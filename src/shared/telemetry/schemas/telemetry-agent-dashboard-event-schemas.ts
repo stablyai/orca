@@ -5,14 +5,16 @@ export const agentDashboardSurfaceSchema = lazyZodSchema(() => z.enum(['in_windo
 export type AgentDashboardSurface = z.infer<typeof agentDashboardSurfaceSchema>
 
 // No agent, workspace, or card data: adoption only needs the setting transition.
-export const agentDashboardEnabledSchema = z.object({ enabled: z.boolean() }).strict()
+export const agentDashboardEnabledSchema = lazyZodSchema(() =>
+  z.object({ enabled: z.boolean() }).strict()
+)
 
 // Emitted only after the board React tree mounts, not when an open request is made.
-export const agentDashboardOpenedSchema = z
-  .object({ surface: agentDashboardSurfaceSchema })
-  .strict()
+export const agentDashboardOpenedSchema = lazyZodSchema(() =>
+  z.object({ surface: agentDashboardSurfaceSchema }).strict()
+)
 
 // One visible-use observation per UTC day and surface, capped in main across restarts.
-export const agentDashboardActiveSchema = z
-  .object({ surface: agentDashboardSurfaceSchema })
-  .strict()
+export const agentDashboardActiveSchema = lazyZodSchema(() =>
+  z.object({ surface: agentDashboardSurfaceSchema }).strict()
+)

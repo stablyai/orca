@@ -33,8 +33,11 @@ import {
   PAIRED_SERVER_ITEM_KINDS,
   type PulledItem
 } from './paired-server-ask-import'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 
-const Answered = z.object({ clientAsks: z.object({ seenAs: z.string() }).optional() })
+const Answered = lazyZodSchema(() =>
+  z.object({ clientAsks: z.object({ seenAs: z.string() }).optional() })
+)
 
 // The servers each runtime's loops take asks from now, so a queued reply knows where to go.
 const activeByRuntime = new WeakMap<object, Map<string, PairedServerAsks>>()

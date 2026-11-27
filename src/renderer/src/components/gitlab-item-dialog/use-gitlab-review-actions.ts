@@ -5,6 +5,7 @@ import { getCommentBodySubmitState } from '@/lib/source-control/review/comments/
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { GitLabAssignableUser, GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
+import { getGitLabContextLineOldNumber } from '../../../../shared/gitlab/mr-inline-comment-position'
 import { dedupeGitLabUsers, showGitLabMutationError } from './gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
@@ -166,6 +167,7 @@ export function useGitLabReviewActions(
       )
       return
     }
+    const oldLine = getGitLabContextLineOldNumber(file.diff, line)
     setInlineCommentSubmitting(true)
     try {
       const result = await gitLabApiFor(repoSelector).addMRInlineComment({
@@ -177,6 +179,7 @@ export function useGitLabReviewActions(
           path: file.path,
           ...(file.oldPath ? { oldPath: file.oldPath } : {}),
           line,
+          ...(oldLine !== undefined ? { oldLine } : {}),
           baseSha: details.baseSha,
           startSha: details.startSha,
           headSha: details.headSha

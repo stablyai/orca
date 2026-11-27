@@ -10,6 +10,7 @@ import type {
   ProviderTimelineTextItem
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { AGENT_CHILD_WORK_LAST_MESSAGE_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work'
 import type {
   AcpChildSessionReport,
@@ -24,7 +25,7 @@ import { acpNamedTextKey } from './acp-turn-messages'
 
 const textKey = (item: ProviderTimelineTextItem): string => ('id' in item ? item.id : item.stream)
 
-const sessionSchema = z.object({ sessionId: z.string() })
+const sessionSchema = lazyZodSchema(() => z.object({ sessionId: z.string() }))
 
 export class AcpChildSessions {
   /** ACP has no message end; a child's text closes at the next message on its channel, or when it ends. */
@@ -49,6 +50,16 @@ export class AcpChildSessions {
 
   started(id: string): boolean {
     return this.executing.has(id)
+  }
+
+  /** Children a kept agent still ran when the earlier app quit: a user's Stop ends them too. */
+  carryRunning(ids: readonly string[]): void {
+    if (this.dialect.childSessionStop) {
+      for (const id of ids) {
+        this.running.add(id)
+        this.executing.add(id)
+      }
+    }
   }
 
   /** A child session's events, or undefined when the notification is the root's own. */

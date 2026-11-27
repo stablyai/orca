@@ -6,14 +6,15 @@ import { useSharedNowSnapshot } from '../../hooks/use-now'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
 import { mobileBotAvatarSource } from '../../bots/host-bot-row-facts'
 import { MobileBotFaceStack } from '../../bots/MobileBotFaceStack'
+import { MobileBotRowView } from '../../bots/MobileBotHomeRow'
 import {
   MobileBotNeedsYouCount,
   MobileBotRowAvatar,
-  MobileBotRowStatus,
-  MobileBotRowView
-} from '../../bots/MobileBotHomeRow'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+  MobileBotRowStatus
+} from '../../bots/MobileBotRowBadges'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { HomeBotRow } from './home-bot-rows'
 
 const keepNow = (now: number): number => now
@@ -29,7 +30,9 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
   nameComputer?: boolean
   onOpen: (row: HomeBotRow) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { row } = props
   const surface = props.grouped ? colors.bgPanel : undefined
   // A kept row (no dot) isn't live, and a server's sessions aren't on its paired computer's feed.
@@ -46,7 +49,9 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
           stop,
           row.line,
           { dot: row.dot, chatSessionId: row.bot.chatSessionId },
-          now
+          now,
+          t,
+          intlLocale
         )
       : null
   return (
@@ -91,7 +96,6 @@ export const MobileHomeBotRows = memo(function MobileHomeBotRows(props: {
   nameComputer?: ReadonlySet<string>
   onOpen: (row: HomeBotRow) => void
 }) {
-  useMobileColorScheme()
   return props.rows.map((row, index) => (
     <MobileHomeBotRow
       key={row.key}

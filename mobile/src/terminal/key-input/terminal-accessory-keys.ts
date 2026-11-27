@@ -29,7 +29,6 @@ export type TerminalShortcutBuildResult = {
 export type TerminalShortcutSpecialKey = {
   id: string
   label: string
-  accessibilityLabel: string
 }
 
 const ESC = '\x1b'

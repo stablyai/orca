@@ -5,8 +5,8 @@ import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader
 } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
-import { sayMobileNativeChatSubagentGroup as say } from './native-chat-subagent-group-copy'
-import { sayMobileNativeChatSessionOption as sayOption } from '../../input/session-options/native-chat-session-option-copy'
+import { mobileNativeChatSubagentGroupSay } from './native-chat-subagent-group-copy'
+import { mobileNativeChatSessionOptionSay } from '../../input/session-options/native-chat-session-option-copy'
 import { normalizeSubagentState } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import {
   subagentEntryDetail,
@@ -21,22 +21,28 @@ import type {
 import { formatNativeChatDuration } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../../../i18n/mobile-i18n'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatEventName, MobileNativeChatEventRow } from './MobileNativeChatEventRow'
 import { scaledType } from './mobile-native-chat-message-styles'
 
 /** What it is doing or said, then its role, where it runs and its tokens; null when it has none. */
-function subagentDetails(agent: NativeChatSubagentEntry): { text: string; facts: string } | null {
+function subagentDetails(
+  agent: NativeChatSubagentEntry,
+  t: Translate
+): { text: string; facts: string } | null {
   const working = normalizeSubagentState(agent.state) === 'working'
   const text =
     (working ? subagentEntryDetail(agent) : subagentMessageText(agent.lastMessage ?? '')) ?? ''
   const facts = [
     subagentRoleLabel(agent.agentType),
-    subagentEntryRunsOn(agent, sayOption),
+    subagentEntryRunsOn(agent, mobileNativeChatSessionOptionSay(t)),
     typeof agent.tokens === 'number'
-      ? say('tokens', { value0: formatSubagentTokens(agent.tokens) })
+      ? mobileNativeChatSubagentGroupSay(t)('tokens', {
+          value0: formatSubagentTokens(agent.tokens)
+        })
       : null
   ]
     .filter(Boolean)
@@ -73,8 +79,11 @@ function SubagentRow({
   groupId: string
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   const state = normalizeSubagentState(agent.state)
-  const details = subagentDetails(agent)
+  const details = subagentDetails(agent, t)
   const type = scaledType(typography.bodySize, fontScale)
   return (
     <MobileNativeChatEventRow
@@ -116,10 +125,13 @@ export function MobileNativeChatSubagentGroup({
   block: NativeChatSubagentGroupBlock
   fontScale: number
 }): React.JSX.Element | null {
-  useMobileColorScheme()
-  // `t` changes identity with the reader's language, so the words follow it.
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const header = useMemo(() => nativeChatSubagentGroupHeader(block.agents, say), [block.agents, t])
+  const header = useMemo(
+    () => nativeChatSubagentGroupHeader(block.agents, mobileNativeChatSubagentGroupSay(t)),
+    [block.agents, t]
+  )
   if (header.total === 0) {
     return null
   }
@@ -161,7 +173,7 @@ export function MobileNativeChatSubagentGroup({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   group: { gap: spacing.xs },
   text: { color: colors.textPrimary },
   facts: { color: colors.textMuted }

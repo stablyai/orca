@@ -2,10 +2,7 @@
 import type { BotGroup } from '../../../../src/shared/bots/bot-group-schema'
 import { botGroupStatusOf } from '../../../../src/shared/bots/bot-group-status'
 import { foldBotStatus, type BotRowStatus } from '../../../../src/shared/bots/bot-row-status'
-import {
-  botGroupMemberBots,
-  botGroupRowLine
-} from '../../../../src/shared/bots/bot-sidebar-entries'
+import { botGroupMemberBots } from '../../../../src/shared/bots/bot-sidebar-entries'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -22,8 +19,9 @@ import {
   mobileBotRowLineText,
   mobileBotRowNeedsYou
 } from '../../bots/mobile-bot-row-line'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { botsOfflineWord } from '../../bots/host-bot-listing'
+import { groupLine, waitsLine } from './home-bot-row-words'
 import {
   agentDotState,
   agentRowTimeAt,
@@ -148,7 +146,8 @@ export function botRow(
   agents: readonly HomeAgentEntry[],
   now: number,
   /** Its workers and the people asking for access, as its computer's Bots list reads them. */
-  asks: { workers?: BotWorkspaceLiveCounts; access: readonly ConnectorAccessRequest[] }
+  asks: { workers?: BotWorkspaceLiveCounts; access: readonly ConnectorAccessRequest[] },
+  t: Translate
 ): HomeBotRow {
   const access = asks.access.filter((request) => request.botId === bot.id).length
   const facts = {
@@ -162,7 +161,7 @@ export function botRow(
     }
   }
   const rows = agents.map((entry) => entry.agent)
-  const line = mobileBotRowLine(facts, rows, now)
+  const line = mobileBotRowLine(facts, rows, now, t)
   const lineAt = line?.kind === 'activity' ? line.at : null
   const needsYou = mobileBotRowNeedsYou(facts.line, rows, now)
   // One question says itself; a count of several, or one the line can't name, says what makes it up.
@@ -181,68 +180,23 @@ export function botRow(
     line,
     asking,
     preview: asking
-      ? waitsLine({
-          asks: needsYou - (asks.workers?.permission ?? 0) - facts.line.itemsNeedingYou,
-          access,
-          workers: asks.workers?.permission ?? 0,
-          items: answer.needsYou[bot.id] ?? 0
-        })
+      ? waitsLine(
+          {
+            asks: needsYou - (asks.workers?.permission ?? 0) - facts.line.itemsNeedingYou,
+            access,
+            workers: asks.workers?.permission ?? 0,
+            items: answer.needsYou[bot.id] ?? 0
+          },
+          t
+        )
       : line
-        ? mobileBotRowLineText(line, now)
+        ? mobileBotRowLineText(line, now, t)
         : '',
-    age: lineAt === null ? null : formatTimeAgo(lineAt, now),
+    age: lineAt === null ? null : formatTimeAgo(lineAt, now, t),
     unread: agents.some((entry) => listedAgentVerdict(entry.agent)?.unread === true),
     needsYou,
     activityAt: Math.max(lineAt ?? 0, ...rows.map(agentRowTimeAt))
   }
-}
-
-/** What a bot's Needs you count is made of: "Question · access request · worker". */
-function waitsLine(waits: {
-  asks: number
-  access: number
-  workers: number
-  items: number
-}): string {
-  const text = [
-    waits.asks > 0
-      ? translate('home.bots.waits.questions', '{{count}} questions', {
-          count: waits.asks,
-          defaultValue_one: 'question'
-        })
-      : null,
-    waits.access > 0
-      ? translate('home.bots.waits.access', '{{count}} access requests', {
-          count: waits.access,
-          defaultValue_one: 'access request'
-        })
-      : null,
-    waits.workers > 0
-      ? translate('home.bots.waits.workers', '{{count}} workers', {
-          count: waits.workers,
-          defaultValue_one: 'worker'
-        })
-      : null,
-    waits.items > 0
-      ? translate('home.bots.waits.items', '{{count}} items', {
-          count: waits.items,
-          defaultValue_one: 'item'
-        })
-      : null
-  ]
-    .filter(Boolean)
-    .join(' · ')
-  return text.charAt(0).toLocaleUpperCase() + text.slice(1)
-}
-
-/** A room's newest post, else how many are in it; its faces already show who. */
-function groupLine(group: BotGroup, members: number): { text: string; at: number | null } {
-  return group.latest
-    ? botGroupRowLine(group, [], translate('bots.groups.you', 'You'))
-    : {
-        text: translate('bots.groups.memberCount', '{{count}} bots', { count: members }),
-        at: null
-      }
 }
 
 export function groupRow(
@@ -251,14 +205,15 @@ export function groupRow(
   bots: readonly PhoneBot[],
   agentOf: (paneKey: string) => RuntimeWorktreeAgentRow | undefined,
   unread: boolean,
-  now: number
+  now: number,
+  t: Translate
 ): HomeBotRow {
   const faces = botGroupMemberBots(group, bots).map((bot) => ({
     id: bot.id,
     name: bot.name,
     avatar: mobileBotAvatarSource(bot)
   }))
-  const line = groupLine(group, faces.length + (group.remoteMembers?.length ?? 0))
+  const line = groupLine(group, faces.length + (group.remoteMembers?.length ?? 0), t)
   return {
     kind: 'group',
     key: `${place.placeKey}\ngroup:${group.id}`,
@@ -272,7 +227,7 @@ export function groupRow(
     faces,
     dot: botGroupStatusOf(group, agentOf),
     preview: line.text,
-    age: line.at === null ? null : formatTimeAgo(line.at, now),
+    age: line.at === null ? null : formatTimeAgo(line.at, now, t),
     unread,
     needsYou: 0,
     activityAt: line.at ?? 0
@@ -287,7 +242,8 @@ export function keptRows(
   mode: 'pending' | 'offline',
   groups: readonly BotGroup[],
   lastActivity: Readonly<Record<string, number>>,
-  now: number
+  now: number,
+  t: Translate
 ): HomeBotRow[] {
   const offline = mode === 'offline'
   const kept = (key: string, title: string) => {
@@ -301,8 +257,8 @@ export function keptRows(
       hostLabel: place.hostLabel,
       title,
       // Nothing names the computer on the row, so the line says why it's dimmed.
-      preview: offline ? botsOfflineWord() : '',
-      age: offline && at > 0 ? formatTimeAgo(at, now) : null,
+      preview: offline ? botsOfflineWord(t) : '',
+      age: offline && at > 0 ? formatTimeAgo(at, now, t) : null,
       unread: false,
       needsYou: 0,
       activityAt: at,

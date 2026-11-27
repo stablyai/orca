@@ -87,16 +87,12 @@
         "activitySubagentCount_other": "{{count}} subagents running"
       },
       "NativeChatResumeToast": {
-        "partial_one": "Resumed {{resumed}} of {{total}} agents. {{count}} needs you.",
-        "partial_other": "Resumed {{resumed}} of {{total}} agents. {{count}} need you.",
-        "resumedOn_one": "Resumed {{count}} agent on {{machine}}.",
-        "resumedOn_other": "Resumed {{count}} agents on {{machine}}.",
-        "resumedRestart_one": "Resumed {{count}} agent after the restart.",
-        "resumedRestart_other": "Resumed {{count}} agents after the restart.",
-        "resumedUpdate_one": "Resumed {{count}} agent after the update.",
-        "resumedUpdate_other": "Resumed {{count}} agents after the update.",
-        "resumingOn_one": "Resuming {{count}} agent on {{machine}}…",
-        "resumingOn_other": "Resuming {{count}} agents on {{machine}}…",
+        "failedSome_one": "Couldn’t resume {{count}} of {{total}}",
+        "failedSome_other": "Couldn’t resume {{count}} of {{total}}",
+        "needYou_one": "{{count}} needs you",
+        "needYou_other": "{{count}} need you",
+        "resumedMany_one": "Resumed {{count}} agent",
+        "resumedMany_other": "Resumed {{count}} agents",
         "resuming_one": "Resuming {{count}} agent…",
         "resuming_other": "Resuming {{count}} agents…",
         "stoppedOn_one": "{{count}} agent stopped on {{machine}}.",
@@ -169,6 +165,7 @@
           "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} runs reported"
         },
         "AutomationRunsDashboard": {
+          "filters": "Filters",
           "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
           "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only.",
           "local": "Local",
@@ -697,6 +694,15 @@
         "PluginAuthor": {
           "shownPluginCount_one": "{{count}} matching plugin shown, including this one",
           "shownPluginCount_other": "{{count}} matching plugins shown, including this one"
+        },
+        "PluginConsentDialog": {
+          "capability": {
+            "appearanceWrite": "Publish and select desktop application, editor and terminal colors",
+            "automationRead": "Read your automations: their names, prompts, agents, projects, workspaces and schedules",
+            "automationWrite": "Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)",
+            "historyRead": "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself",
+            "workspaceCreate": "Create workspaces (new Git branches and worktrees) in your projects, local and SSH; a project's setup script runs as its settings say"
+          }
         },
         "PluginDevelopmentSection": {
           "title": "Development"

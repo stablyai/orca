@@ -149,7 +149,7 @@ export function useMobileSessionBot(
       // A refused chat says why in chat's words; other host errors are codes, not sentences for the owner.
       const refusal = readAgentSessionErrorRefusal(error)
       if (refusal) {
-        showToast(mobileBotRefusalText(refusal), 2400)
+        showToast(mobileBotRefusalText(refusal, t), 2400)
       } else {
         showToast(t('bots.chatStartFailed', 'Couldn’t start the chat'), 1800)
       }

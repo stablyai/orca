@@ -3,8 +3,8 @@ import { useState } from 'react'
 import { Platform } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ComposerUsageDisplayPicker } from '../composer-usage/ComposerUsageDisplayPicker'
-import { ComposerUsagePositionPicker } from '../composer-usage/ComposerUsagePositionPicker'
 import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
+import { ComposerUsagePositionPicker } from '../composer-usage/ComposerUsagePositionPicker'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
@@ -19,7 +19,6 @@ import {
   type NativeChatFont
 } from '../session/native-chat/preferences/native-chat-text-settings'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   nativeChatLineSpacingSegments,
   NativeChatTextSizeSlider,
@@ -27,7 +26,8 @@ import {
   StackedRow
 } from './native-chat-text-controls'
 import { NativeChatTextPreview } from './native-chat-text-preview'
-import { SettingsScreen, SettingsSection, settingsScreenStyles } from './settings-screen-frame'
+import { SettingsScreen, SettingsSection, settingsScreenStylesSheet } from './settings-screen-frame'
+import { useThemedStyles } from '../theme/themed-styles'
 
 const IOS = Platform.OS === 'ios'
 
@@ -52,7 +52,7 @@ function fontOptions(t: Translate): PickerOption<NativeChatFont>[] {
 }
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
-  useMobileColorScheme()
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const { settings, stored } = useNativeChatTextSettingsSnapshot()
@@ -64,13 +64,13 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
 
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
-  const label = t('settings.nativeChatSettingsScreen.openInChatUi', 'Open sessions in Chat UI')
+  const label = t('settings.nativeChatSettingsScreen.openInChat', 'Open agent sessions in chat')
 
   // The slider's gesture needs a root here, as Terminal settings has.
   return (
     <GestureHandlerRootView style={settingsScreenStyles.container}>
       <SettingsScreen
-        title={t('settings.nativeChatSettingsScreen.title', 'Chat UI')}
+        title={t('settings.menuItems.chat', 'Chat')}
         onBack={onBack ?? (() => router.back())}
         overlays={
           <PickerModal<NativeChatFont>
@@ -86,7 +86,7 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
         <NativeChatTextPreview fontScale={nativeChatFontScale(size)} />
         <SettingsSection
           first
-          title={t('settings.nativeChatText.heading', 'TEXT')}
+          title={t('settings.nativeChatText.heading', 'Text')}
           footer={t(
             'settings.nativeChatText.footer',
             'Pinch in a chat to change it; it saves here.'
@@ -131,20 +131,14 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
         </SettingsSection>
 
         <SettingsSection
-          title={t('settings.nativeChatSettingsScreen.defaultViewHeading', 'DEFAULT VIEW')}
           footer={t(
-            'settings.nativeChatSettingsScreen.defaultViewDescription',
-            'Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.'
+            'settings.nativeChatSettingsScreen.defaultViewFooter',
+            'Switch one session from its long-press menu.'
           )}
         >
           <ListRow
             key="chatDefault"
             title={label}
-            subtitle={
-              chatDefault
-                ? t('settings.nativeChatSettingsScreen.on', 'On')
-                : t('settings.nativeChatSettingsScreen.off', 'Off')
-            }
             accessory={
               <MobileSwitch
                 accessibilityLabel={label}
@@ -155,15 +149,16 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
           />
         </SettingsSection>
 
-        <SettingsSection>
-          <ListRow
-            key="reset"
-            title={t('settings.nativeChatText.reset', 'Reset text settings')}
-            disabled={!stored}
-            onPress={() => void resetNativeChatTextSettings()}
-            testID="chat-text-reset"
-          />
-        </SettingsSection>
+        {stored ? (
+          <SettingsSection>
+            <ListRow
+              key="reset"
+              title={t('settings.nativeChatText.reset', 'Reset text settings')}
+              onPress={() => void resetNativeChatTextSettings()}
+              testID="chat-text-reset"
+            />
+          </SettingsSection>
+        ) : null}
 
         <SettingsSection
           title={t('settings.nativeChatSettingsScreen.composerUsageHeading', 'COMPOSER USAGE')}

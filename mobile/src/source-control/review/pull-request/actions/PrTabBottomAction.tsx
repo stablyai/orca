@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitMerge, GitPullRequest, Sparkles, type LucideIcon } from 'lucide-react-native'
-import { colors, feedback, pressedStyle } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { feedback, pressedStyle } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { resolveGitHubPRMergeMethods } from '../../../../../../src/shared/github/pull-requests/merge/pull-request-merge-methods'
 import { resolveGitHubPRMergeState } from '../../../../../../src/shared/github/pull-requests/merge/pull-request-merge-state'
@@ -13,13 +13,15 @@ import { useHostProtocolGates } from '../../../../components/host-connection/hos
 import { AgentLaunchNotice } from '../../../../agents/presentation/AgentLaunchNotice'
 import { presentPrMerge } from './pr-actions-state'
 import type { MobilePrTab } from '../use-mobile-pr-tab'
-import { prTabStyles as styles } from '../pr-tab-styles'
+import { prTabStylesSheet } from '../pr-tab-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 type Tone = 'primary' | 'merge' | 'secondary'
 
 // The diff-review dock's bottom action; in the hub the next-step bar is the one bottom action instead.
 export function PrTabBottomAction({ tab, bottomInset }: { tab: MobilePrTab; bottomInset: number }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(prTabStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { state, actions } = tab
   const canMarkReady = useRouteCapability(MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY)
@@ -93,7 +95,7 @@ export function PrTabBottomAction({ tab, bottomInset }: { tab: MobilePrTab; bott
   const autoMerge = actions.resolveAutoMerge(pr.autoMergeEnabled ?? false)
   const effective = { ...pr, state: prState, autoMergeEnabled: autoMerge }
   const { defaultMethod } = resolveGitHubPRMergeMethods(pr.mergeMethodSettings ?? null)
-  const merge = presentPrMerge(effective, defaultMethod)
+  const merge = presentPrMerge(effective, defaultMethod, t)
   const decision = resolveGitHubPRMergeState(effective)
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
   // The dock has no bar, so conflicts get the bar's own fix here, named by the button rather than a reason line.
@@ -210,7 +212,8 @@ function ActionButton({
   /** Takes the row's spare width next to a compact Cancel. */
   grow?: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(prTabStylesSheet)
+  const colors = useMobileColors()
   const foreground =
     tone === 'primary' ? colors.bgBase : tone === 'merge' ? colors.onMergeGreen : colors.textPrimary
   return (

@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import { GitPullRequest, Link2 } from 'lucide-react-native'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { normalizeHostedReviewHeadRef } from '../../../../../../src/shared/source-control/hosted-review/hosted-review-refs'
 import { fetchWorktreeGitHubPRLink } from '../../creation/mobile-pr-link'
 import { ListGroup, ListRow } from '../../../../components/list/ListGroup'
 import { MobileLinkPrForm } from '../sheets/MobileLinkPrForm'
 import type { MobilePrTab } from '../use-mobile-pr-tab'
-import { prTabStyles as styles } from '../pr-tab-styles'
+import { prTabStylesSheet } from '../pr-tab-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 type Props = {
   tab: MobilePrTab
@@ -18,7 +18,8 @@ type Props = {
 
 // No PR yet: say what is ready to go; the bottom action creates, linking stays the quiet way out.
 export function PrTabEmptyState({ tab, branchCompare }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(prTabStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client, worktreeId } = tab
   const gitBranch = tab.gitBranch ? normalizeHostedReviewHeadRef(tab.gitBranch) : null

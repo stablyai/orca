@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 // Why: both are answered by the paired desktop itself; the phone lists servers the desktop shows.
 export const MOBILE_RELAY_HOSTS_LIST_METHOD = 'mobileRelay.hosts.list'
@@ -27,13 +28,15 @@ export type MobileRelayHost = {
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }
 
 // Strict: phones send the snapshot fields only to desktops advertising MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY.
-export const MobileRelayHostWorktreesParamsSchema = z
-  .object({
-    hostId: z.string().min(1).max(1024),
-    afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
-    acceptRowDelta: z.literal(true).optional()
-  })
-  .strict()
+export const MobileRelayHostWorktreesParamsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      hostId: z.string().min(1).max(1024),
+      afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+      acceptRowDelta: z.literal(true).optional()
+    })
+    .strict()
+)
 
 /** One of a server's own `worktree.ps` rows (RuntimeWorktreePsSummary), carrying the server's host id. */
 export type MobileRelayServerWorktreeRow = Record<string, unknown> & {

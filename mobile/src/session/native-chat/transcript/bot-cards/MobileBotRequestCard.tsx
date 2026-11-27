@@ -11,8 +11,8 @@ import type {
 } from '../../../../../../src/shared/bots/bot-request-card'
 import { useHostBotById, useHostBotStatus } from '../../../../bots/host-bot-store'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { pressedStyle, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { subscribeSharedClientEvents } from '../../../../transport/connection/shared-client-events'
 import {
@@ -24,6 +24,7 @@ import { mobileBotRequestSay } from './mobile-bot-card-copy'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
 import { botRequestOutcomeRead } from './mobile-bot-card-operations'
 import { foldMobileBotRequestMail } from './mobile-bot-request-folded-mail'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 const UNREAD: Pick<BotRequestCardReading, 'outcome' | 'answer' | 'chatId'> = {
   outcome: null,
@@ -89,7 +90,12 @@ function useRequestReading(
   return reading
 }
 
-const SEND_ICON = <Send size={14} color={colors.textMuted} strokeWidth={2} />
+function SendIcon(): React.JSX.Element {
+  const colors = useMobileColors()
+  return <Send size={14} color={colors.textMuted} strokeWidth={2} />
+}
+
+const SEND_ICON = <SendIcon />
 
 type RequestRowProps = {
   card: BotRequestCard
@@ -107,6 +113,7 @@ function ClientAskRequestRow({
   timestamp,
   fontScale
 }: RequestRowProps & { client: NonNullable<BotRequestCard['client']> }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const reading = useRequestReading(
     useMobileBotCardHost()?.client ?? null,
@@ -180,6 +187,8 @@ function HostBotRequestRow({
   fallback,
   fontScale
 }: RequestRowProps & { fallback: string }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
   const bot = useHostBotById(card.toBotId)
@@ -255,7 +264,7 @@ function HostBotRequestRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   answer: { color: colors.textPrimary },
   subject: { color: colors.textMuted }
 }))
