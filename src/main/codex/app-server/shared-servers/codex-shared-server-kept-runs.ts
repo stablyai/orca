@@ -10,14 +10,16 @@ import {
   keptProviderRelay,
   type KeptProviderRelay
 } from '../../../provider-relay/app-provider-relays'
-import { providerRelayRunGate } from '../../../provider-relay/provider-relay-run-liveness'
+import {
+  providerRelayRunGate,
+  providerRelayRunLiveness
+} from '../../../provider-relay/provider-relay-run-liveness'
 import { providerRelayRebinding } from '../../../provider-relay/provider-relay-kept-rebind'
 import {
   providerRelayPlacedRun,
   providerRelayPlacedRunOf,
   providerRelayRunsPlacedOn
 } from '../../../provider-relay/provider-relay-placed-records'
-import { providerRelayRunLiveness } from '../../../provider-relay/provider-relay-run-liveness'
 import { forgetListedProviderRelayChat } from '../../../provider-relay/provider-relay-launch-inventory'
 import type { CodexRecoveredChat } from './codex-shared-server-recovery'
 
