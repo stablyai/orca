@@ -31,6 +31,7 @@ export type GithubPullRequestApi = {
   repoSlug: (args: {
     repoPath: string
     repoId?: string
+    requireVerifiedSshProbe?: boolean
   }) => Promise<{ owner: string; repo: string; host?: string } | null>
   repoUpstream: (args: {
     repoPath: string

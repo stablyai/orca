@@ -1,3 +1,7 @@
+import { completedDurationSeconds } from '../../../../../../shared/github/actions/actions-duration'
+import { formatNativeChatDuration } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
+import { actionsUrl } from '../../../../../../shared/github/actions/actions-web-url'
+import { ActionsStatus } from '@/components/right-sidebar/actions/ActionsStatus'
 import React from 'react'
 import {
   AlertTriangle,
@@ -10,6 +14,7 @@ import {
 import { isGitLabAllowedFailureJob } from '@/components/github/pr-check-presentation'
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import { CheckJobLogTail } from '@/components/right-sidebar/checks-panel/logs/check-job-log-tail'
+import { getIntlLocale } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type {
@@ -47,11 +52,22 @@ function StepOutcomeIcon({ outcome }: { outcome: StepOutcome }): React.JSX.Eleme
   }
 }
 
-function StepRow({ step }: { step: PRCheckStep }): React.JSX.Element {
+function StepRow({
+  step,
+  actionsStatusColors
+}: {
+  step: PRCheckStep
+  actionsStatusColors: boolean
+}): React.JSX.Element {
+  const duration = completedDurationSeconds(step.startedAt, step.completedAt)
   const outcome = resolveStepOutcome(step)
   return (
     <div className="flex min-w-0 items-center gap-2 py-1 text-xs">
-      <StepOutcomeIcon outcome={outcome} />
+      {actionsStatusColors ? (
+        <ActionsStatus status={step.conclusion ?? step.status} iconOnly />
+      ) : (
+        <StepOutcomeIcon outcome={outcome} />
+      )}
       <span
         className={cn(
           'min-w-0 flex-1 truncate',
@@ -60,7 +76,14 @@ function StepRow({ step }: { step: PRCheckStep }): React.JSX.Element {
       >
         {step.name}
       </span>
-      <span className="shrink-0 text-muted-foreground">{step.conclusion ?? step.status}</span>
+      {duration !== null && (
+        <span className="shrink-0 text-muted-foreground">{formatNativeChatDuration(duration)}</span>
+      )}
+      {actionsStatusColors ? (
+        <ActionsStatus status={step.conclusion ?? step.status} showIcon={false} />
+      ) : (
+        <span className="shrink-0 text-muted-foreground">{step.conclusion ?? step.status}</span>
+      )}
     </div>
   )
 }
@@ -70,13 +93,15 @@ function OtherJobSteps({
   summary,
   failed,
   identity,
-  owner
+  owner,
+  actionsStatusColors
 }: {
   steps: PRCheckStep[]
   summary: string
   failed: boolean
   identity: string
   owner?: CheckDetailsReadingOwner
+  actionsStatusColors: boolean
 }): React.JSX.Element {
   const cacheKey = owner ? checkReadingStepsKey(owner.key, identity, failed) : undefined
   const [open, setOpen] = React.useState(() => {
@@ -112,7 +137,7 @@ function OtherJobSteps({
       <CollapsibleContent animation="height">
         <div className="mt-0.5 grid gap-0.5 pl-5">
           {steps.map((step) => (
-            <StepRow key={step.name} step={step} />
+            <StepRow key={step.name} step={step} actionsStatusColors={actionsStatusColors} />
           ))}
         </div>
       </CollapsibleContent>
@@ -123,15 +148,20 @@ function OtherJobSteps({
 function JobCard({
   check,
   job,
+  jobLinkLabel,
   identity,
-  owner
+  owner,
+  actionsStatusColors
 }: {
-  check: PRCheckDetail
+  check?: PRCheckDetail
   job: PRCheckJob
+  jobLinkLabel: string
   identity: string
   owner?: CheckDetailsReadingOwner
+  actionsStatusColors: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const duration = completedDurationSeconds(job.startedAt, job.completedAt)
   const breakdown = summarizeJobSteps(job)
   const jobFailed = resolveStepOutcome(job) === 'failure'
   const collapsible = [...breakdown.succeeded, ...breakdown.skipped, ...breakdown.pending]
@@ -167,7 +197,9 @@ function JobCard({
   return (
     <div className="px-3 py-3">
       <div className="flex min-w-0 items-center gap-2">
-        {isGitLabAllowedFailureJob(check, job) ? (
+        {actionsStatusColors ? (
+          <ActionsStatus status={job.conclusion ?? job.status} iconOnly />
+        ) : check && isGitLabAllowedFailureJob(check, job) ? (
           <AlertTriangle className={cn('size-4 shrink-0', CHECK_COLOR.gitlabAllowedFailure)} />
         ) : jobFailed ? (
           <XCircle className="size-4 shrink-0 text-destructive" />
@@ -192,14 +224,35 @@ function JobCard({
         )}
       </div>
 
+      {actionsStatusColors && (job.runnerName || job.runnerLabels?.length) ? (
+        <p className="mt-1 break-words text-xs text-muted-foreground">
+          {t('actions.runner', 'Runner')}:{' '}
+          {[job.runnerName, ...(job.runnerLabels ?? [])].filter(Boolean).join(' · ')}
+        </p>
+      ) : null}
+
       {breakdown.failed.length > 0 && (
         <div className="mt-2 grid gap-0.5">
           {breakdown.failed.map((step) => (
-            <StepRow key={step.name} step={step} />
+            <StepRow key={step.name} step={step} actionsStatusColors={actionsStatusColors} />
           ))}
         </div>
       )}
 
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {actionsStatusColors ? (
+          <ActionsStatus status={job.conclusion ?? job.status} showIcon={false} />
+        ) : (
+          <span>{job.conclusion ?? job.status}</span>
+        )}
+        {job.startedAt && <span>{new Date(job.startedAt).toLocaleString(getIntlLocale())}</span>}
+        {duration !== null && <span>{formatNativeChatDuration(duration)}</span>}
+        {actionsUrl(job.url) && (
+          <Button variant="link" size="xs" onClick={() => window.api.shell.openUrl(job.url!)}>
+            {jobLinkLabel}
+          </Button>
+        )}
+      </div>
       <CheckJobLogTail
         job={job}
         surface="details"
@@ -214,6 +267,7 @@ function JobCard({
           failed={jobFailed}
           identity={identity}
           owner={owner}
+          actionsStatusColors={actionsStatusColors}
           summary={summaryParts.join(t('auto.components.editor.CheckRunJobs.5a8e1d4f23', ' · '))}
         />
       )}
@@ -225,12 +279,16 @@ export function CheckRunJobs({
   check,
   jobs,
   hasFailedJobs,
-  positionOwner
+  positionOwner,
+  jobLinkLabel,
+  actionsStatusColors = false
 }: {
-  check: PRCheckDetail
+  check?: PRCheckDetail
   jobs: PRCheckJob[]
   hasFailedJobs: boolean
   positionOwner?: CheckDetailsReadingOwner
+  jobLinkLabel?: string
+  actionsStatusColors?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const entries = checkJobIdentities(jobs)
@@ -263,6 +321,8 @@ export function CheckRunJobs({
             job={job}
             identity={identity}
             owner={positionOwner}
+            jobLinkLabel={jobLinkLabel ?? t('checkRun.openJob', 'Open job')}
+            actionsStatusColors={actionsStatusColors}
           />
         ))}
       </div>

@@ -1,0 +1,19 @@
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Store } from '../../persistence/loading-store/store'
+import type { ActionsRequestContext } from '../../../shared/github/actions/actions-types'
+import { assertRegisteredGitHubRepo } from './github-repo-routing'
+/** Reject stale registrations, folder workspaces and runtime-owned repositories from the desktop IPC route. */
+export function registeredActionsRepo(args: ActionsRequestContext, store: Store) {
+  const repo = assertRegisteredGitHubRepo(args, store)
+  if (
+    isFolderRepo(repo) ||
+    parseExecutionHostId(getRepoExecutionHostId(repo))?.kind === 'runtime'
+  ) {
+    throw new Error('Actions must be requested on the registered Git repository execution host')
+  }
+  return repo
+}

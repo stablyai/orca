@@ -5,6 +5,11 @@ import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-p
 import type { WslProcessGroupTermination } from './wsl-process-group-termination'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import { createAbortError } from './abort-error'
+import {
+  assertCaptureEncoding,
+  capturesOutputBytes,
+  decodeCapturedOutput
+} from './capture-output-encoding'
 import { launchProcessSpecOnWindowsWorker } from './process-spec-worker-launch'
 import type { ExecFileCaptureOptions } from './exec-file-capture'
 
@@ -20,6 +25,7 @@ export async function execFileCaptureToTermination(
   // runProcess already reports spawn cost through spawnProcess.
   let program: string
   try {
+    assertCaptureEncoding(options.encoding)
     program = resolveSelectedLocalCommand(command, {
       env: options.env,
       cwd: typeof options.cwd === 'string' ? options.cwd : undefined
@@ -32,7 +38,7 @@ export async function execFileCaptureToTermination(
     options.onChildTerminated?.()
     throw createAbortError()
   }
-  const captureBytes = options.encoding === 'buffer'
+  const captureBytes = capturesOutputBytes(options.encoding)
   // runProcess and a lost worker's tree kill can both report; callers hear it once.
   let terminated = false
   const reportTerminated = (): void => {
@@ -72,14 +78,10 @@ export async function execFileCaptureToTermination(
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending
-  const stdout = captureBytes ? (result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
-  const stderrBytes = result.stderrBytes ?? Buffer.alloc(0)
-  const stderr = captureBytes
-    ? termination
-      ? // Why: Latin-1 strips ASCII control markers without changing arbitrary bytes.
-        Buffer.from(termination.stripControlOutput(stderrBytes.toString('latin1')), 'latin1')
-      : stderrBytes
-    : (termination?.stripControlOutput(result.stderr) ?? result.stderr)
+  const stripControl = termination && ((text: string) => termination.stripControlOutput(text))
+  const { stdout, stderr } = captureBytes
+    ? decodeCapturedOutput(result, options.encoding, stripControl)
+    : { stdout: result.stdout, stderr: stripControl?.(result.stderr) ?? result.stderr }
   if (
     result.code === 0 &&
     !result.timedOut &&
