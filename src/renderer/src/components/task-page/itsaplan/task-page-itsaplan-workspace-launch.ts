@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import type { ItsaplanIssue } from '../../../../../shared/itsaplan/itsaplan-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { getItsaplanIssueWorkspaceSeed } from '../task-page-source-context'
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import { getDefaultPersistedState } from '../../../../shared/constants'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 
 function prepare(settings: Record<string, unknown>) {

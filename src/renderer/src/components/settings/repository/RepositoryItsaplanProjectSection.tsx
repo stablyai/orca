@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { ItsaplanProjectReference } from '../../../../../shared/itsaplan/itsaplan-project-reference'
 import type { ItsaplanProject } from '../../../../../shared/itsaplan/itsaplan-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
-import { WorkItemScopePicker, type WorkItemScopeOption } from '../../work-item-scope-picker'
+import {
+  WorkItemScopePicker,
+  type WorkItemScopeOption
+} from '../../task-page/source-selection/work-item-scope-picker'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
