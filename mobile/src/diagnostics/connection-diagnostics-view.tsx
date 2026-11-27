@@ -3,14 +3,14 @@ import { View, Text, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Check, Copy, Ellipsis, Send } from 'lucide-react-native'
 import { spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
 import { ConnectionLog } from '../components/host-connection/ConnectionLog'
 import { ListRow } from '../components/list/ListGroup'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { NavBarTitleButton } from '../components/nav-bar/NavBar'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { PickerModal } from '../components/sheets/PickerModal'
-import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
+import { connectionDiagnosticsScreenStylesSheet } from './connection-diagnostics-screen-styles'
 import type { ConnectionLogEntry } from './connection/connection-log-types'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { ConnectionDiagnosis } from './connection-diagnostics-analysis'
@@ -20,7 +20,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   SettingsNavBar,
   SettingsSection,
-  settingsScreenStyles
+  settingsScreenStylesSheet
 } from '../settings/settings-screen-frame'
 
 function stateLabel(t: Translate, state: ConnectionState): string {
@@ -88,7 +88,8 @@ export function ConnectionDiagnosticsView({
   entries: readonly ConnectionLogEntry[]
   onBack: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(connectionDiagnosticsScreenStylesSheet)
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const menuAnchor = useRef<HostInstance>(null)

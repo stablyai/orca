@@ -10,9 +10,9 @@ import {
   type TextInputProps,
   type ViewStyle
 } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { composerInputStyles as styles } from './composer-input-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { composerInputStylesSheet as stylesSheet } from './composer-input-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 'selectionColor'> & {
   inputRef?: Ref<TextInputInstance>
@@ -37,7 +37,8 @@ export function TextField({
   editable = true,
   ...inputProps
 }: TextFieldProps): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const ownInputRef = useRef<TextInputInstance>(null)
   const bindInputRef = useCallback(
     (node: TextInputInstance | null) => {

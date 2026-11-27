@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { History, SlidersHorizontal } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import {
   automationRunEventSourceKey,
   sayAutomationRunEnglish
@@ -16,7 +17,7 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { SettingsEmptyRow, SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import { useNow } from '../hooks/use-now'
 import { mobileUsageLimitClock } from '../bots/mobile-usage-limit-copy'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
 import type { AutomationRunObservation, AutomationRunScope } from './use-automation-runs'
 import { toAutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
@@ -24,9 +25,10 @@ import { automationRunStatusLabel, runMatchesOutcome } from './automation-run-pr
 
 function AutomationRunRow(props: { run: MobileAutomationRun; now: number; onPress: () => void }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { run } = props
-  const status = automationRunStatusLabel(run.status)
-  const time = mobileUsageLimitClock(run.startedAt ?? run.scheduledFor, props.now)
+  const status = automationRunStatusLabel(run.status, t)
+  const time = mobileUsageLimitClock(run.startedAt ?? run.scheduledFor, props.now, intlLocale)
   const trigger =
     run.trigger === 'manual'
       ? t('automations.mobile.runNow', 'Run now')
@@ -56,8 +58,8 @@ export function AutomationRecentRuns(props: {
   connected: boolean
   onSelect: (run: MobileAutomationRun) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const now = useNow(60_000)
   const { history } = props
   const recent = history.runs.slice(0, 3)
@@ -99,7 +101,6 @@ export function AutomationRunsView(props: {
   onSelect: (run: MobileAutomationRun) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const now = useNow(60_000)
   const { history } = props
   const query = props.query.trim().toLocaleLowerCase()
@@ -236,7 +237,6 @@ function AutomationRunsFilterSheet(props: {
 }) {
   const { filters } = props
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const outcomes = [
     { value: 'all', label: t('automations.mobile.allOutcomes', 'All outcomes') },
     { value: 'active', label: t('automations.mobile.inProgress', 'In progress') },

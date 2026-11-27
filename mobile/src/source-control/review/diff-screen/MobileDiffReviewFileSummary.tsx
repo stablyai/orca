@@ -1,13 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'
-import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStylesSheet } from './mobile-diff-review-screen-styles'
 
 type Props = {
   fileNotes: DiffComment[]
@@ -41,7 +41,8 @@ export function MobileDiffReviewFileSummary({
   onToggleViewed,
   hiddenThreadCount
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const mobileDiffReviewStyles = useThemedStyles(mobileDiffReviewStylesSheet)
   const t = useMobileTranslation()
   const pill = areaPillLabel(t, item)
   return (
@@ -120,7 +121,7 @@ export function MobileDiffReviewFileSummary({
 }
 
 export function MobileDiffLineStats({ added, removed }: { added?: number; removed?: number }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <>
       {added ? <Text style={styles.added}>+{added}</Text> : null}
@@ -138,7 +139,8 @@ export function ViewedCheckbox({
   onPress: () => void
   accessibilityLabel: string
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       onPress={onPress}
@@ -153,7 +155,7 @@ export function ViewedCheckbox({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   header: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

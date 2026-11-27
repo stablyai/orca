@@ -5,8 +5,7 @@ import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import type { PickerOption } from '../components/sheets/PickerModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { AutomationDraft } from './automation-draft'
 import type { PresentAutomationSheet } from './AutomationSheets'
 import { PickerRow } from './BotAutomationWhenRows'
@@ -28,8 +27,8 @@ export function AutomationAdvancedRows({
   disabled: boolean
   extraArgs: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const none = t('automations.mobile.none', 'None')
   const graceLabel = (minutes: number) =>
     minutes === 0
@@ -214,6 +213,6 @@ function timeZoneOptions(current: string): PickerOption[] {
   })
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   content: { gap: spacing.sm, paddingBottom: spacing.xl }
 }))

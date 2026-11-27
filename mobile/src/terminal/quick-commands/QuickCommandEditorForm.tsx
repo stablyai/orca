@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
-import { colors, concentricRadius, radii, spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { concentricRadius, radii, spacing } from '../../theme/mobile-theme'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
@@ -15,9 +14,9 @@ import {
 } from '../../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 
 import { type QuickCommandDraft, isQuickCommandDraftPromptTooLong } from './quick-command-draft'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
 
 type Props = {
@@ -41,7 +40,7 @@ function ToggleGroup<T extends string>({
   value: T
   onChange: (value: T) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.toggleGroup}>
       {options.map((option) => {
@@ -80,8 +79,9 @@ export function QuickCommandEditorForm({
   onChange,
   onOpenAgentPicker
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const [advancedOpen, setAdvancedOpen] = useState(draft.scope.type === 'repo')
   const isAgent = draft.action === 'agent-prompt'
   const promptTooLong = isQuickCommandDraftPromptTooLong(draft, agentPromptMaxLength)
@@ -181,16 +181,16 @@ export function QuickCommandEditorForm({
                   'session.quickCommandEditorForm.promptSizeKilobytes',
                   '{{used}} KB / {{max}} KB',
                   {
-                    used: Math.ceil(promptSize.used / 1024).toLocaleString(getUiIntlLocale()),
-                    max: Math.ceil(promptSize.max / 1024).toLocaleString(getUiIntlLocale())
+                    used: Math.ceil(promptSize.used / 1024).toLocaleString(intlLocale),
+                    max: Math.ceil(promptSize.max / 1024).toLocaleString(intlLocale)
                   }
                 )
               : t(
                   'session.quickCommandEditorForm.promptSizeCharacters',
                   '{{used}} / {{max}} characters',
                   {
-                    used: promptSize.used.toLocaleString(getUiIntlLocale()),
-                    max: promptSize.max.toLocaleString(getUiIntlLocale())
+                    used: promptSize.used.toLocaleString(intlLocale),
+                    max: promptSize.max.toLocaleString(intlLocale)
                   }
                 )}
           </SettingsNote>
@@ -256,7 +256,7 @@ export function QuickCommandEditorForm({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   form: { paddingBottom: spacing.sm },
   pressed: { backgroundColor: colors.borderSubtle },
   toggleGroup: { flexDirection: 'row', gap: spacing.sm },

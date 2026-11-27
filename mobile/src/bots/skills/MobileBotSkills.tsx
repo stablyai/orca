@@ -18,9 +18,9 @@ import {
   SettingsNote,
   SettingsSection
 } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botSkillsListedNote } from '../mobile-bot-sheet-copy'
 import {
@@ -106,7 +106,7 @@ type SkillSource = {
   skills: readonly { id: string; name: string; description: string | null }[]
 }
 
-const folderIcon = (dim = false) => (
+const folderIcon = (colors: MobilePalette, dim = false) => (
   <Folder size={18} color={dim ? colors.textMuted : colors.textPrimary} strokeWidth={2} />
 )
 
@@ -117,12 +117,13 @@ function ProjectRow(props: {
   guardPress: (onPress: () => void) => () => void
 }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
   const { project } = props
   const local = project.status === 'local'
   const count = local && project.skillsDir ? project.skills.length : 0
   return (
     <ListRow
-      leading={folderIcon(!local)}
+      leading={folderIcon(colors, !local)}
       title={project.name}
       subtitle={
         project.status === 'remote'
@@ -170,7 +171,7 @@ export function MobileBotSkillsPage(
     onBack: () => void
   }
 ) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [linking, setLinking] = useState(false)
   // Which list is open, the bot's own or a project's id, so a re-read scan updates it.
@@ -230,7 +231,9 @@ export function MobileBotSkillsPage(
         onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
       />
       {props.banner}
-      {listsSkills ? <SettingsNote>{botSkillsListedNote(bot.agent, bot.name)}</SettingsNote> : null}
+      {listsSkills ? (
+        <SettingsNote>{botSkillsListedNote(bot.agent, bot.name, t)}</SettingsNote>
+      ) : null}
       {scan === null ? (
         <MobileStateView loading title={t('bots.skills.reading', 'Reading its skills…')} />
       ) : (
@@ -244,7 +247,7 @@ export function MobileBotSkillsPage(
           {own ? (
             <ListRow
               key="own"
-              leading={folderIcon()}
+              leading={folderIcon(colors)}
               title={ownName}
               subtitle={
                 ownSkills.length > 0
@@ -305,6 +308,7 @@ function LinkProjectPage(
     onBack: () => void
   }
 ) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { client, linked } = props
   const [query, setQuery] = useState('')
@@ -410,6 +414,6 @@ function LinkProjectPage(
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   search: { marginTop: spacing.sm, marginBottom: spacing.md }
 }))

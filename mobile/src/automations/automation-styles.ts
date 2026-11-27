@@ -1,9 +1,9 @@
 import { themedStyleSheet } from '../theme/themed-styles'
 import { COMPOSER_TEXT_SIZE } from '../components/composer-input/composer-input-styles'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
 
-export const automationStyles = themedStyleSheet(() => ({
+export const automationStylesSheet = themedStyleSheet((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
   // Inset like Source Control's switch under its bar.
   tabs: { marginHorizontal: spacing.md, marginTop: spacing.sm, backgroundColor: colors.bgPanel },

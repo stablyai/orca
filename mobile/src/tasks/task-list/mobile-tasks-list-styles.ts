@@ -1,7 +1,7 @@
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { radii, spacing } from '../../theme/mobile-theme'
 
-export const mobileTasksListStyles = themedStyleSheet(() => ({
+export const mobileTasksListStylesSheet = themedStyleSheet((colors) => ({
   taskRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

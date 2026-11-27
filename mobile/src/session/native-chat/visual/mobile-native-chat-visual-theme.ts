@@ -1,14 +1,12 @@
 import type { NativeChatVisualTheme } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-shell'
-import { colors, getMobileColorScheme, radii } from '../../../theme/mobile-theme'
+import { paletteForScheme, radii, type MobileColorScheme } from '../../../theme/mobile-theme'
 
 // Match desktop’s chart tokens; initialize visual styles before author content runs.
-// Getters so each document build reads the current scheme.
-export const MOBILE_NATIVE_CHAT_VISUAL_THEME: NativeChatVisualTheme = {
-  get colorScheme() {
-    return getMobileColorScheme()
-  },
-  get tokens() {
-    return {
+export function mobileNativeChatVisualTheme(colorScheme: MobileColorScheme): NativeChatVisualTheme {
+  const colors = paletteForScheme(colorScheme)
+  return {
+    colorScheme,
+    tokens: {
       '--background': colors.bgBase,
       '--foreground': colors.textPrimary,
       '--card': colors.bgPanel,

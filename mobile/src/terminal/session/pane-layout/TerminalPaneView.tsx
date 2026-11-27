@@ -5,9 +5,8 @@ import { useFocusEffect } from 'expo-router'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { ParsedFileLinkLocation } from '../../../../../src/shared/file-links/file-link-location'
 import { terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
-import { colors, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import type { TerminalFrame, TerminalHostSettings } from '../../webview/terminal-webview-messages'
 import { TerminalWebView } from '../../webview/TerminalWebView'
 import { MobileNativeChatFloatingControls } from '../../../session/native-chat/lower-region/MobileNativeChatFloatingControls'
@@ -92,7 +91,7 @@ export function TerminalPaneView({
   onTextScaleChange,
   onCellBoxChange
 }: TerminalPaneViewProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   useEffect(() => () => onDocumentReleased(handle), [handle, onDocumentReleased])
   const [routeFocused, setRouteFocused] = useState(false)
@@ -224,7 +223,7 @@ export function TerminalPaneView({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   terminalPane: {
     ...StyleSheet.absoluteFill
   },

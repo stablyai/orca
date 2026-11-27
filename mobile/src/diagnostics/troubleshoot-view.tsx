@@ -2,15 +2,16 @@ import type { ReactNode } from 'react'
 import { View, ScrollView, ActivityIndicator, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CheckCircle2, RefreshCw, XCircle, AlertTriangle } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
-import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { troubleshootScreenStylesSheet } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   SettingsNavBar,
   SettingsSection,
-  settingsScreenStyles
+  settingsScreenStylesSheet
 } from '../settings/settings-screen-frame'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
@@ -22,7 +23,7 @@ export type CheckResult = {
 }
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   switch (status) {
     case 'pass':
       return <CheckCircle2 size={18} color={colors.statusGreen} />
@@ -56,7 +57,9 @@ export function TroubleshootView({
   /** Developer and shell rows the route fills in. */
   developerRow?: ReactNode
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(troubleshootScreenStylesSheet)
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const problems = checks.filter((check) => check.status === 'fail').length

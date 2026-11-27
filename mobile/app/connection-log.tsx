@@ -17,7 +17,7 @@ import {
   resolveDiagnosticsHostId,
   type DiagnosticsHostSelection
 } from '../src/diagnostics/connection-diagnostics-screen-data'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { recomputeOn } from '../src/hooks/recompute-on'
 import { NATIVE_APP_LOG_ID } from '../src/diagnostics/native-render-log'
 import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
 import type { HostProfile } from '../src/host-catalog/host-profile'
@@ -30,11 +30,10 @@ const getAppLog = () => connectionLogStore.get(NATIVE_APP_LOG_ID)
 
 // Acquire client here so opening logs during host failure starts dialing and live logging.
 export default function NativeConnectionLogRoute() {
-  useMobileColorScheme()
   const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()
-  const routeKey = useMemo(() => ({}), [params.hostId])
+  const routeKey = useMemo(() => recomputeOn([params.hostId], () => ({})), [params.hostId])
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [manualSelection, setManualSelection] = useState<DiagnosticsHostSelection | null>(null)
 

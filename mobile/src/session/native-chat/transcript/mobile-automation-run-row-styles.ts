@@ -1,7 +1,7 @@
-import { colors, spacing } from '../../../theme/mobile-theme'
+import { spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   text: { flex: 1, minWidth: 0, marginLeft: spacing.xs },
   name: { color: colors.textPrimary, fontWeight: '600' },
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minWidth: 0 },

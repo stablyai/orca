@@ -1,10 +1,10 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
-import { diffStyles } from './changes/mobile-source-control-diff-styles'
-import { listStyles } from './changes/mobile-source-control-list-styles'
+import { diffStylesSheet } from './changes/mobile-source-control-diff-styles'
+import { listStylesSheet } from './changes/mobile-source-control-list-styles'
 
-const baseStyles = themedStyleSheet(() => ({
+const baseStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -83,4 +83,8 @@ const baseStyles = themedStyleSheet(() => ({
   }
 }))
 
-export const styles = themedStyles(() => ({ ...baseStyles, ...listStyles, ...diffStyles }))
+export const stylesSheet = themedStyles((_colors, scheme) => ({
+  ...baseStylesSheet.resolve(scheme),
+  ...listStylesSheet.resolve(scheme),
+  ...diffStylesSheet.resolve(scheme)
+}))

@@ -1,7 +1,7 @@
-import { colors, type MobileColorScheme } from '../../theme/mobile-theme'
+import type { MobileColorScheme, MobilePalette } from '../../theme/mobile-theme'
 
 // Suppress mermaid error SVG: render failure uses source fallback, and default error rendering leaves orphan temporary SVG in page.
-export function mermaidDiagramConfig(colorScheme: MobileColorScheme) {
+export function mermaidDiagramConfig(colorScheme: MobileColorScheme, colors: MobilePalette) {
   return {
     startOnLoad: false,
     theme: colorScheme === 'dark' ? 'dark' : 'default',

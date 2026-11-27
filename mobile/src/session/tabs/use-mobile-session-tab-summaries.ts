@@ -19,7 +19,7 @@ export function useMobileSessionTabSummaries(
   return useMemo(
     () =>
       visibleTabs.map((tab) => {
-        const built = buildMobileSessionTabSummary(tab, terminals, now)
+        const built = buildMobileSessionTabSummary(tab, terminals, now, t)
         const summary =
           homeChatId !== null &&
           tab.type === 'agent-session' &&

@@ -4,9 +4,9 @@ import { X } from 'lucide-react-native'
 import { TailClippedText } from '../../components/list/TailClippedText'
 import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, getMobileColorScheme, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { isPathTitle, type MobileSessionTabRow } from './mobile-session-tab-rows'
 
 /** A sidebar row: tap to go there; × (when given) closes it. The open tab keeps the pressed fill. */
@@ -28,7 +28,8 @@ export function SidebarRow({
   onClose?: () => void
   children: ReactNode
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const sidebarRowStyles = useThemedStyles(sidebarRowStylesSheet)
   return (
     <Pressable
       accessibilityRole="button"
@@ -70,6 +71,7 @@ export function SidebarRowMark({
   mark: ReactNode
   state: MobileSessionTabRow['dotState']
 }) {
+  const sidebarRowStyles = useThemedStyles(sidebarRowStylesSheet)
   const dot = state && state !== 'idle' ? state : undefined
   return (
     <View style={sidebarRowStyles.mark}>
@@ -93,6 +95,7 @@ export function SidebarRowText({
   unread: boolean
   children?: ReactNode
 }) {
+  const sidebarRowStyles = useThemedStyles(sidebarRowStylesSheet)
   const titleStyle = [sidebarRowStyles.title, unread && sidebarRowStyles.titleUnread]
   return (
     <View style={sidebarRowStyles.text}>
@@ -114,6 +117,7 @@ export function SidebarRowAsk({
 }: {
   row: Pick<MobileSessionTabRow, 'stateWord' | 'content' | 'dotState'>
 }) {
+  const sidebarRowStyles = useThemedStyles(sidebarRowStylesSheet)
   const t = useMobileTranslation()
   if (!row.stateWord && !row.content) {
     return null
@@ -130,7 +134,7 @@ export function SidebarRowAsk({
 
 /** A section's label, the list's 13 pt label lined up with the rows' marks, with its count. */
 export function SidebarLabel({ title, count }: { title: string; count?: number }) {
-  useMobileColorScheme()
+  const sidebarRowStyles = useThemedStyles(sidebarRowStylesSheet)
   return (
     <View style={sidebarRowStyles.label}>
       <Text style={sidebarRowStyles.labelText} numberOfLines={1}>
@@ -144,8 +148,8 @@ export function SidebarLabel({ title, count }: { title: string; count?: number }
 const ROW_RADIUS = radii.control
 export const SIDEBAR_MARK_SIZE = 20
 
-export const sidebarRowStyles = themedStyleSheet(() => {
-  const ground = getMobileColorScheme() === 'dark' ? colors.bgPanel : colors.bgRaised
+export const sidebarRowStylesSheet = themedStyleSheet((colors, scheme) => {
+  const ground = scheme === 'dark' ? colors.bgPanel : colors.bgRaised
   return {
     row: {
       minHeight: 44,

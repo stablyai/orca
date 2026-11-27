@@ -7,9 +7,15 @@ import {
 } from '../../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { ListGroup, ListRow, SectionHeader } from '../../../../components/list/ListGroup'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import {
+  pressedStyle,
+  radii,
+  spacing,
+  typography,
+  type MobilePalette
+} from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 /** Below this share used, context is not worth a line in the composer. */
 const NEAR_LIMIT_PERCENTAGE = 80
@@ -31,7 +37,7 @@ export function mobileNativeChatContextNearLimit(
   return usage !== null && usage.percentage >= NEAR_LIMIT_PERCENTAGE
 }
 
-function contextTint(percentage: number): string {
+function contextTint(percentage: number, colors: MobilePalette): string {
   return percentage >= NEAR_LIMIT_PERCENTAGE + 10
     ? colors.statusRed
     : percentage >= NEAR_LIMIT_PERCENTAGE
@@ -44,13 +50,14 @@ export const MobileNativeChatContextLimitLine = memo(function MobileNativeChatCo
   usage,
   onCompact
 }: MobileNativeChatContext): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   if (!usage || !mobileNativeChatContextNearLimit(usage)) {
     return null
   }
   const { filled } = contextUsageRingReadout(usage)
-  const tint = contextTint(usage.percentage)
+  const tint = contextTint(usage.percentage, colors)
   const left = String(Math.max(0, 100 - Math.round(filled)))
   return (
     <View style={styles.line} testID="native-chat-context-usage">
@@ -107,7 +114,8 @@ export function MobileNativeChatContextSection({
   usage,
   onCompact
 }: MobileNativeChatContext): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   if (!usage) {
     return null
@@ -127,7 +135,7 @@ export function MobileNativeChatContextSection({
               <View
                 style={[
                   styles.fill,
-                  { width: `${filled}%`, backgroundColor: contextTint(usage.percentage) }
+                  { width: `${filled}%`, backgroundColor: contextTint(usage.percentage, colors) }
                 ]}
               />
             </View>
@@ -150,7 +158,7 @@ const ringStyles = StyleSheet.create({
   ring: { transform: [{ rotate: '-90deg' }] }
 })
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: {
     flexDirection: 'row',
     alignItems: 'center',

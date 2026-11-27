@@ -5,12 +5,10 @@ import { loadHostCatalog } from '../src/host-catalog/host-store'
 import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
 import { firstParam } from '../src/navigation/route-param-reader'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { SettingsScreen, SettingsSection } from '../src/settings/settings-screen-frame'
 
 /** One common issue from Troubleshooting: its steps, numbered, in one group. */
 export default function TroubleshootIssueScreen() {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
   const id = firstParam(useLocalSearchParams<{ id?: string }>().id)

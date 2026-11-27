@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import { Search } from 'lucide-react-native'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { searchMobilePrBaseRefs } from '../../creation/mobile-pr-create-draft'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../../../../components/list/ListGroup'
-import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
 import { TextField } from '../../../../components/composer-input/TextField'
 import type { MobilePrTab } from '../use-mobile-pr-tab'
-import { prSheetStyles as sheetStyles } from '../pr-tab-styles'
+import { prSheetStylesSheet } from '../pr-tab-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 // The Create PR sheet's base picker: desktop's ref search, as branch names.
 export function PrBasePicker({
@@ -24,7 +24,9 @@ export function PrBasePicker({
   onPick: (base: string) => void
   onBack: () => void
 }) {
-  useMobileColorScheme()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const sheetStyles = useThemedStyles(prSheetStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client, worktreeId } = tab
   const [query, setQuery] = useState('')

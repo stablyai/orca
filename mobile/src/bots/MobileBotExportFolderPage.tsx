@@ -7,9 +7,9 @@ import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListG
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { getRuntimePathBasename } from '../../../src/shared/file-access/cross-platform-path'
 import { readHostDirectory, type HostDirectory } from './bot-import-host-reads'
@@ -39,7 +39,8 @@ export function MobileBotExportFolderPage(props: {
   onBack: () => void
   onPick: (folder: ExportFolder) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { client } = props
   // Home first, so Back from Downloads reaches the rest of it; the last one shows.
@@ -175,7 +176,7 @@ export function MobileBotExportFolderPage(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   page: { flex: 1 },
   foot: { paddingTop: spacing.md }
 }))

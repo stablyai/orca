@@ -6,7 +6,7 @@ import { SheetSecondaryButton } from '../components/sheets/SheetSecondaryButton'
 import { TextInputModal } from '../components/sheets/TextInputModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { MobileHomeAppMoveBanner } from './MobileHomeAppMoveBanner'
 import { MobileHomeTabEmpty } from './tabs/MobileHomeTabEmpty'
 
@@ -17,6 +17,7 @@ export function MobileHomeEmptyState(props: {
   onScanCode: () => void
   onPasteCode: (code: string) => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [pasting, setPasting] = useState(false)
   const wide = props.isWideLayout && {
@@ -72,7 +73,7 @@ export function MobileHomeEmptyState(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   content: { flexGrow: 1, paddingHorizontal: spacing.lg },
   foot: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }
 }))

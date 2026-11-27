@@ -1,12 +1,12 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
 const FLOATING_CONTROLS_BOTTOM = spacing.md
 const LOAD_EARLIER_HEIGHT = 44
 const RETRY_PILL_HEIGHT = 28
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   hidden: { display: 'none' },
   root: {
     flex: 1,

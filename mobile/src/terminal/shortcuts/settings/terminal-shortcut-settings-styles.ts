@@ -1,10 +1,10 @@
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../../../components/list/ListGroup'
 
 // Drag-reorder rows keep their own layout: the reorder list fixes their height and adds the grip.
 // Text matches ListRow's title, value and subtitle so a row reads the same in and out of Edit.
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   reorderRowContent: {
     flex: 1,
     height: '100%',

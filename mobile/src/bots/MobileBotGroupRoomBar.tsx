@@ -3,9 +3,9 @@ import { Pressable, Text, View } from 'react-native'
 import { MessageSquare, Plus, Users } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
-import { colors, feedback, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { feedback, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 
 /** A group's rooms as the session's old tab bar drew tabs: the room you're in, the count of rooms, and +
@@ -23,7 +23,8 @@ export function MobileBotGroupRoomBar({
   onOpenRoom: (threadId: string | undefined) => void
   onNewThread: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [listing, setListing] = useState(false)
   const newThread = t('bots.groups.newThreadTab', 'New thread')
@@ -102,7 +103,7 @@ export function MobileBotGroupRoomBar({
 }
 
 // The session's former tab strip: the room you're in raised, the count and + as square cells.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   bar: {
     height: 44,
     flexDirection: 'row',

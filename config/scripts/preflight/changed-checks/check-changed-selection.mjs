@@ -57,6 +57,11 @@ const RATCHET_INPUTS = {
     'config/main-blocking-worker-entries.json',
     'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
   ],
+  'check-mobile-react-compiler-hazard-ratchet.mjs': [
+    'mobile/app/',
+    'mobile/src/',
+    'mobile/web-entry/'
+  ],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
   'check-recurring-timer-ratchet.mjs': [
     'src/main/',
@@ -416,10 +421,12 @@ const RATCHET_SHARED_MODULES = {
     'check-main-blocking-helper-ratchet.mjs'
   ],
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
+    'check-mobile-react-compiler-hazard-ratchet.mjs',
     'check-react-compiler-compat-ratchet.mjs'
   ],
   'config/react-compiler-uncompiled-files.txt': ['check-react-compiler-compat-ratchet.mjs'],
   'config/scripts/localization/reactive-translate/render-path-translate.mjs': [
+    'check-mobile-react-compiler-hazard-ratchet.mjs',
     'check-render-path-translate-ratchet.mjs'
   ]
 }

@@ -1,8 +1,8 @@
 import type { LucideIcon } from 'lucide-react-native'
 import { Text, View } from 'react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** A Home tab with nothing to list: its glyph, a title and a line. */
 export function MobileHomeTabEmpty(props: {
@@ -12,7 +12,8 @@ export function MobileHomeTabEmpty(props: {
   /** Centres in the space it is given, for a tab with nothing else on it but a foot. */
   centred?: boolean
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const Icon = props.icon
   return (
     <View style={[styles.empty, props.centred && styles.centred]}>
@@ -25,7 +26,7 @@ export function MobileHomeTabEmpty(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   empty: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,

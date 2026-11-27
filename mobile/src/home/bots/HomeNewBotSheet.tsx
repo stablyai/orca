@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { MobileNewBotSheet } from '../../bots/MobileNewBotSheet'
 import { botPlaceClient, useOpenBotHome } from '../../bots/use-open-bot-home'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { homeNewBotComputers, type HomeBots } from './home-bot-rows'
 
 /** Home's New bot: the computer's own sheet, with Runs on across every connected computer. Mounted
@@ -33,8 +34,9 @@ function OpenHomeNewBotSheet(props: {
   onAfterClose: () => void
 }) {
   const openBotHome = useOpenBotHome({ standalone: true })
+  const t = useMobileTranslation()
   const { bots, clientOf } = props
-  const computers = useMemo(() => homeNewBotComputers(bots), [bots])
+  const computers = useMemo(() => homeNewBotComputers(bots, t), [bots, t])
   const byId = useMemo(
     () => new Map(bots.computers.map((computer) => [computer.key, computer])),
     [bots]

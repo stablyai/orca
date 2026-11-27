@@ -1,10 +1,10 @@
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, concentricRadius } from '../../theme/mobile-theme'
+import { radii, spacing, concentricRadius } from '../../theme/mobile-theme'
 
 import { FIELD_ROW_HEIGHT } from '../../components/composer-input/composer-input-styles'
 
-export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
+export const mobileTasksProjectPickerStylesSheet = themedStyleSheet((colors) => ({
   boardContainer: {
     gap: spacing.md,
     padding: spacing.md

@@ -2,9 +2,8 @@ import { createContext, useContext } from 'react'
 import { Text, View } from 'react-native'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import {
   countMobileSessionDesktopTabs,
   type MobileSessionTabSummary
@@ -13,11 +12,14 @@ import {
 const CountContext = createContext(0)
 
 // NavBarButton draws an icon; this one is the tab count in a box, in the colour the button gives it.
-function TabCountGlyph({ color = colors.textPrimary }: { color?: string }) {
+function TabCountGlyph({ color }: { color?: string }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const count = useContext(CountContext)
+  const resolvedColor = color ?? colors.textPrimary
   return (
-    <View style={[styles.box, { borderColor: color }]}>
-      <Text style={[styles.count, { color }]}>{count > 99 ? '99+' : count}</Text>
+    <View style={[styles.box, { borderColor: resolvedColor }]}>
+      <Text style={[styles.count, { color: resolvedColor }]}>{count > 99 ? '99+' : count}</Text>
     </View>
   )
 }
@@ -38,7 +40,7 @@ export function MobileSessionTabsButton({
   active: boolean
   onPress: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const count = countMobileSessionDesktopTabs(tabs)
   const needYou =
@@ -67,7 +69,7 @@ export function MobileSessionTabsButton({
 }
 
 // The strip's count cell, kept: a 19 pt box with a 1.8 pt line.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   box: {
     minWidth: 19,
     height: 19,
