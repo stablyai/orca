@@ -182,14 +182,14 @@ export type WorktreeSlice = {
     compareBaseRef?: string,
     options?: CreateWorktreeCallOptions
   ) => Promise<CreatedWorktreeResult>
-  /** Register a window-owned creation and optionally make it the active surface. */
-  beginPendingWorktreeCreation: (entry: PendingWorktreeCreation, activate?: boolean) => void
+  /** Register an in-flight background creation and make it the active surface. */
+  beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
   /** Merge a status patch into an existing pending entry. */
   updatePendingWorktreeCreation: (
     creationId: string,
     patch: {
       phase?: WorktreeCreationPhase
-      status?: 'creating' | 'error'
+      status?: PendingWorktreeCreation['status']
       startedAt?: number
       error?: string
       loaderVisible?: boolean

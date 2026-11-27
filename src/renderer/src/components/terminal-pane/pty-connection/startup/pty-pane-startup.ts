@@ -1,5 +1,8 @@
 import type { NativeChatSignInRequest } from '../../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
+import type {
+  FreshWorkspaceAgentLaunch,
+  WorktreeSetupGateObserver
+} from '@/lib/workspace/creation/worktree-startup-payload'
 import type { EventProps } from '../../../../../../shared/telemetry/telemetry-event-classification'
 import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -34,7 +37,7 @@ export type PtyPaneStartup = {
   /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
   agentArgsOverride?: string | null
   draftPrompt?: string
-  onSetupGateSettled?: (blocked: boolean) => void
+  setupGateObserver?: WorktreeSetupGateObserver
   sessionOptions?: Record<string, SessionOptionValue>
   /** Main emits agent_started only after successful spawn. */
   telemetry?: EventProps<'agent_started'>

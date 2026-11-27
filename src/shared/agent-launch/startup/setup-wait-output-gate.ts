@@ -9,9 +9,15 @@ import {
 } from './setup-agent-sequencing'
 import { copyUtf16SuffixToOwnedString } from '../../text/owned-utf16-suffix'
 
-/** The wrapper can read the marker one tick late, then verify the agent before reporting. */
-export const SETUP_WAIT_GATE_MAX_MS =
-  (SETUP_AGENT_WAIT_TIMEOUT_SECONDS + 1 + SETUP_AGENT_RECHECK_TIMEOUT_SECONDS) * 1000
+/** The wrapper itself gives up then, so no agent can start after it. */
+export const SETUP_WAIT_GATE_MAX_MS = SETUP_AGENT_WAIT_TIMEOUT_SECONDS * 1000
+
+/** Allow one more marker read and the executable recheck before the wrapper reports. */
+export const SETUP_WAIT_WRAPPER_MAX_MS =
+  SETUP_WAIT_GATE_MAX_MS + (1 + SETUP_AGENT_RECHECK_TIMEOUT_SECONDS) * 1000
+
+/** PTY observers can attach before the login shell starts the wrapper's clock. */
+export const SETUP_WAIT_OBSERVER_MAX_MS = SETUP_WAIT_WRAPPER_MAX_MS + 5 * 60_000
 
 const SETUP_WAIT_END_LINES: readonly { line: string; phase: 'started' | 'failed' }[] = [
   { line: SETUP_COMPLETE_MESSAGE, phase: 'started' },

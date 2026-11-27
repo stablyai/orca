@@ -7,6 +7,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
+import { observeRendererSetupGate } from './worktree-creation-setup-draft'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/launch-outcome/agent-launch-pane-notice-text'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { InitialTerminalOptions } from '@/lib/workspace/activation/worktree-activation-store-contract'
@@ -59,20 +60,18 @@ export function windowStartupAfterCreate(
   const plan = planWindowStartup(request, result, backendSpawned)
   const hostId =
     result.worktree.hostId ?? request.workspaceRunContext?.hostId ?? request.executionHostId
-  // Main leaves default-tab startup to the window, whose pane sees the gate settle.
   const rendererGate =
     plan.startup?.launchConfig?.commandProvenance === 'generated' &&
     request.launchDraftPrompt &&
     result.setup?.waitForAgentStartup &&
-    result.defaultTabs?.tabs.length &&
     (hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
     !isWebClientLocation()
-      ? Promise.withResolvers<boolean>()
+      ? observeRendererSetupGate()
       : undefined
   return {
     ...plan,
     ...(plan.startup && rendererGate
-      ? { startup: { ...plan.startup, onSetupGateSettled: rendererGate.resolve } }
+      ? { startup: { ...plan.startup, setupGateObserver: rendererGate.observer } }
       : {}),
     setupGateBlocked: result.setupGateBlocked ?? rendererGate?.promise,
     startupDraftDeferred: Boolean(

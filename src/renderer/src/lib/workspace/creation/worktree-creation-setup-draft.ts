@@ -1,18 +1,27 @@
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
+import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/worktree-create-payload'
 import { getWorktreeDeleteStateKey } from '@/store/slices/worktrees/teardown/worktree-delete-state'
-import { hasWorktreeTeardownStarted } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
+import { subscribeToPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
+import { subscribeToPtyExit } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import type { PendingWorktreeCreation, WorktreeCreationRequest } from './pending-worktree-creation'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+import {
+  createSetupWaitGate,
+  SETUP_WAIT_OBSERVER_MAX_MS
+} from '../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { hostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { CreateWorktreeArgs } from '../../../../../shared/worktree/create-types'
+import type { WorktreeSetupGateObserver } from './worktree-startup-payload'
 
 const setupGateObservers = new Map<string, (blocked: boolean) => void>()
 
@@ -72,57 +81,124 @@ export function deferredWorktreeCreationDraft(
   }
 }
 
-function restoreSetupBlockedWorktreeDraft(
-  entry: PendingWorktreeCreation,
-  worktree: Pick<Worktree, 'id' | 'hostId' | 'instanceId'>
-): void {
-  const state = useAppStore.getState()
-  const hostId = worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
-  const current = selectWorkspaceByHostTarget(
-    state,
-    hostWorktreeTarget({ id: worktree.id, hostId })
-  )
-  if (
-    !current ||
-    !worktree.instanceId ||
-    current.instanceId !== worktree.instanceId ||
-    current.removing ||
-    hasWorktreeTeardownStarted(
-      state.deleteStateByWorktreeId[getWorktreeDeleteStateKey(state, current.id, hostId)]
-    )
-  ) {
-    return
-  }
-  const isViewingWorktree =
-    state.activeView === 'terminal' &&
-    state.activePendingCreationId === null &&
-    state.activeWorktreeId !== null &&
-    worktreeIdsEqual(state.activeWorktreeId, worktree.id) &&
-    (state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
-  state.beginPendingWorktreeCreation(
-    { ...entry, ...deferredWorktreeCreationDraft(current.id, entry.request, hostId) },
-    isViewingWorktree
-  )
-}
-
-export function retainDraftIfSetupBlocks(
+export function keepWorktreeCreationUntilSetupSettles(
   creationId: string,
   request: WorktreeCreationRequest,
   worktree: Worktree,
-  setupGateBlocked: Promise<boolean> | undefined
+  setupGateBlocked: Promise<boolean>
 ): void {
-  if (!setupGateBlocked) {
-    return
+  const state = useAppStore.getState()
+  const hostId = worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
+  state.updatePendingWorktreeCreation(creationId, {
+    status: 'waiting-for-setup',
+    worktreeId: worktree.id,
+    loaderVisible: true,
+    request: { ...request, executionHostId: hostId }
+  })
+  if (state.activePendingCreationId === creationId) {
+    state.setActivePendingWorktreeCreation(null)
   }
-  const pendingEntry = useAppStore.getState().pendingWorktreeCreations[creationId]
-  if (pendingEntry) {
-    const entry = { ...pendingEntry, request }
-    void setupGateBlocked
-      .then((blocked) => {
-        if (blocked) {
-          restoreSetupBlockedWorktreeDraft(entry, worktree)
+
+  void setupGateBlocked
+    .then(async (blocked) => {
+      const beforeDelete = useAppStore.getState()
+      if (!blocked) {
+        beforeDelete.removePendingWorktreeCreation(creationId, { cleanupVm: false })
+        return
+      }
+      if (!beforeDelete.pendingWorktreeCreations[creationId]) {
+        return
+      }
+      const deleteKey = getWorktreeDeleteStateKey(beforeDelete, worktree.id, hostId)
+      if (beforeDelete.deleteStateByWorktreeId[deleteKey]?.isDeleting) {
+        // A refused deletion still owns its workspace and draft.
+        await new Promise<void>((resume) => {
+          const unsubscribe = useAppStore.subscribe((next) => {
+            if (
+              !next.pendingWorktreeCreations[creationId] ||
+              !next.deleteStateByWorktreeId[deleteKey]?.isDeleting
+            ) {
+              unsubscribe()
+              resume()
+            }
+          })
+        })
+      }
+      const live = useAppStore.getState()
+      const entry = live.pendingWorktreeCreations[creationId]
+      if (!entry) {
+        return
+      }
+      const current = selectWorkspaceByHostTarget(
+        live,
+        hostWorktreeTarget({ id: worktree.id, hostId })
+      )
+      if (
+        !current ||
+        !worktree.instanceId ||
+        current.instanceId !== worktree.instanceId ||
+        isWorktreeRetiredByRemoval(current) ||
+        !getIndexedReposById(live.repos, request.repoId).some(
+          (repo) => getRepoExecutionHostId(repo) === hostId
+        )
+      ) {
+        live.removePendingWorktreeCreation(creationId, { cleanupVm: false })
+        return
+      }
+      live.updatePendingWorktreeCreation(
+        creationId,
+        deferredWorktreeCreationDraft(current.id, entry.request, hostId)
+      )
+      if (
+        live.activeView === 'terminal' &&
+        live.activePendingCreationId === null &&
+        live.activeWorktreeId !== null &&
+        worktreeIdsEqual(live.activeWorktreeId, worktree.id) &&
+        (live.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
+      ) {
+        live.setActivePendingWorktreeCreation(creationId)
+      }
+    })
+    .catch(console.error)
+}
+
+export function observeRendererSetupGate(): {
+  observer: WorktreeSetupGateObserver
+  promise: Promise<boolean>
+} {
+  const { promise, resolve } = Promise.withResolvers<boolean>()
+  let stopWatching: (() => void) | undefined
+  let settled = false
+  const settle = (blocked: boolean): void => {
+    settled = true
+    clearTimeout(deadline)
+    stopWatching?.()
+    stopWatching = undefined
+    resolve(blocked)
+  }
+  const deadline = setTimeout(() => settle(false), SETUP_WAIT_OBSERVER_MAX_MS)
+  return {
+    promise,
+    observer: {
+      settle,
+      bind: (ptyId) => {
+        if (settled || stopWatching) {
+          return
         }
-      })
-      .catch(console.error)
+        // A PTY's setup can outlive the pane that launched it.
+        const gate = createSetupWaitGate(true)
+        const stopData = subscribeToPtyData(ptyId, (data) => {
+          const { phase, blocked } = gate.observe(data)
+          if (phase === 'started' || phase === 'failed') {
+            settle(blocked === true)
+          }
+        })
+        const stopExit = subscribeToPtyExit(ptyId, () => settle(false))
+        stopWatching = () => {
+          stopData()
+          stopExit()
+        }
+      }
+    }
   }
 }

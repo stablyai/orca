@@ -23,6 +23,11 @@ export type FreshWorkspaceAgentLaunch = {
   legacy?: () => LaunchAgentStartupPromptPlan
 }
 
+export type WorktreeSetupGateObserver = {
+  bind: (ptyId: string) => void
+  settle: (blocked: boolean) => void
+}
+
 /** Startup command threaded onto a worktree's first terminal at activation. */
 export type WorktreeStartupPayload = {
   command: string
@@ -33,7 +38,7 @@ export type WorktreeStartupPayload = {
   launchToken?: string
   launchAgent?: TuiAgent
   draftPrompt?: string
-  onSetupGateSettled?: (blocked: boolean) => void
+  setupGateObserver?: WorktreeSetupGateObserver
   startupCommandDelivery?: StartupCommandDelivery
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   sessionOptions?: Record<string, SessionOptionValue>

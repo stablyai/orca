@@ -9,7 +9,7 @@ import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktre
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   deferredWorktreeCreationDraft,
-  retainDraftIfSetupBlocks
+  keepWorktreeCreationUntilSetupSettles
 } from './worktree-creation-setup-draft'
 
 export async function completeWorktreeCreation(args: {
@@ -35,15 +35,14 @@ export async function completeWorktreeCreation(args: {
         args.creationId,
         deferredWorktreeCreationDraft(args.worktreeId, request, args.result?.worktree.hostId)
       )
+  } else if (args.setupGateBlocked && args.result) {
+    keepWorktreeCreationUntilSetupSettles(
+      args.creationId,
+      request,
+      args.result.worktree,
+      args.setupGateBlocked
+    )
   } else {
-    if (args.result) {
-      retainDraftIfSetupBlocks(
-        args.creationId,
-        request,
-        args.result.worktree,
-        args.setupGateBlocked
-      )
-    }
     // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
     useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
   }
