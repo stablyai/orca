@@ -145,17 +145,11 @@ export async function catchUpClaudeTranscript(input: {
     // Decided from the journal first, so a chat with nothing to import touches no files.
     const planned = await view()
     check()
-    const fromFirst = input.leafUuid === '' && !planned.covered && !!input.fromFirstPrompt
-    // Past its first turn (an import that committed only part of itself): it resumes from its newest
-    // saved transcript row, and only from there; an older chat holding none is left as it is.
-    const resumeFrom =
-      fromFirst && planned.turns > 1
-        ? await newestClaudeRow(history.reads, input.providerSessionId)
-        : undefined
-    check()
-    const afterFirstPrompt = fromFirst && (planned.turns === 1 || resumeFrom !== undefined)
+    // Only a chat on its first turn: an older one without a saved leaf is left as it is.
+    const afterFirstPrompt =
+      input.leafUuid === '' && !planned.covered && !!input.fromFirstPrompt && planned.turns === 1
     if (input.leafUuid === '' && !planned.covered && !afterFirstPrompt) {
-      if (fromFirst && planned.turns > 1) {
+      if (input.fromFirstPrompt && planned.turns > 1) {
         settledFirstTurns.set(input.sessionId, null)
       }
       return null
@@ -182,7 +176,7 @@ export async function catchUpClaudeTranscript(input: {
     settle = settleHere
     // A first turn imported before reads on from its newest row, so a later open repeats nothing.
     const leaf = afterFirstPrompt
-      ? (resumeFrom ?? (await newestClaudeRow(history.reads, input.providerSessionId)) ?? '')
+      ? ((await newestClaudeRow(history.reads, input.providerSessionId)) ?? '')
       : input.leafUuid
     check()
     let leafAbsent = leaf === '' && (!!planned.covered || afterFirstPrompt)
@@ -198,9 +192,7 @@ export async function catchUpClaudeTranscript(input: {
           }
         })
     check()
-    // A whole-chain scan from the first prompt only for a chat still on it: never past saved turns.
-    const scanFromFirst = afterFirstPrompt && planned.turns === 1
-    if (!tail && !(leafAbsent && (planned.covered || scanFromFirst))) {
+    if (!tail && !(leafAbsent && (planned.covered || afterFirstPrompt))) {
       // Past the tail's read budget: as over the caps as a too-large import.
       settleHere()
       warn('leaf-not-in-tail')
