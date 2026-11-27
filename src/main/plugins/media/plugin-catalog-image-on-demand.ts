@@ -20,6 +20,7 @@ import type { PluginImageCache } from './plugin-image-cache'
 import {
   CatalogSnapshotImages,
   catalogImageKey,
+  isVerifiedImage,
   verifiedImagesAt,
   type VerifiedImages
 } from './plugin-catalog-snapshot-images'
@@ -90,14 +91,13 @@ export class PluginCatalogImageOnDemand {
       snapshots: this.snapshots,
       snapshot,
       isCurrent: () => this.currentSnapshot(source) === snapshot,
-      read: (kind, image) =>
-        this.readFromSnapshot(
-          source,
-          snapshot,
-          catalogImageKey(kind, image),
-          { ...image, kind },
-          signal
-        )
+      read: async (kind, image) => {
+        // Why: an unchanged refresh keeps its proofs, so warming it would only reread the cache.
+        const key = catalogImageKey(kind, image)
+        if (!isVerifiedImage(this.verified, source, snapshot, key)) {
+          await this.readFromSnapshot(source, snapshot, key, { ...image, kind }, signal)
+        }
+      }
     }).catch(() => undefined)
   }
 
@@ -140,10 +140,6 @@ export class PluginCatalogImageOnDemand {
       : null
   }
 
-  private declares(snapshot: PluginMarketplaceCachedSnapshot, key: string): boolean {
-    return this.snapshots.declares(snapshot, key)
-  }
-
   private async readFromSnapshot(
     source: PluginMarketplaceRegisteredSource,
     snapshot: PluginMarketplaceCachedSnapshot,
@@ -151,7 +147,7 @@ export class PluginCatalogImageOnDemand {
     image: CatalogReference['image'] & Pick<CatalogImage, 'path' | 'sha256'>,
     signal: AbortSignal
   ): Promise<CheckedPluginImage | null> {
-    if (!this.declares(snapshot, key)) {
+    if (!this.snapshots.declares(snapshot, key)) {
       return null
     }
     const commit = snapshot.marketplaceCommit
@@ -169,8 +165,8 @@ export class PluginCatalogImageOnDemand {
     // for an image already being read joins that read instead.
     if (this.pending.get(snapshot)?.get(key)?.source !== source) {
       const cache = this.options.cache.get(image.sha256).catch(() => null)
-      const proven = await this.snapshots.provenCached(snapshot, image.path, cache)
-      if (proven && !signal.aborted && validateCatalogImage(proven.bytes, image, image.kind)) {
+      const proven = await this.snapshots.provenCached(snapshot, image, cache)
+      if (proven && !signal.aborted) {
         verifiedImagesAt(this.verified, source, snapshot).keys.add(key)
         return proven
       }
@@ -258,7 +254,11 @@ export class PluginCatalogImageOnDemand {
           const paths = new Map<string, number>()
           admitted = jobs.flatMap((job) => {
             const snapshot = this.currentSnapshot(job.source)
-            if (!snapshot || job.controller.signal.aborted || !this.declares(snapshot, job.key)) {
+            if (
+              !snapshot ||
+              job.controller.signal.aborted ||
+              !this.snapshots.declares(snapshot, job.key)
+            ) {
               return []
             }
             paths.set(

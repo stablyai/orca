@@ -1,7 +1,6 @@
-import type { PluginImageKind } from '../../../shared/plugins/images/plugin-image-fields'
 import type { CatalogImage } from '../catalog/plugin-catalog-image-extraction'
 import type { PluginMarketplaceCachedSnapshot } from '../catalog/plugin-marketplace-store'
-import type { CatalogSnapshotImages } from './plugin-catalog-snapshot-images'
+import type { CatalogImageKind, CatalogSnapshotImages } from './plugin-catalog-snapshot-images'
 
 // Why 64 MiB: what a refresh used to download for artwork, half the image cache, so warming one
 // catalog cannot evict another's.
@@ -17,7 +16,7 @@ export async function warmCatalogImages(input: {
   snapshots: CatalogSnapshotImages
   snapshot: PluginMarketplaceCachedSnapshot
   isCurrent: () => boolean
-  read: (kind: PluginImageKind, image: CatalogImage) => Promise<unknown>
+  read: (kind: CatalogImageKind, image: CatalogImage) => Promise<unknown>
 }): Promise<void> {
   const { snapshots, snapshot } = input
   const listed = await snapshots.listing(snapshot)

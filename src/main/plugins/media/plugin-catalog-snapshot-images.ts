@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 import type { PluginImageKind } from '../../../shared/plugins/images/plugin-image-fields'
+import type { PluginCatalogImageIdentity } from '../../../shared/plugins/images/plugin-image-url'
 import type { ListedBlob } from '../catalog/plugin-catalog-blob-reader'
-import type { CatalogImage } from '../catalog/plugin-catalog-image-extraction'
+import { readPluginImageHeader } from '../../../shared/plugins/images/plugin-image-format'
+import { validateCatalogImage, type CatalogImage } from '../catalog/plugin-catalog-image-extraction'
 import {
   snapshotRepositorySlot,
   type CatalogRepositorySlot,
@@ -9,7 +11,8 @@ import {
 } from '../catalog/plugin-marketplace-store'
 import type { CheckedPluginImage } from './plugin-image-read'
 
-type DeclaredImage = { kind: PluginImageKind; image: CatalogImage }
+export type CatalogImageKind = PluginCatalogImageIdentity['kind']
+type DeclaredImage = { kind: CatalogImageKind; image: CatalogImage }
 type Declarations = { keys: Set<string>; paths: Set<string>; images: DeclaredImage[] }
 type Listing = {
   read: Promise<Map<string, ListedBlob> | null>
@@ -54,6 +57,21 @@ export function verifiedImagesAt<Source extends object>(
   return proven
 }
 
+/** Whether the source already proved this key at the snapshot's commit and slot. */
+export function isVerifiedImage<Source extends object>(
+  verified: WeakMap<Source, VerifiedImages>,
+  source: Source,
+  snapshot: PluginMarketplaceCachedSnapshot,
+  key: string
+): boolean {
+  const proven = verified.get(source)
+  return (
+    proven?.commit === snapshot.marketplaceCommit &&
+    proven.slot === snapshotRepositorySlot(snapshot) &&
+    proven.keys.has(key)
+  )
+}
+
 /** What each published snapshot declares, and one shared listing of its image paths. */
 export class CatalogSnapshotImages {
   private readonly declarations = new WeakMap<PluginMarketplaceCachedSnapshot, Declarations>()
@@ -80,15 +98,21 @@ export class CatalogSnapshotImages {
     return this.listings.get(snapshot)?.value
   }
 
-  /** The cached asset when the snapshot's commit lists its bytes at `path`, by Git blob id. */
+  /** The cached asset when the snapshot's commit lists its bytes at the image's path, by Git blob
+   *  id, and they meet the declaration. `cached` must come from the cache's lookup of the declared
+   *  hash, which returns bytes only after matching it. */
   async provenCached<T extends { bytes: Uint8Array }>(
     snapshot: PluginMarketplaceCachedSnapshot,
-    path: string,
+    image: Pick<CatalogImage, 'path' | 'sha256' | 'width' | 'height'> & { kind: PluginImageKind },
     cached: Promise<T | null>
   ): Promise<T | null> {
     const [asset, listed] = await Promise.all([cached, this.listing(snapshot)])
-    const entry = listed?.get(path)
-    return asset && entry && entry.object === gitBlobId(asset.bytes) ? asset : null
+    const entry = listed?.get(image.path)
+    if (!asset || !entry || entry.object !== gitBlobId(asset.bytes)) {
+      return null
+    }
+    const facts = { info: readPluginImageHeader(asset.bytes), sha256: image.sha256 }
+    return validateCatalogImage(asset.bytes, image, image.kind, facts) ? asset : null
   }
 
   /** Shared by every request against the snapshot; a failed listing is forgotten so a later
@@ -121,7 +145,7 @@ export class CatalogSnapshotImages {
     }
     const declarations: Declarations = { keys: new Set(), paths: new Set(), images: [] }
     const screenshots: DeclaredImage[] = []
-    const add = (kind: PluginImageKind, image: CatalogImage | undefined): void => {
+    const add = (kind: CatalogImageKind, image: CatalogImage | undefined): void => {
       const key = image && catalogImageKey(kind, image)
       if (image && key && !declarations.keys.has(key)) {
         declarations.keys.add(key)

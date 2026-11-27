@@ -602,6 +602,19 @@ describe('on-demand catalog image protocol', () => {
     expect(response.status).toBe(200)
     expect(Buffer.from(await response.arrayBuffer())).toEqual(f.bytes)
     expect(f.readImages).toHaveBeenCalledTimes(1)
+
+    // An unchanged republish keeps its proofs, so warming neither rereads the cache nor Git.
+    const cacheReads = vi.spyOn(f.cache, 'get')
+    const listings = f.listImages.mock.calls.length
+    await f.store.writeSnapshot({
+      source: f.source,
+      marketplaceCommit: 'd'.repeat(40),
+      marketplace: f.marketplace
+    })
+    await vi.waitFor(() => expect(f.listImages).toHaveBeenCalledTimes(listings + 1))
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(cacheReads).not.toHaveBeenCalled()
+    expect(f.readImages).toHaveBeenCalledTimes(1)
   })
 
   it('lists a snapshot loaded from disk without reading its artwork', async () => {
