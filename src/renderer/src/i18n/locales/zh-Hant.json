@@ -20345,12 +20345,7 @@
         "create": "建立"
       },
       "NativeChatResumeToast": {
-        "resumingOn_other": "正在恢復 {{machine}} 上的 {{count}} 個聊天…",
         "resuming_other": "正在恢復 {{count}} 個聊天…",
-        "resumedOn_other": "已恢復 {{machine}} 上的 {{count}} 個聊天。",
-        "resumedUpdate_other": "更新後已恢復 {{count}} 個聊天。",
-        "resumedRestart_other": "重新啟動後已恢復 {{count}} 個聊天。",
-        "partial_other": "已恢復 {{total}} 個聊天中的 {{resumed}} 個。{{count}} 個需要你處理。",
         "stoppedOn_other": "{{machine}} 上有 {{count}} 個聊天已停止。",
         "stoppedUpdate_other": "Orca 更新時有 {{count}} 個聊天已停止。",
         "stoppedRestart_other": "Orca 關閉時有 {{count}} 個聊天已停止。",
@@ -20360,8 +20355,6 @@
         "close": "關閉",
         "listLabel": "聊天",
         "untitled": "無標題聊天",
-        "willAsk": "Orca 會要求聊天繼續。排隊中的訊息可能會被傳送。",
-        "asked": "Orca 已要求聊天繼續。排隊中的訊息可能會被傳送。",
         "resumedAutomatically": "已自動恢復。",
         "changeInSettings": "在設定中變更",
         "dismissAll": "全部忽略",
@@ -20371,7 +20364,13 @@
         "stateResumed": "已恢復",
         "stateNeedsYou": "需要你處理",
         "stateResuming": "正在恢復",
-        "stateStopped": "已停止"
+        "stateStopped": "已停止",
+        "resumingOne": "正在恢復 {{name}}…",
+        "failedOne": "無法恢復 {{name}}",
+        "failedSome_other": "無法恢復：{{total}} 個中的 {{count}} 個",
+        "resumedOne": "已恢復 {{name}}",
+        "resumedMany_other": "已恢復 {{count}} 個聊天",
+        "needYou_other": "{{count}} 個需要你處理"
       },
       "RunTargetCombobox": {
         "noWslDistros": "找不到 WSL 發行版",

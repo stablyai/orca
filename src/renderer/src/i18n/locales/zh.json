@@ -19983,12 +19983,7 @@
         "create": "创建"
       },
       "NativeChatResumeToast": {
-        "resumingOn_other": "正在恢复 {{machine}} 上的 {{count}} 个智能体…",
         "resuming_other": "正在恢复 {{count}} 个智能体…",
-        "resumedOn_other": "已恢复 {{machine}} 上的 {{count}} 个智能体",
-        "resumedUpdate_other": "更新后已恢复 {{count}} 个智能体",
-        "resumedRestart_other": "重启后已恢复 {{count}} 个智能体",
-        "partial_other": "已恢复 {{total}} 个智能体中的 {{resumed}} 个。{{count}} 个需要你处理",
         "stoppedOn_other": "{{machine}} 上有 {{count}} 个智能体已停止",
         "stoppedUpdate_other": "Orca 更新时有 {{count}} 个智能体已停止",
         "stoppedRestart_other": "Orca 关闭时有 {{count}} 个智能体已停止",
@@ -19998,8 +19993,6 @@
         "close": "关闭",
         "listLabel": "智能体",
         "untitled": "无标题智能体",
-        "willAsk": "Orca 会请求智能体继续。排队中的消息可能会被发送",
-        "asked": "Orca 已请求智能体继续。排队中的消息可能会被发送",
         "resumedAutomatically": "已自动恢复",
         "changeInSettings": "在设置中更改",
         "dismissAll": "全部忽略",
@@ -20009,7 +20002,13 @@
         "stateResumed": "已恢复",
         "stateNeedsYou": "需要你处理",
         "stateResuming": "正在恢复",
-        "stateStopped": "已停止"
+        "stateStopped": "已停止",
+        "resumingOne": "正在恢复 {{name}}…",
+        "failedOne": "无法恢复 {{name}}",
+        "failedSome_other": "无法恢复：{{total}} 个中的 {{count}} 个",
+        "resumedOne": "已恢复 {{name}}",
+        "resumedMany_other": "已恢复 {{count}} 个智能体",
+        "needYou_other": "{{count}} 个需要你处理"
       },
       "NativeChatResumeFailureGuidance": {
         "fallbackShort": "无法恢复",

@@ -19702,12 +19702,7 @@
         "create": "作成"
       },
       "NativeChatResumeToast": {
-        "resumingOn_other": "{{machine}} で {{count}} 件の Agent を再開しています…",
-        "resuming_other": "{{count}} 件の Agent を再開しています…",
-        "resumedOn_other": "{{machine}} で {{count}} 件の Agent を再開しました。",
-        "resumedUpdate_other": "アップデート後に {{count}} 件の Agent を再開しました。",
-        "resumedRestart_other": "再起動後に {{count}} 件の Agent を再開しました。",
-        "partial_other": "{{total}} 件中 {{resumed}} 件を再開しました。{{count}} 件は対応が必要です。",
+        "resuming_other": "再開中：{{count}} 件の Agent…",
         "stoppedOn_other": "{{machine}} で {{count}} 件の Agent が停止しました。",
         "stoppedUpdate_other": "アップデートで {{count}} 件の Agent が停止しました。",
         "stoppedRestart_other": "Orca の終了で {{count}} 件の Agent が停止しました。",
@@ -19717,8 +19712,6 @@
         "close": "閉じる",
         "listLabel": "Agent",
         "untitled": "無題の Agent",
-        "willAsk": "Orca が続行を依頼します。待機中のメッセージは送信される場合があります。",
-        "asked": "Orca が続行を依頼しました。待機中のメッセージは送信される場合があります。",
         "resumedAutomatically": "自動で再開しました。",
         "changeInSettings": "設定で変更",
         "dismissAll": "すべて非表示",
@@ -19728,7 +19721,13 @@
         "stateResumed": "再開済み",
         "stateNeedsYou": "対応が必要",
         "stateResuming": "再開中",
-        "stateStopped": "停止"
+        "stateStopped": "停止",
+        "resumingOne": "再開中：{{name}}…",
+        "failedOne": "再開できませんでした：{{name}}",
+        "failedSome_other": "再開できませんでした：{{total}} 件中 {{count}} 件",
+        "resumedOne": "再開済み：{{name}}",
+        "resumedMany_other": "再開済み：{{count}} 件の Agent",
+        "needYou_other": "{{count}} 件は対応が必要です"
       },
       "RunTargetCombobox": {
         "noWslDistros": "WSL ディストリビューションが見つかりません",
