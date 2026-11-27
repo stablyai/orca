@@ -32,6 +32,7 @@ export function createProcessTableSnapshotReader<T = string>(
 } {
   const ttlMs = deps.ttlMs ?? PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
   let cached: Snapshot<T> | null = null
+  let expiryTimer: ReturnType<typeof setTimeout> | null = null
   let inFlight: Promise<T> | null = null
   let inFlightCapturedAtMs = 0
   let inFlightMode: ProcessTableCaptureMode | null = null
@@ -51,7 +52,17 @@ export function createProcessTableSnapshotReader<T = string>(
     inFlight = promise
     try {
       const value = await promise
-      cached = { value, capturedAtMs, completedAtMs: deps.now() }
+      const next: Snapshot<T> = { value, capturedAtMs, completedAtMs: deps.now() }
+      cached = next
+      clearTimeout(expiryTimer ?? undefined)
+      expiryTimer =
+        ttlMs > 0 && Number.isFinite(ttlMs)
+          ? setTimeout(() => {
+              expiryTimer = null
+              cached = cached === next && deps.now() - next.completedAtMs >= ttlMs ? null : cached
+            }, ttlMs)
+          : null
+      expiryTimer?.unref?.()
       return value
     } finally {
       if (inFlight === promise) {
@@ -160,6 +171,8 @@ export function createProcessTableSnapshotReader<T = string>(
     getFreshSnapshot,
     peekSnapshot,
     reset: () => {
+      clearTimeout(expiryTimer ?? undefined)
+      expiryTimer = null
       cached = null
       inFlight = null
       sequence = 0
