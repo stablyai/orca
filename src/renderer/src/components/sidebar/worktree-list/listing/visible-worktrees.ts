@@ -30,6 +30,8 @@ export type VisibleWorktreeShortcutTarget = {
   id: string
   executionHostId?: Worktree['hostId']
   lineageGroupKey?: string
+  /** The rendered row's key, set only when the mounted list published the target. */
+  rowKey?: string
 }
 let _publishedVisibleShortcutTargets: VisibleWorktreeShortcutTarget[] | null = null
 

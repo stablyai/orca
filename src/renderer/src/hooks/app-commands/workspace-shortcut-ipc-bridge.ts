@@ -2,7 +2,7 @@ import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/terminal/quick-commands/
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
 import { activateTabNumberShortcut } from '@/lib/keyboard/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
-import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
+import { getSidebarNumberShortcutTargets } from '@/components/sidebar/number-shortcuts/sidebar-number-shortcut-targets'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
@@ -87,9 +87,11 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       if (store.activeView !== 'terminal') {
         return
       }
-      const visibleTargets = getVisibleWorktreeShortcutTargets()
-      const target = visibleTargets[index]
-      if (target) {
+      const shortcutTarget = getSidebarNumberShortcutTargets()[index]
+      if (shortcutTarget?.kind === 'bot') {
+        shortcutTarget.target.open()
+      } else if (shortcutTarget) {
+        const { target } = shortcutTarget
         activateAndRevealWorkspace(target.id, {
           navigationIntent: 'user-open',
           // Why: the digit addresses a workspace-list row, so show the list it acted on.

@@ -148,6 +148,11 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:jumpToWorktreeIndex', listener)
     return () => ipcRenderer.removeListener('ui:jumpToWorktreeIndex', listener)
   },
+  onModifierChordConsumed: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:modifierChordConsumed', listener)
+    return () => ipcRenderer.removeListener('ui:modifierChordConsumed', listener)
+  },
   onJumpToTabIndex: (callback: (index: number) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
     ipcRenderer.on('ui:jumpToTabIndex', listener)

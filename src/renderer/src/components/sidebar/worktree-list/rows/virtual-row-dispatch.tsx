@@ -34,6 +34,9 @@ import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { WorktreeRowDragState } from '../drag/row-state'
 import type { Translate } from '@/i18n/use-translate'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { SidebarNumberHintBadge } from '../../number-shortcuts/SidebarNumberHintBadge'
+import { workspaceRowNumberHintKey } from '../../number-shortcuts/sidebar-number-shortcut-targets'
 
 export type WorktreeVirtualRowContext = {
   dragUnitsByRow: ReadonlyMap<number, { identity: string }>
@@ -275,6 +278,11 @@ export function renderWorktreeVirtualRow(
           />
         )}
         <div className={cn('relative', sourceHidden && 'pointer-events-none opacity-0')}>
+          <SidebarNumberHintBadge
+            hintKey={workspaceRowNumberHintKey(
+              folder ? getFolderWorkspaceHostIdentity(row.folderWorkspace) : row.rowKey
+            )}
+          />
           {folder
             ? renderFolderWorkspaceOption({
                 ctx: ctx.folderWorkspace,

@@ -60,6 +60,7 @@ import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
+import { useBotNumberShortcutTargets } from './use-bot-number-shortcut-targets'
 
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
 const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
@@ -171,6 +172,7 @@ export function SidebarBotsSection({
     getScrollContainer: () => listRef.current
   })
   const listShown = !collapsed && entries.length > 0
+  useBotNumberShortcutTargets({ entries, listed: listShown && !searchOpen, onOpenBot })
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
   const newBotLabel = t('bots.section.newBot', 'New bot')
   const newLabel = t('bots.section.new', 'New bot or group')

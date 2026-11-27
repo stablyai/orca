@@ -127,10 +127,11 @@ export function useSidebarWorktreeSelection(args: {
     }
     setVisibleWorktreeIds(renderedWorktreeIds)
     setVisibleWorktreeShortcutTargets(
-      renderedWorktrees.map((worktree) => {
+      renderedRows.map(({ worktree, rowKey }) => {
         const lineageGroupKey = chipKeysByIdentity.get(getWorktreeHostIdentity(worktree))
         return {
           id: worktree.id,
+          rowKey,
           ...(worktree.hostId ? { executionHostId: worktree.hostId } : {}),
           ...(lineageGroupKey ? { lineageGroupKey } : {})
         }
@@ -141,7 +142,7 @@ export function useSidebarWorktreeSelection(args: {
       setVisibleWorktreeIds(null)
       setVisibleWorktreeShortcutTargets(null)
     }
-  }, [renderedWorktreeIds, renderedWorktrees, sectionRows])
+  }, [renderedRows, renderedWorktreeIds, sectionRows])
 
   return {
     renderedWorktreeIds,

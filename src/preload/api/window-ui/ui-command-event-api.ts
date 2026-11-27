@@ -125,6 +125,8 @@ export type UiCommandEventApi = {
   onToggleAgentDashboard: (callback: () => void) => () => void
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void
+  /** Main consumed a Cmd/Ctrl/Alt chord's keydown; its keyups, the modifier's included, will not reach the page. */
+  onModifierChordConsumed: (callback: () => void) => () => void
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
   onRequestTabCreate: (callback: (data: BrowserTabCreateRequest) => void) => () => void
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void

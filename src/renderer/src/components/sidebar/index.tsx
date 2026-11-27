@@ -35,6 +35,7 @@ import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/Stal
 import { SidebarBotsSection } from '@/components/bots/SidebarBotsSection'
 import { SidebarBotsSplit, SidebarProjectsListSlot } from './SidebarBotsSplit'
 import { SidebarContentViewport } from './SidebarContentViewport'
+import { useSidebarNumberHintKeys } from './number-shortcuts/use-sidebar-number-hint-keys'
 import { SidebarSectionDragOverlay } from './SidebarSectionDragOverlay'
 import { PROJECTS_SECTION_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { useBotsEnabled } from '@/lib/bot-catalog'
@@ -211,6 +212,7 @@ function Sidebar({
     workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)
 
   useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
+  useSidebarNumberHintKeys()
   const projectsFirst = useAppStore((s) => s.sidebarProjectsFirst)
   const setProjectsFirst = useAppStore((s) => s.setSidebarProjectsFirst)
   const sidebarSectionDragSensors = useSensors(
