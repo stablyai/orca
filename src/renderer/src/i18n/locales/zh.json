@@ -25679,8 +25679,7 @@
         "failing": "失败",
         "running": "待处理",
         "cancelled": "已取消",
-        "passing": "通过",
-        "more": "另有 {{count}} 项"
+        "passing": "通过"
       },
       "addEmoji": "添加表情符号",
       "addEmojiTooltip": "添加表情符号（或输入 :）",

@@ -26386,8 +26386,7 @@
         "failing": "falhando",
         "running": "pendente",
         "cancelled": "cancelado",
-        "passing": "com sucesso",
-        "more": "+{{count}} mais"
+        "passing": "com sucesso"
       },
       "addEmoji": "Adicionar emoji",
       "addEmojiTooltip": "Adicione emoji (ou digite :)",

@@ -14,6 +14,7 @@ import {
   type WorkspaceReferenceDetailsMap
 } from './workspace-reference-details'
 import { workspaceAttachmentReferenceLabel } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -107,8 +108,27 @@ function priority(item: WorkspaceAttachment, details: WorkspaceReferenceDetailsM
           : 4
 }
 
-// One reference per peek row; past this the list folds into "+N more".
-const PEEK_ROW_LIMIT = 8
+// The peek sits inside the card: inset this far from its edges, never wider than the cap.
+const PEEK_CARD_INSET = 8
+const PEEK_MAX_WIDTH = 300
+const PEEK_SCROLL_STEP = 28
+
+type PeekGeometry = { width: number; alignOffset: number }
+
+// Right-aligns the peek to the card's inner edge so narrow sidebars never clip it.
+function measurePeek(trigger: HTMLElement): PeekGeometry | null {
+  const card = trigger.closest('[data-worktree-card-surface]')
+  if (!card) {
+    return null
+  }
+  const cardRect = card.getBoundingClientRect()
+  const triggerRect = trigger.getBoundingClientRect()
+  return {
+    width: Math.max(0, Math.min(cardRect.width - 2 * PEEK_CARD_INSET, PEEK_MAX_WIDTH)),
+    // Radix shifts an end-aligned popper left by a positive offset.
+    alignOffset: triggerRect.right - (cardRect.right - PEEK_CARD_INSET)
+  }
+}
 
 function openReviewStatus(review: WorktreeCardPrDisplay, t: Translate): string {
   switch (getProviderChecksOutcome(review.checksSummary, review.status)) {
@@ -226,11 +246,59 @@ export function WorktreeReferenceStack({
         .join(' · ')
     })
     .join(', ')
-  const hidden = ordered.length - PEEK_ROW_LIMIT
   return (
-    <Tooltip delayDuration={200}>
+    <ReferencePeek
+      items={items}
+      ordered={ordered}
+      details={details}
+      kind={kind}
+      summary={summary}
+    />
+  )
+}
+
+function ReferencePeek({
+  items,
+  ordered,
+  details,
+  kind,
+  summary
+}: {
+  items: readonly WorkspaceAttachment[]
+  ordered: readonly WorkspaceAttachment[]
+  details: WorkspaceReferenceDetailsMap
+  kind: string
+  summary: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const triggerRef = React.useRef<HTMLSpanElement>(null)
+  const listRef = React.useRef<HTMLUListElement>(null)
+  const [geometry, setGeometry] = React.useState<PeekGeometry | null>(null)
+  const front = ordered[0]
+  return (
+    <Tooltip
+      delayDuration={200}
+      // Why: the pointer must reach the list to scroll it.
+      disableHoverableContent={false}
+      onOpenChange={(open) => {
+        if (open && triggerRef.current) {
+          setGeometry(measurePeek(triggerRef.current))
+        }
+      }}
+    >
       <TooltipTrigger asChild>
         <span
+          ref={triggerRef}
+          onKeyDown={(event) => {
+            const list = listRef.current
+            const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+            if (list && step) {
+              // Why: arrows scroll the open peek instead of moving sidebar focus.
+              event.preventDefault()
+              event.stopPropagation()
+              list.scrollBy({ top: step * PEEK_SCROLL_STEP })
+            }
+          }}
           role="img"
           tabIndex={0}
           aria-label={t('workspace.links.stackSummary', '{{count}} linked: {{references}}', {
@@ -255,22 +323,26 @@ export function WorktreeReferenceStack({
         </span>
       </TooltipTrigger>
       <TooltipContent
-        variant="tab-preview"
-        side="right"
-        sideOffset={8}
+        variant="tab-preview-interactive"
+        side="bottom"
+        align="end"
+        sideOffset={6}
+        alignOffset={geometry?.alignOffset ?? 0}
+        collisionPadding={PEEK_CARD_INSET}
         showArrow={false}
-        className="w-auto max-w-72 min-w-44"
+        className={cn('overflow-hidden p-0', geometry ? 'max-w-none' : 'w-72')}
+        style={geometry ? { width: geometry.width } : undefined}
+        // Why: pointer moves inside the portaled peek bubble to the card; keep its details card shut.
+        data-activity-thread-control=""
       >
-        <ul className="flex flex-col">
-          {ordered.slice(0, PEEK_ROW_LIMIT).map((item) => (
+        <ul
+          ref={listRef}
+          className="scrollbar-sleek flex max-h-42 flex-col overflow-x-hidden overflow-y-auto px-3 py-1.5"
+        >
+          {ordered.map((item) => (
             <ReferencePeekRow key={getWorkspaceAttachmentKey(item)} item={item} details={details} />
           ))}
         </ul>
-        {hidden > 0 ? (
-          <div className="py-0.5 text-muted-foreground">
-            {t('workspace.links.peek.more', '+{{count}} more', { count: hidden })}
-          </div>
-        ) : null}
       </TooltipContent>
     </Tooltip>
   )

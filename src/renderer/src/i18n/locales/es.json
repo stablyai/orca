@@ -26117,8 +26117,7 @@
         "failing": "fallando",
         "running": "en curso",
         "cancelled": "cancelado",
-        "passing": "superado",
-        "more": "+{{count}} más"
+        "passing": "superado"
       }
     },
     "attachments": {

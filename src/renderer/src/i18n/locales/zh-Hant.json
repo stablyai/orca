@@ -25278,8 +25278,7 @@
         "failing": "失敗",
         "running": "待處理",
         "cancelled": "已取消",
-        "passing": "通過",
-        "more": "另有 {{count}} 個"
+        "passing": "通過"
       }
     },
     "attachments": {
