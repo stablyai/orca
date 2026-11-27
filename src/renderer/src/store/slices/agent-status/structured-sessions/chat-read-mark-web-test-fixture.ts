@@ -26,7 +26,11 @@ export function browserChatMarks(initial: Partial<PersistedUIState>) {
       json = value
     })
   }
-  vi.stubGlobal('window', { __ORCA_WEB_CLIENT__: true, localStorage })
+  vi.stubGlobal('window', {
+    __ORCA_WEB_CLIENT__: true,
+    api: { ui: { set: vi.fn().mockResolvedValue(undefined) } },
+    localStorage
+  })
   const stored = (): Partial<PersistedUIState> => JSON.parse(json)
   const open = (snapshot = stored(), liveTurn?: number) => {
     const store = createUIStore()

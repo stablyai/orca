@@ -6,7 +6,10 @@ import {
   CHAT_READ_MARK_FIELDS,
   type ChatReadMarks
 } from '../../../../../../shared/agent-session/view/chat-read-mark-move'
-import { chatReadMarkAliases, removeChatReadMark } from '../structured-sessions/chat-read-mark-aliases'
+import {
+  chatReadMarkAliases,
+  removeChatReadMark
+} from '../structured-sessions/chat-read-mark-aliases'
 import type { AgentStatusSlice } from '../contracts/agent-status-slice-contract'
 import type { AgentStatusRuntime } from '../status-ownership/agent-status-runtime'
 import { collectWorktreeIdsForConnection } from './agent-status-connection-worktree-scope'

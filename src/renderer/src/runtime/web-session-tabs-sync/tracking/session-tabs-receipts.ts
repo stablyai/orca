@@ -60,7 +60,11 @@ export function recordReceivedWebSessionTabsSnapshot(
   }
   // Unchanged reconnect frames may be filtered before apply; check held closes at receipt, but only authoritative worktree evidence can settle presence.
   if (!isRetraction && hostSnapshotAffirmsWorktreeContents(snapshot)) {
-    replayWebSessionClosesDueForSnapshot(environmentId, snapshot, appPairedTerminalTabCloseIntentStore)
+    replayWebSessionClosesDueForSnapshot(
+      environmentId,
+      snapshot,
+      appPairedTerminalTabCloseIntentStore
+    )
   }
   // Retraction/unpublished placeholders are no takeover; noting them current retires and locks out the still-live publisher.
   if (

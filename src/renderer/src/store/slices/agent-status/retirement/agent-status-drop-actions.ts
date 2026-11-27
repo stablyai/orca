@@ -78,7 +78,11 @@ export function createAgentStatusDropActions(
           ? removeChatReadMark(s.activityClearedAtByPaneKey, 'activityClearedAtByPaneKey', paneKey)
           : s.activityClearedAtByPaneKey
         const nextManualUnread = opts?.paneRemoved
-          ? removeChatReadMark(s.manuallyUnreadTurnsByPaneKey, 'manuallyUnreadTurnsByPaneKey', paneKey)
+          ? removeChatReadMark(
+              s.manuallyUnreadTurnsByPaneKey,
+              'manuallyUnreadTurnsByPaneKey',
+              paneKey
+            )
           : s.manuallyUnreadTurnsByPaneKey
         const nextConversations = opts?.paneRemoved
           ? removePaneKeys(s.agentConversationsByPaneKey, new Set([paneKey]))

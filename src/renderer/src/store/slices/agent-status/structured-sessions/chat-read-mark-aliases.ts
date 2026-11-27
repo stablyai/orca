@@ -116,7 +116,10 @@ export function adoptChatReadMarkAliases(marks: Partial<ChatReadMarks>): void {
   }
 }
 
-export function aliasesAtChatReadMarkLeaf(field: ChatReadMarkField, leaf: string): readonly string[] {
+export function aliasesAtChatReadMarkLeaf(
+  field: ChatReadMarkField,
+  leaf: string
+): readonly string[] {
   return legacyIndex.get(leaf)?.[field] ?? []
 }
 

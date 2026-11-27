@@ -25,7 +25,6 @@ import {
   mergeHostWebUIState,
   mergeOsc52ClipboardNoticePending,
   mergeWebUIState,
-  prepareLocalWebUIState,
   readLocalWebUIState
 } from './web-ui-state'
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
@@ -69,6 +68,24 @@ export function createWebUiApi(): WebUiApi {
     writeJson(UI_STORAGE_KEY, next)
     zoomLevel = next.uiZoomLevel
   }
+  const persistHostState = (incoming: PairedUiState) => {
+    const local = readLocalWebUIState()
+    const next = {
+      ...mergeHostWebUIState(local, incoming),
+      osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, incoming),
+      featureInteractions: mergeFeatureInteractionState(
+        local.featureInteractions,
+        incoming.featureInteractions
+      ),
+      contextualToursSeenIds: mergeContextualTourSeenIds(
+        local.contextualToursSeenIds,
+        incoming.contextualToursSeenIds
+      )
+    }
+    writeJson(UI_STORAGE_KEY, next)
+    zoomLevel = next.uiZoomLevel
+    return next
+  }
   return {
     ...createWebJiraFilterStateApi(),
     /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
@@ -83,22 +100,7 @@ export function createWebUiApi(): WebUiApi {
         if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
           return readLocalWebUIState()
         }
-        const local = readLocalWebUIState()
-        const next = {
-          ...mergeHostWebUIState(local, result.ui),
-          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
-          featureInteractions: mergeFeatureInteractionState(
-            local.featureInteractions,
-            result.ui.featureInteractions
-          ),
-          contextualToursSeenIds: mergeContextualTourSeenIds(
-            local.contextualToursSeenIds,
-            result.ui.contextualToursSeenIds
-          )
-        }
-        writeJson(UI_STORAGE_KEY, next)
-        zoomLevel = next.uiZoomLevel
-        return next
+        return persistHostState(result.ui)
       } catch {
         return readLocalWebUIState()
       }
@@ -121,15 +123,16 @@ export function createWebUiApi(): WebUiApi {
       await sendHostUpdatesWithAck(updates)
     },
     setPersistedUIWithAck: (updates, marks, baseline) => {
-      const project = prepareLocalWebUIState()
       let nextZoomLevel = zoomLevel
-      const persisted = writeWebChatReadMarkEdits(marks, baseline, {
-        mergeUI: (stored) => {
-          const next = mergeWebUIState(project(stored), updates)
-          nextZoomLevel = next.uiZoomLevel
-          return next
-        }
-      })
+      const persisted = readLocalWebUIState((project) =>
+        writeWebChatReadMarkEdits(marks, baseline, {
+          mergeUI: (stored) => {
+            const next = mergeWebUIState(project(stored), updates)
+            nextZoomLevel = next.uiZoomLevel
+            return next
+          }
+        })
+      )
       zoomLevel = nextZoomLevel
       return { marks: persisted, request: sendHostUpdatesWithAck(updates) }
     },
@@ -153,22 +156,7 @@ export function createWebUiApi(): WebUiApi {
           id,
           15_000
         )
-        const local = readLocalWebUIState()
-        const next = {
-          ...mergeHostWebUIState(local, result.ui),
-          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
-          featureInteractions: mergeFeatureInteractionState(
-            local.featureInteractions,
-            result.ui.featureInteractions
-          ),
-          contextualToursSeenIds: mergeContextualTourSeenIds(
-            local.contextualToursSeenIds,
-            result.ui.contextualToursSeenIds
-          )
-        }
-        writeJson(UI_STORAGE_KEY, next)
-        zoomLevel = next.uiZoomLevel
-        return next
+        return persistHostState(result.ui)
       } catch {
         return optimistic
       }

@@ -150,7 +150,13 @@ export function mergeOsc52ClipboardNoticePending(
   )
 }
 
-export function prepareLocalWebUIState() {
+type ProjectLocalWebUIState = (stored: Partial<PersistedUIState>) => PersistedUIState
+
+export function readLocalWebUIState(): PersistedUIState
+export function readLocalWebUIState<T>(read: (project: ProjectLocalWebUIState) => T): T
+export function readLocalWebUIState<T>(
+  read?: (project: ProjectLocalWebUIState) => T
+): PersistedUIState | T {
   const defaults = getDefaultUIState()
   // Settings migration can arm OSC 52’s UI notice before the UI read.
   const storedSettings = getStoredSettings()
@@ -160,7 +166,7 @@ export function prepareLocalWebUIState() {
       storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
     )
   }
-  return (stored: Partial<PersistedUIState>): PersistedUIState =>
+  const project: ProjectLocalWebUIState = (stored) =>
     mergeWebUIState(base, {
       ...stored,
       rightSidebarOpen:
@@ -168,9 +174,5 @@ export function prepareLocalWebUIState() {
           ? stored.rightSidebarOpen
           : storedSettings.rightSidebarOpenByDefault
     })
-}
-
-export function readLocalWebUIState(): PersistedUIState {
-  const project = prepareLocalWebUIState()
-  return project(readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}))
+  return read ? read(project) : project(readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}))
 }
