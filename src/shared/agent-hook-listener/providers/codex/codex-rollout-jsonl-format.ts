@@ -54,6 +54,18 @@ export type JsonlCursorBytes = {
 
 const NO_BYTES = Buffer.alloc(0)
 
+// Why: a poll can land mid-character; leave that partial character for the next read to decode whole.
+function completeUtf8Length(bytes: Buffer): number {
+  for (let i = bytes.length - 1; i >= Math.max(0, bytes.length - 3); i--) {
+    const byte = bytes[i]!
+    if ((byte & 0xc0) !== 0x80) {
+      const width = byte > 0xf4 ? 1 : byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc2 ? 2 : 1
+      return bytes.length - i < width ? i : bytes.length
+    }
+  }
+  return bytes.length
+}
+
 export function planJsonlRead(
   cursor: JsonlCursor & { filePath: string },
   size: number
@@ -120,9 +132,10 @@ export function applyJsonlCursorBytes(
     return []
   }
   const skippedPrefix = read.start !== read.from
-  const content = `${skippedPrefix ? '' : carry}${read.bytes.toString('utf8')}`
+  const completeBytes = completeUtf8Length(read.bytes)
+  const content = `${skippedPrefix ? '' : carry}${read.bytes.toString('utf8', 0, completeBytes)}`
   const lines = content.split('\n')
-  cursor.offset = read.start + read.bytes.length
+  cursor.offset = read.start + completeBytes
   cursor.carry = lines.pop() ?? ''
   if (skippedPrefix) {
     lines.shift()
