@@ -50,6 +50,7 @@ import { createSshOperationAbortError, type SshExecOptions } from './ssh-exec-op
 import type { SshConnectionCallbacks, SshCredentialKind } from './ssh-connection-callbacks'
 import { collectKeyboardInteractiveResponses } from '../authentication/ssh-keyboard-interactive'
 import { resolveEffectiveProxy, spawnProxyCommand } from '../system-transport/ssh-proxy-command'
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { resolveWithSshG, type SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import {
   createCancelledConnectAttemptError,
@@ -725,7 +726,10 @@ export class SshConnection {
     if (!this.isCurrentConnectAttempt(connectGeneration)) {
       throw createCancelledConnectAttemptError()
     }
-    this.proxyProcess?.kill()
+    if (this.proxyProcess) {
+      // Group signal: a ProxyCommand shell's own children must not outlive the attempt.
+      void signalProcessTree(this.proxyProcess, 'SIGTERM')
+    }
     const p = spawnProxyCommand(proxy, config.host!, config.port!, config.username!)
     this.proxyProcess = p.process
     config.sock = p.sock
@@ -873,7 +877,9 @@ export class SshConnection {
   }
 
   private killProxy(): void {
-    this.proxyProcess?.kill()
+    if (this.proxyProcess) {
+      void signalProcessTree(this.proxyProcess, 'SIGTERM')
+    }
     this.proxyProcess = null
   }
 

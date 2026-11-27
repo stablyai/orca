@@ -1,5 +1,7 @@
 import { DirectoryTransferBudget } from '../../file-transfer/ssh-directory-transfer-budget'
 import { spawn } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { access, lstat, opendir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -74,14 +76,13 @@ export async function uploadDirectoryViaSystemSsh(
     windowsHide: true
   })
   const remoteCommand = `mkdir -p ${quotePosixShell(remoteDir)} && tar -xzf - -C ${quotePosixShell(remoteDir)}`
-  const sshExtract = spawn(
-    sshPath,
-    [...buildSshArgs(target, options), wrapRemoteCommandForPosixShell(remoteCommand)],
-    {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
-    }
-  )
+  // Own process group: teardown signals the group so a ProxyJump child cannot outlive the upload.
+  const sshExtract = spawnProcess({
+    program: sshPath,
+    args: [...buildSshArgs(target, options), wrapRemoteCommandForPosixShell(remoteCommand)],
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: true
+  })
 
   let tarResult: ProcessResult | null = null
   let sshResult: ProcessResult | null = null
@@ -90,7 +91,7 @@ export async function uploadDirectoryViaSystemSsh(
       options?.signal,
       () => {
         killProcess(tarCreate)
-        killProcess(sshExtract)
+        void signalProcessTree(sshExtract, 'SIGTERM')
       },
       settleUploadPipeline(
         waitForProcess(tarCreate, 'local tar relay upload'),
@@ -100,7 +101,7 @@ export async function uploadDirectoryViaSystemSsh(
     )
   } catch (err) {
     killProcess(tarCreate)
-    killProcess(sshExtract)
+    void signalProcessTree(sshExtract, 'SIGTERM')
     throw err
   }
 

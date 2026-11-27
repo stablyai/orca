@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import { Duplex } from 'node:stream'
 import type { Socket as NetSocket } from 'node:net'
@@ -91,7 +91,10 @@ export function spawnProxyCommand(
       ? // Spawn structured ProxyJump argv directly so values cannot escape through a shell.
         spawnProcess({
           program: 'ssh',
-          args: jumpHostSpawnArgs(proxy.jumpHost, host, port)
+          args: jumpHostSpawnArgs(proxy.jumpHost, host, port),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          // Own process group: teardown signals the group so the -W child cannot outlive the parent.
+          detached: true
         })
       : (() => {
           const escape = process.platform === 'win32' ? cmdEscape : quotePosixShell
@@ -101,10 +104,12 @@ export function spawnProxyCommand(
             .replace(/%r/g, escape(user))
           const shell = getShellSpawnConfig(expanded)
           // User-authored ProxyCommand needs verbatim shell semantics; hide its Windows console to avoid focus theft (#10488).
-          return spawn(shell.file, shell.args, {
+          return spawnProcess({
+            program: shell.file,
+            args: shell.args,
             stdio: ['pipe', 'pipe', 'pipe'],
-            windowsHide: true,
-            windowsVerbatimArguments: shell.windowsVerbatimArguments
+            windowsVerbatimArguments: shell.windowsVerbatimArguments,
+            detached: true
           })
         })()
 

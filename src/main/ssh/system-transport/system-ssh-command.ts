@@ -1,4 +1,6 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { Duplex } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
@@ -40,9 +42,12 @@ export function spawnSystemSsh(
   }
 
   const args = buildSshArgs(target, options)
-  const proc = spawn(sshPath, args, {
+  // Own process group: teardown signals the group so a ProxyJump child cannot outlive the parent.
+  const proc = spawnProcess({
+    program: sshPath,
+    args,
     stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
+    detached: true
   })
 
   return wrapChildProcess(proc)
@@ -64,9 +69,11 @@ export function spawnSystemSshCommand(
     options?.wrapCommand === false
       ? command
       : wrapRemoteCommandForPosixShell(command, { compress: options?.compressCommand === true })
-  const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
+  const proc = spawnProcess({
+    program: sshPath,
+    args: [...buildSshArgs(target, options), remoteCommand],
     stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
+    detached: true
   })
   const channel = wrapCommandProcess(proc)
   if (options?.closeStdin) {
@@ -82,11 +89,8 @@ function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
     stderr: proc.stderr!,
     pid: proc.pid,
     kill: () => {
-      try {
-        proc.kill('SIGTERM')
-      } catch {
-        // Process may already be dead
-      }
+      // OpenSSH skips ProxyCommand/ProxyJump cleanup on a signal death, so signal the group.
+      void signalProcessTree(proc, 'SIGTERM')
     },
     onExit: (cb) => {
       proc.on('exit', (code) => cb(code))
@@ -121,11 +125,7 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
   mutableChannel._process = proc
   mutableChannel.close = () => {
     mutableChannel._closeRequested = true
-    try {
-      proc.kill('SIGTERM')
-    } catch {
-      // Process may already be dead
-    }
+    void signalProcessTree(proc, 'SIGTERM')
   }
 
   const cleanupProcessListeners = (): void => {
