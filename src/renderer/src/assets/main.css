@@ -779,6 +779,18 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   gap: 6px;
 }
 
+/* Why: sonner fades a folded toast's content only for styled toasts; a custom card is its own surface, so fade its rows. */
+[data-sonner-toaster] [data-toast-card] > * {
+  transition: opacity 400ms;
+}
+
+[data-sonner-toaster]
+  [data-sonner-toast][data-expanded='false'][data-front='false']
+  [data-toast-card]
+  > * {
+  opacity: 0;
+}
+
 /* Clip folded toast overflow to prevent hover/re-expansion loops; hidden would create a focus-scrollable container. */
 [data-sonner-toaster] [data-sonner-toast][data-expanded='false'][data-front='false'] {
   overflow: clip;

@@ -157,6 +157,7 @@ function LocalBaseRefNotUpdatedCard({
   return (
     <div
       ref={cardRef}
+      data-toast-card
       className="flex w-[var(--width)] flex-col gap-1 rounded-[var(--radius)] border border-[var(--notice-border)] bg-[var(--notice-surface)] p-3 text-[13px] leading-5 text-popover-foreground shadow-notice"
     >
       <div className="flex items-center gap-2">
@@ -316,7 +317,14 @@ export function showLocalBaseRefRefreshToast(
 
   const worktreeName = createdWorktree ? resolveWorktreeDisplayName(createdWorktree).trim() : ''
   // Why: one id per repo and branch because creates toward one target share a run, so its result is one fact, not one per create.
-  const id = `local-base-ref-refresh-failed:${createdWorktree?.repoId ?? 'unknown'}:${result.localBranch}`
+  const baseId = `local-base-ref-refresh-failed:${createdWorktree?.repoId ?? 'unknown'}:${result.localBranch}`
+  // Why one id per variant: sonner merges an update into the existing toast, so a custom card's jsx would outlive a switch to the info toast.
+  const id = `${baseId}:${result.shallowHistory ? 'shallow' : 'refresh'}`
+  const otherVariantId = `${baseId}:${result.shallowHistory ? 'refresh' : 'shallow'}`
+  // Why only when shown: sonner applies a dismiss a frame later, so dismissing an absent id would close it if it appears first.
+  if (toast.getToasts().some((entry) => entry.id === otherVariantId)) {
+    toast.dismiss(otherVariantId)
+  }
   const runnableCommand = result.shallowHistory ? runnableUnshallowCommand(result) : undefined
 
   const actions = (
