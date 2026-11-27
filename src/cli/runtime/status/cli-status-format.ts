@@ -8,6 +8,9 @@ export function formatCliStatus(status: CliStatusResult): string {
       : []),
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
+    ...(status.app.restarting
+      ? [`restarting: ${status.app.restarting.reason} since ${status.app.restarting.since}`]
+      : []),
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,

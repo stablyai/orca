@@ -8,6 +8,7 @@ import {
   type RuntimeMetadata
 } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { tryReadMetadata } from '../profile/metadata'
+import { readActiveRuntimeRestart } from '../connection/runtime-restart-wait'
 import { sendRequest } from '../connection/transport'
 import { resolveDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../connection/types'
@@ -24,10 +25,19 @@ export async function getCliStatus(
   const metadata = tryReadMetadata(userDataPath, { throwOnAccessDenied: true })
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
   if (!transport || !metadata?.authToken) {
+    const restart = await readActiveRuntimeRestart(userDataPath)
     return buildCliStatusResponse({
       app: {
         running: false,
-        pid: null
+        pid: null,
+        ...(restart
+          ? {
+              restarting: {
+                reason: restart.reason,
+                since: new Date(restart.writtenAt).toISOString()
+              }
+            }
+          : {})
       },
       runtime: {
         // Existing metadata proves the runtime started at least once.
