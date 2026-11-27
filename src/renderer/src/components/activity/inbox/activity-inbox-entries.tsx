@@ -12,6 +12,7 @@ import { openBotHomePanelFromSidebar } from '@/components/bots/BotRow'
 import { openBotItem } from '@/components/bots/items/bot-item-open'
 import { botItemsLastRead } from '@/components/bots/items/use-bot-items'
 import { botItemForChat } from './activity-inbox-chat-item'
+import { findBotByWorkspace } from '@/components/bots/bot-workspace'
 import type { Bot } from '../../../../../shared/bot-types'
 import { formatBotItemNumber, type BotItem } from '../../../../../shared/bots/bot-items'
 import {
@@ -31,9 +32,18 @@ export type ActivityInboxEntry =
       ask: boolean
       /** The bot whose workspace the agent runs in: its row is the bot's. */
       bot: Bot | null
+      gone?: true
     }
-  | { kind: 'item'; key: string; at: number; bot: Bot; item: BotItem }
-  | { kind: 'access'; key: string; at: number; request: HostAccessRequest; bot: Bot | null }
+  | { kind: 'item'; key: string; at: number; bot: Bot; item: BotItem; gone?: true }
+  | {
+      kind: 'access'
+      key: string
+      at: number
+      request: HostAccessRequest
+      bot: Bot | null
+      /** Kept only because you opened it: answered, or its pane closed. Opening it again does nothing. */
+      gone?: true
+    }
 
 // Rows show one plain line; inline code and bold markers would otherwise print as literal characters.
 const plainLine = (line: string): string => line.replace(/`|\*\*/g, '')
@@ -106,9 +116,15 @@ function AgentEntryRow({
       selected={selected}
       onOpen={() => {
         onOpened(entry)
+        // Its pane is closed: the row stays for you to see, but there is nothing to open.
+        if (entry.gone) {
+          return
+        }
         onOpenThread(thread)
-        // A bot's chat or workspace: the right side opens the item this chat is about, else the bot's Home.
-        if (bot) {
+        // A chat in the bot's own home: the right side is that bot's page, so open the item this chat is
+        // about, else its Home. A workspace nested under the home is no bot page, and an item request
+        // nothing takes would fire later, when the bot next opens.
+        if (bot && findBotByWorkspace([bot], thread.worktree.id) !== null) {
           const item = botItemForChat(thread, botItemsLastRead(bot))
           if (item) {
             openBotItem(bot, item.uid)
@@ -162,7 +178,10 @@ function AccessEntryRow({ entry, selected, onOpened }: RowProps<'access'>): Reac
       selected={selected}
       onOpen={() => {
         onOpened(entry)
-        reviewAccessRequest(request)
+        // Answered since you opened it: reviewing it again would bring the closed request back.
+        if (!entry.gone) {
+          reviewAccessRequest(request)
+        }
       }}
     />
   )

@@ -34,11 +34,11 @@ describe('withOpenedEntry', () => {
     expect(kept.kind === 'agent' && kept.thread).toBe(working)
   })
 
-  it('keeps an opened row as it was when its pane or item is gone', () => {
+  it('keeps an opened row as it was, marked gone, once its pane or item is gone', () => {
     const opened = agent(thread({}))
-    expect(withOpenedEntry([], opened, [])).toEqual([opened])
+    expect(withOpenedEntry([], opened, [])).toEqual([{ ...opened, gone: true }])
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only key and kind are read.
     const item = { kind: 'item', key: 'item:x', at: 2 } as ActivityInboxEntry
-    expect(withOpenedEntry([], item, [])).toEqual([item])
+    expect(withOpenedEntry([], item, [])).toEqual([{ ...item, gone: true }])
   })
 })

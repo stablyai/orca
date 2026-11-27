@@ -3,6 +3,9 @@
 import React, { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useTranslate } from '@/i18n/use-translate'
 import { readBots, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
 import { botRefKey } from '@/lib/bot-hosts'
@@ -96,10 +99,28 @@ export default function ActivityInbox({
     })
   }, [])
 
-  const agentEntries = useMemo(() => agentEntriesOf(allThreads, bots), [allThreads, bots])
+  // Which bot a workspace belongs to reads its nesting and its host's status: recompute when either changes.
+  const lineage = useAppStoreWithHostStatuses((s, statuses) =>
+    selectSidebarLineageParentIdentities(s, statuses)
+  )
+  const folders = useAppStore(selectFolderWorkspaces)
+  const agentEntries = useMemo(
+    () => agentEntriesOf(allThreads, bots),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- lineage and folders are what createBotOfThread reads from the store.
+    [allThreads, bots, lineage, folders]
+  )
+  // Item rows only for bots the dot counts (live, unpaused, with items needing you); a chat-only bot's items are
+  // read to open its chat's item, not listed.
+  const countedBotKeys = useMemo(
+    () => new Set(sources.bots.map(({ bot }) => botRefKey(bot))),
+    [sources.bots]
+  )
   const entries = useMemo(() => {
     const all: ActivityInboxEntry[] = [...agentEntries]
-    for (const { bot, items } of itemsByBot.values()) {
+    for (const [key, { bot, items }] of itemsByBot) {
+      if (!countedBotKeys.has(key)) {
+        continue
+      }
       for (const item of items ?? []) {
         all.push({
           kind: 'item',
@@ -120,7 +141,7 @@ export default function ActivityInbox({
       })
     }
     return withOpenedEntry(all, opened, allThreads).sort((a, b) => b.at - a.at)
-  }, [agentEntries, itemsByBot, sources.requests, bots, opened, allThreads])
+  }, [agentEntries, itemsByBot, countedBotKeys, sources.requests, bots, opened, allThreads])
 
   const agentThreads = useMemo(() => agentEntries.map((entry) => entry.thread), [agentEntries])
   const { selectThread, markAllThreadsRead, hasUnreadThreads } = useActivityThreadActionBindings({
@@ -130,8 +151,9 @@ export default function ActivityInbox({
     unacknowledgeAgents: storeData.unacknowledgeAgents
   })
 
-  // A bot item or access request stays selected once opened. An agent row follows the pane you have focused,
-  // so focusing another pane anywhere moves the highlight; until a focus lands, the row you opened keeps it.
+  // A bot item or access request you opened stays selected until you open another row, wherever focus goes
+  // next (opening one focuses the bot's chat). Otherwise an agent row follows the pane you have focused; until
+  // a focus lands, the agent row you opened keeps the highlight.
   const focusedKey = focusedPaneKey === null ? null : `agent:${focusedPaneKey}`
   const selectedKey =
     opened && opened.kind !== 'agent' ? opened.key : (focusedKey ?? opened?.key ?? null)
