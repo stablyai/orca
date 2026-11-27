@@ -1,4 +1,8 @@
 import { CLAUDE_ENTRYPOINT_ENV } from './claude-chat-entrypoint'
+import {
+  isOrcaForgeCredentialEnvKey,
+  stripOrcaForgeCredentialEnv
+} from './orca-forge-credential-env'
 
 // A launching Claude or Codex task's identity, messaging access and runtime selection do not belong to independent processes.
 export const PARENT_AGENT_SESSION_STAMP_ENV_KEYS = [
@@ -35,7 +39,7 @@ export function canonicalAgentSessionStampEnvKey(key: string, platform: NodeJS.P
   return stampKeys.has(normalized) ? normalized : key
 }
 
-/** The separate launch overlay, never the merged environment, owns any deliberate session values. */
+/** The separate launch overlay, never the merged environment, owns any deliberate session values or forge credentials. */
 export function stripInheritedAgentSessionEnv(
   env: NodeJS.ProcessEnv,
   {
@@ -54,9 +58,13 @@ export function stripInheritedAgentSessionEnv(
       delete env[key]
     }
   }
+  stripOrcaForgeCredentialEnv(env, platform)
   for (const [key, value] of explicit) {
     const canonical = canonicalAgentSessionStampEnvKey(key, platform)
-    if (value !== undefined && stampKeys.has(canonical)) {
+    if (
+      value !== undefined &&
+      (stampKeys.has(canonical) || isOrcaForgeCredentialEnvKey(key, platform))
+    ) {
       env[canonical] = value
     }
   }

@@ -1,6 +1,10 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import {
+  cachedAzureDevOpsCommandToken,
+  ensureAzureDevOpsCommandToken
+} from './azure-devops-token-command'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Newest first: older on-prem Servers reject newer versions with VssVersionOutOfRangeException.
@@ -72,6 +76,8 @@ export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
   onResponse?: (response: Response) => void
+  /** Credentials the caller already resolved, so the token command never runs twice per call. */
+  auth?: AzureDevOpsAuthConfig
 }
 
 function envValue(name: string): string | null {
@@ -89,7 +95,10 @@ export function normalizeAzureDevOpsApiBaseUrl(value: string): string {
 export function getAzureDevOpsAuthConfig(): AzureDevOpsAuthConfig {
   return {
     apiBaseUrl: envValue('ORCA_AZURE_DEVOPS_API_BASE_URL'),
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
+    pat:
+      envValue('ORCA_AZURE_DEVOPS_TOKEN') ??
+      envValue('ORCA_AZURE_DEVOPS_PAT') ??
+      cachedAzureDevOpsCommandToken(),
     accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
     username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
   }
@@ -151,6 +160,14 @@ function apiUrl(
   return url
 }
 
+/** Environment credentials first, then the token command; a failed command stays retryable. */
+export async function resolveAzureDevOpsRequestAuth(): Promise<AzureDevOpsAuthConfig> {
+  const commandToken = await ensureAzureDevOpsCommandToken()
+  const authConfig = getAzureDevOpsAuthConfig()
+  // The returned token, not a second cache read that could have expired in between.
+  return { ...authConfig, pat: authConfig.pat ?? commandToken }
+}
+
 export async function requestAzureDevOpsJsonAtBase<T>(
   baseUrl: string,
   path: string,
@@ -158,7 +175,7 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false
 ): Promise<T | null> {
-  const config = getAzureDevOpsAuthConfig()
+  const config = options.auth ?? (await resolveAzureDevOpsRequestAuth())
   const doFetch = (url: URL): Promise<Response> =>
     fetch(url, {
       headers: {

@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import { NODE_RUNTIME_DARWIN_MINIMUM_OS } from '../../../../shared/node-runtime/node-runtime-pin'
+import { stripOrcaForgeCredentialEnv } from '../../../../shared/agent-launch/startup/orca-forge-credential-env'
 import { runProcess } from '@orca/process-host'
 import { rm } from '../../../filesystem/asar-transparent-fs'
 import { compareDottedVersions } from '../../../orcad/native-runtime/native-host-abi'
@@ -71,6 +72,7 @@ function buildMacDaemonLaunchJob(
   delete env.NODE_CHANNEL_FD
   delete env.NODE_CHANNEL_SERIALIZATION_MODE
   delete env.NODE_UNIQUE_ID
+  stripOrcaForgeCredentialEnv(env)
   return {
     Label: label,
     ProgramArguments: [

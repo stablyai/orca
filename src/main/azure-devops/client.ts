@@ -21,10 +21,10 @@ import {
 } from './branch-pull-request-selection'
 import {
   azureDevOpsTokenConfigured,
-  getAzureDevOpsAuthConfig,
   normalizeAzureDevOpsApiBaseUrl,
   requestAzureDevOpsJson,
-  requestAzureDevOpsJsonAtBase
+  requestAzureDevOpsJsonAtBase,
+  resolveAzureDevOpsRequestAuth
 } from './azure-devops-api-request'
 export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
 
@@ -129,7 +129,7 @@ async function normalizePullRequest(
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
-  const config = getAzureDevOpsAuthConfig()
+  const config = await resolveAzureDevOpsRequestAuth()
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
   const hasToken = azureDevOpsTokenConfigured(config)
   if (!baseUrl && !hasToken) {
@@ -157,7 +157,7 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
       customDisplayName?: string | null
       uniqueName?: string | null
     } | null
-  }>(baseUrl, '/_apis/connectionData', { timeoutMs: 4000 })
+  }>(baseUrl, '/_apis/connectionData', { timeoutMs: 4000, auth: config })
   const user = connection?.authenticatedUser
   return {
     configured: hasToken || connection !== null,
