@@ -1,4 +1,5 @@
 import type { AgentSessionForkNaming } from './conversation-naming/agent-session-fork-name'
+import type { AgentSessionBadge } from './conversation-naming/agent-session-badge'
 import type { AgentSessionUnavailable } from './failures/agent-session-availability'
 import type { AgentSessionFrameFields } from './view/live-read/agent-session-frame-fields'
 import type { AgentSessionUsageLimitContinue } from './lifecycle/stopping/agent-session-usage-limit-continue-wire'
@@ -281,6 +282,8 @@ export type AgentSessionStatusSummary = {
   /** The record's Sleep mark: the user's Sleep stopped this chat and nothing has been sent since.
    *  Absent from older hosts. */
   sleptAt?: number
+  /** Another program's picture on the chat (`orca chat badge`); absent from older hosts. */
+  badge?: AgentSessionBadge
   /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
    *  Absent from older hosts. */
   hostProgram?: true
@@ -309,7 +312,7 @@ export type AgentSessionConversationName = {
   namingError?: AgentSessionNamingError
   /** The chat's agent, so an older fork can title itself from an unnamed source no longer open. */
   agent?: AgentSessionStatusSummary['agent']
-} & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom'>
+} & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom' | 'badge'>
 
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
 export type AgentSessionStatusEvent =

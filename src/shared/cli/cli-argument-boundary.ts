@@ -13,6 +13,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'attachments',
   'check',
   'children',
+  'clear',
   'comments',
   'compact',
   'connect',

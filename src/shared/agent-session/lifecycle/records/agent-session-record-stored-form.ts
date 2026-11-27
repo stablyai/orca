@@ -11,6 +11,7 @@ import {
   encodePersistedAgentSessionProviderHandleChain
 } from '../provider-handles/agent-session-provider-handle'
 import { isAgentSessionLastTurn } from './agent-session-last-turn'
+import { readAgentSessionBadge } from '../../conversation-naming/agent-session-badge'
 import type { AgentSessionDeathEvidence } from '../leases/agent-session-death-evidence'
 import type { AgentSessionRecord } from '../agent-session-record'
 
@@ -56,8 +57,11 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
     lastTurn,
     instructionsKey,
     asyncQuestionsSkippedThrough: skipped,
+    badge: storedBadge,
     ...rest
   } = record
+  // A badge is decoration: a malformed one is dropped, never a reason to set the chat aside.
+  const badge = readAgentSessionBadge(storedBadge)
   const validSleep = typeof sleptAt === 'number' && Number.isFinite(sleptAt) && sleptAt > 0
   const validKey =
     typeof instructionsKey === 'string' &&
@@ -71,6 +75,7 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
       ...(validKey ? { instructionsKey } : {}),
       ...(isAgentSessionLastTurn(lastTurn) ? { lastTurn } : {}),
       ...(typeof skipped === 'string' && skipped ? { asyncQuestionsSkippedThrough: skipped } : {}),
+      ...(badge ? { badge } : {}),
       providerHandleChain,
       lease: { ...lease, deathEvidence: decodeDeathEvidence(lease.deathEvidence) }
     },

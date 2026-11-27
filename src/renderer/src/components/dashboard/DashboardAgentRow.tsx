@@ -42,7 +42,8 @@ import { agentToolDisplayName } from '../../../../shared/agent-status/presentati
 import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { useAgentRowConversationName } from './rows/use-agent-row-conversation-name'
+import { useAgentRowConversationNaming } from './rows/use-agent-row-conversation-name'
+import { AgentRowChatBadge } from './rows/AgentRowChatBadge'
 import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
@@ -156,7 +157,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const sendTargetRow = useAgentSendTargetRow(agent.paneKey, sendTargetStatus, onSendTargetClick)
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
-  const conversationName = useAgentRowConversationName(agent)
+  const { name: conversationName, badge } = useAgentRowConversationNaming(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel =
@@ -349,6 +350,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         ) : (
           label
         )}
+        <AgentRowChatBadge badge={badge} size={14} />
         {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
         {hasChildDisclosure && !childAgentsExpanded && (
           <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums">

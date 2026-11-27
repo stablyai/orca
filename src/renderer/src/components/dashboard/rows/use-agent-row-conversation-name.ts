@@ -7,6 +7,7 @@ import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structur
 import { useStructuredChatTabNaming } from '@/runtime/native-chat/naming/structured-conversation-name'
 import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from './dashboard-agent-row'
+import type { AgentSessionBadge } from '../../../../../shared/agent-session/conversation-naming/agent-session-badge'
 
 type WorktreeTabs = NonNullable<AppState['tabsByWorktree'][string]>
 
@@ -31,10 +32,12 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
   return useAgentRowConversationNaming(agent).name
 }
 
-/** The row's name, and whether it names a forked native chat (drawn with the fork mark). */
+/** The row's name, whether it names a forked native chat (drawn with the fork mark), and the
+ *  picture another program pinned on the chat. */
 export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
   name: string | null
   forked: boolean
+  badge: AgentSessionBadge | null
 } {
   const parentPaneKey = agent.entry.orchestration?.parentPaneKey
   const usesParentTab =
@@ -72,13 +75,18 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
   )
   // Why: synthetic and same-tab child rows do not own the parent tab's name.
   if (cannotOwnTabName) {
-    return { name: null, forked: false }
+    return { name: null, forked: false, badge: null }
   }
   const structuredName =
     structuredTab &&
     structuredChatDisplayName(structuredTab.customLabel, conversationName, structuredTab.label)
+  const badge = structuredTab ? chatNaming.badge : null
   if (structuredName) {
-    return { name: structuredName, forked: chatNaming.forkSourceId !== null }
+    return {
+      name: structuredName,
+      forked: chatNaming.forkSourceId !== null,
+      badge
+    }
   }
   // Why: attributed rows can arrive before their tab metadata.
   const name = getAgentRowConversationName(
@@ -88,5 +96,5 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
     paneLiveTitle,
     agent.entry.providerSession?.id
   )
-  return { name, forked: false }
+  return { name, forked: false, badge }
 }

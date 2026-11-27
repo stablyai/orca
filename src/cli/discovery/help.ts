@@ -207,6 +207,18 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command.startsWith('account ') && flag === 'agent') {
     return '--agent <id>           Account provider: claude, codex, opencode, devin, or antigravity'
   }
+  if (command === 'chat badge' && flag === 'session') {
+    return '--session <id>        Chat session id (defaults to the chat this runs in)'
+  }
+  if (command === 'chat badge' && flag === 'icon') {
+    return '--icon <file>         PNG, WebP or SVG picture, at most about 6 KB'
+  }
+  if (command === 'chat badge' && flag === 'label') {
+    return '--label <text>        What the picture means, shown as its tooltip'
+  }
+  if (command === 'chat badge' && flag === 'clear') {
+    return "--clear               Remove the chat's picture"
+  }
   if (command === 'chat rename' && flag === 'session') {
     return '--session <id>        Chat session id (defaults to the chat this runs in)'
   }
