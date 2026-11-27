@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { z } from 'zod'
 import { createHash } from 'node:crypto'
 import type Database from '../sqlite/sync-database'
@@ -5,22 +6,24 @@ import type Database from '../sqlite/sync-database'
 import { cardData, type FeishuCardData } from './feishu-card-data'
 import { responseCardId, responseDestination } from './feishu-card-links'
 import { syncInlineQuestion } from './feishu-inline-question-state'
-const row = z.object({
-  id: z.string(),
-  external: z.string(),
-  original: z.string(),
-  chat: z.string(),
-  message: z.string().nullable(),
-  body: z.string(),
-  revision: z.number(),
-  sent: z.number(),
-  state: z.enum(['open', 'claimed', 'closed']),
-  selected: z.string().nullable(),
-  first_post: z.number().nullable(),
-  review: z.number(),
-  cardkit: z.string().nullable(),
-  cardkit_sequence: z.number()
-})
+const row = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    external: z.string(),
+    original: z.string(),
+    chat: z.string(),
+    message: z.string().nullable(),
+    body: z.string(),
+    revision: z.number(),
+    sent: z.number(),
+    state: z.enum(['open', 'claimed', 'closed']),
+    selected: z.string().nullable(),
+    first_post: z.number().nullable(),
+    review: z.number(),
+    cardkit: z.string().nullable(),
+    cardkit_sequence: z.number()
+  })
+)
 export type FeishuCardRow = z.infer<typeof row>
 
 export class FeishuCardStore {

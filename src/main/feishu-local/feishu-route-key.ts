@@ -1,13 +1,16 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { z } from 'zod'
 import { createHash } from 'node:crypto'
 import { dmKey, type Binding } from './feishu-binding'
-export const feishuRoute = z.object({
-  external: z.string(),
-  chat: z.string(),
-  root: z.string(),
-  original: z.string(),
-  group: z.boolean()
-})
+export const feishuRoute = lazyZodSchema(() =>
+  z.object({
+    external: z.string(),
+    chat: z.string(),
+    root: z.string(),
+    original: z.string(),
+    group: z.boolean()
+  })
+)
 export type FeishuRoute = z.infer<typeof feishuRoute>
 export function threadKey(b: Binding, chat: string, root: string, sender: string = b.owner!) {
   return {

@@ -1,28 +1,33 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { z } from 'zod'
 import { ConnectorContextItem } from '../../shared/connector-asker-contract'
 import type { BotMember } from '../../shared/bot-types'
 import { feishuAsker } from '../../shared/bots/feishu-members'
 
-export const feishuStoredContext = z
-  .string()
-  .nullable()
-  .transform((raw) => z.array(ConnectorContextItem).parse(raw ? JSON.parse(raw) : []))
+export const feishuStoredContext = lazyZodSchema(() =>
+  z
+    .string()
+    .nullable()
+    .transform((raw) => z.array(ConnectorContextItem).parse(raw ? JSON.parse(raw) : []))
+)
 
-export const feishuHistoryMessage = z.object({
-  message_id: z.string(),
-  chat_id: z.string(),
-  create_time: z.string().regex(/^\d+$/),
-  msg_type: z.string(),
-  deleted: z.boolean().optional(),
-  sender: z.object({
-    id: z.string().min(1).max(128),
-    id_type: z.string(),
-    sender_type: z.string()
-  }),
-  body: z.object({ content: z.string() })
-})
+export const feishuHistoryMessage = lazyZodSchema(() =>
+  z.object({
+    message_id: z.string(),
+    chat_id: z.string(),
+    create_time: z.string().regex(/^\d+$/),
+    msg_type: z.string(),
+    deleted: z.boolean().optional(),
+    sender: z.object({
+      id: z.string().min(1).max(128),
+      id_type: z.string(),
+      sender_type: z.string()
+    }),
+    body: z.object({ content: z.string() })
+  })
+)
 type HistoryMessage = z.infer<typeof feishuHistoryMessage>
-const object = z.record(z.string(), z.unknown())
+const object = lazyZodSchema(() => z.record(z.string(), z.unknown()))
 
 function cardText(value: unknown): string {
   const node = object.safeParse(value).data

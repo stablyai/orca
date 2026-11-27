@@ -27334,7 +27334,6 @@
   },
   "bots": {
     "feishu": {
-      "who": "只有主人能从连接设置里验证过的飞书私聊向 bot 提问。",
       "verificationFailed": "无法核对原始私聊消息。请检查应用的私聊读取权限，然后重新发送验证码。",
       "name": "飞书",
       "chat": "飞书私聊",
@@ -29922,7 +29921,8 @@
       "there": "那里",
       "executionComputer": "运行此智能体的电脑",
       "yourComputer": "你的电脑",
-      "actsAsYou": "他们会以你的身份在 {{computer}} 上操作"
+      "actsAsYou": "他们会以你的身份在 {{computer}} 上操作",
+      "reachFeishu": "以 {{name}} 的身份在飞书发送消息"
     },
     "import": {
       "nudgeOne": "在 {{app}} 中发现了一个 bot",

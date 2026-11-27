@@ -1,22 +1,27 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { z } from 'zod'
 import { feishuCommand } from './feishu-cli'
 
-const page = z.object({
-  ok: z.literal(true),
-  identity: z.literal('bot'),
-  data: z.object({
-    items: z.array(z.unknown()).default([]),
-    has_more: z.boolean().default(false),
-    page_token: z.string().optional(),
-    trigger_security_conf_limit: z.boolean().optional()
+const page = lazyZodSchema(() =>
+  z.object({
+    ok: z.literal(true),
+    identity: z.literal('bot'),
+    data: z.object({
+      items: z.array(z.unknown()).default([]),
+      has_more: z.boolean().default(false),
+      page_token: z.string().optional(),
+      trigger_security_conf_limit: z.boolean().optional()
+    })
   })
-})
-const person = z.object({
-  member_id: z.string().regex(/^ou_[a-zA-Z0-9_-]+$/),
-  member_id_type: z.literal('open_id'),
-  name: z.string().trim().min(1).max(200),
-  is_agent: z.boolean().optional()
-})
+)
+const person = lazyZodSchema(() =>
+  z.object({
+    member_id: z.string().regex(/^ou_[a-zA-Z0-9_-]+$/),
+    member_id_type: z.literal('open_id'),
+    name: z.string().trim().min(1).max(200),
+    is_agent: z.boolean().optional()
+  })
+)
 export type FeishuPeople = { members: { id: string; name: string }[]; complete: boolean }
 
 /** Only the bot's own group membership, never the owner's user-token address book. */

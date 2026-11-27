@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { z } from 'zod'
 import { feishuCommand, type FeishuMessage } from './feishu-cli'
 import type { Binding } from './feishu-binding'
@@ -5,17 +6,19 @@ import type { BotMember } from '../../shared/bot-types'
 import type { ConnectorContextItem } from '../../shared/connector-asker-contract'
 import { feishuHistoryContext, feishuHistoryMessage } from './feishu-history-context'
 
-const messages = z.object({
-  ok: z.literal(true),
-  identity: z.literal('bot'),
-  data: z.object({
-    items: z
-      .array(feishuHistoryMessage.nullable().catch(null))
-      .default([])
-      .transform((items) => items.filter((item) => item !== null)),
-    has_more: z.boolean().optional()
+const messages = lazyZodSchema(() =>
+  z.object({
+    ok: z.literal(true),
+    identity: z.literal('bot'),
+    data: z.object({
+      items: z
+        .array(feishuHistoryMessage.nullable().catch(null))
+        .default([])
+        .transform((items) => items.filter((item) => item !== null)),
+      has_more: z.boolean().optional()
+    })
   })
-})
+)
 
 export async function feishuThreadContext(
   b: Binding,

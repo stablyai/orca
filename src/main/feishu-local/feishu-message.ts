@@ -1,27 +1,32 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { z } from 'zod'
 
 export const FEISHU_MESSAGE_EVENT = 'im.message.receive_v1'
-const messageKind = z.enum(['text', 'image', 'file', 'post'])
-const text = z.object({ text: z.string().refine((s) => s.trim().length > 0 && !s.includes('\0')) })
-const event = z.object({
-  app_id: z.string(),
-  event_id: z.string().min(1).max(256),
-  sender: z.object({
-    sender_type: z.literal('user'),
-    sender_id: z.object({ open_id: z.string().regex(/^ou_[a-zA-Z0-9_-]{1,120}$/) })
-  }),
-  message: z.object({
-    message_id: z.string().regex(/^om_[a-zA-Z0-9_-]{1,120}$/),
-    chat_id: z.string().regex(/^oc_[a-zA-Z0-9_-]{1,120}$/),
-    chat_type: z.enum(['p2p', 'group']),
-    message_type: messageKind,
-    create_time: z.string().regex(/^\d{13}$/),
-    content: z
-      .string()
-      .min(1)
-      .max(64 * 1024)
+const messageKind = lazyZodSchema(() => z.enum(['text', 'image', 'file', 'post']))
+const text = lazyZodSchema(() =>
+  z.object({ text: z.string().refine((s) => s.trim().length > 0 && !s.includes('\0')) })
+)
+const event = lazyZodSchema(() =>
+  z.object({
+    app_id: z.string(),
+    event_id: z.string().min(1).max(256),
+    sender: z.object({
+      sender_type: z.literal('user'),
+      sender_id: z.object({ open_id: z.string().regex(/^ou_[a-zA-Z0-9_-]{1,120}$/) })
+    }),
+    message: z.object({
+      message_id: z.string().regex(/^om_[a-zA-Z0-9_-]{1,120}$/),
+      chat_id: z.string().regex(/^oc_[a-zA-Z0-9_-]{1,120}$/),
+      chat_type: z.enum(['p2p', 'group']),
+      message_type: messageKind,
+      create_time: z.string().regex(/^\d{13}$/),
+      content: z
+        .string()
+        .min(1)
+        .max(64 * 1024)
+    })
   })
-})
+)
 
 type Message = z.infer<typeof event>['message']
 export type FeishuMessage = Message & {

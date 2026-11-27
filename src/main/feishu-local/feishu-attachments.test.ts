@@ -101,7 +101,7 @@ it('keeps identically named original messages and generated uploads separate acr
       content: 'example'
     } as const
     for (const name of ['alpha', 'beta']) {
-      const b = db.add('scope', name, { appId: `cli_${name}`, sealedSecret: 'sealed' })
+      const b = db.add('scope', name, { name, appId: `cli_${name}`, brand: 'feishu' })
       db.pair('scope', b, event)
     }
     const [first, second] = db.bindings('scope')

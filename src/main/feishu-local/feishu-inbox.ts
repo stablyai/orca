@@ -184,7 +184,13 @@ export class FeishuInbox {
       .prepare('UPDATE inbox SET stored_path=? WHERE account=? AND mid=? AND body IS NOT NULL')
       .run(path, account, mid)
   }
-  stageFile = (...args: Parameters<FeishuReplyFiles['stageFile']>) => this.files.stageFile(...args)
+  stageFile(account: string, mid: string, name: string, bytes: Uint8Array): void {
+    const first = this.files.artifacts(account, mid)[0]
+    if (this.credential(account) && first && first.name !== name) {
+      throw new Error('The SDK DM transport accepts one file per reply')
+    }
+    this.files.stageFile(account, mid, name, bytes)
+  }
   artifacts = (...args: Parameters<FeishuReplyFiles['artifacts']>) => this.files.artifacts(...args)
   uploaded = (...args: Parameters<FeishuReplyFiles['uploaded']>) => this.files.uploaded(...args)
   filePosted = (...args: Parameters<FeishuReplyFiles['filePosted']>) =>

@@ -1,14 +1,17 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-export const binding = z.object({
-  account: z.string(),
-  bot: z.string(),
-  profile: z.string().nullable(),
-  app: z.string(),
-  owner: z.string().nullable(),
-  chat: z.string().nullable(),
-  pairedAt: z.number().int().nullable()
-})
+export const binding = lazyZodSchema(() =>
+  z.object({
+    account: z.string(),
+    bot: z.string(),
+    profile: z.string().nullable(),
+    app: z.string(),
+    owner: z.string().nullable(),
+    chat: z.string().nullable(),
+    pairedAt: z.number().int().nullable()
+  })
+)
 export type Binding = z.infer<typeof binding>
 export function dmKey(b: Binding) {
   return {

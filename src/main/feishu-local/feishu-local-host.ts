@@ -1,3 +1,4 @@
+import { unsealFeishuCredential } from './feishu-credential'
 import { feishuAsker } from '../../shared/bots/feishu-members'
 import { access, open } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
@@ -61,17 +62,8 @@ export class FeishuLocalHost {
       if (this.stopping) {
         return
       }
-      let secret: string | null = null
-      if (b.profile === null) {
-        const sealed = await this.inbox.credential(b.account)
-        try {
-          if (sealed) {
-            secret = getSecretStore().decryptString(Buffer.from(sealed, 'base64'))
-          }
-        } catch {
-          /* Leave an unreadable credential disconnected. */
-        }
-      }
+      const secret =
+        b.profile === null ? unsealFeishuCredential(await this.inbox.credential(b.account)) : null
       if (this.stopping) {
         return
       }
@@ -241,6 +233,7 @@ export class FeishuLocalHost {
       this.stopping ||
       this.retiring.has(botId) ||
       !c?.binding.owner ||
+      c.binding.profile === null ||
       (dmKey(c.binding).externalId !== externalId &&
         !(await this.inbox.laneRoute(c.binding.account, externalId))) ||
       !this.runtime.bots.enabled() ||
