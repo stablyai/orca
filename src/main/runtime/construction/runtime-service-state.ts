@@ -105,9 +105,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly resolvedWorktrees = new RuntimeResolvedWorktreeCache()
 
-  /** Bound abandoned Git-admin filesystem probes to one per repo. */
-  protected worktreeAdminFingerprintProbes = new Set<string>()
-
   protected readonly worktreeLineage = BotWorktreeLineageController.forRuntime(this, {
     getStore: () => this.store,
     getDb: () => this.getOrchestrationDbIfAvailable(),
