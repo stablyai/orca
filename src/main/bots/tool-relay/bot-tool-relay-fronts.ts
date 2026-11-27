@@ -16,6 +16,8 @@ import { keptProviderRelay } from '../../provider-relay/provider-relay-launch-in
 
 const CONNECT_TIMEOUT_MS = 1_000
 const FRONT_REQUEST_TIMEOUT_MS = 5_000
+const SERVE_RETRY_MIN_MS = 5_000
+const SERVE_RETRY_MAX_MS = 60_000
 
 /** A launch's front: its loopback origin and the daemon start holding it. */
 export type ToolRelayFront = { origin: string; daemonInstance: string }
@@ -31,6 +33,8 @@ type Watched = {
   servedConnection: number | null
   /** Announced connections being opened, so a re-announcement starts no second one. */
   opening: Set<string>
+  /** The wait before a failed serve is asked again. */
+  retryMs: number
 }
 
 export class ToolRelayFronts {
@@ -135,6 +139,7 @@ export class ToolRelayFronts {
       connection: 0,
       servedConnection: null,
       opening: new Set(),
+      retryMs: SERVE_RETRY_MIN_MS,
       stop: () => {
         stopEvents()
         stopConnected()
@@ -161,12 +166,26 @@ export class ToolRelayFronts {
       )
       .then(({ port }) => this.noteServed(client, Number.isSafeInteger(port) ? port : null))
     watched.served = served
-    served.catch(() => {
-      // A failed serve is asked again by the next launch.
-      if (watched.servedConnection === watched.connection) {
+    served.then(
+      () => {
+        watched.retryMs = SERVE_RETRY_MIN_MS
+      },
+      () => {
+        // A failed serve is asked again by the next launch, and meanwhile on its own (backing off),
+        // so agents kept under an older daemon start never wait for a launch that won't come.
+        if (watched.servedConnection !== watched.connection) {
+          return
+        }
         watched.servedConnection = null
+        const connection = watched.connection
+        setTimeout(() => {
+          if (this.watched.get(client) === watched && watched.connection === connection) {
+            void this.serveOnce(client).catch(() => {})
+          }
+        }, watched.retryMs).unref()
+        watched.retryMs = Math.min(watched.retryMs * 2, SERVE_RETRY_MAX_MS)
       }
-    })
+    )
     await served
   }
 

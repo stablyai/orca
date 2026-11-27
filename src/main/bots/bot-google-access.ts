@@ -8,7 +8,7 @@ import {
   type GoogleBotConnectState
 } from '../../shared/google/google-bot-connect-state'
 import { getGoogleConnect } from '../google/google-connect'
-import { BOT_TOKEN_ENDED, botOfToken } from './bot-of-caller'
+import { botOfToken, botTokenEnded } from './bot-of-caller'
 
 /** Null when the bot may use Google; else the one sentence to act on. A non-bot caller is the owner. */
 export function botGoogleRefusal(bot: Pick<Bot, 'name' | 'google'> | null): string | null {
@@ -26,7 +26,7 @@ export function readGoogleRefusal(
 ): string | null {
   const caller = botOfToken(runtime, botToken, pairedDeviceId)
   return caller.kind === 'ended'
-    ? BOT_TOKEN_ENDED
+    ? botTokenEnded()
     : botGoogleRefusal(caller.kind === 'bot' ? caller.bot : null)
 }
 

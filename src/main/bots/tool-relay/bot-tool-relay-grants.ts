@@ -207,6 +207,10 @@ export class RelayGrants {
     }
   }
 
+  get anyLocked(): boolean {
+    return this.locked.size > 0
+  }
+
   /** The owner has a grant in the file (opened or not). */
   holds(owner: string): boolean {
     return this.kept.has(owner) || this.locked.has(owner)

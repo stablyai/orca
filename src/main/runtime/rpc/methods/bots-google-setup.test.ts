@@ -51,7 +51,7 @@ vi.mock('../../../google/google-connect', () => ({
   })
 }))
 vi.mock('../../../bots/bot-of-caller', () => ({
-  BOT_TOKEN_ENDED: 'ended',
+  botTokenEnded: () => 'ended',
   botOfToken: (_runtime: unknown, token?: string) =>
     token ? { kind: 'bot', bot: BOT } : { kind: 'owner' }
 }))

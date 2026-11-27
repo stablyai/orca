@@ -91,7 +91,7 @@ export function answerUnavailable(
   res.end(JSON.stringify(errors ?? { error: UNAVAILABLE }))
 }
 
-const CREDENTIALS_LOCKED =
+export const CREDENTIALS_LOCKED =
   "Orca can't unlock this bot's credentials yet (the keychain is locked). Your session is still running; try again shortly."
 /** Only a body this small is read for its ids; anything else is answered without one. */
 const LOCKED_ID_READ_MAX_BYTES = 64 * 1024

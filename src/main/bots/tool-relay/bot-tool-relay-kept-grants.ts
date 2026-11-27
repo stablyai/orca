@@ -165,6 +165,11 @@ export class KeptRelayGrants {
     }
   }
 
+  /** Some kept token is still waiting for the keychain. */
+  anyLocked(): boolean {
+    return this.grants.anyLocked
+  }
+
   /** Whether `owner`'s grant is kept in the file (opened or still locked). */
   keeps(owner: string): boolean {
     return this.grants.holds(owner)

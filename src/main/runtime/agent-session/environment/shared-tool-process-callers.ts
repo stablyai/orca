@@ -42,6 +42,8 @@ export class SharedToolProcessSession {
   private kept: KeptSharedToolCaller | null = null
   /** At its end, whether its agent runs on (handed to its daemon at quit), so the entry stays. */
   private outlivesApp: () => boolean = () => false
+  /** The chat this session's run settled, so its end retires what it carried too. */
+  private settledFor: string | null = null
   /** Retires the chat's earlier kept entries, once this run is placed. */
   private retireEarlier: (() => void) | null = null
 
@@ -136,6 +138,7 @@ export class SharedToolProcessSession {
     const stays = await sharedToolCallerStore
       .adopt(sessionId, this.kept, carryLockedTo)
       .catch(() => this.kept?.runFence)
+    this.settledFor = sessionId
     this.retireEarlier = () => {
       void sharedToolCallerStore.retireExcept(sessionId, stays).catch(() => {})
     }
@@ -193,8 +196,9 @@ export class SharedToolProcessSession {
     this.ended = true
     callers.delete(this.key)
     // An agent handed to its daemon at quit keeps running with this token; anything else retires it.
-    if (this.kept && !this.outlivesApp()) {
-      void sharedToolCallerStore.settle(this.kept.sessionId, null).catch(() => {})
+    const chat = this.kept?.sessionId ?? this.settledFor
+    if (chat !== null && !this.outlivesApp()) {
+      void sharedToolCallerStore.settle(chat, null).catch(() => {})
     }
     void this.withdrawPublished()
   }

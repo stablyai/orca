@@ -11,7 +11,7 @@ import { googleSetupBlocker } from '../../../../shared/google/google-setup-block
 import { googleBotAsk } from '../../../../shared/google/google-bot-connect-state'
 import { botTurns } from '../../../bots/bot-automation-sessions'
 import { hostGoogleBotState } from '../../../bots/bot-google-access'
-import { BOT_TOKEN_ENDED, botOfToken } from '../../../bots/bot-of-caller'
+import { botOfToken, botTokenEnded } from '../../../bots/bot-of-caller'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
@@ -61,7 +61,7 @@ export function whose(
   }
   const caller = botOfToken(runtime, params.botToken, context.pairedDeviceId)
   if (caller.kind === 'ended') {
-    throw new InvalidArgumentError(BOT_TOKEN_ENDED)
+    throw new InvalidArgumentError(botTokenEnded())
   }
   if (caller.kind === 'bot') {
     const { bot } = caller
