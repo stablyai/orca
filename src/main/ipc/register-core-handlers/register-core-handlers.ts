@@ -107,7 +107,7 @@ export async function registerCoreHandlers(
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
     })
     registerLazyRareIpcHandlers(store)
-    registerLazySetupIpcHandlers(store, codexAccounts, keybindings)
+    registerLazySetupIpcHandlers(store, codexAccounts, runtime, keybindings)
     registerLazyCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
     registerLazyClaudeAccountHandlers(claudeAccounts, (change, held) =>

@@ -1,9 +1,11 @@
 import type {
+  AgentProgramBlockReason,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../src/shared/agent-session/lifecycle/agent-session-resume'
 import {
   buildAiVaultLocalResumeStartup,
+  buildAiVaultTypedResumeStartup,
   type AiVaultResumeCommandSession,
   type AiVaultResumeLaunchSettings
 } from '../../../src/shared/ai-vault/resume/ai-vault-resume-startup'
@@ -24,7 +26,11 @@ import {
 } from '../source-control/review/terminal-delivery/mobile-review-terminal-operations'
 import type { MobileReviewTerminalTab } from '../source-control/review/terminal-delivery/review-terminal-reply-schema'
 import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault/resume/ai-vault-resume-target'
-import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/agent-launch/startup/qoder-terminal-create-capability'
+import { GENERATED_AGENT_LAUNCH_ENV } from '../../../src/shared/agent-launch/startup/generated-agent-launch-inputs'
+import {
+  QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
+  SESSION_HISTORY_TERMINAL_CREATE_CAPABILITY
+} from '../../../src/shared/agent-launch/startup/qoder-terminal-create-capability'
 import { agentHistoryHostStatusSchema } from './agent-history-reply-schema'
 import { readMobileRuntimeHostPlatform } from '../transport/connection/mobile-runtime-host-platform'
 import { translate } from '../i18n/mobile-i18n'
@@ -50,12 +56,15 @@ export function buildMobileAiVaultResumeLaunch(args: {
   session: AiVaultResumeCommandSession
   workspacePlatform: NodeJS.Platform
   hostTerminalWindowsShell?: string | null
+  hostCapabilities?: readonly string[]
   settings?: AiVaultResumeLaunchSettings | null
 }): MobileAiVaultResumeLaunch {
   const commandOverride = args.settings?.agentCmdOverrides?.[args.session.agent]
+  const hostOwned = args.hostCapabilities?.includes(SESSION_HISTORY_TERMINAL_CREATE_CAPABILITY)
+  const buildResume = hostOwned ? buildAiVaultLocalResumeStartup : buildAiVaultTypedResumeStartup
   const startup =
-    buildAiVaultRemoteResumeStartup(args.session, commandOverride) ??
-    buildAiVaultLocalResumeStartup({
+    (hostOwned ? null : buildAiVaultRemoteResumeStartup(args.session, commandOverride)) ??
+    buildResume({
       session: args.session,
       host: resolveAiVaultResumeHostShell({
         session: args.session,
@@ -86,20 +95,26 @@ export async function resumeAiVaultSessionInTerminal(
     viewMode?: 'chat'
   },
   assertCurrentOwner?: () => void
-): Promise<MobileReviewTerminalTab> {
+): Promise<MobileReviewTerminalTab & { agentProgramBlocked?: AgentProgramBlockReason }> {
   assertCurrentOwner?.()
-  // Qoder's execution host must select its installed executable before the resume starts.
+  const historyResume = launch.hostCapabilities?.includes(
+    SESSION_HISTORY_TERMINAL_CREATE_CAPABILITY
+  )
   const launchAtCreate =
-    launch.launchAgent === 'qoder' &&
     Boolean(launch.clientMutationId) &&
-    launch.hostCapabilities?.includes(QODER_OWNED_TERMINAL_CREATE_CAPABILITY) === true
+    (historyResume ||
+      (launch.launchAgent === 'qoder' &&
+        launch.hostCapabilities?.includes(QODER_OWNED_TERMINAL_CREATE_CAPABILITY)))
+  const { [GENERATED_AGENT_LAUNCH_ENV]: generatedAgentLaunch, ...env } = launch.env ?? {}
   // Await requests outside refusal handling so transport errors keep their original delivery-unknown identity.
   const created = await reviewTerminalCreateRun.request(
     client,
     {
       worktree: `id:${worktreeId}`,
       ...(launchAtCreate ? { command: launch.command } : {}),
-      ...(launch.env ? { env: launch.env } : {}),
+      ...(launchAtCreate && historyResume ? { historyResume: true } : {}),
+      ...(launchAtCreate && generatedAgentLaunch ? { generatedAgentLaunch } : {}),
+      ...(Object.keys(env).length ? { env } : {}),
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
       ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),

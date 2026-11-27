@@ -9,6 +9,7 @@ import {
   type RuntimeRepoSelector
 } from '../../../workspaces/catalog/runtime-repo-selector'
 import type { WorktreeCreate } from '../../../../../shared/rpc-contract/workspaces/worktree-create-params'
+import { generatedAgentLaunchRequestEnv } from '../../startup/agent-launch-request-env'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
@@ -31,6 +32,12 @@ export function buildManagedWorktreeCreateArgs(
 ): ManagedWorktreeCreateArgs {
   const viewerSupported = origin && terminalImageViewerSupported(origin)
   const launchSource = callerLaunchSource(origin ?? {}, params.launchSource)
+  const startupEnv = generatedAgentLaunchRequestEnv({
+    command: params.startupCommand,
+    env: params.startupEnv,
+    generatedAgentLaunch: params.generatedAgentLaunch,
+    hermesStartupQueryArgv: params.hermesStartupQueryArgv
+  })
   // Why: another owner's provenance is a label only; this host's create policy stays as before.
   const hostAutomationCreate =
     provenance.automationProvenance !== undefined &&
@@ -105,7 +112,7 @@ export function buildManagedWorktreeCreateArgs(
     startup: params.startupCommand
       ? {
           command: params.startupCommand,
-          ...(params.startupEnv ? { env: params.startupEnv } : {}),
+          ...(startupEnv ? { env: startupEnv } : {}),
           ...(params.startupLaunchConfig ? { launchConfig: params.startupLaunchConfig } : {}),
           ...(params.startupCommandDelivery
             ? { startupCommandDelivery: params.startupCommandDelivery }
@@ -123,6 +130,7 @@ export function buildManagedWorktreeCreateArgs(
       ? { startupLaunchPreferences: params.startupLaunchPreferences }
       : {}),
     startupDraft: params.startupDraft,
+    ...(params.afterPublication === undefined ? {} : { afterPublication: params.afterPublication }),
     lineage: {
       parentWorkspace: params.parentWorkspace,
       ...(params.parentWorkspaceOrigin ? { parentWorkspaceOrigin: 'manual' as const } : {}),

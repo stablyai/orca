@@ -193,6 +193,7 @@ export type WorktreeSlice = {
       startedAt?: number
       error?: string
       loaderVisible?: boolean
+      startupDraftDeferred?: PendingWorktreeCreation['startupDraftDeferred']
       request?: PendingWorktreeCreation['request']
       chatSessionOptions?: Readonly<Record<string, string>>
       provisioningLog?: string

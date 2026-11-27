@@ -3,6 +3,7 @@ import {
   captureSavedResumeCleanup,
   chooseSavedResumeFreshLaunch,
   resumeSpawnRefusal,
+  suppressSavedResumeLaunch,
   type ResumeSpawnAdmission,
   type ResumeSpawnRefusal
 } from '../host-env/saved-resume-admission'
@@ -30,8 +31,14 @@ export async function prepareSavedPtyResume(
   )
   return async (inherited?: ResumeSpawnRefusal): Promise<void> => {
     ctx.spawnOptions.env = { ...ctx.spawnOptions.env }
+    const deferred: ResumeSpawnRefusal | undefined =
+      facts.agentProgramBlocked && captured ? { ...captured, verdict: 'unverifiable' } : undefined
+    if (deferred) {
+      suppressSavedResumeLaunch(args, ctx.spawnOptions)
+    }
     ctx.resumeAdmission =
       inherited ??
+      deferred ??
       (await chooseSavedResumeFreshLaunch(
         ctx.deps.runtime,
         args,

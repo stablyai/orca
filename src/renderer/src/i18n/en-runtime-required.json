@@ -3988,6 +3988,9 @@
     }
   },
   "terminal": {
+    "agentStartup": {
+      "setupBlocked": "Setup finished. Orca couldn't verify {{agent}} for this launch. Start it from the agent menu."
+    },
     "newerDaemonBanner": {
       "reopenTerminal": "Reopen {{count}} terminals",
       "reopenTerminal_one": "Reopen terminal",
@@ -4003,7 +4006,9 @@
       "count": "{{count}} running terminals",
       "count_one": "{{count}} running terminal",
       "count_other": "{{count}} running terminals"
-    }
+    },
+    "startupPromptMore_one": "({{count}} more)",
+    "startupPromptMore_other": "({{count}} more)"
   },
   "updates": {
     "failure": {

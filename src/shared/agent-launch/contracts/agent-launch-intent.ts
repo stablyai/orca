@@ -100,7 +100,7 @@ export type AgentLaunchPromptDisposal =
   | { outcome: 'handed-to-terminal' }
   /** Not delivered by this call; the caller still owns the text. */
   | { outcome: 'not-delivered' }
-  /** Replay only: the host stopped mid-delivery, so never resend. Requires agent.launch.prompt-unconfirmed.v1; older clients receive agent_session_operation_unknown. */
+  /** Delivery could not be confirmed. Never resend. Older clients receive agent_session_operation_unknown. */
   | { outcome: 'unconfirmed' }
 
 export type AgentLaunchPromptReceipt = {

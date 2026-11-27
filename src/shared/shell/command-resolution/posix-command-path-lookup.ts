@@ -5,6 +5,8 @@ export type PosixCommandPathLookupTarget =
   | { kind: 'shell-variable'; name: string }
 
 const SHELL_VARIABLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
+export const POSIX_WINDOWS_MOUNT_PRELUDE =
+  '[ "${_orca_win_mounts+set}" = set ] || _orca_win_mounts=$(awk \'$3 == "drvfs" || $3 == "9p" || $3 == "virtiofs" { print $2 }\' /proc/mounts 2>/dev/null)'
 
 export type PosixCommandPathLookupOptions = {
   /** Skip Windows-mounted PATH entries during WSL search, not after the first hit: otherwise a Windows CLI masks a later guest CLI.
@@ -19,11 +21,7 @@ export function buildPosixCommandPathLookupScript(
   const commandAssignment = buildCommandAssignment(target)
   // Recognize drvfs/9p/virtiofs independent of mount root. Cache the table once per shell with ${x+set}, including empty results:
   // callers loop over every agent, and one awk fork each previously spent 36 probes’ 10s budget.
-  const mountPrelude = options.skipWindowsMountDirs
-    ? [
-        '[ "${_orca_win_mounts+set}" = set ] || _orca_win_mounts=$(awk \'$3 == "drvfs" || $3 == "9p" || $3 == "virtiofs" { print $2 }\' /proc/mounts 2>/dev/null)'
-      ]
-    : []
+  const mountPrelude = options.skipWindowsMountDirs ? [POSIX_WINDOWS_MOUNT_PRELUDE] : []
   const skipMountComponent = options.skipWindowsMountDirs
     ? [
         '      for _orca_win_mount in $_orca_win_mounts; do',

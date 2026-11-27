@@ -1,9 +1,20 @@
+import { prepareQueuedAgentLaunch } from '../../../preflight/prepare-queued-agent-launch'
+import { mayResolveQueuedAgentLaunch } from '../../../../shared/agent-launch/startup/queued-agent-launch'
 import type { OrcaRuntimeWithWaitForLeafPtyId as WaitForLeafPtyIdMethods } from '../../terminal/view/renderer-terminal-snapshot'
 import { OrcaRuntimeWithWaitForMobileTerminalSurface } from '../../terminal/view/mobile-terminal-surface'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { ptyShellPath } from '../../../providers/local-pty/local-pty-provider-state'
+import { resolvePtyWriteHostPlatform } from '../../terminal/input/pty-write-host-platform'
+import { resolveWindowsShellStartupFamily } from '../../../../shared/shell/launch/windows-terminal-shell'
+import { randomUUID } from 'node:crypto'
+import { recordFreshLaunch } from '../../terminal/launch/launch-evidence'
+import {
+  copySleepingAgentLaunchConfig,
+  resolveLaunchedAgent
+} from '../../terminal/launch/runtime-agent-launch-resolution'
 
 export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals extends OrcaRuntimeWithWaitForMobileTerminalSurface {
   protected abstract resolveHandleForTab(
@@ -116,20 +127,63 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
   }
 
   // A stalled create may leave an agent tab bound to a plain shell (#7587, STA-3214), bypassing pending recovery; absent recorded startup proves it never ran, so deliver it now.
-  protected deliverPendingStartupCommandToBareRendererPty(worktreeId: string, tabId: string): void {
-    const pending = this.pendingMobileTerminalCreatesByKey.get(`${worktreeId}::${tabId}`)
-    const command = pending?.startupCommand
-    if (!command) {
+  protected async deliverPendingStartupCommandToBareRendererPty(
+    worktreeId: string,
+    tabId: string
+  ): Promise<void> {
+    const key = `${worktreeId}::${tabId}`
+    const pending = this.pendingMobileTerminalCreatesByKey.get(key)
+    const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
+    if (!pending?.startup || !pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
       return
     }
-    const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
-    if (!pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
+    const settings = this.store?.getSettings()
+    const shellPath = ptyShellPath.get(pty.ptyId) ?? pending.startup.shellOverride
+    const shell =
+      !pty.isWsl && !pty.wslDistro && resolvePtyWriteHostPlatform(pty) === 'win32'
+        ? resolveWindowsShellStartupFamily(
+            shellPath ?? (pty.connectionId ? undefined : settings?.terminalWindowsShell)
+          )
+        : 'posix'
+    const launch = { ...pending.startup, terminal: pty.ptyId, shell }
+    const owner = this.readQueuedLaunchPty(pty.ptyId)
+    const {
+      preparedCommand: command,
+      launchConfig,
+      blocked
+    } = mayResolveQueuedAgentLaunch(launch)
+      ? await prepareQueuedAgentLaunch(this, pty.ptyId, launch, settings).catch(
+          (): Awaited<ReturnType<typeof prepareQueuedAgentLaunch>> => ({ preparedCommand: null })
+        )
+      : { preparedCommand: launch.command, launchConfig: launch.launchConfig, blocked: undefined }
+    if (
+      !owner?.isCurrent() ||
+      this.pendingMobileTerminalCreatesByKey.get(key) !== pending ||
+      this.terminalSpawnCommandsByPtyId.has(pty.ptyId)
+    ) {
+      return
+    }
+    if (!command) {
+      this.noteTerminalSpawnCommand(pty.ptyId, null, blocked ?? 'unknown')
       return
     }
     if (this.ptyController?.write(pty.ptyId, command, 'launch')) {
       // Write Enter separately so long commands cannot swallow it.
-      this.ptyController.write(pty.ptyId, '\r', 'launch')
       this.noteTerminalSpawnCommand(pty.ptyId, command)
+      if (
+        this.ptyController.write(pty.ptyId, '\r', 'launch') &&
+        launchConfig &&
+        launchConfig !== launch.launchConfig
+      ) {
+        const agent = resolveLaunchedAgent(command, launch.launchAgent)
+        if (agent) {
+          const config = copySleepingAgentLaunchConfig(launchConfig)
+          pty.launchConfig = config
+          pty.launchAgent = agent
+          // This shell has no launch token in its environment; keep the recipe on its live incarnation.
+          recordFreshLaunch(pty, { agent, token: pty.launchToken ?? randomUUID(), config })
+        }
+      }
     }
   }
 

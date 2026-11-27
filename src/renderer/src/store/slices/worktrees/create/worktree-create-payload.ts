@@ -1,4 +1,5 @@
 import type { WorktreeStartupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
+import { worktreeAgentStartupParams } from '../../../../runtime/hosted-terminals/creation/terminal-agent-create-launch-params'
 import type { agentPickerLaunchInputs } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'
 import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
@@ -208,8 +209,7 @@ export function buildRuntimeWorktreeCreateParams(
         ? buildHostAgentLaunchParams(hostAgentLaunch)
         : startup
           ? {
-              startupCommand: startup.command,
-              ...(startup.env ? { startupEnv: startup.env } : {}),
+              ...worktreeAgentStartupParams(startup),
               ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
               ...(startup.startupCommandDelivery
                 ? { startupCommandDelivery: startup.startupCommandDelivery }

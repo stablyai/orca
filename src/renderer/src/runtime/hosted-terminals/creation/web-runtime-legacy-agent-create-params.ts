@@ -1,6 +1,7 @@
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { CreateWebRuntimeSessionTerminalArgs } from './terminal-create-contracts'
+import { terminalAgentCreateLaunchParams } from './terminal-agent-create-launch-params'
 
 export function buildLegacyAgentCreateTerminalParams(
   args: CreateWebRuntimeSessionTerminalArgs,
@@ -15,9 +16,8 @@ export function buildLegacyAgentCreateTerminalParams(
     ...trustOptions,
     afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
     targetGroupId: args.targetGroupId,
-    ...(legacy.command ? { command: legacy.command } : {}),
+    ...terminalAgentCreateLaunchParams(legacy.command || undefined, legacy.env),
     cwd: args.cwd,
-    ...(legacy.env ? { env: legacy.env } : {}),
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
     startupCommandDelivery: legacy.startupCommandDelivery,
     ...(legacy.launchConfig ? { launchConfig: legacy.launchConfig } : {}),

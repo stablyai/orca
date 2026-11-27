@@ -90,7 +90,8 @@ export async function resolveDismissedOnboardingFolderAgentLaunch(args: {
     {
       platform: context.resolvedLaunchPlatform,
       shell: context.queuedShell,
-      isRemote: context.isRemote
+      isRemote: context.isRemote,
+      managedAgentCommands: context.managedAgentCommands
     }
   )
   return { agent, plan, startup }

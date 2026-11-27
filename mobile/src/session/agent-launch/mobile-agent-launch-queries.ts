@@ -28,21 +28,21 @@ type DetectionInput = { refusesOtherRuntime: boolean }
 
 // Another runtime's workspace is an answer, not a failure: it replaces any agents listed before.
 export type MobileDetectedAgents =
-  | ({ kind: 'detected' } & Pick<MobileAgentLaunchContext, 'detectedAgents' | 'repo'>)
+  | ({ kind: 'detected' } & Awaited<ReturnType<typeof loadMobileDetectedAgents>>)
   | { kind: 'other-runtime' }
 
 async function detectAgents(
   client: RpcClient,
   target: HostQueryTarget,
   input: DetectionInput,
-  refresh?: MobileAgentRefresh
+  options: { refresh?: MobileAgentRefresh; afterPublication?: number } = {}
 ): Promise<MobileDetectedAgents> {
   try {
     const detected = await loadMobileDetectedAgents({
       client,
       worktreeId: target.worktree ?? '',
       hostRefusesOtherRuntime: input.refusesOtherRuntime,
-      refresh
+      ...options
     })
     return { kind: 'detected', ...detected }
   } catch (error) {
@@ -53,12 +53,32 @@ async function detectAgents(
   }
 }
 
+function mergeDetectedAgents(
+  result: MobileDetectedAgents,
+  previous: MobileDetectedAgents | undefined
+): MobileDetectedAgents {
+  return result.kind === 'detected' && result.incomplete && previous?.kind === 'detected'
+    ? {
+        ...result,
+        detectedAgents: [...new Set([...previous.detectedAgents, ...result.detectedAgents])]
+      }
+    : result
+}
+
 // Installs rarely change, and desktop has no signal for them; launches read live instead.
-export const detectedAgentsQuery = defineHostQuery({
+export const detectedAgentsQuery = defineHostQuery<DetectionInput, MobileDetectedAgents>({
   family: 'agents.detected',
-  staleTime: 10 * 60_000,
+  staleTime: ({ state: { data } }) =>
+    data?.kind === 'detected' && data.incomplete ? 0 : 10 * 60_000,
   gcTime: 30 * 60_000,
-  fetch: (client, target, input: DetectionInput) => detectAgents(client, target, input)
+  fetch: async (client, target, input, previous) => {
+    const afterPublication =
+      previous?.kind === 'detected' && previous.incomplete ? previous.afterPublication : undefined
+    return mergeDetectedAgents(
+      await detectAgents(client, target, input, { afterPublication }),
+      previous
+    )
+  }
 })
 
 // Rewrites the cached list after the host re-reads its login-shell PATH, as desktop's refresh does.
@@ -72,9 +92,13 @@ export async function refreshDetectedAgents(
 ): Promise<void> {
   const queryKey = hostQueryKey(host.hostId, detectedAgentsQuery.family, target, input)
   await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
-  queryClient.setQueryData(
-    queryKey,
-    await detectAgents(hostReadClient(host.client), target, input, { onSent: onRefreshSent })
+  const result = await detectAgents(hostReadClient(host.client), target, input, {
+    refresh: { onSent: onRefreshSent }
+  })
+  // A read started during refresh may have merged against the list from before this write.
+  await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
+  queryClient.setQueryData<MobileDetectedAgents>(queryKey, (previous) =>
+    mergeDetectedAgents(result, previous)
   )
 }
 

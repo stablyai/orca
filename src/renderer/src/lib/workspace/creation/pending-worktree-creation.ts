@@ -163,6 +163,7 @@ export type PendingWorktreeCreation = {
   // Instant folder creates retain the initiating surface; explicit opens and retries reveal progress.
   loaderVisible: boolean
   error?: string
+  startupDraftDeferred?: boolean
   provisioningLog?: string
   /** VM creates: the provisioned VM's environment checks, run before the workspace is created. */
   environmentCheck?: PendingVmEnvironmentCheck

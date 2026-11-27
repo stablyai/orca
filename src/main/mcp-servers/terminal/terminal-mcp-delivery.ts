@@ -39,6 +39,8 @@ export type TerminalMcpLaunch = {
   /** What the spawn drops from the env its provider adds (this process's own). */
   envToDelete?: readonly string[]
   cwd: string | undefined
+  executableUnverified?: boolean
+  verifiedExecutable?: string
   /** Set when the agent runs in a WSL distro (null: the default one). */
   wsl?: {
     distro: string | null
@@ -154,8 +156,10 @@ export function withArgs(
     launch.command,
     launch.shell,
     (tokens, shell) =>
-      findAgentExecutableIndex(tokens, shell, (token) =>
-        isAgentExecutableToken(token, executables)
+      findAgentExecutableIndex(
+        tokens,
+        shell,
+        (token) => token === launch.verifiedExecutable || isAgentExecutableToken(token, executables)
       ),
     args.map((arg) => ` ${quoteStartupArg(arg, launch.shell)}`).join(''),
     subcommand
@@ -183,9 +187,11 @@ export async function cliRefusal(
   tooOld: string
 ): Promise<TerminalMcpDelivery | null> {
   // A WSL distro's CLI is asked in the distro, as its login PATH finds it.
-  const fact = launch.wsl
-    ? await terminalMcpCliSupportsInWsl(executable, requirement, launch.wsl.distro, launch.cwd)
-    : await terminalMcpCliSupports(executable, requirement, cliEnv(launch), launch.cwd)
+  const fact = launch.executableUnverified
+    ? 'unknown'
+    : launch.wsl
+      ? await terminalMcpCliSupportsInWsl(executable, requirement, launch.wsl.distro, launch.cwd)
+      : await terminalMcpCliSupports(executable, requirement, cliEnv(launch), launch.cwd)
   return fact === 'supported'
     ? null
     : fact === 'unsupported'
@@ -198,7 +204,7 @@ export async function claudeRefusesMcpConfig(
   launch: TerminalMcpLaunch,
   executable: string
 ): Promise<boolean> {
-  if (launch.wsl) {
+  if (launch.wsl || launch.executableUnverified) {
     return false
   }
   const env = cliEnv(launch)

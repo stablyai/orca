@@ -1,14 +1,12 @@
+import { findCommandsOnLocalPath } from '../ipc/command-path/command-path-batch'
 import { access, mkdtemp, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import {
-  findCommandsOnLocalPath,
-  resolveCommandOnLocalPath
-} from '../ipc/command-path/command-path-resolver'
+import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-detection-shell-path'
 import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
-import { detectInstalledAgents } from '../preflight/installed-agent-detection'
+import { detectInstalledAgentInventory } from '../preflight/installed-agent-detection'
 import { resolveGitBashPath } from '../pty/shell-startup/git-bash'
 import {
   buildPosixRunnerScript,
@@ -52,8 +50,9 @@ export function createHostEnvironmentDoctorDeps(
     // Agent detection's login-shell PATH, applied before any probe so all checks agree.
     prepare: () => hydrateShellPathForAgentDetection(undefined, options.refreshShellPath === true),
     run,
-    findCommands: (commands) => findCommandsOnLocalPath(commands, { env: baseEnv() }),
-    detectAgents: () => detectInstalledAgents(),
+    findCommands: (commands) =>
+      findCommandsOnLocalPath(commands, { env: baseEnv(), presenceOnly: true }),
+    detectAgents: () => detectInstalledAgentInventory(),
     readFile: (path) => readFile(path, 'utf8').catch(() => null),
     exists: (path) =>
       access(path).then(

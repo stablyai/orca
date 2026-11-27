@@ -1,4 +1,8 @@
-import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  beginAgentDetection,
+  LOCAL_MANAGED_AGENT_HOST,
+  mergeAgentDetection
+} from './managed-agent-launch-commands'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { filterEnabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -107,17 +111,27 @@ export function refreshLocalAgentInventory(
     }
   }))
   const refreshArgs = includeDisabled ? context : { ...context, enabledOnly: true }
+  const read = beginAgentDetection(LOCAL_MANAGED_AGENT_HOST)
   const pending = window.api.preflight
-    .refreshAgents({ ...refreshArgs, ...options })
+    .refreshAgents({ ...refreshArgs, ...options, withManagedAgentCommands: true })
     .then((result) => {
-      const typed = result.agents.filter(isTuiAgent)
+      const detection = read(result)
+      const state = get()
+      const typed = mergeAgentDetection(detection, state.localDetectedAgentIdsByContext[contextKey])
       const published = includeDisabled
-        ? filterEnabledTuiAgents(typed, get().settings?.disabledTuiAgents)
+        ? mergeAgentDetection(
+            {
+              ...detection,
+              agents: filterEnabledTuiAgents(typed, state.settings?.disabledTuiAgents)
+            },
+            state.localDetectedAgentIdsByContext[publishedContextKey]
+          )
         : typed
       if (
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
+        detection.keepManagedAgentCommands()
         const ownsPublished = ownsPublishedRefresh()
         const settledKeys = ownsPublished ? refreshContextKeys : new Set([contextKey])
         lifecycle.failedDetectContextKeys.delete(contextKey)

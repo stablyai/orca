@@ -1,23 +1,21 @@
-import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
-import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
+import type {
+  AgentProgramBlockReason,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import type { PreselectedAgentProgram } from '../../../managed-agent-cli/managed-agent-spawn-program'
+import { preparePtyAgentLaunch } from './prepare-pty-agent-launch'
+import { selectPtyAgentLaunch } from './select-pty-agent-launch'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
-import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
-import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { getStartupTerminalIngressIntent } from '../host-env/terminal-startup-color-query-replies'
-import { promoteAgentTeamsShimPath } from '../host-env/path'
 import { resolveConfiguredTerminalShellArgs } from '../host-env/configured-terminal-shell-args'
 import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
-import { applyTerminalImageEnvironment } from './terminal-image-environment'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
-import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
-import { planClaudeRootLaunch } from '../../../../shared/agent-launch/permissions/claude-root-bypass-launch'
+import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
 
@@ -26,6 +24,11 @@ export type PtySpawnLaunchOptionsInput = {
     cols: number
     rows: number
     launchAgent?: unknown
+    preselectedAgentProgram?: PreselectedAgentProgram
+    nativeChatSignIn?: NativeChatSignInRequest
+    resumeProviderSession?: unknown
+    resumeOrigin?: unknown
+    signal?: AbortSignal
     command?: string
     commandDelivery?: PtySpawnOptions['commandDelivery']
     startupCommandDelivery?: PtySpawnOptions['startupCommandDelivery']
@@ -40,6 +43,7 @@ export type PtySpawnLaunchOptionsInput = {
   /** Mutated: OpenCode prep may add the keys its launch must drop. */
   envToDelete: string[]
   launchCommand: string | undefined
+  launchConfig?: SleepingAgentLaunchConfig
   cwd: string | undefined
   /** Window only: the renderer validated cwd; a daemon re-validates it in its own process. */
   prevalidatedCwd?: string
@@ -67,64 +71,40 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   spawnOptions: PtySpawnOptions
   env: Record<string, string> | undefined
   launchCommand: string | undefined
+  launchConfig?: SleepingAgentLaunchConfig
+  blocked?: AgentProgramBlockReason
   /** What the host's MCP server list gave the pane; null when it was left as main leaves it. */
   terminalMcp: TerminalMcpPaneLaunch | null
 }> {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
-  const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-  const shell = resolveStartupShell(
-    input.codexRuntime === 'wsl' ? 'linux' : process.platform,
-    resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
-      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
-    })
-  )
+  const selection = await selectPtyAgentLaunch(input)
+  const expectedWslDistro = selection.wslDistro
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
-    command: input.launchCommand,
-    agent: launchAgent,
-    env: input.env,
+    command: selection.startupCommand,
+    agent: selection.launchAgent,
+    env: selection.paneEnv,
     envToDelete: input.envToDelete,
     cwd: input.cwd,
     connectionId,
-    isFreshLaunch: !input.preAdoptedStablePane && input.launchCommand !== undefined,
-    shell,
-    ...(input.codexRuntime === 'wsl'
-      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
-      : {})
+    isFreshLaunch:
+      !input.preAdoptedStablePane &&
+      selection.startupCommand !== undefined &&
+      (!selection.postSetupProgram || selection.postSetupProgram.path !== undefined),
+    shell: selection.shell,
+    ...(input.codexRuntime === 'wsl' ? { wsl: { distro: expectedWslDistro ?? undefined } } : {})
   })
-  const settings = input.getSettings?.()
-  const env = { ...openCodeLaunch.env }
-  const inlineImagesEnabled = applyTerminalImageEnvironment(
+  const {
     env,
-    input.envToDelete,
     launchAgent,
-    settings?.terminalInlineImages,
-    input.headlessHost
-  )
-  const mcp = await withSpawnTerminalMcpServers(input, {
-    launchAgent,
-    command: openCodeLaunch.command,
-    env,
-    shell,
-    connectionId
-  })
-  const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
-  const viewedCommand =
-    pluginDir && mcp.command
-      ? withClaudeAgentViewPlugin(mcp.command, pluginDir, shell)
-      : mcp.command
-  // Claude exits as root on its bypass switch; only a shell on this host shares main's uid.
-  const rootLaunch = planClaudeRootLaunch({
-    command: viewedCommand,
-    agent: launchAgent,
-    shell,
-    isRoot: !connectionId && input.codexRuntime !== 'wsl' && process.getuid?.() === 0,
-    env: [env, process.env]
-  })
-  const launchCommand = rootLaunch?.command ?? viewedCommand
-  promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
+    launchCommand,
+    startup,
+    settings,
+    terminalMcp,
+    launchConfig,
+    blocked,
+    startupNotice
+  } = await preparePtyAgentLaunch({ ...input, expectedWslDistro }, selection, openCodeLaunch)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
     rows: args.rows,
@@ -141,23 +121,11 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   if (!connectionId && !input.isDaemonHostSpawn) {
     spawnOptions.codexHomePathOverride = { value: input.selectedCodexHomePath }
   }
-  const noDaemonLaunch = planCodexNoDaemonLaunch({
-    command: launchCommand,
-    executesOnThisHost: !connectionId && input.codexRuntime !== 'wsl',
-    shellOverride: input.shellOverride,
-    env,
-    envToDelete: input.envToDelete,
-    cwd: input.cwd
-  })
-  const command = noDaemonLaunch ? await noDaemonLaunch : launchCommand
-  if (command !== undefined) {
-    spawnOptions.command =
-      !connectionId && inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
-        ? withCodexStartupImageCommand(command, shell)
-        : command
+  if (startup !== undefined) {
+    spawnOptions.command = startup
   }
-  if (rootLaunch) {
-    spawnOptions.startupNotice = rootLaunch.notice
+  if (startupNotice) {
+    spawnOptions.startupNotice = startupNotice
   }
   if (args.commandDelivery !== undefined) {
     spawnOptions.commandDelivery = args.commandDelivery
@@ -188,7 +156,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     settings: input.getSettings?.(),
     env,
     claudeAuth: input.claudeAuth,
-    wslDistro: input.expectedWslDistro,
+    wslDistro: expectedWslDistro,
     connectionId: connectionId ?? null,
     codexHome: input.selectedCodexHomePath,
     spawnOptions
@@ -218,13 +186,20 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     })
     if (process.platform === 'win32') {
       // Preserve the PowerShell implementation choice across both provider paths.
-      spawnOptions.terminalWindowsWslDistro = input.expectedWslDistro
+      spawnOptions.terminalWindowsWslDistro = expectedWslDistro
       spawnOptions.terminalWindowsPowerShellImplementation = input.getSettings
         ? (input.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
         : undefined
     }
   }
-  return { spawnOptions, env, launchCommand, terminalMcp: mcp.pane }
+  return {
+    spawnOptions,
+    env,
+    launchCommand,
+    terminalMcp,
+    launchConfig,
+    blocked
+  }
 }
 
 export type PtySpawnSizeSeed = {

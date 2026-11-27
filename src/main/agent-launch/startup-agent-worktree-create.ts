@@ -87,7 +87,11 @@ async function resolveStartupAgentLaunch(
       connectionId
     }
   }
-  const agent = await runtime.resolveStartupDraftAgent(repo, args.createdWithAgent)
+  const agent = await runtime.resolveStartupDraftAgent(
+    repo,
+    args.createdWithAgent,
+    args.afterPublication
+  )
   if (!agent) {
     // Avoid repeating agent detection when the draft resolved no agent.
     const { startupDraft: _draft, ...withoutDraft } = args
@@ -118,6 +122,7 @@ function withoutStartupAgentFields(
     startupPrompt: _prompt,
     startupDraft: _draft,
     startupDraftAgent: _draftAgent,
+    afterPublication: _publication,
     startupLaunchSource: _source,
     ...rest
   } = args

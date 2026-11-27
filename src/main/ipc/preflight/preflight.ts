@@ -5,6 +5,7 @@ import { runPreflightCheck } from '../../preflight/agent-detection'
 import { detectRemoteWindowsTerminalCapabilities } from './preflight-remote-windows-terminal-capabilities'
 import {
   assertAgentDetectionHostRunning,
+  detectAgentInventoryOnHost,
   detectAgentsOnHost,
   refreshAgentsOnHost,
   type AgentDetectionHost
@@ -18,8 +19,15 @@ import { getPreflightWslTarget } from './preflight-runtime-target'
 import { runAsWslExecUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
 import { agentCommandOverrideDetectionOptions } from '../../preflight/installed-agent-detection'
+import { PreflightQueuedAgentLaunch } from '../../../shared/rpc-contract/preflight/preflight-params'
+import { prepareQueuedAgentLaunch } from '../../preflight/prepare-queued-agent-launch'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
-type AgentDetectionRequest = PreflightRuntimeContext & { enabledOnly?: boolean }
+type AgentDetectionRequest = PreflightRuntimeContext & {
+  enabledOnly?: boolean
+  withManagedAgentCommands?: boolean
+  afterPublication?: number
+}
 /** Set by a user act (window focus, a click, opening a picker): it may start its WSL distro. */
 type PreflightWake = { wakeWslDistro?: boolean }
 
@@ -35,6 +43,7 @@ function runPreflightAct<T>(
 
 export function registerPreflightHandlers(
   store?: Pick<Store, 'getSettings'>,
+  runtime?: Pick<OrcaRuntimeService, 'readQueuedLaunchPty'>,
   ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const detectionOptions = (args?: AgentDetectionRequest) => {
@@ -64,12 +73,24 @@ export function registerPreflightHandlers(
   // Mount-time detection must not start a stopped distro; opening an agent picker wakes it.
   ipc.handle(
     'preflight:detectAgents',
-    async (_event, args?: AgentDetectionRequest & PreflightWake) =>
-      runPreflightAct(args, async () => {
+    async (_event, args?: AgentDetectionRequest & PreflightWake & { launch?: unknown }) => {
+      if (args?.launch !== undefined) {
+        const launch = PreflightQueuedAgentLaunch.parse(args.launch)
+        return runtime
+          ? prepareQueuedAgentLaunch(runtime, launch.terminal, launch, store?.getSettings())
+          : { preparedCommand: null }
+      }
+      return runPreflightAct(args, async () => {
         const host: AgentDetectionHost = { kind: 'local', context: args }
         await assertAgentDetectionHostRunning(host)
-        return detectAgentsOnHost(host, detectionOptions(args))
+        return args?.withManagedAgentCommands
+          ? detectAgentInventoryOnHost(host, {
+              ...detectionOptions(args),
+              afterPublication: args.afterPublication
+            })
+          : detectAgentsOnHost(host, { ...detectionOptions(args), waitForCompletion: false })
       })
+    }
   )
 
   ipc.handle('preflight:zcodeInteractiveCapability', async () =>
@@ -82,7 +103,12 @@ export function registerPreflightHandlers(
       runPreflightAct(args, async () => {
         const host: AgentDetectionHost = { kind: 'local', context: args }
         await assertAgentDetectionHostRunning(host)
-        return refreshAgentsOnHost(host, detectionOptions(args), args?.userInitiated)
+        return refreshAgentsOnHost(
+          host,
+          detectionOptions(args),
+          args?.userInitiated,
+          args?.withManagedAgentCommands
+        )
       })
   )
 

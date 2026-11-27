@@ -45,6 +45,7 @@ export async function createDesktopTerminal(
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+      nativeChatSignIn: opts.nativeChatSignIn,
       startupCommandDelivery: opts.startupCommandDelivery,
       title: opts.title,
       activate: presentation === 'focused',

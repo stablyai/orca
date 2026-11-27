@@ -100,7 +100,7 @@ export function registerProjectCatalogIpcBridge(
   // Why: route main's two-phase creation progress to each pending entry by correlation id (?. guards stale preload).
   unsubs.push(
     window.api.worktrees.onCreateProgress?.((data) => {
-      if (!data.creationId) {
+      if (!data.creationId || data.phase === 'startup-gate-settled') {
         return
       }
       // Why: every event without a live meter (a phase change, or null when git finished) clears it.

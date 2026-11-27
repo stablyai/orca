@@ -1,5 +1,6 @@
 // WSL-host orcad must ignore Windows CLI shims; identify mounts by type because the automount root is configurable.
 import { existsSync, readFileSync } from 'node:fs'
+import { access, readFile } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 
@@ -8,6 +9,8 @@ const WINDOWS_DRIVE_MOUNT_TYPES = new Set(['drvfs', '9p', 'virtiofs'])
 import { ORCAD_WSL_HOST_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 
 let cachedGuestMounts: readonly string[] | null = null
+let pendingGuestMounts: Promise<readonly string[]> | undefined
+const WSL_INTEROP_REGISTRATION = '/proc/sys/fs/binfmt_misc/WSLInterop'
 
 // The Windows-copy check stats every drive-mounted PATH entry (~50 ms cold); reuse a recent verdict.
 const WINDOWS_COPY_VERDICT_TTL_MS = 30_000
@@ -16,15 +19,19 @@ const WINDOWS_COPY_VERDICT_LIMIT = 32
 type WindowsCopyVerdict = { windowsOnly: boolean; checkedAt: number }
 let windowsCopyVerdicts = new WeakMap<typeof resolveCliCommand, Map<string, WindowsCopyVerdict>>()
 
+function hasWslGuestEnvironment(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(env.WSL_DISTRO_NAME?.trim() || env.WSL_INTEROP?.trim())
+}
+
 export function isWslGuestProcess(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
-  interopRegistered: () => boolean = () => existsSync('/proc/sys/fs/binfmt_misc/WSLInterop')
+  interopRegistered: () => boolean = () => existsSync(WSL_INTEROP_REGISTRATION)
 ): boolean {
   if (platform !== 'linux') {
     return false
   }
-  return Boolean(env.WSL_DISTRO_NAME?.trim() || env.WSL_INTEROP?.trim()) || interopRegistered()
+  return hasWslGuestEnvironment(env) || interopRegistered()
 }
 
 export function isWslHostOrcadProcess(
@@ -85,10 +92,41 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
+async function probeGuestWindowsDriveMounts(): Promise<readonly string[]> {
+  if (process.platform !== 'linux' || process.env[ORCAD_WSL_HOST_ENV] !== '1') {
+    return []
+  }
+  try {
+    if (!hasWslGuestEnvironment(process.env)) {
+      await access(WSL_INTEROP_REGISTRATION)
+    }
+    return parseWindowsDriveMountPoints(await readFile('/proc/mounts', 'utf8'))
+  } catch {
+    return []
+  }
+}
+
+export async function readGuestWindowsDriveMountsAsync(): Promise<readonly string[]> {
+  if (cachedGuestMounts) {
+    return cachedGuestMounts
+  }
+  pendingGuestMounts ??= probeGuestWindowsDriveMounts()
+  const mounts = await pendingGuestMounts
+  pendingGuestMounts = undefined
+  return (cachedGuestMounts ??= mounts)
+}
+
 /** Keep CLI launches consistent with detection by removing Windows drive PATH entries only in WSL-host orcad. */
 export function guestNativePathEnv(
   pathEnv: string | null | undefined,
   mounts: readonly string[] = readGuestWindowsDriveMounts()
+): string | null | undefined {
+  return guestNativePathForMounts(pathEnv, mounts)
+}
+
+function guestNativePathForMounts(
+  pathEnv: string | null | undefined,
+  mounts: readonly string[]
 ): string | null | undefined {
   if (mounts.length === 0) {
     return pathEnv
@@ -102,10 +140,21 @@ export function guestNativeSpawnEnv(
   env: NodeJS.ProcessEnv,
   mounts: readonly string[] = readGuestWindowsDriveMounts()
 ): NodeJS.ProcessEnv {
+  return guestNativeSpawnEnvForMounts(env, mounts)
+}
+
+export async function guestNativeSpawnEnvAsync(env: NodeJS.ProcessEnv): Promise<NodeJS.ProcessEnv> {
+  return guestNativeSpawnEnvForMounts(env, await readGuestWindowsDriveMountsAsync())
+}
+
+function guestNativeSpawnEnvForMounts(
+  env: NodeJS.ProcessEnv,
+  mounts: readonly string[]
+): NodeJS.ProcessEnv {
   if (mounts.length === 0) {
     return env
   }
-  const pathEnv = guestNativePathEnv(env.PATH ?? null, mounts)
+  const pathEnv = guestNativePathForMounts(env.PATH ?? null, mounts)
   return pathEnv === null || pathEnv === undefined ? env : { ...env, PATH: pathEnv }
 }
 

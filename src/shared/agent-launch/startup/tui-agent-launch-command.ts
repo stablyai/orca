@@ -22,53 +22,29 @@ import {
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
 import {
+  launchCommandProvenance,
+  stockLaunchProgram,
+  withManagedAgentProgram,
+  type ManagedAgentCommands
+} from './managed-agent-launch-program'
+import { withAgentTerminalInputArgs } from './codex-terminal-input-args'
+import { antigravityModelArgs } from './antigravity-resume-model-args'
+import {
   STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS,
   STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV
 } from './agent-startup-update-prompt'
-
-// Why not win32: Codex there reads console input records and needs its burst for pastes (windowsInputRecordPasteNewline).
-// Elsewhere Orca's terminals bracket every paste, so the burst can only misread relayed typing (#34496).
-function agentTerminalInputArgs(
-  agent: TuiAgent,
-  platform: NodeJS.Platform | null
-): readonly string[] {
-  return agent === 'codex' && platform !== null && platform !== 'win32'
-    ? ['-c', 'disable_paste_burst=true']
-    : []
-}
-
-function isCodexExecutable(token: string | undefined): boolean {
-  const basename = token?.split(/[\\/]/).pop()?.toLowerCase()
-  return basename !== undefined && /^codex(?:\.(?:exe|cmd|bat|ps1))?$/.test(basename)
-}
-
-/** Appends the per-launch terminal input flags to a recorded agent command. */
-export function withAgentTerminalInputArgs(
-  command: string,
-  agent: TuiAgent,
-  /** OS that runs the agent; null when the host has not reported it. */
-  platform: NodeJS.Platform | null,
-  shell: AgentStartupShell
-): string {
-  const inputArgs = agentTerminalInputArgs(agent, platform)
-  const tokens = tokenizeStartupCommand(command, shell)
-  // Why: only a lone Codex invocation is safe; a wrapper may not forward -c, a compound line would
-  // hand it to another command, and the command may already set it or end its options with `--`.
-  return inputArgs.length &&
-    !/[;&|<>`$()\n]/.test(command) &&
-    tokens.ok &&
-    isCodexExecutable(tokens.tokens[0]) &&
-    !command.includes('disable_paste_burst') &&
-    !tokens.tokens.includes('--')
-    ? `${command} ${inputArgs.map((arg) => quoteStartupArg(arg, shell)).join(' ')}`
-    : command
-}
 
 export type ResolvedAgentLaunchCommand =
   | {
       ok: true
       command: string
-      resumeLaunch: { agentCommand: string; agentArgs?: string }
+      resumeLaunch: {
+        agentCommand: string
+        agentArgs?: string
+        commandProvenance: 'authored' | 'generated'
+        authoredCommand?: string
+        selectedExecutable?: string
+      }
       appliedSessionOptions: Record<string, SessionOptionValue>
       startupEnv?: Readonly<Record<string, string>>
     }
@@ -87,28 +63,43 @@ export function resolveAgentLaunchCommand(args: {
   suppressStartupUpdatePrompt?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
+  managedAgentCommands?: ManagedAgentCommands | null
 }): ResolvedAgentLaunchCommand {
-  const override = args.cmdOverrides[args.agent]
+  const override =
+    args.cmdOverrides[args.agent] ??
+    (args.agent === 'claude-agent-teams' ? args.cmdOverrides.claude : undefined)
+  const commandProvenance = launchCommandProvenance(
+    override,
+    stockLaunchProgram(args.agent, args.platform, args.isRemote),
+    args.platform
+  )
   const command =
-    override ||
+    (commandProvenance === 'authored' ? override : override?.trim()) ||
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
       isRemote: args.isRemote
     })
+  // Saved sessions resolve the stock program on their current host.
+  const program =
+    commandProvenance === 'generated' ? withManagedAgentProgram(command, args) : command
   const suppressionArgs = args.suppressStartupUpdatePrompt
     ? (STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS[args.agent] ?? [])
     : []
   const prefixSuppressionArgs = args.agent === 'aider' ? [] : suppressionArgs
   const launchHead = withAgentTerminalInputArgs(
     prefixSuppressionArgs.length
-      ? `${command} ${prefixSuppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
-      : command,
+      ? `${program} ${prefixSuppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
+      : program,
     args.agent,
-    args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
+    commandProvenance === 'authored'
+      ? null
+      : args.agentHostPlatform === undefined
+        ? args.platform
+        : args.agentHostPlatform,
     args.shell
   )
-  const trailingTokens = args.agentArgs?.trim()
+  const trailingTokens: ReturnType<typeof tokenizeStartupCommand> = args.agentArgs?.trim()
     ? tokenizeStartupCommand(args.agentArgs.trim(), args.shell)
-    : { ok: true as const, tokens: [], spans: [] }
+    : { ok: true, tokens: [], spans: [] }
   if (!trailingTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${trailingTokens.error}` }
   }
@@ -175,11 +166,20 @@ export function resolveAgentLaunchCommand(args: {
       ? [...antigravityModelArgs(resolvedOptions.args), ...(resolvedOptions.permissionArgs ?? [])]
       : (resolvedOptions.permissionArgs ?? [])
   const resumeArgs = render(insertBeforeTerminator(args.agent, keptTokens, resumeOptionArgs))
+  const launchArgs = render(launchTokens)
   return {
     ok: true,
-    command: withArgs(render(launchTokens), launchHead),
+    command: withArgs(launchArgs, launchHead),
     resumeLaunch: {
       agentCommand: withArgs(resumeArgs),
+      commandProvenance,
+      ...(commandProvenance === 'authored' &&
+      (args.agent === 'claude' || args.agent === 'claude-agent-teams')
+        ? { authoredCommand: command }
+        : {}),
+      ...(program !== command
+        ? { selectedExecutable: args.managedAgentCommands?.[args.agent] }
+        : {}),
       ...(keptTokens.length !== rawTokens.length ||
       keptTokens.some((token, index) => token !== rawTokens[index]) ||
       resolvedOptions.permissionArgs ||
@@ -192,20 +192,6 @@ export function resolveAgentLaunchCommand(args: {
       ? { startupEnv: STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[args.agent] }
       : {})
   }
-}
-
-/** The resolved `--model <id>` (or `--model=<id>`) tokens, without any other launch option. */
-function antigravityModelArgs(tokens: readonly string[]): string[] {
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (token.startsWith('--model=')) {
-      return [token]
-    }
-    if (token === '--model' && index + 1 < tokens.length) {
-      return [token, tokens[index + 1]]
-    }
-  }
-  return []
 }
 
 function insertBeforeTerminator(

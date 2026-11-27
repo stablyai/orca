@@ -33,6 +33,9 @@ const resolved = new Map<string, WslGuestEnvironment>()
 const retryAfter = new Map<string, number>()
 // A later caller with materially more budget deserves a retry after a starved probe.
 const probedWithBudget = new Map<string, number>()
+let environmentGeneration = 0
+let defaultGeneration = 0
+const distroGenerations = new Map<string, number>()
 
 /** A payload that is not three absolute, single-line POSIX values is a failed probe. */
 function parseProbePayload(payload: string | null): WslGuestEnvironment | null {
@@ -84,7 +87,21 @@ async function probeGuestEnvironment(
 }
 
 function cacheKey(distro: string | undefined): string {
-  return distro ?? ''
+  return (distro ?? '').toLowerCase()
+}
+
+export function getWslGuestEnvironmentGeneration(distro: string | undefined): number {
+  return distroGenerations.get(cacheKey(distro)) ?? defaultGeneration
+}
+
+export function trackWslGuestEnvironmentGeneration(distro: string): number {
+  const generation = ++environmentGeneration
+  distroGenerations.set(cacheKey(distro), generation)
+  return generation
+}
+
+export function forgetWslGuestEnvironmentGeneration(distro: string): void {
+  distroGenerations.delete(cacheKey(distro))
 }
 
 /** Null means "could not ask", never "has no PATH" -- callers fall back. */
@@ -162,6 +179,8 @@ export function getWslGuestEnvironment(
 export function invalidateWslGuestEnvironment(distro?: string, all = false): void {
   // Undefined means default distro; a separate all flag avoids evicting every distro on default Refresh.
   if (all) {
+    defaultGeneration = ++environmentGeneration
+    distroGenerations.clear()
     inFlight.clear()
     resolved.clear()
     retryAfter.clear()
@@ -169,6 +188,9 @@ export function invalidateWslGuestEnvironment(distro?: string, all = false): voi
     return
   }
   const key = cacheKey(distro)
+  if (distroGenerations.has(key)) {
+    distroGenerations.set(key, ++environmentGeneration)
+  }
   inFlight.delete(key)
   resolved.delete(key)
   retryAfter.delete(key)

@@ -1,5 +1,9 @@
-import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
+import {
+  SETUP_AGENT_GATE,
+  type RuntimeTerminalCreate
+} from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredAgentSessionSendBody } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
@@ -13,7 +17,6 @@ import { agentPromptRidesLaunchCommand } from '../../shared/agent-launch/startup
 
 import type { CreatedSurface } from './agent-launch-executor'
 import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
-import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
 
 function structuredLaunchSubmitText(intent: Pick<AgentLaunchIntent, 'prompt'>): string | undefined {
   return intent.prompt?.delivery === 'submit' && intent.prompt.text.trim().length > 0
@@ -44,7 +47,7 @@ const UNCONFIRMED: AgentLaunchPromptDisposal = { outcome: 'unconfirmed' }
 /** Persist owed submits as unconfirmed: a crash during delivery must not invite duplicate turns. */
 export function settledAtCreation(
   intent: Pick<AgentLaunchIntent, 'prompt'>,
-  created: { promptRodeLaunchCommand?: boolean; structured?: AgentLaunchStructuredSurface }
+  created: Pick<CreatedSurface, 'promptRodeLaunchCommand' | 'structured' | 'terminalCreation'>
 ): AgentLaunchPromptDisposal {
   if (created.structured?.firstMessage) {
     return { outcome: 'journaled', messageId: created.structured.firstMessage.clientMessageId }
@@ -52,8 +55,12 @@ export function settledAtCreation(
   if (created.structured) {
     return structuredLaunchSubmitText(intent) === undefined ? NOT_DELIVERED : UNCONFIRMED
   }
+  const gate = created.terminalCreation?.[SETUP_AGENT_GATE]
+  if (created.terminalCreation?.agentProgramBlocked || gate?.blocked) {
+    return NOT_DELIVERED
+  }
   if (created.promptRodeLaunchCommand) {
-    return HANDED_TO_TERMINAL
+    return gate ? UNCONFIRMED : HANDED_TO_TERMINAL
   }
   return intent.prompt?.delivery === 'submit' ? UNCONFIRMED : NOT_DELIVERED
 }
@@ -62,11 +69,19 @@ export async function settleLaunchPromptDisposal(
   execution: AgentLaunchSurfaceExecution,
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
-  if (created.structured) {
-    return settledAtCreation(execution.intent, created)
+  const gate = created.terminalCreation?.[SETUP_AGENT_GATE]
+  if (created.terminalCreation?.agentProgramBlocked || gate?.blocked) {
+    return NOT_DELIVERED
   }
-  if (created.promptRodeLaunchCommand) {
-    return HANDED_TO_TERMINAL
+  if (gate && created.promptRodeLaunchCommand) {
+    const outcome = await waitForPromiseWithSignal(gate.outcome, execution.signal).catch(
+      () => undefined
+    )
+    // The setup marker precedes the agent wrapper, so it cannot confirm argv handoff.
+    return outcome === 'blocked' || outcome === 'failed' ? NOT_DELIVERED : UNCONFIRMED
+  }
+  if (created.structured || created.promptRodeLaunchCommand) {
+    return settledAtCreation(execution.intent, created)
   }
   return deliverTerminalLaunchPrompt(execution, created.outcome.handle, {
     freshLaunch: true,

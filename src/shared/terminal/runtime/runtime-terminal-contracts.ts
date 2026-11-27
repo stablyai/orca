@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { TerminalLaunchResult } from '../../agent-session/lifecycle/agent-session-resume'
 import type * as AgentSessionResume from '../../agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../agent-launch/startup/codex-startup-delivery'
@@ -275,6 +276,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   launchAgent?: TuiAgent
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: StartupCommandDelivery
   title?: string
   activate?: boolean

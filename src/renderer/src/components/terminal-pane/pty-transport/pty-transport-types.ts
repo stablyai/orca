@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { TerminalOutputCadence } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
@@ -199,6 +200,7 @@ export type PtyTransport = {
     resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    nativeChatSignIn?: NativeChatSignInRequest
     startupCommandDelivery?: StartupCommandDelivery
     /** Consume only at fresh spawn dispatch; main stops the returned predecessor before resolving ownership. Reattach leaves retirement with the caller. */
     claimReplacedPtyId?: () => string | null
@@ -323,6 +325,7 @@ export type IpcPtyTransportOptions = {
   launchAgent?: TuiAgent
   agentLaunch?: AgentPaneLaunchRequest
   trustWorktreeId?: string
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null
@@ -339,7 +342,7 @@ export type IpcPtyTransportOptions = {
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
-  onPtySpawn?: (ptyId: string) => void
+  onPtySpawn?: (ptyId: string, blocked?: TerminalLaunchResult['agentProgramBlocked']) => void
   /** Current surface may retain a late disposed spawn for its successor; absent/false authorizes kill (disposed-spawn-retention.ts). */
   retainDisposedSpawn?: () => boolean
   /** Rebind an existing pane after its provider replaces the PTY identity. */

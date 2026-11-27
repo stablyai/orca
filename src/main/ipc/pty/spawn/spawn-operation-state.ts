@@ -3,7 +3,10 @@ import type { RuntimePtySpawnState, RuntimePtySpawnArgs } from '../runtime/spawn
 import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProgramBlockReason,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export type PtySpawnOperationState = Pick<
   RuntimePtySpawnState,
@@ -63,6 +66,7 @@ export type PtySpawnExecutionFacts = {
   preAllocatedHandle?: string | null
   replacedPaneOwner?: ReplacedPaneOwner | null
   attachOnlyView?: true
+  agentProgramBlocked?: AgentProgramBlockReason
   savedResumePaneKey?: string | null
   launchConfig?: SleepingAgentLaunchConfig
   suppressRefusedLaunch?: () => void

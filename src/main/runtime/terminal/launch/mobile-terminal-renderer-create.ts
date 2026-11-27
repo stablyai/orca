@@ -43,7 +43,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
   protected abstract deliverPendingStartupCommandToBareRendererPty(
     worktreeId: string,
     tabId: string
-  ): void
+  ): Promise<void>
 
   protected abstract findMobileTerminalSurface(
     worktreeId: string,
@@ -70,7 +70,6 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     worktreeSelector: string,
     opts: MobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    const pairedCreate = Boolean(opts.clientNavigationId)
     const graphEpoch = this.captureReadyGraphEpoch()
     // The paired client's own create: its user's act, as every start below.
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, undefined, {
@@ -81,11 +80,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     // Older mobile clients optimistically append; match until they advertise grouped placement.
-    const requestedAfterTabId = opts.afterTabId
     const afterTabId =
       opts.clientNavigationId && opts.supportsSplitGroupPlacement === false
         ? undefined
-        : requestedAfterTabId
+        : opts.afterTabId
     if (opts.sourceChatFork) {
       return this.createMobileChatForkTerminal({
         workspace,
@@ -97,7 +95,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     }
     const afterDesktopTabId = anchorTabOfCreate(
       this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
-      requestedAfterTabId,
+      opts.afterTabId,
       afterTabId !== undefined
     )
     const startupCommand = applyRemoteViewerLaunchEnv(
@@ -108,7 +106,11 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
-    if (opts.clientMutationId && startupCommand.command && startupCommand.launchAgent === 'qoder') {
+    if (
+      opts.clientMutationId &&
+      startupCommand.command &&
+      (opts.historyResume || startupCommand.launchAgent === 'qoder')
+    ) {
       const clientIdentity = opts.clientNavigationId ?? 'local'
       const seed = `${clientIdentity}\0${worktreeId}\0${opts.clientMutationId}`
       // A command-bearing retry must reconcile the owning PTY before delivering the resume again.
@@ -120,6 +122,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           // The paired client's own create: its user's act.
           wslUserAct: true,
           ...startupCommand,
+          resumeProviderSession: opts.resumeProviderSession,
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
           identity: {
@@ -127,6 +130,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             leafId: deterministicAgentSessionUuid(`mobile-qoder-leaf\0${seed}`)
           },
           createMutation: { clientIdentity, id: opts.clientMutationId },
+          historyResume: opts.historyResume,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
@@ -147,13 +151,14 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           cwd,
           env: startupCommand.env,
           envToDelete: startupCommand.envToDelete,
+          nativeChatSignIn: startupCommand.nativeChatSignIn,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
-            () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
+            () => this.mainLayoutTabOfRow(worktreeId, opts.afterTabId),
             afterDesktopTabId
           ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
@@ -167,7 +172,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (!desktop.hasLiveRenderer(windowId)) {
       throw new Error('runtime_unavailable')
     }
-    const releasePublicationThrottle = pairedCreate
+    const releasePublicationThrottle = opts.clientNavigationId
       ? (desktop.holdRendererPublication?.(windowId) ?? (() => {}))
       : () => {}
     try {
@@ -197,6 +202,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+          nativeChatSignIn: startupCommand.nativeChatSignIn,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
           activate: opts.activate
@@ -215,9 +221,24 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       // Rescue uses the active group; renderer reconciliation later moves the tab into its requested group.
       this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
         activate: opts.activate !== false,
-        paired: pairedCreate,
+        paired: Boolean(opts.clientNavigationId),
         selectIfNoActiveTab: true,
-        ...(startupCommand.command ? { startupCommand: startupCommand.command } : {}),
+        ...(startupCommand.command
+          ? {
+              startup: {
+                command: startupCommand.command,
+                shellOverride: opts.shellOverride,
+                cwd,
+                restoring: Boolean(
+                  opts.resumeProviderSession ||
+                  (startupCommand.launchConfig && !startupCommand.launchConfig.commandProvenance)
+                ),
+                launchConfig: startupCommand.launchConfig,
+                launchAgent: startupCommand.launchAgent,
+                nativeChatSignIn: startupCommand.nativeChatSignIn
+              }
+            }
+          : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
       })
       try {
@@ -228,7 +249,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           signal: opts.signal
         })
         if (this.isReadyMobileTerminalSurface(surface)) {
-          this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          await this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
           // The window spawned it outside this RPC, so the runtime's spawn point never saw the caller.
           noteCallerOpenedTerminal(surface.tab.terminal)
           return surface
@@ -239,7 +260,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           signal: opts.signal
         }).catch(() => null)
         if (readySurface) {
-          this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          await this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
           noteCallerOpenedTerminal(readySurface.tab.terminal)
           return readySurface
         }
@@ -263,6 +284,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             cwd,
             env: startupCommand.env,
             envToDelete: startupCommand.envToDelete,
+            nativeChatSignIn: startupCommand.nativeChatSignIn,
             startupCommandDelivery: startupCommand.startupCommandDelivery,
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
@@ -280,7 +302,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {
           const rescued = this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
           if (rescued) {
-            this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+            await this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
             return rescued
           }
         }

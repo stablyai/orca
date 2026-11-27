@@ -19,6 +19,7 @@ import type { AgentStartupShell } from '../../../../../../shared/agent-launch/st
 import type { AgentLaunchProfileSettings } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { translate } from '@/i18n/i18n'
+import type { ManagedAgentCommands } from '../../../../../../shared/agent-launch/startup/managed-agent-launch-program'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -37,6 +38,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
+  managedAgentCommands?: ManagedAgentCommands
 }): {
   startupPlan: AgentStartupPlan | null
   draftLaunchedNatively: boolean
@@ -54,7 +56,8 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     platform: args.launchPlatform,
     shell: args.shell,
-    isRemote: args.isRemote ?? false
+    isRemote: args.isRemote ?? false,
+    managedAgentCommands: args.managedAgentCommands
   })
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'

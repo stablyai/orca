@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../../shared/terminal/replay/painted-restore-ack'
 import type {
@@ -55,6 +56,7 @@ export const ptySessionControlApi = {
     launchToken?: string
     launchAgent?: TuiAgent
     trustWorktreeId?: string
+    nativeChatSignIn?: NativeChatSignInRequest
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null
     worktreeId?: string

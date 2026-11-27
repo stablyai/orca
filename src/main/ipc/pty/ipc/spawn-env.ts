@@ -56,9 +56,12 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   ctx.baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
   const shouldRefreshAgentTeamsEnv =
     !ctx.preAdoptedStablePane &&
+    !args.connectionId &&
+    process.platform !== 'win32' &&
     ctx.deps.runtime !== undefined &&
     ctx.stablePaneKey !== null &&
     shouldRefreshNativeClaudeAgentTeamsEnv({
+      launchAgent: args.launchAgent,
       command: args.command,
       launchConfig: args.launchConfig
     })

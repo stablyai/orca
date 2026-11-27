@@ -35,6 +35,19 @@ describe('argv prompt separator (#48072)', () => {
     )
   })
 
+  it('separates the prompt for a Claude command with a backtick and apostrophe in its path', () => {
+    expect(
+      promptLaunch(
+        '--disallowedTools Agent',
+        'powershell',
+        'claude',
+        "& 'C:\\Users\\O`''Brien\\tools\\claude.exe'"
+      )
+    ).toBe(
+      "& 'C:\\Users\\O`''Brien\\tools\\claude.exe' '--disallowedTools' 'Agent' '--' 'Reply OK'"
+    )
+  })
+
   it('adds no second separator when the args already end option parsing', () => {
     expect(promptLaunch('--disallowedTools Agent --', 'posix')).toBe(
       "claude '--disallowedTools' 'Agent' '--' 'Reply OK'"

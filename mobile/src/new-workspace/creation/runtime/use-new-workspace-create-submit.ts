@@ -5,7 +5,7 @@ import type { RetiredNameRegistry } from '../../../../../src/shared/worktree/nam
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { folderCreateBusyMessage, uncertainCreateMessage } from './new-workspace-create-copy'
 import { triggerError, triggerSuccess } from '../../../platform/haptics/haptics'
-import type { WorktreeCreateParent } from '../worktree-create-retry'
+import type { WorktreeCreateDraftRetry, WorktreeCreateParent } from '../worktree-create-retry'
 import { createBlankWorkspace } from '../blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../../../agents/mobile-tui-agents'
 import { createSetupNeedsTrustCheck, resolveCreateSetupApproval } from '../setup-hook-trust'
@@ -92,6 +92,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   skipSetupTrust: () => void
 } {
   const createInFlightRef = useRef(false)
+  const draftRetry = useRef<WorktreeCreateDraftRetry>({})
   const [creating, setCreating] = useState(false)
   const setupTrust = useNewWorkspaceSetupTrust({
     ...args,
@@ -109,7 +110,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   })
 
   async function create(options: CreateOptions = {}): Promise<void> {
-    const { client, selectedRepo } = args
+    const { client, selectedRepo, selectedAgent } = args
     if (!client || !selectedRepo || createInFlightRef.current) {
       return
     }
@@ -136,8 +137,7 @@ export function useNewWorkspaceCreateSubmit(args: {
       }
       let latestRuntimeSettings = args.runtimeSettings
       try {
-        const settingsReply = await settingsRead.request(client)
-        const settings = settingsRead.interpret(settingsReply)
+        const settings = settingsRead.interpret(await settingsRead.request(client))
         if (settings.accepted) {
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           latestRuntimeSettings = settings.value as NewWorktreeRuntimeSettings
@@ -147,8 +147,8 @@ export function useNewWorkspaceCreateSubmit(args: {
         // The runtime validates the same setting before spawning.
       }
       if (
-        args.selectedAgent.id !== '__blank__' &&
-        !isMobileTuiAgentEnabled(args.selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
+        selectedAgent.id !== '__blank__' &&
+        !isMobileTuiAgentEnabled(selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
       ) {
         args.setSelectedAgent(
           pickPreferredNewWorktreeAgent(latestRuntimeSettings, args.detectedAgentIds)
@@ -219,8 +219,7 @@ export function useNewWorkspaceCreateSubmit(args: {
       if (!(await saveStartupPolicy(client, setupRepo, args.setupWait, args.setError))) {
         return
       }
-      const createdWithAgentId =
-        args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined
+      const createdWithAgentId = selectedAgent.id !== '__blank__' ? selectedAgent.id : undefined
       const trimmedNote = args.note.trim() || undefined
       const result = selection
         ? await createWorkspaceFromComposerSource({
@@ -229,7 +228,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             targetRepoId: selectedRepo.id,
             setupDecision,
             approvedSetupHash: setupApproval?.approvedSetupHash,
-            agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
+            agent: { choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
@@ -238,6 +237,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             branchIntentSupported: args.getBranchIntentSupport(
               selection.kind === 'branch' && selection.reuse ? 'open-existing-v2' : 'create-new'
             ),
+            draftRetry: draftRetry.current,
             parent: folder?.parent
           })
         : await createBlankWorkspace({

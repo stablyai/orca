@@ -160,12 +160,13 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         clientMutationId,
         agent,
         options,
+        isCurrent,
         shell: options?.shell,
         ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {}),
         viewMode:
           sourceFork || options?.terminalView ? undefined : await hostViewModeForNewAgentTab(agent)
       })
-      if (!isCurrent()) {
+      if (!response || !isCurrent()) {
         return sourceOutcome('accepted')
       }
       const forkMessage = sourceFork ? mobileChatForkCreateReplyMessage(agentName, response) : null

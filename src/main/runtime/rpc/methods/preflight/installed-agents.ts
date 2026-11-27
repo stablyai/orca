@@ -12,6 +12,10 @@ import { agentCommandOverrideDetectionOptions } from '../../../../preflight/inst
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../../../shared/concurrency/abort-signal-reason'
 
 type InstalledAgentsRuntime = Pick<
   OrcaRuntimeService,
@@ -25,7 +29,8 @@ type InstalledAgentsRuntime = Pick<
 
 export async function listInstalledWorkspaceAgents(
   runtime: InstalledAgentsRuntime,
-  params: z.infer<typeof PreflightAgentDetection>
+  params: z.infer<typeof PreflightAgentDetection>,
+  signal?: AbortSignal
 ) {
   let selectedWorktree:
     | Awaited<ReturnType<InstalledAgentsRuntime['showManagedWorktree']>>
@@ -63,15 +68,19 @@ export async function listInstalledWorkspaceAgents(
     }
     if (environmentId) {
       const server = await runtime.resolveOrchestrationWorkerServer(environmentId)
+      throwIfSignalAborted(signal)
       try {
-        return await runtime.callOrchestrationWorkerServer(
-          environmentId,
-          'preflight.installedAgents',
-          // The execution owner must hold this workspace locally; never follow a pairing cycle.
-          { worktreeId: worktree.id, worktreeHostId: 'local' },
-          undefined,
-          undefined,
-          { expectedEnvironmentPairingRevision: server.pairingRevision }
+        return await waitForPromiseWithSignal(
+          runtime.callOrchestrationWorkerServer(
+            environmentId,
+            'preflight.installedAgents',
+            // The execution owner must hold this workspace locally; never follow a pairing cycle.
+            { worktreeId: worktree.id, worktreeHostId: 'local' },
+            undefined,
+            undefined,
+            { expectedEnvironmentPairingRevision: server.pairingRevision }
+          ),
+          signal
         )
       } catch (error) {
         if (error instanceof OrchestrationError && error.code === 'method_not_found') {
@@ -104,7 +113,9 @@ export async function listInstalledWorkspaceAgents(
   return {
     agents: await detectAgentsOnHost(
       host,
-      agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
+      agentCommandOverrideDetectionOptions(settings.agentCmdOverrides),
+      signal,
+      'wsl-fallback'
     ),
     settings: {
       disabledTuiAgents: settings.disabledTuiAgents,

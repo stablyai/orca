@@ -1,5 +1,13 @@
 import { accessSync, constants, readFileSync, readdirSync, statSync } from 'node:fs'
-import { access, open, readdir, readFile, stat } from 'node:fs/promises'
+import { access, lstat, open, readdir, readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import {
+  isMissingPathError,
+  isPathPermissionError,
+  UNVERIFIED_FS_PROBE,
+  type InstallDirectoryListing,
+  type InventoryFsProbes
+} from './inventory-fs-probes'
 import {
   hasNativeExecutableMagic,
   isNativeExecutable,
@@ -81,17 +89,93 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
   }
 }
 
-async function readAsync(read: CliFsRead): Promise<CliFsReadResult> {
+export type CliFsProbeOptions = {
+  probes: InventoryFsProbes
+  onUnverified: () => void
+  acceptsExecutableTarget?: (target: string) => Promise<boolean | typeof UNVERIFIED_FS_PROBE>
+  readDirectories?: (
+    path: string
+  ) => Promise<InstallDirectoryListing | null | typeof UNVERIFIED_FS_PROBE>
+}
+
+async function readInstallDirectoryNames(path: string): Promise<string[]> {
+  const directories: string[] = []
+  for (const name of await readdir(path)) {
+    try {
+      if ((await lstat(join(path, name))).isDirectory()) {
+        directories.push(name)
+      }
+    } catch (error) {
+      if (!isMissingPathError(error) && !isPathPermissionError(error)) {
+        throw error
+      }
+    }
+  }
+  return directories
+}
+
+async function readInstallDirectories(path: string): Promise<string[]> {
+  try {
+    return (await readdir(path, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+  } catch (error) {
+    if (
+      !isMissingPathError(error) ||
+      (typeof error === 'object' && error !== null && 'path' in error && error.path === path)
+    ) {
+      throw error
+    }
+    // On DT_UNKNOWN filesystems a vanished entry can fail the Dirent conversion.
+    return readInstallDirectoryNames(path)
+  }
+}
+
+async function readAsync(
+  read: CliFsRead,
+  options?: CliFsProbeOptions
+): Promise<CliFsReadResult | typeof UNVERIFIED_FS_PROBE> {
+  const probes = options?.probes
   try {
     switch (read.kind) {
-      case 'runnable':
-        return await isRunnableCommandAsync(read.platform, read.path)
-      case 'file':
-        return (await stat(read.path)).isFile() ? await readFile(read.path, 'utf8') : null
-      case 'dirs':
-        return (await readdir(read.path, { withFileTypes: true }))
-          .filter((entry) => entry.isDirectory())
-          .map((entry) => entry.name)
+      case 'runnable': {
+        if (!probes) {
+          return await isRunnableCommandAsync(read.platform, read.path)
+        }
+        const result = await probes.executableFile(read.path, read.platform === 'win32')
+        const acceptsTarget = options?.acceptsExecutableTarget
+        if (result !== 'file' || !acceptsTarget) {
+          return result === UNVERIFIED_FS_PROBE ? result : result === 'file'
+        }
+        const target = await probes.realPath(read.path)
+        return target === UNVERIFIED_FS_PROBE
+          ? target
+          : target !== null && (await acceptsTarget(target))
+      }
+      case 'file': {
+        const stats = await (probes
+          ? probes.read(read.path, 'stat', () => stat(read.path))
+          : stat(read.path))
+        if (stats === UNVERIFIED_FS_PROBE || !stats?.isFile()) {
+          return stats === UNVERIFIED_FS_PROBE ? stats : null
+        }
+        return await (probes
+          ? probes.read(read.path, 'file', () => readFile(read.path, 'utf8'))
+          : readFile(read.path, 'utf8'))
+      }
+      case 'dirs': {
+        if (!options?.readDirectories) {
+          return await readInstallDirectories(read.path)
+        }
+        const listing = await options.readDirectories(read.path)
+        if (listing === UNVERIFIED_FS_PROBE) {
+          return listing
+        }
+        if (listing?.uncertain) {
+          options.onUnverified()
+        }
+        return listing?.names ?? null
+      }
       case 'native':
         return await isNativeExecutableAsync(read.path)
     }
@@ -108,10 +192,17 @@ export function runCliFsReadsSync<T>(reads: CliFsReads<T>): T {
   return step.value
 }
 
-export async function runCliFsReadsAsync<T>(reads: CliFsReads<T>): Promise<T> {
+export async function runCliFsReadsAsync<T>(
+  reads: CliFsReads<T>,
+  options?: CliFsProbeOptions
+): Promise<T> {
   let step = reads.next()
   while (!step.done) {
-    step = reads.next(await readAsync(step.value))
+    const result = await readAsync(step.value, options)
+    if (result === UNVERIFIED_FS_PROBE) {
+      options?.onUnverified()
+    }
+    step = reads.next(result === UNVERIFIED_FS_PROBE ? null : result)
   }
   return step.value
 }

@@ -50,11 +50,17 @@ export function windowStartupAfterCreate(
   startup?: WorktreeStartupPayload
   agent: TuiAgent | null
   terminalOptions: CreationTerminalOptions
+  startupDraftDeferred: boolean
 } {
-  const backendSpawned = result.startupTerminal?.spawned === true
+  const backendSpawned = Boolean(result.startupTerminal?.spawned || result.startupTerminal?.handle)
   const plan = planWindowStartup(request, result, backendSpawned)
   return {
     ...plan,
+    startupDraftDeferred: Boolean(
+      request.launchDraftPrompt &&
+      result.startupTerminal?.handle &&
+      result.startupTerminal.spawned === false
+    ),
     terminalOptions: {
       worktreeCreationId: creationId,
       ...(plan.startup ? { createNewTerminalForStartup: true } : {}),

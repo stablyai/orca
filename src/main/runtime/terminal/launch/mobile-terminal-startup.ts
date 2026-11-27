@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
@@ -10,7 +11,10 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-resume-startup'
-import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import {
+  agentLaunchUnbuildableMessage,
+  buildAgentStartupPlan
+} from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
@@ -26,6 +30,7 @@ export type MobileTerminalCommandOptions = {
   command?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   agent?: TuiAgent
   agentPrompt?: string
@@ -46,6 +51,7 @@ export type MobileTerminalCommand = {
   command?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
@@ -64,10 +70,10 @@ function normalizeOriginConnectionId(connectionId: string | null | undefined): s
 
 export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
   /** The `--resume` launch for a pane's recorded agent session, as the host window's cold restore builds it. */
-  protected resolveMobileSessionResumeCommand(
+  protected async resolveMobileSessionResumeCommand(
     workspace: TerminalWorkspaceLaunchScope,
     record: ResumableAgentSessionSource
-  ): MobileTerminalResumeCommand | null {
+  ): Promise<MobileTerminalResumeCommand | null> {
     const providerSession = normalizeAgentProviderSession(record.providerSession)
     if (!this.store || !providerSession || !isResumableTuiAgent(record.agent)) {
       return null
@@ -123,6 +129,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
         envToDelete: opts.envToDelete,
         launchConfig: opts.launchConfig,
         launchAgent: opts.launchAgent,
+        nativeChatSignIn: opts.nativeChatSignIn,
         startupCommandDelivery: opts.startupCommandDelivery
       }
     }
@@ -150,7 +157,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
-      throw new Error(`Could not build launch command for ${opts.agent}.`)
+      throw new Error(agentLaunchUnbuildableMessage(opts.agent))
     }
     if (opts.agentPrompt && startupPlan.followupPrompt) {
       throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)

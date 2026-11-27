@@ -29,11 +29,11 @@ function claudeArgsStart(
   tokens: readonly string[],
   shell: AgentStartupShell
 ): number {
-  if (agent === 'claude') {
-    const index = findAgentExecutableIndex(tokens, shell, (token) =>
-      isAgentExecutableToken(token, ['claude'])
-    )
-    return index < 0 ? -1 : index + 1
+  const direct = findAgentExecutableIndex(tokens, shell, (token) =>
+    isAgentExecutableToken(token, ['claude'])
+  )
+  if (direct >= 0 || agent === 'claude') {
+    return direct < 0 ? -1 : direct + 1
   }
   const config = TUI_AGENT_CONFIG['claude-agent-teams']
   const names = [config.detectCmd, ...(config.detectCmdAliases ?? [])]
@@ -77,7 +77,8 @@ function previousTakesNextWord(
 export function withoutClaudeRootBypass(
   command: string,
   agent: TuiAgent | undefined,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  authoredPrefix = ''
 ): string | null {
   if (agent !== 'claude' && agent !== 'claude-agent-teams') {
     return null
@@ -113,7 +114,10 @@ export function withoutClaudeRootBypass(
       following += 1
     }
     const span = parsed.spans[index]
-    const gapStart = parsed.spans[index - 1].end
+    if (span.start < authoredPrefix.length) {
+      continue
+    }
+    const gapStart = Math.max(parsed.spans[index - 1].end, authoredPrefix.length)
     if (
       span.divergesFromShell ||
       !/^[ \t]+$/.test(command.slice(gapStart, span.start)) ||
@@ -135,15 +139,17 @@ export function planClaudeRootLaunch(args: {
   agent: TuiAgent | undefined
   shell: AgentStartupShell
   isRoot: boolean
+  authoredPrefix?: string
   env: readonly (Readonly<Record<string, string | undefined>> | undefined)[]
 }): { command: string; notice: string } | null {
   if (
     !args.command ||
     !args.isRoot ||
+    (args.authoredPrefix !== undefined && !args.command.startsWith(args.authoredPrefix)) ||
     args.env.some((env) => CLAUDE_ROOT_SANDBOX_ENV.some((name) => env?.[name]))
   ) {
     return null
   }
-  const command = withoutClaudeRootBypass(args.command, args.agent, args.shell)
+  const command = withoutClaudeRootBypass(args.command, args.agent, args.shell, args.authoredPrefix)
   return command === null ? null : { command, notice: CLAUDE_ROOT_BYPASS_NOTICE }
 }

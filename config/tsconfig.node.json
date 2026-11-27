@@ -38,6 +38,7 @@
     "../src/cli/bot-orchestration-eval/bot-orchestration-eval-worker-control.ts",
     "../src/cli/orchestration/workers/worker-view-results.ts",
     "../src/renderer/src/store/slices/worktrees/create/worktree-create-payload.ts",
+    "../src/renderer/src/runtime/hosted-terminals/creation/terminal-agent-create-launch-params.ts",
     "../src/renderer/src/runtime/repo-hooks/orca-hook-trust.ts",
     "../src/renderer/src/runtime/agent-status/renderer-status-sender.ts",
     "../src/renderer/src/components/browser-pane/navigate/browser-page-download-activity.ts",

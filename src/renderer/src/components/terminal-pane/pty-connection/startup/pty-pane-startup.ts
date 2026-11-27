@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { EventProps } from '../../../../../../shared/telemetry/telemetry-event-classification'
 import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
@@ -16,6 +17,7 @@ export type PtyPaneStartup = {
   /** Renderer-delivered startup input for callers that need xterm paste
    *  semantics before the submit Enter. */
   delivery?: 'terminal-paste'
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: StartupCommandDelivery
   env?: Record<string, string>
   envToDelete?: string[]

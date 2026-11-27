@@ -1,3 +1,5 @@
+import { readManagedAgentCommandsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { useAppStore } from '@/store/index'
 import {
   parseExecutionHostId,
   type ExecutionHostScope
@@ -64,11 +66,22 @@ export function buildAiVaultCliForkStartupForWorktree(
   if (owner && !matchesWebSessionIntentOwner(owner)) {
     throw conversationHostUnavailableError()
   }
-  const startupArgs = { session, host: resolveAiVaultResumeHost(args), settings }
+  const startupArgs = {
+    session,
+    host: resolveAiVaultResumeHost(args),
+    settings
+  }
   if (args.copied) {
     assertAiVaultCopiedSessionLaunchAllowed(args)
     return {
-      ...buildAiVaultLocalResumeStartup({ ...startupArgs, embedCwd: false }),
+      ...buildAiVaultLocalResumeStartup({
+        ...startupArgs,
+        embedCwd: false,
+        managedAgentCommands: readManagedAgentCommandsForWorktree(
+          useAppStore.getState(),
+          args.worktreeId
+        )
+      }),
       agent: session.agent
     }
   }

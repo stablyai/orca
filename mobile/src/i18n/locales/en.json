@@ -437,6 +437,7 @@
       "missingResumeId": "This session is missing a resume id.",
       "unknownHostPlatform": "Unable to determine host platform.",
       "sessionQueued": "Agent session queued.",
+      "inventoryBusy": "Agent inventory is still running. Try again.",
       "resumeFailed": "Failed to resume session.",
       "title": "Agent history",
       "refreshSessions": "Refresh agent sessions",

@@ -299,6 +299,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         sessionOptions: { model: target.model }
       }),
       cwd: path,
+      shellPath: launchRuntime.pty.shellOverride,
       hostIdentity: this.getRuntimeId()
     })
     return true

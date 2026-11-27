@@ -6,10 +6,16 @@ export const runtimeRepoListSchema = z
   .looseObject({ repos: salvagingArray(z.looseObject({ id: z.string() })) })
   .transform((reply) => reply.repos)
 
-// Require the array before option construction spreads it; isMobileTuiAgent filters individual entries.
-export const detectedAgentsSchema = z.array(z.unknown())
+const agentListSchema = z.array(z.unknown())
 
-/** `preflight.refreshAgents` wraps the same list with PATH diagnostics the drawer never reads. */
-export const refreshedAgentsSchema = z
-  .looseObject({ agents: detectedAgentsSchema })
-  .transform((reply) => reply.agents)
+export const refreshedAgentsSchema = z.object({
+  agents: agentListSchema,
+  incomplete: z.boolean().optional(),
+  afterPublication: z.number().int().nonnegative().optional()
+})
+
+// Older hosts and remote detection return the list alone.
+export const detectedAgentsSchema = z.union([
+  refreshedAgentsSchema,
+  agentListSchema.transform((agents): z.output<typeof refreshedAgentsSchema> => ({ agents }))
+])

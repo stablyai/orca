@@ -2,6 +2,7 @@ import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-p
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import type { AppState } from '../../types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { isIncompleteAgentInventory } from './managed-agent-launch-commands'
 
 /** A context's list and latest attempt outcome; a list kept through a failed refresh is failed. */
 export function readLocalAgentInventoryOutcome(
@@ -23,6 +24,8 @@ export function readLocalAgentInventoryOutcome(
         ? 'pending'
         : failedContextKeys.has(key) || keptThroughFailure.has(ids)
           ? 'failed'
-          : 'successful'
+          : isIncompleteAgentInventory(ids)
+            ? 'pending'
+            : 'successful'
   }
 }

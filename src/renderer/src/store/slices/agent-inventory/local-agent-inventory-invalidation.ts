@@ -4,6 +4,20 @@ import type { LocalAgentInventoryLifecycle } from './local-agent-inventory-refre
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
 import type { AppState } from '../../types'
 
+export function haveAgentCommandOverridesChanged(state: AppState, previous: AppState): boolean {
+  // Settings hydration is not an edit; detection already ran with the persisted overrides.
+  if (previous.settings == null) {
+    return false
+  }
+  const before: Partial<Record<string, string>> | undefined = previous.settings.agentCmdOverrides
+  const after: Partial<Record<string, string>> | undefined = state.settings?.agentCmdOverrides
+  if (before === after) {
+    return false
+  }
+  const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])
+  return [...keys].some((key) => (before?.[key]?.trim() ?? '') !== (after?.[key]?.trim() ?? ''))
+}
+
 /** A dropped inventory's in-flight probes and failure flags predate the disabled list. */
 function forgetEnabledContexts(keyed: Map<string, unknown> | Set<string>): void {
   for (const contextKey of keyed.keys()) {

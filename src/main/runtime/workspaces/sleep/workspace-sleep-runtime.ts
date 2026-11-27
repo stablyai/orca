@@ -272,13 +272,13 @@ export class WorkspaceSleepCoordinator {
   }
 
   /** A slept pane was opened: main resumes it, queued like any wake, and the opener attaches. */
-  resumePane(pane: RestoredPane, automatic = false): Promise<boolean> {
+  resumePane(pane: RestoredPane, automatic = false): Promise<StartedPty | null> {
     if (!automatic) {
       this.noteReopened(pane.worktreeId)
     }
     return queueTerminalWorkspaceCommand(this.runtime, `id:${pane.worktreeId}`, {
       kind: 'wake',
-      run: async () => (await this.runtime.ensureRestoredPaneStarted(pane, { automatic })) !== null
+      run: () => this.runtime.ensureRestoredPaneStarted(pane, { automatic })
     })
   }
 

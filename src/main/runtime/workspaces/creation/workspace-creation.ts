@@ -281,10 +281,10 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ...(addResult.localBaseRefUpdateSuggestion
         ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
         : {}),
-      ...(didSpawnStartup && startupTerminalHandle
+      ...(startupTerminalHandle
         ? {
             startupTerminal: {
-              spawned: true,
+              spawned: didSpawnStartup,
               handle: startupTerminalHandle,
               ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
               ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),

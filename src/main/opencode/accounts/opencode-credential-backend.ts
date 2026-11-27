@@ -1,7 +1,10 @@
 import { runProcess } from '@orca/process-host'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
+import { getSystemCliInstallDirectories } from '../../../shared/shell/command-resolution/system-cli-install-dirs'
 import { createHash } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { delimiter } from 'node:path'
 
 export type OpenCodeCredentialBackend = 'v1' | 'v2'
 
@@ -21,9 +24,18 @@ export async function detectOpenCodeCredentialBackend(
   cwd = process.cwd()
 ): Promise<OpenCodeCredentialBackend | null> {
   // The execution host's default CLI owns this lookup; table presence proves neither backend.
+  // Its installer folder is not on PATH, so search it after PATH, as launches do.
+  const installDirs = getSystemCliInstallDirectories(
+    process.platform,
+    environment.HOME ?? homedir()
+  )
+  const lookupEnv =
+    installDirs.length > 0
+      ? { ...environment, PATH: [environment.PATH, ...installDirs].filter(Boolean).join(delimiter) }
+      : environment
   const program =
-    (await resolveCommandOnLocalPath('opencode', { env: environment, cwd })) ??
-    (await resolveCommandOnLocalPath('opencode2', { env: environment, cwd }))
+    (await resolveCommandOnLocalPath('opencode', { env: lookupEnv, cwd })) ??
+    (await resolveCommandOnLocalPath('opencode2', { env: lookupEnv, cwd }))
   if (!program) {
     return null
   }

@@ -54,6 +54,15 @@ export async function main(
   cwd = resolveInvocationCwd(),
   configureExecutable?: (commandPath: readonly string[]) => void
 ): Promise<void> {
+  if (process.send && argv.length === 1) {
+    const { CLI_SKILL_AGENT_INVENTORY_ARG, sendCliSkillAgentInventory } =
+      await import('./skills/cli-skill-agent-inventory.js')
+    if (argv[0] === CLI_SKILL_AGENT_INVENTORY_ARG) {
+      const { getDefaultUserDataPath } = await import('./runtime/profile/metadata.js')
+      await sendCliSkillAgentInventory(getDefaultUserDataPath())
+      return
+    }
+  }
   // Why: version audits use the bundled launcher; Electron intercepts direct binary version flags.
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
     const version = readOrcaCliVersion()
@@ -204,7 +213,8 @@ export async function main(
       },
       cwd,
       json,
-      rawArgs: argv
+      rawArgs: argv,
+      cliEntryPath: __filename
     })
   } catch (error) {
     const worktreeSelector = parsed.flags.get('worktree')

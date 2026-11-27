@@ -9,7 +9,6 @@ import { applyAgentLaunchPluginHook } from '../spawn/spawn-agent-launch-plugin-h
 import { endPaneAgentLaunch } from './spawn-agent-launch-end'
 import { preparePtyIpcSpawnPreflight } from './spawn-preflight'
 import { assemblePtyIpcSpawnEnv } from './spawn-env'
-import { preparePtyIpcQoderCommand } from './spawn-qoder-command'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { attachOnlyViewOf } from '../pane/attach-only-view'
 import { commitPtyIpcSpawn } from './spawn-commit'
@@ -52,7 +51,6 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
       }
       await preparePtyIpcSpawnPreflight(ctx)
       await assemblePtyIpcSpawnEnv(ctx)
-      await preparePtyIpcQoderCommand(ctx)
       await buildPtyIpcSpawnOptions(ctx)
     },
     facts: () => ({
@@ -63,6 +61,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
         }
       },
       sessionId: ctx.effectiveSessionId,
+      agentProgramBlocked: ctx.agentProgramBlocked,
       savedResumePaneKey: ctx.stablePaneKey,
       launchConfig: ctx.effectiveLaunchConfig,
       suppressRefusedLaunch: () => {

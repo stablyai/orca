@@ -2,6 +2,8 @@ import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-tr
 // Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/blocked-agent-startup-notice'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
@@ -100,13 +102,14 @@ export function startWindowTabInMain(
       ])
     })
   }
-  void callRuntimeRpc<{ terminal: { ptyId: string } }>({ kind: 'local' }, 'terminal.create', {
+  void callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>({ kind: 'local' }, 'terminal.create', {
     worktree: `id:${tab.worktreeId}`,
     windowTab: true,
     tabId: tab.id,
     leafId,
     ...(cwd ? { cwd } : {}),
     ...(tab.shellOverride ? { shell: tab.shellOverride } : {}),
+    ...(startup?.nativeChatSignIn ? { nativeChatSignIn: startup.nativeChatSignIn } : {}),
     ...(startup?.command ? { command: startup.command } : {}),
     ...(startup?.startupCommandDelivery
       ? { startupCommandDelivery: startup.startupCommandDelivery }
@@ -121,7 +124,12 @@ export function startWindowTabInMain(
     ...(startup?.launchAgent ? { launchAgent: startup.launchAgent } : {}),
     ...(startup?.trustWorktreeId ? { trustWorktreeId: startup.trustWorktreeId } : {})
   }).then(
-    (reply) => releaseOnceDrawn(store, tab.id, leafId, reply?.terminal?.ptyId ?? null, mark),
+    (reply) => {
+      if (reply?.terminal?.agentProgramBlocked && store.getState().terminalLayoutsByTabId[tab.id]) {
+        notifyBlockedAgentStartup(reply.terminal.agentProgramBlocked, startup?.command)
+      }
+      releaseOnceDrawn(store, tab.id, leafId, reply?.terminal?.ptyId ?? null, mark)
+    },
     (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       if (message === 'host_not_owned') {

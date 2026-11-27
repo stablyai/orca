@@ -259,7 +259,7 @@
 1 src/main/codex-accounts/runtime-home/wsl/runtime-home-service-wsl.ts
 1 src/main/codex-accounts/runtime-home/wsl/wsl-codex-auth-batch-reader.ts
 2 src/main/codex-accounts/service.ts
-10 src/main/codex-cli/command.ts
+9 src/main/codex-cli/command.ts
 1 src/main/codex-usage/codex-usage-provider.ts
 1 src/main/codex-usage/store.ts
 1 src/main/codex/app-server/codex-app-server-connection.ts
@@ -574,7 +574,6 @@
 5 src/main/ipc/browser/browser-session-profile-ipc.ts
 1 src/main/ipc/browser/lazy-browser-session-profile-ipc.ts # session-profile charge moved from browser.ts; the module imports on first invoke, so readFileSync never runs at boot
 7 src/main/ipc/cli.ts
-1 src/main/ipc/command-path/command-path-directory-worker-client.ts
 2 src/main/ipc/computer-use-permissions.ts
 2 src/main/ipc/custom-app-icon.ts
 22 src/main/ipc/diagnostics.ts
@@ -1037,9 +1036,6 @@
 8 src/main/ports/local-workspace-platform-port-scanner.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
-3 src/main/preflight/agent-command-detection.ts
-1 src/main/preflight/agent-detection.ts
-1 src/main/preflight/installed-agent-detection.ts
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts
 2 src/main/provider-process/provider-executable-missing.ts
@@ -1266,7 +1262,6 @@
 7 src/main/runtime/terminal/launch/claude-agent-teams-shim-env.ts
 1 src/main/runtime/terminal/launch/mobile-terminal-chat-fork.ts
 2 src/main/runtime/terminal/launch/mobile-terminal-startup.ts
-1 src/main/runtime/terminal/launch/qoder-terminal-command-resolution.ts
 1 src/main/runtime/terminal/launch/runtime-agent-terminal-startup.ts
 1 src/main/runtime/terminal/launch/terminal-create-team-allocation.ts
 1 src/main/runtime/terminal/launch/terminal-split-source-authority.ts
@@ -1492,7 +1487,7 @@
 7 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
 2 src/main/wsl/filesystem/wsl-drive-unc-mounts.ts
 1 src/main/wsl/filesystem/wsl-guest-drive-path.ts
-8 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
+7 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
 4 src/main/wsl/host-lifecycle/wsl-host-connector.ts
@@ -1533,7 +1528,6 @@
 2 src/shared/agent-hook-listener/transcript-reader.ts
 4 src/shared/agent-hook-listener/transport/agent-hook-spool.ts
 1 src/shared/agent-hook-listener/transport/endpoint-publication.ts
-1 src/shared/agent-launch/installation/local-agent-install-dir-detection.ts
 2 src/shared/agent-launch/plugins/opencode/opencode-installed-plugin.ts
 4 src/shared/agent-launch/plugins/opencode/opencode-plugin-atomic-write.ts
 1 src/shared/agent-launch/plugins/opencode/opencode-startup-prompt-install.ts
@@ -1575,6 +1569,6 @@
 6 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts
 3 src/shared/shell/command-resolution/cli-fs-reads.ts # sync runner for CLI lookups; isNativeExecutable moved here from node-cli-command-resolution (16 -> 13) so withCliRuntimeOnPath has an async form
-13 src/shared/shell/command-resolution/node-cli-command-resolution.ts
+9 src/shared/shell/command-resolution/node-cli-command-resolution.ts
 1 src/shared/shell/command-resolution/nvm-version-directories.ts
 1 src/shared/shell/launch/startup-command-staging.ts

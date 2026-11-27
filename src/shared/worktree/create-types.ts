@@ -5,6 +5,7 @@ import type { WorkspaceSource } from '../workspace/creation/workspace-source'
 import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
+import type { AgentProgramBlockReason } from '../agent-session/lifecycle/agent-session-resume'
 import type {
   GitPushTarget,
   GitWorktreeInfo,
@@ -161,7 +162,8 @@ export type WorktreeCheckoutProgress = {
 /** Progress payload: checkout accompanies creating; null means Git finished writing files. */
 export type CreateWorktreeProgressEvent = {
   creationId?: string
-  phase: 'fetching' | 'creating'
+  phase: 'fetching' | 'creating' | 'startup-gate-settled'
+  blockReason?: AgentProgramBlockReason
   checkout?: WorktreeCheckoutProgress | null
   /** Local creates name the checkout before Git publishes it. */
   worktreeId?: string
@@ -207,6 +209,8 @@ export type CreateWorktreeResult = {
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
   startupTerminal?: {
     spawned: boolean
+    /** Desktop IPC reports the gate outcome on the creation progress channel. */
+    reportsSetupGateOutcome?: true
     handle?: string
     tabId?: string
     paneKey?: string | null

@@ -3,6 +3,7 @@ import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/bran
 import { BotItemError } from '../../../bots/bot-item-error'
 import { BotSessionRefusedError } from '../../../bots/bot-session-refused-error'
 import { AgentConversationRefusal } from '../../agent-conversations/agent-conversation-refusal'
+import { AgentInventoryDeadlineError } from '../../../preflight/agent-command-detection'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
@@ -200,6 +201,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   }
   if (
     error instanceof BranchSwitchCollisionError ||
+    error instanceof AgentInventoryDeadlineError ||
     error instanceof TerminalSplitOutcomeError ||
     error instanceof SparsePresetValidationError ||
     error instanceof WslHostWindowsDriveRefusalError ||

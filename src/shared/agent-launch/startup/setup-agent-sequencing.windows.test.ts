@@ -8,6 +8,7 @@ import { getPowerShellAgentWrappers } from '../../shell/launch/agents/powershell
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 import {
   createSequencedSetupAgentCommands,
+  SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from './setup-agent-sequencing'
 
@@ -22,10 +23,7 @@ it('defines the agent wrappers in the Windows gate before running the startup co
   expect(sequenced.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toBe(
     getPowerShellAgentWrappers()
   )
-  const gate = Buffer.from(sequenced.startupCommand.split(' ').at(-1) ?? '', 'base64').toString(
-    'utf16le'
-  )
-  expect(gate).toMatch(
+  expect(sequenced.startupEnv?.[SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV]).toMatch(
     /Invoke-Expression \$wrappers; Remove-Item Env:ORCA_SEQUENCED_STARTUP_SCRIPT .*Invoke-Expression \$startup/s
   )
 })
@@ -53,13 +51,16 @@ it.skipIf(process.platform !== 'win32')(
         Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
       )
       const pathKey = Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH'
-      Object.assign(env, sequenced.startupEnv, {
+      Object.assign(env, {
         [pathKey]: `${root};${env[pathKey] ?? ''}`,
         [CLAUDE_HOOK_PLUGIN_DIR_ENV]: join(root, 'plugin')
       })
-      for (const command of [sequenced.setupCommand, sequenced.startupCommand]) {
+      for (const { command, gateEnv } of [
+        { command: sequenced.setupCommand, gateEnv: sequenced.setupEnv },
+        { command: sequenced.startupCommand, gateEnv: sequenced.startupEnv }
+      ]) {
         const [program, ...args] = command.split(' ')
-        const result = await runProcess({ program, args, cwd: root, env })
+        const result = await runProcess({ program, args, cwd: root, env: { ...env, ...gateEnv } })
         expect(result.code, JSON.stringify(result)).toBe(0)
       }
       expect(JSON.parse(await readFile(join(root, 'argv.json'), 'utf8'))).toEqual([

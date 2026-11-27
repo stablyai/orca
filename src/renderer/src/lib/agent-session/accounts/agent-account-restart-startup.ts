@@ -1,3 +1,4 @@
+import { readManagedAgentCommandsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useAppStore } from '@/store/index'
@@ -149,7 +150,8 @@ export function buildCodexAccountRestartStartup(
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: target.platform,
     agentHostPlatform: target.agentHostPlatform,
-    shell: resolveStartupShell(target.platform, target.shell)
+    shell: resolveStartupShell(target.platform, target.shell),
+    managedAgentCommands: readManagedAgentCommandsForWorktree(state, args.worktreeId)
   })
   if (!command.ok) {
     throw new Error(command.error)

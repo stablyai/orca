@@ -1,7 +1,9 @@
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
+import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
+import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   createSetupWaitGate,
   SETUP_WAIT_GATE_MAX_MS
@@ -9,6 +11,7 @@ import {
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../../input/paste/terminal-pty-paste-writer'
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
+import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/blocked-agent-startup-notice'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
@@ -17,7 +20,16 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
   // Providers own startup delivery across renderer replacement; only explicit terminal paste stays renderer-owned.
   session.pendingStartupCommand = session.shouldDeliverStartupViaTerminalPaste
     ? session.paneStartup?.command
-      ? { command: session.paneStartup.command, resumeSource: session.paneStartup.resumeSource }
+      ? {
+          command: session.paneStartup.command,
+          resumeSource: session.paneStartup.resumeSource,
+          launchConfig: session.paneStartup.launchConfig,
+          launchAgent: session.paneStartup.launchAgent,
+          restoring: Boolean(
+            session.paneStartup.resumeProviderSession || session.paneStartup.resumeSource
+          ),
+          nativeChatSignIn: session.paneStartup.nativeChatSignIn
+        }
       : null
     : null
   const startupSource = session.paneStartup?.resumeSource
@@ -29,7 +41,11 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     ? createStartupDraftReadyScanner()
     : null
   // A wait-for-setup pane's Setup time does not count toward the draft deadline.
-  const setupWaitGate = createSetupWaitGate()
+  const awaitSetupGate = Boolean(
+    session.paneStartup?.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+  )
+  const setupWaitGate = createSetupWaitGate(awaitSetupGate)
+  let watchingSetup = awaitSetupGate
   let startupDraftReadinessArmed = false
   let startupDraftPasteSettled = !session.ownsStartupDraftPaste
   let startupDraftPasteInFlight = false
@@ -47,6 +63,24 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     }
   }
   session.cleanupStartupDraftPasteTimers = clearStartupDraftPasteTimers
+  session.withholdStartupDraftPaste = (): void => {
+    startupDraftPasteSettled = true
+    session.startupDraftPasteAttempted = true
+    clearStartupDraftPasteTimers()
+  }
+  session.notifyBlockedStartup = (reason: AgentProgramBlockReason): void => {
+    const freshLaunch = session.paneStartup?.freshAgentLaunch
+    const draft =
+      session.startupDraftPrompt ??
+      (awaitSetupGate || freshLaunch?.promptDelivery === 'draft' ? freshLaunch?.prompt : undefined)
+    notifyBlockedAgentStartup(
+      reason,
+      draft?.trim()
+        ? { prompt: draft }
+        : (session.paneStartup?.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] ??
+            session.paneStartup?.command)
+    )
+  }
   const getStartupDraftPtyId = (): string | null => {
     const ptyId = session.transport.getPtyId()
     if (
@@ -166,13 +200,28 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       return
     }
     startupDraftReadinessArmed = true
+    if (awaitSetupGate) {
+      return armStartupDraftHardTimer(SETUP_WAIT_GATE_MAX_MS, abandonStartupDraft)
+    }
     armStartupDraftHardTimer()
   }
   session.observeStartupDraftPasteReadiness = (data: string): void => {
-    if (!startupDraftReadyScanner || !startupDraftReadinessArmed || startupDraftPasteSettled) {
+    const waitingForDraft = startupDraftReadinessArmed && !startupDraftPasteSettled
+    if (!watchingSetup && !waitingForDraft) {
       return
     }
     const gated = setupWaitGate.observe(data)
+    if (gated.phase === 'started' || gated.phase === 'failed') {
+      watchingSetup = false
+    }
+    if (gated.blocked) {
+      session.withholdStartupDraftPaste()
+      session.notifyBlockedStartup('unknown')
+      return
+    }
+    if (!startupDraftReadyScanner || !waitingForDraft) {
+      return
+    }
     if (gated.phase) {
       // Output before Setup ended was the wrapper's, so the scan and timers start over.
       startupDraftReadyScanner = createStartupDraftReadyScanner()

@@ -3,6 +3,7 @@ import { toHostSessionTabId } from '../../../../../shared/workspace-layout/termi
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { CreateWebRuntimeSessionTerminalArgs } from './terminal-create-contracts'
+import { terminalAgentCreateLaunchParams } from './terminal-agent-create-launch-params'
 
 export type CreateTerminalShellParams = { command?: string; shell?: string }
 
@@ -29,14 +30,16 @@ export async function buildPlainCreateTerminalParams(
   environmentId: string,
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<Record<string, unknown>> {
+  const { command, ...shell } = await resolveCreateTerminalShellParams(environmentId, args)
   return {
     worktree: toRuntimeWorktreeSelector(args.worktreeId),
     afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
     targetGroupId: args.targetGroupId,
-    ...(await resolveCreateTerminalShellParams(environmentId, args)),
+    ...shell,
+    ...terminalAgentCreateLaunchParams(command, args.env),
     cwd: args.cwd,
-    ...(args.env ? { env: args.env } : {}),
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
+    nativeChatSignIn: args.nativeChatSignIn,
     startupCommandDelivery: args.startupCommandDelivery,
     ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
     ...(args.launchToken ? { launchToken: args.launchToken } : {}),

@@ -141,6 +141,7 @@ export function useAgentHistorySessionResume({
         const launch = buildMobileAiVaultResumeLaunch({
           session: preparedSession,
           workspacePlatform: platform,
+          hostCapabilities: resumeHost.capabilities,
           hostTerminalWindowsShell: readMobileRuntimeTerminalWindowsShell(hostStatus),
           settings
         })
@@ -156,6 +157,18 @@ export function useAgentHistorySessionResume({
           assertCurrentOwner
         )
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
+        if (resumed.agentProgramBlocked) {
+          triggerError()
+          setResumeMessage(
+            resumed.agentProgramBlocked === 'unknown'
+              ? t(
+                  'agentHistory.panel.inventoryBusy',
+                  'Agent inventory is still running. Try again.'
+                )
+              : t('agentHistory.panel.resumeFailed', 'Failed to resume session.')
+          )
+          return
+        }
         triggerSuccess()
         // The host accepted the resume; a cutover now only stops navigation.
         try {

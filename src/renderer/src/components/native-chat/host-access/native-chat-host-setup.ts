@@ -1,3 +1,4 @@
+import { useNativeChatSignInCommand } from './native-chat-sign-in-command'
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -7,18 +8,17 @@ import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { isIncompleteAgentInventory } from '@/store/slices/agent-inventory/managed-agent-launch-commands'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   agentSessionInstallCommand,
-  agentSessionSignInCommand,
   agentSessionSignInEnv
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentSessionSetupFailureKind } from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
@@ -196,44 +196,22 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const shell = useAppStoreWithHostStatuses((s, statuses) => {
-    const status =
-      input.target.kind === 'environment'
-        ? lastVerifiedRuntimeStatus(statuses.get(input.target.environmentId))
-        : null
-    const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
-    if (!platform) {
-      return null
-    }
-    return (
-      resolveHostAgentStartupShell({
-        platform,
-        isRemote: input.target.kind !== 'local',
-        hostTerminalWindowsShell:
-          input.target.kind === 'local'
-            ? s.settings?.terminalWindowsShell
-            : status?.terminalWindowsShell
-      }) ?? (platform === 'win32' ? null : 'posix')
-    )
-  })
+  const login = useNativeChatSignInCommand(input)
   // agy signs in from Orca, so its terminal command (`system`) never runs from here.
   const antigravity = useNativeChatAgySignIn(input.agent, input.account, input.target)
-  const command = agentSessionSignInCommand(input.agent, {
-    account: input.account,
-    remote: input.target.kind !== 'local',
-    shell
-  })
-  const { agent } = input
+  const { agent, account } = input
+  const remote = input.target.kind === 'environment'
   const viaTerminal = useMemo(
     () =>
-      command && terminal
+      login && terminal
         ? {
             signingIn: terminal.opening,
-            signIn: () => void terminal.open(command, agentSessionSignInEnv(agent)),
-            loginCommand: command
+            signIn: () =>
+              void terminal.open(login, agentSessionSignInEnv(agent), { agent, account, remote }),
+            loginCommand: login
           }
         : null,
-    [agent, command, terminal]
+    [agent, account, remote, login, terminal]
   )
   // A managed account owns sign-in: a terminal login after it succeeds would sign in another account.
   return accountId ? managed : (antigravity ?? viaTerminal)
@@ -243,10 +221,10 @@ function useNativeChatInstall(
   input: NativeChatHostSetupInput,
   terminal: NativeChatHostCommandTerminal | null
 ): NativeChatInstall | null {
-  const { worktreeId, onRechecked } = input
+  const { agent, worktreeId, onRechecked } = input
   const environmentId = input.target.kind === 'environment' ? input.target.environmentId : null
   const command = agentSessionInstallCommand(
-    input.agent,
+    agent,
     useAppStoreWithHostStatuses((_s, statuses) =>
       environmentId ? runtimeHostPlatform(statuses, environmentId) : getRendererAppPlatform()
     )
@@ -276,7 +254,13 @@ function useNativeChatInstall(
             ? { kind: 'runtime', environmentId, worktreeId }
             : { kind: 'local', worktreeId }
         )
-        if (inventory.state === 'successful') {
+        if (
+          inventory.state === 'successful' ||
+          (inventory.state === 'pending' &&
+            isIncompleteAgentInventory(inventory.ids) &&
+            isTuiAgent(agent) &&
+            inventory.ids?.includes(agent))
+        ) {
           setOpened(false)
           onRechecked()
         } else {
@@ -285,7 +269,7 @@ function useNativeChatInstall(
       })
       .catch(reportFailure)
       .finally(() => setRechecking(false))
-  }, [environmentId, worktreeId, onRechecked])
+  }, [agent, environmentId, worktreeId, onRechecked])
   return useMemo(
     () =>
       command && terminal

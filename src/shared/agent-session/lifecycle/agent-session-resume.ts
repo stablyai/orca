@@ -295,8 +295,11 @@ export type SavedResumeDecision = {
   verdict: 'admitted' | 'chat-home' | 'chat-writing' | 'unverifiable'
 }
 
+export type AgentProgramBlockReason = 'unknown' | 'unavailable' | 'unbuildable'
+
 /** Effective facts of a terminal launch; a refused shell carries no rejected agent metadata. */
 export type TerminalLaunchResult = {
+  agentProgramBlocked?: AgentProgramBlockReason
   savedResumeDecision?: SavedResumeDecision
   agentResumeUnavailable?: true
   agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
@@ -317,6 +320,7 @@ export type SavedResumeStartupSource = {
 /** Forward only effective launch facts through each existing terminal envelope. */
 export function terminalLaunchFacts(result: TerminalLaunchResult): TerminalLaunchResult {
   return {
+    ...(result.agentProgramBlocked ? { agentProgramBlocked: result.agentProgramBlocked } : {}),
     ...(result.savedResumeDecision ? { savedResumeDecision: result.savedResumeDecision } : {}),
     ...(result.agentResumeUnavailable
       ? { agentResumeUnavailable: result.agentResumeUnavailable }

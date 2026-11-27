@@ -7,7 +7,10 @@ import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provi
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProgramBlockReason,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import { type PtySpawnTiming, createPtySpawnTiming } from '../spawn/pty-spawn-timing'
@@ -86,6 +89,7 @@ export type PtyIpcSpawnState = {
   codexResumeLaunch: CodexResumeLaunch
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
+  agentProgramBlocked?: AgentProgramBlockReason
   launchCommand: string | undefined
   /** What the host's MCP server list gave the pane, recorded at commit. */
   terminalMcp?: TerminalMcpPaneLaunch | null

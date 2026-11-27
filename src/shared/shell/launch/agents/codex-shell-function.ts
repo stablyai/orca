@@ -9,11 +9,13 @@ import {
 } from '../../../terminal/images/terminal-image-protocol'
 
 // Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
-const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
+export const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
 export const CODEX_NO_DAEMON_SKIP_ARGS = [...CODEX_SHARED_SERVER_ARGS, '--no-daemon'] as const
 const argPattern = (args: readonly string[]): string => `^(${args.join('|')}|--remote=.*)$`
-const CODEX_SHARED_SERVER_ARG_PATTERN = argPattern(CODEX_SHARED_SERVER_ARGS)
-const CODEX_NO_DAEMON_SKIP_ARG_PATTERN = argPattern(CODEX_NO_DAEMON_SKIP_ARGS)
+export const CODEX_SHARED_SERVER_ARG_PATTERN = /* @__PURE__ */ argPattern(CODEX_SHARED_SERVER_ARGS)
+export const CODEX_NO_DAEMON_SKIP_ARG_PATTERN =
+  /* @__PURE__ */ argPattern(CODEX_NO_DAEMON_SKIP_ARGS)
+export const CODEX_PROBE_DONE = '__orca_codex_probe_done'
 
 /** Restore nonsecret Orca caller identity stripped by inherit=core (#25775). set overrides inherit/exclude but include_only still wins; never send tokens through locally readable argv. */
 export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
@@ -26,10 +28,10 @@ export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
 
 // Blank Orca's clipboard marker for commands Codex runs: agy reads SSH_CONNECTION as a remote host and ignores its local login (#37723).
 // Why set, not exclude: -c exclude would replace the user's own exclude list. Real SSH never reports port 0.
-const CLEAR_SSH_MARKER_ARG = "shell_environment_policy.set.SSH_CONNECTION=''"
+export const CLEAR_SSH_MARKER_ARG = "shell_environment_policy.set.SSH_CONNECTION=''"
 
 // Skip apostrophes: TOML literals cannot hold them and Codex parse fallback may truncate paths; missing identity is safer than wrong identity.
-const identitySetArg = (key: string, value: string): string =>
+export const identitySetArg = (key: string, value: string): string =>
   `shell_environment_policy.set.${key}='${value}'`
 
 export function getPosixCodexShellLaunchPreflight(): string {
@@ -58,6 +60,10 @@ if ! typeset -f codex >/dev/null 2>&1 && [[ -n "\${__orca_codex_binary:-}" && -x
         ${CODEX_SHARED_SERVER_ARGS.join('|')}|--remote=*) __orca_codex_isolate=0 __orca_codex_identity=0 ;;
       esac
     done
+    if [[ "\${${CODEX_PROBE_DONE}:-}" == 1 ]]; then
+      unset ${CODEX_PROBE_DONE}
+      __orca_codex_isolate=0
+    fi
     if [[ "$__orca_codex_identity" != 0 ]]; then
 ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\${${key}}" == *"'"* ]] || set -- -c "${identitySetArg(key, `\${${key}}`)}" "$@"`).join('\n')}
       [[ "\${SSH_CONNECTION:-}" != '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' ]] || set -- -c "${CLEAR_SSH_MARKER_ARG}" "$@"
@@ -92,7 +98,9 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
         set argv -c "${CLEAR_SSH_MARKER_ARG}" $argv
       end
     end
-    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
+    if test "$${CODEX_PROBE_DONE}" = 1
+      set -e ${CODEX_PROBE_DONE}
+    else if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
     # A top-level and-chain keeps -l scoped to this function on fish before 3.5.
@@ -135,7 +143,7 @@ if ($orcaCodexCommand -and
             } catch {
             }
         }
-        if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}')) {
+        if (-not (Test-Path Variable:${CODEX_PROBE_DONE}) -and $env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}')) {
             try {
                 if ((& $exe @flags --help 2>$null) -match '--no-daemon') {
                     $flags += '--no-daemon'

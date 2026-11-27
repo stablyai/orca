@@ -1,7 +1,10 @@
-// Orca's own copies of agent CLIs, for hosts without the user's own; the user's install always wins.
+// Orca's agent CLI copies support native chat and its host-side integrations.
 
-import { delimiter, dirname } from 'node:path'
-import type { ManagedAgentCli } from '../node-runtime/managed-runtime-release'
+import { dirname } from 'node:path'
+import {
+  runtimeReleaseMayBePublished,
+  type ManagedAgentCli
+} from '../node-runtime/managed-runtime-release'
 import {
   CLAUDE_MANAGED_RUNTIME,
   claudeManagedExecutable,
@@ -23,8 +26,6 @@ import {
   OPENCODE2_MINIMUM_VERSIONS,
   OPENCODE_MINIMUM_VERSIONS
 } from '../acp/launch/acp-minimum-versions'
-import { readInheritedPath } from '../ipc/pty/host-env/path'
-import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 
 // Hermes ships only as a git checkout its installer builds with uv, so it stays the user's own install.
@@ -96,6 +97,20 @@ export function managedAgentCli(agent: ManagedAgentCliId): ManagedAgentCli {
   return MANAGED_AGENT_CLIS[agent]
 }
 
+export async function readManagedAgentsFromDisk(
+  dataDirectory: string,
+  include: (agent: ManagedAgentCliId) => boolean
+): Promise<ManagedAgentCliId[]> {
+  const present = await Promise.all(
+    MANAGED_AGENT_CLI_IDS.filter(include).map(async (agent) =>
+      (await runtimeReleaseMayBePublished(managedAgentCli(agent).runtime.root(dataDirectory)))
+        ? agent
+        : null
+    )
+  )
+  return present.filter((agent) => agent !== null)
+}
+
 const installedFolders = new Map<ManagedAgentCliId, string>()
 
 /** The installation reports each release it reads from disk, so lookups here never touch the disk. */
@@ -147,6 +162,18 @@ export function managedAgentCommandFor(
   return use ? managedAgentCommand(agent) : installedManagedAgentCommand(agent)
 }
 
+/** The release folder of Orca's installed copy of `agent`; null without one. */
+export function installedManagedAgentFolder(agent: ManagedAgentCliId): string | null {
+  return installedFolders.get(agent) ?? null
+}
+
+/** The installed CLI entry point for a native-chat sign-in, including any launcher alias. */
+export function installedManagedAgentLauncher(agent: ManagedAgentCliId): string | null {
+  const folder = installedFolders.get(agent)
+  const cli = MANAGED_AGENT_CLIS[agent]
+  return folder ? (cli.launcher ?? cli.executable)(folder) : null
+}
+
 /** Orca's installed copy of `agent`, read without counting as use. */
 export function installedManagedAgentCommand(agent: ManagedAgentCliId): string | null {
   const folder = installedFolders.get(agent)
@@ -168,29 +195,4 @@ let managedUseListener: ((agent: ManagedAgentCliId) => void) | null = null
 /** Told each time a launch resolves to Orca's copy, so updates follow real use instead of a timer. */
 export function onManagedAgentUse(listener: (agent: ManagedAgentCliId) => void): void {
   managedUseListener = listener
-}
-
-/** Last on PATH, so sign-in commands and CLI tabs reach Orca's copies and never shadow the user's own. */
-export function appendManagedAgentDirsToChildPath(
-  env: Record<string, string>,
-  platform: NodeJS.Platform = process.platform
-): void {
-  delete env.ORCA_MANAGED_AGENT_PATH
-  // Opening a terminal isn't use of an agent, so this reads the folders without the use hook.
-  const folders = MANAGED_AGENT_CLI_IDS.flatMap((agent) => {
-    const folder = installedFolders.get(agent)
-    return folder ? [dirname(MANAGED_AGENT_CLIS[agent].executable(folder))] : []
-  })
-  if (folders.length === 0) {
-    return
-  }
-  const key = resolvePathEnvKey(env, platform)
-  const separator = platform === 'win32' ? ';' : delimiter
-  const entries = readInheritedPath(env, platform).split(separator).filter(Boolean)
-  const missing = folders.filter((folder) => !entries.includes(folder))
-  if (missing.length > 0) {
-    env[key] = [...entries, ...missing].join(separator)
-  }
-  // Startup files re-add them after a login profile rebuilds PATH.
-  env.ORCA_MANAGED_AGENT_PATH = folders.join(separator)
 }

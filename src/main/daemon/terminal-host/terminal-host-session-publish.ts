@@ -182,7 +182,7 @@ export async function spawnAndPublishSession(
   onPublished(opts.sessionId, session.isAlive)
   const token = session.attachClient(opts.streamClient)
   attachSessionInputViewer(session, opts.streamClient)
-  if (opts.startupNotice && opts.command) {
+  if (opts.startupNotice) {
     session.startupIngress.accept(opts.startupNotice)
   }
 

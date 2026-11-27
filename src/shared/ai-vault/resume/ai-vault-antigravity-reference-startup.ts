@@ -1,7 +1,12 @@
 import { resolveAgentStartupPlanInputs } from '../../agent-launch/startup/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../agent-launch/startup/tui-agent-startup'
-import type { AgentStartupShell } from '../../agent-launch/startup/tui-agent-startup-shell'
+import { resolveAgentLaunchCommand } from '../../agent-launch/startup/tui-agent-launch-command'
+import {
+  resolveStartupShell,
+  type AgentStartupShell
+} from '../../agent-launch/startup/tui-agent-startup-shell'
+import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { buildAiVaultResumeCommand } from './ai-vault-resume-command'
+import type { ManagedAgentCommands } from '../../agent-launch/startup/managed-agent-launch-program'
 import type { AiVaultResumeLaunchSettings, AiVaultResumeStartup } from './ai-vault-resume-startup'
 
 /** References are fresh launches, so preserve normal model arguments and environment. */
@@ -12,25 +17,28 @@ export function buildAntigravityReferenceStartup(args: {
   shell?: AgentStartupShell
   commandOverride?: string | null
   settings?: AiVaultResumeLaunchSettings | null
+  managedAgentCommands?: ManagedAgentCommands
 }): AiVaultResumeStartup | null {
-  const plan = buildAgentStartupPlan({
-    ...resolveAgentStartupPlanInputs({
-      agent: 'antigravity',
-      platform: args.platform,
-      shell: args.shell,
-      isRemote: false,
-      settings: {
-        ...args.settings,
-        agentCmdOverrides: {
-          ...args.settings?.agentCmdOverrides,
-          ...(args.commandOverride?.trim() ? { antigravity: args.commandOverride } : {})
-        }
+  // A reference carries no launch prompt. Resolve the command without the fresh prompt builders.
+  const inputs = resolveAgentStartupPlanInputs({
+    agent: 'antigravity',
+    platform: args.platform,
+    shell: args.shell,
+    isRemote: false,
+    settings: {
+      ...args.settings,
+      agentCmdOverrides: {
+        ...args.settings?.agentCmdOverrides,
+        ...(args.commandOverride?.trim() ? { antigravity: args.commandOverride } : {})
       }
-    }),
-    prompt: '',
-    allowEmptyPromptLaunch: true
+    },
+    managedAgentCommands: args.managedAgentCommands
   })
-  if (!plan) {
+  const plan = resolveAgentLaunchCommand({
+    ...inputs,
+    shell: resolveStartupShell(args.platform, inputs.shell)
+  })
+  if (!plan.ok) {
     return null
   }
   return {
@@ -41,9 +49,9 @@ export function buildAntigravityReferenceStartup(args: {
       cwd: args.cwd,
       platform: args.platform,
       shell: args.shell,
-      commandOverride: plan.launchCommand
+      commandOverride: plan.command
     }),
-    ...(plan.env ? { env: plan.env } : {}),
-    launchConfig: plan.launchConfig
+    env: { ...inputs.agentEnv, ...plan.startupEnv },
+    launchConfig: buildSleepingAgentLaunchConfig({ ...inputs, ...plan.resumeLaunch })
   }
 }

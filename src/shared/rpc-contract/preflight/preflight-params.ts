@@ -4,9 +4,37 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating
 import { parseRoutableExecutionHostId } from '../../execution-host/execution-host'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
 import { RepoSelector } from '../github/github-repo-target-params'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../../agent-launch/contracts/workspace-launch-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
+import { OptionalNativeChatSignIn } from '../terminal/native-chat-sign-in-params'
+
+export const PreflightQueuedAgentLaunch = lazyZodSchema(() =>
+  z.object({
+    terminal: z.string().min(1).max(4096),
+    command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
+    shell: z.enum(['posix', 'powershell', 'cmd']),
+    shellOverride: z.string().max(4096).optional(),
+    cwd: z.string().max(4096).optional(),
+    launchConfig: z
+      .object({
+        agentCommand: z.string().optional(),
+        agentArgs: z.string(),
+        agentEnv: z.record(z.string(), z.string()),
+        commandProvenance: z.enum(['authored', 'generated']).optional(),
+        authoredCommand: z.string().optional(),
+        selectedExecutable: z.string().optional(),
+        ompResumeFilePath: z.string().optional()
+      })
+      .optional(),
+    launchAgent: z.custom<TuiAgent>(isTuiAgent).optional(),
+    restoring: z.boolean().optional(),
+    nativeChatSignIn: OptionalNativeChatSignIn,
+    images: z.boolean().optional()
+  })
+)
 
 export const PreflightCheck = lazyZodSchema(() =>
   z.object({
@@ -52,12 +80,20 @@ export const PreflightAgentDetection = lazyZodSchema(() =>
     })
 )
 
-export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
-  userInitiated: z.boolean().optional()
-})
+export const PreflightAgentRefresh = lazyZodSchema(() =>
+  PreflightAgentDetection.safeExtend({
+    userInitiated: z.boolean().optional(),
+    withManagedAgentCommands: z.boolean().optional()
+  })
+)
 
 export const PreflightProjectAgentDetection = lazyZodSchema(() =>
   PreflightAgentDetection.safeExtend({
+    /** Answer `{ agents, managedAgentCommands }`; older hosts drop it and answer the list alone. */
+    withManagedAgentCommands: z.boolean().optional(),
+    afterPublication: z.number().int().nonnegative().optional(),
+    launch: PreflightQueuedAgentLaunch.optional(),
+    nativeChatSignIn: OptionalNativeChatSignIn,
     project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
       .strict()
       .optional()
@@ -67,7 +103,9 @@ export const PreflightProjectAgentDetection = lazyZodSchema(() =>
       (!value.worktreeId &&
         !value.repoId &&
         !value.worktreeHostId &&
-        !value.configuredWindowsRuntime),
+        !value.configuredWindowsRuntime &&
+        !value.launch &&
+        !value.nativeChatSignIn),
     'Choose project, repository or worktree'
   )
 )
@@ -75,6 +113,7 @@ export const PreflightProjectAgentDetection = lazyZodSchema(() =>
 /** Facts resolved by the same project owner that creates the workspace. */
 export type ProjectLaunchContext = {
   agents: TuiAgent[]
+  incomplete?: boolean
   workspaceKind: WorkspaceLaunchKind
   executionContext:
     | { kind: 'host'; projectRuntime: ProjectExecutionRuntimeResolution }

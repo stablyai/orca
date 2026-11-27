@@ -27,6 +27,9 @@ import {
   type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import { SETUP_AGENT_GATE } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { waitForWorktreeSetupGate } from './worktree-setup-gate'
 import {
   provisionWorktreeTerminals,
   type WorktreeTerminalProvisioningHost
@@ -126,13 +129,18 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   }
 
   /** Use buildStartupForDraft's selection so launches can name the agent before creation. */
-  async resolveStartupDraftAgent(repo: Repo, requestedAgent?: TuiAgent): Promise<TuiAgent | null> {
+  async resolveStartupDraftAgent(
+    repo: Repo,
+    requestedAgent?: TuiAgent,
+    afterPublication?: number
+  ): Promise<TuiAgent | null> {
     if (!this.store) {
       return null
     }
     return resolveWorktreeStartupDraftAgent({
       repo,
       settings: this.store.getSettings(),
+      afterPublication,
       ...(requestedAgent ? { requestedAgent } : {})
     })
   }
@@ -147,6 +155,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       startupAgentArgs?: string | null
       startupSessionOptions?: Parameters<typeof buildWorktreeStartupForDraft>[0]['sessionOptions']
       startupLaunchPreferences?: AgentLaunchPreferences
+      afterPublication?: number
     }
   ): ReturnType<typeof buildWorktreeStartupForDraft> {
     if (!this.store) {
@@ -157,6 +166,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       draft,
       originalAgent: inputs?.createdWithAgent ?? requestedAgent,
       agentArgs: inputs?.startupAgentArgs,
+      afterPublication: inputs?.afterPublication,
       sessionOptions:
         inputs?.startupSessionOptions ??
         this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
@@ -211,7 +221,11 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 
-  protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
+  protected pasteStartupDraftWhenReady(
+    handle: string,
+    draft: WorktreeStartupDraftPaste,
+    awaitSetupGate?: boolean
+  ): void {
     pasteStartupDraftInCustody(
       {
         readiness: this.getWorktreeStartupReadinessHost(),
@@ -221,7 +235,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         isStopRequested: (ptyId) => this.isPtyStopRequested(ptyId)
       },
       handle,
-      draft
+      draft,
+      awaitSetupGate
     )
   }
 
@@ -267,12 +282,28 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     }
   }
 
-  deliverStartupFollowup(
+  async deliverStartupFollowup(
     handle: string,
     followup: WorktreeStartupFollowup,
     options?: StartupFollowupPromptOptions
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
+    const gate = options?.terminalCreation?.[SETUP_AGENT_GATE]?.outcome
+    if (options?.awaitSetupGate || gate) {
+      const ptyId = host.getPtyId(handle)
+      if (!ptyId) {
+        return false
+      }
+      const lifecycle = this.getPtyLifecycleSignal(ptyId)
+      const signal = options?.signal ? AbortSignal.any([lifecycle, options.signal]) : lifecycle
+      const outcome = gate
+        ? await waitForPromiseWithSignal(gate, signal).catch(() => undefined)
+        : await waitForWorktreeSetupGate(host, ptyId, signal)
+      if (outcome !== 'started' || signal.aborted) {
+        return false
+      }
+      return deliverStartupFollowupPrompt(this, host, handle, followup, { ...options, signal })
+    }
     return deliverStartupFollowupPrompt(this, host, handle, followup, options)
   }
 

@@ -1,3 +1,4 @@
+import type { AgentProgramBlockReason } from '../../agent-session/lifecycle/agent-session-resume'
 import type { BrowserPageInventoryEntry } from '../../browser/runtime/browser-page-inventory'
 import type {
   AgentSenderPublication,
@@ -312,6 +313,7 @@ export type RuntimeMobileSessionCreateTerminalResult = {
   publicationEpoch: string
   snapshotVersion: number
   warning?: 'desktop-tab-not-shown'
+  agentProgramBlocked?: AgentProgramBlockReason
   /** The saved folder was gone, so the terminal started at the workspace root. */
   startupCwdFallback?: 'workspace-root'
 }

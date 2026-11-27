@@ -4,6 +4,7 @@ import { track } from '@/diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-status/identity/agent-kind'
 import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { copyDroppedTextAction } from './blocked-agent-startup-notice'
 
 /** Report otherwise-silent lost launch text; wasNotified lets deferred callers suppress duplicate toasts. */
 export function createPasteReadinessTimeoutNotice(args: {
@@ -70,15 +71,4 @@ export function notifyAgentExitedBeforeLaunchPrompt(agent: TuiAgent, prompt: str
     error_class: 'paste_agent_exited',
     agent_kind: tuiAgentToAgentKind(agent)
   })
-}
-
-function copyDroppedTextAction(text: string): { action: { label: string; onClick: () => void } } {
-  return {
-    action: {
-      label: translate('menu.copy', 'Copy'),
-      onClick: () => {
-        void window.api.ui.writeClipboardText(text)
-      }
-    }
-  }
 }

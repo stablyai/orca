@@ -1,7 +1,13 @@
 import type {
+  AgentDetectionArgs,
+  AgentInventoryReply,
   PreflightStatus,
   RefreshAgentsResult
 } from '../../../../../preload/api/preflight/preflight-api'
+import type {
+  PreparedAgentLaunch,
+  QueuedAgentLaunch
+} from '../../../../../shared/agent-launch/startup/queued-agent-launch'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import type {
   ComputerUsePermissionSetupResult,
@@ -16,6 +22,28 @@ import { SKILL_DELETE_CAPABILITY } from '../../../../../shared/skills/capabiliti
 import { callRuntimeResult, getRemoteRuntimeStatus } from '../../runtime/client/web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from '../../runtime/client/web-runtime-session'
 import { getBrowserPlatform } from '../web-storage'
+
+function detectRuntimeAgents(args: { launch: QueuedAgentLaunch }): Promise<PreparedAgentLaunch>
+function detectRuntimeAgents(
+  args: AgentDetectionArgs & { withManagedAgentCommands: true }
+): Promise<AgentInventoryReply>
+function detectRuntimeAgents(args?: AgentDetectionArgs): Promise<string[]>
+async function detectRuntimeAgents(
+  args?:
+    | (AgentDetectionArgs & { withManagedAgentCommands?: boolean })
+    | { launch: QueuedAgentLaunch }
+): Promise<PreparedAgentLaunch | AgentInventoryReply | string[]> {
+  // Queued launches address their bound terminal via its own pinned RPC target.
+  if (args && 'launch' in args) {
+    return { preparedCommand: null }
+  }
+  if (!requireActiveEnvironmentOrNull()) {
+    return []
+  }
+  return callRuntimeResult<AgentInventoryReply | string[]>('preflight.detectAgents', args).catch(
+    () => []
+  )
+}
 
 export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
   const fallbackStatus: PreflightStatus = {
@@ -68,12 +96,7 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
     },
     // The zcode probe spawns a host CLI; web must not decide the host’s install state.
     zcodeInteractiveCapability: async () => 'unknown' as const,
-    detectAgents: async () => {
-      if (!requireActiveEnvironmentOrNull()) {
-        return []
-      }
-      return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
-    },
+    detectAgents: detectRuntimeAgents,
     refreshAgents: (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult('preflight.refreshAgents', args)

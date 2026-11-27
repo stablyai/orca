@@ -1,3 +1,5 @@
+import type { QueuedAgentLaunch } from '../../../../shared/agent-launch/startup/queued-agent-launch'
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
@@ -11,6 +13,7 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../share
 import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { PreselectedAgentProgram } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsHost
@@ -31,18 +34,30 @@ export type MobileTerminalCreateOptions = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   agent?: TuiAgent
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
   launchAgent?: TuiAgent
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   clientNavigationId?: string
   clientMutationId?: string
+  historyResume?: true
   supportsSplitGroupPlacement?: boolean
   signal?: AbortSignal
+}
+
+export type PendingMobileTerminalCreate = {
+  activate: boolean
+  paired: boolean
+  selectIfNoActiveTab: boolean
+  viewMode?: 'terminal' | 'chat'
+  /** A renderer may mount a bare shell while its create is pending (STA-3214). */
+  startup?: Omit<QueuedAgentLaunch, 'terminal' | 'shell' | 'images'>
 }
 
 export type OwnedMobileTerminalCreateOptions = {
@@ -53,9 +68,11 @@ export type OwnedMobileTerminalCreateOptions = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   identity?: { tabId: string; leafId: string; sessionId?: string }
   createMutation?: { clientIdentity: string; id: string }
+  historyResume?: true
   launchAgent?: TuiAgent
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
@@ -68,6 +85,7 @@ export type OwnedMobileTerminalCreateOptions = {
   resumeOrigin?: 'saved'
   spawnIntent?: SpawnIntent
   launchRuntime?: AgentLaunchRuntime
+  preselectedAgentProgram?: PreselectedAgentProgram
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   resumesSleepingRecord?: true
@@ -105,6 +123,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       cwd?: string
       env?: Record<string, string>
       envToDelete?: string[]
+      nativeChatSignIn?: NativeChatSignInRequest
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       agentPrompt?: string
@@ -119,6 +138,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       clientNavigationId?: string
       navigation?: RuntimeNavigationTarget
       clientMutationId?: string
+      historyResume?: true
       // Older mobile clients optimistically append; preserve that placement until they advertise
       // split-group ordering support.
       supportsSplitGroupPlacement?: boolean
@@ -180,7 +200,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
     created: RuntimeMobileSessionCreateTerminalResult,
     opts: { resumeProviderSession?: AgentProviderSessionMetadata; launchAgent?: TuiAgent }
   ): void {
-    if (!opts.resumeProviderSession || !created.tab.terminal) {
+    if (!opts.resumeProviderSession || !created.tab.terminal || created.agentProgramBlocked) {
       return
     }
     const pty = this.getLivePtyForHandle(created.tab.terminal)?.pty

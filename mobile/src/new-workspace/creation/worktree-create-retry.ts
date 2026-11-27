@@ -45,6 +45,15 @@ export type WorktreeCreateParent = Required<
   Pick<WorkspaceCreateParams, 'parentWorkspace' | 'parentWorkspaceOrigin'>
 >
 
+export type WorktreeCreateDraftRetry = {
+  pending?: {
+    client: RpcClient
+    repo: WorkspaceCreateParams['repo']
+    startupDraft: string
+    afterPublication: number
+  }
+}
+
 export type CreateWorktreeWithNameRetryArgs = {
   client: RpcClient
   baseName: string
@@ -54,6 +63,7 @@ export type CreateWorktreeWithNameRetryArgs = {
   branchIntentSupported?: boolean | Promise<boolean>
   agentLaunch?: WorktreeCreateAgentLaunch
   maxAttempts?: number
+  draftRetry?: WorktreeCreateDraftRetry
   /** The workspace the new worktree is attached to, on every attempt. */
   parent?: WorktreeCreateParent
   /** Pins setup to the content the user approved; repo trust sends none. */
@@ -73,14 +83,27 @@ export async function createWorktreeWithNameRetry(
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   const mintLaunchOperationId = args.mintLaunchOperationId ?? structuredSessionOperationId
+  const draftRetry: WorktreeCreateDraftRetry = args.draftRetry ?? {}
   let lastError: string | null = null
   let lastReplayed = false
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const candidateName = args.nameWasGenerated
       ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
       : getClientWorktreeCreateCandidate(baseName, attempt)
+    const built = buildParams(candidateName, attempt)
+    const pendingDraft = draftRetry.pending
+    if (
+      pendingDraft &&
+      (pendingDraft.client !== client ||
+        pendingDraft.repo !== built.repo ||
+        pendingDraft.startupDraft !== built.startupDraft)
+    ) {
+      delete draftRetry.pending
+    }
+    const afterPublication = draftRetry.pending?.afterPublication
     const candidateParams = {
-      ...buildParams(candidateName, attempt),
+      ...built,
+      ...(afterPublication === undefined ? {} : { afterPublication }),
       ...args.parent,
       ...(args.approvedSetupHash ? { approvedSetupHash: args.approvedSetupHash } : {})
     }
@@ -128,10 +151,37 @@ export async function createWorktreeWithNameRetry(
       response = fallback.response
       replayed = fallback.replayed
     }
+    if (!response.ok && !replayed && !launch && params.startupDraft) {
+      const retryAfterPublication = readInventoryRetryCursor(response.error.data)
+      if (retryAfterPublication !== undefined) {
+        const retryDraft = {
+          client,
+          repo: params.repo,
+          startupDraft: params.startupDraft,
+          afterPublication: retryAfterPublication
+        }
+        draftRetry.pending = retryDraft
+        // The host refused before creating. Retry this draft once with the same mutation key.
+        const retry = await sendWorktreeCreateResilient(
+          client,
+          null,
+          null,
+          { ...params, afterPublication: retryAfterPublication },
+          worktreeCreateIdempotency
+        )
+        response = retry.response
+        replayed = retry.replayed
+        if (!response.ok && !replayed) {
+          retryDraft.afterPublication =
+            readInventoryRetryCursor(response.error.data) ?? retryAfterPublication
+        }
+      }
+    }
     // Ledger refusal may follow creation; never retry unnamed. Inspect raw refusal messages for legacy collision handling.
     if (response.ok) {
       const created = readCreateResult(response, launch)
       if (created) {
+        delete draftRetry.pending
         return {
           worktreeId: created.worktreeId,
           name: created.displayName?.trim() ? created.displayName : candidateName,
@@ -159,6 +209,15 @@ export async function createWorktreeWithNameRetry(
       lastError ??
       translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace'),
     ...(lastReplayed ? { replayed: true as const } : {})
+  }
+}
+
+function readInventoryRetryCursor(data: unknown): number | undefined {
+  if (data && typeof data === 'object' && 'afterPublication' in data) {
+    const cursor = data.afterPublication
+    if (typeof cursor === 'number' && Number.isSafeInteger(cursor) && cursor >= 0) {
+      return cursor
+    }
   }
 }
 

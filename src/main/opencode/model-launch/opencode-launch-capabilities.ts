@@ -7,34 +7,41 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { probeOpenCodeCliVersion } from './opencode-cli-version'
-import {
-  getAgentLaunchCommandToken,
-  getAgentLaunchExecutableName
-} from '../../../shared/agent-launch/startup/agent-command-line-intent'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { getAgentLaunchCommandToken } from '../../../shared/agent-launch/startup/agent-command-line-intent'
+import { launchExecutableIs } from '../../../shared/agent-launch/startup/launch-position'
+import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../../shared/shell/command-resolution/command-token-scanner'
 
 export function getOpenCodeLaunchExecutable(
   command: string | undefined,
-  agent?: TuiAgent
+  agent?: TuiAgent,
+  shell?: AgentStartupShell
 ): string | null {
-  const executable = getAgentLaunchCommandToken(command)
-  const name = getAgentLaunchExecutableName(command)
-  return agent === 'opencode' ||
-    agent === 'opencode2' ||
-    (!agent && (name === 'opencode' || name === 'opencode2'))
-    ? executable || null
+  const designated = agent === 'opencode' || agent === 'opencode2'
+  if (
+    !designated &&
+    (agent || !/opencode/i.test(command?.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS) ?? ''))
+  ) {
+    return null
+  }
+  const executable = getAgentLaunchCommandToken(command, shell)
+  return executable &&
+    (designated || launchExecutableIs(executable, /^opencode2?(\.(exe|cmd|bat|ps1|sh))?$/i))
+    ? executable
     : null
 }
 
 export async function probeOpenCodeLaunchCapabilities(options: {
   command: string | undefined
   agent?: TuiAgent
+  shell?: AgentStartupShell
   env: NodeJS.ProcessEnv
   cwd?: string
   wsl?: { distro?: string }
   hostIdentity?: string
   resolveExecutable?: (executable: string) => Promise<string | null>
 }): Promise<OpenCodeCliCapabilities | null> {
-  const executable = getOpenCodeLaunchExecutable(options.command, options.agent)
+  const executable = getOpenCodeLaunchExecutable(options.command, options.agent, options.shell)
   if (!executable) {
     return null
   }

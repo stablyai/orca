@@ -1,7 +1,24 @@
 import { ipcRenderer } from 'electron'
-import type { PreflightRuntimeContext, RefreshAgentsResult } from './preflight-api'
+import type { AgentDetectionArgs, AgentInventoryReply, RefreshAgentsResult } from './preflight-api'
 import type { PreloadApi } from '../../api-types'
+import type {
+  PreparedAgentLaunch,
+  QueuedAgentLaunch
+} from '../../../shared/agent-launch/startup/queued-agent-launch'
 import type { ZCodeInteractiveCapability } from '../../../shared/agent-launch/installation/zcode-missing-tui'
+
+function detectAgents(args: { launch: QueuedAgentLaunch }): Promise<PreparedAgentLaunch>
+function detectAgents(
+  args: AgentDetectionArgs & { withManagedAgentCommands: true }
+): Promise<AgentInventoryReply>
+function detectAgents(args?: AgentDetectionArgs): Promise<string[]>
+function detectAgents(
+  args?:
+    | (AgentDetectionArgs & { withManagedAgentCommands?: boolean })
+    | { launch: QueuedAgentLaunch }
+): Promise<PreparedAgentLaunch | AgentInventoryReply | string[]> {
+  return ipcRenderer.invoke('preflight:detectAgents', args)
+}
 
 export const preflightApi = {
   check: (args?: {
@@ -28,13 +45,7 @@ export const preflightApi = {
     }
     linear: { connected: boolean }
   }> => ipcRenderer.invoke('preflight:check', args),
-  detectAgents: (
-    args?: PreflightRuntimeContext & {
-      enabledOnly?: boolean
-      wakeWslDistro?: boolean
-      userInitiated?: boolean
-    }
-  ): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents', args),
+  detectAgents,
   onWslDistroRunning: (callback: (distro: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, distro: string): void => callback(distro)
     ipcRenderer.on('preflight:wslDistroRunning', listener)
@@ -43,11 +54,7 @@ export const preflightApi = {
   zcodeInteractiveCapability: (): Promise<ZCodeInteractiveCapability> =>
     ipcRenderer.invoke('preflight:zcodeInteractiveCapability'),
   refreshAgents: (
-    args?: PreflightRuntimeContext & {
-      enabledOnly?: boolean
-      wakeWslDistro?: boolean
-      userInitiated?: boolean
-    }
+    args?: AgentDetectionArgs & { withManagedAgentCommands?: boolean }
   ): Promise<RefreshAgentsResult> => ipcRenderer.invoke('preflight:refreshAgents', args),
   detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
     ipcRenderer.invoke('preflight:detectRemoteAgents', args),

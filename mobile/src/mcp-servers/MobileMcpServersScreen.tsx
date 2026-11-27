@@ -103,6 +103,7 @@ export function MobileMcpServersScreen() {
   const open = (server: PhoneMcpServer) => {
     setOpenedId(server.id)
     pager.open('server')
+    data.retryIncompleteAgents()
   }
   useBackClaim(() => {
     if (workspacesPager.page) {

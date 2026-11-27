@@ -105,6 +105,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   creatorProvenance?: Worktree['creatorProvenance']
   startup?: WorktreeStartupLaunch
   startupDraft?: string
+  /** Retry a draft auto-pick against an inventory published after this cursor. */
+  afterPublication?: number
   /** Reuse the launch-selected draft agent without changing caller-requested createdWithAgent. */
   startupDraftAgent?: TuiAgent
   startupDraftPaste?: WorktreeStartupDraftPaste

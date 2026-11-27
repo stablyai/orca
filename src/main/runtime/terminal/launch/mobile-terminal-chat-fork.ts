@@ -24,6 +24,7 @@ export function buildMobileTerminalChatFork(args: {
   prepared: AiVaultPrepareSessionResumeResult
   settings: AiVaultResumeLaunchSettings
   runtime: AgentLaunchRuntime
+  /** Orca's copies on this host, which is where forks run. */
 }): MobileTerminalCommand & {
   command: string
   cwd?: string

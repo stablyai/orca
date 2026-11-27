@@ -9,6 +9,7 @@ import { isHostMirroredSleepingRecord } from '@/lib/agent-session/resume/host-mi
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import {
   isWorkspaceSleepRecord,
+  type SleptPaneWakeResult,
   WORKTREE_TERMINALS_SLEEPING_ERROR
 } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
@@ -71,9 +72,9 @@ export async function attachToMainResumedSleepPane(
     return null
   }
   const visibleAtSpawn = session.deps.isVisibleRef.current === true
-  let resumed = false
+  let wake: SleptPaneWakeResult = null
   try {
-    resumed = await window.api.worktrees.resumeSleptPane(pane, automatic)
+    wake = await window.api.worktrees.resumeSleptPane(pane, automatic)
   } catch (error: unknown) {
     if (!isCurrent() || generation !== session.transportStreamGeneration) {
       return null
@@ -90,13 +91,13 @@ export async function attachToMainResumedSleepPane(
   if (!isCurrent() || generation !== session.transportStreamGeneration) {
     return null
   }
-  if (automatic && !resumed) {
+  if (automatic && !wake) {
     releaseDeferredCwdFence(session)
     session.settlePaneAttachAttempt?.('failed')
     return null
   }
   const ptyId = await session.startFreshSpawn(null, options)
-  if (isCurrent() && resumed && ptyId) {
+  if (isCurrent() && wake?.resumeOutcome === 'restored' && ptyId) {
     session.showSessionRestoredBanner()
     // Main keeps its record; the window's mirror of it is spent.
     if (startup.sleepingRecordEntry) {

@@ -55,8 +55,17 @@ export const reviewTerminalTabsSchema = z
 
 // An accepted create without a usable handle cannot deliver the following prompt.
 export const reviewCreatedTerminalSchema = z
-  .looseObject({ tab: reviewTerminalTabSchema })
-  .transform((reply) => reply.tab)
+  .looseObject({
+    tab: reviewTerminalTabSchema,
+    agentProgramBlocked: salvagedOptional(
+      'agentProgramBlocked',
+      z.enum(['unknown', 'unavailable', 'unbuildable'])
+    )
+  })
+  .transform(({ tab, agentProgramBlocked }) => ({
+    ...tab,
+    ...(agentProgramBlocked ? { agentProgramBlocked } : {})
+  }))
 
 // An absent accepted flag historically means success, but require an outer object so malformed replies cannot hide a lost prompt.
 export const reviewTerminalSendAcceptedSchema = z

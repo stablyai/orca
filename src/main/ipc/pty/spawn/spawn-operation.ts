@@ -138,7 +138,11 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       )
     }
     if (!ctx.result.isReattach) {
-      Object.assign(ctx.result, savedResumeResult(ctx.resumeAdmission))
+      Object.assign(
+        ctx.result,
+        savedResumeResult(ctx.resumeAdmission),
+        facts.agentProgramBlocked ? { agentProgramBlocked: facts.agentProgramBlocked } : {}
+      )
     }
     const outcome = await adapter.commit()
     if (

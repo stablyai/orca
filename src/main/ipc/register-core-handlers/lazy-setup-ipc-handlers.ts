@@ -1,6 +1,7 @@
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
 import type { Store } from '../../persistence/loading-store/store'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { registerLazyIpcHandleGroup } from '../lazy-ipc-handle-group'
 
 export const CLI_IPC_CHANNELS = [
@@ -61,6 +62,7 @@ export const DASHBOARD_POPOUT_IPC_CHANNELS = [
 export function registerLazySetupIpcHandlers(
   store: Store,
   codexAccounts: CodexAccountService,
+  runtime: Pick<OrcaRuntimeService, 'readQueuedLaunchPty'>,
   keybindings?: KeybindingService
 ): void {
   registerLazyIpcHandleGroup(CLI_IPC_CHANNELS, async (ipc) => {
@@ -69,7 +71,7 @@ export function registerLazySetupIpcHandlers(
   })
   registerLazyIpcHandleGroup(PREFLIGHT_IPC_CHANNELS, async (ipc) => {
     const { registerPreflightHandlers } = await import('../preflight/preflight')
-    registerPreflightHandlers(store, ipc)
+    registerPreflightHandlers(store, runtime, ipc)
   })
   registerLazyIpcHandleGroup(ONBOARDING_IPC_CHANNELS, async (ipc) => {
     const { registerOnboardingHandlers } = await import('../onboarding')

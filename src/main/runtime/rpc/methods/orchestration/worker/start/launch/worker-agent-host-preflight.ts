@@ -1,6 +1,8 @@
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { waitForPromiseWithSignal } from '../../../../../../../../shared/concurrency/abort-signal-reason'
+import { withAgentInventoryDeadline } from '../../../../../../../preflight/agent-command-detection'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import {
@@ -69,11 +71,13 @@ export async function refuseUninstalledWorkerAgent(
   if (!agent || target.terminal || !repoSelector) {
     return
   }
-  const installed = await runtime
-    .detectProjectLaunchContext(repoSelector, agent)
-    .then((context): readonly string[] => context.agents)
-    .catch(() => null)
-  if (installed && !installed.includes(agent)) {
+  const context = await withAgentInventoryDeadline((signal) =>
+    waitForPromiseWithSignal(
+      runtime.detectProjectLaunchContext(repoSelector, agent, signal),
+      signal
+    )
+  ).catch(() => null)
+  if (context && !context.incomplete && !context.agents.includes(agent)) {
     throw new OrchestrationError(
       WORKER_AGENT_UNAVAILABLE,
       workerAgentNotInstalledMessage(agent, THIS_COMPUTER),

@@ -19,7 +19,8 @@ export type StartupDraftCustodyHost = {
 export function pasteStartupDraftInCustody(
   host: StartupDraftCustodyHost,
   handle: string,
-  draft: WorktreeStartupDraftPaste
+  draft: WorktreeStartupDraftPaste,
+  awaitSetupGate?: boolean
 ): void {
   const ptyId = host.readiness.getPtyId(handle)
   const target = ptyId ? host.readPty(ptyId) : undefined
@@ -41,7 +42,7 @@ export function pasteStartupDraftInCustody(
         { ...host.readiness, getPtyId: () => target.ptyId },
         handle,
         draft.agent,
-        { signal: stop.signal, afterSetup: true }
+        { signal: stop.signal, afterSetup: true, awaitSetupGate }
       )
       if (!readyPtyId) {
         assertLive()

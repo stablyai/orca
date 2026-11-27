@@ -1,3 +1,4 @@
+import type { PendingMobileTerminalCreate } from '../terminal/launch/mobile-terminal-create'
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
 import * as savedChatOpen from '../agent-session/records/local-agent-session-record-store-startup-open'
 import type { SessionTitlePublisher } from '../session-tabs/publication/session-title-publisher'
@@ -231,17 +232,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
 
   // #7587: hidden renderer graph-sync can time out after a live PTY spawns.
   // In-flight mobile creates let the spawn publish main-side; ordinary renderer spawns must not.
-  protected pendingMobileTerminalCreatesByKey = new Map<
-    string,
-    {
-      activate: boolean
-      paired: boolean
-      selectIfNoActiveTab: boolean
-      viewMode?: 'terminal' | 'chat'
-      /** Retain launch delivery over bare renderer PTYs; silent settlement would lose the command (STA-3214). */
-      startupCommand?: string
-    }
-  >()
+  protected pendingMobileTerminalCreatesByKey = new Map<string, PendingMobileTerminalCreate>()
 
   protected mobileSessionTabListeners = new Set<MobileSessionTabSubscription>()
 

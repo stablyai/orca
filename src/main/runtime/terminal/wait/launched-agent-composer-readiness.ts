@@ -1,4 +1,7 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type {
+  RuntimeTerminalCreate,
+  SETUP_AGENT_GATE
+} from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
   classifyTerminalCreationFailure,
   readTerminalStartFailure,
@@ -44,7 +47,8 @@ export type LaunchedAgentReadinessRuntime = Pick<
 export type TerminalReadinessCreation = Pick<
   RuntimeTerminalCreate,
   'handle' | 'ptyId' | 'incarnationId' | 'isReattach' | 'agentSessionDisposition'
->
+> &
+  Pick<RuntimeTerminalCreate, typeof SETUP_AGENT_GATE>
 
 /** The PTY this creation spawned for `handle`; a reattached or adopted pane launched nothing new. */
 export function freshLaunchPtyId(

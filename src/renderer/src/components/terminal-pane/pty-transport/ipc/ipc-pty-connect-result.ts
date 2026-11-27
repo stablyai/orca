@@ -52,6 +52,7 @@ export function projectIpcPtyConnectResult(
   }
   if (
     launchAgent ||
+    spawnResult.agentProgramBlocked ||
     spawnResult.launchConfig ||
     spawnResult.startupCwdFallback ||
     spawnResult.agentResumeUnavailable ||

@@ -52,7 +52,6 @@
 1 src/shared/rpc-contract/github/github-account-binding-params.ts
 1 src/shared/rpc-contract/google-call-params.ts
 1 src/shared/rpc-contract/google-files-params.ts
-1 src/shared/rpc-contract/preflight/preflight-params.ts
 2 src/shared/rpc-contract/session-tabs/session-tabs-schemas-params.ts
 1 src/shared/rpc-contract/session-tabs/session-terminal-scrollback-params.ts
 2 src/shared/rpc-contract/structured-agent-session/structured-agent-session-create-tab-params.ts

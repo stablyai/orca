@@ -7,10 +7,15 @@ import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/hosted-terminal
 import { notifyWebRuntimeTerminalCreateFailure } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-failure-notice'
 import { startStoppedWslHostForUserAct } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { NativeChatSignInRequest } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 
 export type NativeChatHostCommandTerminal = {
   opening: boolean
-  open: (command: string, env?: Record<string, string>) => Promise<boolean>
+  open: (
+    command: string,
+    env?: Record<string, string>,
+    nativeChatSignIn?: NativeChatSignInRequest
+  ) => Promise<boolean>
 }
 
 /** Opens a visible terminal on the chat's own host running a setup command; null without a workspace. */
@@ -25,23 +30,27 @@ export function useNativeChatHostCommandTerminal(input: {
   // Why a ref: a notice and a transcript row can both press, and state lags a double press.
   const openingRef = useRef(false)
   const open = useCallback(
-    (command: string, env?: Record<string, string>) => {
+    (command: string, env?: Record<string, string>, nativeChatSignIn?: NativeChatSignInRequest) => {
       if (!worktreeId || openingRef.current) {
         return Promise.resolve(false)
       }
       openingRef.current = true
       setOpening(true)
       return (async () => {
+        if (environmentId && !(await startStoppedWslHostForUserAct(environmentId))) {
+          return false
+        }
+        if (!command) {
+          return false
+        }
         if (environmentId) {
-          if (!(await startStoppedWslHostForUserAct(environmentId))) {
-            return false
-          }
           const outcome = await createWebRuntimeSessionTerminalOnHost(
             {
               worktreeId,
               environmentId,
               targetGroupId: groupId,
               command,
+              ...(nativeChatSignIn ? { nativeChatSignIn } : {}),
               ...(env && { env }),
               viewMode: 'terminal',
               activate: true
@@ -55,7 +64,11 @@ export function useNativeChatHostCommandTerminal(input: {
         } else {
           const store = useAppStore.getState()
           const tab = store.createTab(worktreeId, groupId, undefined, {
-            pendingStartup: { command, ...(env && { env }) },
+            pendingStartup: {
+              command,
+              ...(env && { env }),
+              ...(nativeChatSignIn ? { nativeChatSignIn } : {})
+            },
             viewMode: 'terminal'
           })
           store.setActiveTabType('terminal', worktreeId)

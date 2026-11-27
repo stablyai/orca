@@ -1,6 +1,7 @@
 import { Suspense, type JSX } from 'react'
 import type { TopLevelView } from '../../../../shared/ui-chrome/ui-chrome-types'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { BlockedStartupDraftCard } from '../../components/agent-startup/BlockedStartupDraftCard'
 import { CodexSharedSettingsNoticeCard } from '../../components/terminal-pane/provider-notices/codex-settings/CodexSharedSettingsNoticeCard'
 import { NotificationCardStack } from '../../components/notifications/NotificationCardStack'
 import { StarNagCard } from '../../components/star-nag/StarNagCard'
@@ -74,6 +75,9 @@ export function AppNotificationCards({
       </Suspense>
       <OverlayBoundary boundaryId="overlay.workspace-cleanup-run" resetKey={activeView}>
         <WorkspaceCleanupRunCard />
+      </OverlayBoundary>
+      <OverlayBoundary boundaryId="overlay.blocked-startup-draft" resetKey={activeView}>
+        <BlockedStartupDraftCard />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
         <StarNagCard />

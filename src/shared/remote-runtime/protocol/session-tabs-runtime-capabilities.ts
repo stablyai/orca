@@ -1,4 +1,7 @@
-import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../agent-launch/startup/qoder-terminal-create-capability'
+import {
+  QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
+  SESSION_HISTORY_TERMINAL_CREATE_CAPABILITY
+} from '../../agent-launch/startup/qoder-terminal-create-capability'
 
 // Complete split-parent placement agrees across headed/runtime-owned hosts; legacy clients must wait for the snapshot.
 export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
@@ -60,6 +63,7 @@ export const SESSION_TABS_CONTINUE_TERMINAL_IN_CHAT_RUNTIME_CAPABILITY =
 
 export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
+  SESSION_HISTORY_TERMINAL_CREATE_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY,

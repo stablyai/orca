@@ -8,6 +8,7 @@ export type HandlerContext = {
   cwd: string
   json: boolean
   rawArgs?: string[]
+  cliEntryPath?: string
 }
 
 export type CommandHandler = (ctx: HandlerContext) => Promise<void>

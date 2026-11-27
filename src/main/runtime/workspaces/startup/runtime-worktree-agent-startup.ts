@@ -17,6 +17,7 @@ import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/s
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
 import {
+  agentLaunchUnbuildableMessage,
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan
 } from '../../../../shared/agent-launch/startup/tui-agent-startup'
@@ -26,6 +27,7 @@ import {
   nameLocalTypedLineShell
 } from '../../terminal/launch/agent-launch-typed-line-shell'
 import { detectAgentsOnHost } from '../../../preflight/workspace-agent-detection'
+import { AgentInventoryDeadlineError } from '../../../preflight/agent-command-detection'
 import { agentCommandOverrideDetectionOptions } from '../../../preflight/installed-agent-detection'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
@@ -56,7 +58,10 @@ type StartupEnvironment = {
 
 /** Choose requested, default or execution-host-detected agent; null means no agent. */
 export async function resolveWorktreeStartupDraftAgent(
-  environment: Pick<StartupEnvironment, 'repo' | 'settings'> & { requestedAgent?: TuiAgent }
+  environment: Pick<StartupEnvironment, 'repo' | 'settings'> & {
+    requestedAgent?: TuiAgent
+    afterPublication?: number
+  }
 ): Promise<TuiAgent | null> {
   const { repo, settings } = environment
   const preferredAgent = environment.requestedAgent ?? settings.defaultTuiAgent
@@ -67,22 +72,24 @@ export async function resolveWorktreeStartupDraftAgent(
   if (isTuiAgent(preferredAgent) && isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents)) {
     return preferredAgent
   }
-  let detected: string[] = []
   // Detect on the execution host; raw connectionId misses executionHostId-only SSH repos.
   const sshConnectionId = getRepoSshConnectionId(repo)
-  try {
-    // Sparse launch environments may lack host detection dependencies.
-    // Disabled agents cannot be picked here, so background detection never probes them (#34635).
-    detected = await detectAgentsOnHost(
-      sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' },
-      {
-        disabledTuiAgents: settings.disabledTuiAgents,
-        ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
-      }
-    )
-  } catch {
-    detected = []
-  }
+  // Disabled agents cannot be picked here, so background detection never probes them (#34635).
+  const detected = await detectAgentsOnHost(
+    sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' },
+    {
+      disabledTuiAgents: settings.disabledTuiAgents,
+      afterPublication: environment.afterPublication,
+      waitForCompletion: false,
+      reuseSettled: true,
+      ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
+    }
+  ).catch((error: unknown): string[] => {
+    if (error instanceof AgentInventoryDeadlineError) {
+      throw error
+    }
+    return []
+  })
   return pickTuiAgent(null, detected.filter(isTuiAgent), settings.disabledTuiAgents)
 }
 
@@ -91,6 +98,8 @@ export async function buildWorktreeStartupForDraft(
     draft: string
     requestedAgent?: TuiAgent
     originalAgent?: TuiAgent
+    resolvedAgent?: TuiAgent | null
+    afterPublication?: number
   }
 ): Promise<{
   agent: TuiAgent
@@ -103,8 +112,11 @@ export async function buildWorktreeStartupForDraft(
     return null
   }
   const { repo, settings } = environment
-  const agent = await resolveWorktreeStartupDraftAgent(environment)
-  if (!agent) {
+  const agent =
+    environment.resolvedAgent === undefined
+      ? await resolveWorktreeStartupDraftAgent(environment)
+      : environment.resolvedAgent
+  if (!agent || !isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
     return null
   }
 
@@ -125,19 +137,20 @@ export async function buildWorktreeStartupForDraft(
   const prepared = await prepareWorktreeModelStartupInputs({
     inputs: resolvedInputs,
     cwd: repo.path,
+    shellPath: launchRuntime instanceof Error ? undefined : launchRuntime.pty.shellOverride,
     isWsl: !(launchRuntime instanceof Error) && isWslShellName(launchRuntime.pty.shellOverride)
   })
-  const launchArgs = prepared.inputs
   const telemetry = agentStartedTelemetry(agent, environment.launchSource)
-  const draftPlan = prepared.launchConfig
-    ? null
-    : buildAgentDraftLaunchPlan({ ...launchArgs, draft: content })
+  const draftPlan =
+    prepared.launchConfig && !prepared.inputs.sessionOptions
+      ? null
+      : buildAgentDraftLaunchPlan({ ...prepared.inputs, draft: content })
   if (draftPlan) {
     return {
       agent,
       startup: {
         command: draftPlan.launchCommand,
-        launchConfig: draftPlan.launchConfig,
+        launchConfig: prepared.launchConfig ?? draftPlan.launchConfig,
         ...(draftPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftPlan.startupCommandDelivery }
           : {}),
@@ -148,7 +161,7 @@ export async function buildWorktreeStartupForDraft(
     }
   }
   const startupPlan = buildAgentStartupPlan({
-    ...launchArgs,
+    ...prepared.inputs,
     prompt: '',
     allowEmptyPromptLaunch: true
   })
@@ -208,6 +221,7 @@ export async function buildWorktreeStartupForAgent(
   const prepared = await prepareWorktreeModelStartupInputs({
     inputs: resolvedInputs,
     cwd: repo.path,
+    shellPath: launchRuntime instanceof Error ? undefined : launchRuntime.pty.shellOverride,
     isWsl: !(launchRuntime instanceof Error) && isWslShellName(launchRuntime.pty.shellOverride)
   })
   const planInputs = prepared.inputs
@@ -234,7 +248,7 @@ export async function buildWorktreeStartupForAgent(
     startupPlan = buildAgentStartupPlan({ ...planInputs, prompt, allowEmptyPromptLaunch: true })
   }
   if (!startupPlan) {
-    throw new Error(`Could not build launch command for ${agent}.`)
+    throw new Error(agentLaunchUnbuildableMessage(agent))
   }
   return {
     agent,

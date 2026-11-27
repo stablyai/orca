@@ -134,7 +134,7 @@ export function acpRegistryManagedRuntime(managed: AcpRegistryManagedAgent): Man
           signal
         ),
       ...(alias && {
-        // Beside the command, so the folder on Orca's PATH answers to the alias too.
+        // Beside the command, so a launch by full path runs it under the name it answers to.
         prepare: async (folder: string) => {
           const command = executable(folder)
           const named = join(dirname(command), alias(process.platform))
@@ -150,6 +150,9 @@ export function acpRegistryManagedRuntime(managed: AcpRegistryManagedAgent): Man
         key !== null && (known === undefined || known?.distribution.binary?.[key] !== undefined)
       )
     },
-    executable
+    executable,
+    ...(alias && {
+      launcher: (folder: string) => join(dirname(executable(folder)), alias(process.platform))
+    })
   }
 }

@@ -9,6 +9,7 @@ import type { WorktreeSleepResumeRecorder } from '../../terminal/stop/worktree-s
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentSessionResumeClaim } from './agent-session-resume-claims'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import { prepareInPlaceAgentRestart } from './prepare-in-place-agent-restart'
 
 export type AgentPaneRestartRefusal =
   /** Not a live terminal of this host's own (an SSH relay or another server's pane). */
@@ -16,6 +17,7 @@ export type AgentPaneRestartRefusal =
   /** A client viewing the pane would be left on a dead pane by an older Orca. */
   | 'viewer_cannot_follow'
   | 'no_resume_command'
+  | 'agent_program_blocked'
   | 'busy'
   /** The saved layout gives the pane to another terminal or lacks its tab: the binding retire after
    *  the stop would refuse, leaving no replacement. */
@@ -56,8 +58,9 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     ) {
       return { ok: false, reason: 'not_local' }
     }
-    if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(ptyId)) {
-      return { ok: false, reason: 'viewer_cannot_follow' }
+    const initialRefusal = this.restartRefusalBeforeStop(pty)
+    if (initialRefusal) {
+      return { ok: false, reason: initialRefusal }
     }
     const paneKey = `${pty.worktreeId}\0${tabId}\0${pane.leafId}`
     if (this.agentPaneRestartsByPaneKey.has(paneKey) || !this.ptyController?.stopAndWait) {
@@ -67,17 +70,26 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     let held: AgentSessionResumeClaim | null = null
     let dispatched = false
     try {
-      // Resolved before the stop, so nothing after it can leave the pane without its agent.
-      const resume = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
-        .then((workspace) =>
-          this.resolveMobileSessionResumeCommand(workspace, {
-            ...session,
-            launchConfig: pty.launchConfig ?? undefined
-          })
-        )
-        .catch(() => null)
-      if (!resume) {
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+        `id:${pty.worktreeId}`
+      ).catch(() => null)
+      if (!workspace || workspace.connectionId) {
+        return { ok: false, reason: 'not_local' }
+      }
+      const resume = await this.resolveMobileSessionResumeCommand(workspace, {
+        ...session,
+        launchConfig: pty.launchConfig ?? undefined
+      }).catch(() => null)
+      if (!resume?.launchRuntime) {
         return { ok: false, reason: 'no_resume_command' }
+      }
+      const replacement = await prepareInPlaceAgentRestart(
+        resume,
+        resume.launchRuntime,
+        workspace.path
+      )
+      if (!replacement) {
+        return { ok: false, reason: 'agent_program_blocked' }
       }
       const ownPaneKey = makePaneKey(tabId, pane.leafId)
       // Held from before the live-pane check, so no other resume can start this conversation
@@ -135,21 +147,31 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         return refuse(refusalBeforeStop)
       }
       let stopped = false
-      // Left as a slept pane is: its next view starts it afresh and resumes the conversation.
+      let blockedReplacement: string | undefined
       const failedStart = async (): Promise<AgentPaneRestartResult> => {
-        // A closed tab or a successor terminal owns the pane now: its saved state stays theirs.
+        // Save recovery only while the pane is vacant or still holds this restart's terminal.
         const bound = this.storedPaneBinding({
           worktreeId: pty.worktreeId,
           tabId,
           leafId: pane.leafId
         })
-        if (bound === null || (bound !== undefined && bound !== ptyId)) {
+        if (
+          bound === null ||
+          (bound !== undefined && bound !== ptyId && bound !== blockedReplacement)
+        ) {
           return { ok: false, reason: 'create_failed' }
         }
         if (resumeRecord) {
-          await this.sleepResumeRecords.persist(pty.worktreeId, resumeRecord, [ptyId])
+          await this.sleepResumeRecords.persist(
+            pty.worktreeId,
+            resumeRecord,
+            [ptyId],
+            blockedReplacement
+          )
         }
-        this.forgetStoppedPaneTerminal(pty.worktreeId, tabId, pane.leafId, ptyId)
+        if (!blockedReplacement) {
+          this.forgetStoppedPaneTerminal(pty.worktreeId, tabId, pane.leafId, ptyId)
+        }
         return { ok: false, reason: 'create_failed' }
       }
       try {
@@ -186,7 +208,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             startupCommandDelivery: resume.startupCommandDelivery,
             launchConfig: resume.launchConfig,
             launchAgent: resume.launchAgent,
-            launchRuntime: resume.launchRuntime,
+            ...replacement,
             resumeProviderSession: resume.resumeProviderSession,
             spawnIntent: 'user-resume',
             // A desktop window that didn't hold the pane isn't shown or focused to the new terminal.
@@ -196,9 +218,19 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             onPtySpawnDispatched: () => {
               dispatched = true
             },
-            onPtyCreated: claim.bind
+            onPtyCreated: (replacementPtyId, result) => {
+              if (result.agentProgramBlocked) {
+                blockedReplacement = replacementPtyId
+                claim.settleFailure(false)
+              } else {
+                claim.bind(replacementPtyId)
+              }
+            }
           }
         )
+        if (blockedReplacement) {
+          return await failedStart()
+        }
         if (created.tab.status === 'ready' && created.tab.ptyId) {
           return { ok: true, ptyId: created.tab.ptyId }
         }
@@ -210,7 +242,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         const refusedBeforeSpawn =
           error instanceof Error &&
           (error.message === 'tab_not_found' || error.message === 'terminal_split_source_not_found')
-        claim.settleFailure(dispatched && !refusedBeforeSpawn, error)
+        claim.settleFailure(dispatched && !refusedBeforeSpawn && !blockedReplacement, error)
         console.warn('[runtime] could not restart an agent pane in place', { ptyId, error })
         return stopped ? await failedStart() : { ok: false, reason: 'stop_failed' }
       }
@@ -224,9 +256,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     }
   }
 
-  /** What a restart refuses last, with no await before its stop: a viewer an older Orca would
-   *  leave on a dead pane, or a saved layout that gives the pane to another terminal or lacks its
-   *  tab, so the binding retire after the stop would refuse. Reads the partition the retire reads. */
+  /** Checked before program selection and again just before stopping. Refuses a viewer that cannot
+   *  follow the restart or a saved layout that would refuse binding retirement. */
   protected restartRefusalBeforeStop(
     pty: RuntimePtyWorktreeRecord
   ): 'viewer_cannot_follow' | 'saved_layout_differs' | null {

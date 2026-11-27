@@ -35,15 +35,24 @@ import {
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
   detectInstalledAgentsWithShellPathHydration,
-  refreshShellPathAndDetectAgents,
+  refreshAgentShellPath,
   type RefreshAgentsResult
 } from './agent-detection'
 import {
   agentCommandOverrideDetectionOptions,
-  type InstalledAgentDetectionOptions
+  detectInstalledAgentInventory,
+  detectInstalledAgentInventoryWithShellPathHydration,
+  type InstalledAgentDetectionOptions,
+  type InstalledAgentInventory,
+  type InstalledAgentListPolicy
 } from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import { notifyAgentsRefreshedOnHost } from './agents-refreshed-on-host'
+import { AgentInventoryDeadlineError, withAgentInventoryDeadline } from './agent-command-detection'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../shared/concurrency/abort-signal-reason'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -176,13 +185,27 @@ function resolveFolderWorkspace(
 
 export async function detectAgentsOnHost(
   host: AgentDetectionHost,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  signal?: AbortSignal,
+  policy: InstalledAgentListPolicy = 'complete'
 ): Promise<string[]> {
   // Unserved hosts are unverifiable; [] would falsely cache no installed agents.
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
-  return detectInstalledAgentsWithShellPathHydration(host.context, options)
+  return detectInstalledAgentsWithShellPathHydration(host.context, options, signal, policy)
+}
+
+/** The host's terminal agents and user CLI paths outside PATH. */
+export async function detectAgentInventoryOnHost(
+  host: AgentDetectionHost,
+  options?: InstalledAgentDetectionOptions,
+  signal?: AbortSignal
+): Promise<InstalledAgentInventory> {
+  if (host.kind === 'ssh') {
+    throw new SshHostNotServedError(host.connectionId)
+  }
+  return detectInstalledAgentInventoryWithShellPathHydration(host.context, options, signal)
 }
 
 /** Background detection in a WSL runtime refuses a stopped distro (E9); a user act for it passes. */
@@ -196,29 +219,58 @@ export async function assertAgentDetectionHostRunning(host: AgentDetectionHost):
 export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
   options?: InstalledAgentDetectionOptions,
-  userInitiated = false
+  userInitiated = false,
+  withManagedAgentCommands = false,
+  requestSignal?: AbortSignal
 ): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
   const wsl = getPreflightWslTarget(host.context)
-  const refresh = async (): Promise<RefreshAgentsResult> => {
-    const detect = () =>
-      options
-        ? refreshShellPathAndDetectAgents(host.context, options)
-        : refreshShellPathAndDetectAgents(host.context)
-    const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
+  let path: Awaited<ReturnType<typeof refreshAgentShellPath>> | undefined
+  let waitSignal: AbortSignal | undefined
+  const inventory = await detectInstalledAgentInventory(
+    host.context,
+    { ...options, waitForCompletion: userInitiated },
+    true,
+    requestSignal,
+    async (signal) => {
+      waitSignal = signal
+      const preparePath = () => refreshAgentShellPath(host.context, signal)
+      path = wsl
+        ? await preparePath()
+        : await waitForPromiseWithSignal(
+            refreshAtRestCommandContext(() => {
+              throwIfSignalAborted(signal)
+              return captureHostShellEnvironment(preparePath)
+            }),
+            signal
+          )
+    }
+  )
+  if (!waitSignal?.aborted) {
     notifyAgentsRefreshedOnHost(userInitiated && !wsl)
-    return result
   }
-  return wsl ? refresh() : refreshAtRestCommandContext(refresh)
+  if (inventory.incomplete && !withManagedAgentCommands) {
+    throw new AgentInventoryDeadlineError(inventory.afterPublication)
+  }
+  return {
+    ...inventory,
+    ...(path ?? {
+      addedPathSegments: [],
+      shellHydrationOk: false,
+      pathSource: 'sync_seed_only',
+      pathFailureReason: 'timeout'
+    })
+  }
 }
 
 /** A prospective workspace uses the create route's resolved repo, never a client host guess. */
 export async function detectProjectLaunchContext(
   store: WorkspaceAgentDetectionStore,
   repo: Repo,
-  onlyTuiAgent?: TuiAgent
+  onlyTuiAgent?: TuiAgent,
+  { detect, signal }: { detect?: typeof detectAgentsOnHost; signal?: AbortSignal } = {}
 ): Promise<ProjectLaunchContext> {
   const host = getRepoExecutionHostId(repo)
   const ssh = getSshTargetIdForExecutionHost(host)
@@ -230,12 +282,22 @@ export async function detectProjectLaunchContext(
     throw new Error('worktree_execution_host_unresolved')
   }
   const overrides = agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
-  const agents = await detectAgentsOnHost(
-    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } },
-    onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
-  )
+  const options = onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
+  const context = { projectRuntime }
+  const { agents, incomplete } = await withAgentInventoryDeadline(async (waitSignal) => {
+    const target: AgentDetectionHost = ssh
+      ? { kind: 'ssh', connectionId: ssh }
+      : { kind: 'local', context }
+    const detected: InstalledAgentInventory = detect
+      ? { agents: await detect(target, options, waitSignal) }
+      : await detectAgentInventoryOnHost(target, options, waitSignal)
+    return !ssh && onlyTuiAgent && !detected.incomplete && !detected.agents.includes(onlyTuiAgent)
+      ? detectInstalledAgentInventory(context, options, true, waitSignal)
+      : detected
+  }, signal)
   return {
     agents: agents.filter(isTuiAgent),
+    ...(incomplete ? { incomplete: true } : {}),
     workspaceKind: isFolderRepo(repo) ? 'folder' : 'git-worktree',
     executionContext: projectRuntime ? { kind: 'host', projectRuntime } : { kind: 'ssh' }
   }

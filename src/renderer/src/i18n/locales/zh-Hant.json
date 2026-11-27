@@ -24606,6 +24606,8 @@
     "delete": "刪除"
   },
   "terminal": {
+    "startupPromptNotDelivered": "啟動提示詞未送達。",
+    "startupPromptMore_other": "（另有 {{count}} 個）",
     "recentImages": {
       "pasted": "貼上的圖片",
       "open": "開啟預覽",

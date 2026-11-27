@@ -1,3 +1,5 @@
+import type { ManagedAgentCommands } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+import { readManagedAgentCommandsForRepo } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -36,6 +38,7 @@ export type QuickComposerStartupInput = {
   telemetrySource: WorktreeCreationRequest['telemetrySource']
   launchInputs?: WorktreeCreationRequest['launchInputs']
   route?: WorktreeCreationRequest['agentLaunchRoute']
+  managedAgentCommands?: ManagedAgentCommands
 }
 
 export type QuickComposerStartup = {
@@ -58,7 +61,8 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           sessionOptions: input.launchInputs?.sessionOptions,
           platform: requireExecutionHostPlatform(input.launchHost),
           shell: input.shell ?? undefined,
-          isRemote: input.isRemote
+          isRemote: input.isRemote,
+          managedAgentCommands: input.managedAgentCommands
         })
   const promptPlan = inputs
     ? planLaunchAgentStartupPrompt({
@@ -145,7 +149,11 @@ export async function prepareQuickComposerStartup(
       prompt: text ?? prompt,
       draftPrompt: text !== undefined ? (delivery === 'draft' ? text : null) : draftPrompt,
       settings,
-      launchInputs: input.legacyLaunchInputs ?? input.launchInputs
+      launchInputs: input.legacyLaunchInputs ?? input.launchInputs,
+      managedAgentCommands: readManagedAgentCommandsForRepo(
+        { executionHostId: input.executionHostId },
+        input.launchHost.kind === 'known' ? input.launchHost.platform : null
+      )
     })
   const host = parseExecutionHostId(input.executionHostId)
   const hostComposes =

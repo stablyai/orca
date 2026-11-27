@@ -1,25 +1,59 @@
+import { homedir } from 'node:os'
 import path from 'node:path'
-import { resolveCliCommands } from '../../shell/command-resolution/node-cli-command-resolution'
+import {
+  runCliFsReadsAsync,
+  type CliFsProbeOptions
+} from '../../shell/command-resolution/cli-fs-reads'
+import type { InventoryFsProbes } from '../../shell/command-resolution/inventory-fs-probes'
+import {
+  cliInstallDirectories,
+  cliInstallDirectoriesForCommand,
+  firstRunnable,
+  getExecutableNames
+} from '../../shell/command-resolution/node-cli-command-resolution'
 
-// Why: detection may precede shell-PATH hydration, but the fallback stays bounded.
-export function detectCommandsInInstallDirs(
+export async function detectCommandsInInstallDirs(
   commands: readonly string[],
-  /** The PATH detection searched; defaults to this process's own. */
-  pathEnv?: string,
-  options?: { skipPathSearch?: boolean }
-): Set<string> {
-  if (commands.length === 0) {
-    return new Set()
+  {
+    probes,
+    readDirectories,
+    acceptsExecutableTarget,
+    complete
+  }: {
+    probes: InventoryFsProbes
+    readDirectories: NonNullable<CliFsProbeOptions['readDirectories']>
+    acceptsExecutableTarget: NonNullable<CliFsProbeOptions['acceptsExecutableTarget']>
+    complete: (command: string, user: string | null, uncertain: boolean) => void
   }
-  try {
-    const resolvedCommands = resolveCliCommands(commands, {
-      ...(pathEnv === undefined ? {} : { pathEnv }),
-      ...(options?.skipPathSearch ? { skipPathSearch: true } : {})
+): Promise<void> {
+  const platform = process.platform
+  let unverifiedDirectories = false
+  const home = homedir()
+  const dirs = await runCliFsReadsAsync(cliInstallDirectories(platform, home), {
+    probes,
+    readDirectories,
+    onUnverified: () => {
+      unverifiedDirectories = true
+    }
+  })
+  await Promise.all(
+    commands.map(async (command) => {
+      let uncertain = unverifiedDirectories
+      const user = await runCliFsReadsAsync(
+        firstRunnable(
+          platform,
+          cliInstallDirectoriesForCommand(dirs, platform, home, command),
+          getExecutableNames(platform, command)
+        ),
+        {
+          probes,
+          acceptsExecutableTarget,
+          onUnverified: () => {
+            uncertain = true
+          }
+        }
+      )
+      complete(command, user && path.isAbsolute(user) ? user : null, uncertain)
     })
-    return new Set(
-      commands.filter((command) => path.isAbsolute(resolvedCommands.get(command) ?? command))
-    )
-  } catch {
-    return new Set()
-  }
+  )
 }

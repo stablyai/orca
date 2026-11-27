@@ -140,6 +140,8 @@ export const WorktreeCreate = lazyZodSchema(() =>
       // Desktop can prequote startup commands; clients unable to quote for the host send startupAgent.
       startupCommand: OptionalString,
       startupEnv: z.record(z.string(), z.string()).optional(),
+      generatedAgentLaunch: z.string().optional(),
+      hermesStartupQueryArgv: z.string().optional(),
       startupLaunchConfig: sleepingAgentLaunchConfigSchema,
       startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
       // Quote agent launches on the execution host because SSH shells can differ from the client’s.
@@ -152,6 +154,7 @@ export const WorktreeCreate = lazyZodSchema(() =>
       launchSource: LaunchSourceParam.optional(),
       // Task-driven mobile creation uses desktop-equivalent host defaults and linked issue/PR draft URLs.
       startupDraft: OptionalString,
+      afterPublication: z.number().int().nonnegative().optional(),
       createdWithAgent: z
         .unknown()
         .transform((value) => (isTuiAgent(value) ? value : undefined))

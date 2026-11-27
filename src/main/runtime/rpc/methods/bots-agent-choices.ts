@@ -15,17 +15,20 @@ import {
 import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
-  detectAgentsOnHost,
+  detectAgentInventoryOnHost,
   HOST_DEFAULT_AGENT_DETECTION
 } from '../../../preflight/workspace-agent-detection'
 import { defineMethod } from '../core'
 import { hostDetectionOptions } from './preflight/preflight'
+import { AgentInventoryDeadlineError } from '../../../preflight/agent-command-detection'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 
 // The first health snapshot probes every agent; past this the answer goes out without it.
 const AVAILABILITY_WAIT_MS = 10_000
 
 function availabilitySnapshot(
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  signal?: AbortSignal
 ): Promise<ReadonlyMap<string, AgentSessionAgentAvailability> | null> {
   return new Promise((resolve) => {
     let release: (() => void) | null = null
@@ -36,10 +39,13 @@ function availabilitySnapshot(
       }
       done = true
       clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
       release?.()
       resolve(agents)
     }
+    const onAbort = () => settle(null)
     const timer = setTimeout(() => settle(null), AVAILABILITY_WAIT_MS)
+    signal?.addEventListener('abort', onAbort, { once: true })
     release = runtime.subscribeStructuredAgentAvailability((agents) =>
       settle(new Map(agents.map((entry) => [entry.agent, entry])))
     )
@@ -50,14 +56,25 @@ function availabilitySnapshot(
   })
 }
 
-export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
+export async function hostBotAgentChoices(runtime: OrcaRuntimeService, signal?: AbortSignal) {
+  throwIfSignalAborted(signal)
   const settings = runtime.requireStore().getSettings()
   const [detected, roster] = await Promise.all([
-    detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION, hostDetectionOptions(runtime)).catch(
-      () => null
-    ),
-    availabilitySnapshot(runtime)
+    detectAgentInventoryOnHost(
+      HOST_DEFAULT_AGENT_DETECTION,
+      { ...hostDetectionOptions(runtime), waitForCompletion: true },
+      signal
+    )
+      .then(({ agents }) => agents)
+      .catch((error: unknown) => {
+        if (error instanceof AgentInventoryDeadlineError) {
+          throw error
+        }
+        return null
+      }),
+    availabilitySnapshot(runtime, signal)
   ])
+  throwIfSignalAborted(signal)
   const detectedIds = detected?.filter(isTuiAgent) ?? null
   // As the desktop's menu reads a host's published health: absent or refused can't chat there.
   const hostChatAnswer = (agent: string): HostChatAnswer => {
@@ -101,5 +118,5 @@ export const BOT_AGENT_CHOICES_METHOD = defineMethod({
   name: 'bots.agentChoices',
   permission: 'workspace',
   params: null,
-  handler: async (_params, { runtime }) => hostBotAgentChoices(runtime)
+  handler: async (_params, { runtime, signal }) => hostBotAgentChoices(runtime, signal)
 })

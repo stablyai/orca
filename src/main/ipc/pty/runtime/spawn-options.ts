@@ -68,6 +68,7 @@ export async function buildRuntimePtySpawnOptions(
     env: ctx.env,
     envToDelete: deletions.envToDelete,
     launchCommand: ctx.launchCommand,
+    launchConfig: args.launchConfig,
     cwd: ctx.cwd,
     prevalidatedCwd: ctx.prevalidatedCwd,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
@@ -93,6 +94,8 @@ export async function buildRuntimePtySpawnOptions(
     ctx.deps.runtime?.shareClaudeAgentTeamsLeadMcpEnv(launch.env)
   }
   ctx.launchCommand = launch.launchCommand
+  args.launchConfig = launch.launchConfig
+  ctx.agentProgramBlocked = launch.blocked
   ctx.terminalMcp = launch.terminalMcp
   ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.sessionId,

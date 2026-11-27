@@ -6,6 +6,7 @@ import { CreateTerminalTab } from '../../../../../shared/rpc-contract/session-ta
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
+import { generatedAgentLaunchRequestEnv } from '../../startup/agent-launch-request-env'
 
 export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
   name: 'session.tabs.createTerminal',
@@ -19,6 +20,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
         runtime.ensureStructuredAgentSessionHost()
       )
     }
+    const env = generatedAgentLaunchRequestEnv(params)
     return runtime.createMobileSessionTerminal(params.worktree, {
       ...(params.sourceChatFork ? { sourceChatFork: params.sourceChatFork } : {}),
       terminalImageViewerSupported: terminalImageViewerSupported(context),
@@ -27,8 +29,9 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
       command: params.command,
       ...(params.shell ? { shellOverride: params.shell } : {}),
       cwd: params.cwd,
-      ...(params.env ? { env: params.env } : {}),
+      ...(env ? { env } : {}),
       ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
+      nativeChatSignIn: params.nativeChatSignIn,
       startupCommandDelivery: params.startupCommandDelivery,
       agent: params.agent,
       ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
@@ -48,6 +51,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
         clientKind
       }),
       clientMutationId: params.clientMutationId,
+      historyResume: params.historyResume,
       ...(pairedDeviceId
         ? {
             supportsSplitGroupPlacement:

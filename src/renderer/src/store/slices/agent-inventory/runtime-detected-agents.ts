@@ -3,12 +3,18 @@ import {
   RuntimeAgentDetectionNeedsServerUpdateError,
   type NestedSshAgentDetection
 } from './runtime-agent-detection-request'
-export {
-  callRuntimeAgentDetection,
-  RuntimeAgentDetectionNeedsServerUpdateError
-} from './runtime-agent-detection-request'
+export { callRuntimeAgentDetection, RuntimeAgentDetectionNeedsServerUpdateError }
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import {
+  agentInventoryRetryParams,
+  beginAgentDetection,
+  forgetRuntimeManagedAgentCommands,
+  isIncompleteAgentInventory,
+  mergeAgentDetection,
+  runtimeManagedAgentHost,
+  type AgentDetectionReply
+} from './managed-agent-launch-commands'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
@@ -98,6 +104,7 @@ export const createRuntimeDetectedAgentsSlice: (
       }
     }
     ;[...latestOutcome.keys()].filter(dropKey).forEach((key) => latestOutcome.delete(key))
+    forgetRuntimeManagedAgentCommands(drop)
     set((s) => {
       const runtimeDetectedAgentIds = withoutKeys(s.runtimeDetectedAgentIds, dropKey)
       const isDetectingRuntimeAgents = withoutKeys(s.isDetectingRuntimeAgents, dropKey)
@@ -137,7 +144,7 @@ export const createRuntimeDetectedAgentsSlice: (
 
   // Commits a settled detection; an old host commits an empty list, never its default.
   const commitDetection = (key: string, agents: TuiAgent[], needsServerUpdate: boolean): void => {
-    latestOutcome.set(key, 'successful')
+    latestOutcome.set(key, isIncompleteAgentInventory(agents) ? 'pending' : 'successful')
     set((s) => ({
       runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [key]: agents },
       isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
@@ -162,8 +169,8 @@ export const createRuntimeDetectedAgentsSlice: (
         return inflightRefresh
       }
       const existing = get().runtimeDetectedAgentIds[key]
-      // Retry empty results so installs/PATH fixes appear without reconnect; nonempty results remain cached.
-      if (existing?.length) {
+      // Retry failed, empty or incomplete results so installs and PATH fixes appear without reconnect.
+      if (existing?.length && latestOutcome.get(key) === 'successful') {
         return Promise.resolve(existing)
       }
       const inflight = runtimeDetectPromises.get(key)
@@ -178,15 +185,25 @@ export const createRuntimeDetectedAgentsSlice: (
 
       const target = { kind: 'environment', environmentId } as const
       const fence = capturePairingFence(environmentId)
+      const read = beginAgentDetection(runtimeManagedAgentHost(environmentId))
       const pending = callRuntimeAgentDetection(
         environmentId,
         worktreeId,
-        (params) => callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence),
+        (params) =>
+          callRuntimeRpc<AgentDetectionReply>(
+            target,
+            'preflight.detectAgents',
+            { ...params, ...agentInventoryRetryParams(existing), withManagedAgentCommands: true },
+            fence
+          ),
         nestedSshDetection(target, worktreeId, fence)
       )
-        .then((typed) => {
+        .then((reply) => {
+          const detection = read(reply)
+          const typed = mergeAgentDetection(detection, get().runtimeDetectedAgentIds[key])
           // Removed or re-paired environments must not regain stale entries from in-flight detection.
           if (runtimeDetectPromises.get(key) === pending) {
+            detection.keepManagedAgentCommands()
             commitDetection(key, typed, false)
           }
           return typed
@@ -236,25 +253,24 @@ export const createRuntimeDetectedAgentsSlice: (
 
       const target = { kind: 'environment', environmentId } as const
       const fence = capturePairingFence(environmentId)
+      const read = beginAgentDetection(runtimeManagedAgentHost(environmentId))
       const request = () =>
         callRuntimeAgentDetection(
           environmentId,
           worktreeId,
           (params) =>
-            callRuntimeRpc<{ agents: TuiAgent[] }>(
+            callRuntimeRpc<AgentDetectionReply>(
               target,
               'preflight.refreshAgents',
-              options.userInitiated ? { ...params, userInitiated: true } : params,
+              { ...params, userInitiated: options.userInitiated, withManagedAgentCommands: true },
               fence
-            )
-              .then((result) => result.agents)
-              .catch((error) => {
-                if (!isRuntimeMethodNotFoundError(error)) {
-                  throw error
-                }
-                // Fallback only for old servers; repeating disconnect/runtime failures just doubles remote work.
-                return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
-              }),
+            ).catch((error) => {
+              if (!isRuntimeMethodNotFoundError(error)) {
+                throw error
+              }
+              // Fallback only for old servers; repeating disconnect/runtime failures just doubles remote work.
+              return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
+            }),
           nestedSshDetection(target, worktreeId, fence)
         )
       const pending = (
@@ -266,9 +282,12 @@ export const createRuntimeDetectedAgentsSlice: (
             )
           : request()
       )
-        .then((typed) => {
+        .then((reply) => {
+          const detection = read(reply)
+          const typed = mergeAgentDetection(detection, get().runtimeDetectedAgentIds[key])
           // Ignore refreshes detached by environment removal or re-pair.
           if (runtimeRefreshPromises.get(key) === pending) {
+            detection.keepManagedAgentCommands()
             commitDetection(key, typed, false)
           }
           return typed

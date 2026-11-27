@@ -15,6 +15,7 @@ import {
 } from './tui-agent-permission-choice'
 import { reconcileAgentChoiceArgs } from '../choices/agent-choice-reconciliation'
 import { planAgentCliArgsSuffix, type AgentStartupShell } from '../startup/tui-agent-startup-shell'
+import { inferLaunchShell } from '../startup/launch-position'
 
 import type { TuiAgent } from '../catalog/tui-agent'
 
@@ -36,7 +37,11 @@ export function liftAgentPermissionArgs(
 /** A recorded launch without Orca's permission flag; recorded text it cannot rebuild stays whole. */
 export function dropRecordedAgentPermissionArgs(
   agent: TuiAgent,
-  recorded: { agentArgs?: string | null; agentCommand?: string | null },
+  recorded: {
+    agentArgs?: string | null
+    agentCommand?: string | null
+    commandProvenance?: 'authored' | 'generated'
+  },
   shell: AgentStartupShell
 ): { agentArgs?: string | null; agentCommand?: string | null } {
   const lifted = liftAgentPermissionArgs(agent, recorded.agentArgs)
@@ -47,13 +52,24 @@ export function dropRecordedAgentPermissionArgs(
   if (!command) {
     return { ...recorded, agentArgs: lifted.args }
   }
-  const before = planAgentCliArgsSuffix(recorded.agentArgs, shell)
-  const after = planAgentCliArgsSuffix(lifted.args, shell)
-  if (!before.ok || !after.ok || !command.endsWith(` ${before.suffix}`)) {
-    return recorded
+  const source = inferLaunchShell(command)
+  const grammars = new Set([source, shell])
+  if (recorded.commandProvenance === 'generated') {
+    // A bare stock head may look the same in every shell, so require an exact suffix match.
+    grammars.add('cmd').add('powershell')
   }
-  const head = command.slice(0, -before.suffix.length).trimEnd()
-  return { agentArgs: lifted.args, agentCommand: after.suffix ? `${head} ${after.suffix}` : head }
+  for (const grammar of grammars) {
+    const before = planAgentCliArgsSuffix(recorded.agentArgs, grammar)
+    const after = planAgentCliArgsSuffix(lifted.args, grammar)
+    if (before.ok && after.ok && command.endsWith(` ${before.suffix}`)) {
+      const head = command.slice(0, -before.suffix.length).trimEnd()
+      return {
+        agentArgs: lifted.args,
+        agentCommand: after.suffix ? `${head} ${after.suffix}` : head
+      }
+    }
+  }
+  return recorded
 }
 
 /** Lift env bypass with execution-host name casing; unknown browser caches retain ambiguous spellings. */

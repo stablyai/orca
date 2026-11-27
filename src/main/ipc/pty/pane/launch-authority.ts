@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
+import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 
 const AGENT_LAUNCH_TOKEN_MAX_LENGTH = 128
 
@@ -62,9 +63,16 @@ export function admitProviderReattachLaunchIdentity(args: {
 }
 
 export function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
+  launchAgent?: unknown
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
 }): boolean {
+  if (args.launchAgent === 'claude-agent-teams' && args.launchConfig?.commandProvenance) {
+    return (
+      recognizeAgentLaunchCommand(args.command ?? args.launchConfig.agentCommand)?.agent !==
+      'claude-agent-teams'
+    )
+  }
   const capturedCommand = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
   const capturedArgs = args.launchConfig?.agentArgs?.trim() ?? ''
   const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()

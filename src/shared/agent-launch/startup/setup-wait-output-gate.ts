@@ -1,5 +1,6 @@
 import {
   SETUP_AGENT_WAIT_TIMEOUT_SECONDS,
+  SETUP_AGENT_BLOCKED_MESSAGE,
   SETUP_COMPLETE_MESSAGE,
   SETUP_FAILED_MESSAGE_PREFIX,
   SETUP_WAIT_MESSAGE,
@@ -9,10 +10,13 @@ import { copyUtf16SuffixToOwnedString } from '../../text/owned-utf16-suffix'
 
 /** The wrapper itself gives up then, so no agent can start after it. */
 export const SETUP_WAIT_GATE_MAX_MS = SETUP_AGENT_WAIT_TIMEOUT_SECONDS * 1000
+// Allow the login shell to initialize and the wrapper to recheck the executable after setup.
+export const WORKTREE_SETUP_GATE_OBSERVER_TIMEOUT_MS = SETUP_WAIT_GATE_MAX_MS + 5 * 60_000 + 15_000
 
 const SETUP_WAIT_END_LINES: readonly { line: string; phase: 'started' | 'failed' }[] = [
   { line: SETUP_COMPLETE_MESSAGE, phase: 'started' },
   { line: SETUP_FAILED_MESSAGE_PREFIX, phase: 'failed' },
+  { line: SETUP_AGENT_BLOCKED_MESSAGE, phase: 'failed' },
   { line: SETUP_WAIT_TIMEOUT_MESSAGE, phase: 'failed' }
 ]
 const END_CARRY = Math.max(...SETUP_WAIT_END_LINES.map(({ line }) => line.length)) - 1
@@ -22,12 +26,12 @@ export type SetupWaitPhase = 'waiting' | 'started' | 'failed'
 
 export type SetupWaitGate = {
   /** The chunk's agent output (none while Setup holds the pane) and the phase it entered, if any. */
-  observe: (chunk: string) => { output: string; phase: SetupWaitPhase | null }
+  observe: (chunk: string) => { output: string; phase: SetupWaitPhase | null; blocked?: true }
 }
 
 /** A wait-for-setup pane runs no agent between the sequenced wrapper's wait line and the line that ends it. */
-export function createSetupWaitGate(): SetupWaitGate {
-  let state: 'before' | 'waiting' | 'ended' = 'before'
+export function createSetupWaitGate(initiallyWaiting = false): SetupWaitGate {
+  let state: 'before' | 'waiting' | 'ended' = initiallyWaiting ? 'waiting' : 'before'
   let carry = ''
   return {
     observe: (chunk) => {
@@ -45,11 +49,11 @@ export function createSetupWaitGate(): SetupWaitGate {
         state = phase = 'waiting'
         window = window.slice(at + SETUP_WAIT_MESSAGE.length)
       }
-      let end: { at: number; length: number; phase: 'started' | 'failed' } | null = null
+      let end: { at: number; line: string; phase: 'started' | 'failed' } | null = null
       for (const { line, phase: endPhase } of SETUP_WAIT_END_LINES) {
         const at = window.indexOf(line)
         if (at !== -1 && (!end || at < end.at)) {
-          end = { at, length: line.length, phase: endPhase }
+          end = { at, line, phase: endPhase }
         }
       }
       if (!end) {
@@ -58,7 +62,12 @@ export function createSetupWaitGate(): SetupWaitGate {
       }
       state = 'ended'
       carry = ''
-      return { output: window.slice(end.at + end.length), phase: end.phase }
+      const blocked = end.line === SETUP_AGENT_BLOCKED_MESSAGE ? true : undefined
+      return {
+        output: window.slice(end.at + end.line.length),
+        phase: end.phase,
+        ...(blocked ? { blocked } : {})
+      }
     }
   }
 }

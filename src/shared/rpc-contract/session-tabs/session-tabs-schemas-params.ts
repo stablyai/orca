@@ -4,6 +4,7 @@ import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../../workspace-layout/tab-groups/tab-activation-intent'
 import { OptionalBoolean } from '../rpc-param-primitives'
+import { OptionalNativeChatSignIn } from '../terminal/native-chat-sign-in-params'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
@@ -136,10 +137,7 @@ export const TerminalPaneLayoutNodeSchema = lazyZodSchema(() =>
 
 export const UpdatePaneLayout = lazyZodSchema(() =>
   WorktreeTabSelector.extend({
-    tabId: z
-      .unknown()
-      .transform((v) => (typeof v === 'string' ? v : ''))
-      .pipe(z.string().min(1, 'Missing tab id')),
+    tabId: ActivateTab.shape.tabId,
     root: z.union([z.null(), TerminalPaneLayoutNodeSchema]),
     expandedLeafId: z.string().max(128).nullable().optional(),
     chatLeafId: z.string().max(128).nullable().optional(),
@@ -168,10 +166,7 @@ export const MovePaneToNewTab = lazyZodSchema(() =>
 )
 export const SetTabProps = lazyZodSchema(() =>
   WorktreeTabSelector.extend({
-    tabId: z
-      .unknown()
-      .transform((v) => (typeof v === 'string' ? v : ''))
-      .pipe(z.string().min(1, 'Missing tab id')),
+    tabId: ActivateTab.shape.tabId,
     // undefined = leave unchanged; null = clear color / unset.
     color: z.string().max(64).nullable().optional(),
     isPinned: z.boolean().optional(),
@@ -195,7 +190,11 @@ export const CreateTerminalTab = lazyZodSchema(() =>
     shell: WindowsShellOverrideParam.optional(),
     cwd: z.string().min(1).optional(),
     env: z.record(z.string(), z.string()).optional(),
+    generatedAgentLaunch: z.string().optional(),
+    historyResume: z.literal(true).optional(),
+    hermesStartupQueryArgv: z.string().optional(),
     envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
+    nativeChatSignIn: OptionalNativeChatSignIn,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
     launchConfig: sleepingAgentLaunchConfigSchema,
     launchToken: z.string().min(1).max(128).optional(),
@@ -240,6 +239,8 @@ export const CreateTerminalTab = lazyZodSchema(() =>
         'agent',
         'agentPrompt',
         'env',
+        'generatedAgentLaunch',
+        'hermesStartupQueryArgv',
         'envToDelete',
         'cwd',
         'launchConfig',
@@ -247,6 +248,7 @@ export const CreateTerminalTab = lazyZodSchema(() =>
         'resumeProviderSession',
         'launchAgent',
         'startupCommandDelivery',
+        'nativeChatSignIn',
         'viewMode'
       ] as const) {
         if (value[field] !== undefined) {

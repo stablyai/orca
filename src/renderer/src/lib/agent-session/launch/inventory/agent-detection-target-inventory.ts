@@ -18,6 +18,15 @@ import {
   parseExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ManagedAgentCommands } from '../../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+import {
+  LOCAL_MANAGED_AGENT_HOST,
+  readManagedAgentCommands,
+  runtimeManagedAgentHost
+} from '@/store/slices/agent-inventory/managed-agent-launch-commands'
+import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 
 type DetectionReadState = Pick<
   AppState,
@@ -189,4 +198,42 @@ export function readAgentInventoryForWorktree(state: AppState, worktreeId: strin
   return target
     ? readAgentInventoryForTarget(state, target)
     : { ids: null, state: 'unresolved' as const }
+}
+
+/** User executables found outside PATH by the workspace's host. WSL inventory reports names only. */
+export function readManagedAgentCommandsForWorktree(
+  state: AppState,
+  worktreeId: string | null | undefined
+): ManagedAgentCommands | undefined {
+  const target = detectionTargetForWorktree(state, worktreeId ?? null)
+  if (!target || target.kind === 'ssh') {
+    return undefined
+  }
+  if (target.kind === 'runtime') {
+    return worktreeId && getConnectionIdFromState(state, worktreeId)
+      ? undefined
+      : readManagedAgentCommands(runtimeManagedAgentHost(target.environmentId))
+  }
+  const context = getLocalAgentPreflightContext(state, undefined, undefined, target.worktreeId)
+  const runtime = context?.projectRuntime
+  const inWsl =
+    Boolean(context?.wslDistro || context?.wslDefault) ||
+    (runtime !== undefined && (runtime.status !== 'resolved' || runtime.runtime.kind === 'wsl'))
+  return inWsl ? undefined : readManagedAgentCommands(LOCAL_MANAGED_AGENT_HOST)
+}
+
+/** User executables found outside PATH by the project's host before its workspace exists. */
+export function readManagedAgentCommandsForRepo(
+  repo: RepoHostFields,
+  launchPlatform: NodeJS.Platform | null | undefined
+): ManagedAgentCommands | undefined {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'runtime') {
+    return repo.connectionId
+      ? undefined
+      : readManagedAgentCommands(runtimeManagedAgentHost(host.environmentId))
+  }
+  return host?.kind === 'ssh' || launchPlatform !== getRendererAppPlatform()
+    ? undefined
+    : readManagedAgentCommands(LOCAL_MANAGED_AGENT_HOST)
 }

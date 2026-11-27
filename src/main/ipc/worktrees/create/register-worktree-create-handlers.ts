@@ -44,7 +44,7 @@ export function registerWorktreeCreateHandlers(
 
   ipc.handle(
     'worktrees:create',
-    async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
+    async (event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
       // Parent Git spans without recording user branch names or remote URLs.
       return withWorktreeSpan({ stage: 'create' }, async (span) => {
@@ -84,7 +84,7 @@ export function registerWorktreeCreateHandlers(
                 throw new SshHostNotServedError(createRoute.connectionId)
               }
               result = await createLocalWorktree(
-                createArgs,
+                { ...createArgs, startupGateProgressTarget: event.sender },
                 repo,
                 store,
                 mainWindow,

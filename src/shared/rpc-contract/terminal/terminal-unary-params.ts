@@ -3,6 +3,7 @@ import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { SpawnIntentParam, TerminalColorQueryReplyColorsParam } from './agent-session-params'
+import { OptionalNativeChatSignIn } from './native-chat-sign-in-params'
 import {
   canonicalizeWindowsShellOverride,
   isSupportedWindowsShellOverride,
@@ -47,12 +48,18 @@ export const TerminalCreateParams = lazyZodSchema(() =>
     clientMutationId: z.string().min(1).max(128).optional(),
     reconcileExisting: z.boolean().optional(),
     command: OptionalString,
+    nativeChatSignIn: OptionalNativeChatSignIn,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
     env: z.record(z.string(), z.string()).optional(),
+    generatedAgentLaunch: z.string().optional(),
+    hermesStartupQueryArgv: z.string().optional(),
     envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
     launchConfig: z
       .object({
         agentCommand: z.string().optional(),
+        commandProvenance: z.enum(['authored', 'generated']).optional(),
+        authoredCommand: z.string().optional(),
+        selectedExecutable: z.string().optional(),
         agentArgs: z.string(),
         agentEnv: z.record(z.string(), z.string()),
         ompResumeFilePath: z
@@ -120,6 +127,7 @@ export const AgentTeamsPrepareLaunch = lazyZodSchema(() =>
   z.object({
     paneKey: requiredString('Missing pane key'),
     env: z.record(z.string(), z.string()).optional(),
+    cwd: z.string().optional(),
     prepareAuth: z.boolean().optional()
   })
 )

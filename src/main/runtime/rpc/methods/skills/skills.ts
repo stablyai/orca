@@ -145,19 +145,19 @@ export const SKILL_METHODS = [
     name: 'skills.planBundledOrca',
     permission: 'workspace',
     params: BundledSkillPlanRequestSchema,
-    handler: (params, { runtime }) => runtime.planLocalBundledSkills(params)
+    handler: (params, { runtime, signal }) => runtime.planLocalBundledSkills(params, signal)
   }),
   defineMethod({
     name: 'skills.executeBundledOrca',
     permission: 'skills-admin',
     params: BundledSkillExecuteRequestSchema,
-    handler: (params, { runtime }) => runtime.executeLocalBundledSkills(params)
+    handler: (params, { runtime, signal }) => runtime.executeLocalBundledSkills(params, signal)
   }),
   defineMethod({
     name: 'skills.autoUpdateBundledOrca',
     permission: 'skills-admin',
     params: BundledSkillAutoUpdateRequestSchema,
-    handler: (params, { runtime }) => runtime.autoUpdateLocalBundledSkills(params)
+    handler: (params, { runtime, signal }) => runtime.autoUpdateLocalBundledSkills(params, signal)
   }),
   defineMethod({
     name: 'skills.share',
@@ -258,7 +258,8 @@ export const SKILL_METHODS = [
     name: 'skills.previewInstall',
     permission: 'workspace',
     params: SkillInstallPreviewRequestSchema,
-    handler: (params, { runtime }) => runtime.previewSharedSkillInstallRequest(params)
+    handler: (params, { runtime, signal }) =>
+      runtime.previewSharedSkillInstallRequest(params, signal)
   }),
   defineMethod({
     name: 'skills.removeInstall',

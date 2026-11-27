@@ -4,6 +4,10 @@ import type {
   ShellHydrationFailureReason
 } from '../../shared/shell/launch/shell-path-hydration-types'
 import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../shared/concurrency/abort-signal-reason'
+import {
   hydrateShellPath,
   mergePathSegments
 } from '../startup/shell-environment/hydrate-shell-path'
@@ -38,13 +42,9 @@ import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from '../ipc/preflight/preflight-remote-windows-terminal-capabilities'
-import { invalidateWslGuestEnvironment } from '../wsl/execution/wsl-guest-environment'
 import { prunePreflightWslCache } from '../wsl/discovery/preflight-wsl-cache'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
-import {
-  detectInstalledAgents,
-  type InstalledAgentDetectionOptions
-} from './installed-agent-detection'
+import type { InstalledAgentInventory } from './installed-agent-detection'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
 export {
   detectInstalledAgents,
@@ -131,8 +131,7 @@ async function detectCommandRuntime(
     : { installed: false, absent: probe.status === 'absent' }
 }
 
-export type RefreshAgentsResult = {
-  agents: string[]
+type AgentShellPathRefresh = {
   addedPathSegments: string[]
   /** False means detection used existing PATH after shell failure. */
   shellHydrationOk: boolean
@@ -140,19 +139,17 @@ export type RefreshAgentsResult = {
   pathSource: PathSource
   pathFailureReason: ShellHydrationFailureReason
 }
+export type RefreshAgentsResult = InstalledAgentInventory & AgentShellPathRefresh
 
 /** Refresh login-shell PATH so newly installed CLIs appear without restarting Orca. */
-export async function refreshShellPathAndDetectAgents(
+export async function refreshAgentShellPath(
   context?: PreflightRuntimeContext,
-  options?: InstalledAgentDetectionOptions
-): Promise<RefreshAgentsResult> {
+  signal?: AbortSignal
+): Promise<AgentShellPathRefresh> {
+  throwIfSignalAborted(signal)
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    // Discard cached guest PATH before detecting a newly installed WSL CLI.
-    invalidateWslGuestEnvironment(wslTarget.distro)
-    const agents = await detectInstalledAgents(context, options)
     return {
-      agents,
       addedPathSegments: [],
       shellHydrationOk: true,
       pathSource: 'sync_seed_only',
@@ -160,11 +157,10 @@ export async function refreshShellPathAndDetectAgents(
     }
   }
 
-  const hydration = await hydrateShellPath({ force: true })
+  const hydration = await waitForPromiseWithSignal(hydrateShellPath({ force: true }), signal)
+  throwIfSignalAborted(signal)
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
-  const agents = await detectInstalledAgents(context, options)
   return {
-    agents,
     addedPathSegments: added,
     shellHydrationOk: hydration.ok,
     pathSource: hydration.ok ? 'shell_hydrate' : 'sync_seed_only',

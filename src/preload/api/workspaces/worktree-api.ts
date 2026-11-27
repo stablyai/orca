@@ -24,6 +24,7 @@ import type {
   BranchAutoRenameRetryResult
 } from '../../../shared/worktree/branch-auto-rename-attempt'
 import type {
+  SleptPaneWakeResult,
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
 } from '../../../shared/workspace/lifecycle/workspace-sleep'
@@ -113,11 +114,11 @@ export type WorktreeApi = {
   }) => Promise<GitWorktreeInfo[]>
   sleep: (request: WorkspaceSleepRequest) => Promise<WorkspaceSleepOutcome[]>
   sleepReopened: (worktreeId: string) => Promise<void>
-  /** True once running, so the renderer's subsequent spawn reattaches. */
+  /** The result is present once the renderer's subsequent spawn can reattach. */
   resumeSleptPane: (
     pane: { worktreeId: string; tabId: string; leafId: string },
     automatic?: boolean
-  ) => Promise<boolean>
+  ) => Promise<SleptPaneWakeResult>
   /** Drops main's workspace-sleep record only while no tab holds its pane. */
   retireStrandedSleepRecord: (args: { worktreeId: string; paneKey: string }) => Promise<void>
   remove: (args: {

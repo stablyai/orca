@@ -73,6 +73,9 @@ const sleepingAgentLaunchEnvSchema = lazyZodSchema(() =>
 export const sleepingAgentLaunchConfigBaseSchema = lazyZodSchema(() =>
   z.object({
     agentCommand: z.string().optional(),
+    commandProvenance: z.enum(['authored', 'generated']).optional(),
+    authoredCommand: z.string().optional(),
+    selectedExecutable: z.string().optional(),
     agentArgs: z.string(),
     agentEnv: sleepingAgentLaunchEnvSchema,
     // AI Vault scans arbitrary OMP roots; retain the exact resume locator for cold restore.

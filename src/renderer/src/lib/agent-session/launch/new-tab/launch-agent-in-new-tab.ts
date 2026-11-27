@@ -153,7 +153,7 @@ function openAgentInNewTab(
   if ('unavailable' in executionContext) {
     return refuseUnavailableAgentTabLaunch(args, executionContext.unavailable, notifyFailure)
   }
-  const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
+  const { resolvedLaunchPlatform, isRemote, queuedShell, managedAgentCommands } = executionContext
   const terminalShell = queuedShell ?? (resolvedLaunchPlatform === 'win32' ? 'powershell' : 'posix')
   const argsProblem = invalidTerminalArgsMessage(agent, agentArgs, terminalShell)
   if (argsProblem) {
@@ -171,7 +171,8 @@ function openAgentInNewTab(
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
         platform: resolvedLaunchPlatform,
         shell: queuedShell,
-        isRemote
+        isRemote,
+        managedAgentCommands
       }),
       prompt: trimmedPrompt,
       promptDelivery,

@@ -1,4 +1,5 @@
 import {
+  SETUP_AGENT_BLOCKED_MESSAGE,
   SETUP_COMPLETE_MESSAGE,
   SETUP_FAILED_MESSAGE_PREFIX,
   SETUP_WAIT_TIMEOUT_MESSAGE
@@ -19,6 +20,7 @@ export type SetupEndWatch = {
 const SETUP_END_LINES = [
   { line: SETUP_COMPLETE_MESSAGE, failed: false },
   { line: SETUP_FAILED_MESSAGE_PREFIX, failed: true },
+  { line: SETUP_AGENT_BLOCKED_MESSAGE, failed: true },
   { line: SETUP_WAIT_TIMEOUT_MESSAGE, failed: true }
 ] as const
 const SETUP_END_CARRY = Math.max(...SETUP_END_LINES.map(({ line }) => line.length)) - 1

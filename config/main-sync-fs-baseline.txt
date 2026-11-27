@@ -256,7 +256,6 @@
 2 src/main/hermes/hook-service.ts
 2 src/main/host/secret-protection-report.ts
 1 src/main/ipc/app.ts
-1 src/main/ipc/command-path/command-path-directory-worker-client.ts
 1 src/main/ipc/command-path/command-path-resolver.ts
 4 src/main/ipc/diagnostics.ts
 2 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-canary-directory.ts

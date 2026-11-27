@@ -50,6 +50,8 @@ export type TerminalMcpLaunchInput = {
   worktreeId: string | undefined
   connectionId: string | undefined
   isFreshLaunch: boolean
+  executableUnverified?: boolean
+  verifiedExecutable?: string
   /** Set for a launch in a WSL distro. */
   wsl?: { distro: string | null }
   codexHome: string | null
@@ -153,7 +155,8 @@ function adapterAndExecutable(
     command: input.command,
     shell: input.shell,
     env: input.env,
-    cwd: input.cwd
+    cwd: input.cwd,
+    verifiedExecutable: input.verifiedExecutable
   })
   return executable ? { adapter, executable } : null
 }
@@ -208,7 +211,9 @@ export async function withTerminalMcpServers(
   }
   // Codex also takes servers from `-c mcp_servers.*` on the user's own command line.
   const parsed =
-    adapter.agent === 'codex' ? tokenizeStartupCommand(input.command!, input.shell) : null
+    adapter.agent === 'codex'
+      ? tokenizeStartupCommand(input.command!, input.shell, input.shell === 'powershell')
+      : null
   const { tools, skipped } = offered.tools.beside([
     ...(input.cwd && !wsl ? await agentOwnMcpServerNames(adapter.agent, ownEnv, input.cwd) : []),
     ...(parsed?.ok ? codexArgsMcpServerNames(parsed.tokens) : [])
@@ -231,6 +236,8 @@ export async function withTerminalMcpServers(
         env: input.env,
         envToDelete: input.envToDelete,
         cwd: input.cwd,
+        executableUnverified: input.executableUnverified,
+        verifiedExecutable: input.verifiedExecutable,
         ...(input.wsl
           ? {
               wsl: {

@@ -17,6 +17,7 @@ import type {
 } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-replay-outcome'
 import type { TerminalSpawnDispatch } from '../../../../agent-launch/agent-launch-not-started'
+import type { AgentLaunchOpening } from '../../../../agent-launch/agent-launch-opening'
 import type { RpcContext } from '../../core'
 import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import { agentLaunchFailureMessage } from './agent-launch-failure-code'
@@ -40,6 +41,7 @@ export type ReplaySafeLaunch = {
   terminalSpawn: TerminalSpawnDispatch
   /** Queue provisional surface/prompt recording without awaiting it; ordered ledger transactions keep final settlement after it. */
   recordSurface: (provisional: AgentLaunchResult) => void
+  deferPrompt: (settlement: AgentLaunchOpening['settlement']) => void
 }
 
 export type AgentLaunchAdmission =
@@ -48,7 +50,11 @@ export type AgentLaunchAdmission =
       decision: 'execute'
       /** Record the surface immediately so restart can replay the running agent before final prompt settlement. */
       record: (provisional: AgentLaunchResult) => Promise<void>
-      settle: (result: AgentLaunchResult) => Promise<void>
+      deferPrompt: ReplaySafeLaunch['deferPrompt']
+      settle: (
+        result: AgentLaunchResult,
+        onSettled: (result: AgentLaunchResult) => void
+      ) => Promise<void>
       /** `cause` is the refusal, whose own words a coded one keeps for its replay. */
       fail: (code: string, cause?: unknown) => Promise<void>
       /** Distinct from the launch id: the inner attach reserves in this same ledger. */
@@ -113,6 +119,16 @@ function readsUnconfirmedLaunchPrompt(
     context.clientCapabilities?.includes(AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY) ===
       true
   )
+}
+
+export function presentAgentLaunchPrompt(
+  context: RpcContext,
+  result: AgentLaunchResult
+): AgentLaunchResult {
+  if (result.prompt?.outcome === 'unconfirmed' && !readsUnconfirmedLaunchPrompt(context)) {
+    throw new Error('agent_session_operation_unknown')
+  }
+  return result
 }
 
 /** Resolve the current handle by durable pane key when PTY incarnation or host re-adoption changed it.
@@ -218,13 +234,45 @@ export async function admitAgentLaunchOperation(
         launch: result
       }
     })
+  let surfaceCommit: Promise<void> | undefined
+  let deferredPrompt: AgentLaunchOpening['settlement'] | undefined
   return {
     decision: 'execute',
     attachOperationId,
     callerKey,
-    // The same row shape twice: a build that predates the first write reads either one.
-    record: succeeded,
-    settle: succeeded,
+    record: (provisional) => {
+      surfaceCommit = succeeded(provisional)
+      return surfaceCommit
+    },
+    deferPrompt: (settlement) => {
+      deferredPrompt = settlement
+    },
+    settle: async (result, onSettled) => {
+      try {
+        return await (deferredPrompt && surfaceCommit
+          ? surfaceCommit.catch(() => succeeded(result))
+          : succeeded(result))
+      } finally {
+        if (deferredPrompt) {
+          // Publish the pending receipt before any definite gate outcome can replace it.
+          void deferredPrompt
+            .then((settled) => {
+              if (settled.status === 'rejected' || !settled.value.prompt) {
+                return undefined
+              }
+              if (settled.value.prompt.outcome === 'unconfirmed') {
+                onSettled(result)
+                return undefined
+              }
+              const final = { ...result, prompt: settled.value.prompt }
+              return succeeded(final).finally(() => onSettled(final))
+            })
+            .catch(console.warn)
+        } else {
+          onSettled(result)
+        }
+      }
+    },
     fail: (code, cause) => {
       const message = agentLaunchFailureMessage(cause, params.target.kind)
       return store.recordOperationOutcome({

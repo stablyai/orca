@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { PtySpawnSizeSeed } from '../spawn/spawn-options-assembly'
@@ -5,6 +6,7 @@ import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { PreselectedAgentProgram } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
@@ -20,6 +22,7 @@ import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
+  AgentProgramBlockReason,
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -61,6 +64,7 @@ export type RuntimePtySpawnState = {
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
+  agentProgramBlocked?: AgentProgramBlockReason
   launchCommand: string | undefined
   /** What the host's MCP server list gave the pane, recorded at commit. */
   terminalMcp?: TerminalMcpPaneLaunch | null
@@ -122,6 +126,7 @@ export type RuntimePtySpawnArgs = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   commandDelivery?: 'renderer' | 'provider'
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: {
     agent_kind?: unknown
@@ -144,6 +149,7 @@ export type RuntimePtySpawnArgs = {
   shellOverride?: string
   /** Planned command quoting determines the PTY runtime shell. */
   launchRuntime?: AgentLaunchRuntime
+  preselectedAgentProgram?: PreselectedAgentProgram
   isNewSession?: boolean
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
   initiallyHidden?: boolean

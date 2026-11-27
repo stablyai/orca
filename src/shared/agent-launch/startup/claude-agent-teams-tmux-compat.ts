@@ -1,3 +1,9 @@
+import {
+  inferLaunchShell,
+  launchExecutableIs,
+  readLaunchArguments,
+  readLaunchPosition
+} from './launch-position'
 export type ClaudeAgentTeamsMode = 'off' | 'in-process' | 'native-panes-shim'
 
 /** Where Orca's agent-teams launch points its synthetic TMUX; no tmux server listens there. */
@@ -158,28 +164,38 @@ function tmuxSpecialKeyText(token: string): string | null {
   }
 }
 
+const CLAUDE_PROGRAM = /^claude(?:\.(exe|cmd))?$/i
+
+function readClaudeLaunch(command: string) {
+  const shell = inferLaunchShell(command)
+  const launch = readLaunchPosition(command, shell)
+  if (!launch || !launchExecutableIs(launch.executable, CLAUDE_PROGRAM)) {
+    return null
+  }
+  const args = readLaunchArguments(command, shell, launch)
+  return args ? { launch, args } : null
+}
+
 export function isDirectClaudeCommand(command: string | undefined): boolean {
-  const trimmed = command?.trim() ?? ''
-  if (!trimmed) {
-    return false
-  }
-  if (/[;&|<>`]/.test(trimmed)) {
-    return false
-  }
-  const first = trimmed.match(/^\S+/)?.[0] ?? ''
-  return first === 'claude' || first.endsWith('/claude')
+  return command !== undefined && readClaudeLaunch(command) !== null
 }
 
 export function addClaudeTeammateModeAuto(command: string): string {
-  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
-    return command
-  }
-  return command.replace(/^(\S+)/, '$1 --teammate-mode auto')
+  return addClaudeTeammateMode(command, 'auto')
 }
 
 export function addClaudeTeammateModeInProcess(command: string): string {
-  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
+  return addClaudeTeammateMode(command, 'in-process')
+}
+
+function addClaudeTeammateMode(command: string, mode: 'auto' | 'in-process'): string {
+  const parsed = readClaudeLaunch(command)
+  if (
+    !parsed ||
+    parsed.args.some((arg) => arg === '--teammate-mode' || arg.startsWith('--teammate-mode='))
+  ) {
     return command
   }
-  return command.replace(/^(\S+)/, '$1 --teammate-mode in-process')
+  const { end } = parsed.launch
+  return `${command.slice(0, end)} --teammate-mode ${mode}${command.slice(end)}`
 }

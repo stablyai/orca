@@ -1,4 +1,6 @@
 import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
+import { getPowerShellEscapeNativeArgsFunction } from '../../shell/launch/powershell-native-argument'
+import type { ReceivingShell } from './receiving-shell-agent-launch'
 import {
   buildShellCommandFromArgv,
   isPosixStartupShell,
@@ -15,6 +17,7 @@ const POWERSHELL_QUERY_VARIABLE = 'orcaHermesStartupQuery'
 const POWERSHELL_NATIVE_QUERY_VARIABLE = 'orcaHermesNativeQuery'
 
 export const ORCA_HERMES_STARTUP_QUERY_ENV = 'ORCA_HERMES_STARTUP_QUERY'
+export const ORCA_HERMES_STARTUP_QUERY_ARGV_ENV = 'ORCA_HERMES_STARTUP_QUERY_ARGV'
 
 function encodePosixEvalScript(command: string): string {
   return Array.from(
@@ -33,7 +36,7 @@ function isHermesExecutableToken(value: string): boolean {
   return basename === 'hermes' || basename === 'hermes.exe' || basename === 'hermes.cmd'
 }
 
-const HERMES_VALUELESS_FLAGS = new Set([
+const HERMES_VALUELESS_FLAGS = /* @__PURE__ */ new Set([
   '--tui',
   '--cli',
   '--verbose',
@@ -139,9 +142,22 @@ function normalizeHermesArgv(
   ]
 }
 
-function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
+export function buildHermesQueryCommand(
+  argv: readonly string[],
+  shell: AgentStartupShell,
+  programExpression?: string
+): string {
+  const render = (syntax: 'powershell' | 'posix'): string => {
+    if (!programExpression) {
+      return buildShellCommandFromArgv(argv, syntax)
+    }
+    const args = argv.slice(1).map((arg) => quoteStartupArg(arg, syntax))
+    return [syntax === 'powershell' ? `& ${programExpression}` : programExpression, ...args].join(
+      ' '
+    )
+  }
   if (!isPosixStartupShell(shell)) {
-    const invocation = buildShellCommandFromArgv(argv, 'powershell').replace(
+    const invocation = render('powershell').replace(
       quoteStartupArg(QUERY_ARG_PLACEHOLDER, 'powershell'),
       `"--query=$${POWERSHELL_NATIVE_QUERY_VARIABLE}"`
     )
@@ -150,7 +166,7 @@ function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
     const script = `$${POWERSHELL_QUERY_VARIABLE} = $env:${ORCA_HERMES_STARTUP_QUERY_ENV}; $${POWERSHELL_NATIVE_QUERY_VARIABLE} = $${POWERSHELL_QUERY_VARIABLE} -replace '(\\\\*)"', '$1$1\\"'; Remove-Item Env:${ORCA_HERMES_STARTUP_QUERY_ENV} -ErrorAction SilentlyContinue; ${invocation}`
     return `powershell.exe -NoProfile -EncodedCommand ${encodePowerShellCommand(script)}`
   }
-  const invocation = buildShellCommandFromArgv(argv, 'posix').replace(
+  const invocation = render('posix').replace(
     quoteStartupArg(QUERY_ARG_PLACEHOLDER, 'posix'),
     `"--query=\${${POSIX_QUERY_VARIABLE}}"`
   )
@@ -161,6 +177,83 @@ function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
   return `sh -c ${quoteStartupArg(script, shell)}`
 }
 
+export function buildReceivingHermesQueryCommand(
+  argv: readonly [string, ...string[]],
+  shell: ReceivingShell
+): string {
+  const [name, ...args] = argv
+  const query = POSIX_QUERY_VARIABLE
+  const queryArg = shell === 'powershell' ? '$orcaHermesQueryArg' : `"--query=$${query}"`
+  const invocation = [
+    name,
+    ...args.map((arg) =>
+      arg === QUERY_ARG_PLACEHOLDER
+        ? queryArg
+        : quoteStartupArg(arg, shell === 'powershell' ? shell : 'posix')
+    )
+  ].join(' ')
+  if (shell === 'powershell') {
+    const escape = getPowerShellEscapeNativeArgsFunction({ inline: true })
+    const readTarget = `$orcaHermesTarget = Get-Command ${name} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($orcaHermesTarget -is [System.Management.Automation.AliasInfo]) { $orcaHermesTarget = $orcaHermesTarget.ResolvedCommand }`
+    const escapeQuery = `if ($orcaHermesTarget -is [System.Management.Automation.ApplicationInfo]) { ${escape}; $orcaHermesQueryArg = @(__OrcaEscapeNativeArgs $orcaHermesTarget.Source @($orcaHermesQueryArg))[0] }`
+    return `& { $orcaHermesQueryArg = "--query=$env:${ORCA_HERMES_STARTUP_QUERY_ENV}"; Remove-Item Env:${ORCA_HERMES_STARTUP_QUERY_ENV} -ErrorAction SilentlyContinue; ${readTarget}; ${escapeQuery}; ${invocation} }`
+  }
+  if (shell === 'fish') {
+    return `begin; set -l ${query} "$${ORCA_HERMES_STARTUP_QUERY_ENV}"; set -eg ${ORCA_HERMES_STARTUP_QUERY_ENV}; ${invocation}; end`
+  }
+  return `(${query}="\${${ORCA_HERMES_STARTUP_QUERY_ENV}-}"; unset ${ORCA_HERMES_STARTUP_QUERY_ENV}; ${invocation})`
+}
+
+export function readGeneratedHermesQueryArgv(
+  value: string | undefined,
+  command: string,
+  shell: AgentStartupShell
+): string[] | undefined {
+  if (!value) {
+    return undefined
+  }
+  try {
+    const argv: unknown = JSON.parse(value)
+    return Array.isArray(argv) &&
+      argv.every((arg): arg is string => typeof arg === 'string') &&
+      matchesGeneratedHermesQuery(argv, command, shell)
+      ? argv
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function matchesGeneratedHermesQuery(
+  argv: readonly string[],
+  command: string,
+  shell: AgentStartupShell
+): boolean {
+  return (
+    isHermesExecutableToken(argv[0] ?? '') &&
+    argv[1] === 'chat' &&
+    argv[2] === QUERY_ARG_PLACEHOLDER &&
+    buildHermesQueryCommand(argv, shell) === command
+  )
+}
+
+export function hermesStartupQueryFits(
+  command: string,
+  env: Readonly<Record<string, string>>,
+  platform: NodeJS.Platform
+): boolean {
+  const envSize = Object.entries(env).reduce((total, [key, value]) => {
+    if (platform === 'win32') {
+      return total + key.length + value.length + 2
+    }
+    return total + new TextEncoder().encode(`${key}=${value}`).byteLength + 1
+  }, 0)
+  const commandSize =
+    platform === 'win32' ? command.length : new TextEncoder().encode(command).byteLength
+  // WSL executes Linux plans through the Windows environment block; use a conservative bound safe across transports.
+  return commandSize + envSize <= QUERY_ENV_LIMIT
+}
+
 export function planHermesStartupQuery(args: {
   baseCommand: string
   agentArgs?: string | null
@@ -169,6 +262,7 @@ export function planHermesStartupQuery(args: {
   platform: NodeJS.Platform
   shell: AgentStartupShell
   isRemote?: boolean
+  generated?: boolean
 }): { command: string; env: Record<string, string> } | null {
   const baseArgv = tokenizeCommand(args.baseCommand, args.shell)
   const configuredArgv = args.agentArgs?.trim() ? tokenizeCommand(args.agentArgs, args.shell) : []
@@ -179,19 +273,17 @@ export function planHermesStartupQuery(args: {
   if (!argv) {
     return null
   }
-  const command = buildQueryCommand(argv, args.shell)
-  const env = {
+  const command = buildHermesQueryCommand(argv, args.shell)
+  const env: Record<string, string> = {
     ...args.agentEnv,
     [ORCA_HERMES_STARTUP_QUERY_ENV]: args.prompt
   }
-  const envSize = Object.entries(env).reduce((total, [key, value]) => {
-    if (args.platform === 'win32') {
-      return total + key.length + value.length + 2
-    }
-    return total + new TextEncoder().encode(`${key}=${value}`).byteLength + 1
-  }, 0)
-  const commandSize =
-    args.platform === 'win32' ? command.length : new TextEncoder().encode(command).byteLength
-  // WSL executes Linux plans through the Windows environment block; use a conservative bound safe across transports.
-  return commandSize + envSize <= QUERY_ENV_LIMIT ? { command, env } : null
+  if (!hermesStartupQueryFits(command, env, args.platform)) {
+    return null
+  }
+  // Rebuild metadata is stripped before pane spawn.
+  if (args.generated) {
+    env[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV] = JSON.stringify(argv)
+  }
+  return { command, env }
 }

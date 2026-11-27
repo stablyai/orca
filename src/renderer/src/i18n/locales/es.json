@@ -25226,6 +25226,10 @@
     "delete": "Borrar"
   },
   "terminal": {
+    "startupPromptNotDelivered": "El mensaje de inicio no se entregó.",
+    "startupPromptMore_one": "({{count}} más)",
+    "startupPromptMore_other": "({{count}} más)",
+    "startupPromptMore_many": "({{count}} más)",
     "recentImages": {
       "pasted": "Imagen pegada",
       "open": "Abrir vista previa",

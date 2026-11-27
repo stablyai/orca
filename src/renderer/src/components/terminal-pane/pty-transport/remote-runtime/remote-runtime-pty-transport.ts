@@ -1,6 +1,7 @@
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
+import { terminalAgentCreateLaunchParams } from '@/runtime/hosted-terminals/creation/terminal-agent-create-launch-params'
 import { pairedAgentLaunchInputs } from '@/lib/agent-session/launch/routing/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
@@ -250,6 +251,7 @@ export function createRemoteRuntimePtyTransport(
   const trustOptions = createAgentSessionTrustWorktreeOptions(opts.trustWorktreeId)
   const {
     command,
+    nativeChatSignIn,
     startupCommandDelivery,
     env,
     envToDelete,
@@ -3678,15 +3680,17 @@ export function createRemoteRuntimePtyTransport(
       const sectionTrustOptions = opts.trustWorktreeId
         ? await trustOptions(createEnvironmentId)
         : {}
+      let legacyLaunchParams = terminalAgentCreateLaunchParams(commandToSend, envToSend)
       const legacyCreateParams = {
         ...sectionTrustOptions,
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
         clientMutationId: terminalCreateMutationId,
-        ...(commandToSend !== undefined ? { command: commandToSend } : {}),
+        ...((options.nativeChatSignIn ?? nativeChatSignIn)
+          ? { nativeChatSignIn: options.nativeChatSignIn ?? nativeChatSignIn }
+          : {}),
         ...(startupCommandDeliveryToSend !== undefined
           ? { startupCommandDelivery: startupCommandDeliveryToSend }
           : {}),
-        ...(envToSend !== undefined ? { env: envToSend } : {}),
         ...(envToDeleteToSend !== undefined ? { envToDelete: envToDeleteToSend } : {}),
         ...(launchConfigToSend !== undefined ? { launchConfig: launchConfigToSend } : {}),
         ...(resumeProviderSessionToSend !== undefined
@@ -3727,15 +3731,13 @@ export function createRemoteRuntimePtyTransport(
           : undefined
       const legacyCreate = async (epoch = connectLifecycleEpoch) => {
         const fallback = freshLaunch?.legacy?.()
-        const plan = fallback?.startupPlan
-        if (plan && freshLaunch?.recovery) {
-          Object.assign(legacyCreateParams, {
-            command: plan.launchCommand,
-            env: plan.env,
-            launchConfig: plan.launchConfig,
-            startupCommandDelivery: plan.startupCommandDelivery
-          })
+        const plan = freshLaunch?.recovery ? fallback?.startupPlan : undefined
+        if (plan) {
+          legacyLaunchParams = terminalAgentCreateLaunchParams(plan.launchCommand, plan.env)
+          legacyCreateParams.launchConfig = plan.launchConfig
+          legacyCreateParams.startupCommandDelivery = plan.startupCommandDelivery
         }
+        const params = { ...legacyCreateParams, ...legacyLaunchParams }
         const result = await createWithUnknownOutcomeRecovery(
           'terminal',
           (timeoutMs, reconcileExisting) =>
@@ -3743,7 +3745,7 @@ export function createRemoteRuntimePtyTransport(
               createEnvironmentId,
               'terminal.create',
               {
-                ...legacyCreateParams,
+                ...params,
                 ...(reconcileExisting ? { reconcileExisting: true } : {})
               },
               timeoutMs
@@ -3991,7 +3993,11 @@ export function createRemoteRuntimePtyTransport(
       }
       if (createdTerminal.isReattach !== true) {
         spawnedHandle = handle
-        onPtySpawn?.(remotePtyId)
+        if (createdTerminal.agentProgramBlocked) {
+          onPtySpawn?.(remotePtyId, createdTerminal.agentProgramBlocked)
+        } else {
+          onPtySpawn?.(remotePtyId)
+        }
       }
       emitRecoveryState()
 

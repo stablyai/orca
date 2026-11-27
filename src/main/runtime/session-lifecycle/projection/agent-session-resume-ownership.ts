@@ -130,7 +130,7 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
       return null
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-    const resume = this.resolveMobileSessionResumeCommand(workspace, record)
+    const resume = await this.resolveMobileSessionResumeCommand(workspace, record)
     if (!resume) {
       return null
     }

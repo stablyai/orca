@@ -4,7 +4,6 @@ import { isAntigravityReferenceSession } from '../../agent-session/lifecycle/pro
 import type { AiVaultSession } from '../contracts/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
-  buildAiVaultResumeShellCommand,
   realHomeCodexResumeEnvDeletion
 } from './ai-vault-resume-command'
 import {
@@ -18,7 +17,14 @@ import {
   resolveTuiAgentLaunchEnv,
   type AgentLaunchProfileSettings
 } from '../../agent-launch/choices/tui-agent-launch-defaults'
-import { buildAgentResumeStartupPlan } from '../../agent-launch/startup/tui-agent-resume-startup'
+import {
+  buildAgentResumeStartupPlan,
+  buildAgentTypedResumeStartupPlan
+} from '../../agent-launch/startup/tui-agent-resume-startup'
+import {
+  withManagedAgentProgram,
+  type ManagedAgentCommands
+} from '../../agent-launch/startup/managed-agent-launch-program'
 import {
   resolveStartupShell,
   tokenizeStartupCommand,
@@ -69,6 +75,8 @@ type AiVaultResumeStartupArgs = {
   host: AiVaultResumeHostShell
   settings: AiVaultResumeLaunchSettings | null | undefined
   commandOverride?: string | null
+  /** User executables found outside PATH on the resume's host. */
+  managedAgentCommands?: ManagedAgentCommands
 }
 
 export function getAiVaultAgentProviderSession(
@@ -104,15 +112,52 @@ function resumeCommandOverrides(
   }
 }
 
+/** OMP rebuilds its resume line from the recorded command, including a user CLI found outside PATH. */
+function ompResumeProgram(
+  recorded: string | undefined,
+  args: AiVaultResumeStartupArgs,
+  platform: NodeJS.Platform,
+  shell: AgentStartupShell | undefined
+): string | undefined {
+  if (!args.managedAgentCommands?.omp) {
+    return recorded
+  }
+  return withManagedAgentProgram(
+    recorded ?? getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.omp, platform),
+    {
+      agent: 'omp',
+      cmdOverrides: resumeCommandOverrides(args),
+      managedAgentCommands: args.managedAgentCommands,
+      platform,
+      shell: resolveStartupShell(platform, shell)
+    }
+  )
+}
+
 /** A resume run on the host itself: no prebuilt remote command. */
 export function buildAiVaultLocalResumeStartup(
-  args: AiVaultResumeStartupArgs & {
-    agentArgs?: string
-    embedCwd: boolean
-    /** Copy-path only: names the pasted line must strip off the agent itself.
-     *  Spawned startups drop them through `envToDelete` instead. */
-    clearEnvNames?: readonly string[]
-  }
+  args: AiVaultLocalResumeStartupArgs
+): AiVaultResumeStartup {
+  return buildAiVaultResumeStartup(args, buildAgentResumeStartupPlan)
+}
+
+export function buildAiVaultTypedResumeStartup(
+  args: AiVaultLocalResumeStartupArgs
+): AiVaultResumeStartup {
+  return buildAiVaultResumeStartup(args, buildAgentTypedResumeStartupPlan)
+}
+
+type AiVaultLocalResumeStartupArgs = AiVaultResumeStartupArgs & {
+  agentArgs?: string
+  embedCwd: boolean
+  /** Copy-path only: names the pasted line must strip off the agent itself.
+   *  Spawned startups drop them through `envToDelete` instead. */
+  clearEnvNames?: readonly string[]
+}
+
+function buildAiVaultResumeStartup(
+  args: AiVaultLocalResumeStartupArgs,
+  buildResumePlan: typeof buildAgentResumeStartupPlan
 ): AiVaultResumeStartup {
   const { session, settings, embedCwd, clearEnvNames } = args
   const { platform, codexHome, liveShell } = args.host
@@ -123,6 +168,13 @@ export function buildAiVaultLocalResumeStartup(
     filePath: resumeFilePath
   })
   const cwd = embedCwd ? session.cwd : null
+  const shellOptions = {
+    cwd,
+    platform,
+    codexHome,
+    shell: liveShell,
+    clearEnvNames
+  }
   const startupCwd = !embedCwd && session.cwd ? { cwd: session.cwd } : {}
   if (isAntigravityReferenceSession(session)) {
     const reference = buildAntigravityReferenceStartup({
@@ -131,14 +183,15 @@ export function buildAiVaultLocalResumeStartup(
       platform,
       shell: liveShell,
       commandOverride: args.commandOverride,
-      settings
+      settings,
+      managedAgentCommands: args.managedAgentCommands
     })
     if (reference) {
       return { ...reference, ...startupCwd }
     }
   }
   if (localProviderSession && isResumableTuiAgent(session.agent)) {
-    const startupPlan = buildAgentResumeStartupPlan({
+    const startupPlan = buildResumePlan({
       agent: session.agent,
       providerSession: localProviderSession,
       cmdOverrides: resumeCommandOverrides(args),
@@ -158,6 +211,7 @@ export function buildAiVaultLocalResumeStartup(
         ...managedDataAccountResumeEnv(session)
       },
       resumeInLaunchCwd: true,
+      ...(session.agent !== 'omp' ? { resumeShell: shellOptions } : {}),
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
     if (startupPlan) {
@@ -168,21 +222,15 @@ export function buildAiVaultLocalResumeStartup(
                 agent: session.agent,
                 sessionId: session.sessionId,
                 resumeFilePath,
-                cwd,
-                platform,
-                commandOverride: startupPlan.launchConfig.agentCommand,
-                codexHome,
-                shell: liveShell,
-                clearEnvNames
+                commandOverride: ompResumeProgram(
+                  startupPlan.launchConfig.agentCommand,
+                  args,
+                  platform,
+                  liveShell
+                ),
+                ...shellOptions
               })
-            : buildAiVaultResumeShellCommand({
-                resumeCommand: startupPlan.launchCommand,
-                cwd,
-                platform,
-                codexHome,
-                shell: liveShell,
-                clearEnvNames
-              }),
+            : startupPlan.launchCommand,
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         ...realHomeCodexResumeEnvDeletion(session),
         ...startupCwd,
@@ -198,13 +246,9 @@ export function buildAiVaultLocalResumeStartup(
       sessionId: session.sessionId,
       // Forward OMP transcript paths during local rebuilds so custom/WSL stores cannot fall back to default-store ID lookup.
       resumeFilePath,
-      cwd,
-      platform,
       commandOverride: args.commandOverride,
-      codexHome,
       // Fallbacks also handle non-resumable agents; quote for the live Windows shell like startup plans.
-      shell: liveShell,
-      clearEnvNames
+      ...shellOptions
     }),
     ...startupCwd,
     ...realHomeCodexResumeEnvDeletion(session)
@@ -213,7 +257,7 @@ export function buildAiVaultLocalResumeStartup(
 
 /** Return null without fork support: plain resume would create a second writer on the chat's conversation. Omit providerSession because the copy owns a new ID and cold restore must not resume the source. */
 export function buildAiVaultForkStartup(
-  args: AiVaultResumeStartupArgs
+  args: Omit<AiVaultResumeStartupArgs, 'managedAgentCommands'>
 ): AiVaultResumeStartup | null {
   const { session, settings } = args
   const { platform, codexHome, liveShell } = args.host
@@ -239,19 +283,14 @@ export function buildAiVaultForkStartup(
     ),
     agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
     resumeInLaunchCwd: true,
+    resumeShell: { cwd: null, codexHome, shell: liveShell },
     fork: true
   })
   if (!plan) {
     return null
   }
   return {
-    command: buildAiVaultResumeShellCommand({
-      resumeCommand: plan.launchCommand,
-      cwd: null,
-      platform,
-      codexHome,
-      shell: liveShell
-    }),
+    command: plan.launchCommand,
     ...(plan.env ? { env: plan.env } : {}),
     ...realHomeCodexResumeEnvDeletion(session),
     ...(session.cwd ? { cwd: session.cwd } : {}),

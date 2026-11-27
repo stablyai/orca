@@ -124,6 +124,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     command: session.shouldDeliverStartupViaTerminalPaste
       ? undefined
       : session.paneStartup?.command,
+    nativeChatSignIn: session.shouldDeliverStartupViaTerminalPaste
+      ? undefined
+      : session.paneStartup?.nativeChatSignIn,
     startupCommandDelivery: session.shouldDeliverStartupViaTerminalPaste
       ? undefined
       : session.paneStartup?.startupCommandDelivery,

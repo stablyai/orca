@@ -19,7 +19,7 @@ import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import * as ExecutionHost from '../../../../../shared/execution-host/execution-host'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
+import { useAgentPickerInventoryRetry } from './use-agent-picker-inventory-retry'
 import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -81,7 +81,7 @@ export function useAgentMenuObservation(
   // Why: acquiring while the workspace is shown means the first open already knows its agents.
   const acquireTarget = viewActive && (open || shown) ? detectionTarget : undefined
   const acquired = useDetectedAgents(acquireTarget, 'enabled', options?.observationGroup)
-  useAgentPickerRefusedWake(viewActive && options?.wakeOnOpen === true && open, detectionTarget)
+  useAgentPickerInventoryRetry(viewActive && open, detectionTarget, options?.wakeOnOpen === true)
   // Closing the menu or leaving the workspace must not erase the known inventory.
   const storedIds = useAppStateValue((state) =>
     detectionTarget ? readDetectedAgentsForTarget(state, detectionTarget) : null

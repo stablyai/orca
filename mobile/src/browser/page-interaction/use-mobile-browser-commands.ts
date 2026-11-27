@@ -31,7 +31,7 @@ const TOUCH_CLICK_RADIUS_DIP = 14
 type SendBrowserRequest = (
   send: BrowserPageCommandSend,
   options?: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number }
-) => Promise<unknown | null>
+) => Promise<unknown>
 
 type MobileBrowserCommandArgs = {
   client: RpcClient | null

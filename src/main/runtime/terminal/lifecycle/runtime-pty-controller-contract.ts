@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type {
   TerminalLimitStatus,
@@ -9,6 +10,7 @@ import type { RuntimePaneCreateClaim } from '../../../ipc/pty/pane/spawn-reserva
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { PreselectedAgentProgram } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus,
@@ -85,6 +87,7 @@ export type RuntimePtyController = {
     launchConfig?: WorktreeStartupLaunch['launchConfig']
     launchToken?: string
     commandDelivery?: 'renderer' | 'provider'
+    nativeChatSignIn?: NativeChatSignInRequest
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
     envToDelete?: string[]
@@ -103,6 +106,7 @@ export type RuntimePtyController = {
     wslUserAct?: true
     /** The agent launch's runtime fact; when present the PTY shell comes only from it. */
     launchRuntime?: AgentLaunchRuntime
+    preselectedAgentProgram?: PreselectedAgentProgram
     isNewSession?: boolean
     /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
     initiallyHidden?: boolean

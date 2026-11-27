@@ -126,10 +126,11 @@ export function MobileNativeChatNoticeRow({
     cardId !== undefined &&
     names.unresolvedFailureRows !== undefined &&
     !names.unresolvedFailureRows.has(cardId)
-  const signInCommand =
-    failure?.kind === 'notSignedIn' && !resolved
-      ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
+  const signIn =
+    failure?.kind === 'notSignedIn' && !resolved && names.agentName
+      ? { agent: names.agentName, account: failure.account, remote: true }
       : null
+  const signInCommand = signIn && agentSessionSignInCommand(signIn.agent, signIn)
   const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
   const reviewed = look.kind === 'settled-permission' || look.kind === 'auto-review-denied'
@@ -284,14 +285,14 @@ export function MobileNativeChatNoticeRow({
           </Text>
           {continueOffered ? (
             <MobileNativeChatInterruptedContinueButton onPress={continuation.continueNow} />
-          ) : signInCommand && runInTerminal ? (
+          ) : signIn && signInCommand && runInTerminal ? (
             <Pressable
               accessibilityRole="button"
               accessibilityHint={t(
                 'chat.notice.signInHint',
                 'Opens a terminal on the computer running this chat'
               )}
-              onPress={() => runInTerminal(signInCommand)}
+              onPress={() => runInTerminal(signInCommand, signIn)}
               style={({ pressed }) => [
                 sheetPrimaryButtonStyles.button,
                 styles.action,

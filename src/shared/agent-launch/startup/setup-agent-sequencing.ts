@@ -12,15 +12,33 @@ import {
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 import { setupCompletionMarkerPrefix } from './setup-completion-marker'
+import { AGENT_STARTUP_PROMPT_ENV } from './agent-startup-prompt-env'
+import { clearEnvCommand } from './tui-agent-startup-shell'
+import {
+  SETUP_AGENT_ARGV0_ENV,
+  SETUP_AGENT_BLOCKED_MESSAGE,
+  SETUP_AGENT_EXECUTABLE_ENV,
+  SETUP_AGENT_NOTICE_ENV,
+  SETUP_AGENT_RECHECK_ENV,
+  buildPosixSetupAgentRecheck
+} from './setup-agent-program'
+
+const SETUP_AGENT_RECHECK_TIMEOUT_SECONDS = 10
 
 export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
 export const SETUP_FAILED_MESSAGE_PREFIX = 'Setup failed (exit '
 export const SETUP_WAIT_TIMEOUT_MESSAGE = 'Timed out waiting for setup before starting agent.'
+export { SETUP_AGENT_BLOCKED_MESSAGE }
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
+export const SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV = 'ORCA_SEQUENCED_POWERSHELL_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
+export const SETUP_AGENT_PROMPT_ENV = [
+  ...AGENT_STARTUP_PROMPT_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+]
 
 export type SequencedSetupAgentCommands = {
   setupCommand: string
@@ -65,27 +83,29 @@ export function createSequencedSetupAgentCommands(args: {
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
     return {
-      setupCommand: buildWindowsSetupCommand(
-        resolution.runnerScriptPathForShell,
-        markerPath,
-        nonce,
-        args.completionToken
-      ),
-      startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
+      setupCommand: powerShellScriptInvocation(SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV),
+      setupEnv: {
+        [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: buildWindowsSetupScript(
+          resolution.runnerScriptPathForShell,
+          markerPath,
+          nonce,
+          args.completionToken
+        )
+      },
+      startupCommand: powerShellScriptInvocation(SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV),
       startupEnv: {
         [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
-        // Why env: inlined, the wrappers push the encoded gate past the pane's command-line budget.
+        [SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV]: buildWindowsStartupScript(
+          markerPath,
+          nonce,
+          waitTimeoutSeconds
+        ),
         [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: getPowerShellAgentWrappers()
       }
     }
   }
 
-  const startupScript = buildPosixStartupScript(
-    args.startupCommand,
-    markerPath,
-    nonce,
-    waitTimeoutSeconds
-  )
+  const startupScript = buildPosixStartupScript(markerPath, nonce, waitTimeoutSeconds)
   return {
     // Why: long worktree paths can push typed wrappers past a PTY's canonical input cap and drop their submit byte.
     setupCommand: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
@@ -131,7 +151,6 @@ function buildPosixSetupScript(
 }
 
 function buildPosixStartupScript(
-  startupCommand: string,
   markerPath: string,
   nonce: string,
   waitTimeoutSeconds: number
@@ -140,19 +159,30 @@ function buildPosixStartupScript(
   const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
-  const startupSuccessCommand = buildPosixStartupSuccessCommand(startupCommand)
-  // Keep the interactive wrapper one line to avoid visible quote-continuation prompts.
+  const shellFunctions = getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()
   const script = [
+    `trap 'unset ${SETUP_AGENT_PROMPT_ENV.join(' ')}' EXIT;`,
     `deadline=$((SECONDS + ${timeout}));`,
     `echo ${quotePosixShellUnlessPlainNoAt(SETUP_WAIT_MESSAGE)} >&2;`,
     'while :; do',
     `if [ -f ${marker} ]; then`,
     `IFS=: read -r seen status < ${marker} || true;`,
     `if [ "$seen" = ${nonceValue} ]; then`,
+    'if [ "$status" = "0" ]; then',
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
-    // Announce success so “Waiting for setup...” does not linger. Install launch functions only after setup
-    // may have supplied codex; fresh bash -lc does not read Orca’s wrapper.
-    `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
+    `if [ -n "$${SETUP_AGENT_RECHECK_ENV}" ]; then`,
+    `  unset ${SETUP_AGENT_EXECUTABLE_ENV};`,
+    `  if [ -n "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then`,
+    ...buildPosixSetupAgentRecheck(SETUP_AGENT_RECHECK_TIMEOUT_SECONDS),
+    '  fi;',
+    `  if [ -z "$${SETUP_AGENT_EXECUTABLE_ENV}" ] || [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then`,
+    `    printf '%s\\n' '${SETUP_AGENT_BLOCKED_MESSAGE}' "$${SETUP_AGENT_NOTICE_ENV}" >&2; exit 1; fi;`,
+    `  export ${SETUP_AGENT_EXECUTABLE_ENV} ${SETUP_AGENT_ARGV0_ENV};`,
+    `else\n${shellFunctions}fi;`,
+    `if [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then echo '${SETUP_AGENT_BLOCKED_MESSAGE}' >&2; exit 1; fi;`,
+    `echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;`,
+    `eval "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; fi;`,
+    `rm -f ${marker} ${tmp} 2>/dev/null;`,
     `echo "${SETUP_FAILED_MESSAGE_PREFIX}\${status:-1}); skipping agent startup. See the Setup terminal for details." >&2;`,
     'exit "${status:-1}";',
     'fi;',
@@ -168,57 +198,14 @@ function buildPosixStartupScript(
   return script
 }
 
-function buildPosixStartupSuccessCommand(startupCommand: string): string {
-  if (
-    hasUnquotedPosixCommandSeparator(startupCommand) ||
-    hasLeadingPosixEnvAssignment(startupCommand)
-  ) {
-    return `eval ${quotePosixShellUnlessPlainNoAt(startupCommand)}; exit "$?"`
-  }
-  return `exec ${startupCommand}`
-}
-
-function hasLeadingPosixEnvAssignment(command: string): boolean {
-  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(command.trimStart())
-}
-
-function hasUnquotedPosixCommandSeparator(command: string): boolean {
-  let quote: "'" | '"' | null = null
-  let escaped = false
-  for (const char of command) {
-    if (escaped) {
-      escaped = false
-      continue
-    }
-    if (char === '\\') {
-      escaped = true
-      continue
-    }
-    if (quote) {
-      if (char === quote) {
-        quote = null
-      }
-      continue
-    }
-    if (char === "'" || char === '"') {
-      quote = char
-      continue
-    }
-    if (char === ';' || char === '&' || char === '|' || char === '\n' || char === '\r') {
-      return true
-    }
-  }
-  return false
-}
-
-function buildWindowsSetupCommand(
+function buildWindowsSetupScript(
   runnerScriptPath: string,
   markerPath: string,
   nonce: string,
   completionToken?: string
 ): string {
   // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
-  const script = [
+  return [
     `$runner = ${quotePowerShellLiteral(runnerScriptPath)}`,
     `$marker = ${quotePowerShellLiteral(markerPath)}`,
     '$tmp = $marker + ".tmp"',
@@ -242,19 +229,16 @@ function buildWindowsSetupCommand(
       : []),
     'exit $setupStatus'
   ].join('; ')
-
-  return encodePowerShellInvocation(script)
 }
 
-function buildWindowsStartupCommand(
+function buildWindowsStartupScript(
   markerPath: string,
   nonce: string,
   waitTimeoutSeconds: number
 ): string {
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   // Use PowerShell for safe bounded marker polling; native Windows runners still launch through cmd.
-  // Indentation is trimmed below: the encoded gate must fit the pane's 6000-char startup command budget.
-  const script = [
+  return [
     // User startup may invoke policy-gated .ps1; apply relief in-payload to avoid the flagged command-line switch.
     // Silence/restore module-autoload progress so stderr stays clean. Stop routes nonterminating autoload errors
     // to a reporting catch; never rethrow and abort startup over a broken security module.
@@ -273,6 +257,7 @@ function buildWindowsStartupCommand(
     `$nonce = ${quotePowerShellLiteral(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
     `[Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_WAIT_MESSAGE)})`,
+    'try {',
     'while ($true) {',
     '  if (Test-Path -LiteralPath $marker) {',
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
@@ -284,13 +269,33 @@ function buildWindowsStartupCommand(
     '        exit $setupStatus',
     '      }',
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,
+    `      if ($env:${SETUP_AGENT_RECHECK_ENV}) {`,
+    '        $pin = $null',
+    '        if (![string]::IsNullOrWhiteSpace($startup)) {',
+    '          $recheck = [powershell]::Create()',
+    '          try {',
+    `            [void]$recheck.AddScript($env:${SETUP_AGENT_RECHECK_ENV})`,
+    '            $pending = $recheck.BeginInvoke()',
+    `            if ($pending.AsyncWaitHandle.WaitOne(${SETUP_AGENT_RECHECK_TIMEOUT_SECONDS * 1000})) {`,
+    '              try { $pin = $recheck.EndInvoke($pending) } finally { $recheck.Dispose() }',
+    '            } else {',
+    '              [void]$recheck.BeginStop($null, $null)',
+    '            }',
+    '          } catch {}',
+    '        }',
+    '        if (!$pin -or $pin.Count -ne 1) {',
+    `          [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_AGENT_BLOCKED_MESSAGE)})`,
+    `          [Console]::Error.WriteLine($env:${SETUP_AGENT_NOTICE_ENV})`,
+    '          exit 1',
+    '        }',
+    `        $env:${SETUP_AGENT_EXECUTABLE_ENV} = [string]$pin[0]`,
+    '      }',
     '      if ([string]::IsNullOrWhiteSpace($startup)) {',
     '        [Console]::Error.WriteLine("Missing sequenced startup command.")',
     '        exit 1',
     '      }',
     `      [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_COMPLETE_MESSAGE)})`,
-    // This powershell.exe lacks the pane bootstrap's agent wrappers, so 5.1 would split prompts at embedded quotes.
-    // Define them after setup, which may install the agent. No FullLanguage guard: setup already needs it.
+    // Define the quoting wrappers after setup, which may install the agent.
     `      $wrappers = $env:${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}`,
     `      if ($wrappers) { Invoke-Expression $wrappers; Remove-Item Env:${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV} }`,
     '      Invoke-Expression $startup',
@@ -304,16 +309,12 @@ function buildWindowsStartupCommand(
     '    exit 124',
     '  }',
     '  Start-Sleep -Seconds 1',
-    '}'
-  ]
-    .map((line) => line.trimStart())
-    .join('; ')
-
-  return encodePowerShellInvocation(script)
+    `} } finally { ${clearEnvCommand(SETUP_AGENT_PROMPT_ENV, 'powershell')} }`
+  ].join('; ')
 }
 
 // EncodedCommand is not policy-gated; omit the EDR-heavy ExecutionPolicy Bypass switch.
-// Keep base64 because terminal panes reparse the command.
-function encodePowerShellInvocation(script: string): string {
+function powerShellScriptInvocation(name: string): string {
+  const script = `if (!$env:${name}) { exit 1 }; Invoke-Expression $env:${name}`
   return `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(script)}`
 }

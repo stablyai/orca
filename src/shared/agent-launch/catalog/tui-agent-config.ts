@@ -1,8 +1,5 @@
 import type { TuiAgent } from './tui-agent'
-import {
-  getOrcaCliCommandNameForPlatform,
-  skipsLinuxOrcaCliRename
-} from '../../cli/orca-cli-command-name'
+import { skipsLinuxOrcaCliRename } from '../../cli/orca-cli-command-name'
 import type { TuiAgentConfig, TuiAgentConfigSource } from './tui-agent-config-types'
 
 function resolveTuiAgentConfig(source: TuiAgentConfigSource): TuiAgentConfig {
@@ -30,18 +27,14 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     ctrlEnterEncoding: 'csi-u'
   },
   'claude-agent-teams': {
-    // This launch mode uses Orca’s CLI wrapper rather than a separate agent binary.
+    // Native panes still need the Orca command for their tmux shim.
     detectCmd: 'orca',
     detectCmdAliases: ['orca-dev', 'orca-ide'],
     // Orca’s always-present shim alone must not report installed Agent Teams without Claude.
     detectRequiredCommands: ['claude'],
     // Windows/WSL use Claude’s in-process fallback, not this native-pane/tmux wrapper.
     detectUnsupportedRuntimes: ['win32', 'wsl'],
-    launchCmd: 'orca claude-teams',
-    launchCmdByPlatform: {
-      linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,
-      win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
-    },
+    launchCmd: 'claude',
     expectedProcess: 'claude',
     promptInjectionMode: 'stdin-after-start',
     pasteNeedsTypedRequest: true,

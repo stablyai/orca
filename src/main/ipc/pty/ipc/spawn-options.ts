@@ -28,6 +28,7 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
     env: deletions.env,
     envToDelete: ctx.combinedEnvToDelete,
     launchCommand: ctx.launchCommand,
+    launchConfig: ctx.effectiveLaunchConfig,
     cwd: ctx.cwd,
     prevalidatedCwd: ctx.prevalidatedCwd,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
@@ -58,6 +59,8 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
     ctx.deps.runtime?.shareClaudeAgentTeamsLeadMcpEnv(launch.env)
   }
   ctx.launchCommand = launch.launchCommand
+  ctx.effectiveLaunchConfig = launch.launchConfig
+  ctx.agentProgramBlocked = launch.blocked
   ctx.terminalMcp = launch.terminalMcp
   ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.effectiveSessionId,

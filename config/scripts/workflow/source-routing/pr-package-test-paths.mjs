@@ -208,6 +208,8 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/runtime/rpc/server/pairing/network/windows-default-route-interfaces.test.ts',
   'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts',
   'src/main/runtime/files/watch/windows-file-watch.win32.test.ts',
+  'src/main/managed-agent-cli/managed-agent-spawn-program.test.ts',
+  'src/main/runtime/rpc/methods/host-management/managed-copy-detection.test.ts',
   'src/shared/agent-launch/startup/setup-agent-sequencing.windows.test.ts',
   'src/main/external-editors/external-editor-launch.win32.test.ts'
 ]
@@ -243,9 +245,11 @@ const WINDOWS_BOUNDARY_PREFIXES = [
   'src/main/cli/wsl/',
   'src/main/codex/hooks/',
   'src/main/external-editors/external-editor-launch',
+  'src/main/managed-agent-cli/managed-agent-spawn-program',
   'src/main/orca-profiles/',
   'src/main/persistence/profile-state/',
   'src/main/runtime/files/watch/windows-file-watch',
+  'src/main/runtime/rpc/methods/host-management/managed-copy-detection',
   'src/main/runtime/rpc/server/pairing/',
   'src/main/windows/',
   'src/shared/agent-launch/startup/setup-agent-sequencing',

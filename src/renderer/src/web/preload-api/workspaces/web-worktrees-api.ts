@@ -16,6 +16,7 @@ import type {
 import { readRetiredNameRegistryForRepo } from '../../../../../shared/worktree/naming/retired-name-cache'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../../shared/worktree/naming/retired-name-registry'
 import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
+import { worktreeAgentStartupParams } from '../../../runtime/hosted-terminals/creation/terminal-agent-create-launch-params'
 import {
   getRemoteRuntimeStatus,
   callRuntimeResult,
@@ -88,8 +89,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         ...(args.startup
           ? {
-              startupCommand: args.startup.command,
-              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+              ...worktreeAgentStartupParams(args.startup),
               ...(args.startup.launchConfig
                 ? { startupLaunchConfig: args.startup.launchConfig }
                 : {}),
@@ -200,7 +200,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       ),
     // A web client runs no VM, so a reopen during a sleep changes nothing.
     sleepReopened: async () => {},
-    resumeSleptPane: async () => false,
+    resumeSleptPane: async () => null,
     retireStrandedSleepRecord: async () => {},
     ...createWebWorktreeRemovalCalls(),
     // Why: forget-locally clears a desktop workspace pinned to a dead SSH host; a paired web client has no such ghost state.

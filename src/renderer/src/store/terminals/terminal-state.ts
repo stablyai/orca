@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type {
@@ -67,6 +68,7 @@ export type TerminalState = {
       /** Absent when the startup carries only spawn env, e.g. a paired viewer's plain terminal (#39852). */
       command?: string
       delivery?: 'terminal-paste'
+      nativeChatSignIn?: NativeChatSignInRequest
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       envToDelete?: string[]

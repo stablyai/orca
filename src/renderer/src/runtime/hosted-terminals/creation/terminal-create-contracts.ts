@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -29,6 +30,7 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   trustWorktreeId?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: StartupCommandDelivery
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string

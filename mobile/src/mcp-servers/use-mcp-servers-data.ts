@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { BotToolProblem } from '../../../src/shared/bot-tools'
 import {
   getRepoExecutionHostId,
@@ -62,19 +63,35 @@ const discoveredQuery = defineHostQuery({
   signal: { events: ['mcpServersChanged'] }
 })
 
-// Installs rarely change; the new-tab picker reads them as rarely. Servers apply to the agents in
-// the configured Windows Agent runtime, as on desktop; older hosts ignore the flag (native).
-const agentsQuery = defineHostQuery({
+type McpAgentInventory = { agents: TuiAgent[]; incomplete?: boolean; afterPublication?: number }
+
+// Servers apply to agents in the configured Windows runtime. Older hosts use the native runtime.
+const agentsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, McpAgentInventory>({
   family: 'mcpServers.agents',
-  fetch: async (client) => {
-    const detected = new Set(
-      preflightDetectAgentsRead.interpret(
-        await preflightDetectAgentsRead.request(client, { configuredWindowsRuntime: true })
-      )
+  fetch: async (client, _target, _input, previous) => {
+    const retryAfter = previous?.incomplete ? previous.afterPublication : undefined
+    const { agents, incomplete, afterPublication } = preflightDetectAgentsRead.interpret(
+      await preflightDetectAgentsRead.request(client, {
+        configuredWindowsRuntime: true,
+        withManagedAgentCommands: true,
+        ...(retryAfter === undefined ? {} : { afterPublication: retryAfter })
+      })
     )
-    return MOBILE_AGENT_CATALOG.filter((agent) => detected.has(agent.id)).map((agent) => agent.id)
+    const detected = new Set(agents)
+    if (incomplete) {
+      for (const agent of previous?.agents ?? []) {
+        detected.add(agent)
+      }
+    }
+    return {
+      agents: MOBILE_AGENT_CATALOG.filter((agent) => detected.has(agent.id)).map(
+        (agent) => agent.id
+      ),
+      incomplete,
+      afterPublication
+    }
   },
-  staleTime: 10 * 60_000,
+  staleTime: ({ state: { data } }) => (data?.incomplete ? 0 : 10 * 60_000),
   gcTime: 30 * 60_000
 })
 
@@ -117,26 +134,34 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
   const { refetch: refetchList } = list
   const { refetch: refetchDiscovered } = discovered
   const { refetch: refetchAgents } = agents
+  const canReadAgents = enabled && client !== null
+  const retryAgents = useCallback(
+    (onFocus: boolean) => {
+      const key = hostQueryKey(hostId, agentsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+      // Check inside the callback so an error cannot retrigger the focus read.
+      const state = queryClient.getQueryState<McpAgentInventory>(key)
+      if (canReadAgents && (state?.data?.incomplete || (onFocus && state?.status === 'error'))) {
+        void refetchAgents({ cancelRefetch: false })
+      }
+    },
+    [canReadAgents, hostId, queryClient, refetchAgents]
+  )
+  const retryIncompleteAgents = useCallback(() => retryAgents(false), [retryAgents])
+
   // A host without the capability is never asked, even on focus.
   const reread = useCallback(() => {
     if (enabled) {
       // Joins a read already out (the mount's, or the host's notice) instead of sending another.
       void refetchList({ cancelRefetch: false })
       void refetchDiscovered({ cancelRefetch: false })
-      // A failed read (a stopped WSL distro) is retried on focus; a held list keeps its long cache.
-      // Read here, not as a dependency, so the error itself cannot re-run this focus callback.
-      const agentsKey = hostQueryKey(
-        hostId,
-        agentsQuery.family,
-        HOST_LIST_TARGET,
-        NO_HOST_LIST_INPUT
-      )
-      if (queryClient.getQueryState(agentsKey)?.status === 'error') {
-        void refetchAgents({ cancelRefetch: false })
-      }
     }
-  }, [enabled, refetchList, refetchDiscovered, queryClient, hostId, refetchAgents])
-  useFocusEffect(reread)
+  }, [enabled, refetchList, refetchDiscovered])
+  useFocusEffect(
+    useCallback(() => {
+      reread()
+      retryAgents(true)
+    }, [reread, retryAgents])
+  )
 
   /** A change's answer shows at once; the re-read after it catches what else changed. */
   const applyServer = useCallback(
@@ -192,11 +217,12 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
     listError: list.error,
     loading: list.isPending,
     discovered: discovered.data ?? null,
-    agents: agents.data ?? null,
+    agents: agents.data?.agents ?? null,
     agentsFailed: agents.isError,
     workspaces,
     problems,
     reread,
+    retryIncompleteAgents,
     applyServer
   }
 }

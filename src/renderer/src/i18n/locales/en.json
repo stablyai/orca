@@ -25378,6 +25378,14 @@
     "delete": "Delete"
   },
   "terminal": {
+    "startupPromptNotDelivered": "The startup prompt wasn't delivered.",
+    "startupPromptMore_one": "({{count}} more)",
+    "startupPromptMore_other": "({{count}} more)",
+    "agentStartup": {
+      "setupBlocked": "Setup finished. Orca couldn't verify {{agent}} for this launch. Start it from the agent menu.",
+      "unavailable": "The agent could not be found on this host.",
+      "unknown": "The host could not verify the agent installation."
+    },
     "recentImages": {
       "pasted": "Pasted image",
       "open": "Open preview",
@@ -25872,6 +25880,9 @@
       "workspacesToReview": "Workspaces to review",
       "workspaceDetails": "Selected workspace details",
       "workspaceKept": "Will be kept"
+    },
+    "creation": {
+      "startupDraftDeferred": "Your worktree is ready. The agent draft is still available here."
     }
   },
   "projectBoard": {

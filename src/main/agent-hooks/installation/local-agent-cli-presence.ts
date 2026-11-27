@@ -1,3 +1,4 @@
+import { getSystemCliInstallDirectories } from '../../../shared/shell/command-resolution/system-cli-install-dirs'
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -212,10 +213,14 @@ export async function detectLocalManagedAgentCliPresence<K extends string = Agen
   const platform = options.platform ?? process.platform
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
   const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
-  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter, platform).filter(
+  const homeDir = options.homeDir ?? homedir()
+  const pathDirs = pathEntries(await resolveSearchPath(options, platform), delimiter, platform)
+  // Installer folders (e.g. ~/.grok/bin) are lookup-only, not on PATH; search them after PATH, as detection does.
+  const installDirs =
+    options.pathEnv === undefined ? getSystemCliInstallDirectories(platform, homeDir) : []
+  const dirs = [...new Set([...pathDirs, ...installDirs])].filter(
     (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
   )
-  const homeDir = options.homeDir ?? homedir()
   const fileProbe = options.fileProbe ?? {
     isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)
   }

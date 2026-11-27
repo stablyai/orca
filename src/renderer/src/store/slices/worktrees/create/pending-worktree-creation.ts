@@ -119,7 +119,12 @@ export function createRemovePendingWorktreeCreation(
       deleteNativeChatComposerDraft(scope)
       clearNativeChatPendingAttachments(scope)
     }
-    if (!removedEntry || options?.cleanupVm === false || typeof window === 'undefined') {
+    if (
+      !removedEntry ||
+      removedEntry.startupDraftDeferred ||
+      options?.cleanupVm === false ||
+      typeof window === 'undefined'
+    ) {
       return
     }
     if (removedEntry.phase === 'provisioning-vm' && window.api?.ephemeralVm?.cancelProvision) {

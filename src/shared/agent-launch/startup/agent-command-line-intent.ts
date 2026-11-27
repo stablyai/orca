@@ -1,7 +1,9 @@
+import { inferLaunchShell, readLaunchPosition } from './launch-position'
+import { unwrapDirectAgentLaunchCommand } from './direct-agent-launch-recognition'
+import type { AgentStartupShell } from './tui-agent-startup-shell'
 import {
   COMMAND_TOKEN_SCAN_MAX_CHARS,
-  getCommandTokenPathBasename,
-  getFirstCommandToken
+  getCommandTokenPathBasename
 } from '../../shell/command-resolution/command-token-scanner'
 import {
   recognizeAgentProcessFromCommandLine,
@@ -10,6 +12,8 @@ import {
 
 const SLEEP_PREFIX =
   /^[ \t]*(?:sleep|\/bin\/sleep|\/usr\/bin\/sleep)[ \t]+(?:\d+(?:\.\d+)?|\.\d+)[smhd]?[ \t]*&&[ \t]*/
+
+const POWERSHELL_CALL_PREFIX = /^[ \t]*&[ \t]+(?=["'])/
 
 /** Launch preparation hint only; the shell still receives the complete command. */
 export function extractAgentLaunchCommand(command: string): string {
@@ -22,11 +26,23 @@ export function extractAgentLaunchCommand(command: string): string {
     }
     offset += match[0].length
   }
-  return command.slice(offset)
+  // PowerShell runs a quoted program path, such as Orca's own copy, through its call operator.
+  const call = POWERSHELL_CALL_PREFIX.exec(prefix.slice(offset))
+  return command.slice(offset + (call?.[0].length ?? 0))
 }
 
-export function getAgentLaunchCommandToken(command: string | null | undefined): string {
-  return getFirstCommandToken(extractAgentLaunchCommand(command ?? ''))
+export function getAgentLaunchCommandToken(
+  command: string | null | undefined,
+  shell?: AgentStartupShell
+): string {
+  const text = command ?? ''
+  if (shell) {
+    const launch = shell === 'posix' ? extractAgentLaunchCommand(text) : text
+    return readLaunchPosition(launch, shell)?.executable ?? ''
+  }
+  const dialect = inferLaunchShell(text)
+  const launch = dialect === 'posix' ? extractAgentLaunchCommand(text) : text
+  return readLaunchPosition(launch, dialect)?.executable ?? ''
 }
 
 /** Lowercased executable basename without a Windows/shell launcher extension. */
@@ -41,5 +57,18 @@ export function recognizeAgentLaunchCommand(
   commandLine: string | null | undefined,
   options?: Parameters<typeof recognizeAgentProcessFromCommandLine>[1]
 ): RecognizedAgentProcess | null {
-  return recognizeAgentProcessFromCommandLine(extractAgentLaunchCommand(commandLine ?? ''), options)
+  const text = commandLine ?? ''
+  const dialect = inferLaunchShell(text)
+  const command = unwrapDirectAgentLaunchCommand(
+    dialect === 'posix' ? extractAgentLaunchCommand(text) : text
+  )
+  const launch = readLaunchPosition(command, dialect)
+  return recognizeAgentProcessFromCommandLine(
+    launch && /[\\/]/.test(launch.executable)
+      ? getCommandTokenPathBasename(launch.executable) + command.slice(launch.end)
+      : dialect === 'posix'
+        ? command
+        : extractAgentLaunchCommand(command),
+    options
+  )
 }

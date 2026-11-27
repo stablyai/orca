@@ -13,13 +13,23 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
-import { detectAgentCommandsOnHost } from './agent-command-detection'
+import {
+  AgentInventoryDeadlineError,
+  detectAgentCommandInventoryOnHost
+} from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
 import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
-import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { readInstalledManagedAgents } from './managed-agent-detection'
+import {
+  getTuiAgentLaunchCommand,
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../shared/agent-launch/catalog/tui-agent-config'
+import type { ManagedAgentCommands } from '../../shared/agent-launch/startup/managed-agent-launch-program'
+import { configureInventoryOverrideCommands } from './agent-command-inventory-publication'
+
+export type { ManagedAgentCommands }
 
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */
@@ -28,6 +38,11 @@ export type InstalledAgentDetectionOptions = {
   agentCmdOverrides?: Partial<Record<TuiAgent, string>> | null
   /** Probe only this agent, for a caller that checks one agent rather than listing them all. */
   onlyTuiAgent?: TuiAgent
+  reuseSettled?: boolean
+  /** Publication sequence from this caller's incomplete detect reply. */
+  afterPublication?: number
+  /** Wait for the complete publication within the request budget. */
+  waitForCompletion?: boolean
 }
 
 function activeDetectionCommands(
@@ -100,10 +115,35 @@ function overrideProbeCommands(
   return probes
 }
 
-export async function detectInstalledAgents(
+export function configureInstalledAgentInventoryOverrides(
+  readOverrides: () => InstalledAgentDetectionOptions['agentCmdOverrides']
+): void {
+  configureInventoryOverrideCommands((runtime) =>
+    Array.from(
+      overrideProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, readOverrides(), runtime).values(),
+      ({ command }) => command
+    )
+  )
+}
+
+export type InstalledAgentInventory = {
+  agents: string[]
+  incomplete?: boolean
+  afterPublication?: number
+  /** Legacy wire name for the user's CLI paths outside the terminal PATH. */
+  managedAgentCommands?: ManagedAgentCommands
+  outsidePath?: ManagedAgentCommands
+}
+
+export type InstalledAgentListPolicy = 'complete' | 'wsl-fallback'
+
+export async function detectInstalledAgentInventory(
   context?: PreflightRuntimeContext,
-  options?: InstalledAgentDetectionOptions
-): Promise<string[]> {
+  options?: InstalledAgentDetectionOptions,
+  refresh = false,
+  signal?: AbortSignal,
+  prepare?: (signal: AbortSignal) => Promise<void>
+): Promise<InstalledAgentInventory> {
   const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
   // Why: a CLI outside PATH (e.g. agy in a custom install dir) is reachable only through its override.
@@ -114,15 +154,33 @@ export async function detectInstalledAgents(
       ...[...overrides.values()].map((probe) => probe.command)
     ])
   ]
-  const found = await detectAgentCommandsOnHost(probeCommands, { context })
+  const foundOutsidePath = new Map<string, string>()
+  const { found, incomplete, afterPublication } = await detectAgentCommandInventoryOnHost(
+    probeCommands,
+    {
+      context,
+      ...(options?.afterPublication === undefined
+        ? {}
+        : { afterPublication: options.afterPublication }),
+      waitForCompletion: options?.waitForCompletion,
+      reuseSettled: options?.reuseSettled,
+      ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
+      ...(options?.onlyTuiAgent || options?.disabledTuiAgents?.length
+        ? { onlyRequested: true }
+        : {}),
+      ...(refresh ? { refresh: true } : {}),
+      ...(signal ? { signal } : {}),
+      ...(prepare ? { prepare } : {})
+    }
+  )
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
-  // Orca's own copies live on this host, not in a WSL guest; terminals get their folders on PATH.
-  if (runtime !== 'wsl') {
-    const enabled = new Set(commands.map((command) => command.id))
-    for (const id of await readInstalledManagedAgents()) {
-      if (isTuiAgent(id) && enabled.has(id) && !detected.includes(id)) {
-        detected.push(id)
-      }
+  // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.
+  const outsidePath: ManagedAgentCommands = {}
+  for (const id of runtime === 'wsl' ? [] : detected.filter(isTuiAgent)) {
+    const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[id], process.platform).split(' ')
+    const path = foundOutsidePath.get(program)
+    if (path) {
+      outsidePath[id] = path
     }
   }
   for (const [id, probe] of overrides) {
@@ -134,13 +192,71 @@ export async function detectInstalledAgents(
       detected.push(id)
     }
   }
-  return detected
+  return {
+    agents: detected,
+    ...(incomplete ? { incomplete: true } : {}),
+    ...(afterPublication === undefined ? {} : { afterPublication }),
+    ...(runtime === 'wsl' ? {} : { outsidePath, managedAgentCommands: outsidePath })
+  }
+}
+
+export async function detectInstalledAgents(
+  context?: PreflightRuntimeContext,
+  options?: InstalledAgentDetectionOptions,
+  revalidate = false,
+  signal?: AbortSignal
+): Promise<string[]> {
+  return completeAgentList(
+    await detectInstalledAgentInventory(
+      context,
+      { waitForCompletion: true, ...options },
+      revalidate,
+      signal
+    ),
+    options?.waitForCompletion === false ? 'complete' : 'wsl-fallback',
+    context
+  )
+}
+
+function completeAgentList(
+  inventory: InstalledAgentInventory,
+  policy: InstalledAgentListPolicy,
+  context?: PreflightRuntimeContext
+): string[] {
+  if (
+    inventory.incomplete &&
+    (policy === 'complete' ||
+      !getPreflightWslTarget(context) ||
+      inventory.afterPublication !== undefined)
+  ) {
+    throw new AgentInventoryDeadlineError(inventory.afterPublication)
+  }
+  return inventory.agents
+}
+
+export async function detectInstalledAgentInventoryWithShellPathHydration(
+  context?: PreflightRuntimeContext,
+  options?: InstalledAgentDetectionOptions,
+  signal?: AbortSignal
+): Promise<InstalledAgentInventory> {
+  return detectInstalledAgentInventory(context, options, false, signal, (waitSignal) =>
+    hydrateShellPathForAgentDetection(context, false, waitSignal)
+  )
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
   context?: PreflightRuntimeContext,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  signal?: AbortSignal,
+  policy: InstalledAgentListPolicy = 'complete'
 ): Promise<string[]> {
-  await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgents(context, options)
+  return completeAgentList(
+    await detectInstalledAgentInventoryWithShellPathHydration(
+      context,
+      { waitForCompletion: true, ...options },
+      signal
+    ),
+    options?.waitForCompletion === false ? 'complete' : policy,
+    context
+  )
 }

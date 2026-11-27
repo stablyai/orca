@@ -27,6 +27,7 @@ export const FolderWorkspaceHookCreateShape = {
   startupAgent: lazyZodSchema(() => z.string().refine(isTuiAgent).optional()),
   startupPrompt: OptionalString,
   startupDraft: OptionalString,
+  afterPublication: lazyZodSchema(() => z.number().int().nonnegative().optional()),
   startupAgentArgs: lazyZodSchema(() => AgentArgs.optional()),
   startupSessionOptions: lazyZodSchema(() => z.record(z.string(), z.string()).optional()),
   startupLaunchPreferences: lazyZodSchema(() => LaunchPreferences.optional()),

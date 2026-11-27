@@ -1,15 +1,15 @@
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
-import {
-  recordTerminalLaunchMetadata,
-  resolveTerminalLaunchResult,
-  terminalLaunchPublicFacts
-} from './terminal-launch-result'
+import { resolveTerminalLaunchResult, terminalLaunchPublicFacts } from './terminal-launch-result'
 import { revealCreatedTerminal } from './terminal-create-reveal'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
-import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
+import { OrcaRuntimeWithCreateTerminalSetupGate } from './terminal-create-setup-gate'
+import { generatedSetupStartupCommand } from '../../workspaces/startup/worktree-setup-gate'
 import { type PaneStartArgsOf, spawnInAdmittedPane } from './runtime-pane-admission'
 import type { TerminalCreateOptions } from './terminal-create-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import {
+  SETUP_AGENT_GATE,
+  type RuntimeTerminalCreate
+} from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
   admitPairedCreateColors,
   getTerminalViewerColors
@@ -37,7 +37,7 @@ import { migratedPaneRestoreHint } from '../recovery/migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/delivery/pty-first-size'
 import * as dependenciesOwner1 from '../../../../shared/workspace-layout/stable-pane-id'
 
-export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
+export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithCreateTerminalSetupGate {
   protected abstract paneStartStatusArgs: PaneStartArgsOf
 
   async createTerminal(
@@ -63,6 +63,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       }
       const workspace = await this.resolveTerminalCreateLaunchScope(selector, opts, ...evidence)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const gatedStartup = generatedSetupStartupCommand(launchOpts, workspace.connectionId)
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
@@ -77,7 +78,6 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ? this.singleGroupWorkspaceGridSize
           : undefined
       const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
-      const initialSize = resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup })
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = allocateTerminalPaneIdentity(launchOpts)
@@ -101,11 +101,12 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           .prepare(
             {
               launchConfig: launchOpts.launchConfig,
+              launchAgent: launchOpts.launchAgent,
               command: launchOpts.command,
               claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
               claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
               baseEnv: { ...process.env, ...baseEnv },
-              adoptedBeforeLaunch: null
+              connectionId: workspace.connectionId
             },
             preAllocatedHandle
           )
@@ -127,7 +128,6 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           },
           agentTeamsPlan?.env
         )
-        const terminalColorQueryReplies = getTerminalViewerColors()
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
@@ -135,7 +135,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           const { launchAgent } = launchOpts
           launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
           result = await spawnInAdmittedPane(this.store, ptyController, {
-            ...initialSize,
+            ...resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup }),
             cwd,
             command: sequencedStartupCommand
               ? launchOpts.command
@@ -145,6 +145,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             launchConfig: effectiveLaunchConfig,
             ...(launchToken ? { launchToken } : {}),
             commandDelivery: 'provider',
+            nativeChatSignIn: launchOpts.nativeChatSignIn,
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,
             envToDelete: mergeTerminalEnvDeletionKeys(
@@ -153,7 +154,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             ),
             resumeProviderSession: launchOpts.resumeProviderSession,
             ...(launchOpts.resumeOrigin ? { resumeOrigin: launchOpts.resumeOrigin } : {}),
-            telemetry: launchOpts.telemetry,
+            telemetry: gatedStartup ? undefined : launchOpts.telemetry,
             connectionId: workspace.connectionId,
             worktreeId: workspace.id,
             resolvedWorkspace: workspace,
@@ -166,7 +167,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               preAllocatedHandle,
               tabId,
               leafId,
-              terminalColorQueryReplies,
+              terminalColorQueryReplies: getTerminalViewerColors(),
               launcherSpawnArgs,
               commit,
               operation
@@ -185,7 +186,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           throw new Error('client_disconnected')
         }
         const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
-          ...initialSize,
+          ...resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup }),
           cwd,
           connectionId: workspace.connectionId,
           worktreeId: workspace.id,
@@ -236,6 +237,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           })
         }
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
+        const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
         if (pty) {
           pty.runtimeSessionOwned = true
           if (!launch.adoptedStablePane) {
@@ -243,17 +245,12 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          this.watchLaunchedAgent(
-            pty,
-            recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
-          )
-          if (!launch.adoptedStablePane) {
-            this.rememberSavedTerminalLaunchResult(result.id, result)
-          }
           const standing = spawnSurfaceClaimSequence(this.graphSequence)
           recordPtySurface(this.terminalIdentity, pty, tabId, paneKey, standing)
         }
-        const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+        const setupAgentGate = pty
+          ? this.recordCreatedTerminalLaunch(pty, result, launch, launchOpts, gatedStartup)
+          : undefined
         if (pty && !launch.adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
@@ -288,6 +285,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         const { surface, warning } = reveal instanceof Promise ? await reveal : reveal
         return {
           ...terminalLaunchPublicFacts(result, launch.adoptedStablePane, pty),
+          [SETUP_AGENT_GATE]: setupAgentGate,
           handle,
           savedStartupCwd,
           tabId,

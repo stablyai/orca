@@ -1,7 +1,7 @@
 import '../../../../shared/git/admission/git-admission-state'
 import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { join } from 'node:path'
-import { detectInstalledAgentsWithShellPathHydration } from '../../../preflight/installed-agent-detection'
+import { detectLocalSkillInstallProviders } from '../../../skills/providers/skill-provider-presence'
 import { executeSkillInstallRequest } from '../../../skills/install/skill-install-request'
 import { executeSkillBundleInstallRequest } from '../../../skills/install/skill-bundle-install-request'
 import { SkillUploadSessionService } from '../../../skills/runtime-upload/skill-upload-session-service'
@@ -100,7 +100,7 @@ export class RuntimeSkillInstallCommands {
       allowedDownloadOrigins: [...new Set(origins)],
       requireHttps: this.host.isPackaged(),
       resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      detectProviders: () => detectLocalSkillInstallProviders(signal),
       resolveProviderRootOverrides: (destination) => this.roots(destination),
       signal
     })
@@ -168,7 +168,7 @@ export class RuntimeSkillInstallCommands {
         allowedDownloadOrigins: [...new Set(origins)],
         requireHttps: this.host.isPackaged(),
         resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
-        detectProviders: detectInstalledAgentsWithShellPathHydration,
+        detectProviders: () => detectLocalSkillInstallProviders(controller.signal),
         resolveProviderRootOverrides: (destination) => this.roots(destination),
         signal: controller.signal,
         onProgress: report
@@ -181,18 +181,23 @@ export class RuntimeSkillInstallCommands {
       this.progress.delete(request.operationId)
     }
   }
-  planLocalBundledSkills(request: LocalBundledSkillPlanRequest): Promise<BundledSkillPlan> {
-    return planLocalBundledSkills(this.host, request)
+  planLocalBundledSkills(
+    request: LocalBundledSkillPlanRequest,
+    signal?: AbortSignal
+  ): Promise<BundledSkillPlan> {
+    return planLocalBundledSkills(this.host, request, signal)
   }
   executeLocalBundledSkills(
-    request: LocalBundledSkillExecuteRequest
+    request: LocalBundledSkillExecuteRequest,
+    signal?: AbortSignal
   ): Promise<BundledSkillInstallResult> {
-    return executeLocalBundledSkills(this.host, request)
+    return executeLocalBundledSkills(this.host, request, signal)
   }
   autoUpdateLocalBundledSkills(
-    request: BundledSkillAutoUpdateRequest
+    request: BundledSkillAutoUpdateRequest,
+    signal?: AbortSignal
   ): Promise<BundledSkillInstallResult> {
-    return autoUpdateLocalBundledSkills(this.host, request)
+    return autoUpdateLocalBundledSkills(this.host, request, signal)
   }
   getSharedSkillInstallProgress(operationId: string) {
     return this.progress.get(operationId) ?? null

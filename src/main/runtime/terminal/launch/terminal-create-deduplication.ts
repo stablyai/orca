@@ -46,7 +46,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     clientIdentity: string,
     worktreeSelector: string | undefined,
     clientMutationId: string | undefined,
-    reconcileExisting: boolean,
+    reconcileExisting: boolean | 'handle',
     run: (
       canonicalWorktreeSelector: string | undefined,
       preAllocatedHandle: string | undefined
@@ -76,12 +76,19 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       clientMutationId,
       async () => {
         if (reconcileExisting) {
-          const adopted = await this.reconcileRemoteTerminalCreate(
-            workspace.id,
-            preAllocatedHandle,
-            // Scope SSH inventory to its host: aggregate listings silently omit unreachable relays and could respawn live work.
-            workspace.connectionId ?? null
-          )
+          const adopted =
+            reconcileExisting === 'handle'
+              ? this.reconcileTerminalCreateHandle(
+                  workspace.id,
+                  preAllocatedHandle,
+                  workspace.connectionId ?? null
+                )
+              : await this.reconcileRemoteTerminalCreate(
+                  workspace.id,
+                  preAllocatedHandle,
+                  // Scope SSH inventory to its host: aggregate listings silently omit unreachable relays and could respawn live work.
+                  workspace.connectionId ?? null
+                )
           if (adopted) {
             return adopted
           }
@@ -89,6 +96,28 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         return await run(canonicalWorktreeSelector, preAllocatedHandle)
       }
     )
+  }
+
+  private reconcileTerminalCreateHandle(
+    worktreeId: string,
+    handle: string,
+    connectionId: string | null
+  ): RuntimeTerminalCreate | null {
+    const pty = this.getLivePtyForHandle(handle)?.pty
+    if (!pty?.connected) {
+      return null
+    }
+    if (pty.worktreeId !== worktreeId || (pty.connectionId ?? null) !== connectionId) {
+      throw new Error('terminal_create_identity_conflict')
+    }
+    return {
+      ...this.getTerminalLaunchResult(pty.ptyId),
+      handle,
+      ptyId: pty.ptyId,
+      worktreeId,
+      title: pty.title || null,
+      surface: 'background'
+    }
   }
 
   protected async reconcileRemoteTerminalCreate(

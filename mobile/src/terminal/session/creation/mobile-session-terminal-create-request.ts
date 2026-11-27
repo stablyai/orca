@@ -1,9 +1,11 @@
+import type { NativeChatSignInRequest } from '../../../../../src/shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { MobileQuickCommandLaunch } from '../../quick-commands/quick-commands'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { MobileNewTabAgentOption } from '../../../session/agent-launch/mobile-new-tab-agent-options'
 import { sessionTabCreateTerminal } from '../../../session/tabs/mobile-session-tab-write-operations'
 
 export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['options'] & {
+  nativeChatSignIn?: NativeChatSignInRequest
   onPromptSent?: () => void
   errorToast?: string
   sourceChatFork?: { sessionId: string; agent: string }
@@ -13,13 +15,14 @@ export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['optio
   shell?: string
 }
 
-export function requestMobileSessionTerminalCreate(args: {
+export async function requestMobileSessionTerminalCreate(args: {
   client: RpcClient
   worktreeId: string
   afterTabId?: string
   clientMutationId: string
   agent?: MobileNewTabAgentOption['agent']
-  options?: MobileQuickCommandLaunch['options']
+  options?: MobileSessionTerminalCreateOptions
+  isCurrent: () => boolean
   shell?: string
   sourceChatFork?: { sessionId: string }
   viewMode?: 'chat'
@@ -35,11 +38,16 @@ export function requestMobileSessionTerminalCreate(args: {
     sourceChatFork,
     viewMode
   } = args
+  const command = options?.startupCommand
+  if (!args.isCurrent()) {
+    return null
+  }
   const params = {
     worktree: `id:${worktreeId}`,
     afterTabId,
     clientMutationId,
-    ...(options?.startupCommand ? { command: options.startupCommand } : {}),
+    ...(command ? { command } : {}),
+    ...(options?.nativeChatSignIn ? { nativeChatSignIn: options.nativeChatSignIn } : {}),
     ...(options?.startupCommandDelivery
       ? { startupCommandDelivery: options.startupCommandDelivery }
       : {}),

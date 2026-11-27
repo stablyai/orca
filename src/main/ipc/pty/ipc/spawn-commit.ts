@@ -36,13 +36,16 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         rendererLaunchAuthority: admitRendererAgentLaunchAuthority({
           launchToken: args.launchToken,
           spawnEnv: ctx.spawnEnv,
-          launchAgent: args.launchAgent,
+          launchAgent: ctx.agentProgramBlocked ? undefined : args.launchAgent,
           launchConfig: ctx.effectiveLaunchConfig,
           isReattach: ctx.result.isReattach === true,
           hasStablePaneOwner: ctx.stablePaneOwner !== null,
           incarnationId: ctx.result.incarnationId
         }),
-        launchedAgent: freshSpawn ? resolveLaunchedAgent(args.command, args.launchAgent) : null,
+        launchedAgent:
+          freshSpawn && !ctx.agentProgramBlocked
+            ? resolveLaunchedAgent(args.command, args.launchAgent)
+            : null,
         freshSpawn
       },
       preAllocatedHandle: ctx.preAllocatedHandle,
@@ -102,7 +105,9 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
   const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
   return {
     ...provenSpawnResponse(providerResult, ctx.provedSnapshotSeq),
-    ...(!ctx.result.isReattach && !resumeSpawnRefusal(ctx.resumeAdmission)
+    ...(!ctx.result.isReattach &&
+    !ctx.agentProgramBlocked &&
+    !resumeSpawnRefusal(ctx.resumeAdmission)
       ? {
           launchAgent: args.launchAgent,
           launchToken: typeof args.launchToken === 'string' ? args.launchToken : undefined,

@@ -266,12 +266,15 @@ export function terminalMcpExecutable(
   adapter: TerminalMcpAdapter,
   launch: TerminalMcpLaunch
 ): string | null {
-  const parsed = tokenizeStartupCommand(launch.command, launch.shell)
+  const parsed = tokenizeStartupCommand(launch.command, launch.shell, launch.shell === 'powershell')
   if (!parsed.ok) {
     return null
   }
-  const index = findAgentExecutableIndex(parsed.tokens, launch.shell, (token) =>
-    isAgentExecutableToken(token, adapter.executables)
+  const index = findAgentExecutableIndex(
+    parsed.tokens,
+    launch.shell,
+    (token) =>
+      token === launch.verifiedExecutable || isAgentExecutableToken(token, adapter.executables)
   )
   if (index < 0) {
     return null

@@ -3,6 +3,7 @@ import type { RuntimeGroupFolderCreateInput } from './runtime-group-folder-setup
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 import { wslUserAct } from '../startup/workspace-create-activation'
@@ -14,7 +15,8 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
   protected finishGroupFolderCreation = async (
     input: RuntimeGroupFolderCreateInput,
     group: ProjectGroup,
-    workspace: FolderWorkspace
+    workspace: FolderWorkspace,
+    draftAgent?: TuiAgent | null
   ) => {
     const store = this.requireStore()
     const [
@@ -73,6 +75,7 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
             },
             draft,
             requestedAgent,
+            resolvedAgent: draftAgent,
             originalAgent: inputs?.createdWithAgent ?? requestedAgent,
             agentArgs: inputs?.startupAgentArgs,
             sessionOptions:
@@ -105,9 +108,13 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
         worktree
           ? this.createTerminal(selector, { ...options, ...launchContext }, worktree)
           : this.createTerminal(selector, { ...options, ...launchContext }),
-      pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-      sendFollowup: (handle, followup, terminal) => {
-        void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
+      pasteDraft: (handle, draft, awaitSetupGate) =>
+        this.pasteStartupDraftWhenReady(handle, draft, awaitSetupGate),
+      sendFollowup: (handle, followup, terminal, awaitSetupGate) => {
+        void this.deliverStartupFollowup(handle, followup, {
+          terminalCreation: terminal,
+          awaitSetupGate
+        })
       },
       provision: (options) =>
         this.provisionManagedWorktreeTerminals({ ...options, ...launchContext }, worktree),

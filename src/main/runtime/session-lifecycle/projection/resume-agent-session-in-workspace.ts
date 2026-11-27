@@ -151,7 +151,7 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     const record = records[0]
     let resume
     try {
-      resume = this.resolveMobileSessionResumeCommand(workspace, {
+      resume = await this.resolveMobileSessionResumeCommand(workspace, {
         ...session,
         launchConfig: request.launchConfig ?? record?.launchConfig
       })

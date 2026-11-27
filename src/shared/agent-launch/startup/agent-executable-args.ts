@@ -56,7 +56,12 @@ export function withArgsAfterAgentExecutable(
   quotedArgs: string,
   subcommand?: string
 ): string | null {
-  const parsed = tokenizeStartupCommand(command, shell)
+  // A generated PowerShell path can contain a literal backtick inside single quotes.
+  const parsed = tokenizeStartupCommand(
+    command,
+    shell,
+    shell === 'powershell' ? 'preserve-expansions' : false
+  )
   if (!parsed.ok) {
     return null
   }
@@ -91,5 +96,15 @@ export function withArgsAfterAgentExecutable(
     }
   }
   const end = parsed.spans[subcommand === undefined ? index : index + 1].end
+  if (shell === 'powershell') {
+    // Only the executable and subcommand must have literal values for the splice.
+    const head = command.slice(parsed.spans[index].start, end)
+    if (head.includes('$')) {
+      const literal = tokenizeStartupCommand(head, shell, true)
+      if (!literal.ok || literal.spans.some((span) => span.divergesFromShell)) {
+        return null
+      }
+    }
+  }
   return `${command.slice(0, end)}${quotedArgs}${command.slice(end)}`
 }
