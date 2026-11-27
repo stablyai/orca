@@ -14445,7 +14445,6 @@
             "c8e4a1f902": "필터: {{value0}}",
             "b3c8f1a902": "파일 이름으로 필터링",
             "d4f8c2a901": "필터 지우고 닫기",
-            "4b4a7de138": "브라우저에서 검토 페이지 열기",
             "createPrIntentCommitBlockedSummary": "커밋이 차단됨: {{value0}} 이슈를 수정한 후 PR 만들기를 다시 시도하세요.",
             "pushRecovery": {
               "4b37ae99b0": "기본 AI 에이전트를 시작하여 이 푸시 실패 수정",

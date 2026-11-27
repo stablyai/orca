@@ -14108,7 +14108,6 @@
             "c8e4a1f902": "Filter: {{value0}}",
             "b3c8f1a902": "Dateien nach Namen filtern",
             "d4f8c2a901": "Filter leeren und schließen",
-            "4b4a7de138": "Review-Seite im Browser öffnen",
             "createPrIntentCommitBlockedSummary": "Commit blockiert: {{value0}} Problem beheben und anschließend „PR erstellen“ erneut versuchen.",
             "pushRecovery": {
               "4b37ae99b0": "Standard-KI-Agenten starten, um diesen Push-Fehler zu beheben",
