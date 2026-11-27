@@ -296,7 +296,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   relayOpenWork = (id: string) => acpChildRelayOpenWork(this.children.sessions.get(id))
   keptLaunchOutgrown = (id: string) => {
     const session = this.children.sessions.get(id)
-    return childState.isAcpReadySession(session) && session.connection.kept?.launchOutgrown === true
+    return childState.isAcpReadySession(session)
+      ? session.connection.kept?.launchOutgrown
+      : undefined
   }
 
   endedBeforeAcquire = (sessionId: string, generation: string): boolean =>

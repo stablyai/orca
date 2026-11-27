@@ -107,9 +107,12 @@ export class AcpKeptSession {
     return this.relayed.freshOwed === true
   }
 
-  /** It owes a fresh agent, and its replay is acked, so ending it loses none of it. */
-  get launchOutgrown(): boolean {
-    return this.freshOwed && this.child.replayAcked()
+  /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`: false until the replay is acked. */
+  get launchOutgrown(): boolean | undefined {
+    if (!this.child.replayAcked()) {
+      return false
+    }
+    return this.freshOwed || undefined
   }
 
   /** The earlier app's prompt is still owed, or answered in the held replay. */
