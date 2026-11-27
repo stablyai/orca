@@ -1,6 +1,7 @@
 // The card a bot shows with `orca bot create --offer`: a new bot it proposes. Nothing is created until the
 // owner presses Create bot (or creates it from Edit); the card then reads Created, from the bots there are.
-import { useRef, useState } from 'react'
+import { Suspense, useRef, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -12,8 +13,11 @@ import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtim
 import { BotAvatar, BotAvatarTile } from '../bots/BotAvatar'
 import { BOT_MASCOT_URLS } from '../bots/bot-mascots'
 import { botErrorMessage } from '../bots/bot-presentation'
-import { NewBotDialog } from '../bots/NewBotDialog'
 import { isBotMascotId } from '../../../../shared/bot-avatar'
+
+const LazyNewBotDialog = lazy(() =>
+  import('../bots/NewBotDialog').then((module) => ({ default: module.NewBotDialog }))
+)
 import type { Bot } from '../../../../shared/bot-types'
 import {
   botCreateOfferState,
@@ -32,13 +36,10 @@ import {
 } from '../../../../shared/bots/bot-create-offer-view'
 import { botTemplateText } from '../../../../shared/bots/bot-template-text'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
-import {
-  NativeChatCardActions,
-  NativeChatCardFrame,
-  NativeChatCardStatus
-} from './NativeChatCardFrame'
+import { NativeChatCardFrame, NativeChatCardStatus } from './NativeChatCardFrame'
 import { NativeChatCardFact } from './NativeChatAutomationCardDetails'
 import { NativeChatExpandable } from './messages/disclosure/NativeChatExpandable'
+import { NativeChatEventOpenButton } from './messages/events/NativeChatEventOpenButton'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
 import { useNativeChatDisclosure } from './messages/disclosure/native-chat-disclosure-store'
 
@@ -84,6 +85,7 @@ const PIECES: Record<keyof typeof COPY, (t: Translate, values?: BotCardCopyValue
   edit: (t) => t('components.native-chat.botCreateOffer.edit', COPY.edit),
   create: (t) => t('components.native-chat.botCreateOffer.create', COPY.create),
   open: (t) => t('components.native-chat.botCreateOffer.open', COPY.open),
+  openBot: (t, values) => t('components.native-chat.botCreateOffer.openBot', COPY.openBot, values),
   origin: (t, values) => t('components.native-chat.botCreateOffer.origin', COPY.origin, values),
   originTemplate: (t, values) =>
     t('components.native-chat.botCreateOffer.originTemplate', COPY.originTemplate, values),
@@ -175,6 +177,11 @@ function OfferCard({
     botTemplateText(text, t)
   )
   const Chevron = open ? ChevronUp : ChevronDown
+  const openCreatedBot = (): void => {
+    if (created) {
+      void openBotHomeTabById(created)
+    }
+  }
 
   const create = (): void => {
     setCreating(true)
@@ -217,20 +224,28 @@ function OfferCard({
             </NativeChatCardStatus>
           )
         }
-        title={view.title}
-        footer={
+        label={view.title}
+        title={
           created ? (
-            <NativeChatCardActions>
-              <Button
+            <span className="inline-flex min-w-0 items-baseline gap-1 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ring">
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void openBotHomeTabById(created)}
+                className="min-w-0 rounded-sm text-left [overflow-wrap:anywhere] hover:underline focus-visible:outline-none"
+                onClick={openCreatedBot}
               >
-                {say('open')}
-              </Button>
-            </NativeChatCardActions>
-          ) : view.open === null ? undefined : (
+                {view.title}
+              </button>
+              <NativeChatEventOpenButton
+                name={say('openBot', { name: view.title })}
+                onOpen={openCreatedBot}
+              />
+            </span>
+          ) : (
+            view.title
+          )
+        }
+        footer={
+          view.open === null ? undefined : (
             <NativeChatOfferActions
               offer={answering}
               start={
@@ -266,11 +281,8 @@ function OfferCard({
           className="-mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-start justify-between gap-2 rounded-md px-1 text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="min-w-0">
-            {view.line.kind === 'purpose' ? (
-              <span className="block">{view.line.text}</span>
-            ) : view.takeover ? (
-              <span className="block">{view.takeover}</span>
-            ) : null}
+            <span className={open ? 'block' : 'line-clamp-2'}>{view.purpose}</span>
+            {view.takeover ? <span className="block">{view.takeover}</span> : null}
             {view.open?.note ? <span className="block">{view.open.note}</span> : null}
           </span>
           <Chevron className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -280,16 +292,18 @@ function OfferCard({
         </NativeChatExpandable>
       </NativeChatCardFrame>
       {editing ? (
-        <NewBotDialog
-          open
-          onOpenChange={setEditing}
-          proposal={proposal}
-          fromOffer={fromOffer}
-          offerHostId={proposer.hostId}
-          origin={botCreateOfferOrigin(proposal, proposer.name, say, (text) =>
-            botTemplateText(text, t)
-          )}
-        />
+        <Suspense fallback={null}>
+          <LazyNewBotDialog
+            open
+            onOpenChange={setEditing}
+            proposal={proposal}
+            fromOffer={fromOffer}
+            offerHostId={proposer.hostId}
+            origin={botCreateOfferOrigin(proposal, proposer.name, say, (text) =>
+              botTemplateText(text, t)
+            )}
+          />
+        </Suspense>
       ) : null}
     </div>
   )

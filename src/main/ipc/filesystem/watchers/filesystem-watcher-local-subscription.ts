@@ -23,8 +23,25 @@ import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 import { scheduleLocalCapacityRetry } from './filesystem-watcher-local-capacity'
 import { installLocalWatcher } from './filesystem-watcher-local-install'
 import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
+import type { WatchWorktreeResult } from '../../../../shared/file-watch/watch-worktree-result'
 
 const cancelledInstallWaiters = watcherLifecycleState.cancelledLocalInstallWaiters
+
+/** Whether this renderer now listens to the root, waits on its capacity retry, or has nothing. */
+export function localWatchResultFor(worktreePath: string, senderId: number): WatchWorktreeResult {
+  const { key } = getLocalWatcherRoot(worktreePath)
+  if (watcherLifecycleState.watchedRoots.get(key)?.listeners.has(senderId)) {
+    return 'watching'
+  }
+  // Why in-flight too: a capacity retry that already started reinstalling has left the retry queue.
+  if (
+    watcherLifecycleState.pendingLocalCapacityRetries.get(key)?.listeners.has(senderId) ||
+    watcherLifecycleState.inFlightLocalInstalls.get(key)?.listeners.has(senderId)
+  ) {
+    return 'deferred'
+  }
+  return 'unavailable'
+}
 
 export async function subscribeLocalWatcher(
   worktreePath: string,

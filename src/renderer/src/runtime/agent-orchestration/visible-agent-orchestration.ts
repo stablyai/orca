@@ -1,16 +1,8 @@
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
-import {
-  isRemoteRuntimePtyId,
-  parseRemoteRuntimePtyId
-} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { keyedListsMatch } from '@/store/record-transitions/keyed-list-match'
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 import { resolveStructuredAgentSessionOwner } from '../native-chat/session-ownership/structured-agent-session-owner'
 import {
@@ -18,6 +10,8 @@ import {
   orchestrationRowWorkForTest,
   rowIdentities
 } from './orchestration-row-identities'
+import { remoteRowContexts, remoteRowContextsFor, rowOnHost } from './remote-row-orchestration'
+import { terminalProvenance, terminalProvenanceVisits } from './terminal-provenance'
 
 type Contexts = Record<string, AgentStatusOrchestrationContext>
 export type VisibleOrchestrationState = WorktreeRuntimeOwnerState &
@@ -27,12 +21,29 @@ export type VisibleOrchestrationState = WorktreeRuntimeOwnerState &
       | 'unifiedTabsByWorktree'
       | 'agentStatusByPaneKey'
       | 'runtimeAgentOrchestrationByPaneKey'
+      | 'remoteAgentOrchestrationByHost'
       | 'ptyIdsByTabId'
     >
   > & {
     tabsByWorktree?: Record<string, readonly { id: string; ptyId?: string | null }[]>
   }
 const EMPTY: Record<string, never> = {}
+// A row on a remote host reads that host's contexts first; the local map holds this computer's.
+function storedContext(
+  state: VisibleOrchestrationState,
+  row: { key: string; host: string | null } | undefined,
+  paneKey: string
+): AgentStatusOrchestrationContext | undefined {
+  const key = row?.key ?? paneKey
+  const remote =
+    row?.host && row.host !== LOCAL_EXECUTION_HOST_ID
+      ? state.remoteAgentOrchestrationByHost?.[row.host]?.[key]
+      : // A terminal a host runs here reads that host's context by this window's (mirrored) key.
+        !row
+        ? remoteRowContextsFor(state)[paneKey]
+        : undefined
+  return remote ?? state.runtimeAgentOrchestrationByPaneKey?.[key]
+}
 const producerByContext = new WeakMap<AgentStatusOrchestrationContext, string>()
 export function orchestrationProducer(context: AgentStatusOrchestrationContext): string {
   return producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID
@@ -47,103 +58,17 @@ let cache: { inputs: unknown[]; contexts: Contexts } | undefined
 let visits = 0
 export function visibleOrchestrationWorkForTest(): { visits: number; paneKeyEncodes: number } {
   const rows = orchestrationRowWorkForTest()
-  return { visits: visits + rows.visits, paneKeyEncodes: rows.paneKeyEncodes }
+  return {
+    visits: visits + terminalProvenanceVisits() + rows.visits,
+    paneKeyEncodes: rows.paneKeyEncodes
+  }
 }
-type TerminalInputs = Pick<
-  VisibleOrchestrationState,
-  'unifiedTabsByWorktree' | 'tabsByWorktree' | 'ptyIdsByTabId'
->
-let terminalCache:
-  | {
-      inputs: TerminalInputs
-      hosts: Map<string, string | null>
-      ptys: Map<string, string | null>
-    }
-  | undefined
-
-// Why: only rows whose identity, host or pty changed can move provenance; title writes never do.
-function terminalProvenanceInputsMatch(state: TerminalInputs, previous: TerminalInputs): boolean {
-  return (
-    keyedListsMatch(state.ptyIdsByTabId, previous.ptyIdsByTabId, (a, b) => a === b) &&
-    keyedListsMatch(
-      state.unifiedTabsByWorktree,
-      previous.unifiedTabsByWorktree,
-      (a, b) =>
-        a.contentType === b.contentType &&
-        a.worktreeId === b.worktreeId &&
-        a.entityId === b.entityId &&
-        a.executionHostId === b.executionHostId
-    ) &&
-    keyedListsMatch(
-      state.tabsByWorktree,
-      previous.tabsByWorktree,
-      (a, b) => a.id === b.id && a.ptyId === b.ptyId
-    )
-  )
-}
-
-function terminalProvenance(state: VisibleOrchestrationState) {
-  const inputs: TerminalInputs = {
-    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-    tabsByWorktree: state.tabsByWorktree,
-    ptyIdsByTabId: state.ptyIdsByTabId
-  }
-  if (terminalCache && terminalProvenanceInputsMatch(inputs, terminalCache.inputs)) {
-    // The same object keeps the orchestration projection cached across title-only writes.
-    terminalCache.inputs = inputs
-    return terminalCache
-  }
-  const hosts = new Map<string, string | null>()
-  const ptys = new Map<string, string | null>()
-  const merge = (map: Map<string, string | null>, key: string, host: string | null) => {
-    map.set(key, map.has(key) && map.get(key) !== host ? null : host)
-  }
-  const ptyHost = (id?: string | null): string | null | undefined => {
-    if (!id) {
-      return undefined
-    }
-    const remote = parseRemoteRuntimePtyId(id)
-    return remote?.environmentId
-      ? toRuntimeExecutionHostId(remote.environmentId)
-      : isRemoteRuntimePtyId(id)
-        ? null
-        : undefined
-  }
-  for (const [tab, ids] of Object.entries(state.ptyIdsByTabId ?? EMPTY)) {
-    for (const id of ids) {
-      visits++
-      const host = ptyHost(id)
-      if (host !== undefined) {
-        merge(ptys, tab, host)
-      }
-    }
-  }
-  for (const tabs of Object.values(state.unifiedTabsByWorktree ?? EMPTY)) {
-    for (const tab of tabs) {
-      visits++
-      if (tab.contentType === 'terminal' && tab.executionHostId) {
-        merge(hosts, aliasKey(tab.worktreeId, tab.entityId), tab.executionHostId)
-      }
-    }
-  }
-  for (const [worktree, tabs] of Object.entries(state.tabsByWorktree ?? EMPTY)) {
-    for (const tab of tabs) {
-      visits++
-      const host = ptyHost(tab.ptyId)
-      if (host !== undefined) {
-        merge(hosts, aliasKey(worktree, tab.id), host)
-      }
-    }
-  }
-  terminalCache = { inputs, hosts, ptys }
-  return terminalCache
-}
-
 function projection(state: VisibleOrchestrationState): NonNullable<typeof cache> {
   const rows = rowIdentities(state)
   const terminals = terminalProvenance(state)
   const inputs = [
     state.runtimeAgentOrchestrationByPaneKey,
+    state.remoteAgentOrchestrationByHost,
     state.agentStatusByPaneKey,
     terminals,
     rows
@@ -163,10 +88,15 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       alias ?? (canonical.has(key) && canonical.get(key)?.host !== host ? aliasKey(host, key) : key)
     )
   }
+  // A remote host names a parent by its own key; its mirrored row here is the parent shown.
+  const parentKey = (key: string, host: string | null) =>
+    (host && host !== LOCAL_EXECUTION_HOST_ID
+      ? rowOnHost(host, key, rows, terminals)
+      : undefined) ?? visibleKey(key, host)
   const adapt = (key: string, context: AgentStatusOrchestrationContext, host: string | null) => {
     visits++
     const actual = visibleKey(key, host)
-    const parent = context.parentPaneKey ? visibleKey(context.parentPaneKey, host) : undefined
+    const parent = context.parentPaneKey ? parentKey(context.parentPaneKey, host) : undefined
     const next = parent === context.parentPaneKey ? context : { ...context, parentPaneKey: parent }
     const previous = cache?.contexts[actual]
     contexts[actual] =
@@ -174,6 +104,13 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   }
   for (const [key, context] of Object.entries(state.runtimeAgentOrchestrationByPaneKey ?? EMPTY)) {
     adapt(key, context, producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID)
+  }
+  // A remote context names only rows that host runs here; it never re-parents this computer's rows.
+  for (const [row, context] of Object.entries(
+    remoteRowContexts(state.remoteAgentOrchestrationByHost, rows, terminals)
+  )) {
+    visits++
+    contexts[row] = context
   }
   const embedded = (
     entry: NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
@@ -184,7 +121,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       return
     }
     const row = canonical.get(entry.paneKey)
-    const runtime = state.runtimeAgentOrchestrationByPaneKey?.[row?.key ?? entry.paneKey]
+    const runtime = storedContext(state, row, entry.paneKey)
     if (
       runtime &&
       (!row || row.host === orchestrationProducer(runtime)) &&
@@ -213,7 +150,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
           : null
     if (
       entry.orchestration.parentPaneKey &&
-      visibleKey(entry.orchestration.parentPaneKey, host) !== entry.orchestration.parentPaneKey
+      parentKey(entry.orchestration.parentPaneKey, host) !== entry.orchestration.parentPaneKey
     ) {
       adapt(entry.paneKey, entry.orchestration, host)
     }
@@ -244,7 +181,7 @@ export function canonicalOrchestrationForRow(
   paneKey: string
 ): AgentStatusOrchestrationContext | undefined {
   const row = rowIdentities(state).canonical.get(paneKey)
-  const context = state.runtimeAgentOrchestrationByPaneKey?.[row?.key ?? paneKey]
+  const context = storedContext(state, row, paneKey)
   return context &&
     (!row || row.host === (producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID))
     ? context

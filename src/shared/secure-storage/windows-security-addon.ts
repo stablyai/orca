@@ -185,9 +185,12 @@ function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
   }
 }
 
-/** Wrap fake addons identically to production; null simulates load failure. */
-export function setWindowsSecurityForTests(addon: WindowsSecurityAddon | null): void {
-  loaded = addon ? prepare(addon) : { error: 'disabled for tests' }
+/** Wrap fake addons identically to production; null simulates a load failure with `loadError`. */
+export function setWindowsSecurityForTests(
+  addon: WindowsSecurityAddon | null,
+  loadError = 'disabled for tests'
+): void {
+  loaded = addon ? prepare(addon) : { error: loadError }
 }
 
 export function resetWindowsSecurityLoadForTests(): void {

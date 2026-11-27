@@ -42,39 +42,12 @@ export function workerDockKindLabel(t: Translate, kind: string): string {
       return t('components.native-chat.workerDock.task', 'Task')
   }
 }
-export function workerDockKindCount(t: Translate, kind: string, count: number): string {
-  switch (kind) {
-    case 'worker':
-      return t('components.native-chat.workerDock.workerCount', '{{count}} workers', {
-        count,
-        defaultValue_one: '{{count}} worker'
-      })
-    case 'command':
-      return t('components.native-chat.workerDock.commandCount', '{{count}} commands', {
-        count,
-        defaultValue_one: '{{count}} command'
-      })
-    case 'workflow':
-      return t('components.native-chat.workerDock.workflowCount', '{{count}} workflows', {
-        count,
-        defaultValue_one: '{{count}} workflow'
-      })
-    case 'monitor':
-      return t('components.native-chat.workerDock.monitorCount', '{{count}} monitors', {
-        count,
-        defaultValue_one: '{{count}} monitor'
-      })
-    case 'agent':
-      return t('components.native-chat.workerDock.agentCount', '{{count}} agents', {
-        count,
-        defaultValue_one: '{{count}} agent'
-      })
-    default:
-      return t('components.native-chat.workerDock.taskCount', '{{count}} tasks', {
-        count,
-        defaultValue_one: '{{count}} task'
-      })
-  }
+/** Everything the tray lists, of any kind, counts as workers: "1 worker", "3 workers". */
+export function workerDockWorkerCount(t: Translate, count: number): string {
+  return t('components.native-chat.workerDock.workerCount', '{{count}} workers', {
+    count,
+    defaultValue_one: '{{count}} worker'
+  })
 }
 
 /** The pill and card with no rows: work the provider reports but does not list, or a failed read. */

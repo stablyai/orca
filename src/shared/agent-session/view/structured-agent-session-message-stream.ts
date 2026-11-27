@@ -1,3 +1,5 @@
+import { noteRevisedInPlace, positionsRevisedFrom } from './revised-in-place-lists'
+import { onlyStreamedTextChanged } from './structured-agent-session-streamed-text-rows'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -83,15 +85,25 @@ function reuseMessages(
   items: readonly AgentJournalRenderItem[],
   projectItems: StructuredAgentSessionItemProjector
 ): MessageStream | null {
-  if (previous.hasStoppedSends || items.length < previous.items.length) {
+  // Stopped sends are placed among the rows, so only a revision of a reply's streamed text keeps
+  // them where they were; any other change (a turn's opener corrected) places them again.
+  if (
+    items.length < previous.items.length ||
+    (previous.hasStoppedSends && items.length !== previous.items.length)
+  ) {
     return null
   }
   let output: NativeChatMessage[] | null = null
-  for (let index = 0; index < previous.items.length; index += 1) {
+  const revisedAt: number[] = []
+  // A revision in place names its rows; anything else is compared row by row.
+  for (const index of positionsRevisedFrom(items, previous.items) ?? previous.items.keys()) {
     const before = previous.items[index]!
     const item = items[index]!
     if (before === item) {
       continue
+    }
+    if (previous.hasStoppedSends && !onlyStreamedTextChanged(before, item)) {
+      return null
     }
     if (
       !drawsOnlyItsOwnRow(before) ||
@@ -125,10 +137,15 @@ function reuseMessages(
     ;(output ??= previous.output.slice())[at] = queuedId
       ? deliveredAgentMailRow(row, queuedId)
       : row
+    revisedAt.push(at)
   }
   const appended = items.slice(previous.items.length)
   if (appended.length === 0) {
-    return output ? { ...previous, items, output } : { ...previous, items }
+    if (!output) {
+      return { ...previous, items }
+    }
+    noteRevisedInPlace(output, previous.output, revisedAt)
+    return { ...previous, items, output }
   }
   if (
     appended.some(

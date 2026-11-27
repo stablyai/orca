@@ -184,6 +184,8 @@ export function ConfirmationDialogProvider({
         <DialogContent
           size="confirm"
           surface={options?.surface}
+          className={options?.aboveMenus ? 'z-[80]' : undefined}
+          overlayClassName={options?.aboveMenus ? 'z-[80]' : undefined}
           initialFocus={initialFocus === 'cancel' ? 'cancel' : undefined}
           onInteractOutside={(event) => {
             if (openingGesture === true) {

@@ -182,6 +182,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
         subject: `Re: ${original.subject}`,
         body: params.body,
         threadId: original.thread_id ?? original.id,
+        replyTo: original.id,
         runId: recipient.runId,
         // Refuses a second answer to a bot request, before the original is marked read.
         payload: botAnswerPayload(db, original, answerTurn !== null)

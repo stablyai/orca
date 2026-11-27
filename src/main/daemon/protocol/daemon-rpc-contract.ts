@@ -43,6 +43,8 @@ export type CreateOrAttachRequest = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    /** Optional; an old daemon ignores it. */
+    startupNotice?: string
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
