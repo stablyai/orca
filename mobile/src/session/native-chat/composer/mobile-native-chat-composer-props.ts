@@ -11,10 +11,29 @@ import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-s
 import type { MobileNativeChatMicProps } from './dictation/MobileNativeChatComposerMic'
 import type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
 import type { MobileNativeChatSteerHead } from './menus/use-mobile-native-chat-composer-tray'
+import type { Translate } from '../../../i18n/mobile-i18n'
 
 export const NO_FILE_PATHS: string[] = []
 export const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 export const NO_FILES: PendingNativeChatFile[] = []
+
+export function mobileNativeChatComposerPlaceholder(
+  goalPlaceholder: string | null | undefined,
+  placeholder: string | null | undefined,
+  hasMentionBots: boolean,
+  t: Translate
+): string {
+  return (
+    goalPlaceholder ??
+    placeholder ??
+    (hasMentionBots
+      ? t(
+          'bots.chat.mentionPlaceholder',
+          'Ask anything, @ to mention bots or files, / for commands'
+        )
+      : t('chat.composer.placeholder', 'Ask anything, @ to mention files, / for commands'))
+  )
+}
 
 export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   roomReplies?: React.ReactNode

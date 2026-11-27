@@ -20,6 +20,7 @@ import {
   NO_ATTACHMENTS,
   NO_FILES,
   NO_FILE_PATHS,
+  mobileNativeChatComposerPlaceholder,
   type MobileNativeChatComposerProps
 } from './mobile-native-chat-composer-props'
 import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
@@ -310,19 +311,12 @@ export function MobileNativeChatComposer({
               dictation.readSelection(menu.dictationAnchor(e))
               menu.onSelectionChange(e.nativeEvent.selection)
             }}
-            placeholder={
-              goal.placeholder ??
-              placeholder ??
-              (mentionBots && mentionBots.bots.length > 0
-                ? t(
-                    'bots.chat.mentionPlaceholder',
-                    'Ask anything, @ to mention bots or files, / for commands'
-                  )
-                : t(
-                    'chat.composer.placeholder',
-                    'Ask anything, @ to mention files, / for commands'
-                  ))
-            }
+            placeholder={mobileNativeChatComposerPlaceholder(
+              goal.placeholder,
+              placeholder,
+              mentionBots !== undefined && mentionBots.bots.length > 0,
+              t
+            )}
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
             multiline
