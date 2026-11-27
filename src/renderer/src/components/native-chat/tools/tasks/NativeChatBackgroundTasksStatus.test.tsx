@@ -20,7 +20,6 @@ it('opens a command through its command route and retains capability-gated untar
         settledTasks={[]}
         supportsTaskStop={false}
         offersStopAll
-        incomplete
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         indicatorActive
@@ -40,7 +39,7 @@ it('opens a command through its command route and retains capability-gated untar
     opener
   )
   expect(agent).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Stop all$/ }))
   expect(stop).toHaveBeenCalledWith()
 })
 
@@ -85,8 +84,8 @@ it('opens captured invocation details for a retained provider failure', () => {
       />
     </TooltipProvider>
   )
-  // The newest needs-attention row is the lead row: it opens from its own Show.
-  const opener = screen.getByRole('button', { name: 'Show Old agent' })
+  // The row itself opens it: there is no separate Show button.
+  const opener = screen.getByRole('button', { name: /^Verify the journal · Failed/ })
   fireEvent.click(opener)
   expect(details).toHaveBeenCalledWith(
     expect.objectContaining({

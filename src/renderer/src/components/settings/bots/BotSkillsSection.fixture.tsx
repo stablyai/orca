@@ -106,9 +106,25 @@ function atlas(extra: Partial<Bot> = {}): Bot {
   }
 }
 
-function stubRuntime(): void {
+const HOST_SERVERS = ['linear', 'sentry', 'postgres', 'context7'].map((name, index) => ({
+  id: `server-0000000${index}`,
+  name,
+  detail: `https://mcp.${name}.dev/mcp`,
+  transport: 'http',
+  remote: false,
+  agentsOff: [],
+  workspaces: { later: true, on: [], off: [] },
+  sharedProcess: false
+}))
+
+function stubRuntime(hostMcpServers?: boolean): void {
   const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
+    'mcpServers.list': () => ({
+      servers: HOST_SERVERS,
+      agentFiles: { grok: false, cursor: false, droid: false }
+    }),
     'bots.tools.list': () => ({
+      ...(hostMcpServers === undefined ? {} : { hostMcpServers }),
       agent: 'claude',
       own: [
         { name: 'sentry', detail: 'https://mcp.sentry.dev/mcp', remote: true },
@@ -153,14 +169,22 @@ const linked = atlas({ skillProjects: ['orca', 'api', 'website'] })
 export const before = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
+  render: () => <Page bot={linked} skills={false} />
+})
+
+/** A host that serves MCP servers: the bot can take them with one switch (d13). */
+export const hostMcpServersOn = defineFixture({
+  width: 720,
+  store: { repos: REPOS },
+  setup: () => stubRuntime(true),
   render: () => <Page bot={linked} skills={false} />
 })
 
 export const projectsLinked = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
   render: () => <Page bot={linked} skills />,
   interact: async (frame) => {
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -172,7 +196,7 @@ export const projectsLinked = defineFixture({
 export const linkPicker = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
   render: () => <Page bot={atlas({ skillProjects: ['orca'] })} skills />,
   interact: async (frame) => {
     const link = Array.from(frame.querySelectorAll<HTMLButtonElement>('button')).find(
@@ -186,13 +210,13 @@ export const linkPicker = defineFixture({
 export const listedForGrok = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
   render: () => <Page bot={atlas({ agent: 'grok', skillProjects: ['orca'] })} skills />
 })
 
 export const noneLinked = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
   render: () => <Page bot={atlas()} skills />
 })

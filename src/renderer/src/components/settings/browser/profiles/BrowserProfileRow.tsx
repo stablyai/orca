@@ -221,7 +221,8 @@ export function BrowserProfileRow({
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
-        {profile.scope === 'default' ? null : (
+        {/* An SSH host shows this computer's profiles; removing one there would delete it everywhere. */}
+        {profile.scope === 'default' || sshRoute ? null : (
           <Button
             variant="ghost"
             size="icon"

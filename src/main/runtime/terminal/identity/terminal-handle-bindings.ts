@@ -41,6 +41,10 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       return
     }
     this.terminalIdentity.removeIncarnation(ptyId)
+    // A successor that took the handle over (a slept agent's resume) keeps it; only the alias goes.
+    if (this.handlesMovedOnFrom(retained.handle, ptyId)) {
+      return
+    }
     if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
       this.terminalIdentity.unbindLeaf(retained.leafKey)
     }
@@ -164,6 +168,11 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
         this.setPtyHandle(pty.ptyId, existingHandle)
         return existingHandle
       }
+      // A stopped process whose successor took over its handle (a slept agent's resume) answers to
+      // that handle; re-issuing it would point the handle back at the stopped process.
+      if (this.answersToSuccessor(pty, existingHandle)) {
+        return existingHandle
+      }
     }
 
     const handle = existingHandle ?? `term_${randomUUID()}`
@@ -280,6 +289,11 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       }
     }
 
+    // An Agent-slept pane keeps its name across graph epochs and restarts.
+    const sleptHandle = this.sleptLeafHandle(leaf)
+    if (sleptHandle) {
+      return sleptHandle
+    }
     const preAllocatedHandle = this.adoptPreAllocatedHandle(leaf)
     if (preAllocatedHandle) {
       return preAllocatedHandle

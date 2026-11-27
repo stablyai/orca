@@ -56,11 +56,12 @@ export function decodeOpenCode2Message(
 export function parseOpenCode2MessageRow(value: unknown) {
   const row = asRecord(value)
   if (
-    typeof row?.data !== 'string' ||
+    typeof row?.id !== 'string' ||
+    typeof row.data !== 'string' ||
     typeof row.type !== 'string' ||
     typeof row.time_created !== 'number'
   ) {
     throw new Error('OpenCode 2 transcript contains an invalid message')
   }
-  return { data: row.data, type: row.type, time_created: row.time_created }
+  return { id: row.id, data: row.data, type: row.type, time_created: row.time_created }
 }

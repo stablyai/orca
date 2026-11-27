@@ -213,17 +213,17 @@ export async function cancelAntigravityChatSignIn(owner: RuntimeClientTarget): P
   }
 }
 
-/** Sends the address the browser ended on to the host, for a browser on another computer.
+/** Sends what Google showed after sign-in, its code or the page's address, to the host's agy.
  *  Resolves to the host's refusal, empty when it gave no reason, or null once it took it. */
 export async function completeAntigravityChatSignIn(
   owner: RuntimeClientTarget,
-  callbackUrl: string
+  pasted: string
 ): Promise<string | null> {
   const flowId = ownFlowId(owner)
   if (!flowId) {
     return ''
   }
-  return callAntigravityChatSignIn(owner, 'Complete', { flowId, callbackUrl }).then(
+  return callAntigravityChatSignIn(owner, 'Complete', { flowId, callbackUrl: pasted }).then(
     () => null,
     message
   )

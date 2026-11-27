@@ -8,7 +8,9 @@ export const AUTO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   'claude-agent-teams': '--permission-mode auto',
   codex: '--approve-for-me',
   // Why: Cursor's server classifier runs safe tool calls and asks for the rest; its ACP server has no such mode.
-  cursor: '--auto-review'
+  cursor: '--auto-review',
+  // Why: agy --mode auto approves safe actions and asks on risky ones; ACP chats keep their own modes.
+  antigravity: '--mode auto'
 }
 
 export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
@@ -19,7 +21,6 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   codex: '--dangerously-bypass-approvals-and-sandbox',
   qoder: '--dangerously-skip-permissions',
   'qoder-cn': '--dangerously-skip-permissions',
-  gemini: '--yolo',
   antigravity: '--dangerously-skip-permissions',
   aider: '--yes-always',
   amp: '--dangerously-allow-all',

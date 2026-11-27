@@ -10,6 +10,7 @@ import {
   folderWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { runtimePathsEqual, type ResolvedWorktree } from './runtime-worktree-path-identity'
+import { storedNameMatcher } from '../../../../shared/text/typed-name-normalization'
 
 /** The error a selector naming no workspace throws; callers match it to tell absence from failure. */
 export const WORKSPACE_SELECTOR_NOT_FOUND = 'selector_not_found'
@@ -99,7 +100,8 @@ export function matchFolderWorkspaceRows(
     return folders.filter((folder) => runtimePathsEqual(folder.folderPath, selector.slice(5)))
   }
   if (selector.startsWith('name:')) {
-    return folders.filter((folder) => folder.name === selector.slice(5))
+    const matchesName = storedNameMatcher(selector.slice(5))
+    return folders.filter((folder) => matchesName(folder.name))
   }
   return []
 }

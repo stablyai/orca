@@ -5,15 +5,26 @@ import {
   CONNECTOR_REPLIES_OUTBOX_FEATURE
 } from '../../../../../shared/connectors/connector-cloud-contract'
 import { botReplyRefusal } from '../../../../external-conversations/external-conversation-bots'
-import { ConnectorReply } from '../../../../../shared/rpc-contract/connectors/connector-params'
+import {
+  ConnectorReply,
+  ConnectorWakeReplyPlace,
+  CONNECTOR_REPLY_HTML_PAGE_AS_FILE
+} from '../../../../../shared/rpc-contract/connectors/connector-params'
 import type { ExternalConversationSeam } from '../../../../external-conversations/external-conversation-seam'
 import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { defineMethod } from '../../core'
+import { readBotTurnOrigin } from '../orchestration/messaging/bot-turn-origin'
+import { wakeReplyPlace } from '../../../../bots/bot-wake-reply-place'
 import { botTurnFor } from '../../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { CONNECTOR_ACT_METHOD } from '../connector-act'
+import { connectorPostAttempts } from '../../../../external-conversations/connector-post-attempts'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
+import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
+import { splitSlackHtmlReply } from '../../../../../shared/connectors/slack-html-reply'
+import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
+import { botOfSession } from '../../../../bots/bot-session-tabs'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -33,9 +44,8 @@ export const CONNECTOR_METHODS = [
     params: ConnectorReply,
     handler: async (params, context) => {
       const { replyId, text, review } = params
-      const target = requireSeam(context.runtime).replyTarget(
-        'paneKey' in params ? params.paneKey : chatPaneKey(params.sessionId)
-      )
+      const paneKey = 'paneKey' in params ? params.paneKey : chatPaneKey(params.sessionId)
+      const target = requireSeam(context.runtime).replyTarget(paneKey)
       if (!target) {
         throw new Error('not_a_cloud_conversation')
       }
@@ -56,20 +66,34 @@ export const CONNECTOR_METHODS = [
       }
       const turnFor =
         'sessionId' in params
-          ? await botTurnFor(
-              context.runtime,
-              params.sessionId,
-              sessionCallerOf(context.orchestrationCaller)?.sessionId
-            )
+          ? await botTurnFor(context.runtime, params.sessionId, {
+              verifiedSessionId: sessionCallerOf(context.orchestrationCaller)?.sessionId
+            })
           : // A terminal pane's reply names no chat whose turn Orca can read.
             'someone_else'
       const cloud = context.runtime.getConnectorCloud()
+      // Slack shows a whole page as an .html file; a caller that asked resends it with the page attached.
+      const features = cloud?.cloudFeatures()
+      if (
+        params.pagesAsFiles &&
+        conversation.source === 'slack' &&
+        'sessionId' in params &&
+        context.runtime.bots.enabled() &&
+        (['actions', 'files.direct', 'reply.files'] satisfies ConnectorCloudFeature[]).every(
+          (feature) => features?.has(feature)
+        ) &&
+        botOfSession(context.runtime.bots, params.sessionId) &&
+        splitSlackHtmlReply(text) !== null
+      ) {
+        throw new Error(CONNECTOR_REPLY_HTML_PAGE_AS_FILE)
+      }
       // Under replies.outbox a reply naming its turn's request takes that request's answer key.
       const keyed =
         target.answerDeliveryId &&
         cloud?.cloudFeatures()?.has(CONNECTOR_REPLIES_OUTBOX_FEATURE) === true
           ? { answerDeliveryId: target.answerDeliveryId }
           : {}
+      const refused = connectorPostAttempts.attempted(paneKey, replyId, target.key.externalId)
       const sent = await cloud?.reply({
         replyId,
         conversation,
@@ -79,6 +103,13 @@ export const CONNECTOR_METHODS = [
         ...(review ? { review } : {}),
         ...keyed
       })
+      // Never sent, or refused outright: nothing reached the thread. A lost answer may have posted.
+      if (
+        !sent ||
+        (!sent.ok && sent.status !== null && sent.status < 500 && sent.error !== 'post_uncertain')
+      ) {
+        refused()
+      }
       if (!sent) {
         throw new Error('connector_not_connected')
       }
@@ -90,6 +121,28 @@ export const CONNECTOR_METHODS = [
       return { ...sent.value, place: target.place }
     }
   }),
+  // `orca orchestration worker-start`: the thread a later turn of its own may tell, if it wants to.
+  defineMethod({
+    name: 'connector.wakeReplyPlace',
+    permission: 'workspace',
+    params: ConnectorWakeReplyPlace,
+    handler: async ({ sessionId }, context) => {
+      const { runtime } = context
+      const bot = runtime.bots.enabled() ? botOfSession(runtime.bots, sessionId) : null
+      // Only the chat itself names where its own turn started.
+      if (!bot || sessionCallerOf(context.orchestrationCaller)?.sessionId !== sessionId) {
+        return { place: null }
+      }
+      const seam = runtime.getExternalConversationSeam()
+      const target = seam?.replyTarget(chatPaneKey(sessionId)) ?? null
+      const delivered = seam?.deliveredTurn(sessionId) ?? false
+      const placed = await wakeReplyPlace(bot.id, target, delivered, () =>
+        readBotTurnOrigin(runtime, runtime.getOrchestrationDb(), sessionId).catch(() => null)
+      )
+      return placed ?? { place: null }
+    }
+  }),
   CONNECTOR_ACT_METHOD,
-  CONNECTOR_REACT_METHOD
+  CONNECTOR_REACT_METHOD,
+  CONNECTOR_LEAVE_THREAD_METHOD
 ]

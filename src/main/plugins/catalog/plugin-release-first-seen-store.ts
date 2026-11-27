@@ -1,11 +1,14 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { writePluginFileAtomically } from '../installation/plugin-atomic-file-write'
 
-const firstSeenSchema = z.record(
-  z.string().max(256),
-  z.object({ release: z.string().max(512), firstSeenAt: z.number().finite().nonnegative() })
+const firstSeenSchema = lazyZodSchema(() =>
+  z.record(
+    z.string().max(256),
+    z.object({ release: z.string().max(512), firstSeenAt: z.number().finite().nonnegative() })
+  )
 )
 
 /**

@@ -9,6 +9,8 @@ export const BOT_ITEMS_OPS = [
   'events',
   'eventsBefore',
   'linksTo',
+  'itemsLinking',
+  'reportFact',
   'linkedDispatchRefs',
   'list',
   'needsYou',
@@ -24,10 +26,12 @@ export const BOT_ITEMS_OPS = [
   'usageLimitWaitUids',
   'orcaComment',
   'ownerComment',
+  'ownerCommentByRequest',
   'ownerStatus',
   'ownerSnooze',
   'latestEventId',
   'owedMail',
+  'owedCommentAttachmentUploads',
   'markMailSent'
 ] as const satisfies readonly (keyof BotItemsStore)[]
 

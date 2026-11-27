@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isPluginJsonObject } from '../manifest/plugin-json-object'
 
 /**
@@ -68,39 +69,43 @@ export function outcomeError(outcome: Extract<PluginHostCallOutcome, { ok: false
   return pluginError(outcome.code, outcome.error, outcome.retryAfterMs)
 }
 
-const idSchema = z.number().int().nonnegative()
-const nameSchema = z.string().min(1).max(128)
+const idSchema = lazyZodSchema(() => z.number().int().nonnegative())
+const nameSchema = lazyZodSchema(() => z.string().min(1).max(128))
 
-export const pluginErrorSchema = z.object({
-  code: z.string().max(64),
-  message: z.string().max(8192),
-  retryable: z.boolean(),
-  retryAfterMs: z.number().int().nonnegative().optional()
-})
+export const pluginErrorSchema = lazyZodSchema(() =>
+  z.object({
+    code: z.string().max(64),
+    message: z.string().max(8192),
+    retryable: z.boolean(),
+    retryAfterMs: z.number().int().nonnegative().optional()
+  })
+)
 
-export const pluginEnvelopeSchema = z.discriminatedUnion('kind', [
-  z.object({
-    orca: z.literal(PLUGIN_PROTOCOL_VERSION),
-    kind: z.literal('req'),
-    id: idSchema,
-    method: nameSchema,
-    params: z.unknown().optional()
-  }),
-  z.object({
-    orca: z.literal(PLUGIN_PROTOCOL_VERSION),
-    kind: z.literal('res'),
-    id: idSchema,
-    result: z.unknown().optional(),
-    error: pluginErrorSchema.optional()
-  }),
-  z.object({
-    orca: z.literal(PLUGIN_PROTOCOL_VERSION),
-    kind: z.literal('evt'),
-    event: nameSchema,
-    payload: z.unknown().optional()
-  }),
-  z.object({ orca: z.literal(PLUGIN_PROTOCOL_VERSION), kind: z.literal('cancel'), id: idSchema })
-])
+export const pluginEnvelopeSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({
+      orca: z.literal(PLUGIN_PROTOCOL_VERSION),
+      kind: z.literal('req'),
+      id: idSchema,
+      method: nameSchema,
+      params: z.unknown().optional()
+    }),
+    z.object({
+      orca: z.literal(PLUGIN_PROTOCOL_VERSION),
+      kind: z.literal('res'),
+      id: idSchema,
+      result: z.unknown().optional(),
+      error: pluginErrorSchema.optional()
+    }),
+    z.object({
+      orca: z.literal(PLUGIN_PROTOCOL_VERSION),
+      kind: z.literal('evt'),
+      event: nameSchema,
+      payload: z.unknown().optional()
+    }),
+    z.object({ orca: z.literal(PLUGIN_PROTOCOL_VERSION), kind: z.literal('cancel'), id: idSchema })
+  ])
+)
 
 export type PluginEnvelope = z.infer<typeof pluginEnvelopeSchema>
 export type PluginRequest = Extract<PluginEnvelope, { kind: 'req' }>

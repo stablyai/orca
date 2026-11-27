@@ -42,7 +42,10 @@ export type AiVaultResumeHere = {
   confirm: ConfirmationDialogContextValue
 }
 
-type AiVaultReplacement = AiVaultResumeHere & { current: () => boolean }
+type AiVaultReplacement = AiVaultResumeHere & {
+  current: () => boolean
+  retry: () => Promise<void>
+}
 
 /** Replace this chat only after the picked chat opens; confirm busy chats first. False means the row cannot replace it. */
 export function resumeAiVaultSessionHere(args: {
@@ -56,7 +59,20 @@ export function resumeAiVaultSessionHere(args: {
 }): false | Promise<void> {
   const { session, actions } = args
   let current = (): boolean => true
-  const here = { ...args.here, current: () => current() }
+  const chat = findChatTab(args.here)
+  const here: AiVaultReplacement = {
+    ...args.here,
+    current: () => current(),
+    retry: async () => {
+      const anchor = findChatTab(args.here)
+      if (
+        anchor?.entityId === chat?.entityId &&
+        anchor?.executionHostId === chat?.executionHostId
+      ) {
+        await resumeAiVaultSessionHere(args)
+      }
+    }
+  }
   const structured = session.structuredSession
   // A group room never replaces this chat; it opens in its own tab.
   if (structured && botGroupRoomOfRow(readBotGroups(), session)) {
@@ -93,7 +109,6 @@ export function resumeAiVaultSessionHere(args: {
     return false
   }
   const agent = here.agent
-  const chat = findChatTab(here)
   if (!chat) {
     return replace()
   }
@@ -201,23 +216,24 @@ function revealInPlaceOf(
   here: AiVaultReplacement,
   structured: NonNullable<AiVaultSession['structuredSession']>
 ): Promise<void> {
-  return openDesktopStructuredSession({ kind: 'history', structuredSession: structured }).then(
-    (result) => {
-      if (result.kind !== 'opened' || !here.current()) {
-        return
-      }
-      // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
-      const reopened = findChatTabWhere(
-        result.target.worktreeId,
-        (tab) => tab.id === result.tab.id && tab.entityId === result.target.sessionId
-      )
-      if (reopened) {
-        // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
-        insertUnifiedTabAfterAnchor(result.target.worktreeId, reopened.id, here.tabId)
-        closeReplacedChat(here)
-      }
+  return openDesktopStructuredSession(
+    { kind: 'history', structuredSession: structured },
+    { retry: here.retry }
+  ).then((result) => {
+    if (result.kind !== 'opened' || !here.current()) {
+      return
     }
-  )
+    // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
+    const reopened = findChatTabWhere(
+      result.target.worktreeId,
+      (tab) => tab.id === result.tab.id && tab.entityId === result.target.sessionId
+    )
+    if (reopened) {
+      // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
+      insertUnifiedTabAfterAnchor(result.target.worktreeId, reopened.id, here.tabId)
+      closeReplacedChat(here)
+    }
+  })
 }
 
 function findChatTabWhere(workspaceId: string, matches: (tab: Tab) => boolean): Tab | undefined {

@@ -160,7 +160,12 @@ export type BrowserScreencastDriverResult = {
 /** Sent only to viewers that asked with `downloads: 1`: a page's download starting and ending, as a local window hears them. */
 export type BrowserScreencastDownloadResult =
   | { type: 'downloadRequested'; download: BrowserDownloadRequestedEvent }
-  | { type: 'downloadFinished'; download: BrowserDownloadFinishedEvent }
+  | {
+      type: 'downloadFinished'
+      download: BrowserDownloadFinishedEvent
+      // Only for a viewer that asked with `downloadCopyStreams: 1`: browser.downloadCopyStream sends the saved file once.
+      copyId?: string
+    }
 /** Sent only to a viewer that asked with `prints: 1`, when its own input made the page call print(); it reads the PDF printed then with browser.readPrintPdf. */
 export type BrowserScreencastPrintResult = { type: 'print'; printId: string; title: string }
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }

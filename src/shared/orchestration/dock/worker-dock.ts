@@ -1,4 +1,5 @@
-import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import * as z from 'zod'
 import { CrewParty } from '../orchestration-crew'
 
 export const WorkerDockSource = z.object({ party: CrewParty })
@@ -41,20 +42,23 @@ export const WorkerDockEntry = z.object({
   changedAt: z.number().nullable(),
   startedAt: z.number().nullable(),
   reason: z.string().nullable(),
+  progressNote: z.string().optional(),
   settlement: z.string().nullable(),
   resultId: z.string().nullable(),
   stoppable: z.boolean(),
   ownerActionsAvailable: z.boolean().default(true)
 })
 export type WorkerDockEntry = z.infer<typeof WorkerDockEntry>
-export const WorkerDockIdentity = WorkerDockEntry.pick({
-  id: true,
-  dispatchId: true,
-  state: true,
-  changedAt: true,
-  ownerActionsAvailable: true,
-  settlement: true
-}).extend({ kind: WorkerDockEntry.shape.kind.optional(), hasModel: z.boolean().default(false) })
+export const WorkerDockIdentity = lazyZodSchema(() =>
+  WorkerDockEntry.pick({
+    id: true,
+    dispatchId: true,
+    state: true,
+    changedAt: true,
+    ownerActionsAvailable: true,
+    settlement: true
+  }).extend({ kind: WorkerDockEntry.shape.kind.optional(), hasModel: z.boolean().default(false) })
+)
 export const WorkerDockSnapshot = z.object({
   revision: z.number(),
   currentOnly: z.literal(true).optional(),
@@ -84,10 +88,15 @@ export const WorkerDockResult = z.object({
   title: z.string(),
   outcome: z.enum(['succeeded', 'failed', 'stopped', 'unexpected']),
   body: z.string(),
+  /** True when the body is the worker's own report (Markdown); false for a raw error or a stop
+   *  note. Optional: older hosts omit it, and their bodies keep rendering as Markdown. */
+  report: z.boolean().optional(),
   at: z.number().nullable(),
   settlement: z.string(),
   acknowledged: z.boolean(),
-  ownerActionsAvailable: z.boolean().default(true)
+  ownerActionsAvailable: z.boolean().default(true),
+  /** The worker's workspace on its host, so the card can say when it was removed. Older hosts omit it. */
+  workspaceId: z.string().optional()
 })
 export type WorkerDockResult = z.infer<typeof WorkerDockResult>
 /** A failed row this owner can acknowledge; Clear all sends exactly these. */
@@ -118,4 +127,7 @@ export function compareWorkerDockEntries(
 }
 
 export const WorkerDockResultRead = WorkerDockSource.extend({ dispatch: z.string() })
-export const WorkerDockStop = WorkerDockResultRead.extend({ requestId: z.string().min(1) })
+/** `requestId` is unread here; clients keep sending it because older hosts still require it. */
+export const WorkerDockStop = WorkerDockResultRead.extend({
+  requestId: z.string().min(1).optional()
+})

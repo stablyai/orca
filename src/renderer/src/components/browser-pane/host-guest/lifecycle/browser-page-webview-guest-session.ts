@@ -29,6 +29,7 @@ import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserTabPageState
 } from '../../describe-page/browser-page-types'
+import { isBrowserPageAttachWaiting } from './browser-page-deferred-attach'
 
 export type BrowserPageWebviewGuestSessionArgs = {
   webview: Electron.WebviewTag
@@ -145,7 +146,8 @@ export function createBrowserPageWebviewGuestSession({
   const guestRecovery = createBrowserPageGuestRecovery({
     webview,
     browserPageExists: () => browserPageExists(browserTabId),
-    shouldValidate: () => isPaintableRef.current,
+    // A page still waiting for its profile's extensions has no guest yet; that is not a crash.
+    shouldValidate: () => isPaintableRef.current && !isBrowserPageAttachWaiting(webview),
     isCurrentWebview: () => webviewRef.current === webview,
     isPending: () => guestRecoveryPendingRef.current,
     setPending: (pending) => {

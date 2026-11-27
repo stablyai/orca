@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
 
 /**
@@ -8,9 +9,9 @@ import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
  */
 
 /** Request and event names: what authors declare in `PluginRequests` / `PluginPanelEvents`. */
-export const pluginBridgeNameSchema = z
-  .string()
-  .regex(/^[A-Za-z0-9_.:-]{1,128}$/, 'is 1-128 letters, digits, or . _ : -')
+export const pluginBridgeNameSchema = lazyZodSchema(() =>
+  z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/, 'is 1-128 letters, digits, or . _ : -')
+)
 
 export const PLUGIN_PANEL_REQUEST_DEFAULT_TIMEOUT_MS = 30_000
 export const PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS = 120_000
@@ -21,26 +22,32 @@ export const PLUGIN_PANEL_POST_MAX_BYTES = 256 * 1024
 export const PLUGIN_PANEL_POST_RATE_LIMIT = { maxMessages: 200, perMs: 10_000 }
 
 /** Who asked: one open panel or editor of the plugin. `id` stays the same while it stays open. */
-export const pluginPanelCallerSchema = z.object({
-  id: z.string().min(1).max(64),
-  surface: z.enum(['panel', 'editor']),
-  contributionId: z.string().min(1).max(256)
-})
+export const pluginPanelCallerSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string().min(1).max(64),
+    surface: z.enum(['panel', 'editor']),
+    contributionId: z.string().min(1).max(256)
+  })
+)
 export type PluginPanelCaller = z.infer<typeof pluginPanelCallerSchema>
 
 /** host → worker request `panel.request`. */
-export const pluginWorkerPanelRequestParamsSchema = z.object({
-  name: pluginBridgeNameSchema,
-  input: z.unknown(),
-  panel: pluginPanelCallerSchema
-})
+export const pluginWorkerPanelRequestParamsSchema = lazyZodSchema(() =>
+  z.object({
+    name: pluginBridgeNameSchema,
+    input: z.unknown(),
+    panel: pluginPanelCallerSchema
+  })
+)
 
 /** worker → host event `panel.post`; `panel` targets one panel, else every open one. */
-export const pluginWorkerPanelPostSchema = z.object({
-  event: pluginBridgeNameSchema,
-  payload: z.unknown(),
-  panel: z.string().min(1).max(64).optional()
-})
+export const pluginWorkerPanelPostSchema = lazyZodSchema(() =>
+  z.object({
+    event: pluginBridgeNameSchema,
+    payload: z.unknown(),
+    panel: z.string().min(1).max(64).optional()
+  })
+)
 export type PluginWorkerPanelPost = z.infer<typeof pluginWorkerPanelPostSchema>
 
 /** Which of the plugin's stores changed; values are re-read, never pushed. */
@@ -48,16 +55,20 @@ export const PLUGIN_DATA_AREAS = ['storage', 'settings'] as const
 export type PluginDataArea = (typeof PLUGIN_DATA_AREAS)[number]
 
 /** host → worker event `data.changed`: a panel or the person changed the plugin's data. */
-export const pluginDataChangedSchema = z.object({
-  area: z.enum(PLUGIN_DATA_AREAS),
-  key: z.string().min(1).max(256)
-})
+export const pluginDataChangedSchema = lazyZodSchema(() =>
+  z.object({
+    area: z.enum(PLUGIN_DATA_AREAS),
+    key: z.string().min(1).max(256)
+  })
+)
 export type PluginDataChanged = z.infer<typeof pluginDataChangedSchema>
 
 /** main → renderer → frame: what an open panel is told, wrapped in the `plugin.push` frame event. */
-export const pluginPanelPushSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('message'), event: pluginBridgeNameSchema, payload: z.unknown() }),
-  z.object({ kind: z.literal('event'), event: z.enum(PLUGIN_EVENT_NAMES), payload: z.unknown() }),
-  z.object({ kind: z.literal('changed'), area: z.enum(PLUGIN_DATA_AREAS), key: z.string() })
-])
+export const pluginPanelPushSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('message'), event: pluginBridgeNameSchema, payload: z.unknown() }),
+    z.object({ kind: z.literal('event'), event: z.enum(PLUGIN_EVENT_NAMES), payload: z.unknown() }),
+    z.object({ kind: z.literal('changed'), area: z.enum(PLUGIN_DATA_AREAS), key: z.string() })
+  ])
+)
 export type PluginPanelPush = z.infer<typeof pluginPanelPushSchema>

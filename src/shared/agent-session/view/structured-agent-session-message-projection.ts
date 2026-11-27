@@ -4,7 +4,6 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../requests/structured-agent-session-send-evidence'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
 import {
@@ -23,6 +22,10 @@ import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispa
 import { isStructuredAgentSessionStartFailureRow } from '../failures/structured-agent-session-start-failure-row-key'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import {
+  deliveredAgentMailRow,
+  structuredAgentSessionEchoRows
+} from './structured-agent-session-echo-rows'
 import {
   automationResultMarks,
   withAutomationResultMarks
@@ -205,7 +208,9 @@ export function projectStructuredAgentSessionMessageRows(
             deliveryState: submission.dispatchState,
             ...(submission.queuedMessageId ? { queuedMessageId: submission.queuedMessageId } : {})
           }
-        : row
+        : submission?.queuedMessageId && row.from
+          ? deliveredAgentMailRow(row, submission.queuedMessageId)
+          : row
     // Until handover, queued sends have no conversation position.
     if (
       submission &&
@@ -250,41 +255,7 @@ export function projectStructuredAgentSessionMessageRows(
     // Held cards follow the conversation outside its runs.
     ...held,
     // Host rows supersede client echoes under either client or provider IDs.
-    ...optimistic
-      .filter((entry) => {
-        const key = agentJournalSubmissionKey(entry.clientMessageId)
-        const submission = submissionsByItemId.get(key)
-        return (
-          !journalled.has(key) &&
-          (!submission ||
-            submission.dispatchState === 'pending' ||
-            submission.reason === STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING)
-        )
-      })
-      .map((entry): NativeChatMessage => {
-        const id = agentJournalSubmissionKey(entry.clientMessageId)
-        const submission = submissionsByItemId.get(id)
-        const hostPending =
-          submission?.dispatchState === 'pending' &&
-          submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
-        return {
-          id,
-          role: 'user',
-          source: 'transcript',
-          deliveryState:
-            hostPending || entry.phase === 'recorded' || entry.recordedCursor !== undefined
-              ? 'pending'
-              : 'unknown',
-          timestamp: entry.queuedAt,
-          blocks: entry.body.blocks,
-          ...(entry.afterSequence !== undefined
-            ? {
-                journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt ?? 0 }
-              }
-            : {}),
-          ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
-        }
-      })
+    ...structuredAgentSessionEchoRows(optimistic, journalled, submissionsByItemId)
   ]
   return {
     output,
