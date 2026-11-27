@@ -1,8 +1,12 @@
-import type { GitReviewBranchSource } from '../../../../shared/git/remotes/git-review-branch-source'
+import type {
+  GitReviewBranchSource,
+  GitReviewBranchSourceResolver
+} from '../../../../shared/git/remotes/git-review-branch-source'
 import { splitRemoteBranchName } from '../../../../shared/git/remotes/git-remote-branch-name'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
 import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
+import { getCanonicalRepoKey } from '../../../git/repositories/canonical-repo-key'
 export type TrackedUpstreamBranch = {
   remoteName: string
   branchName: string
@@ -10,13 +14,15 @@ export type TrackedUpstreamBranch = {
 
 export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
 
-export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
+// Keyed per canonical repository (git common dir) rather than per worktree.
+export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 64
 
 export type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
   gitConfigSignature?: string
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
   reviewSources?: Map<string, GitReviewBranchSource | Error>
+  reviewSourceResolver?: GitReviewBranchSourceResolver
 }
 
 export type TrackedUpstreamSnapshotProbeResult = {
@@ -25,6 +31,7 @@ export type TrackedUpstreamSnapshotProbeResult = {
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
   reviewSources?: Map<string, GitReviewBranchSource | Error>
+  reviewSourceResolver?: GitReviewBranchSourceResolver
 }
 
 export const trackedUpstreamSnapshotCache = new Map<string, TrackedUpstreamSnapshotCacheEntry>()
@@ -128,4 +135,15 @@ export function getTrackedUpstreamBranchCacheKey(
     ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
   return [runtimeKey, repoPath].join('\0')
+}
+
+export async function resolveTrackedUpstreamBranchCacheKey(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<string> {
+  if (connectionId) {
+    return getTrackedUpstreamBranchCacheKey(repoPath, connectionId, localGitOptions)
+  }
+  return getCanonicalRepoKey(repoPath, localGitOptions)
 }
