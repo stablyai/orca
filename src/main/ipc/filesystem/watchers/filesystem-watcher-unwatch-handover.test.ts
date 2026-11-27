@@ -86,4 +86,23 @@ it('hands back an edit that was queued or still flushing when the window unwatch
   )
   expect(flushing.send).not.toHaveBeenCalled()
   expect(fromFlush).toEqual(handedBack)
+
+  await closeAllWatchers()
+
+  // Cancelled out: a file created and deleted inside the window leaves nothing to hand back.
+  const cancelled = sender()
+  await handlers.get('fs:watchWorktree')!(
+    { sender: cancelled },
+    { worktreePath: '/repo/linked/a/b' }
+  )
+  emit(null, [
+    { type: 'create', path: edit.path },
+    { type: 'delete', path: edit.path }
+  ])
+  expect(
+    handlers.get('fs:unwatchWorktree')!(
+      { sender: cancelled },
+      { worktreePath: '/repo/linked/a/b', handOver: true }
+    )
+  ).toBeUndefined()
 })

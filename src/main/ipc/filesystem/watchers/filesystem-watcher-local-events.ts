@@ -209,12 +209,14 @@ export function undeliveredBatchPayload(root: WatchedRoot): FsChangedPayload | u
   if (overflowed || flushing?.overflowed || raw.length > MAX_BATCHED_WATCHER_EVENTS) {
     return overflowPayload(root)
   }
-  if (raw.length === 0) {
+  const coalesced = coalesceEvents(raw)
+  // Why: a create then delete of one path cancels out, leaving nothing worth a renderer pass.
+  if (coalesced.length === 0) {
     return undefined
   }
   return {
     worktreePath: root.rootPath,
-    events: coalesceEvents(raw).map(({ type, path }) => ({ kind: type, absolutePath: path }))
+    events: coalesced.map(({ type, path }) => ({ kind: type, absolutePath: path }))
   }
 }
 
