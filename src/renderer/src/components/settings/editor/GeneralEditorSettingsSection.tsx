@@ -16,6 +16,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { MarkdownDefaultViewSetting } from './MarkdownDefaultViewSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
+import { EditorLineNumbersSetting } from '../EditorLineNumbersSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
@@ -159,12 +160,13 @@ export function GeneralEditorSettingsSection({
           updateSettings={updateSettings}
           fontSuggestions={fontSuggestions}
           onRequestFontSuggestions={onRequestFontSuggestions}
-        />
-        <EditorTypographySettings settings={settings} updateSettings={updateSettings} />
+        />        <EditorTypographySettings settings={settings} updateSettings={updateSettings} />
         <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+        <EditorLineNumbersSetting settings={settings} updateSettings={updateSettings} />
         <SearchableSetting
           id={GENERAL_SETTING_ANCHORS.minimap}
           title={t('auto.components.settings.GeneralEditorSettingsSection.6690b1ffb9', 'Minimap')}
+
           description={t(
             'auto.components.settings.GeneralEditorSettingsSection.51161d1647',
             'Show the minimap overview when editing a file.'
