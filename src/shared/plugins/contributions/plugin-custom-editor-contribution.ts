@@ -4,6 +4,7 @@ import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-man
 import {
   pluginFieldDoc,
   pluginPathFieldDoc,
+  PLUGIN_EDITOR_DIFF_SINCE,
   PLUGIN_EDITOR_FRAME_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SOURCE_MODULES_SINCE
@@ -87,6 +88,16 @@ export const pluginCustomEditorContributionSchema = z
           "`any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.",
           PLUGIN_EDITOR_FRAME_SINCE,
           ['isolated']
+        )
+      ),
+    diff: z
+      .boolean()
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          "`true` also offers this editor in a single-file diff tab, beside Orca's diff, which stays the default. The editor then gets the changed side as a read-only document and the side the change started from as `diff.original`. Text editors only.",
+          PLUGIN_EDITOR_DIFF_SINCE,
+          [true]
         )
       )
   })

@@ -94,5 +94,5 @@
 - `MountOptions = { host?: MockHost; theme?: 'light' | 'dark'; locale?: string; visible?: boolean; panelId?: string; persisted?: { plugin?: Record<string, unknown>; workspace?: Record<string, unknown> } }`
 - `MountWorkerOptions = { host?: MockHost; events?: readonly string[]; commands?: readonly string[]; hooks?: readonly (string | { event: string; onError?: 'pass' | 'deny' })[] }`
 - `MockHostOptions = { capabilities?: readonly string[]; results?: Record<string, unknown>; requests?: MockRequests; storage?: Record<string, JsonValue>; settings?: Record<string, JsonValue>; secrets?: Record<string, string> }`
-- `MockEditorHostOptions = { readOnly?: boolean; colorScheme?: 'light' | 'dark'; locale?: string; fileType?: string }`
+- `MockEditorHostOptions = { readOnly?: boolean; colorScheme?: 'light' | 'dark'; locale?: string; fileType?: string; original?: string }`
 - `CheckScenario = MockHostOptions & { persisted?: MountOptions['persisted']; theme?: 'light' | 'dark'; events?: readonly { [E in keyof OrcaEvents]: { event: E; payload: OrcaEvents[E] } }[keyof OrcaEvents][] }`

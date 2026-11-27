@@ -108,6 +108,8 @@ declare module 'orca/testing' {
     locale?: string
     /** Bytes documents: the manifest suffix that matched, e.g. `xlsx`. */
     fileType?: string
+    /** A diff tab's original side; the document is then read-only and carries `diff`. */
+    original?: string
   }
   export type MockEditorEdit = {
     baseVersion: number

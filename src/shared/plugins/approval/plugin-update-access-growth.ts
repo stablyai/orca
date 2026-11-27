@@ -57,6 +57,7 @@ type CustomEditorReach = {
   files: string[]
   takesDefault: boolean
   contentKind: string
+  readsDiffs: boolean
 }
 
 function customEditorReach(entry: unknown): [string, CustomEditorReach] | null {
@@ -73,13 +74,14 @@ function customEditorReach(entry: unknown): [string, CustomEditorReach] | null {
           : []
       }),
       takesDefault: entry.priority !== 'option',
-      contentKind: typeof entry.contentKind === 'string' ? entry.contentKind : 'text'
+      contentKind: typeof entry.contentKind === 'string' ? entry.contentKind : 'text',
+      readsDiffs: entry.diff === true
     }
   ]
 }
 
-/** Why per field: new extensions or file names, or taking over opening them is more reach, while new editor
- *  code under the same id is not. */
+/** Why per field: new extensions or file names, taking over opening them, or reading their earlier
+ *  revisions in diff tabs is more reach, while new editor code under the same id is not. */
 function customEditorsGrow(installed: readonly unknown[], next: readonly unknown[]): boolean {
   const held = new Map(installed.map(customEditorReach).filter((reach) => reach !== null))
   return next.some((entry) => {
@@ -92,7 +94,8 @@ function customEditorsGrow(installed: readonly unknown[], next: readonly unknown
     return (
       after.files.some((file) => !before.files.includes(file)) ||
       (after.takesDefault && !before.takesDefault) ||
-      after.contentKind !== before.contentKind
+      after.contentKind !== before.contentKind ||
+      (after.readsDiffs && !before.readsDiffs)
     )
   })
 }

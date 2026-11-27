@@ -165,7 +165,10 @@ export function useEditorPanelDiffContentLoader({
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
         }
-        setDiffContents((prev) => ({ ...prev, [file.id]: result }))
+        setDiffContents((prev) => ({
+          ...prev,
+          [file.id]: { ...result, readWithOldPath: file.branchOldPath }
+        }))
         // Why: an unstaged diff saves its modified side to the working-tree file, so that side is its baseline.
         if (
           file.diffSource === 'unstaged' &&
@@ -196,7 +199,8 @@ export function useEditorPanelDiffContentLoader({
                 }
               ),
               originalIsBinary: false,
-              modifiedIsBinary: false
+              modifiedIsBinary: false,
+              loadFailed: true
             }
           }
         })
