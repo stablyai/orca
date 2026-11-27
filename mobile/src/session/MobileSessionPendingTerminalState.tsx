@@ -1,7 +1,38 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-session-styles'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+
+const pendingTerminalStylesSheet = themedStyleSheet((colors) => ({
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl
+  },
+  emptyText: {
+    color: colors.textSecondary,
+    fontSize: typography.bodySize,
+    marginBottom: spacing.lg
+  },
+  createButton: {
+    backgroundColor: colors.bgRaised,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.control
+  },
+  createButtonText: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  newTerminalButtonPressed: {
+    backgroundColor: colors.bgRaised
+  }
+}))
 
 export function MobileSessionPendingTerminalState({
   title,
@@ -13,6 +44,8 @@ export function MobileSessionPendingTerminalState({
   onRetry: () => void
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(pendingTerminalStylesSheet)
   return (
     <View style={styles.emptyState}>
       {!parked && <ActivityIndicator size="small" color={colors.textSecondary} />}

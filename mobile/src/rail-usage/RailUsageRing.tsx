@@ -11,9 +11,9 @@ import { usageResetLabel } from '../composer-usage/usage-reset-label'
 import { UsageProviderGlyph } from '../composer-usage/usage-provider-logo'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { DUO_STATUS_RING_DIAMETER } from '../layout/duo-status-row'
-import { colors, feedback } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { feedback } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { pickRailUsageWindow, railRingArc, railRingPoint } from './rail-usage-model'
 
 // The same ring as the iOS status glyph above it.
@@ -38,7 +38,8 @@ export function RailUsageRing({
   now: number
   onPress: () => void
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const display = useComposerUsageDisplay()
   // "3d 2h" when it fits inside the ring, else its largest unit ("3d", "5h", "40m").
@@ -138,7 +139,7 @@ export function RailUsageRing({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   ring: {
     width: SIZE,
     height: SIZE,

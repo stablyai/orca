@@ -324,7 +324,7 @@ export function MobileNativeChatComposer({
                   dictation.readSelection(menu.dictationAnchor(e))
                   menu.onSelectionChange(e.nativeEvent.selection)
                 }}
-                placeholder={composerPlaceholder(goal, placeholder, mentionBots, t)}
+                placeholder={composerPlaceholder(goal.placeholder, placeholder, mentionBots, t)}
                 placeholderTextColor={colors.textMuted}
                 selectionColor={colors.accentBlue}
                 multiline
