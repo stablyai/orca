@@ -5,6 +5,7 @@ import type {
 } from '../host-catalog/remote-server-update'
 import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 import { readRemoteServerInstallFailure } from './remote-server-install-failure-probe'
+import { RemoteServerUpdaterStatusError } from './remote-server-updater-polling'
 
 type RestartWaitTransport = {
   getRuntimeStatus: (
@@ -42,7 +43,7 @@ export async function waitForReplacementRuntime(
   while (now() < deadline) {
     // Clamp each RPC to remaining time or it outlives the caller’s whole wait budget.
     const rpcTimeoutMs = Math.min(RESTART_WAIT_RPC_TIMEOUT_MS, deadline - now())
-    let installFailure: string | null = null
+    let installFailure: Awaited<ReturnType<typeof readRemoteServerInstallFailure>> = null
     try {
       // A restart the user started must notice the new server now, not after a failure backoff.
       const status = await transport.getRuntimeStatus(environmentId, rpcTimeoutMs, { force: true })
@@ -69,7 +70,7 @@ export async function waitForReplacementRuntime(
     }
     // Why: thrown outside the try so the loop's own catch cannot swallow the reason we came for.
     if (installFailure !== null) {
-      throw new Error(installFailure)
+      throw new RemoteServerUpdaterStatusError(installFailure)
     }
     const waitMs = Math.min(timing.pollIntervalMs, deadline - now())
     if (waitMs > 0) {
