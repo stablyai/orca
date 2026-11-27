@@ -13,6 +13,7 @@ import {
   nextResumeRun,
   resumeRunInFlight,
   resumeRunPendingIds,
+  settledResumeRun,
   unsentResumeIds,
   withoutResumeRunSessions,
   type ResumeRun,
@@ -189,7 +190,7 @@ export function createNativeChatRestartOccurrence(
     startedBy: ResumeRunStarter = 'user',
     took?: NativeChatRestartOffer['candidates']
   ): Promise<void> {
-    // Checked before any await, so a second activation in the same tick sends nothing.
+    // Checked before any await, so an activation while one is in flight, even in the same tick, sends nothing.
     const requested = unsentResumeIds(run, sessionIds)
     if (!current() || requested.length === 0) {
       return
@@ -246,18 +247,15 @@ export function createNativeChatRestartOccurrence(
           releaseRunStatus = undefined
         }
         actionsSettled += 1
-        const attemptedIds = new Set(outcomes.attempted)
         if (run === actionRun) {
-          setRun({
-            ...actionRun,
-            entries: actionRun.entries.filter(
-              (entry) =>
-                attemptedIds.has(entry.candidate.sessionId) &&
-                !outcomes.skipped.has(entry.candidate.sessionId)
-            ),
-            inFlight: false,
-            continued: outcomes.continued
-          })
+          setRun(
+            settledResumeRun(
+              actionRun,
+              new Set(outcomes.attempted),
+              outcomes.skipped,
+              outcomes.continued
+            )
+          )
         }
       }
     }

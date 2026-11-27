@@ -105,13 +105,17 @@ export function NativeChatResumeToastRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = rowActions(row, remote, t)
-  const reason = row.openOnly
-    ? t('auto.components.NativeChatResumeFailureGuidance.fallbackShort', 'Couldn’t resume.')
-    : row.failure
-      ? resumeFailureGuidance(row.failure, t).text
-      : row.state === 'needs-you' || row.state === 'stopped'
-        ? resumeActivityLabel(row.candidate.activity, t)?.summary
-        : undefined
+  // A row being resumed again no longer shows why the last attempt failed.
+  const reason =
+    row.state === 'resuming'
+      ? undefined
+      : row.openOnly
+        ? t('auto.components.NativeChatResumeFailureGuidance.fallbackShort', 'Couldn’t resume.')
+        : row.failure
+          ? resumeFailureGuidance(row.failure, t).text
+          : row.state === 'needs-you' || row.state === 'stopped'
+            ? resumeActivityLabel(row.candidate.activity, t)?.summary
+            : undefined
   return (
     <li className="flex min-w-0 items-start gap-2 rounded-md px-2 py-1.5 hover:bg-accent/40">
       <StateMark row={row} />

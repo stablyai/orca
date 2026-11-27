@@ -4,6 +4,7 @@ import {
   isResumeRunSessionStarting,
   nextResumeRun,
   observeResumeRun,
+  settledResumeRun,
   unsentResumeIds
 } from './native-chat-resume-run'
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
@@ -46,33 +47,38 @@ const candidate = (sessionId: string): ResumeCandidate => ({
   recordedAt: 1
 })
 
-it('sends a chat once when Retry is activated twice before the first action settles', () => {
+it('sends nothing while an action is in flight, even a different chat', () => {
   const first = nextResumeRun(null, [candidate('failed')], 3, 'user')
 
   expect(unsentResumeIds(null, ['failed', 'failed'])).toEqual(['failed'])
   expect(unsentResumeIds(first, ['failed'])).toEqual([])
+  expect(unsentResumeIds(first, ['other'])).toEqual([])
   expect(unsentResumeIds({ ...first, inFlight: false }, ['failed'])).toEqual(['failed'])
 })
 
 it('keeps chats an earlier run resumed in the report when a retry replaces the run', () => {
-  const settled = {
-    ...beginResumeRun([candidate('a'), candidate('b'), candidate('failed')], 1, 'launch'),
-    inFlight: false,
-    continued: [
-      { sessionId: 'a', outcome: 'continued' as const },
-      { sessionId: 'b', outcome: 'continued' as const },
-      { sessionId: 'failed', outcome: 'refused' as const }
+  const settled = settledResumeRun(
+    beginResumeRun([candidate('a'), candidate('b'), candidate('failed')], 1, 'launch'),
+    new Set(['a', 'b', 'failed']),
+    new Set(),
+    [
+      { sessionId: 'a', outcome: 'continued' },
+      { sessionId: 'b', outcome: 'continued' },
+      { sessionId: 'failed', outcome: 'refused' }
     ]
-  }
+  )
   const retry = nextResumeRun(settled, [candidate('failed')], 2, 'user')
   expect(retry.entries.map((entry) => entry.candidate.sessionId)).toEqual(['failed'])
   expect(retry.resumedBefore?.map((row) => row.sessionId)).toEqual(['a', 'b'])
 
-  const again = nextResumeRun(
-    { ...retry, inFlight: false, continued: [{ sessionId: 'failed', outcome: 'refused' }] },
-    [candidate('failed'), candidate('a')],
-    3,
-    'user'
-  )
-  expect(again.resumedBefore?.map((row) => row.sessionId)).toEqual(['b'])
+  const done = settledResumeRun(retry, new Set(['failed']), new Set(), [
+    { sessionId: 'failed', outcome: 'continued' }
+  ])
+  expect(done.resumedBefore).toBeUndefined()
+  expect(done.entries.map((entry) => entry.candidate.sessionId)).toEqual(['a', 'b', 'failed'])
+  expect(done.continued?.every((entry) => entry.outcome === 'continued')).toBe(true)
+
+  // A retry the host skips still leaves the earlier successes as a settled run.
+  const skipped = settledResumeRun(retry, new Set(), new Set(['failed']), [])
+  expect(skipped.entries.map((entry) => entry.candidate.sessionId)).toEqual(['a', 'b'])
 })

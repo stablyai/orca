@@ -18,7 +18,8 @@ export type ResumeRun = Readonly<{
   inFlight: boolean
   continued?: readonly RestartContinuationOutcome[]
   finishedViewShown?: boolean
-  /** Chats earlier runs resumed that this one does not retry, so a retry keeps them in the report. */
+  /** While a retry is in flight: chats earlier runs resumed that it does not retry. Settling folds
+   *  them back into entries, so a settled run reads like any other. */
   resumedBefore?: readonly ResumeCandidate[]
 }>
 
@@ -132,13 +133,40 @@ export function nextResumeRun(
   return carried.size > 0 ? { ...next, resumedBefore: [...carried.values()] } : next
 }
 
-/** What a new action may send: a chat an action is already resuming is never sent twice. */
+/** One action owns the occurrence: while it is in flight nothing else is sent, even a repeat. */
 export function unsentResumeIds(
   run: ResumeRun | null,
   sessionIds: readonly string[]
 ): readonly string[] {
-  const pending = new Set(resumeRunPendingIds(run))
-  return [...new Set(sessionIds)].filter((sessionId) => !pending.has(sessionId))
+  return run?.inFlight ? [] : [...new Set(sessionIds)]
+}
+
+/** The action's reply: what it skipped leaves the run, and earlier successes rejoin it. */
+export function settledResumeRun(
+  run: ResumeRun,
+  attempted: ReadonlySet<string>,
+  skipped: ReadonlySet<string>,
+  continued: readonly RestartContinuationOutcome[]
+): ResumeRun {
+  const { resumedBefore = [], ...rest } = run
+  return {
+    ...rest,
+    entries: [
+      ...resumedBefore.map((candidate) => ({ candidate })),
+      ...run.entries.filter(
+        (entry) =>
+          attempted.has(entry.candidate.sessionId) && !skipped.has(entry.candidate.sessionId)
+      )
+    ],
+    inFlight: false,
+    continued: [
+      ...resumedBefore.map((candidate) => ({
+        sessionId: candidate.sessionId,
+        outcome: 'continued' as const
+      })),
+      ...continued
+    ]
+  }
 }
 
 const NONE: readonly string[] = []
@@ -157,16 +185,12 @@ export function withoutResumeRunSessions(
   }
   const dismissed = new Set(sessionIds)
   const entries = run.entries.filter((entry) => !dismissed.has(entry.candidate.sessionId))
-  const resumedBefore = run.resumedBefore?.filter(
-    (candidate) => !dismissed.has(candidate.sessionId)
-  )
-  if (entries.length === 0 && !resumedBefore?.length) {
+  if (entries.length === 0) {
     return null
   }
   return {
     ...run,
     entries,
-    continued: run.continued?.filter((entry) => !dismissed.has(entry.sessionId)),
-    ...(resumedBefore ? { resumedBefore } : {})
+    continued: run.continued?.filter((entry) => !dismissed.has(entry.sessionId))
   }
 }
