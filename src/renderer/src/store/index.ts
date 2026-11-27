@@ -72,6 +72,7 @@ import {
 import { registerAppHttpLinkStateAccessor } from '@/lib/browser/navigation/app-http-link-open'
 import { registerServerPortForwardStateAccessor } from '@/lib/workspace-ports/server-port-forward-support'
 import { installStoreListenerCensus } from './diagnostics/store-listener-census'
+import { installFanoutCostMeasure, measureSelector } from './diagnostics/fanout-cost-measure'
 import { installSettledSortEpoch } from './slices/ui/settled-sort-epoch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { withReactCommitCascadeWriteProbe } from './diagnostics/react-commit-cascade-write-probe'
@@ -98,7 +99,7 @@ const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) 
 
 // Presentation ownership follows accepted buffer reconciliation; probes see the caller’s patch.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
-export const useAppStore = create<AppState>()(
+const useAppStoreRaw = create<AppState>()(
   withStatusTransaction(
     withBrowserInitializationPresentations(
       withEditorBufferRecords(
@@ -111,6 +112,7 @@ export const useAppStore = create<AppState>()(
             }
             // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
             installStoreListenerCensus(a[2])
+            a[0] = installFanoutCostMeasure(a[2], a[0]) as typeof a[0]
             return {
               ...createRepoSlice(...a),
               ...createSparsePresetsSlice(...a),
@@ -174,6 +176,11 @@ export const useAppStore = create<AppState>()(
     )
   )
 )
+
+function useAppStoreMeasured(selector?: (s: AppState) => unknown): unknown {
+  return selector ? useAppStoreRaw(measureSelector(selector)) : useAppStoreRaw()
+}
+export const useAppStore = Object.assign(useAppStoreMeasured, useAppStoreRaw) as unknown as typeof useAppStoreRaw
 
 bindAppRuntimeStatusStore(useAppStore)
 

@@ -284,7 +284,7 @@ export const electronViteConfig: UserConfig = {
       reportCompressedSize: false,
       chunkSizeWarningLimit: RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB,
       modulePreload: { polyfill: true },
-      minify: 'oxc',
+      minify: false,
       target: 'es2020',
       // Give pop-out dashboard its own HTML/React root with shared preload API; retain index or overriding input drops electron-vite’s default entry.
       rollupOptions: {

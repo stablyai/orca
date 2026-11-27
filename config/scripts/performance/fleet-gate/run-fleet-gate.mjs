@@ -25,6 +25,7 @@ import { parseArgs } from './fleet-gate-args.mjs'
 import { hotPathChanges, isHotPath } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
+import { readFanoutCost, resetFanoutCost } from './fleet-gate-fanout-cost.mjs'
 import { burstRows, compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
 import { chatMemoryOnce, chatMemoryRows } from './fleet-gate-chat-memory.mjs'
 import {
@@ -388,11 +389,16 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       await SCENARIO_SETUP[name]?.(page)
       await resetMainProbe(app)
       await renderer.reset()
+      await resetFanoutCost(page)
       const started = Date.now()
       const driven = await SCENARIOS[name]({ page, userDataDir, windowMs })
       const elapsed = Date.now() - started
       const main = await snapshotMainProbe(app)
       const rendererSnapshot = await renderer.snapshot()
+      const fanoutCost = await readFanoutCost(page)
+      if (fanoutCost) {
+        console.log(`[fanout-cost] ${label} ${name} ${JSON.stringify(fanoutCost)}`)
+      }
       // After the snapshot, so a scenario's cleanup (e.g. typing's backspaces) is never measured or counted.
       await driven.cleanup?.()
       const ptyWrites = main.inByChannel['pty:write']?.n ?? 0
