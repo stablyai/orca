@@ -27,6 +27,7 @@ import {
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readBots } from '@/lib/bot-catalog'
+import { readStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { findBotByWorkspace } from '@/components/bots/bot-workspace'
 import { isOwnBotHome } from '../../../../../../shared/bots/bot-home-of'
 import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
@@ -120,7 +121,7 @@ function dispatchStructuredAttention(
     tab.entityId
   )
     ? 'Home'
-    : tab.label
+    : readStructuredChatTabName(tab, state)
   const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   applyAgentAttention(decision, {
     unread: state.markAgentAttentionUnread,
