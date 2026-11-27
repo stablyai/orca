@@ -44,6 +44,16 @@ describe('Claude relay ack floor', () => {
     expect(floor.floor()).toBe(null)
   })
 
+  it("never replays a turn's end for a stream that crossed it and stopped before the reader passed it", () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, stream('message_start', 'agent-1'))
+    floor.observe(2, frame({ type: 'result', session_id: 's' }))
+    floor.observe(3, stream('message_start'))
+    floor.observe(6, stream('message_stop', 'agent-1'))
+    // The reader is at 5: the result is past, the subagent's stop is not.
+    expect(floor.floor(5)).toBe(3)
+  })
+
   it("keeps a background subagent's open call past the turn's end, never replaying that end", () => {
     const floor = claudeRelayAckFloor()
     floor.observe(

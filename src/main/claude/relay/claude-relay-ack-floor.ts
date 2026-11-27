@@ -107,6 +107,13 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
         map.set(scope, Math.max(from, seq + 1))
       }
     }
+    // Applied once the reader is past the result, after a stream that crossed it may have stopped.
+    for (const stopped of closed.values()) {
+      for (const message of stopped) {
+        cut ||= message.start <= seq && message.stop > seq
+        message.start = Math.max(message.start, seq + 1)
+      }
+    }
     for (const tool of tools.values()) {
       tool.seq = Math.max(tool.seq, seq + 1)
     }
