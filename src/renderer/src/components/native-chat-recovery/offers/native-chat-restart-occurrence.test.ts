@@ -2,11 +2,13 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
 import type { RestartContinuationBatchResult } from '../runs/native-chat-restart-continuation-chunks'
 import type * as HostOffer from './native-chat-restart-host-offer'
+import type * as Chunks from '../runs/native-chat-restart-continuation-chunks'
 
 const sent: string[][] = []
 let reply: (result: RestartContinuationBatchResult) => void = () => {}
 
-vi.mock('../runs/native-chat-restart-continuation-chunks', () => ({
+vi.mock('../runs/native-chat-restart-continuation-chunks', async (actual) => ({
+  ...(await actual<typeof Chunks>()),
   continueRestartChunks: (_target: unknown, ids: readonly string[]) => {
     sent.push([...ids])
     return new Promise<RestartContinuationBatchResult>((resolve) => {
@@ -133,20 +135,47 @@ it('lets neither a dismissal nor a resume start while the other is in flight', a
   store.dispose()
 })
 
-it("always follows the host's own launch action, even while a dismissal is in flight", async () => {
+it("follows the host's own launch action once the action in flight settles", async () => {
   const store = await occurrence()
   const dismissal = store.dismissNativeChatRestartOffer(['b'])
   const launch = store.continueNativeChatRestartOffer(['a'], 'launch', [chat('a')])
-  expect(sent).toEqual([['a']])
-  expect(
-    store.getNativeChatRestartRun()?.entries.map((entry) => entry.candidate.sessionId)
-  ).toEqual(['a'])
+  await Promise.resolve()
+  expect(sent).toEqual([])
   dismissReply()
+  await dismissal
+  await vi.waitFor(() => expect(sent).toEqual([['a']]))
   reply({
     attempted: ['a'],
     continued: [{ sessionId: 'a', outcome: 'continued' }],
     skipped: new Set()
   })
-  await Promise.all([dismissal, launch])
+  await launch
+  expect(store.getNativeChatRestartRun()?.continued).toEqual([
+    { sessionId: 'a', outcome: 'continued' }
+  ])
+  store.dispose()
+})
+
+it("keeps a user resume's results when the host's launch action follows it", async () => {
+  const store = await occurrence()
+  const resume = store.continueNativeChatRestartOffer(['b'])
+  const launch = store.continueNativeChatRestartOffer(['a'], 'launch', [chat('a')])
+  expect(sent).toEqual([['b']])
+  reply({
+    attempted: ['b'],
+    continued: [{ sessionId: 'b', outcome: 'continued' }],
+    skipped: new Set()
+  })
+  await resume
+  await vi.waitFor(() => expect(sent).toEqual([['b'], ['a']]))
+  reply({
+    attempted: ['a'],
+    continued: [{ sessionId: 'a', outcome: 'continued' }],
+    skipped: new Set()
+  })
+  await launch
+  const run = store.getNativeChatRestartRun()
+  expect(run?.entries.map((entry) => entry.candidate.sessionId)).toEqual(['b', 'a'])
+  expect(run?.continued?.map((entry) => entry.outcome)).toEqual(['continued', 'continued'])
   store.dispose()
 })
