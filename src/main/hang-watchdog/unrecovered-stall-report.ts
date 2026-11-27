@@ -17,10 +17,10 @@ export async function importUnrecoveredStallReport(
   store: CrashReportStore,
   record: HangObservation,
   captureDirectory = nativeHangCaptureDirectory(getCanonicalUserDataPath())
-): Promise<void> {
+): Promise<boolean> {
   // Pre-stamp records cannot be attributed.
   if (!record.appVersion || Date.now() - record.detectedAt > MAX_STALL_AGE_MS) {
-    return
+    return false
   }
   // A saved sample for this stall is filed by the native importer, but only one that reads and validates counts.
   for (const file of await listNativeHangCaptures(captureDirectory)) {
@@ -28,11 +28,11 @@ export async function importUnrecoveredStallReport(
       file.detectedAt === record.detectedAt &&
       (await readNativeHangCapture(captureDirectory, file.captureId))
     ) {
-      return
+      return false
     }
   }
   const sameBuild = record.appVersion === app.getVersion()
-  await store.importHangReport({
+  const filed = await store.importHangReport({
     source: 'child',
     processType: 'main',
     reason: 'main-thread-hang',
@@ -53,4 +53,5 @@ export async function importUnrecoveredStallReport(
       nativeCapture: record.native?.state ?? 'none'
     }
   })
+  return filed !== null
 }

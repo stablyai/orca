@@ -125,13 +125,15 @@ export function initializeMainProcessObservers(store: Store): void {
     const store = state.crashReports
     trackUnrecoveredStallImport(
       import('../hang-watchdog/unrecovered-stall-report')
-        .then(({ importUnrecoveredStallReport }) =>
-          importUnrecoveredStallReport(store, unrecoveredStall)
+        .then(async ({ importUnrecoveredStallReport }) =>
+          (await importUnrecoveredStallReport(store, unrecoveredStall))
+            ? unrecoveredStall.detectedAt
+            : null
         )
-        .catch((error) =>
+        .catch((error) => {
           console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
-        ),
-      unrecoveredStall.detectedAt
+          return null
+        })
     )
   }
   if (state.hangDetection) {

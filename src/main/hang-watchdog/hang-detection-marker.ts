@@ -59,7 +59,9 @@ export function writeHangDetectionMarker(markerPath: string, marker: StoredHangM
 /** The watchdog's write: a stalled disk must not block the loop that escalates and spawns sample. */
 export async function writeHangDetectionMarkerAsync(
   markerPath: string,
-  marker: StoredHangMarker
+  marker: StoredHangMarker,
+  // Tests hold the rename here to reproduce a quit landing while it is in flight.
+  renameFile: (from: string, to: string) => Promise<void> = rename
 ): Promise<void> {
   const text = serializeHangDetectionMarker(marker)
   const temporaryPath = `${markerPath}.async.tmp`
@@ -70,7 +72,7 @@ export async function writeHangDetectionMarkerAsync(
   } finally {
     await file.close()
   }
-  await rename(temporaryPath, markerPath)
+  await renameFile(temporaryPath, markerPath)
 }
 
 export function readAvailableHangDetectionMarker(
@@ -117,7 +119,8 @@ export function consumeHangDetectionMarker(markerPath: string): StoredHangMarker
 export function createHangMarkerWriter(
   markerPath: string,
   // Injected so only the worker entry, which may block at shutdown, holds the sync writer.
-  writeSync: (path: string, marker: StoredHangMarker) => void
+  writeSync: (path: string, marker: StoredHangMarker) => void,
+  renameFile?: (from: string, to: string) => Promise<void>
 ): {
   write: (marker: StoredHangMarker) => void
   /** Shutdown only: if the marker may lag the newest state, write it synchronously to the final file (main answered, so this is safe). */
@@ -132,7 +135,7 @@ export function createHangMarkerWriter(
     }
     latest = null
     writing = true
-    void writeHangDetectionMarkerAsync(markerPath, marker)
+    void writeHangDetectionMarkerAsync(markerPath, marker, renameFile)
       .catch(() => {})
       .finally(() => {
         writing = false

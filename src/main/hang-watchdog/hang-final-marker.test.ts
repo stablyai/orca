@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -43,21 +44,26 @@ describe('shutdown marker vs an in-flight async write', () => {
       tier: 'stall'
     }
     const recovered = { ...open, selfRecovered: true }
-    const writer = createHangMarkerWriter(markerPath, writeHangDetectionMarker)
+    let entered!: () => void
+    let release!: () => void
+    let renamed!: () => void
+    const renameEntered = new Promise<void>((resolve) => (entered = resolve))
+    const renameReleased = new Promise<void>((resolve) => (release = resolve))
+    const renameDone = new Promise<void>((resolve) => (renamed = resolve))
+    // Holds the tick's rename after its file write, so it is already submitted when the quit lands.
+    const heldRename = async (from: string, to: string): Promise<void> => {
+      entered()
+      await renameReleased
+      await rename(from, to)
+      renamed()
+    }
+    const writer = createHangMarkerWriter(markerPath, writeHangDetectionMarker, heldRename)
 
-    // The tick's async write is in flight when main sends shutdown.
     writer.write(collection(open))
+    await renameEntered
     writer.flushPending(collection(recovered))
-    // Let the submitted rename land after the shutdown write, as it can before exit.
-    await expect
-      .poll(() => {
-        try {
-          return readFileSync(markerPath, 'utf8').includes('"selfRecovered":false')
-        } catch {
-          return false
-        }
-      })
-      .toBe(true)
+    release()
+    await renameDone
 
     const merged = mergeFinalHangMarker(
       asHangObservations(readAvailableHangDetectionMarker(markerPath)),

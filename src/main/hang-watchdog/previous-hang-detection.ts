@@ -39,8 +39,12 @@ export function preservePreviousHangDetection(userDataPath: string): void {
     const [currentMarker, finalMarker, pending] = [currentPath, finalPath, pendingPath].map(
       (path) => readAvailableHangDetectionMarker(path)
     )
+    // An unreadable .final may hold the clean-quit state: keep every file and retry next launch.
+    if (finalMarker === undefined || pending === undefined) {
+      return
+    }
     const current = mergeFinalHangMarker(asHangObservations(currentMarker), finalMarker)
-    if (!current || pending === undefined) {
+    if (!current) {
       return
     }
     const merged = mergeHangObservations(
