@@ -28944,7 +28944,8 @@
       },
       "deliveryUnconfirmed": "Delivery unconfirmed",
       "starting": "Starting…",
-      "notStarted": "Not started"
+      "notStarted": "Not started",
+      "renameThreadNeedsHostUpdate": "Update Orca on {{host}} to rename threads."
     },
     "google": {
       "turnOn": {
