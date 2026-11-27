@@ -37,9 +37,8 @@ import {
 import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
-import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { assertTuiAgentLaunchEnabled } from '../../../agent-launch/disabled-agent-launch-refusal'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
-import { OrchestrationError } from '../../orchestration/orchestration-error'
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -111,12 +110,7 @@ export async function resolveAgentTerminalCreateOptions(
     if (!store) {
       throw new Error('runtime_unavailable')
     }
-    if (!isTuiAgentEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)) {
-      throw new OrchestrationError(
-        'agent_unconfigured',
-        `Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`
-      )
-    }
+    assertTuiAgentLaunchEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)
   }
   if (!launchAgent || !store) {
     return opts

@@ -57,15 +57,19 @@ export class RemoteLayoutSnapshotPersistence {
       : undefined
   }
 
-  getRemoteLayoutSnapshots(): Record<string, RemoteLayoutSnapshot> {
+  getRemoteLayoutSnapshots(
+    environmentIds?: ReadonlySet<string>
+  ): Record<string, RemoteLayoutSnapshot> {
     const stored =
       this[remoteLayoutSnapshotPersistenceContext].runtime.state.remoteLayoutSnapshots ?? {}
     // Drop legacy receivedAt/serverRuntimeId fields when returning snapshots.
     return Object.fromEntries(
-      Object.entries(stored).map(([environmentId, { workspaces }]) => [
-        environmentId,
-        { workspaces: structuredClone(workspaces) }
-      ])
+      Object.entries(stored)
+        .filter(([environmentId]) => !environmentIds || environmentIds.has(environmentId))
+        .map(([environmentId, { workspaces }]) => [
+          environmentId,
+          { workspaces: structuredClone(workspaces) }
+        ])
     )
   }
 

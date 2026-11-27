@@ -230,6 +230,54 @@ export const plusMenu = defineFixture({
   }
 })
 
+/** The folded Bots header with a bot avatar's right-click context menu open. */
+export const foldedHeaderContextMenu = defineFixture({
+  ...foldedHeader,
+  width: 320,
+  interact: async (frame) => {
+    const face = frame.querySelector<HTMLButtonElement>('[data-bot-preview] button')
+    if (!face) {
+      return
+    }
+    const rect = face.getBoundingClientRect()
+    face.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+})
+
+/** The expanded Bots list with a bot row's right-click context menu open. */
+export const expandedRowContextMenu = defineFixture({
+  ...foldedHeader,
+  width: 320,
+  store: {
+    ...foldedHeader.store,
+    collapsedGroups: new Set()
+  },
+  interact: async (frame) => {
+    const row = frame.querySelector<HTMLElement>('[data-worktree-card-surface="true"]')
+    if (!row) {
+      return
+    }
+    const rect = row.getBoundingClientRect()
+    row.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+})
+
 /** The Bots + menu with New bot's submenu opened from the keyboard: Start from scratch leads and takes focus. */
 export const plusMenuNewBotSubmenu = defineFixture({
   ...plusMenu,

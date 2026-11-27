@@ -1,21 +1,12 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
-export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
+export const mobileDiffReviewLayoutStylesSheet = themedStyleSheet((colors) => ({
+  screen: { flex: 1 },
   safeArea: {
     flex: 1,
     backgroundColor: colors.bgBase
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  iconButtonPressed: {
-    backgroundColor: colors.borderSubtle
   },
   staleText: {
     color: colors.statusAmber,
@@ -89,11 +80,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   diffListFrame: {
     flex: 1
   },
-  threadRow: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgBase
-  },
+  threadLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   diffList: {
     flex: 1,
     backgroundColor: colors.bgBase

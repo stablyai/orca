@@ -14,10 +14,10 @@ import { journalLifecycleItemMutation } from '../../native-chat/agent-session-jo
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
-  createHistoryCatchUpBatch,
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import { createHistoryCatchUpBatches } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up-batches'
 import { LEGACY_IMPORT_BLOCK_LIMITS } from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import { legacyItemBody } from '../../native-chat/agent-session-journal/history-import/journal-replacement-items'
 import type {
@@ -239,14 +239,27 @@ export function createClaudeTranscriptImportPlan(input: {
         await flushAppends()
       }
     },
-    finish: async (): Promise<HistoryCatchUpPlan | null> => {
+    finish: async (): Promise<HistoryCatchUpPlan[] | null> => {
       input.check()
       idle()
       translator.flush()
       await flushAppends()
       // A row that renders nothing adds no divider either.
       const rows = [...mutations.values()]
-      const batch = createHistoryCatchUpBatch()
+      const revised = new Set(
+        rows.flatMap((row) => {
+          const key = agentJournalItemKey(row.identity)
+          return row.kind === 'item' && saved(key) ? [key] : []
+        })
+      )
+      // Every commit checks the items the rows depend on that none of them rewrites.
+      const batch = createHistoryCatchUpBatches((first) => {
+        for (const [key, item] of dependencies) {
+          if (!revised.has(key)) {
+            first.expectItem(key, { canonicalItemId: item.itemId, revision: item.revision })
+          }
+        }
+      })
       const firstCreated = rows.find(
         (row) =>
           row.kind === 'item' &&
@@ -267,27 +280,20 @@ export function createClaudeTranscriptImportPlan(input: {
           )
         )
       }
-      const revised = new Set<string>()
       for (const row of rows) {
-        const key = agentJournalItemKey(row.identity)
-        const existing = saved(key)
+        const existing = saved(agentJournalItemKey(row.identity))
         if (existing && row.kind === 'item') {
           batch.revise(row, { canonicalItemId: existing.itemId, revision: existing.revision })
-          revised.add(key)
         } else {
           batch.push(row)
         }
+        await batch.pause()
       }
-      for (const [key, item] of dependencies) {
-        if (!revised.has(key)) {
-          batch.expectItem(key, { canonicalItemId: item.itemId, revision: item.revision })
-        }
-      }
-      return batch.finish('claude-history-import', [
+      input.check()
+      return await batch.finish('claude-history-import', [
         input.epoch,
         input.providerSessionId,
-        uuids,
-        rows
+        uuids
       ])
     },
     dispose: () => translator.dispose()

@@ -13,6 +13,7 @@ import {
 import { chmod, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { withFileTransactionLock } from '../filesystem/file-transaction-lock'
 
 export const CONNECTOR_HOST_KEY_FILENAME = 'connector-host-key.json'
@@ -22,7 +23,9 @@ const RESET_PENDING_PREFIX = 'connector-host-key-reset-pending.'
 const MAX_KEY_FILE_BYTES = 4 * 1024
 const PROOF_CONTEXT = 'orca-connector-host-proof/v1'
 
-const KeyFile = z.object({ privateKey: z.string().regex(/^[A-Za-z0-9_-]{40,200}$/) }).strict()
+const KeyFile = lazyZodSchema(() =>
+  z.object({ privateKey: z.string().regex(/^[A-Za-z0-9_-]{40,200}$/) }).strict()
+)
 
 export type ConnectorHostKey = { privateKey: KeyObject; publicKey: string }
 

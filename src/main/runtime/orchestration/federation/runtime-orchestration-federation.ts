@@ -22,11 +22,7 @@ import {
   clearFederationAckCheckpoints,
   releaseFederationAckCheckpoint
 } from '../legacy-remote-home/federation-ack-checkpoints'
-import {
-  federatedSyncMovedMail,
-  syncFederatedDispatch,
-  type FederatedSyncResult
-} from '../legacy-remote-home/federation-sync'
+import type { FederatedSyncResult } from '../legacy-remote-home/federation-sync'
 import { FederationAcknowledgmentRecovery } from '../legacy-remote-home/federation-acknowledgment-recovery'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
@@ -197,11 +193,17 @@ export class RuntimeOrchestrationFederation {
     const generation = this.relayGeneration
     const isCurrent = (): boolean =>
       generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
-    const sync = syncFederatedDispatch(this.runtime, dispatchId, isCurrent)
-      .then((result) => {
+    const sync = import('../legacy-remote-home/federation-sync')
+      .then(({ syncFederatedDispatch, federatedSyncMovedMail }) =>
+        syncFederatedDispatch(this.runtime, dispatchId, isCurrent).then((result) => ({
+          result,
+          movedMail: federatedSyncMovedMail(result)
+        }))
+      )
+      .then(({ result, movedMail }) => {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
-          this.relays.noteSynced(dispatchId, federatedSyncMovedMail(result))
+          this.relays.noteSynced(dispatchId, movedMail)
         }
         return result
       })
@@ -263,7 +265,10 @@ export class RuntimeOrchestrationFederation {
       return 'ended'
     }
     return this.syncDispatch(dispatchId).then(
-      (result): FederationRelayTickOutcome => (federatedSyncMovedMail(result) ? 'moved' : 'idle'),
+      async (result): Promise<FederationRelayTickOutcome> => {
+        const { federatedSyncMovedMail } = await import('../legacy-remote-home/federation-sync')
+        return federatedSyncMovedMail(result) ? 'moved' : 'idle'
+      },
       async (): Promise<FederationRelayTickOutcome> => {
         if (!(await this.isEnvironmentRemoved(dispatchId))) {
           return 'failed'

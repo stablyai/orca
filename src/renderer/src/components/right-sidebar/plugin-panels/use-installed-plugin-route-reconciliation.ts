@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isPluginPanelTabKey } from '../../../../../shared/plugins/manifest/plugin-manifest'
+import { isPluginPanelTabKey } from '../../../../../shared/plugins/frames/plugin-tab-key'
 import type { PluginPanelsFetchStatus } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome/ui-chrome-types'
 

@@ -1,22 +1,17 @@
-import React from 'react'
-import { EyeOff } from 'lucide-react'
-import { cn } from '@/lib/class-names'
+import React, { Suspense } from 'react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { useAppStore } from '@/store/index'
-import { Button } from '@/components/ui/button'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
-import {
-  getFirstIncompleteFeatureWallSetupStepId,
-  type FeatureWallSetupStepId
-} from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
+import type { FeatureWallSetupStepId } from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
 import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
-import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
-import { useTranslate } from '@/i18n/use-translate'
+
+const LazySetupGuideSidebarEntryBody = lazyWithRetry(
+  () =>
+    import('./SetupGuideSidebarEntryBody').then((module) => ({
+      default: module.SetupGuideSidebarEntryBody
+    })),
+  { reloadKey: 'setup-guide-sidebar-entry-body' }
+)
 
 export type SetupGuideEntryVisibilityInput = {
   ready: boolean
@@ -40,7 +35,6 @@ function isSetupGuideSidebarComplete(progress: FeatureWallSetupProgress): boolea
 }
 
 export function SetupGuideSidebarEntry(): React.JSX.Element | null {
-  const t = useTranslate()
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -55,17 +49,24 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
     setupComplete,
     dismissed: setupGuideSidebarDismissed
   })
-  const lastVisibleProgressRef = React.useRef<FeatureWallSetupProgress | null>(null)
+  const [lastVisibleProgress, setLastVisibleProgress] =
+    React.useState<FeatureWallSetupProgress | null>(null)
   const rowRef = React.useRef<HTMLDivElement>(null)
-  if (showSetupGuideEntry) {
-    lastVisibleProgressRef.current = setupProgress
+  if (showSetupGuideEntry && lastVisibleProgress !== setupProgress) {
+    setLastVisibleProgress(setupProgress)
   }
   // Keep an already-visible checklist row stable through host/workspace probe refreshes.
   const renderedProgress = showSetupGuideEntry
     ? setupProgress
     : !setupProgress.ready && !setupGuideSidebarDismissed
-      ? lastVisibleProgressRef.current
+      ? lastVisibleProgress
       : null
+  const handleOpenSetupGuide = React.useCallback(
+    (setupStepId: FeatureWallSetupStepId) => {
+      openModal('setup-guide', { setupStepId, telemetrySource: 'sidebar' })
+    },
+    [openModal]
+  )
   const handleHideSetupGuide = React.useCallback(() => {
     const row = rowRef.current
     if (row?.contains(document.activeElement) && row.parentElement) {
@@ -83,66 +84,16 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   if (!renderedProgress) {
     return null
   }
-  const firstUnfinishedSetupStepId: FeatureWallSetupStepId =
-    getFirstIncompleteFeatureWallSetupStepId(renderedProgress.stepDone)
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          ref={rowRef}
-          className={cn(
-            'flex w-full items-center rounded-md text-[13px] font-medium tracking-tight transition-colors',
-            setupActive
-              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-          )}
-        >
-          <button
-            type="button"
-            data-contextual-tour-target="setup-guide-entry"
-            onClick={() =>
-              openModal('setup-guide', {
-                setupStepId: firstUnfinishedSetupStepId,
-                telemetrySource: 'sidebar'
-              })
-            }
-            aria-current={setupActive ? 'page' : undefined}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left"
-          >
-            <SetupGuideProgressRing
-              done={renderedProgress.coreDoneCount}
-              total={renderedProgress.coreTotal}
-              sizeClassName="size-4"
-            />
-            <span className="min-w-0 flex-1 truncate">
-              {t(
-                'auto.components.sidebar.SetupGuideSidebarEntry.88d402b71d',
-                'Onboarding checklist'
-              )}
-            </span>
-          </button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="mr-1"
-            onClick={handleHideSetupGuide}
-            aria-label={t(
-              'auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c',
-              'Hide from sidebar'
-            )}
-          >
-            {t('auto.components.sidebar.WorktreeVisibilitySourceList.hide', 'Hide')}
-          </Button>
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={handleHideSetupGuide}>
-          <EyeOff className="size-3.5" />
-          {t('auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c', 'Hide from sidebar')}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+    <Suspense fallback={null}>
+      <LazySetupGuideSidebarEntryBody
+        renderedProgress={renderedProgress}
+        setupActive={setupActive}
+        rowRef={rowRef}
+        onOpenSetupGuide={handleOpenSetupGuide}
+        onHideSetupGuide={handleHideSetupGuide}
+      />
+    </Suspense>
   )
 }

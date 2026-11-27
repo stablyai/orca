@@ -19,6 +19,7 @@ import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
 import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
 import { useTranslate } from '@/i18n/use-translate'
 import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 // Both IDs select an SSH host owned and listed by the paired server.
 type RemoteFileBrowserProps = (
@@ -117,29 +118,34 @@ export function RemoteFileBrowser({
       const gen = ++genRef.current
       setLoading(true)
       setError(null)
-      try {
-        const result = await fetchListing(dirPath)
-        if (gen !== genRef.current) {
-          return
+      await runWithFinally(
+        async () => {
+          try {
+            const result = await fetchListing(dirPath)
+            if (gen !== genRef.current) {
+              return
+            }
+            setResolvedPath(result.resolvedPath)
+            setEntries(result.entries)
+            setPathFlavor(result.pathFlavor)
+            // Only bare ~ resolves the home anchor; ~/sub must not replace it.
+            if (dirPath === '~') {
+              homePathRef.current = result.resolvedPath
+            }
+          } catch (err) {
+            if (gen !== genRef.current) {
+              return
+            }
+            setError(err instanceof Error ? err.message : String(err))
+            setEntries([])
+          }
+        },
+        () => {
+          if (gen === genRef.current) {
+            setLoading(false)
+          }
         }
-        setResolvedPath(result.resolvedPath)
-        setEntries(result.entries)
-        setPathFlavor(result.pathFlavor)
-        // Only bare ~ resolves the home anchor; ~/sub must not replace it.
-        if (dirPath === '~') {
-          homePathRef.current = result.resolvedPath
-        }
-      } catch (err) {
-        if (gen !== genRef.current) {
-          return
-        }
-        setError(err instanceof Error ? err.message : String(err))
-        setEntries([])
-      } finally {
-        if (gen === genRef.current) {
-          setLoading(false)
-        }
-      }
+      )
     },
     [fetchListing, homePathRef]
   )

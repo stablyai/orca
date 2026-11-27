@@ -7,10 +7,9 @@ import { ChevronLeft } from 'lucide-react-native'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { settingsScreenStyles } from '../settings/settings-screen-frame'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { settingsScreenStylesSheet } from '../settings/settings-screen-frame'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 
 export function McpPageFrame(props: {
   title: string
@@ -23,7 +22,8 @@ export function McpPageFrame(props: {
   footer?: ReactNode
   children: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const scrollY = useRef(new Animated.Value(0)).current
@@ -73,7 +73,7 @@ export function McpPageFrame(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   bar: { backgroundColor: colors.sheetSurface },
   footer: {

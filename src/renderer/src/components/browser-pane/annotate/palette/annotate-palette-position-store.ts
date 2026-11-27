@@ -6,8 +6,8 @@ const STORAGE_KEY = 'orca.browser.annotate-palette-position'
 /** Each axis is a 0–1 fraction of the palette's free travel in the page area. */
 export type AnnotatePalettePosition = { x: number; y: number }
 
-/** Top centre: where the palette first appears. */
-export const DEFAULT_ANNOTATE_PALETTE_POSITION: AnnotatePalettePosition = { x: 0.5, y: 0 }
+/** Bottom centre: where the palette first appears. */
+export const DEFAULT_ANNOTATE_PALETTE_POSITION: AnnotatePalettePosition = { x: 0.5, y: 1 }
 
 let cachedPosition: AnnotatePalettePosition | null = null
 const listeners = new Set<() => void>()
@@ -76,7 +76,16 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** The saved palette position (x 0.5 = centred, y 0 = top). */
+/** The saved palette position (x 0.5 = centred, y 0 = top, y 1 = bottom). */
 export function useAnnotatePalettePosition(): AnnotatePalettePosition {
   return useSyncExternalStore(subscribe, getAnnotatePalettePosition, getAnnotatePalettePosition)
+}
+
+function getPopupSide(): 'top' | 'bottom' {
+  return getAnnotatePalettePosition().y >= 0.5 ? 'top' : 'bottom'
+}
+
+/** Palette tooltips and menus open toward the page's middle, so a low palette doesn't push them off the page. */
+export function useAnnotatePalettePopupSide(): 'top' | 'bottom' {
+  return useSyncExternalStore(subscribe, getPopupSide, getPopupSide)
 }

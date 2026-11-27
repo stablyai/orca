@@ -105,17 +105,6 @@ export function useMobileStructuredSessionOpening(
         )
       }
     },
-    [
-      owner,
-      client,
-      connState,
-      worktreeId,
-      hostId,
-      executionHost,
-      router,
-      scope,
-      showToast,
-      switchSessionTab
-    ]
+    [owner, client, connState, worktreeId, hostId, router, scope, showToast, switchSessionTab]
   )
 }

@@ -42,7 +42,7 @@ import type { WorkerTurnStopReportDeps } from '../orchestration/workers/turn-sto
 import type { LostWorkerReport } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 import { terminalLastOutput } from '../terminal/output/tail/terminal-tail-read'
 import { terminalHistoryLastOutput } from '../terminal/output/tail/terminal-history-last-output'
-import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
+import type { RuntimeSkillCommandOwner } from '../integrations/skill/runtime-skill-command-contract'
 import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../terminal/output/recent-pty-output-buffer'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
@@ -104,9 +104,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected emulatorBridge: EmulatorBridge | null = null
 
   protected readonly resolvedWorktrees = new RuntimeResolvedWorktreeCache()
-
-  /** Bound abandoned Git-admin filesystem probes to one per repo. */
-  protected worktreeAdminFingerprintProbes = new Set<string>()
 
   protected readonly worktreeLineage = BotWorktreeLineageController.forRuntime(this, {
     getStore: () => this.store,
@@ -335,7 +332,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       terminalLastOutput(this.ptysById.get(ptyId)) ?? (await terminalHistoryLastOutput(ptyId))
   }
 
-  protected readonly skillCommands!: RuntimeSkillCommands
+  protected readonly skillCommands!: RuntimeSkillCommandOwner
 
   protected readonly terminalStreamConsumers = new RuntimeTerminalStreamConsumers()
 

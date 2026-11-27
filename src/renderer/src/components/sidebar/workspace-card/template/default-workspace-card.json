@@ -13,7 +13,7 @@
     "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
     "detailsRow": "!vars.newStyle || options.detailsRow",
     "metaRow": "!vars.compact && vars.detailsRow",
-    "detachedInMeta": "vars.metaRow && !vars.folder && ws.detachedHead",
+    "detachedInMeta": "vars.metaRow && !vars.newStyle && !vars.folder && ws.detachedHead",
     "branch": "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && (!vars.compact || ws.branch != ws.name)",
     "identityInMeta": "vars.newStyle && vars.metaRow && options.show.branch && ws.identity != null",
     "folderInMeta": "vars.newStyle ? vars.metaRow && options.show.branch && vars.folder && ws.identity != null : vars.folder",
@@ -89,6 +89,11 @@
                 {
                   "el": "SparseBadge",
                   "when": "ws.isSparse",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
+                {
+                  "el": "DetachedHead",
+                  "when": "vars.newStyle && !vars.folder && ws.detachedHead",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
                 { "el": "NotificationsMuted" },

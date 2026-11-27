@@ -44,10 +44,10 @@ export function useWorkspaceHandToBot(args: {
   const handBots = listing && listing.createRefusal !== 'bots-off' ? listing : null
   const computers = useMemo(
     () =>
-      newBotComputers({ desktopLabel: state.hostName, listings: bots, serverHosts: [] }).filter(
+      newBotComputers({ desktopLabel: state.hostName, listings: bots, serverHosts: [], t }).filter(
         (computer) => computer.hostId === LOCAL_EXECUTION_HOST_ID
       ),
-    [state.hostName, bots]
+    [state.hostName, bots, t]
   )
 
   const reopen = (row: Worktree, next: HandToBotSeed) => {

@@ -9,7 +9,8 @@ import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
 import {
   PALETTE_EDGE_INSET_PX,
   PALETTE_HINT_LINE_PX,
-  paletteRatioPercent
+  paletteRatioPercent,
+  paletteTooltipOffset
 } from './palette-placement'
 import { usePaletteDrag } from './use-palette-drag'
 import { usePaletteFitLevel } from './use-palette-fit-level'
@@ -17,6 +18,7 @@ import { usePaletteHintHeight } from './use-palette-hint-height'
 import type { MarkupPaletteDensity } from './MarkupPaletteTools'
 import {
   setAnnotatePalettePosition,
+  useAnnotatePalettePopupSide,
   useAnnotatePalettePosition
 } from './annotate-palette-position-store'
 import { PaletteDoneButton, PaletteGrabActions, PaletteGrip } from './palette-controls'
@@ -27,6 +29,7 @@ import { focusAnnotateButtonNear, isEditableFocus, useToolLabelsFit } from './pa
 
 type ToolOption = {
   tool: BrowserAnnotateTool
+  key: 'A' | 'G' | 'D'
   icon: LucideIcon
   label: string
   tooltip: string
@@ -130,6 +133,7 @@ export function BrowserAnnotateToolPalette({
   }, [boundsRef])
   // Read here, not by the always-mounted overlays, so no page subscribes while its palette is closed.
   const position = useAnnotatePalettePosition()
+  const popupSide = useAnnotatePalettePopupSide()
   const [findBarMinTop, setFindBarMinTop] = useState(PALETTE_EDGE_INSET_PX)
   const [hintHeight, setHintHeight] = useState(PALETTE_HINT_LINE_PX)
   const { left, top, canMove, dragging, snapping, shownPosition, hintPlacement, gripProps } =
@@ -146,15 +150,8 @@ export function BrowserAnnotateToolPalette({
 
   const options: ToolOption[] = [
     {
-      tool: 'annotate',
-      icon: MessageSquarePlus,
-      label: t('browser.toolbar.annotate', 'Annotate'),
-      tooltip: showKeyHints
-        ? t('browser.annotatePalette.annotateTooltip', 'Annotate: comment on an element (A)')
-        : t('browser.annotatePalette.annotateTooltipNoKey', 'Annotate: comment on an element')
-    },
-    {
       tool: 'copy',
+      key: 'G',
       icon: Crosshair,
       label: t('browser.toolbar.grab', 'Grab'),
       tooltip: showKeyHints
@@ -162,7 +159,17 @@ export function BrowserAnnotateToolPalette({
         : t('browser.annotatePalette.grabTooltipNoKey', "Grab: copy an element's context")
     },
     {
+      tool: 'annotate',
+      key: 'A',
+      icon: MessageSquarePlus,
+      label: t('browser.toolbar.annotate', 'Annotate'),
+      tooltip: showKeyHints
+        ? t('browser.annotatePalette.annotateTooltip', 'Annotate: comment on an element (A)')
+        : t('browser.annotatePalette.annotateTooltipNoKey', 'Annotate: comment on an element')
+    },
+    {
       tool: 'draw',
+      key: 'D',
       icon: PenTool,
       label: t('browser.toolbar.draw', 'Draw'),
       tooltip: showKeyHints
@@ -185,6 +192,8 @@ export function BrowserAnnotateToolPalette({
   const showHint =
     Boolean(hint) && (fitLevel === 0 || hintKeepsWhenCompact) && !dragging && left !== null
   usePaletteHintHeight(hintRef, showHint, setHintHeight)
+  const tooltipOffset = paletteTooltipOffset(showHint, hintPlacement, hintHeight, popupSide)
+  const tooltipPlacement = { side: popupSide, sideOffset: tooltipOffset }
   const hasActions =
     activeTool === 'draw' ? drawHasActions : activeTool === 'copy' || annotateActions !== null
   useGrabLabelAvoidArea({
@@ -253,9 +262,9 @@ export function BrowserAnnotateToolPalette({
         role="group"
         aria-label={t('browser.annotatePalette.label', 'Annotate tools')}
         className={cn(
-          'absolute z-40 flex w-max items-center gap-1 rounded-lg border border-border bg-popover/95 p-1 text-xs text-popover-foreground backdrop-blur transition-opacity duration-100',
+          // Frosted glass with a hairline and deep shadow, so it stands out over any page.
+          'absolute z-40 flex w-max items-center gap-1 rounded-xl border border-black/14 bg-floating-surface p-1 text-xs text-popover-foreground shadow-[0_10px_27px_rgba(0,0,0,0.27),0_1px_2px_rgba(0,0,0,0.12)] backdrop-blur-[14px] backdrop-saturate-[1.4] transition-opacity duration-100 dark:border-white/16 dark:shadow-[0_10px_27px_rgba(0,0,0,0.27),0_1px_2px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.08)]',
           seeThrough ? 'pointer-events-none opacity-15' : 'pointer-events-auto',
-          'shadow-floating',
           snapping && 'transition-[left,top] duration-150 ease-out',
           left === null && 'invisible'
         )}
@@ -269,15 +278,15 @@ export function BrowserAnnotateToolPalette({
         <div
           role="group"
           aria-label={t('browser.annotatePalette.tools', 'Tool')}
-          className="order-1 flex shrink-0 items-center gap-0.5"
+          className="order-1 flex shrink-0 items-center gap-1"
         >
           <span
             ref={labelProbeRef}
             aria-hidden
-            className="pointer-events-none invisible absolute flex items-center gap-0.5 font-medium whitespace-nowrap"
+            className="pointer-events-none invisible absolute flex items-center gap-1 font-medium whitespace-nowrap"
           >
             {options.map((option) => (
-              <span key={option.tool} className="flex h-7 items-center gap-1.5 px-2">
+              <span key={option.tool} className="flex h-6.5 items-center gap-1.5 px-2">
                 <option.icon className="size-3.5" />
                 {option.label}
               </span>
@@ -315,28 +324,20 @@ export function BrowserAnnotateToolPalette({
                     aria-pressed={checked}
                     aria-busy={waiting || undefined}
                     aria-label={accessibleLabel}
-                    aria-keyshortcuts={
-                      !showKeyHints
-                        ? undefined
-                        : option.tool === 'annotate'
-                          ? 'A'
-                          : option.tool === 'copy'
-                            ? 'G'
-                            : 'D'
-                    }
+                    aria-keyshortcuts={showKeyHints ? option.key : undefined}
                     tabIndex={checked ? 0 : -1}
                     // aria-disabled, not disabled: a disabled button shows no tooltip, and this one says why.
                     aria-disabled={unavailable || undefined}
                     className={cn(
-                      'flex h-7 items-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none aria-disabled:opacity-50',
+                      'flex h-6.5 items-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-popover focus-visible:outline-none aria-disabled:opacity-50',
                       showToolLabels
                         ? 'px-2'
                         : shortActions
                           ? 'w-6 justify-center'
                           : 'w-7 justify-center',
                       checked
-                        ? 'bg-accent text-foreground ring-1 ring-muted-foreground ring-inset'
-                        : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                        ? 'bg-theme-accent-fill text-theme-accent-foreground shadow-[0_2px_8px_color-mix(in_srgb,var(--color-theme-accent-fill)_55%,transparent)]'
+                        : 'text-popover-foreground/80 hover:bg-accent/70 hover:text-popover-foreground'
                     )}
                     onClick={() => {
                       if (!unavailable) {
@@ -354,7 +355,7 @@ export function BrowserAnnotateToolPalette({
                     {showToolLabels ? <span>{option.label}</span> : null}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
+                <TooltipContent data-annotate-palette-tooltip="" {...tooltipPlacement}>
                   {unavailable && unavailableReason
                     ? unavailableReason
                     : waiting
@@ -366,7 +367,10 @@ export function BrowserAnnotateToolPalette({
           })}
         </div>
         {hasActions ? (
-          <span className="order-1 mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden />
+          <span
+            className="order-1 mx-0.5 h-4 w-px shrink-0 bg-black/14 dark:bg-white/16"
+            aria-hidden
+          />
         ) : null}
         {/* Why shrink-0 until the last step: overflow must show in the palette's width so the fit steps can see it;
             only when every step is used may the actions wrap onto a second line instead of overlapping Done. */}
@@ -391,8 +395,15 @@ export function BrowserAnnotateToolPalette({
             <div ref={setDrawSlot} className="flex min-w-0 flex-wrap items-center" />
           ) : null}
         </div>
-        <span className="order-1 mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden />
-        <PaletteDoneButton discardsDrawing={discardsDrawing} onDone={onDone} />
+        <span
+          className="order-1 mx-0.5 h-4 w-px shrink-0 bg-black/14 dark:bg-white/16"
+          aria-hidden
+        />
+        <PaletteDoneButton
+          discardsDrawing={discardsDrawing}
+          onDone={onDone}
+          tooltipOffset={tooltipOffset}
+        />
         {/* Last in DOM so keyboard users reach the tools first; shown first visually. */}
         {/* Kept while dragging, so a resize that removes the room can't detach the grip mid-drag. */}
         {canMove || dragging ? (
@@ -401,6 +412,7 @@ export function BrowserAnnotateToolPalette({
             verticalPercent={verticalPercent}
             dragging={dragging}
             gripProps={gripProps}
+            tooltipOffset={tooltipOffset}
           />
         ) : null}
       </div>
@@ -408,10 +420,10 @@ export function BrowserAnnotateToolPalette({
         <div
           ref={hintRef}
           className={cn(
-            'pointer-events-none absolute z-40 rounded-md break-words border border-border bg-popover/95 px-2 py-0.5 text-2xs backdrop-blur',
+            'pointer-events-none absolute z-40 rounded-md break-words border border-black/14 bg-floating-surface px-2 py-0.5 text-2xs shadow-[0_1px_2px_rgba(0,0,0,0.12)] backdrop-blur-[14px] dark:border-white/16',
             'transition-opacity duration-100',
             seeThrough && 'opacity-15',
-            hintIsError ? 'text-destructive' : 'text-muted-foreground'
+            hintIsError ? 'text-destructive' : 'text-popover-foreground/80'
           )}
           style={hintPlacement}
         >

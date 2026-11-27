@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import {
   RuntimeSshAccessLinkRequestSchema,
   RuntimeSshAccessUnlinkRequestSchema
@@ -9,11 +10,14 @@ import {
 } from '../../../ssh/runtime-access/runtime-ssh-access'
 import { addFanoutListener } from '../../../runtime/events/event-listener-fanout'
 
-export function registerRuntimeSshAccessHandlers(options: {
-  getUserDataPath: () => string
-  invalidateTransport: (environmentId: string) => void | Promise<void>
-}): void {
-  ipcMain.handle('runtimeEnvironments:linkSshAccess', async (event, input: unknown) => {
+export function registerRuntimeSshAccessHandlers(
+  options: {
+    getUserDataPath: () => string
+    invalidateTransport: (environmentId: string) => void | Promise<void>
+  },
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('runtimeEnvironments:linkSshAccess', async (event, input: unknown) => {
     const args = RuntimeSshAccessLinkRequestSchema.parse(input)
     // Unreachable links hold two lifecycle queues; cancel when their window closes.
     const controller = new AbortController()
@@ -28,7 +32,7 @@ export function registerRuntimeSshAccessHandlers(options: {
       releaseDestroyed()
     }
   })
-  ipcMain.handle('runtimeEnvironments:unlinkSshAccess', async (_event, input: unknown) => {
+  ipc.handle('runtimeEnvironments:unlinkSshAccess', async (_event, input: unknown) => {
     const args = RuntimeSshAccessUnlinkRequestSchema.parse(input)
     return await unlinkRuntimeSshAccess(options.getUserDataPath(), args, {
       invalidateTransport: options.invalidateTransport

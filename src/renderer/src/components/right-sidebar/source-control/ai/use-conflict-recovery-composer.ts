@@ -8,6 +8,7 @@ import {
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { SourceControlAiControllerParams } from './controller-types'
 import { buildResolveConflictsPrompt } from '../../../../../../shared/source-control/recovery/source-control-conflict-prompts'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useConflictRecoveryComposer({
   target,
@@ -87,21 +88,24 @@ export function useConflictRecoveryComposer({
     const check = new AbortController()
     checkRef.current = check
     setComposer({ scope, phase: 'checking' })
-    try {
-      const admitted = await admitSourceControlRecovery(context, check.signal)
-      if (!check.signal.aborted) {
-        if (admitted && onAdmitted) {
-          setComposer(null)
-          await onAdmitted(context, check.signal)
-        } else {
-          setComposer(admitted ? { scope, phase: 'open' } : null)
+    await runWithFinally(
+      async () => {
+        const admitted = await admitSourceControlRecovery(context, check.signal)
+        if (!check.signal.aborted) {
+          if (admitted && onAdmitted) {
+            setComposer(null)
+            await onAdmitted(context, check.signal)
+          } else {
+            setComposer(admitted ? { scope, phase: 'open' } : null)
+          }
+        }
+      },
+      () => {
+        if (checkRef.current === check) {
+          checkRef.current = null
         }
       }
-    } finally {
-      if (checkRef.current === check) {
-        checkRef.current = null
-      }
-    }
+    )
   }, [context, scope, conflictOperation, unresolvedConflicts.length, onAdmitted])
 
   return {

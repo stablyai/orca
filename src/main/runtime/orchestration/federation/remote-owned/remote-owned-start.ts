@@ -37,6 +37,7 @@ import {
   refuseTaskOfClosedPairing
 } from '../../db/remote-owned/remote-placement-hold'
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
+import { attemptHereRetriedOnServer, withQuestionLeftHere } from './remote-owned-local-retry'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { resolveCrossMachineChildParent } from '../cross-machine-child-parent'
 import { remoteForwardKey } from './remote-forward-caller'
@@ -48,6 +49,7 @@ import {
   inServerTerms,
   serverNeverAnswered
 } from './remote-owned-answers'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 
 type StartParams = z.infer<typeof WorkerStartParams>
 type StartContext = Pick<
@@ -123,13 +125,15 @@ function adoptedTaskId(key: string): string {
   return `task_${createHash('sha256').update(`task\n${key}`).digest('hex').slice(0, 12)}`
 }
 
-const StartedOnServer = z.object({
-  dispatchId: z.string().min(1),
-  run: z.object({ id: z.string().min(1) }).optional(),
-  agent: z.string().nullable().optional(),
-  launch: z.unknown().optional(),
-  state: z.string().optional()
-})
+const StartedOnServer = lazyZodSchema(() =>
+  z.object({
+    dispatchId: z.string().min(1),
+    run: z.object({ id: z.string().min(1) }).optional(),
+    agent: z.string().nullable().optional(),
+    launch: z.unknown().optional(),
+    state: z.string().optional()
+  })
+)
 
 /**
  * worker-start --on a server that owns its workers: the Task stays in this Orca's graph, and the
@@ -149,9 +153,10 @@ export async function startRemoteOwnedWorker(
       { effectsApplied: false }
     )
   }
+  const db = runtime.getOrchestrationDb()
+  const attemptHere = attemptHereRetriedOnServer(db, startParams.retryOf)
   const { params, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
     await prepareWorkerStart(startParams, ctx)
-  const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
   const launch = await prepareRemoteOwnedRetryLaunch(params, server.name, () =>
     serverSupports(runtime, server, ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY)
@@ -177,6 +182,7 @@ export async function startRemoteOwnedWorker(
     taskId,
     requestKey: forward.key,
     retryOf: params.retryOf,
+    retriesAttemptHere: attemptHere !== undefined,
     creator: resolveDispatchCreator(runtime, params.from, ctx.orchestrationCaller),
     create: existingTask
       ? undefined
@@ -192,7 +198,7 @@ export async function startRemoteOwnedWorker(
   })
   // Its queue has a reader from the start, so mail sent before the answer still comes home.
   runtime.ensureOrchestrationFederationRelay(run.id)
-  const options = serverStartOptions(launch.params)
+  const { retryOf: _retryOf, ...options } = serverStartOptions(launch.params)
   // Read before the wait: the server cannot tell a bot's worker from a person's, and the
   // coordinator's own Dispatch may settle while the server starts this one.
   const keepOpenByDefault = coordinatorKeepOpenByDefault(
@@ -208,8 +214,8 @@ export async function startRemoteOwnedWorker(
   const baseParams = {
     ...options,
     // A retry names the server's existing Task, whose ordinary retry checks refuse a spec.
-    ...(params.retryOf
-      ? { task: task.id }
+    ...(params.retryOf && !attemptHere
+      ? { retryOf: params.retryOf, task: task.id }
       : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
     adoptTaskId: task.id,
     ...(crossStoreParent ? { crossStoreParent } : {}),
@@ -278,7 +284,7 @@ export async function startRemoteOwnedWorker(
     inServerTerms(receipt, { server: server.name, forward }),
     retryWarning
   )
-  return withRun(
+  const placed = withRun(
     answer && typeof answer === 'object'
       ? {
           ...answer,
@@ -291,6 +297,7 @@ export async function startRemoteOwnedWorker(
         }
       : answer
   )
+  return withQuestionLeftHere(attemptHere, params.forQuestion, placed)
 }
 
 /** What a start's failure says about its reservation: adopt the Dispatch it names, keep it for the server's queue to answer, or free it. */
