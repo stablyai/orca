@@ -54,17 +54,32 @@ export function agentListPreview(
   return prompt === title ? '' : prompt
 }
 
+/** Each word of the lower-cased `query` must appear in one of the fields, so "orca main" finds both. */
+export function fieldsMatchQueryWords(
+  fields: readonly (string | null | undefined)[],
+  query: string
+): boolean {
+  const lowered = fields.flatMap((field) => (field ? [field.toLowerCase()] : []))
+  return query
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => lowered.some((field) => field.includes(word)))
+}
+
 /** Search covers what the row shows plus the prompt; `query` is already lower-cased. */
 export function agentListEntryMatches(entry: HomeAgentEntry, query: string): boolean {
   const { agent } = entry
-  return [
-    agentListTitle(agent),
-    agent.activity?.listed === true ? agent.activity.title : null,
-    entry.workspaceName,
-    entry.branch,
-    entry.repo,
-    formatAgentTypeLabel(agent.agentType),
-    agent.prompt,
-    agent.lastAssistantMessage
-  ].some((field) => field?.toLowerCase().includes(query))
+  return fieldsMatchQueryWords(
+    [
+      agentListTitle(agent),
+      agent.activity?.listed === true ? agent.activity.title : null,
+      entry.workspaceName,
+      entry.branch,
+      entry.repo,
+      formatAgentTypeLabel(agent.agentType),
+      agent.prompt,
+      agent.lastAssistantMessage
+    ],
+    query
+  )
 }
