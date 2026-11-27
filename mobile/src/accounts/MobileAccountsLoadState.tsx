@@ -1,4 +1,4 @@
-import { CircleAlert } from 'lucide-react-native'
+import { CircleAlert } from '../components/icons/icon-set'
 import {
   MobileLoadErrorState,
   MobileOfflineState,

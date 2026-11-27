@@ -16,7 +16,7 @@ import {
   Folder,
   Image as ImageIcon,
   Link
-} from 'lucide-react-native'
+} from '../../components/icons/icon-set'
 import { STATUS_LABELS } from '../../../../src/shared/git/status/git-status-labels'
 import type { GitFileStatus } from '../../../../src/shared/git/status/git-status-types'
 import { statusColor } from '../../source-control/changes/mobile-git-status'

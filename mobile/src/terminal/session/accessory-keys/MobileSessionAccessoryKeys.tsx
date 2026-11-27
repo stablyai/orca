@@ -7,7 +7,7 @@ import {
   type GestureResponderEvent,
   type ScrollViewInstance
 } from 'react-native'
-import { ClipboardPaste, Ellipsis } from 'lucide-react-native'
+import { ClipboardPaste, MoreHorizontal } from '../../../components/icons/icon-set'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
 import { createTerminalLiveAccessoryInput } from '../../live-input/terminal-live-accessory-input'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../../key-input/terminal-accessory-repeat'
@@ -243,7 +243,7 @@ export function MobileSessionAccessoryKeys({
               'Paste from clipboard'
             )}
           >
-            <ClipboardPaste size={15} color={colors.textPrimary} strokeWidth={2} />
+            <ClipboardPaste size={15} color={colors.textPrimary} />
           </Pressable>
         )}
         {customKeys
@@ -284,7 +284,7 @@ export function MobileSessionAccessoryKeys({
         accessibilityRole="button"
         accessibilityLabel={t('session.accessoryKeys.moreKeys', 'More keys and actions')}
       >
-        <Ellipsis size={16} color={colors.textPrimary} strokeWidth={2.2} />
+        <MoreHorizontal size={16} color={colors.textPrimary} />
       </Pressable>
     </View>
   )

@@ -10,7 +10,7 @@ import { projectRowType } from '../item-detail/mobile-tasks-item-mapping'
 import { GitHubPrFileDiff } from '../hosted-review/MobileTasksPrFileDiff'
 import { View, Text, ActivityIndicator, Pressable } from 'react-native'
 import { pressedStyle } from '../../theme/mobile-theme'
-import { Check, ExternalLink } from 'lucide-react-native'
+import { Check, ExternalLink } from '../../components/icons/icon-set'
 import { TextField } from '../../components/composer-input/TextField'
 import { openExternalLink } from '../../platform/external-links/external-link'
 

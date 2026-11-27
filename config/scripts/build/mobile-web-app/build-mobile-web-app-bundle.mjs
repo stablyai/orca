@@ -90,12 +90,6 @@ export const MOBILE_WEB_APP_SHIMS = [
     appliesTo: (options) => options.alias?.zod === MOBILE_ZOD_PACKAGE
   },
   {
-    // lucide-react-native@1.14.0 reexports missing LucideProvider; esbuild rejects what Metro tolerates. Patch only web build, preserving native package.
-    name: 'lucide-barrel-provider',
-    appliesTo: (options) =>
-      options.plugins?.some((plugin) => plugin.name === LUCIDE_PLUGIN_NAME) === true
-  },
-  {
     // Shell has no durable localStorage (Android disabled, iOS session origin changes); bridge init/storage grant persists page-owned values.
     name: 'async-storage-over-the-bridge',
     appliesTo: (options) =>
@@ -134,7 +128,6 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
 const MOBILE_ZOD_PACKAGE = join(mobileDir, 'node_modules', 'zod')
 
 const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
-const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
 const HAIRLINE_PLUGIN_NAME = 'orca-hairline-device-pixel'
 
 const ENTRY_CHUNK_NAME = 'entry'
@@ -223,19 +216,8 @@ function routeManifestPlugin(manifestSource, routes, sharedModules, anchoredLazy
   }
 }
 
-// Reuse this shim in component render checks so icon builds match the page.
-export const lucideBarrelPlugin = {
-  name: LUCIDE_PLUGIN_NAME,
-  setup(build) {
-    build.onLoad({ filter: /lucide-react-native[\\/].*[\\/]context\.mjs$/ }, async (args) => ({
-      contents: `${await readFile(args.path, 'utf8')}\nexport const LucideProvider = ({ children }) => children;\n`,
-      loader: 'js'
-    }))
-  }
-}
-
 // Render checks bundle components on their own; share the page's module shims so they resolve alike.
-export const mobileWebRenderCheckPlugins = [lucideBarrelPlugin, reactNativeSvgWebPlugin]
+export const mobileWebRenderCheckPlugins = [reactNativeSvgWebPlugin]
 
 // react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
 const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
@@ -311,7 +293,6 @@ export function mobileWebAppBuildOptions(
         sharedModules,
         anchoredLazyModules
       ),
-      lucideBarrelPlugin,
       reactNativeSvgWebPlugin,
       hairlineDevicePixelPlugin,
       packageBuildPlugin,

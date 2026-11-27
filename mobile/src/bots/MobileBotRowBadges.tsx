@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { Gauge, Lightbulb } from 'lucide-react-native'
+import { Gauge, Lightbulb } from '../components/icons/icon-set'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'

@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../../../components/icons/icon-set'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import { formatMobileNativeChatActiveTurnLabel } from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -57,7 +57,7 @@ export function MobileNativeChatLiveLine({
         </Text>
         {reasoning ? (
           <View style={open ? styles.caretOpen : undefined}>
-            <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+            <ChevronRight size={14} color={colors.textMuted} />
           </View>
         ) : null}
       </Pressable>

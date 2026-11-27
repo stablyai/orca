@@ -2,7 +2,7 @@
 // what stays behind, a tick on each thing that can come. Import tells the bot the desktop's same sentence.
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Check, Download } from 'lucide-react-native'
+import { Check, Download } from '../../../../components/icons/icon-set'
 import {
   BOT_IMPORT_PLAN_GROUPS,
   botImportAnswer,
@@ -111,7 +111,7 @@ export function MobileBotImportPlanCard({
                   style={({ pressed }) => [styles.item, pressed && pressedStyle]}
                 >
                   <View style={[styles.box, on && styles.boxOn]}>
-                    {on ? <Check size={11} color={colors.bgBase} strokeWidth={3} /> : null}
+                    {on ? <Check size={11} color={colors.bgBase} /> : null}
                   </View>
                   {text}
                 </Pressable>

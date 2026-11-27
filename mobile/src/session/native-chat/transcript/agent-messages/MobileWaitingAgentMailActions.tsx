@@ -4,7 +4,7 @@ import {
   type MembershipStore
 } from '../../../../../../src/shared/collections/membership-store'
 import { Pressable, Text, View } from 'react-native'
-import { CornerDownRight, Pencil, Send, Trash2 } from 'lucide-react-native'
+import { CornerDownRight, Pencil, Send, Trash2 } from '../../../../components/icons/icon-set'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
@@ -87,9 +87,9 @@ export function MobileWaitingAgentMailActions({
         ]}
       >
         {steers ? (
-          <CornerDownRight size={12} color={colors.textPrimary} strokeWidth={2} />
+          <CornerDownRight size={12} color={colors.textPrimary} />
         ) : (
-          <Send size={12} color={colors.textPrimary} strokeWidth={2} />
+          <Send size={12} color={colors.textPrimary} />
         )}
         <Text style={queuedMessageStyles.steerLabel}>
           {steers
@@ -111,7 +111,7 @@ export function MobileWaitingAgentMailActions({
             busy && styles.disabled
           ]}
         >
-          <Pencil size={14} color={colors.textSecondary} strokeWidth={2} />
+          <Pencil size={14} color={colors.textSecondary} />
         </Pressable>
       ) : null}
       <Pressable
@@ -127,7 +127,7 @@ export function MobileWaitingAgentMailActions({
           busy && styles.disabled
         ]}
       >
-        <Trash2 size={14} color={colors.textSecondary} strokeWidth={2} />
+        <Trash2 size={14} color={colors.textSecondary} />
       </Pressable>
     </View>
   )

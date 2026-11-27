@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState, type Ref } from 'react'
 import { ActivityIndicator, Pressable, Text, View, type HostInstance } from 'react-native'
-import { CircleAlert, Laptop, Mic, RotateCcw, Smartphone, Square, X } from 'lucide-react-native'
+import {
+  CircleAlert,
+  Laptop,
+  Mic,
+  RotateCcw,
+  Smartphone,
+  Square,
+  X
+} from '../components/icons/icon-set'
 import type { MobileDictationMeter } from '../hooks/mobile-dictation-meter'
 import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -56,12 +64,7 @@ export function MobileDictationCancelButton({
       hitSlop={COMPOSER_CONTROL_HIT_SLOP}
       onPress={onCancel}
     >
-      <X
-        pointerEvents="none"
-        size={compact ? 16 : 18}
-        color={colors.textPrimary}
-        strokeWidth={2.4}
-      />
+      <X pointerEvents="none" size={compact ? 16 : 18} color={colors.textPrimary} />
     </Pressable>
   )
 }
@@ -70,27 +73,19 @@ export function MobileDictationCancelButton({
 export function MobileDictationMicIcon({
   active,
   processing,
-  micSize,
-  micStroke
+  micSize
 }: {
   active: boolean
   processing: boolean
   micSize: number
-  micStroke: number
 }): React.JSX.Element {
   const colors = useMobileColors()
   return processing ? (
     <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
   ) : active ? (
-    <Square
-      pointerEvents="none"
-      size={16}
-      color={colors.statusRed}
-      strokeWidth={2.4}
-      fill={colors.statusRed}
-    />
+    <Square pointerEvents="none" size={16} color={colors.statusRed} fill={colors.statusRed} />
   ) : (
-    <Mic pointerEvents="none" size={micSize} color={colors.textSecondary} strokeWidth={micStroke} />
+    <Mic pointerEvents="none" size={micSize} color={colors.textSecondary} />
   )
 }
 
@@ -108,12 +103,7 @@ export function MobileDictationFailureNote({
   const kept = dictationControlsCopy.recordingKept(t)
   return (
     <View style={styles.row} accessible accessibilityLabel={`${reason}. ${kept}.`}>
-      <CircleAlert
-        pointerEvents="none"
-        size={compact ? 15 : 17}
-        color={colors.statusRed}
-        strokeWidth={2.2}
-      />
+      <CircleAlert pointerEvents="none" size={compact ? 15 : 17} color={colors.statusRed} />
       {compact ? (
         <Text style={styles.failureCompact} numberOfLines={1}>
           {`${reason} · ${kept}`}
@@ -159,7 +149,6 @@ export function MobileDictationRetryButton({
         pointerEvents="none"
         size={15}
         color={labelled ? colors.bgBase : colors.textPrimary}
-        strokeWidth={2.4}
       />
       {labelled ? (
         <Text style={styles.retryLabel}>{dictationControlsCopy.retryShort(t)}</Text>
@@ -170,9 +159,9 @@ export function MobileDictationRetryButton({
 
 function EngineIcon({ kind, color }: { kind: MobileDictationEngineShown['kind']; color: string }) {
   return kind === 'phone' ? (
-    <Smartphone pointerEvents="none" size={15} color={color} strokeWidth={2} />
+    <Smartphone pointerEvents="none" size={15} color={color} />
   ) : (
-    <Laptop pointerEvents="none" size={16} color={color} strokeWidth={2} />
+    <Laptop pointerEvents="none" size={16} color={color} />
   )
 }
 

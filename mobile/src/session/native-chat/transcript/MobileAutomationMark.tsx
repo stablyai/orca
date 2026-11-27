@@ -1,4 +1,5 @@
-import { Clock, Hourglass, Play, Webhook, Zap, type LucideIcon } from 'lucide-react-native'
+import { Clock, Hourglass, Play, Webhook, Zap } from '../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../components/icons/mobile-icon'
 import type { AutomationRowMark } from '../../../../../src/shared/automations/automation-chat-row'
 import {
   MobileConnectorSourceIcon,
@@ -7,7 +8,7 @@ import {
 import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 // Connectors draw their own logo; the rest a plain mark.
-const PLAIN: Record<AutomationRowMark, LucideIcon | null> = {
+const PLAIN: Record<AutomationRowMark, MobileIcon | null> = {
   github: null,
   slack: null,
   linear: null,
@@ -28,7 +29,7 @@ export function MobileAutomationMark({
   const colors = useMobileColors()
   const Icon = PLAIN[mark]
   return Icon ? (
-    <Icon size={14} color={colors.textMuted} strokeWidth={2} />
+    <Icon size={14} color={colors.textMuted} />
   ) : mark === 'google' ? (
     <MobileGoogleMark />
   ) : mark === 'github' || mark === 'slack' || mark === 'linear' ? (

@@ -2,7 +2,7 @@ import { MobileNativeChatGoalCheckNotice } from './MobileNativeChatGoalCheckNoti
 import * as Fallback from '../../../../../../src/shared/native-chat/transcript/notices/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
+import { CircleAlert, Info, TriangleAlert } from '../../../../components/icons/icon-set'
 import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
 import {
   nativeChatNoticeBlock,
@@ -321,13 +321,12 @@ export function MobileNativeChatNoticeRow({
         return content
       }
       const Icon =
-        look.tone === 'warning' ? AlertTriangle : look.tone === 'error' ? AlertCircle : Info
+        look.tone === 'warning' ? TriangleAlert : look.tone === 'error' ? CircleAlert : Info
       return (
         <View style={resolved ? styles.toneCard : [styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
             color={toneColor(colors, resolved ? 'notice' : look.tone)}
-            strokeWidth={2}
             style={styles.toneIcon}
           />
           {content}

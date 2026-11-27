@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react-native'
+import { Play } from '../../../../components/icons/icon-set'
 import { spacing } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'

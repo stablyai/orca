@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { X } from '../../components/icons/icon-set'
 import { TailClippedText } from '../../components/list/TailClippedText'
 import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -56,7 +56,7 @@ export function SidebarRow({
             onClose()
           }}
         >
-          <X size={13} color={colors.textMuted} strokeWidth={2.2} />
+          <X size={13} color={colors.textMuted} />
         </Pressable>
       ) : null}
     </Pressable>

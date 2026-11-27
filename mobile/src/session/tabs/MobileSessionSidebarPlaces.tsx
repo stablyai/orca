@@ -1,6 +1,6 @@
 import { useMemo, type ComponentType } from 'react'
 import { Text, View } from 'react-native'
-import { Folder, GitBranch, ListChecks } from 'lucide-react-native'
+import { Folder, GitBranch, ListChecks } from '../../components/icons/icon-set'
 import { NavBarBadge } from '../../components/nav-bar/NavBarButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { prStateIcon } from '../../source-control/review/status/pr-state-token'
@@ -15,7 +15,7 @@ import { SIDEBAR_MARK_SIZE, SidebarRow } from './MobileSessionSidebarRow'
 import { useCachedHostWorktrees } from './use-cached-host-worktrees'
 import type { MobileSessionSidebar } from './use-mobile-session-sidebar'
 
-type IconProps = { size?: number; color?: string; strokeWidth?: number }
+type IconProps = { size?: number; color?: string }
 type Place = {
   key: string
   label: string
@@ -119,11 +119,7 @@ export function MobileSessionSidebarPlaces({
           onPress={item.onPress}
         >
           <View style={styles.icon}>
-            <item.icon
-              size={SIDEBAR_MARK_SIZE}
-              color={item.color ?? colors.textPrimary}
-              strokeWidth={1.75}
-            />
+            <item.icon size={SIDEBAR_MARK_SIZE} color={item.color ?? colors.textPrimary} />
           </View>
           <Text style={styles.label} numberOfLines={1}>
             {item.label}

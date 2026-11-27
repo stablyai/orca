@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { MobileIcon } from '../icons/mobile-icon'
 import { feedback, radii, spacing } from '../../theme/mobile-theme'
 import { MobilePendingButton } from '../controls/MobilePendingButton'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
@@ -13,7 +13,7 @@ type SheetPrimaryButtonProps = {
   /** Merge keeps desktop's merge green for the one action that lands a pull request. */
   tone?: 'default' | 'merge'
   size?: 'default' | 'compact'
-  icon?: LucideIcon
+  icon?: MobileIcon
 }
 
 /** A sheet's full-width commit at its foot, e.g. "Create worktree". */
@@ -33,7 +33,7 @@ export function SheetPrimaryButton({
   return (
     <MobilePendingButton
       label={label}
-      icon={Icon ? <Icon size={17} color={foreground} strokeWidth={2.2} /> : undefined}
+      icon={Icon ? <Icon size={17} color={foreground} /> : undefined}
       style={[
         sheetPrimaryButtonStyles.button,
         tone === 'merge' && sheetPrimaryButtonStyles.merge,

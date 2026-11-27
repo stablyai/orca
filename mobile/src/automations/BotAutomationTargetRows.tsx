@@ -1,7 +1,7 @@
 // Where an agent's automation runs and where its results go: the desktop sidebar's Runs in, Agent and
 // Send results to, in its order, offering only the places this agent can send to.
 import type { ReactNode } from 'react'
-import { CircleOff, Hash, MessageCircle, MessageSquare } from 'lucide-react-native'
+import { CircleOff, Hash, MessageCircle, MessageSquare } from '../components/icons/icon-set'
 import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AutomationBotTarget } from '../../../src/shared/automations/automation-definition'
@@ -131,9 +131,7 @@ export function BotAutomationTargetRows(props: {
   const choice = botResultsToChoice(target.resultsTo)
   const posted = typeof target.resultsTo === 'object' ? target.resultsTo : null
   const threadReady = props.threadReplies && props.hasEventThread && target.runsIn === 'new'
-  const icon = (Icon: typeof MessageSquare) => () => (
-    <Icon size={18} color={colors.textSecondary} strokeWidth={1.8} />
-  )
+  const icon = (Icon: typeof MessageSquare) => () => <Icon size={18} color={colors.textSecondary} />
   // Places this agent can't send to yet stay out of the list, unless it already sends there.
   const resultOptions: PickerOption<BotResultsToChoice>[] = [
     { value: 'chat', label: chatLabel, renderIcon: icon(MessageSquare) },

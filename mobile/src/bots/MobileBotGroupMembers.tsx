@@ -2,7 +2,7 @@ import { botFailureMessage } from './bot-failure-message'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useState } from 'react'
 import { LayoutAnimation, Pressable, Text, View } from 'react-native'
-import { Users } from 'lucide-react-native'
+import { Users } from '../components/icons/icon-set'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
@@ -169,7 +169,7 @@ export function MobileBotGroupMembers({
         ) : (
           // The desktop dialog's empty picture, so the space reads as the group's picture to come.
           <View style={styles.emptyPicture}>
-            <Users size={28} strokeWidth={1.5} color={colors.textMuted} />
+            <Users size={28} color={colors.textMuted} />
           </View>
         )}
       </View>

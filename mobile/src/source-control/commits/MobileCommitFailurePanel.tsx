@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Text, View } from 'react-native'
-import { Sparkles } from 'lucide-react-native'
+import { Sparkles } from '../../components/icons/icon-set'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { AgentLaunchNotice } from '../../agents/presentation/AgentLaunchNotice'
@@ -39,7 +39,7 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
       <View style={styles.commitFailureLinks}>
         <PrTextLink
           accent
-          icon={<Sparkles size={14} color={colors.accentBlue} strokeWidth={2.2} />}
+          icon={<Sparkles size={14} color={colors.accentBlue} />}
           label={t('sourceControl.commitFailurePanel.fix', 'Fix')}
           onPress={() => void action.launch()}
           busy={action.launching}

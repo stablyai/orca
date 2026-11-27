@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { HostInstance } from 'react-native'
-import { ChevronLeft, MoreHorizontal } from 'lucide-react-native'
+import { ChevronLeft, MoreHorizontal } from '../../../components/icons/icon-set'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import { NavBar, NavBarTitleButton } from '../../../components/nav-bar/NavBar'

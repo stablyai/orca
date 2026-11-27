@@ -1,7 +1,7 @@
 import { MobileFileMediaPreview } from '../media/MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { Text, View } from 'react-native'
-import { FileText } from 'lucide-react-native'
+import { FileText } from '../../components/icons/icon-set'
 import type { MobileFilePreviewResult } from './mobile-file-preview-response'
 import { MobileFileMarkdownPreview } from '../markdown/MobileFileMarkdownPreview'
 import type { MarkdownPreviewMode } from '../markdown/MobileMarkdownPreviewModeBar'

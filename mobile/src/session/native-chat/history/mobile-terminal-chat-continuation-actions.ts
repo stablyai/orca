@@ -1,4 +1,4 @@
-import { MessageSquare } from 'lucide-react-native'
+import { MessageSquare } from '../../../components/icons/icon-set'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import type { MobileSessionTab } from '../../tabs/mobile-session-tabs'

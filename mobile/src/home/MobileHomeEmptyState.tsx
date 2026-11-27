@@ -1,4 +1,4 @@
-import { Clipboard, Laptop, ScanQrCode } from 'lucide-react-native'
+import { Clipboard, Laptop, ScanQrCode } from '../components/icons/icon-set'
 import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'

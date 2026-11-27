@@ -22,7 +22,7 @@ vi.mock('react-native', () => ({
   Linking: { openURL: () => Promise.resolve() },
   Platform: { OS: 'ios', select: (o: Record<string, unknown>) => o.ios }
 }))
-vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronDown: 'ChevronDown', X: 'X' }))
+vi.mock('../../../../components/icons/mobile-icon', () => ({ mobileIcon: () => () => null }))
 // Leaves that load native modules; the question text renders as plain Text so steps can be read.
 vi.mock('../../transcript/message-content/MobileNativeChatQuestionText', async () => {
   const React = await import('react')

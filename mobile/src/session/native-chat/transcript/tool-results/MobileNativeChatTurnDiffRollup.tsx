@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../../../components/icons/icon-set'
 import {
   NATIVE_CHAT_TURN_DIFF_FILE_LIMIT,
   nativeChatTurnDiffEditFile,
@@ -112,7 +112,7 @@ export function MobileNativeChatTurnDiffRollup({
           </Text>
         ) : null}
         <View style={[styles.caret, open && styles.open]}>
-          <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+          <ChevronRight size={14 * fontScale} color={colors.textMuted} />
         </View>
       </Pressable>
       {open ? (

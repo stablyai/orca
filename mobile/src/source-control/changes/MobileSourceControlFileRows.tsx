@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
-import { Minus, Plus, Undo2 } from 'lucide-react-native'
+import { Minus, Plus, Undo2 } from '../../components/icons/icon-set'
 import { STATUS_LABELS } from '../../../../src/shared/git/status/git-status-labels'
 import type {
   GitConflictKind,
@@ -188,9 +188,9 @@ export function ChangeFileRow({
         }
       >
         {item.canUnstage ? (
-          <Minus size={18} color={colors.textSecondary} strokeWidth={2.2} />
+          <Minus size={18} color={colors.textSecondary} />
         ) : (
-          <Plus size={18} color={colors.textSecondary} strokeWidth={2.2} />
+          <Plus size={18} color={colors.textSecondary} />
         )}
       </Pressable>
     ) : null

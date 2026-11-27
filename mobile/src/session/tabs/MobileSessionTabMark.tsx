@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Image } from 'react-native'
-import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
+import { File, FileText, Globe, SquareTerminal } from '../../components/icons/icon-set'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import {
@@ -65,7 +65,7 @@ function MobileSessionTabKindIcon({
         : type === 'file'
           ? File
           : SquareTerminal
-  return <Icon size={size} color={colors.textSecondary} strokeWidth={2.1} />
+  return <Icon size={size} color={colors.textSecondary} />
 }
 
 // Icons React Native can't decode (SVG, some ICOs) fall back to the globe, as desktop does.

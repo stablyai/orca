@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, View, Text } from 'react-native'
-import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
+import { PencilLine, Trash2 } from '../icons/icon-set'
+import type { MobileIcon } from '../icons/mobile-icon'
 import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
@@ -10,7 +11,7 @@ import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from '../lis
 export type ActionSheetAction = {
   id?: string
   label: string
-  icon?: LucideIcon
+  icon?: MobileIcon
   renderIcon?: () => ReactNode
   destructive?: boolean
   disabled?: boolean
@@ -48,14 +49,14 @@ type Props = {
   onAfterClose?: () => void
 }
 
-function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon): LucideIcon {
+function iconForAction(label: string, destructive?: boolean, icon?: MobileIcon): MobileIcon {
   if (icon) {
     return icon
   }
   if (destructive || /delete|remove/i.test(label)) {
     return Trash2
   }
-  return Edit3
+  return PencilLine
 }
 
 type ContentProps = {

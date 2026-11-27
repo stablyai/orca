@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react'
 import { Text, View } from 'react-native'
-import { Timer } from 'lucide-react-native'
+import { Timer } from '../../../../components/icons/icon-set'
 import { approvalRecordTool } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-tool'
 import { workerApprovalTimeLeft } from '../../../../../../src/shared/orchestration/approvals/worker-approval-time-left'
 import { useNow } from '../../../../hooks/use-now'
@@ -126,7 +126,7 @@ function WorkerApprovalCountdown({ expiresAt }: { expiresAt: string }) {
   const timeLeft = workerApprovalTimeLeft(expiresAt, useNow(1_000))
   return timeLeft ? (
     <View style={styles.countdown}>
-      <Timer size={14} strokeWidth={2.2} color={colors.textSecondary} />
+      <Timer size={14} color={colors.textSecondary} />
       <Text style={styles.noteText}>
         {t(
           'chat.workerApproval.countdown',

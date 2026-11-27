@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MessageSquare, Plus, Users } from 'lucide-react-native'
+import { MessageSquare, Plus, Users } from '../components/icons/icon-set'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { feedback, spacing } from '../theme/mobile-theme'
@@ -84,7 +84,7 @@ export function MobileBotGroupRoomBar({
         accessibilityLabel={newThread}
         accessibilityState={{ disabled: createDisabled }}
       >
-        <Plus size={18} color={colors.textPrimary} strokeWidth={2.2} />
+        <Plus size={18} color={colors.textPrimary} />
       </Pressable>
       <ActionSheetModal
         visible={listing}

@@ -1,4 +1,4 @@
-import { Plus, SlidersHorizontal } from 'lucide-react-native'
+import { Plus, SlidersHorizontal } from '../../components/icons/icon-set'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import {

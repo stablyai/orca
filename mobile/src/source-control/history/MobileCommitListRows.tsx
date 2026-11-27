@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../components/icons/icon-set'
 import { SectionHeader } from '../../components/list/ListGroup'
 import {
   paletteForScheme,
@@ -146,7 +146,7 @@ export function renderCommitRow(
           </Text>
         </View>
         <CommitLineStat added={row.insertions} removed={row.deletions} />
-        <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
+        <ChevronRight size={16} color={colors.textMuted} />
       </View>
     </Pressable>
   )

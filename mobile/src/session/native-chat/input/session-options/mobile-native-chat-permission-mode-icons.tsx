@@ -1,4 +1,5 @@
-import { FilePenLine, Hand, ShieldAlert, ShieldCheck, type LucideIcon } from 'lucide-react-native'
+import { FilePenLine, Hand, ShieldAlert, ShieldCheck } from '../../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../../components/icons/mobile-icon'
 import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   isAgentChatPermissionMode
@@ -12,7 +13,7 @@ export function permissionChoiceColor(
   return value === 'full-access' ? colors.statusAmber : undefined
 }
 
-export function permissionModeIcon(value: string): LucideIcon | undefined {
+export function permissionModeIcon(value: string): MobileIcon | undefined {
   if (!isAgentChatPermissionMode(value)) {
     return undefined
   }
@@ -34,10 +35,6 @@ export function permissionChoiceLeading(
 ): React.JSX.Element | null {
   const Icon = permissionModeIcon(value)
   return Icon ? (
-    <Icon
-      size={18}
-      color={permissionChoiceColor(colors, value) ?? colors.textSecondary}
-      strokeWidth={2.2}
-    />
+    <Icon size={18} color={permissionChoiceColor(colors, value) ?? colors.textSecondary} />
   ) : null
 }

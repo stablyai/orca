@@ -2,7 +2,7 @@
 // itself happens in Google Cloud on the computer; from the phone the owner answers what they can.
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../../components/icons/icon-set'
 import {
   googleSetupFoldedSteps,
   googleSetupProgressView,
@@ -44,7 +44,7 @@ function StepMark({ index, status }: { index: number; status: string }): React.J
       ]}
     >
       {status === 'done' ? (
-        <Check size={11} color={colors.bgPanel} strokeWidth={3} />
+        <Check size={11} color={colors.bgPanel} />
       ) : (
         <Text
           style={[

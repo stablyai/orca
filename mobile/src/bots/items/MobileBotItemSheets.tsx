@@ -10,7 +10,7 @@ import {
   MessageSquare,
   Shuffle,
   WifiOff
-} from 'lucide-react-native'
+} from '../../components/icons/icon-set'
 import {
   BOT_ITEM_LIMITS,
   botItemPickerStatuses,

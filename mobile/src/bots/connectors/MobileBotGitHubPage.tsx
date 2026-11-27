@@ -7,12 +7,12 @@ import { useRef, useState, type ReactNode } from 'react'
 import {
   ArrowUpRight,
   BookMarked,
-  Ellipsis,
   LogIn,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Unlink
-} from 'lucide-react-native'
+} from '../../components/icons/icon-set'
 import {
   botMemberSource,
   botMembersFrom,
@@ -286,7 +286,7 @@ export function MobileBotGitHubPage(props: {
           menu.length + accountMenu.length > 0 ? (
             <NavBarButton
               ref={menuAnchor}
-              icon={Ellipsis}
+              icon={MoreHorizontal}
               accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
                 name: BOT_CONNECTOR_NAMES.github
               })}

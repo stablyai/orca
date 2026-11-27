@@ -1,4 +1,4 @@
-import { Activity, Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
+import { Activity, PencilLine, PowerOff, RefreshCw } from './components/icons/icon-set'
 import type { ActionSheetAction } from './components/sheets/ActionSheetModal'
 import type { ConnectionState } from './transport/connection/connection-state'
 import type { HostProfile } from './host-catalog/host-profile'
@@ -85,7 +85,7 @@ export function hostEditAction(onPress: () => void, t: Translate): ActionSheetAc
   return {
     id: 'editHost',
     label: t('hostScreen.hostListActionSheetActions.editComputer', 'Edit computer'),
-    icon: Edit3,
+    icon: PencilLine,
     closeBeforePress: true,
     onPress
   }

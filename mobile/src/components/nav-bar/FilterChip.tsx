@@ -1,11 +1,11 @@
 import type { ComponentType } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown } from 'lucide-react-native'
+import { ChevronDown } from '../icons/icon-set'
 import { feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
-type IconProps = { size?: number; color?: string; strokeWidth?: number }
+type IconProps = { size?: number; color?: string }
 
 type FilterChipProps = {
   label: string
@@ -52,11 +52,11 @@ export function FilterChip({
             pressed && styles.pressed
           ]}
         >
-          {Icon ? <Icon size={15} color={color} strokeWidth={2.2} /> : null}
+          {Icon ? <Icon size={15} color={color} /> : null}
           <Text style={[styles.label, { color }]} numberOfLines={1}>
             {label}
           </Text>
-          {menu ? <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.2} /> : null}
+          {menu ? <ChevronDown size={14} color={colors.textMuted} /> : null}
         </View>
       )}
     </Pressable>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { ChevronRight, X } from 'lucide-react-native'
+import { ChevronRight, X } from '../../../components/icons/icon-set'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,
@@ -83,7 +83,7 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
           style={({ pressed }) => [styles.close, pressed && styles.pressed]}
           onPress={props.onClose}
         >
-          <X size={16} color={colors.textMuted} strokeWidth={2} />
+          <X size={16} color={colors.textMuted} />
         </Pressable>
       </View>
       <McpTrayBody {...props} t={t} />
@@ -94,7 +94,7 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
           onPress={props.onManage}
         >
           <Text style={styles.footerText}>{t('chat.mcp.manage', 'Manage MCP servers')}</Text>
-          <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} />
+          <ChevronRight size={15} color={colors.textMuted} />
         </Pressable>
       ) : null}
     </View>

@@ -1,4 +1,10 @@
-import { CheckCheck, Ellipsis, SquareTerminal, Trash2, WifiOff } from 'lucide-react-native'
+import {
+  CheckCheck,
+  MoreHorizontal,
+  SquareTerminal,
+  Trash2,
+  WifiOff
+} from '../../components/icons/icon-set'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ActivityIndicator,
@@ -199,7 +205,7 @@ export function MobileHomeAgentsTab(props: {
         trailing={
           <MobileHomeTabHeaderButton
             ref={moreRef}
-            icon={Ellipsis}
+            icon={MoreHorizontal}
             accessibilityLabel={t('agents.options.more', 'More')}
             active={menuOpen}
             onPress={() => setMenuOpen(true)}

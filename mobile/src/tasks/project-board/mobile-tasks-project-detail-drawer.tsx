@@ -2,7 +2,7 @@ import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tas
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { openExternalLink } from '../../platform/external-links/external-link'
-import { ExternalLink, Copy, Plus, RefreshCw, X, GitBranch } from 'lucide-react-native'
+import { Copy, ExternalLink, GitBranch, Plus, RefreshCw, X } from '../../components/icons/icon-set'
 import { pressedStyle } from '../../theme/mobile-theme'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../components/list/ListGroup'

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { TriangleAlert } from 'lucide-react-native'
+import { TriangleAlert } from '../components/icons/icon-set'
 import { radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
@@ -74,7 +74,7 @@ function AgentHistorySkippedNotice({ issues }: { issues: readonly AiVaultScanIss
   return (
     <View style={styles.notice}>
       <View style={styles.noticeRow}>
-        <TriangleAlert size={14} color={colors.statusAmber} strokeWidth={2.2} />
+        <TriangleAlert size={14} color={colors.statusAmber} />
         <Text style={styles.noticeText}>
           {count === 1
             ? t('agentHistory.panel.skipped_one', '{{count}} transcript skipped', { count })

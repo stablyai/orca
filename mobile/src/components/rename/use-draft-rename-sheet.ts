@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ClockFading, CloudOff } from 'lucide-react-native'
+import { ClockFading, CloudOff } from '../icons/icon-set'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { isHostRouteUnreachableError, type HostMutationPhase } from '../../query/host-mutation'
 import { readHostMutationDraft, setHostMutationDraft } from '../../query/host-mutation-drafts'

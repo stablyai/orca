@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
-import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from 'lucide-react-native'
+import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from '../../../../components/icons/icon-set'
 import { nativeChatEditFilePatchText } from '../../../../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
   nativeChatEditFileBaseName,
@@ -25,7 +25,7 @@ import { useThemedStyles } from '../../../../theme/themed-styles'
 function VerbIcon({ kind, size }: { kind: NativeChatEditFile['changeKind']; size: number }) {
   const colors = useMobileColors()
   const Icon = kind === 'added' ? FilePlus2 : kind === 'deleted' ? FileMinus2 : FilePen
-  return <Icon size={size} color={colors.textMuted} strokeWidth={2} />
+  return <Icon size={size} color={colors.textMuted} />
 }
 
 function DiffRow({
@@ -199,7 +199,7 @@ export function MobileNativeChatDiffCard({
           ) : null}
           {hasBody ? (
             <View style={expanded ? styles.caretOpen : undefined}>
-              <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+              <ChevronRight size={14 * fontScale} color={colors.textMuted} />
             </View>
           ) : null}
         </Pressable>

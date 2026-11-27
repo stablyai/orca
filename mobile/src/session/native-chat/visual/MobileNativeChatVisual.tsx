@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { Maximize2, X } from 'lucide-react-native'
+import { Maximize2, X } from '../../../components/icons/icon-set'
 import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
@@ -98,7 +98,7 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
         hitSlop={8}
         style={({ pressed }) => [styles.openButton, pressed && pressedStyle]}
       >
-        <Maximize2 size={14} color={colors.textSecondary} strokeWidth={2.2} />
+        <Maximize2 size={14} color={colors.textSecondary} />
       </Pressable>
       {fullscreen ? (
         <MobileNativeChatVisualFullscreen
@@ -151,7 +151,7 @@ function MobileNativeChatVisualFullscreen({
             hitSlop={8}
             style={({ pressed }) => [styles.closeButton, pressed && pressedStyle]}
           >
-            <X size={18} color={colors.textSecondary} strokeWidth={2.2} />
+            <X size={18} color={colors.textSecondary} />
           </Pressable>
         </View>
         <MobileNativeChatVisualFrame

@@ -14,7 +14,7 @@ import {
   Pencil,
   Sparkles,
   Trash2
-} from 'lucide-react-native'
+} from '../../../../components/icons/icon-set'
 import type { PRComment } from '../../../../../../src/shared/github/comments/comment-types'
 import {
   getPRCommentGroupRoot,
@@ -174,7 +174,7 @@ export function PrThreadRow({
             accessibilityRole="button"
             accessibilityLabel={t('pullRequest.screens.commentActions', 'More for this comment')}
           >
-            <MoreHorizontal size={18} color={colors.textSecondary} strokeWidth={2.2} />
+            <MoreHorizontal size={18} color={colors.textSecondary} />
           </Pressable>
         ) : null}
       </View>
@@ -227,7 +227,7 @@ export function PrThreadRow({
             {ask ? (
               <PrTextLink
                 accent
-                icon={<Sparkles size={14} color={colors.accentBlue} strokeWidth={2.2} />}
+                icon={<Sparkles size={14} color={colors.accentBlue} />}
                 label={ask.label}
                 onPress={ask.onPress}
                 busy={ask.busy}
@@ -312,7 +312,7 @@ export function PrCommentFileLink({
       accessibilityRole={onPress ? 'link' : undefined}
       style={({ pressed }) => [styles.file, pressed && pressedStyle]}
     >
-      <FileText size={12} color={colors.textMuted} strokeWidth={2} />
+      <FileText size={12} color={colors.textMuted} />
       <Text style={styles.fileText} numberOfLines={1}>
         {location}
       </Text>

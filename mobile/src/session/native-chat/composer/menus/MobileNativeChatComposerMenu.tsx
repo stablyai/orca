@@ -2,7 +2,7 @@ import { MobileNativeChatComposerMenuReservation } from '../field/MobileNativeCh
 import type { RefObject } from 'react'
 import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
-import { AtSign, FileText, Folder, Package, Terminal } from 'lucide-react-native'
+import { AtSign, FileText, Folder, Package, Terminal } from '../../../../components/icons/icon-set'
 import type { NativeChatPickerItem } from '../../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import { isFolderPath } from '../../../../../../src/shared/quick-open/quick-open-folder-paths'
 import { radii, spacing, typography } from '../../../../theme/mobile-theme'
@@ -152,7 +152,7 @@ function MenuRow({
       {row.kind === 'member' && row.icon ? (
         row.icon
       ) : (
-        <Icon size={16} color={colors.textSecondary} strokeWidth={2} style={styles.icon} />
+        <Icon size={16} color={colors.textSecondary} style={styles.icon} />
       )}
       <View style={styles.body}>
         <View style={styles.nameLine}>

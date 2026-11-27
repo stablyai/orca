@@ -1,5 +1,5 @@
 import { ScrollView, Text, View } from 'react-native'
-import { MessageSquare } from 'lucide-react-native'
+import { MessageSquare } from '../components/icons/icon-set'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
 import { mobileOnboardingStylesSheet } from './mobile-onboarding-styles'

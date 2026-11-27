@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Check, Download } from 'lucide-react-native'
+import { Check, Download } from '../../components/icons/icon-set'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { radii, spacing, typography } from '../../theme/mobile-theme'
@@ -225,7 +225,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                     <Text style={styles.modelStateText}>{cloudModelNeedsKey(t)}</Text>
                   ) : action === 'in-use' ? (
                     <View style={styles.selectedTag}>
-                      <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
+                      <Check size={14} color={colors.statusGreen} />
                       <Text style={styles.selectedText}>
                         {t('components.dictationSetupSheet.inUse', 'In use')}
                       </Text>
@@ -272,7 +272,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                         <ActivityIndicator size="small" color={colors.textSecondary} />
                       ) : (
                         <>
-                          <Download size={13} color={colors.textSecondary} strokeWidth={2.2} />
+                          <Download size={13} color={colors.textSecondary} />
                           <Text style={styles.actionText}>
                             {t('components.dictationSetupSheet.download', 'Download')}
                           </Text>

@@ -7,7 +7,7 @@ import { MobileNativeChatVisualContext } from '../session/native-chat/visual/mob
 import { MobileNativeChatItemSourceContext } from '../session/native-chat/transcript/projection/mobile-native-chat-item-read'
 import { useMobileNativeChatMessageDetail } from '../session/native-chat/transcript/projection/use-mobile-native-chat-message-detail'
 import { MobileNativeChatRowOverlaysHost } from '../session/native-chat/transcript/message-actions/MobileNativeChatRowOverlaysHost'
-import { Reply, Square } from 'lucide-react-native'
+import { Reply, Square } from '../components/icons/icon-set'
 import { foldMobileNativeChatMessages } from '../session/native-chat/transcript/projection/mobile-native-chat-render-data'
 import {
   botGroupOperationAdmitted,
@@ -241,12 +241,7 @@ export function MobileBotGroupTurn({
                       onPress={onStop}
                       style={({ pressed }) => [styles.metaButton, pressed && styles.metaPressed]}
                     >
-                      <Square
-                        size={13}
-                        color={colors.textSecondary}
-                        fill={colors.textSecondary}
-                        strokeWidth={2.4}
-                      />
+                      <Square size={13} color={colors.textSecondary} fill={colors.textSecondary} />
                     </Pressable>
                   ) : undefined
                 }

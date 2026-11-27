@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { inertIconModule, inertNativeElement, inertNativeElements } from './inert-native-elements'
+import { inertNativeElement, inertNativeElements } from './inert-native-elements'
 import { partialNativeModule } from './native-module-traps'
 
 // List only native members recordings actually reach; trap all others so new device dependencies require an explicit decision.
@@ -22,7 +22,6 @@ export function screenNativeSubstitutes(): Map<string, unknown> {
         useLocalSearchParams: constantRoute
       })
     ],
-    ['lucide-react-native', inertIconModule()],
     [
       'react-native-svg',
       partialNativeModule('react-native-svg', {

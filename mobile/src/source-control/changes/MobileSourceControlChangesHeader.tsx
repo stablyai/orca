@@ -1,5 +1,10 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, GitBranch, GitCommitHorizontal } from 'lucide-react-native'
+import {
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
+  GitCommitHorizontal
+} from '../../components/icons/icon-set'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -115,11 +120,11 @@ export function MobileSourceControlChangesHeader({
             }
           )}
         >
-          <GitBranch size={15} color={colors.textSecondary} strokeWidth={2.1} />
+          <GitBranch size={15} color={colors.textSecondary} />
           <Text style={styles.branchText} numberOfLines={1}>
             {state.branchLabel}
           </Text>
-          <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.2} />
+          <ChevronDown size={14} color={colors.textMuted} />
         </Pressable>
         {meta ? <Text style={styles.syncText}>{meta}</Text> : null}
       </View>
@@ -130,7 +135,7 @@ export function MobileSourceControlChangesHeader({
           onPress={onOpenCommits}
           accessibilityRole="button"
         >
-          <GitCommitHorizontal size={16} color={colors.textSecondary} strokeWidth={2.1} />
+          <GitCommitHorizontal size={16} color={colors.textSecondary} />
           <Text style={styles.commitsRowText}>
             {commits === 1
               ? t('sourceControl.changesHeader.commits_one', '{{count}} commit', { count: commits })
@@ -138,7 +143,7 @@ export function MobileSourceControlChangesHeader({
                   count: commits
                 })}
           </Text>
-          <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
+          <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
       ) : null}
     </View>

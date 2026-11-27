@@ -1,5 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { ShieldCheck, ShieldMinus, ShieldQuestion, ShieldX } from 'lucide-react-native'
+import {
+  ShieldCheck,
+  ShieldMinus,
+  ShieldQuestion,
+  ShieldX
+} from '../../../../components/icons/icon-set'
 import {
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswers,
@@ -119,7 +124,7 @@ function ApprovalRecord({
   const sentence = parts.map((part) => part.text).join('')
   return (
     <MobileNativeChatEventRow
-      icon={<Icon size={14} color={colors.textMuted} strokeWidth={2} />}
+      icon={<Icon size={14} color={colors.textMuted} />}
       label={preview ? `${sentence} · ${preview}` : sentence}
       timestamp={body.resolution.resolvedAt}
       disclosureKey={disclosureKey}

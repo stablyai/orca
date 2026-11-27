@@ -2,12 +2,12 @@ import type { ReactNode } from 'react'
 import { useSyncExternalStore } from 'react'
 import { Text, View, useWindowDimensions, type LayoutRectangle } from 'react-native'
 import {
-  AlertCircle,
+  CircleAlert,
   CornerDownRight,
   Image as ImageIcon,
   MoreHorizontal,
   Send
-} from 'lucide-react-native'
+} from '../../../../components/icons/icon-set'
 import { queuedMessageCardSteers } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
@@ -121,9 +121,7 @@ function QueuedMessageCardContents({
         {dragHandle}
         <View style={styles.textColumn}>
           <View style={styles.metaLine}>
-            {card.needsAttention ? (
-              <AlertCircle size={12} color={colors.statusRed} strokeWidth={2} />
-            ) : null}
+            {card.needsAttention ? <CircleAlert size={12} color={colors.statusRed} /> : null}
             {lead ? (
               <>
                 <Text
@@ -164,7 +162,7 @@ function QueuedMessageCardContents({
                     : t('session.queuedMessageCardRow.images_other', '{{count}} images', { count })
                 }
               >
-                <ImageIcon size={12} color={colors.textSecondary} strokeWidth={2} />
+                <ImageIcon size={12} color={colors.textSecondary} />
                 <Text style={styles.metaText}>{count}</Text>
               </View>
             ) : null}
@@ -204,13 +202,9 @@ function QueuedMessageCardContents({
             labelStyle={[styles.steerLabel, lit && styles.litActionLabel]}
             icon={
               narrow ? null : steers ? (
-                <CornerDownRight
-                  size={12}
-                  color={lit ? colors.bgBase : colors.textPrimary}
-                  strokeWidth={2}
-                />
+                <CornerDownRight size={12} color={lit ? colors.bgBase : colors.textPrimary} />
               ) : (
-                <Send size={12} color={lit ? colors.bgBase : colors.textPrimary} strokeWidth={2} />
+                <Send size={12} color={lit ? colors.bgBase : colors.textPrimary} />
               )
             }
             spinnerColor={lit ? colors.bgBase : colors.textPrimary}
@@ -222,7 +216,7 @@ function QueuedMessageCardContents({
         <MobilePendingButton
           label={t('session.queuedMessageCardRow.moreActions', 'More actions')}
           iconOnly
-          icon={<MoreHorizontal size={16} color={colors.textSecondary} strokeWidth={2} />}
+          icon={<MoreHorizontal size={16} color={colors.textSecondary} />}
           style={styles.moreButton}
           spinnerColor={colors.textSecondary}
           pending={busyControl === 'more'}

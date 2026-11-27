@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Text, View } from 'react-native'
-import { Bot } from 'lucide-react-native'
+import { Bot } from '../../../../components/icons/icon-set'
 import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader
@@ -88,7 +88,7 @@ function SubagentRow({
   return (
     <MobileNativeChatEventRow
       testID="subagent-row"
-      icon={<Bot size={14} color={colors.textMuted} strokeWidth={2} />}
+      icon={<Bot size={14} color={colors.textMuted} />}
       badge={state === 'working' ? 'running' : state === 'failed' ? 'failed' : null}
       label={agent.label}
       timestamp={agent.startedAt ?? null}
@@ -150,7 +150,7 @@ export function MobileNativeChatSubagentGroup({
   return (
     <MobileNativeChatEventRow
       testID="subagent-summary"
-      icon={<Bot size={14} color={colors.textMuted} strokeWidth={2} />}
+      icon={<Bot size={14} color={colors.textMuted} />}
       badge={
         working ? 'running' : (alertState ?? header.verdictState) === 'failed' ? 'failed' : null
       }

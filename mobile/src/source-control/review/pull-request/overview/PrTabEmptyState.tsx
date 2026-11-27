@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
-import { GitPullRequest, Link2 } from 'lucide-react-native'
+import { GitPullRequest, Link2 } from '../../../../components/icons/icon-set'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { normalizeHostedReviewHeadRef } from '../../../../../../src/shared/source-control/hosted-review/hosted-review-refs'
@@ -94,7 +94,7 @@ export function PrTabEmptyState({ tab, branchCompare }: Props) {
   return (
     <>
       <View style={styles.empty}>
-        <GitPullRequest size={28} color={colors.textMuted} strokeWidth={1.6} />
+        <GitPullRequest size={28} color={colors.textMuted} />
         <Text style={styles.emptyTitle}>
           {orphanLinkedPR
             ? t(
@@ -113,7 +113,7 @@ export function PrTabEmptyState({ tab, branchCompare }: Props) {
             'pullRequest.prSidebarCreateEmptyState.linkExistingPullRequest',
             'Link pull request'
           )}
-          leading={<Link2 size={18} color={colors.textSecondary} strokeWidth={2} />}
+          leading={<Link2 size={18} color={colors.textSecondary} />}
           navigates
           disabled={!client}
           onPress={() => setLinking(true)}

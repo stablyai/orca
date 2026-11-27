@@ -1,5 +1,6 @@
 import { Pressable, Text } from 'react-native'
-import { X, type LucideIcon } from 'lucide-react-native'
+import { X } from '../../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../../components/icons/mobile-icon'
 import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
@@ -18,7 +19,7 @@ export function MobileNativeChatComposerModeChip({
   disabled = false,
   onExit
 }: {
-  icon: LucideIcon
+  icon: MobileIcon
   label: string
   exitLabel: string
   testID: string
@@ -43,9 +44,9 @@ export function MobileNativeChatComposerModeChip({
       onPress={onExit}
       testID={testID}
     >
-      <Icon size={15} color={colors.textPrimary} strokeWidth={2} />
+      <Icon size={15} color={colors.textPrimary} />
       <Text style={styles.label}>{label}</Text>
-      <X size={14} color={colors.textMuted} strokeWidth={2} />
+      <X size={14} color={colors.textMuted} />
     </Pressable>
   )
 }

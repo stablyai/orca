@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
-import { Search } from 'lucide-react-native'
+import { Search } from '../../../../components/icons/icon-set'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { searchMobilePrBaseRefs } from '../../creation/mobile-pr-create-draft'

@@ -5,7 +5,7 @@ import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-tran
 import { useThemedStyles } from '../theme/themed-styles'
 import { useEffect, useRef, useState } from 'react'
 import { View, type HostInstance } from 'react-native'
-import { Ellipsis, History, Pencil, Play, Trash2 } from 'lucide-react-native'
+import { History, MoreHorizontal, Pencil, Play, Trash2 } from '../components/icons/icon-set'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   loadAutomationTargets,
@@ -243,7 +243,7 @@ function AutomationDetailMenu(props: DetailMenuActions & { name: string }) {
       />
       <NavBarButton
         ref={anchor}
-        icon={Ellipsis}
+        icon={MoreHorizontal}
         accessibilityLabel={t('automations.mobile.moreActions', 'More actions')}
         onPress={() => setOpen(true)}
       />

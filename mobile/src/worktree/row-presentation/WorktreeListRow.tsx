@@ -8,7 +8,7 @@ import {
   GitBranch,
   Pin,
   PinOff
-} from 'lucide-react-native'
+} from '../../components/icons/icon-set'
 import { Pressable, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'

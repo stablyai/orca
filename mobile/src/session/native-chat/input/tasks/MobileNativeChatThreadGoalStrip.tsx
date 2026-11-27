@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { ChevronDown, Goal, Pause, Play, Trash2 } from 'lucide-react-native'
+import { ChevronDown, Goal, Pause, Play, Trash2 } from '../../../../components/icons/icon-set'
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalOfferedStatusChange
@@ -79,7 +79,7 @@ export function MobileNativeChatThreadGoalStrip({
   const toggle = (): void => setExpanded(!expanded)
   const chevron = (
     <View style={[styles.chevron, expanded && styles.chevronOpen]}>
-      <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
+      <ChevronDown size={14} color={colors.textMuted} />
     </View>
   )
   return (
@@ -91,7 +91,7 @@ export function MobileNativeChatThreadGoalStrip({
         <>
           <View style={styles.openLine}>
             <View style={styles.openIcon}>
-              <Goal size={14} color={colors.textMuted} strokeWidth={2} />
+              <Goal size={14} color={colors.textMuted} />
             </View>
             <ScrollView style={styles.objectiveScroll} nestedScrollEnabled>
               <Text style={[styles.text, styles.openText]}>
@@ -124,9 +124,9 @@ export function MobileNativeChatThreadGoalStrip({
                   }
                   icon={
                     statusChange === 'paused' ? (
-                      <Pause size={13} color={colors.textPrimary} strokeWidth={2} />
+                      <Pause size={13} color={colors.textPrimary} />
                     ) : (
-                      <Play size={13} color={colors.textPrimary} strokeWidth={2} />
+                      <Play size={13} color={colors.textPrimary} />
                     )
                   }
                   hitSlop={6}
@@ -144,7 +144,7 @@ export function MobileNativeChatThreadGoalStrip({
               ) : null}
               <MobilePendingButton
                 label={t('chat.goal.clear', 'Clear goal')}
-                icon={<Trash2 size={13} color={colors.statusRed} strokeWidth={2} />}
+                icon={<Trash2 size={13} color={colors.statusRed} />}
                 hitSlop={6}
                 style={styles.action}
                 labelStyle={[styles.actionLabel, styles.destructive]}
@@ -165,7 +165,7 @@ export function MobileNativeChatThreadGoalStrip({
           style={({ pressed }) => [styles.line, pressed && styles.pressed]}
           onPress={toggle}
         >
-          <Goal size={14} color={colors.textMuted} strokeWidth={2} />
+          <Goal size={14} color={colors.textMuted} />
           <Text style={[styles.text, styles.lineText]} numberOfLines={1} ellipsizeMode="tail">
             <Text style={styles.status}>{status}</Text> {goal.objective}
           </Text>

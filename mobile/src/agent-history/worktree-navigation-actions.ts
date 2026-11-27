@@ -1,4 +1,4 @@
-import { GitBranch, MessageSquarePlus } from 'lucide-react-native'
+import { GitBranch, MessageSquarePlus } from '../components/icons/icon-set'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import type { MobilePalette } from '../theme/mobile-theme'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
@@ -62,8 +62,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   actions.push({
     id: 'agentSessionHistory',
     label: args.t('agentHistory.worktreeNavigationActions.agentSessionHistory', 'Agent history'),
-    renderIcon: () =>
-      MobileAgentSessionHistoryIcon({ size: 16, color: args.colors.textSecondary, strokeWidth: 2 }),
+    renderIcon: () => MobileAgentSessionHistoryIcon({ size: 16, color: args.colors.textSecondary }),
     onPress: () => openHistory()
   })
   // History picks the session to hand off; the new agent starts through the host's durable launch.

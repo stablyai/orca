@@ -15,10 +15,7 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light',
   Appearance: { getColorScheme: () => 'light', addChangeListener: () => ({ remove() {} }) }
 }))
-vi.mock(
-  'lucide-react-native',
-  () => new Proxy({}, { get: (_, name) => String(name), has: () => true })
-)
+vi.mock('../components/icons/mobile-icon', () => ({ mobileIcon: () => () => null }))
 vi.mock('../i18n/use-mobile-translation', () => ({
   useMobileTranslation: () => (_key: string, fallback: string) => fallback
 }))

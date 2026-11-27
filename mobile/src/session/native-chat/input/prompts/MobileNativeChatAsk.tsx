@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../../components/icons/icon-set'
 import {
   nativeChatAnswerOperationEvidence,
   type NativeChatAnswerOperation,
@@ -309,9 +309,7 @@ export function MobileNativeChatAsk({
               <Text style={[styles.tabText, i === index && styles.tabTextActive]} numberOfLines={1}>
                 {qq.header || t('chat.ask.step', 'Step {{step}}', { step: i + 1 })}
               </Text>
-              {isAnswered(i) ? (
-                <Check size={11} color={colors.statusGreen} strokeWidth={3} />
-              ) : null}
+              {isAnswered(i) ? <Check size={11} color={colors.statusGreen} /> : null}
             </Pressable>
           ))}
         </ScrollView>

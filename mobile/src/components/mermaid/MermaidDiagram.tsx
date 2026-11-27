@@ -1,6 +1,6 @@
 import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
-import { Maximize2 } from 'lucide-react-native'
+import { Maximize2 } from '../icons/icon-set'
 import { radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
@@ -142,7 +142,7 @@ function MermaidFrame({ children, onExpand }: { children: ReactNode; onExpand?: 
             accessibilityRole="button"
             accessibilityLabel={expandLabel}
           >
-            <Maximize2 size={13} color={colors.textSecondary} strokeWidth={2} />
+            <Maximize2 size={13} color={colors.textSecondary} />
           </Pressable>
         ) : null}
       </View>

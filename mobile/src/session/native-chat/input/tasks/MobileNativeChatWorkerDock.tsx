@@ -2,7 +2,7 @@
 // a sheet of their rows, as the Chats tab lists a chat's workers. Approvals stay in their own card.
 import { memo, useContext, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../../../components/icons/icon-set'
 import {
   compareWorkerDockEntries,
   type WorkerDockEntry
@@ -239,7 +239,7 @@ function MobileNativeChatWorkerDockImpl({
               <Text style={styles.line} numberOfLines={1} ellipsizeMode="tail">
                 {line}
               </Text>
-              <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+              <ChevronRight size={14} color={colors.textMuted} />
             </Pressable>
           </View>
         </View>

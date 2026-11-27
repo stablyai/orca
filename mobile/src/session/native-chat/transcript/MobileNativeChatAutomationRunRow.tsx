@@ -1,6 +1,6 @@
 import { useContext, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../../components/icons/icon-set'
 import type { AutomationRunMessage } from '../../../../../src/shared/automations/automation-run-message'
 import { automationRunInstructions } from '../../../../../src/shared/automations/automation-run-message'
 import {

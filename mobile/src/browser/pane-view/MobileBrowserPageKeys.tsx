@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { KeyboardOff, X } from 'lucide-react-native'
+import { KeyboardOff, X } from '../../components/icons/icon-set'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -125,7 +125,7 @@ export function MobileBrowserPageKeys({
           <GhostKey
             label={t('common.cancel', 'Cancel')}
             onPress={() => setHeld(null)}
-            icon={<X size={18} color={colors.textPrimary} strokeWidth={2} />}
+            icon={<X size={18} color={colors.textPrimary} />}
           />
         </>
       ) : (
@@ -154,7 +154,7 @@ export function MobileBrowserPageKeys({
           <GhostKey
             label={t('browser.pageKeys.hideKeyboard', 'Hide keyboard')}
             onPress={onDone}
-            icon={<KeyboardOff size={18} color={colors.textPrimary} strokeWidth={2} />}
+            icon={<KeyboardOff size={18} color={colors.textPrimary} />}
           />
         </>
       )}

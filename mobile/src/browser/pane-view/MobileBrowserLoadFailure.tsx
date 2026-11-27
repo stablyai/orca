@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { CircleAlert, ShieldAlert } from 'lucide-react-native'
+import { CircleAlert, ShieldAlert } from '../../components/icons/icon-set'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError

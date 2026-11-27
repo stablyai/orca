@@ -1,4 +1,4 @@
-import { Gauge, RefreshCw } from 'lucide-react-native'
+import { Gauge, RefreshCw } from '../../components/icons/icon-set'
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import Animated, {

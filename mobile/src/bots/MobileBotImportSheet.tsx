@@ -2,7 +2,7 @@
 // the folder an old bot exported there; the new bot's first turn brings it over. The desktop's ImportBotDialog.
 import { useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { ScrollView, Text, View, type HostInstance } from 'react-native'
-import { Ellipsis, Plus } from 'lucide-react-native'
+import { MoreHorizontal, Plus } from '../components/icons/icon-set'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useBottomDrawerModalHostBackClaim } from '../components/bottom-drawer/bottom-drawer-modal-host-scope'
 import { TextField } from '../components/composer-input/TextField'
@@ -267,7 +267,7 @@ export function MobileBotImportSheet(props: {
               trailingButtons: (
                 <NavBarButton
                   ref={menuAnchor}
-                  icon={Ellipsis}
+                  icon={MoreHorizontal}
                   accessibilityLabel={t('bots.import.more', 'More actions')}
                   onPress={() => setMenuOpen(true)}
                 />

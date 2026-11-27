@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { pressedStyle } from '../../theme/mobile-theme'
-import { X } from 'lucide-react-native'
+import { X } from '../../components/icons/icon-set'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { composerInputStylesSheet } from '../../components/composer-input/composer-input-styles'
 import {
@@ -162,7 +162,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                           setProjectEditingCommentDraft('')
                         }}
                       >
-                        <X size={18} color={colors.textSecondary} strokeWidth={2} />
+                        <X size={18} color={colors.textSecondary} />
                       </Pressable>
                     }
                   />

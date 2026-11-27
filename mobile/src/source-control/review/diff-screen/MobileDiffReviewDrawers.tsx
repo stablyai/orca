@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
-import { Copy, Plus, Send } from 'lucide-react-native'
+import { Copy, Plus, Send } from '../../../components/icons/icon-set'
 import { getRuntimePathBasename } from '../../../../../src/shared/file-access/cross-platform-path'
 import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { sendSheetMessage } from './mobile-diff-review-send-copy'
@@ -271,7 +271,7 @@ function CompletionContent({ controller }: Props) {
               'Send notes to agent'
             )}
           >
-            <Send size={14} color={colors.bgBase} strokeWidth={2.2} />
+            <Send size={14} color={colors.bgBase} />
             <Text style={styles.primaryButtonText}>
               {t('components.diffReviewDrawers.sendNotes', 'Send Notes')}
             </Text>

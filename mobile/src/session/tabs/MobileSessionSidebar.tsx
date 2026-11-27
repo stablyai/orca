@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../../components/icons/icon-set'
 import { StatusDot } from '../../components/feedback/StatusDot'
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -143,7 +143,7 @@ export function MobileSessionSidebar({
         accessibilityRole="button"
         accessibilityState={{ disabled: createDisabled }}
       >
-        <Plus size={18} color={colors.bgBase} strokeWidth={2.4} />
+        <Plus size={18} color={colors.bgBase} />
         <Text style={styles.pillText}>{t('session.sheets.newTab', 'New tab')}</Text>
       </Pressable>
       {stopConfirm.confirm}

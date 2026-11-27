@@ -3,7 +3,7 @@
 // person typed on their paired computer, "Sam Lee · Sam's MacBook Pro"; "Sent as goal".
 import { useState } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
-import { ChevronRight, Goal } from 'lucide-react-native'
+import { ChevronRight, Goal } from '../../../../components/icons/icon-set'
 import type { ConnectorMessageAsker } from '../../../../../../src/shared/connector-message-asker'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
@@ -211,7 +211,7 @@ export function MobileNativeChatSentAsGoal(): React.JSX.Element {
   const t = useMobileTranslation()
   return (
     <View style={styles.sentAsGoal}>
-      <Goal size={ICON_SIZE} color={colors.textMuted} strokeWidth={2} />
+      <Goal size={ICON_SIZE} color={colors.textMuted} />
       <Text style={styles.toggleText}>
         {t('components.native-chat.goal.sentAsGoal', 'Sent as goal')}
       </Text>
@@ -246,7 +246,6 @@ export function MobileNativeChatConnectorNoAccessNote({
         <ChevronRight
           size={ICON_SIZE}
           color={colors.textMuted}
-          strokeWidth={2}
           style={open ? styles.chevronOpen : undefined}
         />
       </Pressable>

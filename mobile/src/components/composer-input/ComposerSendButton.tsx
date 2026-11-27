@@ -1,4 +1,4 @@
-import { ArrowUp } from 'lucide-react-native'
+import { ArrowUp } from '../icons/icon-set'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobilePendingButton } from '../controls/MobilePendingButton'
 import {
@@ -32,13 +32,7 @@ export function ComposerSendButton({
     <MobilePendingButton
       label={label}
       iconOnly
-      icon={
-        <ArrowUp
-          size={compact ? 15 : 19}
-          color={canSend ? colors.bgBase : colors.textMuted}
-          strokeWidth={2.4}
-        />
-      }
+      icon={<ArrowUp size={compact ? 15 : 19} color={canSend ? colors.bgBase : colors.textMuted} />}
       pending={sending}
       disabled={!canSend}
       onPress={onPress}

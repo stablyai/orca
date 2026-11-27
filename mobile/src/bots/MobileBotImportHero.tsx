@@ -1,7 +1,7 @@
 // The old bot, an arrow, then the new bot's picture or the bot an earlier import made. The desktop's ImportBotHero.
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowRight } from 'lucide-react-native'
+import { ArrowRight } from '../components/icons/icon-set'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'

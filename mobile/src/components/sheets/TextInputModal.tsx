@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Text, View, type KeyboardTypeOptions } from 'react-native'
-import type { LucideIcon } from 'lucide-react-native'
+import type { MobileIcon } from '../icons/mobile-icon'
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
@@ -31,7 +31,7 @@ type SheetProps = {
   /** A save in flight: Save is disabled so it can't be sent twice. */
   busy?: boolean
   /** Why Save is off or still waiting (e.g. the desktop is offline); shown under the field. */
-  notice?: { icon: LucideIcon; text: string } | null
+  notice?: { icon: MobileIcon; text: string } | null
   /** Save is off for a reason the notice gives; the text stays editable. */
   submitBlocked?: boolean
   onSubmit: (value: string) => void

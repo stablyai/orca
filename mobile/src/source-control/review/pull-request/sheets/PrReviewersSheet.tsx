@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Search, X } from 'lucide-react-native'
+import { Search, X } from '../../../../components/icons/icon-set'
 import { pressedStyle } from '../../../../theme/mobile-theme'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -233,7 +233,7 @@ export function PrReviewersSheet({
                     {actions.isBusy({ kind: 'reviewer', login: row.login }) ? (
                       <ActivityIndicator size="small" color={colors.textMuted} />
                     ) : (
-                      <X size={16} color={colors.textMuted} strokeWidth={2.2} />
+                      <X size={16} color={colors.textMuted} />
                     )}
                   </Pressable>
                 }

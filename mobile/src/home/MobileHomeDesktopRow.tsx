@@ -1,4 +1,5 @@
-import { ChevronRight, Laptop, Monitor, Server, type LucideIcon } from 'lucide-react-native'
+import { ChevronRight, Laptop, Monitor, Server } from '../components/icons/icon-set'
+import type { MobileIcon } from '../components/icons/mobile-icon'
 import { Pressable, Text, View } from 'react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -18,7 +19,7 @@ import {
 import { homeListStylesSheet as stylesSheet } from './home-list-styles'
 import { useThemedStyles } from '../theme/themed-styles'
 
-const MACHINE_GLYPHS: Record<'laptop' | 'desktop' | 'server', LucideIcon> = {
+const MACHINE_GLYPHS: Record<'laptop' | 'desktop' | 'server', MobileIcon> = {
   laptop: Laptop,
   desktop: Monitor,
   server: Server
@@ -32,7 +33,6 @@ export function MachineGlyph({
   kind: keyof typeof MACHINE_GLYPHS | null
   size: number
   color: string
-  strokeWidth?: number
 }) {
   const Glyph = kind ? MACHINE_GLYPHS[kind] : Monitor
   return <Glyph {...icon} />

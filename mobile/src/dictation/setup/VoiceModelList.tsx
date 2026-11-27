@@ -1,5 +1,5 @@
 import { ActivityIndicator, View } from 'react-native'
-import { Download, Trash2 } from 'lucide-react-native'
+import { Download, Trash2 } from '../../components/icons/icon-set'
 import { feedback } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
@@ -107,7 +107,7 @@ export function VoiceModelList({
                 rowBusy || action === 'downloading' ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 ) : action === 'download' ? (
-                  <Download size={18} color={colors.textSecondary} strokeWidth={2.2} />
+                  <Download size={18} color={colors.textSecondary} />
                 ) : undefined
               }
               accessibilityLabel={

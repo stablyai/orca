@@ -6,7 +6,7 @@ import {
   GitMerge,
   GitPullRequest,
   X
-} from 'lucide-react-native'
+} from '../../../components/icons/icon-set'
 import type { SmartNameSelection } from '../mobile-composer-source-types'
 import type { MobileComposerSource } from '../use-mobile-composer-source'
 import { spacing, pressedStyle } from '../../../theme/mobile-theme'

@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ChevronDown } from 'lucide-react-native'
+import { ChevronDown } from '../icons/icon-set'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
@@ -153,7 +153,7 @@ export function NavBarTitleButton({
         <Text style={[styles.title, styles.titleButtonText]} numberOfLines={1}>
           {title}
         </Text>
-        <ChevronDown size={14} color={colors.textSecondary} strokeWidth={2.2} />
+        <ChevronDown size={14} color={colors.textSecondary} />
       </View>
       {subtitle !== undefined ? (
         <Text style={styles.subtitle} numberOfLines={1}>

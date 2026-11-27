@@ -1,4 +1,4 @@
-import { MessageSquare, SquareTerminal } from 'lucide-react-native'
+import { MessageSquare, SquareTerminal } from '../../../components/icons/icon-set'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
