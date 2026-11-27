@@ -3,7 +3,7 @@
 // (grey once stale), Done a check, Canceled a slashed circle.
 import { View } from 'react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
-import { CircleCheck, CircleSlash } from 'lucide-react-native'
+import { CircleCheck, CircleSlash } from '../../components/icons/icon-set'
 import type { BotItemStatus } from '../../../../src/shared/bots/bot-items'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { radii } from '../../theme/mobile-theme'
@@ -43,9 +43,9 @@ export function MobileBotItemStatusIcon({
     case 'planned':
       return <View style={[styles.dot, box, styles.planned]} />
     case 'done':
-      return <CircleCheck size={size} strokeWidth={2} color={colors.statusGreen} />
+      return <CircleCheck size={size} color={colors.statusGreen} />
     case 'canceled':
-      return <CircleSlash size={size} strokeWidth={2} color={colors.textMuted} />
+      return <CircleSlash size={size} color={colors.textMuted} />
   }
 }
 

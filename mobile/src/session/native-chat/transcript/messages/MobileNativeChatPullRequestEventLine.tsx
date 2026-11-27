@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { Text } from 'react-native'
-import { GitPullRequest } from 'lucide-react-native'
+import { GitPullRequest } from '../../../../components/icons/icon-set'
 import type { NativeChatTextBlock } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
   parsePullRequestEventItemId,
@@ -45,7 +45,7 @@ export function MobileNativeChatPullRequestEventLine({
   const pullRequestName = event ? `${event.repo}#${event.number}` : ''
   return (
     <MobileNativeChatEventRow
-      icon={<GitPullRequest size={14} color={colors.textMuted} strokeWidth={2} />}
+      icon={<GitPullRequest size={14} color={colors.textMuted} />}
       badge={failing ? 'failed' : null}
       label={event ? `${lead} ${pullRequestName}` : block.text}
       timestamp={timestamp}

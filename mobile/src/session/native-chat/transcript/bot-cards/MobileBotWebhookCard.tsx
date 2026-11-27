@@ -2,7 +2,7 @@
 // bot's chats; anywhere else, the line that says where the URL is. Rotating stays in Settings.
 import { useContext, useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
-import { Copy, Webhook } from 'lucide-react-native'
+import { Copy, Webhook } from '../../../../components/icons/icon-set'
 import {
   webhookCardShows,
   webhookStatusFact,

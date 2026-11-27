@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { MobileIcon } from '../../components/icons/mobile-icon'
 import { Text, View } from 'react-native'
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
@@ -6,7 +6,7 @@ import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** A Home tab with nothing to list: its glyph, a title and a line. */
 export function MobileHomeTabEmpty(props: {
-  icon: LucideIcon
+  icon: MobileIcon
   title: string
   message?: string
   /** Centres in the space it is given, for a tab with nothing else on it but a foot. */
@@ -17,7 +17,7 @@ export function MobileHomeTabEmpty(props: {
   const Icon = props.icon
   return (
     <View style={[styles.empty, props.centred && styles.centred]}>
-      <Icon size={30} strokeWidth={1.6} color={colors.textMuted} />
+      <Icon size={30} color={colors.textMuted} />
       <Text style={styles.emptyTitle} accessibilityRole="header">
         {props.title}
       </Text>

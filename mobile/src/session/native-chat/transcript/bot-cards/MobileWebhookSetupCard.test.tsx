@@ -32,11 +32,7 @@ vi.mock('react-native', () => ({
   },
   Appearance: { getColorScheme: () => 'dark', addChangeListener: () => ({ remove: () => {} }) }
 }))
-// Every icon as a host element named after it.
-vi.mock(
-  'lucide-react-native',
-  () => new Proxy({}, { get: (_, name) => String(name), has: () => true })
-)
+vi.mock('../../../../components/icons/mobile-icon', () => ({ mobileIcon: () => () => null }))
 
 const HOOK = 'wh_PhoneCardTest001'
 const URL = `https://connector.orca.dev/hooks/${HOOK}/secret-key`

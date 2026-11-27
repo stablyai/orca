@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { View } from 'react-native'
-import { CircleAlert } from 'lucide-react-native'
+import { CircleAlert } from '../components/icons/icon-set'
 import { MobileStateView } from '../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SafeAreaView } from 'react-native-safe-area-context'

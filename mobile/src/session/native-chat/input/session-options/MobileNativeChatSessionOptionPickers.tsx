@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, View } from 'react-native'
-import { Clock } from 'lucide-react-native'
+import { Clock } from '../../../../components/icons/icon-set'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../../components/list/ListGroup'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'

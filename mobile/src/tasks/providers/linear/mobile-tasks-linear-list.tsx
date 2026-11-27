@@ -4,7 +4,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { SectionHeader } from '../../../components/list/ListGroup'
 import { MobileTaskRow, MobileTaskRowSeparator } from '../../task-list/mobile-task-row'
 import { spacing, type MobileColorScheme, pressedStyle } from '../../../theme/mobile-theme'
-import { ChevronDown } from 'lucide-react-native'
+import { ChevronDown } from '../../../components/icons/icon-set'
 import {
   ignoreKeptRowPress,
   renderMobileTasksListState

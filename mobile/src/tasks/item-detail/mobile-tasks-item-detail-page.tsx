@@ -3,16 +3,16 @@ import type { ScrollViewInstance } from 'react-native'
 import { ScrollView, Text, View } from 'react-native'
 import {
   ChevronLeft,
-  Copy,
-  Ellipsis,
-  ExternalLink,
-  GitBranch,
-  RefreshCw,
   Circle,
   CircleCheck,
   CircleMinus,
-  CircleX
-} from 'lucide-react-native'
+  CircleX,
+  Copy,
+  ExternalLink,
+  GitBranch,
+  MoreHorizontal,
+  RefreshCw
+} from '../../components/icons/icon-set'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import type { ActionableTaskItem } from '../mobile-tasks-project-workspace-types'
 import type { GitHubDetailCheck } from '../mobile-tasks-provider-detail-types'
@@ -194,7 +194,7 @@ function DetailNavBar({
         trailing={
           <NavBarButton
             ref={anchor}
-            icon={Ellipsis}
+            icon={MoreHorizontal}
             accessibilityLabel={t('tasks.itemActions.moreActions', 'More actions')}
             onPress={() => setOpen(true)}
           />
@@ -259,7 +259,7 @@ function DetailHeading({ item }: { item: ActionableTaskItem }) {
         {item.title}
       </Text>
       <View style={styles.meta}>
-        <glyph.icon size={14} color={glyph.color} strokeWidth={2.2} />
+        <glyph.icon size={14} color={glyph.color} />
         <Text style={styles.metaText} numberOfLines={1}>
           <Text style={[styles.stateWord, { color: glyph.color }]}>{item.status}</Text>
           {[author, updated].filter(Boolean).map((part) => ` · ${part}`)}
@@ -357,7 +357,7 @@ function ChecksList({ model }: { model: ConnectionPresentationModel }) {
         return (
           <ListRow
             key={`${check.name}:${check.status}:${url ?? ''}`}
-            leading={<Icon size={18} strokeWidth={2} color={color} />}
+            leading={<Icon size={18} color={color} />}
             title={check.name}
             value={word}
             onPress={url ? () => void openExternalLink(url) : undefined}

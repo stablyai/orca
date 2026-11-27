@@ -3,13 +3,13 @@ import {
   BellRing,
   Bot,
   CircleDashed,
-  Edit3,
   Eye,
   EyeOff,
   Moon,
+  PencilLine,
   Pin,
   PinOff
-} from 'lucide-react-native'
+} from '../../components/icons/icon-set'
 import { buildWorktreeNavigationActions } from '../../agent-history/worktree-navigation-actions'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -163,7 +163,7 @@ export function useWorkspaceRowMenuActions(args: {
       id: 'rename',
       group: 'change',
       label: t('hostScreen.hostScreenOverlays.rename', 'Rename'),
-      icon: Edit3,
+      icon: PencilLine,
       onPress: () => onRename(row)
     },
     // A server row's columns are that server's own, which the desktop does not relay to the phone yet.

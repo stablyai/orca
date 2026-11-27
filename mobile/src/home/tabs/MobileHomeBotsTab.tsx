@@ -1,4 +1,4 @@
-import { Bot, Plus } from 'lucide-react-native'
+import { Bot, Plus } from '../../components/icons/icon-set'
 import { useMemo } from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
 import { MobileBotsListEnd } from '../../bots/MobileBotsSectionHeader'

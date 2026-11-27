@@ -7,7 +7,7 @@ import Animated, {
   withSpring,
   withTiming
 } from 'react-native-reanimated'
-import { Check } from 'lucide-react-native'
+import { Check } from '../components/icons/icon-set'
 import { SHEET_CURVE } from '../components/motion/sheet-motion-values'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
@@ -91,7 +91,7 @@ export function PairingProgress({
     <>
       {succeeded ? (
         <Animated.View style={[styles.check, checkStyle]}>
-          <Check size={22} color={colors.bgBase} strokeWidth={3} />
+          <Check size={22} color={colors.bgBase} />
         </Animated.View>
       ) : (
         <ActivityIndicator size="large" color={colors.textSecondary} />

@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../../components/icons/icon-set'
 import { MobileNativeChatOptionThumbnail } from '../session-options/MobileNativeChatOptionThumbnail'
 import { radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'
@@ -57,7 +57,7 @@ export function MobileNativeChatAskOptionRow({
           selected && styles.checkOn
         ]}
       >
-        {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
+        {selected ? <Check size={12} color={colors.bgBase} /> : null}
       </View>
       <View style={styles.optionBody}>
         <Text style={styles.optionLabel}>

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../components/icons/icon-set'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import { pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
@@ -150,7 +150,7 @@ export function ViewedCheckbox({
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [styles.box, viewed && styles.boxChecked, pressed && pressedStyle]}
     >
-      {viewed ? <Check size={14} color={colors.onAccent} strokeWidth={3} /> : null}
+      {viewed ? <Check size={14} color={colors.onAccent} /> : null}
     </Pressable>
   )
 }

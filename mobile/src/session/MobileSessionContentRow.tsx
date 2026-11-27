@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { View, Text, Pressable } from 'react-native'
-import { AlertTriangle, X } from 'lucide-react-native'
+import { TriangleAlert, X } from '../components/icons/icon-set'
 import { SessionDockColumn } from './SessionDockColumn'
 import { SidebarPageDragContext } from './tabs/sidebar-page-drag'
 import { useSidebarContentSwipe } from './tabs/use-sidebar-content-swipe'
@@ -48,7 +48,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
       <View ref={swipeOpensSidebar} style={styles.sessionContentMain}>
         {createWarning ? (
           <View style={styles.createWarningBanner}>
-            <AlertTriangle size={16} color={colors.statusAmber} strokeWidth={2.2} />
+            <TriangleAlert size={16} color={colors.statusAmber} />
             <Text style={styles.createWarningText}>{createWarning}</Text>
             <Pressable
               style={({ pressed }) => [styles.createWarningDismiss, pressed && pressedStyle]}
@@ -59,7 +59,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
               )}
               hitSlop={8}
             >
-              <X size={16} color={colors.textMuted} strokeWidth={2.2} />
+              <X size={16} color={colors.textMuted} />
             </Pressable>
           </View>
         ) : null}

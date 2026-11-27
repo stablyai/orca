@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { Pressable, View } from 'react-native'
-import { Undo2 } from 'lucide-react-native'
+import { Undo2 } from '../../../../components/icons/icon-set'
 import { MobileNativeChatRewindContext } from './mobile-native-chat-rewind-context'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { radii } from '../../../../theme/mobile-theme'

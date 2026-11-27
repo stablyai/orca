@@ -9,7 +9,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  ImageIcon,
+  Image,
   Italic,
   Keyboard,
   Link,
@@ -18,7 +18,7 @@ import {
   ListTodo,
   Quote,
   Strikethrough
-} from 'lucide-react-native'
+} from '../icons/icon-set'
 import { feedback, radii, spacing } from '../../theme/mobile-theme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -27,7 +27,7 @@ import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import type { MobileRichMarkdownCommand } from './mobile-rich-markdown-editor-contract'
 
-type Icon = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
+type Icon = ComponentType<{ size?: number; color?: string }>
 
 type ToolbarItem = {
   command: MobileRichMarkdownCommand | 'heading'
@@ -87,7 +87,7 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
   {
     command: 'image',
     label: (t) => t('components.richMarkdownToolbar.image', 'Image'),
-    icon: ImageIcon
+    icon: Image
   }
 ]
 
@@ -159,8 +159,8 @@ function DismissKeyboardGlyph({ color }: { color?: string }) {
   const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.dismissGlyph}>
-      <Keyboard size={15} color={color} strokeWidth={2} />
-      <ChevronDown size={10} color={color} strokeWidth={2.5} style={styles.dismissChevron} />
+      <Keyboard size={15} color={color} />
+      <ChevronDown size={10} color={color} style={styles.dismissChevron} />
     </View>
   )
 }
@@ -187,7 +187,7 @@ function ToolbarButton({
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
     >
       <View style={[styles.mark, lit && styles.markLit]}>
-        <IconComponent size={18} color={colors.textPrimary} strokeWidth={2} />
+        <IconComponent size={18} color={colors.textPrimary} />
       </View>
     </Pressable>
   )

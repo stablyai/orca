@@ -1,5 +1,5 @@
-import type { LucideIcon } from 'lucide-react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../components/icons/icon-set'
+import type { MobileIcon } from '../components/icons/mobile-icon'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { SettingsSection } from './settings-screen-frame'
@@ -7,7 +7,7 @@ import { SettingsSection } from './settings-screen-frame'
 export type MobileSettingsMenuItem = {
   id: string
   label: string
-  icon: LucideIcon
+  icon: MobileIcon
   onPress: () => void
   /** The page's current choice, e.g. Dark on Appearance. */
   value?: string
@@ -32,11 +32,7 @@ export function MobileSettingsSection({
           value={value}
           leading={<Icon size={18} color={colors.textSecondary} />}
           navigates={!external}
-          accessory={
-            external ? (
-              <ArrowUpRight size={15} color={colors.textMuted} strokeWidth={2.2} />
-            ) : undefined
-          }
+          accessory={external ? <ArrowUpRight size={15} color={colors.textMuted} /> : undefined}
           onPress={onPress}
         />
       ))}

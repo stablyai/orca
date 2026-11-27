@@ -1,4 +1,4 @@
-import { Image, Paperclip } from 'lucide-react-native'
+import { Image, Paperclip } from '../../../../components/icons/icon-set'
 import type { ActionSheetAction } from '../../../../components/sheets/ActionSheetModal'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 

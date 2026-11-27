@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Pressable } from 'react-native'
-import { X } from 'lucide-react-native'
+import { X } from '../../../../components/icons/icon-set'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { isSubmittableCommentBody } from './pr-comment-actions'
@@ -87,7 +87,7 @@ export function PRCommentComposer({
             accessibilityRole="button"
             accessibilityLabel={t('common.cancel', 'Cancel')}
           >
-            <X size={19} color={colors.textSecondary} strokeWidth={2} />
+            <X size={19} color={colors.textSecondary} />
           </Pressable>
         ) : undefined
       }

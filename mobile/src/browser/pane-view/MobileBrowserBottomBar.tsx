@@ -9,7 +9,14 @@ import {
   type HostInstance,
   type TextInputInstance
 } from 'react-native'
-import { ChevronLeft, Ellipsis, Keyboard, Lock, RotateCw, X } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  Keyboard,
+  Lock,
+  MoreHorizontal,
+  RotateCw,
+  X
+} from '../../components/icons/icon-set'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
@@ -24,7 +31,7 @@ import { MobileBrowserLoadProgress } from './MobileBrowserLoadProgress'
 // BottomSearchBar's 44 pt round buttons and pill, docked under the page instead of floating over a list.
 const BAR_CONTROL_SIZE = 44
 
-type IconProps = { size?: number; color?: string; strokeWidth?: number }
+type IconProps = { size?: number; color?: string }
 
 type Props = {
   /** The sign-in sheet's page: only the keyboard, no address or page buttons. */
@@ -115,7 +122,7 @@ export function MobileBrowserBottomBar(props: Props) {
             <BarButton
               ref={menuAnchor}
               button={{
-                icon: Ellipsis,
+                icon: MoreHorizontal,
                 accessibilityLabel: t('browser.bottomBar.more', 'More'),
                 onPress: () => setMenuOpen(true)
               }}
@@ -189,7 +196,7 @@ function AddressPill({
       {addressFocused ? null : (
         <>
           <View pointerEvents="none" style={styles.pillLabel}>
-            {label?.secure ? <Lock size={12} color={colors.textMuted} strokeWidth={2.4} /> : null}
+            {label?.secure ? <Lock size={12} color={colors.textMuted} /> : null}
             <Text
               style={[styles.pillText, !label && styles.pillPlaceholder]}
               numberOfLines={1}
@@ -210,7 +217,7 @@ function AddressPill({
             accessibilityRole="button"
             accessibilityLabel={t('browser.bottomBar.typeOnPage', 'Type on page')}
           >
-            <Keyboard size={18} color={colors.textSecondary} strokeWidth={2} />
+            <Keyboard size={18} color={colors.textSecondary} />
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -226,7 +233,7 @@ function AddressPill({
               showStop ? t('browser.paneView.stop', 'Stop') : t('browser.paneView.reload', 'Reload')
             }
           >
-            <ReloadIcon size={16} color={colors.textSecondary} strokeWidth={2.2} />
+            <ReloadIcon size={16} color={colors.textSecondary} />
           </Pressable>
         </>
       )}
@@ -261,7 +268,7 @@ function BarButton({ button, ref }: { button: BarButtonSpec; ref?: Ref<HostInsta
         button.disabled && styles.disabled
       ]}
     >
-      <Icon size={20} color={colors.textPrimary} strokeWidth={2.2} />
+      <Icon size={20} color={colors.textPrimary} />
     </Pressable>
   )
 }

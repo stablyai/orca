@@ -1,5 +1,5 @@
 import { View, Text, Pressable } from 'react-native'
-import { MessageSquare, Plus, X } from 'lucide-react-native'
+import { MessageSquare, Plus, X } from '../../../components/icons/icon-set'
 import { MobileSyntaxSegments } from '../../../components/code-presentation/MobileSyntaxSegments'
 import { MessageBox } from '../../../components/composer-input/MessageBox'
 import { composerInputStylesSheet } from '../../../components/composer-input/composer-input-styles'
@@ -97,7 +97,7 @@ export function DiffLineRow({
               line: commentLine
             })}
           >
-            <Plus size={12} color={colors.textSecondary} strokeWidth={2.3} />
+            <Plus size={12} color={colors.textSecondary} />
           </Pressable>
         ) : null}
       </View>
@@ -106,7 +106,7 @@ export function DiffLineRow({
           {comments.map((comment) => (
             <View key={comment.id} style={styles.diffCommentCard}>
               <View style={styles.diffCommentHeader}>
-                <MessageSquare size={12} color={colors.textMuted} strokeWidth={2.2} />
+                <MessageSquare size={12} color={colors.textMuted} />
                 <Text style={styles.diffCommentMeta}>
                   {t('session.diffLineRow.lineNumber', 'Line {{line}}', {
                     line: comment.lineNumber
@@ -124,7 +124,7 @@ export function DiffLineRow({
                     }
                   )}
                 >
-                  <X size={12} color={colors.textMuted} strokeWidth={2.2} />
+                  <X size={12} color={colors.textMuted} />
                 </Pressable>
               </View>
               <Text style={styles.diffCommentBody}>{comment.body}</Text>
@@ -158,7 +158,7 @@ export function DiffLineRow({
               accessibilityRole="button"
               accessibilityLabel={t('common.cancel', 'Cancel')}
             >
-              <X size={19} color={colors.textSecondary} strokeWidth={2} />
+              <X size={19} color={colors.textSecondary} />
             </Pressable>
           }
         />

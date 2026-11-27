@@ -10,9 +10,9 @@ import {
   UserMinus,
   UserPlus,
   UserRound,
-  X,
-  type LucideIcon
-} from 'lucide-react-native'
+  X
+} from '../components/icons/icon-set'
+import type { MobileIcon } from '../components/icons/mobile-icon'
 import type { BotMember } from '../../../src/shared/bot-types'
 import { botMemberAvatarUrl } from '../../../src/shared/bots/bot-member-avatar-url'
 import { connectorAskerInitials } from '../../../src/shared/connectors/connector-message-asker-view'
@@ -48,7 +48,7 @@ export function MobilePersonFace(props: {
   id: string
   name: string
   picture?: string
-  mark?: LucideIcon
+  mark?: MobileIcon
 }) {
   const colors = useMobileColors()
   const styles = useThemedStyles(stylesSheet)
@@ -57,7 +57,7 @@ export function MobilePersonFace(props: {
     const Mark = props.mark
     return (
       <View style={styles.disc}>
-        <Mark size={15} color={colors.textSecondary} strokeWidth={2.2} />
+        <Mark size={15} color={colors.textSecondary} />
       </View>
     )
   }
@@ -96,7 +96,7 @@ export function MobileWhoCanAskOwnerFace() {
 type RowAction = {
   label: string
   accessibilityLabel: string
-  icon: LucideIcon
+  icon: MobileIcon
   destructive?: boolean
   onPress: () => void
 }

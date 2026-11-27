@@ -10,7 +10,7 @@ import {
   Plus,
   Trash2,
   Zap
-} from 'lucide-react-native'
+} from '../components/icons/icon-set'
 import { hasAutomationSchedule } from '../../../src/shared/automation-event-triggers'
 import { useNow } from '../hooks/use-now'
 import { intlLocaleFor } from '../i18n/ui-intl-locale'
@@ -198,7 +198,7 @@ function WaitRow(props: {
   )
 }
 
-const KIND_GLYPH = { size: 18, strokeWidth: 1.8 } as const
+const KIND_GLYPH = { size: 18 } as const
 
 /** The desktop's Automations panel: each automation in the bot's home with its switch, a tap opening
  *  its menu (Run now, Edit, Edit in chat, View runs, Delete), then its waits, with Cancel, then New

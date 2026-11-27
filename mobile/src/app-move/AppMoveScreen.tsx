@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications'
-import { ArrowLeft, CircleCheck, Download, ExternalLink } from 'lucide-react-native'
+import { ArrowLeft, CircleCheck, Download, ExternalLink } from '../components/icons/icon-set'
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -133,7 +133,7 @@ export function AppMoveScreen() {
             style={({ pressed }) => [styles.back, pressed && styles.pressed]}
             onPress={returnToPlayScreen}
           >
-            <ArrowLeft size={24} color={colors.textPrimary} strokeWidth={2} />
+            <ArrowLeft size={24} color={colors.textPrimary} />
           </Pressable>
         </View>
       ) : null}
@@ -163,7 +163,7 @@ export function AppMoveScreen() {
         </View>
         <NumberedStepsPanel steps={moveSteps(t, screen)} />
         <View style={styles.reassurance}>
-          <CircleCheck size={20} color={colors.statusGreen} strokeWidth={2} />
+          <CircleCheck size={20} color={colors.statusGreen} />
           <Text style={styles.reassuranceText}>
             {t(
               'appMove.dataKept',
@@ -187,9 +187,9 @@ export function AppMoveScreen() {
           onPress={play ? () => openExternalLink(NEW_APP_PLAY_URL) : download}
         >
           {play ? (
-            <ExternalLink size={18} color={colors.onAccent} strokeWidth={2.2} />
+            <ExternalLink size={18} color={colors.onAccent} />
           ) : (
-            <Download size={18} color={colors.onAccent} strokeWidth={2.2} />
+            <Download size={18} color={colors.onAccent} />
           )}
           <Text style={styles.ctaLabel}>
             {play

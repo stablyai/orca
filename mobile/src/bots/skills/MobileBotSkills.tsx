@@ -1,7 +1,7 @@
 // Settings › Skills: the desktop's BotSkillsSection. The bot's own skills, then each linked project's,
 // and Link a project to pick from the host's projects. Open folder stays on the desktop.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Folder, Plus, Unlink } from 'lucide-react-native'
+import { Folder, Plus, Unlink } from '../../components/icons/icon-set'
 import { BOT_MAX_SKILL_PROJECTS } from '../../../../src/shared/bot-types'
 import { BOT_AGENTS_LISTING_LINKED_SKILLS } from '../../../../src/shared/bots/bot-skill-projects'
 import { MobileSearchField } from '../../components/controls/MobileSearchField'
@@ -107,7 +107,7 @@ type SkillSource = {
 }
 
 const folderIcon = (colors: MobilePalette, dim = false) => (
-  <Folder size={18} color={dim ? colors.textMuted : colors.textPrimary} strokeWidth={2} />
+  <Folder size={18} color={dim ? colors.textMuted : colors.textPrimary} />
 )
 
 /** A linked project: its skills open on their own page; on another host or gone, one line says so. */
@@ -287,7 +287,7 @@ export function MobileBotSkillsPage(
             ) : null
           })}
           <ListRow
-            leading={<Plus size={18} color={colors.textPrimary} strokeWidth={2} />}
+            leading={<Plus size={18} color={colors.textPrimary} />}
             title={t('bots.skills.link', 'Link a project')}
             disabled={!props.online}
             onPress={() => setLinking(true)}

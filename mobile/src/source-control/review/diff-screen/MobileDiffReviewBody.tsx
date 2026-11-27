@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { View } from 'react-native'
-import { FileText, ListChecks } from 'lucide-react-native'
+import { FileText, ListChecks } from '../../../components/icons/icon-set'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import {
   MobileLoadErrorState,

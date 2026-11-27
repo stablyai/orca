@@ -1,5 +1,5 @@
 import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native'
-import type { Play } from 'lucide-react-native'
+import { Play } from '../../../../components/icons/icon-set'
 import { pressedStyle, spacing } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { stylesSheet } from '../../mobile-native-chat-view-styles'

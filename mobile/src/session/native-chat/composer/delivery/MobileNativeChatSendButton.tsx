@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable } from 'react-native'
-import { CornerDownRight, ListEnd } from 'lucide-react-native'
+import { CornerDownRight, ListEnd } from '../../../../components/icons/icon-set'
 import type {
   NativeChatFollowUpBehavior,
   NativeChatSendFollowUp
@@ -108,7 +108,7 @@ export function MobileNativeChatSteerPreviewButton({
       }}
       hitSlop={COMPOSER_CONTROL_HIT_SLOP}
     >
-      <Icon size={19} color={colors.bgBase} strokeWidth={2.4} />
+      <Icon size={19} color={colors.bgBase} />
     </Pressable>
   )
 }

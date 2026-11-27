@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { ChevronDown, CircleCheck, CircleMinus, LoaderCircle, RotateCw } from 'lucide-react-native'
+import {
+  ChevronDown,
+  CircleCheck,
+  CircleMinus,
+  LoaderCircle,
+  RotateCw
+} from '../../../../components/icons/icon-set'
 import { NavBarButton } from '../../../../components/nav-bar/NavBarButton'
 import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
@@ -186,10 +192,10 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
                     count: passed.length
                   })}
                   subtitle={showPassed ? undefined : foldedNames(passed, t)}
-                  leading={<CircleCheck size={20} color={colors.statusGreen} strokeWidth={2} />}
+                  leading={<CircleCheck size={20} color={colors.statusGreen} />}
                   accessory={
                     <DisclosureChevron expanded={showPassed} collapsedDeg={0} expandedDeg={180}>
-                      <ChevronDown size={16} color={colors.textMuted} strokeWidth={2.2} />
+                      <ChevronDown size={16} color={colors.textMuted} />
                     </DisclosureChevron>
                   }
                   onPress={() => setShowPassed((value) => !value)}
@@ -315,7 +321,7 @@ function CheckRow({
     <ListRow
       title={check.name}
       subtitle={subtitle}
-      leading={<Icon size={20} color={color} strokeWidth={2} />}
+      leading={<Icon size={20} color={color} />}
       navigates={url !== null}
       onPress={url ? () => openExternalLink(url) : undefined}
       accessibilityRole={url ? 'link' : undefined}

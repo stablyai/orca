@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react-native'
+import { ChevronDown } from '../../components/icons/icon-set'
 import { useState, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import Animated from 'react-native-reanimated'

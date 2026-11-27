@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft } from '../../../components/icons/icon-set'
 import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NavBar } from '../../../components/nav-bar/NavBar'

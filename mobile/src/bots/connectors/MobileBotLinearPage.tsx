@@ -3,7 +3,7 @@
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useRef, useState, type ReactNode } from 'react'
-import { Ellipsis, LogIn, Plus, Unlink } from 'lucide-react-native'
+import { LogIn, MoreHorizontal, Plus, Unlink } from '../../components/icons/icon-set'
 import {
   botLinearWorkspaces,
   botMemberSource,
@@ -205,7 +205,7 @@ export function MobileBotLinearPage(props: {
         trailingButtons={
           <NavBarButton
             ref={menuAnchor}
-            icon={Ellipsis}
+            icon={MoreHorizontal}
             accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
               name: BOT_CONNECTOR_NAMES.linear
             })}

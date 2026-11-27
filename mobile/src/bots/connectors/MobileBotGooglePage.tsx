@@ -4,7 +4,7 @@
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
-import { ArrowUpRight, Ellipsis, Plus, Share } from 'lucide-react-native'
+import { ArrowUpRight, MoreHorizontal, Plus, Share } from '../../components/icons/icon-set'
 import {
   GOOGLE_CHOICE_SERVICES,
   GOOGLE_SERVICE_CHOICES
@@ -321,7 +321,7 @@ export function MobileBotGooglePage(props: {
           menu.length > 0 ? (
             <NavBarButton
               ref={menuAnchor}
-              icon={Ellipsis}
+              icon={MoreHorizontal}
               accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
                 name: BOT_CONNECTOR_NAMES.google
               })}

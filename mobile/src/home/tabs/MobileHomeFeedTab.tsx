@@ -1,4 +1,4 @@
-import { Settings } from 'lucide-react-native'
+import { Settings } from '../../components/icons/icon-set'
 import { useState } from 'react'
 import { RefreshControl, ScrollView } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

@@ -2,7 +2,7 @@
 // Edit and Forget (swipe left, or tap to edit); History lists every change with Undo.
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { Text, View } from 'react-native'
-import { FileText, History, Pencil, Plus, Trash2 } from 'lucide-react-native'
+import { FileText, History, Pencil, Plus, Trash2 } from '../../components/icons/icon-set'
 import {
   BOT_MEMORY_INDEX_LINE_CAP,
   type BotMemoryFact,
@@ -156,8 +156,8 @@ function TopicFiles(props: {
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const { topics, archive } = props.topics
-  const fileIcon = <FileText size={18} color={colors.textSecondary} strokeWidth={2} />
-  const archiveIcon = <History size={18} color={colors.textSecondary} strokeWidth={2} />
+  const fileIcon = <FileText size={18} color={colors.textSecondary} />
+  const archiveIcon = <History size={18} color={colors.textSecondary} />
   if (topics.length === 0 && !archive) {
     return null
   }
@@ -221,7 +221,7 @@ function Facts(
   return (
     <>
       <TextField
-        leading={<Plus size={18} color={colors.textMuted} strokeWidth={2} />}
+        leading={<Plus size={18} color={colors.textMuted} />}
         trailing={
           quickAdd.trim() ? (
             <MobileBotTextButton

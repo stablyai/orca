@@ -1,7 +1,7 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ReactNode } from 'react'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../components/icons/icon-set'
 import { describeLoadError } from '../components/feedback/load-error-description'
 import { MobileLoadErrorState } from '../components/feedback/MobileStateView'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'

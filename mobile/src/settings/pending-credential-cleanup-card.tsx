@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { KeyRound, RefreshCw } from 'lucide-react-native'
+import { KeyRound, RefreshCw } from '../components/icons/icon-set'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import {

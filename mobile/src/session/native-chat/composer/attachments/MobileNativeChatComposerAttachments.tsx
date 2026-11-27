@@ -11,7 +11,7 @@ import {
   Text,
   View
 } from 'react-native'
-import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
+import { FileText, Image as ImageIcon, X } from '../../../../components/icons/icon-set'
 import { concentricRadius, radii, spacing, pressedStyle } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
@@ -88,7 +88,7 @@ export function MobileNativeChatComposerAttachments({
                 t('chat.composerAttachments.attachedImage', 'Attached image')
               }
             >
-              <ImageIcon size={17} color={colors.textSecondary} strokeWidth={2} />
+              <ImageIcon size={17} color={colors.textSecondary} />
             </View>
           )}
           {image.path ? null : (
@@ -115,7 +115,7 @@ export function MobileNativeChatComposerAttachments({
       {files.map((file) => (
         <View key={file.id} style={styles.fileCard}>
           <View style={styles.fileIcon}>
-            <FileText size={17} color={colors.textSecondary} strokeWidth={2} />
+            <FileText size={17} color={colors.textSecondary} />
           </View>
           <Pressable
             style={styles.fileText}
@@ -167,7 +167,7 @@ function RemoveBadge({ label, onPress }: { label: string; onPress: () => void })
       // A 44 pt target around the 20 pt badge.
       hitSlop={12}
     >
-      <X size={11} color={colors.textPrimary} strokeWidth={3} />
+      <X size={11} color={colors.textPrimary} />
     </Pressable>
   )
 }

@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../components/icons/icon-set'
 import {
   CONNECTOR_OFFER_NAMES,
   type ConnectorOffer,

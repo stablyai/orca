@@ -1,6 +1,6 @@
 import { memo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { ChevronDown, ShieldQuestion } from 'lucide-react-native'
+import { ChevronDown, ShieldQuestion } from '../../../../components/icons/icon-set'
 import { approvalDetailPreview } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { approvalBlockedPathToShow } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-blocked-path'
 import { readShellApprovalDetail } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-shell-detail'
@@ -87,12 +87,7 @@ function MobileNativeChatPermissionImpl({
     <View testID="native-chat-approval-card" style={askStyles.card}>
       <ScrollView style={askStyles.scroll} nestedScrollEnabled>
         <View style={askStyles.questionRow}>
-          <ShieldQuestion
-            size={ICON_SIZE}
-            color={colors.textSecondary}
-            strokeWidth={2}
-            style={styles.icon}
-          />
+          <ShieldQuestion size={ICON_SIZE} color={colors.textSecondary} style={styles.icon} />
           {/* Plain text, sized as the ask card's question: a tool or server name is never markup. */}
           <Text style={[askStyles.questionText, styles.title]}>{title}</Text>
           <MobileNativeChatCardHeaderAction

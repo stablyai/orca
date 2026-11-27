@@ -1,6 +1,6 @@
 import { useCallback, useContext, useSyncExternalStore, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowLeftRight, Gauge, Play } from 'lucide-react-native'
+import { ArrowLeftRight, Gauge, Play } from '../../../../components/icons/icon-set'
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import type { NativeChatTextBlock } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { feedback, spacing, typography } from '../../../../theme/mobile-theme'
@@ -32,7 +32,7 @@ export function MobileNativeChatUsageLimitRow({
   const colors = useMobileColors()
   return (
     <MobileNativeChatEventRow
-      icon={<Gauge size={14} color={colors.textMuted} strokeWidth={2} />}
+      icon={<Gauge size={14} color={colors.textMuted} />}
       label={text}
       fontScale={fontScale}
       onLongPress={onLongPress}

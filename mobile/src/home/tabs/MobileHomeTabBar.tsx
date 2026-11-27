@@ -3,9 +3,9 @@ import {
   CalendarClock,
   Gauge,
   LayoutList,
-  SquareTerminal,
-  type LucideIcon
-} from 'lucide-react-native'
+  SquareTerminal
+} from '../../components/icons/icon-set'
+import type { MobileIcon } from '../../components/icons/mobile-icon'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
@@ -21,7 +21,7 @@ import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 
-const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
+const TAB_ICONS: Record<HomeTabId, MobileIcon> = {
   feed: LayoutList,
   bots: Bot,
   agents: SquareTerminal,
@@ -76,7 +76,7 @@ export function MobileHomeTabBar(props: {
 }
 
 function TabButton(props: {
-  icon: LucideIcon
+  icon: MobileIcon
   label: string
   selected: boolean
   badge: number
@@ -109,7 +109,7 @@ function TabButton(props: {
           }
         ]}
       >
-        <Icon size={25} strokeWidth={props.selected ? 2.2 : 1.8} color={tint} />
+        <Icon size={25} color={tint} />
         {props.badge > 0 ? <TabBadge count={props.badge} /> : null}
       </Animated.View>
       <Text style={[styles.label, { color: tint }]} numberOfLines={1}>

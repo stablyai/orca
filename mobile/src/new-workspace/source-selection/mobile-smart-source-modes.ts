@@ -2,9 +2,9 @@ import type { MrStateFilter } from './mobile-composer-source-types'
 import type { SmartNameMode } from '../../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { Translate } from '../../i18n/mobile-i18n'
 
-// Lucide has no brand icons; provider modes use TaskProviderLogo SVGs.
+// The app icon set has no brand icons; provider modes use TaskProviderLogo SVGs.
 export type SmartModeIcon =
-  | { type: 'lucide'; name: 'sparkles' | 'git-branch' | 'case-sensitive' }
+  | { type: 'glyph'; name: 'sparkles' | 'git-branch' | 'case-sensitive' }
   | { type: 'provider'; provider: 'github' | 'gitlab' | 'linear' | 'jira' }
 
 export type SmartModeOption = {
@@ -17,7 +17,7 @@ export const SMART_MODE_OPTIONS: readonly SmartModeOption[] = [
   {
     id: 'smart',
     label: (t) => t('tasks.smartSourceModes.smart', 'Smart'),
-    icon: { type: 'lucide', name: 'sparkles' }
+    icon: { type: 'glyph', name: 'sparkles' }
   },
   { id: 'github', label: () => 'GitHub', icon: { type: 'provider', provider: 'github' } },
   { id: 'linear', label: () => 'Linear', icon: { type: 'provider', provider: 'linear' } },
@@ -26,12 +26,12 @@ export const SMART_MODE_OPTIONS: readonly SmartModeOption[] = [
   {
     id: 'branches',
     label: (t) => t('tasks.smartSourceModes.branch', 'Branch'),
-    icon: { type: 'lucide', name: 'git-branch' }
+    icon: { type: 'glyph', name: 'git-branch' }
   },
   {
     id: 'text',
     label: (t) => t('tasks.smartSourceModes.name', 'Name'),
-    icon: { type: 'lucide', name: 'case-sensitive' }
+    icon: { type: 'glyph', name: 'case-sensitive' }
   }
 ]
 

@@ -3,7 +3,12 @@
 // command, any coordinator reason and Open worker open under it.
 import { createContext, memo, useContext, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ShieldCheck, ShieldMinus, ShieldQuestion, ShieldX } from 'lucide-react-native'
+import {
+  ShieldCheck,
+  ShieldMinus,
+  ShieldQuestion,
+  ShieldX
+} from '../../../../components/icons/icon-set'
 import { anchorNativeChatTimedRows } from '../../../../../../src/shared/native-chat/transcript/native-chat-timed-row-anchors'
 import {
   workerApprovalRecord,
@@ -161,7 +166,7 @@ function WorkerApprovalReceipt({
   return (
     <MobileNativeChatEventRow
       testID={`worker-approval-receipt:${approval.approvalId}`}
-      icon={<Icon size={14} color={colors.textMuted} strokeWidth={2} />}
+      icon={<Icon size={14} color={colors.textMuted} />}
       label={parts.map((part) => part.text).join('')}
       timestamp={Date.parse(entry.at)}
       details={details}

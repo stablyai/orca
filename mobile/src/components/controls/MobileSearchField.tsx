@@ -7,7 +7,7 @@ import {
   type ViewStyle,
   type TextInputInstance
 } from 'react-native'
-import { Search, X } from 'lucide-react-native'
+import { Search, X } from '../icons/icon-set'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
@@ -113,7 +113,7 @@ export function MobileSearchField({
           >
             {/* Use chip and large hit target: bare 14px X looked decorative and was hard to tap. */}
             <View style={styles.clearChip}>
-              <X size={12} color={colors.surfaceBright} strokeWidth={2.6} />
+              <X size={12} color={colors.surfaceBright} />
             </View>
           </Pressable>
         ) : undefined

@@ -16,7 +16,7 @@ export const NAV_BAR_BUTTON_SIZE = 36
 /** Set by a bar on light grey (a sheet's header, a grouped page): bgRaised is that grey, so its buttons take a fill that reads on it. */
 export const NavBarButtonOnSheetContext = createContext(false)
 
-type IconProps = { size?: number; color?: string; strokeWidth?: number }
+type IconProps = { size?: number; color?: string }
 
 type NavBarButtonProps = {
   ref?: Ref<HostInstance>
@@ -63,11 +63,7 @@ export function NavBarButton({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled, selected: active }}
     >
-      <Icon
-        size={18}
-        color={active ? colors.bgBase : (iconColor ?? colors.textPrimary)}
-        strokeWidth={2.1}
-      />
+      <Icon size={18} color={active ? colors.bgBase : (iconColor ?? colors.textPrimary)} />
       {badge ? <NavBarBadge count={badge.count} color={badge.color} /> : null}
     </Pressable>
   )

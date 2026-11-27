@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CircleX, RefreshCw } from 'lucide-react-native'
+import { CircleX, RefreshCw } from '../../components/icons/icon-set'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { ConfirmModal } from '../../components/sheets/ConfirmModal'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'

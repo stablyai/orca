@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Save, Trash2 } from 'lucide-react-native'
+import { Save, Trash2 } from '../components/icons/icon-set'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { DirtyMarkdownDraft } from '../files/session-documents/session-document-state'

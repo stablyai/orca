@@ -8,7 +8,7 @@ import {
   terminalPaneKeyboardLayout
 } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { useWindowDimensions, View } from 'react-native'
-import { CircleAlert } from 'lucide-react-native'
+import { CircleAlert } from '../components/icons/icon-set'
 import { MobileBrowserTabBody } from '../browser/MobileBrowserTabBody'
 import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'

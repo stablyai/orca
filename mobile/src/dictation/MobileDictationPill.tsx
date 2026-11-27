@@ -1,7 +1,7 @@
 import { useContext, useEffect } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CircleAlert, Laptop, Smartphone } from 'lucide-react-native'
+import { CircleAlert, Laptop, Smartphone } from '../components/icons/icon-set'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { radii, spacing, typography } from '../theme/mobile-theme'
@@ -71,9 +71,9 @@ function PillStatus({
         <>
           <Text style={styles.sub}>·</Text>
           {dictation.engine.kind === 'phone' ? (
-            <Smartphone size={13} color={colors.textMuted} strokeWidth={2} />
+            <Smartphone size={13} color={colors.textMuted} />
           ) : (
-            <Laptop size={14} color={colors.textMuted} strokeWidth={2} />
+            <Laptop size={14} color={colors.textMuted} />
           )}
         </>
       ) : null}
@@ -113,7 +113,7 @@ function MobileDictationPill({
         accessibilityHint={dictationAwayCopy.hint(t)}
       >
         {failed ? (
-          <CircleAlert size={18} color={colors.statusRed} strokeWidth={2.2} />
+          <CircleAlert size={18} color={colors.statusRed} />
         ) : (
           <MobileDictationGrapes meter={dictation.meter} dotSize={4} />
         )}
@@ -147,7 +147,6 @@ function MobileDictationPill({
             active={dictation.isStarting || dictation.isRecording}
             processing={dictation.isProcessing}
             micSize={17}
-            micStroke={2}
           />
         </Pressable>
       )}

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { View, ScrollView, ActivityIndicator, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CheckCircle2, RefreshCw, XCircle, AlertTriangle } from 'lucide-react-native'
+import { CircleCheck, CircleX, RefreshCw, TriangleAlert } from '../components/icons/icon-set'
 import { spacing } from '../theme/mobile-theme'
 import { useThemedStyles } from '../theme/themed-styles'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
@@ -26,11 +26,11 @@ function StatusIcon({ status }: { status: CheckResult['status'] }) {
   const colors = useMobileColors()
   switch (status) {
     case 'pass':
-      return <CheckCircle2 size={18} color={colors.statusGreen} />
+      return <CircleCheck size={18} color={colors.statusGreen} />
     case 'fail':
-      return <XCircle size={18} color={colors.statusRed} />
+      return <CircleX size={18} color={colors.statusRed} />
     case 'warn':
-      return <AlertTriangle size={18} color={colors.textMuted} />
+      return <TriangleAlert size={18} color={colors.textMuted} />
   }
 }
 
@@ -109,7 +109,7 @@ export function TroubleshootView({
             accent
             busy={running}
             testID="diagnostics-run"
-            leading={<RefreshCw size={18} color={colors.accentBlue} strokeWidth={2.2} />}
+            leading={<RefreshCw size={18} color={colors.accentBlue} />}
             accessory={
               running ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined
             }

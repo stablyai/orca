@@ -10,7 +10,7 @@ import {
   Platform,
   type ListRenderItem
 } from 'react-native'
-import { Copy, MessageSquare, Send } from 'lucide-react-native'
+import { Copy, MessageSquare, Send } from '../../components/icons/icon-set'
 import { MobileSyntaxSegments } from '../../components/code-presentation/MobileSyntaxSegments'
 import {
   buildPlainMobileDiffSyntaxLines,
@@ -213,7 +213,7 @@ function FileReaderDocument({
         {diffCommentActions ? (
           <View style={styles.diffNotesToolbar}>
             <View style={styles.diffNotesTitleRow}>
-              <MessageSquare size={14} color={colors.textSecondary} strokeWidth={2.2} />
+              <MessageSquare size={14} color={colors.textSecondary} />
               <Text style={styles.diffNotesTitle}>
                 {count === 0
                   ? t('session.fileReader.noReviewNotes', 'No review notes')
@@ -235,7 +235,7 @@ function FileReaderDocument({
                 onPress={() => void diffCommentActions.onCopyAll()}
                 accessibilityLabel={t('session.fileReader.copyReviewNotes', 'Copy review notes')}
               >
-                <Copy size={13} color={colors.textSecondary} strokeWidth={2.2} />
+                <Copy size={13} color={colors.textSecondary} />
                 <Text style={styles.diffNotesActionText}>{t('common.copy', 'Copy')}</Text>
               </Pressable>
               <Pressable
@@ -251,7 +251,7 @@ function FileReaderDocument({
                   'Send review notes to AI'
                 )}
               >
-                <Send size={13} color={colors.textSecondary} strokeWidth={2.2} />
+                <Send size={13} color={colors.textSecondary} />
                 <Text style={styles.diffNotesActionText}>
                   {t('session.fileReader.send', 'Send')}
                 </Text>

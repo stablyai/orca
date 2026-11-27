@@ -2,7 +2,7 @@ import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tas
 import { SHOW_MOBILE_PROJECT_METADATA_EDITORS } from '../task-list/mobile-tasks-options'
 import { editableProjectFields, projectFieldValueLabel } from './mobile-tasks-project-fields'
 import { View, Text, Pressable } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../components/icons/icon-set'
 import { pressedStyle } from '../../theme/mobile-theme'
 import { TextField } from '../../components/composer-input/TextField'
 

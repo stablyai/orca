@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../../components/icons/icon-set'
 import { useEffect, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
@@ -69,7 +69,7 @@ export function MobileHomeFab(props: {
               }
             ]}
           >
-            <Plus size={26} strokeWidth={2.4} color={colors.onAccent} />
+            <Plus size={26} color={colors.onAccent} />
           </Animated.View>
         </Pressable>
       </Animated.View>

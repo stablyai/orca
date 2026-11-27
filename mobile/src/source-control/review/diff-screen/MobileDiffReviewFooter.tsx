@@ -1,5 +1,12 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Check, ChevronLeft, ChevronRight, MessageSquare, Plus, X } from 'lucide-react-native'
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  MessageSquare,
+  Plus,
+  X
+} from '../../../components/icons/icon-set'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'
@@ -83,7 +90,7 @@ export function MobileDiffReviewFooter({
             accessibilityRole="button"
             accessibilityLabel={t('components.diffReviewFooter.clearSelection', 'Clear selection')}
           >
-            <X size={20} color={colors.textPrimary} strokeWidth={2.2} />
+            <X size={20} color={colors.textPrimary} />
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
@@ -91,7 +98,7 @@ export function MobileDiffReviewFooter({
             accessibilityRole="button"
             accessibilityLabel={label}
           >
-            <MessageSquare size={17} color={colors.bgBase} strokeWidth={2.2} />
+            <MessageSquare size={17} color={colors.bgBase} />
             <Text style={styles.primaryButtonText} numberOfLines={1}>
               {label}
             </Text>
@@ -109,7 +116,7 @@ export function MobileDiffReviewFooter({
           accessibilityRole="button"
           accessibilityLabel={t('components.diffReviewFooter.previousFile', 'Previous file')}
         >
-          <ChevronLeft size={20} color={colors.textPrimary} strokeWidth={2.2} />
+          <ChevronLeft size={20} color={colors.textPrimary} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -127,7 +134,7 @@ export function MobileDiffReviewFooter({
             <ActivityIndicator size="small" color={colors.bgBase} />
           ) : (
             <>
-              <PrimaryIcon size={17} color={colors.bgBase} strokeWidth={2.2} />
+              <PrimaryIcon size={17} color={colors.bgBase} />
               <Text style={styles.primaryButtonText} numberOfLines={1}>
                 {primary.label}
               </Text>
@@ -140,7 +147,7 @@ export function MobileDiffReviewFooter({
           accessibilityRole="button"
           accessibilityLabel={t('components.diffReviewFooter.nextFileButton', 'Next file')}
         >
-          <ChevronRight size={20} color={colors.textPrimary} strokeWidth={2.2} />
+          <ChevronRight size={20} color={colors.textPrimary} />
         </Pressable>
       </View>
     </View>

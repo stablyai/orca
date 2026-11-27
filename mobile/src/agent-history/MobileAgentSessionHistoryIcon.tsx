@@ -3,13 +3,11 @@ import Svg, { Path } from 'react-native-svg'
 type MobileAgentSessionHistoryIconProps = {
   size?: number
   color?: string
-  strokeWidth?: number
 }
 
 export function MobileAgentSessionHistoryIcon({
   size = 18,
-  color = '#000000',
-  strokeWidth = 2
+  color = '#000000'
 }: MobileAgentSessionHistoryIconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -18,28 +16,28 @@ export function MobileAgentSessionHistoryIcon({
       <Path
         d="M14 4h6v6h-6z"
         stroke={color}
-        strokeWidth={strokeWidth}
+        strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <Path
         d="M4 14h6v6h-6z"
         stroke={color}
-        strokeWidth={strokeWidth}
+        strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <Path
         d="M17 17m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
         stroke={color}
-        strokeWidth={strokeWidth}
+        strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <Path
         d="M7 7m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
         stroke={color}
-        strokeWidth={strokeWidth}
+        strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />

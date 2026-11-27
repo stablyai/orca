@@ -12,7 +12,7 @@ import type {
   SourceControlPrimaryActionDecisionInputs
 } from '../../../../src/shared/source-control/decisions/source-control-primary-action-decision-types'
 
-// String identifiers keep native lucide imports out of this module.
+// String identifiers keep native icon imports out of this module.
 export type MobileSourceControlActionIcon =
   | 'commit'
   | 'push'

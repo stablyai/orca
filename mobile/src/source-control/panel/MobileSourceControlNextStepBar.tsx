@@ -7,9 +7,9 @@ import {
   Check,
   GitMerge,
   GitPullRequest,
-  Sparkles,
-  type LucideIcon
-} from 'lucide-react-native'
+  Sparkles
+} from '../../components/icons/icon-set'
+import type { MobileIcon } from '../../components/icons/mobile-icon'
 import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
@@ -32,7 +32,7 @@ import type {
 import { stylesSheet } from '../mobile-source-control-styles'
 import { useMobileDictationClearance } from '../../dictation/mobile-dictation-host-context'
 
-const ICONS: Record<MobileNextStepIcon, LucideIcon> = {
+const ICONS: Record<MobileNextStepIcon, MobileIcon> = {
   push: ArrowUp,
   pull: ArrowDown,
   sync: ArrowDownUp,
@@ -140,7 +140,7 @@ export function MobileSourceControlNextStepBar({
       ) : view.kind === 'auto_merge_on' ? (
         <View style={styles.row}>
           <View style={[styles.button, styles.buttonOff, styles.grow]}>
-            <GitMerge size={17} color={colors.mergeGreen} strokeWidth={2.2} />
+            <GitMerge size={17} color={colors.mergeGreen} />
             <Text style={[styles.label, styles.labelSecondary]} numberOfLines={1}>
               {t('sourceControl.nextStep.willMergeWhenReady', 'Will merge when ready')}
             </Text>
@@ -159,7 +159,7 @@ export function MobileSourceControlNextStepBar({
         </View>
       ) : view.kind === 'merged' ? (
         <View style={styles.merged}>
-          <GitMerge size={16} color={colors.statusPurple} strokeWidth={2.2} />
+          <GitMerge size={16} color={colors.statusPurple} />
           <Text style={styles.mergedText} numberOfLines={1}>
             {view.baseRef
               ? t('sourceControl.nextStep.mergedInto', 'Merged into {{base}}', {
@@ -192,7 +192,7 @@ function BarButton({
   onPress
 }: {
   label: string
-  Icon?: LucideIcon
+  Icon?: MobileIcon
   tone: MobileNextStepTone
   disabled: boolean
   loading: boolean
@@ -231,7 +231,7 @@ function BarButton({
       {loading ? (
         <ActivityIndicator size="small" color={fg} />
       ) : Icon ? (
-        <Icon size={17} color={fg} strokeWidth={2.2} />
+        <Icon size={17} color={fg} />
       ) : null}
       <Text style={[styles.label, { color: fg }]} numberOfLines={1}>
         {label}
@@ -314,7 +314,7 @@ function CommitComposer({
             {generatingMessage ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
-              <Sparkles size={17} color={colors.textSecondary} strokeWidth={2} />
+              <Sparkles size={17} color={colors.textSecondary} />
             )}
           </Pressable>
         ) : null

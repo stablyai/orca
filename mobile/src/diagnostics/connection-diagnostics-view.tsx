@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { View, Text, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Check, Copy, Ellipsis, Send } from 'lucide-react-native'
+import { Check, Copy, MoreHorizontal, Send } from '../components/icons/icon-set'
 import { spacing } from '../theme/mobile-theme'
 import { useThemedStyles } from '../theme/themed-styles'
 import { ConnectionLog } from '../components/host-connection/ConnectionLog'
@@ -130,7 +130,7 @@ export function ConnectionDiagnosticsView({
           hasHost || entries.length > 0 ? (
             <NavBarButton
               ref={menuAnchor}
-              icon={Ellipsis}
+              icon={MoreHorizontal}
               accessibilityLabel={t('diagnostics.connectionDiagnosticsView.more', 'More actions')}
               onPress={() => setMenuOpen(true)}
             />

@@ -1,7 +1,7 @@
 import { memo, useState } from 'react'
 import { Text, View, type LayoutChangeEvent } from 'react-native'
 import { useMobileScreenReaderOn } from '../../../../platform/accessibility/use-mobile-screen-reader-on'
-import { Image as ImageIcon } from 'lucide-react-native'
+import { Image as ImageIcon } from '../../../../components/icons/icon-set'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { queuedMessageStylesSheet } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
@@ -137,7 +137,7 @@ function MobileQueuedImageCount({
           : t('session.queuedMessageCardRow.images_other', '{{count}} images', { count })
       }
     >
-      <ImageIcon size={12} color={colors.textSecondary} strokeWidth={2} />
+      <ImageIcon size={12} color={colors.textSecondary} />
       <Text style={queuedMessageStyles.metaText}>{count}</Text>
     </View>
   )

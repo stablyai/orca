@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Text, View } from 'react-native'
-import { GitPullRequest, Sparkles } from 'lucide-react-native'
+import { GitPullRequest, Sparkles } from '../../../components/icons/icon-set'
 import { getRuntimePathBasename } from '../../../../../src/shared/file-access/cross-platform-path'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { DiffHunkLine } from '../../../../../src/shared/github/comments/pr-comment-diff-hunk'
@@ -126,7 +126,7 @@ export function MobileDiffReviewRangeSheet({
                   agent ? (
                     <MobileAgentIcon agentId={agent} size={18} />
                   ) : (
-                    <Sparkles size={18} color={colors.textSecondary} strokeWidth={2} />
+                    <Sparkles size={18} color={colors.textSecondary} />
                   )
                 }
                 title={
@@ -149,7 +149,7 @@ export function MobileDiffReviewRangeSheet({
                 disabled={busy}
               />
               <ListRow
-                leading={<GitPullRequest size={18} color={colors.textSecondary} strokeWidth={2} />}
+                leading={<GitPullRequest size={18} color={colors.textSecondary} />}
                 title={t('components.diffReviewDrawers.gitHubOnPr', 'GitHub, on PR #{{number}}', {
                   number: controller.github?.prNumber ?? 0
                 })}

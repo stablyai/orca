@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Users } from 'lucide-react-native'
+import { Users } from '../components/icons/icon-set'
 import type { Bot } from '../../../src/shared/bot-types'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 import {
@@ -51,7 +51,7 @@ export function useMobileBotGroupComposer(
         name: bot.name,
         icon: <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={20} />
       })),
-      { name: 'everyone', icon: <Users size={20} color={colors.textSecondary} strokeWidth={2} /> }
+      { name: 'everyone', icon: <Users size={20} color={colors.textSecondary} /> }
     ],
     [memberBots, group?.remoteMembers, colors]
   )

@@ -2,7 +2,7 @@ import { projectContentField } from '../../../../src/shared/github/projects/proj
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { View, Text, Pressable, FlatList } from 'react-native'
 import { spacing, type MobileColorScheme, pressedStyle } from '../../theme/mobile-theme'
-import { ChevronDown, Inbox } from 'lucide-react-native'
+import { ChevronDown, Inbox } from '../../components/icons/icon-set'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 
 import {

@@ -10,12 +10,12 @@ import {
   Plug,
   Search,
   SquareTerminal,
-  Wrench,
-  type LucideIcon
-} from 'lucide-react-native'
+  Wrench
+} from '../../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../../components/icons/mobile-icon'
 import type { NativeChatToolIconName } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-icon'
 
-const GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
+const GLYPHS: Record<NativeChatToolIconName, MobileIcon> = {
   eye: Eye,
   search: Search,
   folder: Folder,
@@ -40,5 +40,5 @@ export function MobileNativeChatToolGlyph({
   color: string
 }): React.JSX.Element {
   const Glyph = GLYPHS[name]
-  return <Glyph size={size} color={color} strokeWidth={2} />
+  return <Glyph size={size} color={color} />
 }

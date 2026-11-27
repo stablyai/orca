@@ -9,7 +9,7 @@ import {
   type ViewStyle
 } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { UnfoldVertical } from 'lucide-react-native'
+import { UnfoldVertical } from '../../../components/icons/icon-set'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -320,7 +320,7 @@ export function MobileDiffReviewLines({
                   )}
                 >
                   <View style={[styles.foldIcon, { width: gutterWidth }]}>
-                    <UnfoldVertical size={14} color={colors.diffFoldText} strokeWidth={2} />
+                    <UnfoldVertical size={14} color={colors.diffFoldText} />
                   </View>
                   <View style={styles.foldBody}>
                     <Text style={styles.foldText}>

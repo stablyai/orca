@@ -5,7 +5,14 @@ import {
   summarizeProviderChecks
 } from '../../../../src/shared/source-control/checks/provider-check-summary'
 import { Text, View } from 'react-native'
-import { CircleCheck, FolderKanban, Gauge, ListChecks, Tag, Users } from 'lucide-react-native'
+import {
+  CircleCheck,
+  FolderKanban,
+  Gauge,
+  ListChecks,
+  Tag,
+  Users
+} from '../../components/icons/icon-set'
 import { spacing, type MobilePalette } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
@@ -80,9 +87,7 @@ function factRows(
   t: Translate,
   colors: MobilePalette
 ): FactRow[] {
-  const icon = (Icon: typeof Users) => (
-    <Icon size={18} color={colors.textSecondary} strokeWidth={2} />
-  )
+  const icon = (Icon: typeof Users) => <Icon size={18} color={colors.textSecondary} />
   const rows: FactRow[] = []
   const assignees =
     payload.provider === 'github' || payload.provider === 'gitlab'

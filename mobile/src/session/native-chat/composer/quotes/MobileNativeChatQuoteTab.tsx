@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import { Pressable, Text, View, type TextInputInstance } from 'react-native'
-import { Quote } from 'lucide-react-native'
+import { Quote } from '../../../../components/icons/icon-set'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
@@ -57,7 +57,7 @@ export function MobileNativeChatQuoteTab({
           fieldRef.current?.focus()
         }}
       >
-        <Quote size={14} color={colors.textMuted} strokeWidth={2} />
+        <Quote size={14} color={colors.textMuted} />
         <Text style={styles.text} numberOfLines={1} ellipsizeMode="tail">
           {quote.replace(/\s+/g, ' ')}
         </Text>

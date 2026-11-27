@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import type { HostInstance } from 'react-native'
-import { ALargeSmall, Columns2, SquareChevronRight } from 'lucide-react-native'
+import { ALargeSmall, Columns2, SquareChevronRight } from '../components/icons/icon-set'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
@@ -54,7 +54,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef }: Props) {
               'Browse and resume agent sessions'
             ),
             renderIcon: () => (
-              <MobileAgentSessionHistoryIcon size={17} color={colors.textPrimary} strokeWidth={2} />
+              <MobileAgentSessionHistoryIcon size={17} color={colors.textPrimary} />
             ),
             onPress: openAgentSessionHistory
           }

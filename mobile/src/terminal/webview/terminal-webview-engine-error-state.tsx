@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { CircleAlert } from 'lucide-react-native'
+import { CircleAlert } from '../../components/icons/icon-set'
 import { StyleSheet, View } from 'react-native'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

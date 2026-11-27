@@ -14,7 +14,7 @@ import {
   Hourglass,
   Link2,
   X
-} from 'lucide-react-native'
+} from '../../components/icons/icon-set'
 import { Text, View } from 'react-native'
 import {
   BOT_ITEM_LINK_ROWS,
@@ -122,9 +122,9 @@ function CiMark({ row }: { row: BotItemGitHubRow }) {
     return null
   }
   return row.checks === 'success' ? (
-    <Check size={14} color={colors.statusGreen} strokeWidth={2.5} />
+    <Check size={14} color={colors.statusGreen} />
   ) : (
-    <X size={14} color={colors.statusRed} strokeWidth={2.5} />
+    <X size={14} color={colors.statusRed} />
   )
 }
 

@@ -1,5 +1,5 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { RefreshCw, X, GitBranch } from 'lucide-react-native'
+import { GitBranch, RefreshCw, X } from '../../components/icons/icon-set'
 import { taskStatusActionLabel, isGitHubPrMergeBlocked } from './mobile-tasks-item-comments'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 

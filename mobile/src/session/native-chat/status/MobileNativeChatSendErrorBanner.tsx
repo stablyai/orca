@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { X } from '../../../components/icons/icon-set'
 import { pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { stylesSheet } from '../mobile-native-chat-view-styles'

@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { ImageSourcePropType } from 'react-native'
-import { Terminal } from 'lucide-react-native'
+import { Terminal } from './icon-set'
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 import { radii } from '../../theme/mobile-theme'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'

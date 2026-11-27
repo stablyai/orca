@@ -8,9 +8,9 @@ import {
   Pencil,
   Plus,
   RotateCcw,
-  Sparkles,
-  type LucideIcon
-} from 'lucide-react-native'
+  Sparkles
+} from '../../components/icons/icon-set'
+import type { MobileIcon } from '../../components/icons/mobile-icon'
 import type { BotMemoryHistoryView } from '../../../../src/shared/bots/bot-memory-history'
 import {
   botMemoryHistoryAuthor,
@@ -39,7 +39,7 @@ import type { MemoryActions } from './MobileBotMemory'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-const ICONS: Record<BotMemoryHistoryKind, LucideIcon> = {
+const ICONS: Record<BotMemoryHistoryKind, MobileIcon> = {
   'tidy-up': Sparkles,
   undo: RotateCcw,
   edit: Pencil,
@@ -91,14 +91,14 @@ function HistoryRow(props: {
       <ListRow
         leading={
           <View style={styles.mark}>
-            <Icon size={13} color={colors.textSecondary} strokeWidth={2.4} />
+            <Icon size={13} color={colors.textSecondary} />
           </View>
         }
         title={botMemoryHistorySummary(t, row)}
         wrapTitle
         subtitle={`${author} · ${time}`}
         subtitleLines={2}
-        accessory={<Chevron size={16} color={colors.textMuted} strokeWidth={2.2} />}
+        accessory={<Chevron size={16} color={colors.textMuted} />}
         onPress={props.onToggle}
       />
       {props.open ? (

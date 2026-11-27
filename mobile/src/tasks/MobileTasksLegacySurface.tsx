@@ -8,7 +8,7 @@ import type { ConnectionPresentationModel } from './screen-state/use-mobile-task
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { View, Text, Pressable } from 'react-native'
-import { AlertTriangle, GitBranch } from 'lucide-react-native'
+import { GitBranch, TriangleAlert } from '../components/icons/icon-set'
 import { pressedStyle } from '../theme/mobile-theme'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
@@ -173,7 +173,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           githubMode === 'project' &&
           githubProjectTable?.parentFieldDropped === true ? (
             <View style={styles.projectDataNotice}>
-              <AlertTriangle size={15} color={colors.statusAmber} />
+              <TriangleAlert size={15} color={colors.statusAmber} />
               <Text style={styles.projectDataNoticeText}>
                 {t(
                   'tasks.legacySurface.subIssueDataUnavailable',
