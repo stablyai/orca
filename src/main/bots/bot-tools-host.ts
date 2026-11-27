@@ -43,6 +43,7 @@ import { cliWithLaunchTools, withRelayProblems } from './bot-launch-tools'
 import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import type { BotAgent } from '../../shared/bot-types'
 import { botToolCredentialsReader, withSavedBotToolHeaders } from './bot-tool-credentials'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export type BotToolsFolder = {
   /** The relay grant's owner: the bot, or the host list's reserved owner. */
@@ -75,7 +76,7 @@ export type BotToolsHome =
 export const hasBotToolsCli = (home: BotToolsHome): home is BotToolsCli =>
   home.agent === 'claude' || home.agent === 'codex'
 
-const StartedThread = z.object({ thread: z.object({ id: z.string() }) })
+const StartedThread = lazyZodSchema(() => z.object({ thread: z.object({ id: z.string() }) }))
 
 const CLI_TIMEOUT_MS = 60_000
 

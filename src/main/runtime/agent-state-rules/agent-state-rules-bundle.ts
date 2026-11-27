@@ -5,6 +5,7 @@ import {
   AGENT_STATE_RULES_ENGINE_VERSION,
   type AgentStateRulesFile
 } from './agent-state-rules-schema'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 /** Published live-update envelope; bundledOnly forces shipped-rule fallback. */
 
@@ -19,14 +20,16 @@ export const LIVE_UPDATABLE_AGENT_STATE_RULE_IDS: ReadonlySet<string> = new Set(
 )
 
 // Check engine compatibility first so newer formats are not misreported as malformed files.
-const BundleEnvelopeSchema = z
-  .object({
-    version: z.number().int().positive(),
-    engineVersion: z.literal(AGENT_STATE_RULES_ENGINE_VERSION),
-    bundledOnly: z.boolean().optional(),
-    files: z.array(z.unknown())
-  })
-  .strict()
+const BundleEnvelopeSchema = lazyZodSchema(() =>
+  z
+    .object({
+      version: z.number().int().positive(),
+      engineVersion: z.literal(AGENT_STATE_RULES_ENGINE_VERSION),
+      bundledOnly: z.boolean().optional(),
+      files: z.array(z.unknown())
+    })
+    .strict()
+)
 
 export type AgentStateRulesBundle = {
   version: number

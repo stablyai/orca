@@ -10,13 +10,16 @@ import { sendSupportedMigrationRequest } from '../../managed-server/migration/ca
 import { getWslHostService } from './wsl-host-service-instance'
 import { untilWslMoveTurnAborted } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-host-automations-lock'
 import type { WslMoveMovedAutomation } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-host-automations-rewrite'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 // The host's automation service message for an id it does not hold.
 export const AUTOMATION_NOT_FOUND = 'Automation not found'
 
-export const ShownAutomationSchema = z.object({
-  automation: z.object({ enabled: z.boolean(), updatedAt: z.number() })
-})
+export const ShownAutomationSchema = lazyZodSchema(() =>
+  z.object({
+    automation: z.object({ enabled: z.boolean(), updatedAt: z.number() })
+  })
+)
 
 export type WslHostAutomationApi = (
   method: 'automation.show' | 'automation.update',

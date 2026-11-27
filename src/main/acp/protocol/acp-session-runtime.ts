@@ -35,8 +35,9 @@ import {
   type SetSessionModelRequest,
   type SetSessionModelResponse
 } from '../generated/acp-protocol.generated'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
-const ForkSessionResponseSchema = z.looseObject({ sessionId: SessionIdSchema })
+const ForkSessionResponseSchema = lazyZodSchema(() => z.looseObject({ sessionId: SessionIdSchema }))
 
 type Meta = PromptRequest['_meta']
 const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})

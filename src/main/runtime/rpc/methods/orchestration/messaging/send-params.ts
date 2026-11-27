@@ -10,53 +10,56 @@ import {
   getLifecycleGroupRecipientError,
   isDispatchMutationMessageType
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
+import { lazyZodSchema } from '../../../../../../shared/schema/lazy-zod-schema'
 
 const SEND_MESSAGE_TYPE_ERROR = [
   `Invalid --type. Expected one of: ${MESSAGE_TYPES.join(', ')}.`,
   'To answer a worker question, use the same Orca CLI executable with orchestration reply --id <msg_id> --body <text>.'
 ].join(' ')
 
-export const SendParams = z
-  .object({
-    to: OptionalString,
-    subject: requiredString('Missing --subject'),
-    from: OptionalString,
-    body: OptionalString,
-    type: z
-      .enum(MESSAGE_TYPES, {
-        error: SEND_MESSAGE_TYPE_ERROR
-      })
-      .optional(),
-    priority: z.enum(['normal', 'high', 'urgent']).optional(),
-    threadId: OptionalString,
-    payload: OptionalString,
-    // Use remint-stable pane keys to attest worker_done/heartbeat; from handles only route.
-    senderPaneKey: OptionalString,
-    run: OptionalString,
-    /** With `to: bot:<name>`, the one of that bot's chats the mail lands in instead of its Home Chat;
-     *  `new` starts a new chat for it. */
-    chat: OptionalString,
-    /** With `to: bot:<name>`, an item number: the mail lands in the chat that owns it. With
-     *  `to: dispatch:<id>` of a finished worker, its follow-up is for that item, as `worker-start --item`. */
-    item: OptionalString,
-    /** With `item`: files on this computer, sent with the mail into the item's chat. */
-    files: z.array(z.string().min(1).max(4096)).max(30).optional(),
-    // A paired server: this Orca carries the mail there and the replies back (`send --on`).
-    on: OptionalString,
-    // A paired computer's agent: it pulls the mail while connected and decides there (`send --on-client`).
-    // Supplied but empty is refused, never read as a local send.
-    onClient: z.string().trim().min(1, 'Missing --on-client computer').optional(),
-    waitForLifecycleSettlement: OptionalBoolean,
-    devMode: OptionalBoolean
-  })
-  .superRefine((params, ctx) => {
-    if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
-      return
-    }
-    // Lifecycle authority targets one coordinator; fanout would leak signals to unrelated terminals.
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: getLifecycleGroupRecipientError(params.type),
-      path: ['to']
+export const SendParams = lazyZodSchema(() =>
+  z
+    .object({
+      to: OptionalString,
+      subject: requiredString('Missing --subject'),
+      from: OptionalString,
+      body: OptionalString,
+      type: z
+        .enum(MESSAGE_TYPES, {
+          error: SEND_MESSAGE_TYPE_ERROR
+        })
+        .optional(),
+      priority: z.enum(['normal', 'high', 'urgent']).optional(),
+      threadId: OptionalString,
+      payload: OptionalString,
+      // Use remint-stable pane keys to attest worker_done/heartbeat; from handles only route.
+      senderPaneKey: OptionalString,
+      run: OptionalString,
+      /** With `to: bot:<name>`, the one of that bot's chats the mail lands in instead of its Home Chat;
+       *  `new` starts a new chat for it. */
+      chat: OptionalString,
+      /** With `to: bot:<name>`, an item number: the mail lands in the chat that owns it. With
+       *  `to: dispatch:<id>` of a finished worker, its follow-up is for that item, as `worker-start --item`. */
+      item: OptionalString,
+      /** With `item`: files on this computer, sent with the mail into the item's chat. */
+      files: z.array(z.string().min(1).max(4096)).max(30).optional(),
+      // A paired server: this Orca carries the mail there and the replies back (`send --on`).
+      on: OptionalString,
+      // A paired computer's agent: it pulls the mail while connected and decides there (`send --on-client`).
+      // Supplied but empty is refused, never read as a local send.
+      onClient: z.string().trim().min(1, 'Missing --on-client computer').optional(),
+      waitForLifecycleSettlement: OptionalBoolean,
+      devMode: OptionalBoolean
     })
-  })
+    .superRefine((params, ctx) => {
+      if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
+        return
+      }
+      // Lifecycle authority targets one coordinator; fanout would leak signals to unrelated terminals.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: getLifecycleGroupRecipientError(params.type),
+        path: ['to']
+      })
+    })
+)

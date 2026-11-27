@@ -17,6 +17,7 @@ import {
   openCodeTakesConfigDirInstructions,
   writeOpenCodeInstructionsConfigDir
 } from '../../opencode/opencode-instructions-config-dir'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 /** What a launch adds so the agent's own system prompt carries the instructions. */
 export type AcpInstructionsLaunch = {
@@ -94,9 +95,11 @@ export const deliverGrokInstructions = keptWithSession(async ({ text }) => ({
   sessionMeta: { rules: text }
 }))
 
-const AntigravitySystemPromptCapability = z.object({
-  antigravity: z.object({ systemPrompt: z.object({ append: z.literal(true) }) })
-})
+const AntigravitySystemPromptCapability = lazyZodSchema(() =>
+  z.object({
+    antigravity: z.object({ systemPrompt: z.object({ append: z.literal(true) }) })
+  })
+)
 
 /** Whether the Antigravity server appends `_meta.antigravity.systemPrompt.append` to its system prompt. */
 export function antigravityTakesSystemPrompt(initialized: InitializeResponse): boolean {

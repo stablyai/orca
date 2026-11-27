@@ -40,33 +40,35 @@ export function isLandingText(value: string, maximum: number): boolean {
   return value === value.trim() && value.length <= maximum && !hasUnsafeText(value)
 }
 
-const BotTransportManifestV1Schema = z
-  .object({
-    schemaVersion: z.literal(1),
-    kind: z.literal('bot'),
-    packageId: z.string().regex(ID_PATTERN),
-    versionId: z.string().regex(ID_PATTERN),
-    /** The cloud package name, `bot-<id>`: what *Update link* finds the package by. */
-    name: z.string().refine((name) => {
-      try {
-        validateSkillPackageName(name)
-        return true
-      } catch {
-        return false
-      }
-    }),
-    /** The bot's own name; bot.json's `name`. */
-    displayName: z
-      .string()
-      .min(1)
-      .refine((value) => isLandingText(value, BOT_DISPLAY_NAME_MAX)),
-    /** The bot's one-line purpose. */
-    description: z.string().refine((value) => isLandingText(value, BOT_DESCRIPTION_MAX)),
-    createdAt: z.iso.datetime({ offset: true }),
-    files: z.array(BotTransportFileSchema).min(2).max(512),
-    botDigest: z.string().regex(SHA256_PATTERN)
-  })
-  .strict()
+const BotTransportManifestV1Schema = lazyZodSchema(() =>
+  z
+    .object({
+      schemaVersion: z.literal(1),
+      kind: z.literal('bot'),
+      packageId: z.string().regex(ID_PATTERN),
+      versionId: z.string().regex(ID_PATTERN),
+      /** The cloud package name, `bot-<id>`: what *Update link* finds the package by. */
+      name: z.string().refine((name) => {
+        try {
+          validateSkillPackageName(name)
+          return true
+        } catch {
+          return false
+        }
+      }),
+      /** The bot's own name; bot.json's `name`. */
+      displayName: z
+        .string()
+        .min(1)
+        .refine((value) => isLandingText(value, BOT_DISPLAY_NAME_MAX)),
+      /** The bot's one-line purpose. */
+      description: z.string().refine((value) => isLandingText(value, BOT_DESCRIPTION_MAX)),
+      createdAt: z.iso.datetime({ offset: true }),
+      files: z.array(BotTransportFileSchema).min(2).max(512),
+      botDigest: z.string().regex(SHA256_PATTERN)
+    })
+    .strict()
+)
 
 export type BotTransportManifest = z.infer<typeof BotTransportManifestV1Schema>
 export type BotTransportFile = z.infer<typeof BotTransportFileSchema>

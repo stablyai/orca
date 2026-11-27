@@ -19,6 +19,7 @@ import {
   parseCursorSessionToken,
   type CursorSessionToken
 } from './cursor-session-token'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 // cursor-agent 2026.06+ stores tokens in Keychain instead of auth.json.
 const KEYCHAIN_SERVICE = 'cursor-access-token'
@@ -49,18 +50,24 @@ function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
-const cliConfigSchema = z.object({
-  authInfo: z.object({ email: z.unknown(), displayName: z.unknown() }).partial().optional()
-})
+const cliConfigSchema = lazyZodSchema(() =>
+  z.object({
+    authInfo: z.object({ email: z.unknown(), displayName: z.unknown() }).partial().optional()
+  })
+)
 
 // Linux/Windows cursor-agent keep this shape in the OS secret store; auth.json keeps only `storedIn`.
-const cliAuthFileSchema = z.object({ accessToken: z.unknown(), storedIn: z.unknown() }).partial()
+const cliAuthFileSchema = lazyZodSchema(() =>
+  z.object({ accessToken: z.unknown(), storedIn: z.unknown() }).partial()
+)
 
 // Windows cursor-agent's secret store: `auth.dpapi` next to auth.json, holding a current-user DPAPI blob.
-const dpapiFileSchema = z.object({
-  version: z.literal(1),
-  dpapi: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/)
-})
+const dpapiFileSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    dpapi: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/)
+  })
+)
 const DPAPI_ERROR = 'Unable to decrypt the Cursor CLI login'
 
 /** `cli-config.json` carries the signed-in identity for keychain-backed CLI sessions. */
