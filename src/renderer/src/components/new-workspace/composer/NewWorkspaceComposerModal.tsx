@@ -26,7 +26,7 @@ import AgentSettingsDialog, {
   restoreAgentSettingsInvoker
 } from '@/components/agent/AgentSettingsDialog'
 import { useComposerHostedAddProject } from '../project-selection/use-composer-hosted-add-project'
-import { useComposerState } from '@/hooks/useComposerState'
+import { usePluginTaskComposerState } from './use-plugin-task-launch'
 import {
   composerLaunchWorkspace,
   quickWorkspacePickerInputs
@@ -138,7 +138,7 @@ function QuickTabBody({
     createDisabled: formDisabled,
     selectAddedProjectRepo,
     selectAddedProjectGroup
-  } = useComposerState({
+  } = usePluginTaskComposerState(modalData, {
     initialName: modalData.prefilledName ?? '',
     // Quick create ignores legacy prompt-prefill payloads.
     initialPrompt: '',

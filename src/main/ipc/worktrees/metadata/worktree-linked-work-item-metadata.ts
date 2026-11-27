@@ -11,6 +11,7 @@ type LinkedWorkItemMetadata = Pick<
   | 'linkedWorkItem'
   | 'linkedItems'
   | 'linkedTaskSourceContext'
+  | 'linkedPluginTask'
 >
 
 export function getLinkedWorkItemMetadata(meta: WorktreeMeta | undefined): LinkedWorkItemMetadata {
@@ -22,6 +23,7 @@ export function getLinkedWorkItemMetadata(meta: WorktreeMeta | undefined): Linke
     linkedGiteaPR: meta?.linkedGiteaPR ?? null,
     linkedWorkItem: meta?.linkedWorkItem ?? null,
     ...(meta?.linkedItems !== undefined ? { linkedItems: meta.linkedItems } : {}),
-    linkedTaskSourceContext: meta?.linkedTaskSourceContext ?? null
+    linkedTaskSourceContext: meta?.linkedTaskSourceContext ?? null,
+    linkedPluginTask: meta?.linkedPluginTask ?? null
   }
 }

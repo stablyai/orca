@@ -66,6 +66,7 @@ export type PluginContributionSource = {
   statusBarItems: readonly string[]
   /** Each server's name with its URL or the command line that starts it. */
   mcpServers: readonly { name: string; detail: string }[]
+  taskSources?: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
@@ -116,7 +117,8 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles,
     statusBarItems: statusBarItemTitles(contributes.statusBarItems),
-    mcpServers: contributes.mcpServers.map(pluginMcpServerListing)
+    mcpServers: contributes.mcpServers.map(pluginMcpServerListing),
+    taskSources: contributes.taskSources.map((source) => source.title)
   }
 }
 
@@ -159,7 +161,8 @@ export function summaryContributionSource(
     statusBarItems: of('statusBarItems').map((item) => item.name),
     // Why no detail: install checks a summary's names, not its details, so a catalog's address or
     // command line could differ from what runs.
-    mcpServers: of('mcpServers').map((item) => ({ name: item.name, detail: '' }))
+    mcpServers: of('mcpServers').map((item) => ({ name: item.name, detail: '' })),
+    taskSources: of('taskSources').map((item) => item.name)
   }
 }
 

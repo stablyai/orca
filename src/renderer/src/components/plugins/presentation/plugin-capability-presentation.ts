@@ -69,6 +69,11 @@ export function pluginCapabilityDescription(
         'auto.components.settings.PluginConsentDialog.capability.settingsOwn',
         'Read and change its own settings'
       )
+    case 'tasks:provide':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.tasksProvide',
+        'Add task lists to the Tasks page, with prompts you review before an agent starts'
+      )
     default:
       return fallback
   }

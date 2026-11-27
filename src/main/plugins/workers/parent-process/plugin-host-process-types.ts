@@ -1,6 +1,7 @@
 import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
 import type { PluginEventName } from '../../../../shared/plugins/manifest/plugin-manifest'
 import type { PluginHookName } from '../../../../shared/plugins/contributions/plugin-hook-contribution'
+import type { PluginTaskSourceOperation } from '../../../../shared/plugins/tasks/plugin-task-source'
 import type {
   PluginErrorCode,
   PluginHostCallOutcome
@@ -35,6 +36,14 @@ export type PluginWorkerHandle = {
   /** Command ids the worker registered on activate (⊆ manifest commands). */
   commands: readonly string[]
   invokeCommand(commandId: string, args?: unknown): Promise<unknown>
+  /** Task source ids the worker registered on activate (⊆ manifest taskSources). */
+  taskSources: readonly string[]
+  /** Raw worker result; callers validate it against the operation's schema. */
+  invokeTaskSource(
+    sourceId: string,
+    operation: PluginTaskSourceOperation,
+    params: unknown
+  ): Promise<unknown>
   deliverEvent(event: PluginEventName, payload: unknown): void
   /** A panel's `plugin.request`; rejects with a {@link PluginWorkerRequestError}. */
   requestFromPanel(request: PluginWorkerPanelRequest): Promise<unknown>
@@ -65,6 +74,7 @@ export type StartPluginWorkerOptions = {
   log: PluginWorkerLogSink
   readyTimeoutMs?: number
   invokeTimeoutMs?: number
+  taskSourceTimeoutMs?: number
   eventTimeoutMs?: number
   signal?: AbortSignal
 }
