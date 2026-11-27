@@ -18,7 +18,7 @@ import {
   usesNativeWindowsRemoval
 } from '../../../git/worktrees/removal/windows-worktree-removal'
 import { isPrunableGitFileWorktree } from '../../../workspaces/removal/worktree-prunable-git-file'
-import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
+import { findRegisteredWorktreeReleasingDiedAddLock } from '../../../workspaces/removal/died-worktree-add-lock'
 import { assertNestedWorktreeRemovalApproval } from '../../../workspaces/removal/nested-worktree-removal-plan'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
@@ -63,11 +63,12 @@ export async function executeWorktreeRemoval(
     : await listGitWorktreesStrict(repo.path)
   const removedMeta = resolveWorktreeRemovalMetadata(store, repoId, args.worktreeId, removalHostId)
   const removedPushTarget = removedMeta?.pushTarget
-  const registeredWorktree = findRegisteredDeletableWorktree(
+  const registeredWorktree = await findRegisteredWorktreeReleasingDiedAddLock(
     repo.path,
     worktreePath,
     registeredWorktrees,
-    resolveWorktreeRemovalHomeForHost(removalHostId)
+    resolveWorktreeRemovalHomeForHost(removalHostId),
+    localWorktreeGitOptions
   )
   if (args.expectedCheckout) {
     assertNestedWorktreeRemovalApproval(registeredWorktree ? [registeredWorktree] : [], [

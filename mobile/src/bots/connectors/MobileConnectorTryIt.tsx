@@ -7,8 +7,7 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileConnectorTryIt(props: {
   /** Titled as the connector's own page, which Done opens. */
@@ -26,7 +25,7 @@ export function MobileConnectorTryIt(props: {
   /** Also what Back does: the setup's own back claim calls it. */
   onDone: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const { prompt, showToast } = props

@@ -1,13 +1,6 @@
 import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { isChromiumCrashpadPipeNameKey } from '../pty/shell-startup/chromium-crashpad-pipe-env'
 
-const CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS = new Set([
-  'AGY_ACP_FORCE_FILE_STORAGE',
-  'BROWSER',
-  'PYTHONUNBUFFERED',
-  'ELECTRON_RUN_AS_NODE'
-])
-
 // The credentials each saved account type reads from the launch environment.
 const AUTH_ENVIRONMENT_KEYS: Partial<
   Record<AntigravityChatAuthConfig['method'], ReadonlySet<string>>
@@ -22,8 +15,9 @@ const AUTH_ENVIRONMENT_KEYS: Partial<
   ])
 }
 
-/** Remove inherited authentication, harness and stale Electron Crashpad overrides, keeping only
- *  the credentials the chat's saved account type reads. */
+/** Remove inherited authentication, agy ACP overrides (such as forcing file storage, which would
+ *  hide agy's keyring login) and stale Electron Crashpad overrides, keeping only the credentials the
+ *  chat's saved account type reads. */
 export function scrubAntigravityAcpEnvironment(
   env: Record<string, string | undefined>,
   inherited: NodeJS.ProcessEnv,
@@ -32,17 +26,10 @@ export function scrubAntigravityAcpEnvironment(
   const kept = chatAuth ? AUTH_ENVIRONMENT_KEYS[chatAuth.method] : undefined
   const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
     const normalized = process.platform === 'win32' ? key.toUpperCase() : key
-    const shadowsConfiguredValue =
-      process.platform === 'win32' &&
-      CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS.has(normalized) &&
-      key !== normalized
     return (
-      shadowsConfiguredValue ||
       isChromiumCrashpadPipeNameKey(key) ||
-      (!CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS.has(normalized) &&
-        !kept?.has(normalized) &&
+      (!kept?.has(normalized) &&
         (normalized === 'GEMINI_API_KEY' ||
-          normalized === 'ANTIGRAVITY_HARNESS_PATH' ||
           normalized === 'GCLOUD_PROJECT' ||
           normalized === 'CLOUDSDK_CORE_PROJECT' ||
           normalized.startsWith('GOOGLE_') ||

@@ -48,10 +48,10 @@ describe('ForegroundExitWatches', () => {
   })
 
   it('does not pair a read’s agent with the pid of another agent a later lookup cached', () => {
-    // Windows: the read named Codex, but the lookup that landed during the child census cached Gemini.
+    // Windows: the read named Codex, but the lookup that landed during the child census cached Copilot.
     const source = {
       isAlive: true,
-      foregroundAgent: () => ({ processName: 'gemini.exe', pid: 77 })
+      foregroundAgent: () => ({ processName: 'copilot.exe', pid: 77 })
     }
 
     expect(watches.noteInspection('pane', source, 'codex.exe')).toBe(false)
@@ -60,7 +60,7 @@ describe('ForegroundExitWatches', () => {
     // The same disagreement does not notify again.
     expect(watches.noteInspection('pane', source, 'codex.exe')).toBe(false)
     expect(notices).toEqual(['pane'])
-    expect(watches.noteInspection('pane', source, 'gemini.exe')).toBe(true)
+    expect(watches.noteInspection('pane', source, 'copilot.exe')).toBe(true)
   })
 
   it('drops a watch whose pid now belongs to another process and never re-arms it', async () => {

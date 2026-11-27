@@ -245,7 +245,13 @@ export class StructuredAgentSessionDeliveryLoop {
       )
     }
     // Stop may take the lane during readiness; recheck before steering into work it is ending.
-    if ((await this.deps.stopping(sessionId)) || awaitedChild.phase !== 'ready') {
+    // A kept agent that ended before this acquisition takes no send: its exit wakes a fresh start.
+    if (
+      (await this.deps.stopping(sessionId)) ||
+      awaitedChild.phase !== 'ready' ||
+      (awaitedChild.generation !== null &&
+        this.deps.adapter.endedBeforeAcquire?.(sessionId, awaitedChild.generation))
+    ) {
       return this.stop(sessionId)
     }
     // Opening turns must exist before follow-ups join them.

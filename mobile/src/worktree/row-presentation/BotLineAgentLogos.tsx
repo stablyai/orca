@@ -4,21 +4,22 @@ import {
   type BotWorkspaceLineAgent
 } from '../../../../src/shared/bots/bot-sidebar-workspaces'
 import { formatAgentTypeLabel } from '../../../../src/shared/agent-status/presentation/agent-type-label'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 
 /** A bot worker line's agents by logo, one per kind, overlapping as on the desktop. */
 export function BotLineAgentLogos({
   agent,
-  ringColor = colors.bgBase
+  ringColor
 }: {
   agent: BotWorkspaceLineAgent
   /** The row's surface, which the gap between logos shows, as MobileBotFaceStack does. */
   ringColor?: string
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const surface = ringColor ?? colors.bgBase
   const { size, step, gap } = BOT_WORKSPACE_LINE_LOGO
   return (
     <View
@@ -37,8 +38,8 @@ export function BotLineAgentLogos({
                 left: index * step - ring,
                 top: -ring,
                 borderWidth: ring,
-                borderColor: ringColor,
-                backgroundColor: index > 0 ? ringColor : undefined,
+                borderColor: surface,
+                backgroundColor: index > 0 ? surface : undefined,
                 borderRadius: size / 2 + ring
               }
             ]}
@@ -51,6 +52,6 @@ export function BotLineAgentLogos({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   logo: { position: 'absolute' }
 }))

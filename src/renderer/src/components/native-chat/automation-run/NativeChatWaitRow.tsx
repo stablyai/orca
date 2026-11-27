@@ -116,7 +116,7 @@ function WaitRow({
         {once && state.kind === 'waiting' ? (
           <>
             <h4 className={ROW_HEADING}>{say('thenLine')}</h4>
-            <div className={ROW_NOTE}>{waitRowThen(once, wording)}</div>
+            <div className={ROW_NOTE}>{waitRowThen(automation, once, wording)}</div>
           </>
         ) : null}
         {bot ? (
@@ -138,6 +138,7 @@ export function NativeChatWaitRow({
   automation,
   once,
   ended,
+  endedOn,
   timestamp
 }: {
   messageId: string
@@ -145,6 +146,8 @@ export function NativeChatWaitRow({
   once: AutomationOnce
   /** How it ended, when its run or card is in this chat. */
   ended?: WaitEnding
+  /** The rules it had when it ended, which an edit may have changed. */
+  endedOn?: BotAutomationFacts['on']
   timestamp: number | null
 }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
@@ -161,7 +164,12 @@ export function NativeChatWaitRow({
       once={once}
       state={
         waitRowState(
-          { automationSaved: { automation }, savedWaitEnded: ended, timestamp },
+          {
+            automationSaved: { automation },
+            savedWaitEnded: ended,
+            savedWaitEndedOn: endedOn,
+            timestamp
+          },
           bot?.cancelledWaits,
           now,
           host

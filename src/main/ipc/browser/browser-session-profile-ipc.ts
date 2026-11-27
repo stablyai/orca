@@ -4,6 +4,7 @@ import { registerGoogleCookieClearHandlers } from './browser-google-cookie-clear
 import { registerClientHostCookieImportHandlers } from './browser-client-host-cookie-import-ipc'
 import { registerCookieClearHandlers } from './browser-cookie-clear-ipc'
 import { BrowserWindow, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
@@ -38,26 +39,35 @@ import {
   type BrowserSitePermissionEntry
 } from '../../../shared/browser/site-settings/browser-site-permission'
 
-export function registerBrowserSessionProfileHandlers(): void {
-  ipcMain.removeHandler('browser:session:listProfiles')
-  ipcMain.removeHandler('browser:session:createProfile')
-  ipcMain.removeHandler('browser:session:deleteProfile')
-  ipcMain.removeHandler('browser:session:ensureManagedProfile')
-  ipcMain.removeHandler('browser:identity:get')
-  ipcMain.removeHandler('browser:identity:set')
-  ipcMain.removeHandler('browser:session:importCookies')
-  ipcMain.removeHandler('browser:session:resolvePartition')
-  ipcMain.removeHandler('browser:sitePermissions:list')
-  ipcMain.removeHandler('browser:sitePermissions:set')
+export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    for (const channel of [
+      'browser:session:listProfiles',
+      'browser:session:createProfile',
+      'browser:session:deleteProfile',
+      'browser:session:ensureManagedProfile',
+      'browser:identity:get',
+      'browser:identity:set',
+      'browser:session:importCookies',
+      'browser:session:resolvePartition',
+      'browser:sitePermissions:list',
+      'browser:sitePermissions:set',
+      'browser:session:detectBrowsers',
+      'browser:session:detectBrowsersForClientHost',
+      'browser:session:importFromBrowser'
+    ]) {
+      ipcMain.removeHandler(channel)
+    }
+  }
 
-  ipcMain.handle('browser:session:listProfiles', (event): BrowserSessionProfile[] => {
+  ipc.handle('browser:session:listProfiles', (event): BrowserSessionProfile[] => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return []
     }
     return browserSessionRegistry.listProfiles()
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:createProfile',
     async (
       event,
@@ -70,7 +80,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:ensureManagedProfile',
     (event, args: { owner: ManagedBrowserProfileOwner; label: string }) =>
       isTrustedBrowserRenderer(event.sender)
@@ -78,14 +88,14 @@ export function registerBrowserSessionProfileHandlers(): void {
         : null
   )
 
-  ipcMain.handle('browser:identity:get', (event) => {
+  ipc.handle('browser:identity:get', (event) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return null
     }
     return getBrowserIdentityModeStatus()
   })
 
-  ipcMain.handle('browser:identity:set', async (event, mode: unknown) => {
+  ipc.handle('browser:identity:set', async (event, mode: unknown) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return null
     }
@@ -96,7 +106,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     return setBrowserIdentityMode(mode)
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:deleteProfile',
     async (event, args: { profileId: string }): Promise<boolean> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
@@ -106,7 +116,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:importCookies',
     async (
       event,
@@ -148,7 +158,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:resolvePartition',
     (event, args: { profileId: string | null }): string | null => {
       if (!isTrustedBrowserRenderer(event.sender)) {
@@ -158,7 +168,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:sitePermissions:list',
     (event, args: { profileId: string }): BrowserSitePermissionEntry[] => {
       if (
@@ -171,7 +181,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:sitePermissions:set',
     (
       event,
@@ -200,15 +210,11 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
-  registerGoogleCookieClearHandlers()
-  registerClientHostCookieImportHandlers()
-  registerCookieClearHandlers()
+  registerGoogleCookieClearHandlers(ipc)
+  registerClientHostCookieImportHandlers(ipc)
+  registerCookieClearHandlers(ipc)
 
-  ipcMain.removeHandler('browser:session:detectBrowsers')
-  ipcMain.removeHandler('browser:session:detectBrowsersForClientHost')
-  ipcMain.removeHandler('browser:session:importFromBrowser')
-
-  ipcMain.handle('browser:session:detectBrowsers', (event): DetectedBrowserPickerEntry[] => {
+  ipc.handle('browser:session:detectBrowsers', (event): DetectedBrowserPickerEntry[] => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return []
     }
@@ -216,7 +222,7 @@ export function registerBrowserSessionProfileHandlers(): void {
   })
 
   // List browsers on the machine whose cookie store import will read.
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:detectBrowsersForClientHost',
     (event, args: { environmentId: string }): DetectedBrowserPickerEntry[] | null => {
       if (!isTrustedBrowserRenderer(event.sender)) {
@@ -229,7 +235,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:importFromBrowser',
     async (
       event,

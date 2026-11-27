@@ -14,6 +14,7 @@ import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-sco
 import { useTranslate } from '@/i18n/use-translate'
 import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/text-input/ime/ime-text-field'
+import { isCommandInputCaretKey } from '@/lib/keyboard/command-input-caret-keys'
 import { DialogOverlay } from '@/components/ui/dialog'
 import {
   COMMAND_ITEM_BASE_CLASS,
@@ -204,6 +205,13 @@ function CommandInput({
       )}
       {...props}
       {...imeProps}
+      onKeyDown={(event) => {
+        // Why: cmdk's root handler would preventDefault these and jump the list instead.
+        if (isCommandInputCaretKey(event)) {
+          event.stopPropagation()
+        }
+        imeProps.onKeyDown?.(event)
+      }}
       placeholder={truncatePlaceholder ? undefined : props.placeholder}
       aria-placeholder={repeatsName ? undefined : placeholderHint}
     />

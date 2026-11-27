@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
 
 export const RELAY_REGIONS = ['us-central1', 'asia-east2'] as const
@@ -10,47 +11,51 @@ const PROBE_SAMPLES = 3
 // TLS-scale jitter needs a floor or healthy warmed paths fail spread checks.
 const SPREAD_FLOOR_MS = 150
 
-export const RelayRegionSchema = z.enum(RELAY_REGIONS)
-export const RelayProbeOriginSchema = z.string().max(2_048).refine(isCanonicalHttpsOrigin)
-export const RelayRegionCatalogSchema = z
-  .object({
-    v: z.literal(1),
-    regions: z
-      .array(
-        z
-          .object({
-            region: RelayRegionSchema,
-            probeOrigins: z.array(RelayProbeOriginSchema).min(1).max(2)
-          })
-          .strict()
-      )
-      .max(RELAY_REGIONS.length)
-  })
-  .strict()
-  .superRefine((catalog, context) => {
-    const regions = new Set<RelayRegion>()
-    const origins = new Set<string>()
-    for (const [regionIndex, entry] of catalog.regions.entries()) {
-      if (regions.has(entry.region)) {
-        context.addIssue({
-          code: 'custom',
-          message: 'duplicate relay region',
-          path: ['regions', regionIndex, 'region']
-        })
-      }
-      regions.add(entry.region)
-      for (const [originIndex, origin] of entry.probeOrigins.entries()) {
-        if (origins.has(origin)) {
+export const RelayRegionSchema = lazyZodSchema(() => z.enum(RELAY_REGIONS))
+export const RelayProbeOriginSchema = lazyZodSchema(() =>
+  z.string().max(2_048).refine(isCanonicalHttpsOrigin)
+)
+export const RelayRegionCatalogSchema = lazyZodSchema(() =>
+  z
+    .object({
+      v: z.literal(1),
+      regions: z
+        .array(
+          z
+            .object({
+              region: RelayRegionSchema,
+              probeOrigins: z.array(RelayProbeOriginSchema).min(1).max(2)
+            })
+            .strict()
+        )
+        .max(RELAY_REGIONS.length)
+    })
+    .strict()
+    .superRefine((catalog, context) => {
+      const regions = new Set<RelayRegion>()
+      const origins = new Set<string>()
+      for (const [regionIndex, entry] of catalog.regions.entries()) {
+        if (regions.has(entry.region)) {
           context.addIssue({
             code: 'custom',
-            message: 'duplicate relay probe origin',
-            path: ['regions', regionIndex, 'probeOrigins', originIndex]
+            message: 'duplicate relay region',
+            path: ['regions', regionIndex, 'region']
           })
         }
-        origins.add(origin)
+        regions.add(entry.region)
+        for (const [originIndex, origin] of entry.probeOrigins.entries()) {
+          if (origins.has(origin)) {
+            context.addIssue({
+              code: 'custom',
+              message: 'duplicate relay probe origin',
+              path: ['regions', regionIndex, 'probeOrigins', originIndex]
+            })
+          }
+          origins.add(origin)
+        }
       }
-    }
-  })
+    })
+)
 
 export type RelayRegionCatalog = z.infer<typeof RelayRegionCatalogSchema>
 export type RelayRegionCatalogEntry = RelayRegionCatalog['regions'][number]

@@ -1,8 +1,36 @@
-import { chmod, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { writeFolderContextFile } from './acp-folder-context-file'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
+
+// Runs once right after the next read of the context file, as a user's editor saving meanwhile.
+let saveAfterNextRead: (() => Promise<void>) | null = null
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof FsPromises>()
+  return {
+    ...fs,
+    readFile: async (...args: Parameters<typeof fs.readFile>) => {
+      const content = await fs.readFile(...args)
+      const save = saveAfterNextRead
+      saveAfterNextRead = null
+      await save?.()
+      return content
+    }
+  }
+})
 
 const HERMES_CONTEXT_FILE = '.hermes.md'
 const writeHermesContextFile = (cwd: string, text: string) =>
@@ -45,6 +73,10 @@ describe('Hermes context file', () => {
     [
       'a file Orca wrote',
       '<!-- Orca writes this file for Hermes chats in this folder; edits are replaced. -->\n\nold\n'
+    ],
+    [
+      'a file that already holds the text',
+      '<!-- Orca writes this file for Hermes chats in this folder; edits are replaced. -->\n\nprivate text\n'
     ]
   ])('makes %s that others could read private once it carries the text', async (_, content) => {
     const path = join(dir, HERMES_CONTEXT_FILE)
@@ -104,4 +136,49 @@ describe('Hermes context file', () => {
     expect(content).toContain('fresh')
     expect(content).not.toContain('old')
   })
+})
+
+it("takes Orca's text back out of a context file and keeps the user's", async () => {
+  const orcaOwn = join(dir, 'own')
+  await mkdir(orcaOwn)
+  await writeFolderContextFile(orcaOwn, 'GEMINI.md', 'Gemini', 'bot preamble')
+  await removeFolderContextFile(orcaOwn, 'GEMINI.md', 'Gemini')
+  await expect(lstat(join(orcaOwn, 'GEMINI.md'))).rejects.toThrow()
+
+  await writeFile(join(dir, 'GEMINI.md'), 'My own rules.\n')
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
+  expect(await readFile(join(dir, 'GEMINI.md'), 'utf8')).toBe('My own rules.\n')
+})
+
+it("leaves every byte around Orca's block as the user wrote it", async () => {
+  const path = join(dir, 'GEMINI.md')
+  const user = '# Rules\r\n\n```\n    indented code\n```\n  \n'
+  await writeFile(path, `${user}<!-- orca:begin -->\nbot preamble\n<!-- orca:end -->\n\tmore\n`)
+  await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
+  expect(await readFile(path, 'utf8')).toBe(`${user}\tmore\n`)
+})
+
+it("leaves a file that isn't UTF-8 as it is", async () => {
+  const path = join(dir, 'GEMINI.md')
+  const bytes = Buffer.from('caf\xe9\n\n<!-- orca:begin -->\nbot\n<!-- orca:end -->\n', 'latin1')
+  await writeFile(path, bytes)
+  await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
+  expect(await readFile(path)).toEqual(bytes)
+})
+
+it.each([
+  ['a file Orca wrote', null],
+  ['a file the user wrote', 'My own rules.\n']
+])("never replaces a save that lands while Orca's text is taken out of %s", async (_, user) => {
+  const path = join(dir, 'GEMINI.md')
+  if (user !== null) {
+    await writeFile(path, user)
+  }
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  const saved = 'Rules saved meanwhile.\n'
+  saveAfterNextRead = () => writeFile(path, saved)
+  await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
+  expect(await readFile(path, 'utf8')).toBe(saved)
+  expect(await readdir(dir)).toEqual(['GEMINI.md'])
 })

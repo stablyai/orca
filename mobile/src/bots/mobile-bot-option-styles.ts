@@ -1,8 +1,7 @@
 // Content-specific sheet copy; list rows and groups use the shared list primitives.
-import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
-export const optionStyles = themedStyleSheet(() => ({
+export const optionStylesSheet = themedStyleSheet((colors) => ({
   optionRowDetail: {
     fontSize: 13,
     color: colors.textMuted,

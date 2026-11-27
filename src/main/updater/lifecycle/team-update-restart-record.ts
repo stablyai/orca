@@ -1,17 +1,20 @@
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { AtomicSnapshotWriter } from '../../persistence/atomic-snapshot-writer'
 
-const timestamp = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
-const recordSchema = z.object({
-  accountId: z.string(),
-  runningVersion: z.string(),
-  version: z.string(),
-  downloadedAt: timestamp,
-  snoozedUntil: timestamp.optional(),
-  countdownStartedAt: timestamp.optional(),
-  installAttempts: z.number().int().min(0).max(2)
-})
+const timestamp = lazyZodSchema(() => z.number().int().positive().max(Number.MAX_SAFE_INTEGER))
+const recordSchema = lazyZodSchema(() =>
+  z.object({
+    accountId: z.string(),
+    runningVersion: z.string(),
+    version: z.string(),
+    downloadedAt: timestamp,
+    snoozedUntil: timestamp.optional(),
+    countdownStartedAt: timestamp.optional(),
+    installAttempts: z.number().int().min(0).max(2)
+  })
+)
 
 export type TeamUpdateRestartScope = { file: string; accountId: string }
 export type TeamUpdateRestartRecord = z.infer<typeof recordSchema>

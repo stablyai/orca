@@ -18,12 +18,12 @@ import {
   type BrowserMemorySaverSettingsSource
 } from '../../browser/guest-lifecycle/browser-page-idle-discard'
 import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
-import { registerBrowserGrabHandlers } from './browser-grab-ipc'
 import {
+  registerBrowserGrabHandlers,
   disposeGrabModeStateForPage,
   resetGrabModeState
-} from '../../browser/element-grab/browser-grab-mode-sequencer'
-import { registerBrowserSessionProfileHandlers } from './browser-session-profile-ipc'
+} from './browser-grab-ipc'
+import { registerLazyBrowserSessionProfileHandlers } from './lazy-browser-session-profile-ipc'
 import type { BrowserCertificateProceedResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   cancelBrowserWebAuthnAccountRequests,
@@ -38,8 +38,7 @@ import { respondToBrowserPagePrompt } from '../../browser/guest-lifecycle/prompt
 import { openStreamedBrowserExternalAppLink } from '../../browser/guest-lifecycle/prompts/browser-external-app-launch'
 import { recordActiveBrowserPage } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-model'
 import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-lifecycle'
-import { registerBrowserExtensionHandlers } from './browser-extensions'
-import { registerBrowserExtensionContextMenuHandlers } from './browser-extension-context-menu'
+import { registerLazyBrowserExtensionIpcHandlers } from './lazy-browser-extension-ipc'
 import {
   registerBrowserPasswordsHandlers,
   type BrowserPasswordsSettingsSource
@@ -320,9 +319,8 @@ export function registerBrowserHandlers(
 
   registerBrowserGrabHandlers()
 
-  registerBrowserSessionProfileHandlers()
+  registerLazyBrowserSessionProfileHandlers()
 
-  registerBrowserExtensionHandlers()
-  registerBrowserExtensionContextMenuHandlers()
+  registerLazyBrowserExtensionIpcHandlers()
   registerBrowserPasswordsHandlers(store)
 }

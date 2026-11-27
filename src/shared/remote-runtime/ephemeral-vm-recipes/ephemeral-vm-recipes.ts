@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { parsePairingCode } from '../pairing/pairing'
 import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -7,15 +8,17 @@ import {
 import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 import { ephemeralVmFailure, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'
 
-const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(JsonValueSchema),
-    z.record(z.string(), JsonValueSchema)
-  ])
+const JsonValueSchema: z.ZodType<JsonValue> = lazyZodSchema(() =>
+  z.lazy(() =>
+    z.union([
+      z.string(),
+      z.number(),
+      z.boolean(),
+      z.null(),
+      z.array(JsonValueSchema),
+      z.record(z.string(), JsonValueSchema)
+    ])
+  )
 )
 
 export type JsonValue =
@@ -31,107 +34,127 @@ export const EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS = {
   nestingDepth: 64
 } as const
 
-const SavedPortForwardSchema = z
-  .object({
-    localPort: z.number().int().min(1).max(65535),
-    remoteHost: z.string().min(1),
-    remotePort: z.number().int().min(1).max(65535),
-    label: z.string().min(1).optional()
-  })
-  .strict()
+const SavedPortForwardSchema = lazyZodSchema(() =>
+  z
+    .object({
+      localPort: z.number().int().min(1).max(65535),
+      remoteHost: z.string().min(1),
+      remotePort: z.number().int().min(1).max(65535),
+      label: z.string().min(1).optional()
+    })
+    .strict()
+)
 
-export const EphemeralVmRecipeSshTargetSchema = z
-  .object({
-    label: z.string().min(1),
-    configHost: z.string().min(1).optional(),
-    host: z.string().min(1),
-    port: z.number().int().min(1).max(65535),
-    username: z.string(),
-    identityFile: z.string().min(1).optional(),
-    identityAgent: z.string().min(1).optional(),
-    identitiesOnly: z.boolean().optional(),
-    proxyCommand: z.string().min(1).optional(),
-    jumpHost: z.string().min(1).optional(),
-    relayGracePeriodSeconds: z
-      .number()
-      .int()
-      .refine(
-        (value) =>
-          value === 0 ||
-          (value >= MIN_SSH_RELAY_GRACE_PERIOD_SECONDS &&
-            value <= MAX_SSH_RELAY_GRACE_PERIOD_SECONDS),
-        `Relay grace period must be 0 or between ${MIN_SSH_RELAY_GRACE_PERIOD_SECONDS} and ${MAX_SSH_RELAY_GRACE_PERIOD_SECONDS} seconds.`
-      )
-      .optional(),
-    portForwards: z.array(SavedPortForwardSchema).optional()
-  })
-  .strict()
+export const EphemeralVmRecipeSshTargetSchema = lazyZodSchema(() =>
+  z
+    .object({
+      label: z.string().min(1),
+      configHost: z.string().min(1).optional(),
+      host: z.string().min(1),
+      port: z.number().int().min(1).max(65535),
+      username: z.string(),
+      identityFile: z.string().min(1).optional(),
+      identityAgent: z.string().min(1).optional(),
+      identitiesOnly: z.boolean().optional(),
+      proxyCommand: z.string().min(1).optional(),
+      jumpHost: z.string().min(1).optional(),
+      relayGracePeriodSeconds: z
+        .number()
+        .int()
+        .refine(
+          (value) =>
+            value === 0 ||
+            (value >= MIN_SSH_RELAY_GRACE_PERIOD_SECONDS &&
+              value <= MAX_SSH_RELAY_GRACE_PERIOD_SECONDS),
+          `Relay grace period must be 0 or between ${MIN_SSH_RELAY_GRACE_PERIOD_SECONDS} and ${MAX_SSH_RELAY_GRACE_PERIOD_SECONDS} seconds.`
+        )
+        .optional(),
+      portForwards: z.array(SavedPortForwardSchema).optional()
+    })
+    .strict()
+)
 
-const EphemeralVmRecipeOrcaServerConnectionSchema = z
-  .object({
-    type: z.literal('orca-server'),
-    pairingCode: z.string().min(1),
-    projectRoot: z.string().min(1)
-  })
-  .strict()
+const EphemeralVmRecipeOrcaServerConnectionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('orca-server'),
+      pairingCode: z.string().min(1),
+      projectRoot: z.string().min(1)
+    })
+    .strict()
+)
 
-const EphemeralVmRecipeSshConnectionSchema = z
-  .object({
-    type: z.literal('ssh'),
-    target: EphemeralVmRecipeSshTargetSchema,
-    projectRoot: z.string().min(1)
-  })
-  .strict()
+const EphemeralVmRecipeSshConnectionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('ssh'),
+      target: EphemeralVmRecipeSshTargetSchema,
+      projectRoot: z.string().min(1)
+    })
+    .strict()
+)
 
-export const EphemeralVmRecipeConnectionSchema = z.discriminatedUnion('type', [
-  EphemeralVmRecipeOrcaServerConnectionSchema,
-  EphemeralVmRecipeSshConnectionSchema
-])
+export const EphemeralVmRecipeConnectionSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('type', [
+    EphemeralVmRecipeOrcaServerConnectionSchema,
+    EphemeralVmRecipeSshConnectionSchema
+  ])
+)
 
 export type EphemeralVmRecipeConnection = z.infer<typeof EphemeralVmRecipeConnectionSchema>
 
-export const EphemeralVmRecipeLegacyResultSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    pairingCode: z.string().min(1),
-    projectRoot: z.string().min(1),
-    userData: z.record(z.string(), JsonValueSchema).optional()
-  })
-  .strict()
+export const EphemeralVmRecipeLegacyResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      schemaVersion: z.literal(1),
+      pairingCode: z.string().min(1),
+      projectRoot: z.string().min(1),
+      userData: z.record(z.string(), JsonValueSchema).optional()
+    })
+    .strict()
+)
 
-export const EphemeralVmRecipeConnectionResultSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    connection: EphemeralVmRecipeConnectionSchema,
-    userData: z.record(z.string(), JsonValueSchema).optional()
-  })
-  .strict()
+export const EphemeralVmRecipeConnectionResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      schemaVersion: z.literal(1),
+      connection: EphemeralVmRecipeConnectionSchema,
+      userData: z.record(z.string(), JsonValueSchema).optional()
+    })
+    .strict()
+)
 
-export const EphemeralVmRecipeProvisionedRootLegacyResultSchema = z
-  .object({
-    schemaVersion: z.literal(2),
-    checkoutMode: z.literal('provisioned-root'),
-    pairingCode: z.string().min(1),
-    projectRoot: z.string().min(1),
-    userData: z.record(z.string(), JsonValueSchema).optional()
-  })
-  .strict()
+export const EphemeralVmRecipeProvisionedRootLegacyResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      schemaVersion: z.literal(2),
+      checkoutMode: z.literal('provisioned-root'),
+      pairingCode: z.string().min(1),
+      projectRoot: z.string().min(1),
+      userData: z.record(z.string(), JsonValueSchema).optional()
+    })
+    .strict()
+)
 
-export const EphemeralVmRecipeProvisionedRootConnectionResultSchema = z
-  .object({
-    schemaVersion: z.literal(2),
-    checkoutMode: z.literal('provisioned-root'),
-    connection: EphemeralVmRecipeConnectionSchema,
-    userData: z.record(z.string(), JsonValueSchema).optional()
-  })
-  .strict()
+export const EphemeralVmRecipeProvisionedRootConnectionResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      schemaVersion: z.literal(2),
+      checkoutMode: z.literal('provisioned-root'),
+      connection: EphemeralVmRecipeConnectionSchema,
+      userData: z.record(z.string(), JsonValueSchema).optional()
+    })
+    .strict()
+)
 
-export const EphemeralVmRecipeResultSchema = z.union([
-  EphemeralVmRecipeLegacyResultSchema,
-  EphemeralVmRecipeConnectionResultSchema,
-  EphemeralVmRecipeProvisionedRootLegacyResultSchema,
-  EphemeralVmRecipeProvisionedRootConnectionResultSchema
-])
+export const EphemeralVmRecipeResultSchema = lazyZodSchema(() =>
+  z.union([
+    EphemeralVmRecipeLegacyResultSchema,
+    EphemeralVmRecipeConnectionResultSchema,
+    EphemeralVmRecipeProvisionedRootLegacyResultSchema,
+    EphemeralVmRecipeProvisionedRootConnectionResultSchema
+  ])
+)
 
 export type EphemeralVmRecipeResult = z.infer<typeof EphemeralVmRecipeResultSchema>
 

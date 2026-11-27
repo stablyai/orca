@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useSyncExternalStore, type SetStateAction } from 'react'
 import type { TaskPageProviderStateModel } from '../../use-task-page-provider-state'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
-import { sortWorkItemsByNumber } from '../../../../../../shared/work-items/work-item-order'
+import { sortWorkItemsByRecency } from '../../../../../../shared/work-items/work-item-order'
 import { stripRepoQualifiers } from '../../../../../../shared/work-items/task-query'
 import type { GitHubSourceCollections } from '@/store/github/sources/source-collections'
 import { githubCollectionScope } from '@/store/github/sources/source-preference-ownership'
@@ -56,7 +56,7 @@ export function useTaskPageGitHubCollectionState(input: CollectionInput) {
     if (merged.length === 0) {
       return { key: githubResumeContextKey, value: empty }
     }
-    const page0 = sortWorkItemsByNumber(merged).slice(0, githubPageSize)
+    const page0 = sortWorkItemsByRecency(merged, (item) => item).slice(0, githubPageSize)
     return { key: githubResumeContextKey, value: [page0] }
   })
   const pages = useMemo(

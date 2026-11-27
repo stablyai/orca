@@ -26,10 +26,14 @@ import { explainOlderRuntimeRunRequired } from '../recovery/older-runtime-run-bi
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { refuseAgentServerRoute } from '../identity/agent-server-route'
+import { readWorkerStartWakeNote } from './worker-start-wake-note'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async (ctx) => {
     const { flags, client, cwd, json } = ctx
+    // Read first, while the starting turn still runs, so a later turn this start wakes is told where
+    // it came from.
+    const wakeNote = await readWorkerStartWakeNote(client)
     await refuseAgentServerRoute('worker-start', ctx)
     const terminal = getPresentStringFlag(flags, 'terminal')
     const model = getOptionalStringFlag(flags, 'model')
@@ -81,20 +85,27 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
     }
+    // Once a start was sent, the note prints however it ends: started, recovered or thrown.
     const result = await callOrchestrationMutation<WorkerStartAgentReceipt>(
       client,
       flags,
       'orchestration.workerStart',
       params
-    ).catch(async (error: unknown) => {
-      if (!flags.has('retry-request')) {
-        const recovered = await reconcileWorkerStartTimeout(client, error)
-        if (recovered) {
-          return recovered
+    )
+      .catch(async (error: unknown) => {
+        if (!flags.has('retry-request')) {
+          const recovered = await reconcileWorkerStartTimeout(client, error)
+          if (recovered) {
+            return recovered
+          }
         }
-      }
-      throw await explainOlderRuntimeRunRequired(client, error)
-    })
+        throw await explainOlderRuntimeRunRequired(client, error)
+      })
+      .finally(() => {
+        if (wakeNote) {
+          process.stderr.write(`${wakeNote}\n`)
+        }
+      })
     if (result.result.state !== 'ready') {
       process.exitCode = 1
     }

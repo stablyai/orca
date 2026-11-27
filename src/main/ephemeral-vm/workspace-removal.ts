@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { WorktreeRemove } from '../../shared/rpc-contract/workspaces/worktree-params'
 import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import {
@@ -22,23 +23,25 @@ export type RecipeWorkspaceRemoval = Record<string, unknown> & {
 }
 
 // An accepted background removal answers { removed: false, removing: true }.
-const Removed = z
-  .object({ removed: z.boolean().optional(), removing: z.boolean().optional() })
-  .passthrough()
-const Worktrees = z
-  .object({
-    truncated: z.boolean().optional(),
-    worktrees: z.array(
-      z
-        .object({
-          id: z.string(),
-          isMainWorktree: z.boolean().optional(),
-          removing: z.boolean().optional()
-        })
-        .passthrough()
-    )
-  })
-  .passthrough()
+const Removed = lazyZodSchema(() =>
+  z.object({ removed: z.boolean().optional(), removing: z.boolean().optional() }).passthrough()
+)
+const Worktrees = lazyZodSchema(() =>
+  z
+    .object({
+      truncated: z.boolean().optional(),
+      worktrees: z.array(
+        z
+          .object({
+            id: z.string(),
+            isMainWorktree: z.boolean().optional(),
+            removing: z.boolean().optional()
+          })
+          .passthrough()
+      )
+    })
+    .passthrough()
+)
 
 function findRecipeRemovalOwner(
   userDataPath: string,

@@ -7,6 +7,12 @@ import { notify } from '../host-bridge/host-notify'
 import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
+  endPageSwipe,
+  forwardSwipe,
+  startTouchSwipe,
+  type TerminalTouchSwipeState
+} from './surface-sidebar-swipe'
+import {
   applyNormalBufferScrollDelta,
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
@@ -47,7 +53,7 @@ export type TerminalTouchState = {
   /** Where the current one-finger gesture began; null once a second finger joins. */
   swipeStartX: number | null
   swipeStartY: number | null
-}
+} & TerminalTouchSwipeState
 
 export function getDistance(a: Touch, b: Touch) {
   const dx = a.clientX - b.clientX,
@@ -91,7 +97,11 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchstart',
     function (e) {
-      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
+      if (targetSurface !== scope.surface) {
+        return
+      }
+      endPageSwipe(scope, 'cancel')
+      if (dispatcherShouldBlockSurface(scope)) {
         return
       }
       notify(scope, { type: 'terminal-interaction' })
@@ -122,6 +132,7 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
       }
+      startTouchSwipe(scope, touches, e.timeStamp)
       scope.touchGesture.active = touches.length > 0
     },
     { capture: true, passive: true }
@@ -140,11 +151,14 @@ export function attachSurfaceEventHandlers(
       // Claim inactive and interrupted moves too, or xterm's own touch scroller moves the buffer.
       e.preventDefault()
       e.stopPropagation()
+      const touches = touchesInRoot(scope.root, e.touches)
+      if (forwardSwipe(scope, touches, e.timeStamp)) {
+        return
+      }
       if (!scope.interactionActive || !scope.touchGesture.active) {
         return
       }
 
-      const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
         scope.touchGesture.isPinching = true
         const dist = getDistance(touches[0], touches[1])
@@ -210,7 +224,9 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchend',
     function (e) {
-      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
+      // A swipe handed to the page ends there, with no momentum or tap here.
+      const blocked = targetSurface !== scope.surface || endPageSwipe(scope, 'end')
+      if (blocked || dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term || !scope.touchGesture.active) {
@@ -297,6 +313,7 @@ export function attachSurfaceEventHandlers(
       if (targetSurface !== scope.surface) {
         return
       }
+      endPageSwipe(scope, 'cancel')
       stopSurfaceTouchGestures(scope)
       resetSmoothScrollOffset(scope)
     },

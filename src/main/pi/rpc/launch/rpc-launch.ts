@@ -8,7 +8,7 @@ import {
   type NativeChatVisualsLaunch
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
-import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import { toolFreeSession, type ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import { compareAppVersions } from '../../../../shared/app-lifecycle/identity/app-version'
 import type { AgentCliVersionCheck } from '../../../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
@@ -101,7 +101,7 @@ export function piToolLimit(
   readOnly: ReadOnlySessionMode | null,
   launchVersion: AgentCliVersionCheck
 ): PiToolLimit | null {
-  const tools = readOnly === 'reply-only' ? 'none' : readOnly ? 'read' : null
+  const tools = toolFreeSession(readOnly) ? 'none' : readOnly ? 'read' : null
   if (
     tools &&
     launchVersion.status === 'ready' &&

@@ -20,7 +20,10 @@ import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promis
 import { createTerminalDocumentWrites } from '../output-flow/terminal-output-ack'
 import { isTerminalGestureInput } from '../pointer-input/terminal-gesture-input'
 import { DEFAULT_TERMINAL_FONT_STYLE } from '../preferences/terminal-font-style'
-import { useTerminalDocumentSettingsSync } from './use-terminal-document-settings-sync'
+import {
+  terminalChromeColors,
+  useTerminalDocumentSettingsSync
+} from './use-terminal-document-settings-sync'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
 
@@ -108,6 +111,7 @@ export function useTerminalWebViewController(
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
       sendToDocument({ type: 'set-interaction-active', active: interactionActive })
       sendToDocument({ type: 'set-theme', terminalTheme })
+      sendToDocument({ type: 'set-chrome', chrome: terminalChromeColors() })
       flushPendingMessages()
     },
     [

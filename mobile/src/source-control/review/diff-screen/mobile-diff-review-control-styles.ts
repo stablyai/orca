@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
-export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
+export const mobileDiffReviewControlStylesSheet = themedStyleSheet((colors) => ({
   footer: {
     position: 'absolute',
     left: 0,
@@ -45,25 +45,6 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     fontSize: 15,
     fontWeight: '600'
   },
-  secondaryButton: {
-    flex: 1,
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
-  },
-  sheetSecondaryButton: {
-    backgroundColor: colors.sheetGroup
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
   destructiveText: {
     color: colors.statusRed,
     fontSize: typography.bodySize,
@@ -74,13 +55,6 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   },
   buttonDisabled: {
     opacity: feedback.disabledOpacity
-  },
-  composerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md
   },
   drawerTitle: {
     color: colors.textPrimary,
@@ -95,11 +69,6 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   rangeField: {
     minHeight: 96,
     alignItems: 'flex-start'
-  },
-  rangeError: {
-    marginTop: spacing.sm,
-    color: colors.statusRed,
-    fontSize: typography.metaSize
   },
   drawerButtonRow: {
     flexDirection: 'row',

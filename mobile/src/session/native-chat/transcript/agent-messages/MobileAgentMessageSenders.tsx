@@ -7,12 +7,14 @@ import {
 } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
 import { agentMessageSenderCanOpen } from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
-import { styles } from './mobile-agent-message-card-styles'
+import { pressedStyle } from '../../../../theme/mobile-theme'
+import { stylesSheet } from './mobile-agent-message-card-styles'
 import {
   MobileAgentMessageOpenContext,
   useMobileAgentMessageName
 } from './mobile-agent-message-context'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 // Queued names sit in a caption line, too short for a 44pt target.
 const QUEUED_HIT_SLOP = { top: 8, bottom: 8 }
@@ -27,6 +29,7 @@ export function MobileAgentMessageSenders({
   /** Names only, without the queued line's "From": the row draws its own lead. */
   bare?: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const open = useContext(MobileAgentMessageOpenContext)
   const t = useMobileTranslation()
   const { shown, more } = agentMessageSendersShown(from)
@@ -79,7 +82,9 @@ function SenderName({
   from: AgentMessageSource
   open: React.ContextType<typeof MobileAgentMessageOpenContext>
 }) {
-  const name = useMobileAgentMessageName(sender, unnamed)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const name = useMobileAgentMessageName(sender) ?? unnamed
   const canOpen = open !== undefined && agentMessageSenderCanOpen(sender)
   return (
     <Pressable

@@ -19,7 +19,7 @@ Orca only hibernates an agent terminal when **all** of the following are true:
 - The agent is in a **done** state — it has finished its last turn and isn't waiting on input.
 - Its terminal tab isn't visible on screen (the active tab, a tab shown in another split group, or a terminal shown on the Activity page). Other tabs in the active worktree can still hibernate.
 - It hasn't received keystrokes since the agent finished.
-- The agent is one with a [resumable session](/docs/agents/session-history): Claude, Codex, Gemini, Antigravity, OpenCode, Pi, MiMo Code, Droid, Grok, Devin, or OMP.
+- The agent is one with a [resumable session](/docs/agents/session-history): Claude, Codex, Antigravity, OpenCode, Pi, MiMo Code, Droid, Grok, Devin, or OMP.
 - It's been idle for at least the configured idle window (default 30 minutes).
 - No mobile session is currently driving the terminal.
 - No [orchestration](/docs/cli/orchestration) Dispatch is still unsettled (`pending`, `dispatched`, or unknown). Sleep is allowed again after runtime-confirmed `completed`, `failed`, or `circuit_broken`.

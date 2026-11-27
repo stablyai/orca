@@ -69,6 +69,8 @@ export type TerminalDocumentState = {
   sgrMousePixelsMode: boolean
   keyboardModes: TerminalKittyKeyboardModeTracker
   scrollIndicatorHideTimer: ReturnType<typeof setTimeout> | null
+  // Last scrolled-up state sent to native (null: none yet, so a reloaded document always reports one).
+  reportedScrolledUp: boolean | null
   handledMessageIds: number[]
   currentTextScale: number
   // The family xterm draws with; a bundled font joins it only once loaded, so cells are never measured on a fallback.
@@ -201,6 +203,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     sgrMousePixelsMode: false,
     keyboardModes: new TerminalKittyKeyboardModeTracker(),
     scrollIndicatorHideTimer: null,
+    reportedScrolledUp: null,
     handledMessageIds: [],
     currentTextScale: 1,
     terminalFontFamily: '',
@@ -282,6 +285,11 @@ function createTerminalDocumentState(): TerminalDocumentState {
       pinchScale: 0,
       pinchSurfX: 0,
       pinchSurfY: 0,
+      startX: 0,
+      startY: 0,
+      startAt: 0,
+      swipe: 'terminal',
+      keepTouchId: null,
       swipeStartX: null,
       swipeStartY: null
     }
@@ -302,6 +310,7 @@ function createTerminalDocumentHostSeams(): TerminalDocumentHostSeams {
     start: windowStart,
     viewportRect: windowViewportRect,
     observeViewport: observeWindowViewport,
+    handsSwipesToPage: false,
     root: null
   }
 }

@@ -187,6 +187,8 @@ export type TerminalActions = {
       leafId: string
       ptyId: string
       expectedRuntimePtyId?: string
+      /** Re-checked after main's sleep admission: the user may have come back to the pane meanwhile. */
+      stillEligible?: () => Promise<boolean>
     }
   ) => Promise<void>
   suppressPtyExit: (ptyId: string) => void

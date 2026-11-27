@@ -33,6 +33,8 @@ import type {
 export type OrcaAccountLifecycleHooks = {
   /** After a sign-in, org change or capability refresh succeeds. */
   onAuthMutation?: () => void
+  /** After `onAuthMutation`, for a completed sign-in only (never a refresh), even as the same account. */
+  onSignedIn?: () => void
   /** Before sign-out touches the network, so nothing keeps running as the old account. */
   onBeforeSignOut?: () => void
   onAfterSignOut?: () => void
@@ -109,6 +111,7 @@ export class OrcaAccountService {
     )
     if (result.status === 'connected') {
       this.hooks.onAuthMutation?.()
+      this.hooks.onSignedIn?.()
     }
     return result
   }
@@ -128,6 +131,7 @@ export class OrcaAccountService {
     })
     if (result.status === 'connected') {
       this.hooks.onAuthMutation?.()
+      this.hooks.onSignedIn?.()
     }
     return result
   }

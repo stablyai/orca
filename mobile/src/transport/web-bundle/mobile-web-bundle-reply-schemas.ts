@@ -48,8 +48,7 @@ const assetSchema = z.looseObject({
     .optional()
     .catch(undefined),
   // A kind this build cannot read is a plain asset, downloaded like any other.
-  kind: z.string().optional().catch(undefined),
-  deferred: z.boolean().optional().catch(undefined)
+  kind: z.string().optional().catch(undefined)
 })
 
 // Read unknown schema versions as numbers so compatibility can name the required update.
@@ -137,14 +136,9 @@ export type MobileWebBundleManifestRead = MobileWebBundleManifestReply['manifest
 export type MobileWebBundleAssetRead = MobileWebBundleManifestRead['assets'][number]
 
 // Language-catalog chunks stay on the desktop: this shell grants the page hostCatalogs, and the
-// page reads its one catalog over RPC. Deferred code comes down when the page first asks for it.
-// Everything else is the generation, on disk.
-export function shellDownloadedAssets<
-  Asset extends { readonly kind?: string; readonly deferred?: boolean }
->(manifest: { readonly assets: readonly Asset[] }): Asset[] {
-  return manifest.assets.filter((asset) => asset.kind !== 'catalog' && !isDeferredAsset(asset))
-}
-
-export function isDeferredAsset(asset: { readonly deferred?: boolean }): boolean {
-  return asset.deferred === true
+// page reads its one catalog over RPC. Everything else is the generation, on disk.
+export function shellDownloadedAssets<Asset extends { readonly kind?: string }>(manifest: {
+  readonly assets: readonly Asset[]
+}): Asset[] {
+  return manifest.assets.filter((asset) => asset.kind !== 'catalog')
 }

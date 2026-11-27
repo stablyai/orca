@@ -1,5 +1,6 @@
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
+  WslHostAddStage,
   WslHostDeferredUpdate,
   WslHostPastUncountedTerminals
 } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
@@ -51,4 +52,6 @@ export type WslOrcadDeployOptions = {
   /** A no-boot connect's running check (E9), re-read before any further wake. */
   requireRunning?: () => Promise<boolean>
   onInstallLockWait?: (wait: InstallLockWait | null) => void
+  /** Each step of the launch as it starts, for an Add's progress. */
+  onStage?: (stage: WslHostAddStage) => void
 }

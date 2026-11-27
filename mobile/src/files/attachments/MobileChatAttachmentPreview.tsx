@@ -1,7 +1,6 @@
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { createMobileChatAttachmentReader } from './mobile-chat-attachment-read'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { AttachmentTextScrollView } from './AttachmentTextScrollView'
@@ -12,9 +11,11 @@ import { createAttachmentTextPreviewHook } from '../../../../src/shared/attachme
 import { chatTextAttachmentName } from '../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../src/shared/mobile-bridge/mobile-bridge-frame-bytes'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { chatAttachmentPreviewStyles as styles } from '../preview/mobile-file-preview-styles'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { chatAttachmentPreviewStylesSheet } from '../preview/mobile-file-preview-styles'
 import type { MobileFilePreviewRouteParams } from '../preview/mobile-file-preview-route'
+import { useThemedStyles } from '../../theme/themed-styles'
+import { recomputeOn } from '../../hooks/recompute-on'
 
 const useAttachmentTextPreview = createAttachmentTextPreviewHook({
   useState,
@@ -23,8 +24,9 @@ const useAttachmentTextPreview = createAttachmentTextPreviewHook({
 })
 
 export function MobileChatAttachmentPreview({ params }: { params: MobileFilePreviewRouteParams }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(chatAttachmentPreviewStylesSheet)
   const t = useMobileTranslation()
+  const locale = intlLocaleFor(useMobileUiLocale())
   const { client, state } = useWorkspaceClient(params.hostId)
   const router = useWorkspaceRouteHandoff()
   const clipboard = useClipboardWriter()
@@ -32,7 +34,8 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
   const connectedAt = client?.getLastConnectedAt()
   const generation = client?.getGeneration?.()
   const read = useMemo(
-    () => createMobileChatAttachmentReader(client),
+    () =>
+      recomputeOn([connectedAt, generation, state], () => createMobileChatAttachmentReader(client)),
     [client, connectedAt, generation, state]
   )
   const { source, revision, busy, error, setError, setBusy, demand, retry } =
@@ -96,7 +99,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
               {source.size === null
                 ? t('chat.textAttachmentPreview.textAttachment', 'Text attachment')
                 : t('chat.textAttachmentPreview.byteSize', '{{size}} bytes', {
-                    size: source.size.toLocaleString(getUiIntlLocale())
+                    size: source.size.toLocaleString(locale)
                   })}
             </Text>
           </View>

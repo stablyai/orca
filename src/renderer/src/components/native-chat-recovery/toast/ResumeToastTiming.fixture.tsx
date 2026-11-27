@@ -4,7 +4,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
 import { resumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToast } from './NativeChatResumeToast'
-import { useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
+import { RESUMED_TOAST_MS, useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
 
 const chats: ResumeCandidate[] = Array.from({ length: 20 }, (_, index) => ({
   sessionId: `chat-${index}`,
@@ -74,9 +74,7 @@ function Timing(): React.JSX.Element {
 const render = (): React.JSX.Element => <Timing />
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 const reportShown = (frame: HTMLElement): boolean =>
-  frame
-    .querySelector('[role=status]')
-    ?.textContent?.includes('Resumed 20 agents after the restart.') === true
+  frame.querySelector('[role=status]')?.textContent?.includes('Resumed 20 agents') === true
 
 function expectReport(frame: HTMLElement, shown: boolean, why: string): void {
   if (reportShown(frame) !== shown) {
@@ -116,8 +114,8 @@ export const dismissed = defineFixture({
   interact: async (frame) => {
     await wait(300)
     expectReport(frame, true, 'Expected the successful restart report to appear')
-    await wait(5700)
-    expectReport(frame, false, 'The report stayed open five seconds after it was shown')
+    await wait(RESUMED_TOAST_MS + 700)
+    expectReport(frame, false, 'The report stayed open its full time after it was shown')
   }
 })
 export const visibleButUnfocused = defineFixture({
@@ -128,7 +126,7 @@ export const visibleButUnfocused = defineFixture({
     // A visible window behind another app still shows the report, so it still leaves on time.
     setWindowFocus(false, { deliverEvent: true })
     try {
-      await wait(5700)
+      await wait(RESUMED_TOAST_MS + 700)
       expectReport(frame, false, 'The report stayed open on a visible but unfocused window')
     } finally {
       Reflect.deleteProperty(document, 'hasFocus')
@@ -143,7 +141,7 @@ export const hovered = defineFixture({
     frame
       .querySelector('[data-sonner-toast]')
       ?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: false }))
-    await wait(6000)
+    await wait(RESUMED_TOAST_MS + 1000)
     expectReport(frame, true, 'The report left while the pointer was on it')
   }
 })
@@ -154,7 +152,7 @@ export const keyboardFocused = defineFixture({
     await wait(300)
     // Alt+T then Tab lands on Sonner's own toast element, outside the report's wrapper.
     frame.querySelector<HTMLElement>('[data-sonner-toast]')?.focus()
-    await wait(6000)
+    await wait(RESUMED_TOAST_MS + 1000)
     expectReport(frame, true, 'The report left while keyboard focus was on the toast')
   }
 })
@@ -165,13 +163,13 @@ export const restoredWithStaleVisibility = defineFixture({
     await wait(300)
     expectReport(frame, true, 'Expected the successful restart report to appear')
     await whileDocumentReportsHidden(async () => {
-      await wait(5500)
+      await wait(RESUMED_TOAST_MS + 500)
       expectReport(frame, true, 'The report expired while the window was hidden')
       setWindowFocus(true, { deliverEvent: true })
-      await wait(4000)
-      expectReport(frame, true, 'The report did not get a fresh five seconds after focus')
+      await wait(RESUMED_TOAST_MS - 1000)
+      expectReport(frame, true, 'The report did not get a fresh countdown after focus')
       await wait(1600)
-      expectReport(frame, false, 'The report stayed open five seconds after focus')
+      expectReport(frame, false, 'The report stayed open its full time after focus')
     })
   }
 })
@@ -185,13 +183,13 @@ export const blurredAgainWhileHidden = defineFixture({
       await wait(3000)
       // Leaving the window again means the stale hidden flag no longer proves anyone is looking.
       setWindowFocus(false, { deliverEvent: true })
-      await wait(4000)
+      await wait(RESUMED_TOAST_MS - 1000)
       expectReport(frame, true, 'The report expired after the window lost focus')
       setWindowFocus(true, { deliverEvent: true })
-      await wait(4000)
-      expectReport(frame, true, 'The report did not get a fresh five seconds after focus')
+      await wait(RESUMED_TOAST_MS - 1000)
+      expectReport(frame, true, 'The report did not get a fresh countdown after focus')
       await wait(1600)
-      expectReport(frame, false, 'The report stayed open five seconds after focus')
+      expectReport(frame, false, 'The report stayed open its full time after focus')
     })
   }
 })
@@ -202,17 +200,17 @@ export const focusLostAtExpiryWhileHidden = defineFixture({
     await wait(300)
     await whileDocumentReportsHidden(async () => {
       setWindowFocus(true, { deliverEvent: true })
-      await wait(4800)
+      await wait(RESUMED_TOAST_MS - 200)
       // Focus is gone at the deadline, but its blur has not reached the report yet.
       setWindowFocus(false, { deliverEvent: false })
       await wait(1000)
       expectReport(frame, true, 'The report expired after focus left, before its blur arrived')
       setWindowFocus(false, { deliverEvent: true })
       setWindowFocus(true, { deliverEvent: true })
-      await wait(4000)
-      expectReport(frame, true, 'The report did not get a fresh five seconds after focus')
+      await wait(RESUMED_TOAST_MS - 1000)
+      expectReport(frame, true, 'The report did not get a fresh countdown after focus')
       await wait(1600)
-      expectReport(frame, false, 'The report stayed open five seconds after focus')
+      expectReport(frame, false, 'The report stayed open its full time after focus')
     })
   }
 })
@@ -223,7 +221,7 @@ export const visibleAfterFocusLostAtExpiry = defineFixture({
     await wait(300)
     await whileDocumentReportsHidden(async () => {
       setWindowFocus(true, { deliverEvent: true })
-      await wait(4800)
+      await wait(RESUMED_TOAST_MS - 200)
       // Focus leaves without a blur, so the deadline is skipped with focus still cached.
       setWindowFocus(false, { deliverEvent: false })
       await wait(1000)
@@ -232,8 +230,8 @@ export const visibleAfterFocusLostAtExpiry = defineFixture({
     // The document turns visible again while the window stays unfocused.
     setWindowFocus(false, { deliverEvent: false })
     try {
-      await wait(4000)
-      expectReport(frame, true, 'The report did not get a fresh five seconds once visible')
+      await wait(RESUMED_TOAST_MS - 1000)
+      expectReport(frame, true, 'The report did not get a fresh countdown once visible')
       await wait(1600)
       expectReport(frame, false, 'The report stuck after the document became visible again')
     } finally {
@@ -253,17 +251,17 @@ export const visibleBeforeDeadlineAfterFocusLost = defineFixture({
       setWindowFocus(false, { deliverEvent: false })
       await wait(1300)
     })
-    // The document turns visible at 3.3 s; the report should count five fresh seconds from here.
+    // The document turns visible at 3.3 s; the report should start a fresh countdown here.
     setWindowFocus(false, { deliverEvent: false })
     try {
-      await wait(4000)
+      await wait(RESUMED_TOAST_MS - 1000)
       expectReport(
         frame,
         true,
         'The report kept its old deadline after the document became visible'
       )
       await wait(1600)
-      expectReport(frame, false, 'The report stayed open five seconds after becoming visible')
+      expectReport(frame, false, 'The report stayed open its full time after becoming visible')
     } finally {
       Reflect.deleteProperty(document, 'hasFocus')
     }

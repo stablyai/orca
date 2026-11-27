@@ -129,7 +129,11 @@ export function createRuntimeAutomationService(input: {
           }
           if (run.sessionKind === 'chat') {
             try {
-              return await observeAutomationChatRun(runtime, run, options.signal)
+              // A bot automation sends its own prompt; any other chat run is launched with a receipt.
+              const sentByRun = Boolean(
+                store.listAutomations().find((entry) => entry.id === run?.automationId)?.bot
+              )
+              return await observeAutomationChatRun(runtime, run, options.signal, sentByRun)
             } catch (error) {
               if (options.signal.aborted) {
                 throw error

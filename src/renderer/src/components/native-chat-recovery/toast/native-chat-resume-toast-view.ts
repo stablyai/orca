@@ -20,12 +20,26 @@ export type ResumeToastView = Readonly<{
   /** offer: nothing sent yet; resuming: an action is in flight; finished: its reply settled. */
   phase: 'offer' | 'resuming' | 'finished'
   rows: readonly ResumeToastRow[]
-  counts: Readonly<{ resumed: number; resuming: number; needsYou: number; total: number }>
+  /** failed: needs the person because resuming it went wrong, not because it was left for them. */
+  counts: Readonly<{
+    resumed: number
+    resuming: number
+    needsYou: number
+    failed: number
+    total: number
+  }>
   /** What the toast's one Resume button sends: every chat a retry could still help. */
   resumable: readonly string[]
+  /** What the toast's Retry sends: failures a retry could fix, never a chat left for the person. */
+  retryable: readonly string[]
   interruptedByUpdate: boolean
   startedBy: ResumeRunStarter | null
 }>
+
+/** A lone agent's line says it all; Details stays for several agents, the offer, or a failure. */
+export function resumeToastShowsDetails(view: ResumeToastView): boolean {
+  return view.phase === 'offer' || view.rows.length !== 1 || view.rows[0]?.state === 'needs-you'
+}
 
 const ORDER: Record<ResumeToastRowState, number> = {
   'needs-you': 0,
@@ -56,8 +70,13 @@ export function resumeToastView(
   const failureFor = (sessionId: string) => failureBySession.get(sessionId)
   const view = run ? resumeRunView(run, listed, failureFor, 'all') : null
   const phase = run === null ? 'offer' : run.inFlight ? 'resuming' : 'finished'
+  // One pass over the run, so a large settled run stays linear.
+  const refused = refusedWithoutRecord(run)
   const rows = (view?.rows ?? listed).map((candidate): ResumeToastRow => {
     const failure = failureFor(candidate.sessionId)
+    if (!failure && refused.has(candidate.sessionId)) {
+      return { candidate, state: 'needs-you', openOnly: true }
+    }
     const status = view?.statusBySession.get(candidate.sessionId)
     const state: ResumeToastRowState =
       status?.kind === 'resumed'
@@ -69,8 +88,6 @@ export function resumeToastView(
             : 'stopped'
     return failure ? { candidate, state, failure } : { candidate, state }
   })
-  // One pass over the run, so a large settled run stays linear.
-  const refused = refusedWithoutRecord(run)
   if (refused.size > 0) {
     const shown = new Set(rows.map((row) => row.candidate.sessionId))
     for (const { candidate } of run?.entries ?? []) {
@@ -90,12 +107,23 @@ export function resumeToastView(
       resumed: count('resumed'),
       resuming: count('resuming'),
       needsYou,
+      failed: rows.filter((row) => row.state === 'needs-you' && (row.failure || row.openOnly))
+        .length,
       total: rows.length
     },
     resumable: rows
       .filter(
         (row) =>
           (row.state === 'stopped' || row.state === 'needs-you') &&
+          !row.openOnly &&
+          resumableByDefault(row.failure)
+      )
+      .map((row) => row.candidate.sessionId),
+    retryable: rows
+      .filter(
+        (row) =>
+          row.state === 'needs-you' &&
+          row.failure !== undefined &&
           !row.openOnly &&
           resumableByDefault(row.failure)
       )

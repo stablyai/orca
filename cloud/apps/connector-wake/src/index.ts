@@ -1,6 +1,6 @@
 // Connector wake Worker: a stateless router in front of one ConnectorHost object per host.
 //   GET  /v1/connector/wake  desktop upgrade (wake token, checked here only)
-//   POST /__admin/wake       connector publisher (admin.ts)
+//   POST /__admin/wake       connector publisher (admin.ts); optional kind picks the frame
 //   GET  /__health/object    alerts deep probe (health.ts)
 import {
   CONNECTOR_WAKE_ADMIN_PATH,
@@ -8,7 +8,8 @@ import {
   CONNECTOR_WAKE_GAP_HEADER,
   CONNECTOR_WAKE_PATH,
   ConnectorWakeAdminRequestSchema,
-  type ConnectorWakeAdminResponse
+  type ConnectorWakeAdminResponse,
+  type ConnectorWakeKind
 } from '../../../packages/connector-contract/src/wake-messages'
 import { verifyAdminRequest } from './admin'
 import { ConnectorHost, HOST_ID_HEADER, PLACE_HEADER, type WakeResult } from './connector-host'
@@ -64,7 +65,8 @@ async function handleUpgrade(env: Env, request: Request): Promise<Response> {
       metric(env, 'upgrade', 1, 'keys_unavailable', [], '', place)
       return reject(503, 5)
     }
-    metric(env, 'refuse', 1, '401', [], 'token', place)
+    // detail: which check failed (jwt.ts WAKE_REFUSE_CODES), never token contents or ids.
+    metric(env, 'refuse', 1, '401', [], 'token', place, verified ? verified.code : 'missing')
     return reject(401)
   }
   const gapHeader = request.headers.get(CONNECTOR_WAKE_GAP_HEADER) ?? ''
@@ -76,17 +78,36 @@ async function handleUpgrade(env: Env, request: Request): Promise<Response> {
   }
   headers.set(HOST_ID_HEADER, verified.hostId)
   headers.set(PLACE_HEADER, place)
-  return host(env, verified.hostId).fetch(new Request(request.url, { method: 'GET', headers }))
+  try {
+    return await host(env, verified.hostId).fetch(new Request(request.url, { method: 'GET', headers }))
+  } catch (error) {
+    // The object could not be reached (a colo restarting, its link to the object broken, the
+    // object overloaded or throwing). A 503 is a handled answer, not scriptThrewException: the
+    // desktop backs off and redials either way (connector-wake-socket.ts treats any non-401 the
+    // same). Logged without ids so Workers Logs keeps the reason.
+    const e = error as { message?: unknown; retryable?: unknown; overloaded?: unknown }
+    console.error('connector-wake: object forward failed', { message: String(e?.message ?? error), retryable: e?.retryable === true, overloaded: e?.overloaded === true, place })
+    metric(env, 'upgrade', 1, 'object_unavailable', [], '', place)
+    return reject(503, forwardRetryAfter())
+  }
 }
 
-async function wakeAll(env: Env, hosts: string[]): Promise<ConnectorWakeAdminResponse> {
+// Seconds. Spread, because the desktop waits exactly Retry-After (no jitter of its own), and a
+// colo's whole set of desktops fails together.
+const FORWARD_RETRY_AFTER_MIN_S = 5
+const FORWARD_RETRY_AFTER_MAX_S = 30
+function forwardRetryAfter(): number {
+  return FORWARD_RETRY_AFTER_MIN_S + Math.floor(Math.random() * (FORWARD_RETRY_AFTER_MAX_S - FORWARD_RETRY_AFTER_MIN_S + 1))
+}
+
+async function wakeAll(env: Env, hosts: string[], kind: ConnectorWakeKind | undefined): Promise<ConnectorWakeAdminResponse> {
   const counts: ConnectorWakeAdminResponse = { delivered: 0, noSocket: 0, error: 0 }
   const unique = [...new Set(hosts)]
   let next = 0
   const worker = async () => {
     while (next < unique.length) {
       const hostId = unique[next++]
-      const result: WakeResult = await host(env, hostId).wake().catch(() => 'error' as const)
+      const result: WakeResult = await host(env, hostId).wake(kind).catch(() => 'error' as const)
       if (result === 'delivered') { counts.delivered++ }
       else if (result === 'no_socket') { counts.noSocket++ }
       else { counts.error++ }
@@ -109,7 +130,7 @@ async function handleAdminWake(env: Env, request: Request): Promise<Response> {
     metric(env, 'admin', 1, '400', [], '', place)
     return reject(400)
   }
-  const counts = await wakeAll(env, body.data.hosts)
+  const counts = await wakeAll(env, body.data.hosts, body.data.kind)
   metric(env, 'admin', body.data.hosts.length, '200', [], '', place)
   if (counts.delivered) { metric(env, 'wake', counts.delivered, 'delivered', [], '', place) }
   if (counts.noSocket) { metric(env, 'wake', counts.noSocket, 'no_socket', [], '', place) }
@@ -117,25 +138,42 @@ async function handleAdminWake(env: Env, request: Request): Promise<Response> {
   return Response.json(counts)
 }
 
+const ROUTE_LABELS = new Set(['/health', '/__health/object', CONNECTOR_WAKE_ADMIN_PATH, CONNECTOR_WAKE_PATH])
+function routeLabel(request: Request): string {
+  const path = new URL(request.url).pathname
+  return ROUTE_LABELS.has(path) ? path : 'other'
+}
+
+async function route(request: Request, env: Env): Promise<Response> {
+  // Fails every request (500) on a misconfigured deploy.
+  wakeConfig(env)
+  const url = new URL(request.url)
+  if (url.pathname === '/health') { return Response.json({ ok: true }) }
+  if (url.search) { return reject(400) }
+  if (url.pathname === '/__health/object') { return objectHealth(env, request) }
+  if (url.pathname === CONNECTOR_WAKE_ADMIN_PATH) { return handleAdminWake(env, request) }
+  if (url.pathname === CONNECTOR_WAKE_PATH) { return handleUpgrade(env, request) }
+  const spike = env.SPIKE_DEBUG === '1' ? /^\/__spike\/object\/([^/]+)$/.exec(url.pathname) : null
+  if (spike) {
+    let hostId = ''
+    try {
+      hostId = decodeURIComponent(spike[1])
+    } catch {}
+    if (!isHostId(hostId)) { return reject(400) }
+    return Response.json({ worker: requestPlace(request), ...(await host(env, hostId).spikePlace()) })
+  }
+  return reject(404)
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // Fails every request (500) on a misconfigured deploy.
-    wakeConfig(env)
-    const url = new URL(request.url)
-    if (url.pathname === '/health') { return Response.json({ ok: true }) }
-    if (url.search) { return reject(400) }
-    if (url.pathname === '/__health/object') { return objectHealth(env, request) }
-    if (url.pathname === CONNECTOR_WAKE_ADMIN_PATH) { return handleAdminWake(env, request) }
-    if (url.pathname === CONNECTOR_WAKE_PATH) { return handleUpgrade(env, request) }
-    const spike = env.SPIKE_DEBUG === '1' ? /^\/__spike\/object\/([^/]+)$/.exec(url.pathname) : null
-    if (spike) {
-      let hostId = ''
-      try {
-        hostId = decodeURIComponent(spike[1])
-      } catch {}
-      if (!isHostId(hostId)) { return reject(400) }
-      return Response.json({ worker: requestPlace(request), ...(await host(env, hostId).spikePlace()) })
+    try {
+      return await route(request, env)
+    } catch (error) {
+      // Still thrown (500, scriptThrewException, as before); logged first so Workers Logs keeps
+      // the reason. A fixed route label, never the path (it can carry ids) or the query.
+      console.error('connector-wake: request threw', { route: routeLabel(request), place: requestPlace(request), message: String((error as { message?: unknown })?.message ?? error) })
+      throw error
     }
-    return reject(404)
   }
 } satisfies ExportedHandler<Env>

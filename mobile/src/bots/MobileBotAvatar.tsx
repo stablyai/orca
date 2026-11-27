@@ -1,7 +1,5 @@
 import { Image, StyleSheet, Text, View } from 'react-native'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { useBotAvatarUpload } from './bot-avatar-uploads'
 import { mobileBotMascotAsset, mobileBotMascotRimAsset } from './mobile-bot-mascot-assets'
@@ -28,7 +26,7 @@ export function MobileBotAvatar({
   size?: number
   circular?: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const upload = useBotAvatarUpload(
     avatar.kind === 'upload' ? avatar.botId : null,
     avatar.kind === 'upload' ? avatar.avatar : null
@@ -86,15 +84,16 @@ function OutfitLayer({
   id: BotMascotId
   size: number
 }) {
-  const { sheet, column, row } = mobileBotOutfitAsset(outfit, id)
+  const styles = useThemedStyles(stylesSheet)
+  const { sheet, left, top } = mobileBotOutfitAsset(outfit, id)
   return (
     <View style={[StyleSheet.absoluteFill, styles.window]}>
       <Image
         source={sheet}
         style={{
           position: 'absolute',
-          left: -column * size,
-          top: -row * size,
+          left: left * size,
+          top: top * size,
           width: size * OUTFIT_SHEET_COLUMNS,
           height: size * OUTFIT_SHEET_ROWS
         }}
@@ -104,7 +103,7 @@ function OutfitLayer({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   tile: {
     alignItems: 'center',
     justifyContent: 'center',

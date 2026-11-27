@@ -1,3 +1,4 @@
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { NativeChatWaitingAgentMailRows } from '../../queue/NativeChatWaitingAgentMailRows'
 import { Fragment, useMemo } from 'react'
 import {
@@ -15,7 +16,9 @@ import {
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 import type { NativeChatNewRowsMarkerState } from '../new-rows/native-chat-new-rows-marker'
 import {
+  NativeChatHeldTextSessionContext,
   NativeChatReplyRevealsContext,
+  NativeChatSaveFallbackContext,
   useNativeChatReplyReveals
 } from '../../markdown/native-chat-reply-reveals'
 import { NativeChatImageGallery } from '../../media/images/gallery/NativeChatImageGallery'
@@ -37,75 +40,81 @@ export function NativeChatTranscriptItems({
   window: NativeChatTranscriptWindow
   newRowsMarker?: NativeChatNewRowsMarkerState
 }): React.JSX.Element {
-  const rowKeys = useMemo(() => slots.map(nativeChatSlotKey), [slots])
+  // A streamed text revision draws the same rows, so its keys are its base's.
+  const keySlots = stageBesideStreamedText(slots)
+  const rowKeys = useMemo(() => keySlots.map(nativeChatSlotKey), [keySlots])
   const replyReveals = useNativeChatReplyReveals(rowKeys, loadedMessageIds)
   const placed = useNativeChatTimedRows(slots, timedRows)
   const rowContext = useMemo(
     () => (placed ? { ...context, timedRows: placed.afterMessage } : context),
     [context, placed]
   )
+  const { sizerRef, virtualItems, scrollMargin, measureRow, totalSize } = window
   return (
     <NativeChatReplyRevealsContext.Provider value={replyReveals}>
-      <NativeChatImageGallery loadedMessageIds={loadedMessageIds}>
-        <div
-          ref={window.sizerRef}
-          data-native-chat-window
-          data-native-chat-gallery-root=""
-          className="relative w-full"
-        >
-          {window.virtualItems.map((item, position) => {
-            const slot = slots[item.index]
-            if (!slot) {
-              return null
-            }
-            const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
-            const leavesWhole = nativeChatSlotLeavesWhole(slot)
-            return (
-              <Fragment key={item.key}>
-                <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
-                {/* A leaving row's negative top margin passes through to close the gap before it. */}
-                <div
-                  data-index={item.index}
-                  ref={window.measureRow}
-                  className={leavesWhole ? 'w-full' : 'flow-root w-full'}
-                >
-                  <NativeChatTranscriptRow
-                    slot={slot}
-                    context={rowContext}
-                    newRowsMarker={
-                      rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
-                    }
-                    newRowsMarkerBelow={
-                      newRowsMarker?.place === 'above-row' &&
-                      rowKeys[item.index + 1] === newRowsMarker.key
-                    }
-                    joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
-                      slot,
-                      previous: slots[item.index - 1],
-                      timedRowsAfter: placed?.afterMessage,
-                      markerKey: newRowsMarker?.key,
-                      leavesWhole
-                    })}
-                  />
-                </div>
-              </Fragment>
-            )
-          })}
-          <div
-            aria-hidden
-            style={{
-              height: Math.max(
-                0,
-                window.totalSize -
-                  ((window.virtualItems.at(-1)?.end ?? window.scrollMargin) - window.scrollMargin)
-              )
-            }}
-          />
-        </div>
-        {placed?.unplaced.map(({ key, node }) => (
-          <div key={key}>{node}</div>
-        ))}
-      </NativeChatImageGallery>
+      <NativeChatHeldTextSessionContext.Provider value={context.heldTextSession}>
+        <NativeChatSaveFallbackContext.Provider value={context.savesAsRepliesGrow ?? false}>
+          <NativeChatImageGallery loadedMessageIds={loadedMessageIds}>
+            <div
+              ref={sizerRef}
+              data-native-chat-window
+              data-native-chat-gallery-root=""
+              className="relative w-full"
+            >
+              {virtualItems.map((item, position) => {
+                const slot = slots[item.index]
+                if (!slot) {
+                  return null
+                }
+                const previousEnd = virtualItems[position - 1]?.end ?? scrollMargin
+                const leavesWhole = nativeChatSlotLeavesWhole(slot)
+                return (
+                  <Fragment key={item.key}>
+                    <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
+                    {/* A leaving row's negative top margin passes through to close the gap before it. */}
+                    <div
+                      data-index={item.index}
+                      ref={measureRow}
+                      className={leavesWhole ? 'w-full' : 'flow-root w-full'}
+                    >
+                      <NativeChatTranscriptRow
+                        slot={slot}
+                        context={rowContext}
+                        newRowsMarker={
+                          rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
+                        }
+                        newRowsMarkerBelow={
+                          newRowsMarker?.place === 'above-row' &&
+                          rowKeys[item.index + 1] === newRowsMarker.key
+                        }
+                        joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
+                          slot,
+                          previous: slots[item.index - 1],
+                          timedRowsAfter: placed?.afterMessage,
+                          markerKey: newRowsMarker?.key,
+                          leavesWhole
+                        })}
+                      />
+                    </div>
+                  </Fragment>
+                )
+              })}
+              <div
+                aria-hidden
+                style={{
+                  height: Math.max(
+                    0,
+                    totalSize - ((virtualItems.at(-1)?.end ?? scrollMargin) - scrollMargin)
+                  )
+                }}
+              />
+            </div>
+            {placed?.unplaced.map(({ key, node }) => (
+              <div key={key}>{node}</div>
+            ))}
+          </NativeChatImageGallery>
+        </NativeChatSaveFallbackContext.Provider>
+      </NativeChatHeldTextSessionContext.Provider>
     </NativeChatReplyRevealsContext.Provider>
   )
 }
