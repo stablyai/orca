@@ -40,6 +40,26 @@ function replaceIssue(issues: ItsaplanIssue[], updated: ItsaplanIssue): Itsaplan
 
 export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> = (set, get) => {
   const client = () => createRuntimeItsaplanClient(defaultScopeSource(get().settings))
+  // Bumped on disconnect/reconnect so reads and writes started for the old account never land.
+  let generation = 0
+  const setIfCurrent = (
+    gen: number,
+    update: Partial<ItsaplanSlice> | ((state: AppState) => Partial<ItsaplanSlice>)
+  ): void => {
+    if (gen === generation) {
+      set(update)
+    }
+  }
+  const resetConnectionScope = (): void => {
+    generation += 1
+    inflight = new Map()
+    set({
+      itsaplanProjects: null,
+      itsaplanProjectMetadata: {},
+      itsaplanIssueLists: {},
+      itsaplanIssueDetails: {}
+    })
+  }
 
   return {
     itsaplanStatus: null,
@@ -49,6 +69,7 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
     itsaplanIssueDetails: {},
 
     refreshItsaplanStatus: async () => {
+      const gen = generation
       let status: ItsaplanConnectionStatus
       try {
         status = await client().status()
@@ -56,13 +77,14 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
         // Settle out of the null "checking" state so setup UI does not spin forever.
         status = DISCONNECTED_STATUS
       }
-      set({ itsaplanStatus: status })
+      setIfCurrent(gen, { itsaplanStatus: status })
       return status
     },
 
     connectItsaplan: async (args) => {
       const result = await client().connect(args)
       if (result.ok) {
+        resetConnectionScope()
         await get().refreshItsaplanStatus()
       }
       return result
@@ -71,15 +93,11 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
     detectItsaplanApiUrl: (appUrl) => client().detectApiUrl({ appUrl }),
 
     disconnectItsaplan: async () => {
+      // Reset before and after so reads racing the credential removal are dropped too.
+      resetConnectionScope()
       await client().disconnect()
-      inflight = new Map()
-      set({
-        itsaplanStatus: DISCONNECTED_STATUS,
-        itsaplanProjects: null,
-        itsaplanProjectMetadata: {},
-        itsaplanIssueLists: {},
-        itsaplanIssueDetails: {}
-      })
+      resetConnectionScope()
+      set({ itsaplanStatus: DISCONNECTED_STATUS })
     },
 
     loadItsaplanProjects: async (opts) => {
@@ -88,8 +106,9 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
         return cached
       }
       return dedupe('projects', async () => {
+        const gen = generation
         const projects = await client().listProjects()
-        set({ itsaplanProjects: projects })
+        setIfCurrent(gen, { itsaplanProjects: projects })
         return projects
       })
     },
@@ -100,8 +119,9 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
         return cached
       }
       return dedupe(`metadata:${projectRef}`, async () => {
+        const gen = generation
         const metadata = await client().getProjectMetadata({ projectRef })
-        set((state) => ({
+        setIfCurrent(gen, (state) => ({
           itsaplanProjectMetadata: { ...state.itsaplanProjectMetadata, [projectRef]: metadata }
         }))
         return metadata
@@ -116,8 +136,9 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
         return cached.issues
       }
       return dedupe(`issues:${key}`, async () => {
+        const gen = generation
         const previous = get().itsaplanIssueLists[key]
-        set((state) => ({
+        setIfCurrent(gen, (state) => ({
           itsaplanIssueLists: {
             ...state.itsaplanIssueLists,
             [key]: {
@@ -130,7 +151,7 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
         }))
         try {
           const issues = await client().listIssues(query)
-          set((state) => ({
+          setIfCurrent(gen, (state) => ({
             itsaplanIssueLists: {
               ...state.itsaplanIssueLists,
               [key]: { issues, fetchedAt: Date.now(), error: null, loading: false }
@@ -140,7 +161,7 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
         } catch (error) {
           const entry = get().itsaplanIssueLists[key]
           const message = error instanceof Error ? error.message : String(error)
-          set((state) => ({
+          setIfCurrent(gen, (state) => ({
             itsaplanIssueLists: {
               ...state.itsaplanIssueLists,
               [key]: {
@@ -162,9 +183,10 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
         return cached
       }
       return dedupe(`detail:${issueId}`, async () => {
+        const gen = generation
         const detail = await client().getIssue({ issueId })
         if (detail) {
-          set((state) => ({
+          setIfCurrent(gen, (state) => ({
             itsaplanIssueDetails: { ...state.itsaplanIssueDetails, [issueId]: detail }
           }))
         }
@@ -173,10 +195,11 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
     },
 
     createItsaplanIssue: async (args) => {
+      const gen = generation
       const result = await client().createIssue(args)
       if (result.ok) {
         // New issue belongs in lists we cannot filter locally, so mark them for refetch.
-        set((state) => ({
+        setIfCurrent(gen, (state) => ({
           itsaplanIssueLists: Object.fromEntries(
             Object.entries(state.itsaplanIssueLists).map(([key, entry]) => [
               key,
@@ -189,10 +212,11 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
     },
 
     updateItsaplanIssue: async (issueId, updates) => {
+      const gen = generation
       const result = await client().updateIssue({ issueId, updates })
       if (result.ok) {
         const updated = result.issue
-        set((state) => {
+        setIfCurrent(gen, (state) => {
           const detail = state.itsaplanIssueDetails[issueId]
           const nextDetail: ItsaplanIssueDetail | undefined = detail && { ...detail, ...updated }
           return {
@@ -212,9 +236,10 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
     },
 
     addItsaplanComment: async (issueId, body) => {
+      const gen = generation
       const result = await client().addComment({ issueId, body })
       if (result.ok) {
-        set((state) => {
+        setIfCurrent(gen, (state) => {
           const detail = state.itsaplanIssueDetails[issueId]
           return detail
             ? {

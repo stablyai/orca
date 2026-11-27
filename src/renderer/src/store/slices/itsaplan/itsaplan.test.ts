@@ -7,11 +7,13 @@ import { createItsaplanSlice } from './itsaplan'
 
 const listIssues = vi.fn()
 const updateIssue = vi.fn()
+const disconnect = vi.fn()
 
 vi.mock('@/runtime/itsaplan/runtime-itsaplan-client', () => ({
   createRuntimeItsaplanClient: () => ({
     listIssues: (...args: unknown[]) => listIssues(...args),
-    updateIssue: (...args: unknown[]) => updateIssue(...args)
+    updateIssue: (...args: unknown[]) => updateIssue(...args),
+    disconnect: (...args: unknown[]) => disconnect(...args)
   })
 }))
 
@@ -45,6 +47,7 @@ describe('itsaplan slice', () => {
   beforeEach(() => {
     listIssues.mockReset()
     updateIssue.mockReset()
+    disconnect.mockReset().mockResolvedValue(undefined)
   })
 
   it('uses one cache key regardless of label id order', () => {
@@ -82,5 +85,22 @@ describe('itsaplan slice', () => {
     expect(entry.issues.map((item) => item.id)).toEqual([4])
     expect(entry.error).toBe('invalidApiKey: API key invalid, reconnect')
     expect(entry.loading).toBe(false)
+  })
+
+  it('drops a list read that resolves after disconnect', async () => {
+    let resolveList!: (issues: ItsaplanIssue[]) => void
+    listIssues.mockReturnValue(
+      new Promise<ItsaplanIssue[]>((resolve) => {
+        resolveList = resolve
+      })
+    )
+    const store = createTestStore()
+    const pending = store.getState().loadItsaplanIssues({ projectRef: 'a.E', filters: {} })
+
+    await store.getState().disconnectItsaplan()
+    resolveList([issue(4, 1)])
+    await pending
+
+    expect(store.getState().itsaplanIssueLists).toEqual({})
   })
 })
