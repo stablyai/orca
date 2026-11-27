@@ -902,6 +902,14 @@
         "gitBlameKeywordCommit": "commit",
         "gitBlameToggleDescription": "Show the author and age of the cursor line. Click it to open the commit."
       },
+      "macWindowCloseBehavior": {
+        "title": "Window close behavior",
+        "description": "Choose what the red close button does. When hidden, click the menu bar icon to reopen Orca.",
+        "closeWindow": "Close window",
+        "hideToMenuBar": "Hide to menu bar",
+        "quitApp": "Quit Orca",
+        "iconRequired": "The icon stays visible while the close button is set to Hide to menu bar."
+      },
       "menuBarIcon": {
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar.",
         "keyword": {

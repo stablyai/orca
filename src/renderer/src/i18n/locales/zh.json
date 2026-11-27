@@ -181,6 +181,14 @@
         "gitBlameKeywordCommit": "提交",
         "gitBlameToggleDescription": "显示光标所在行的作者和修改时间，点击可打开对应的提交"
       },
+      "macWindowCloseBehavior": {
+        "title": "关闭窗口时",
+        "description": "选择点击红色关闭按钮时的行为。窗口隐藏后，点击菜单栏图标即可恢复。",
+        "closeWindow": "关闭窗口",
+        "hideToMenuBar": "隐藏到菜单栏",
+        "quitApp": "退出 Orca",
+        "iconRequired": "选择隐藏到菜单栏后，菜单栏图标会保持显示。"
+      },
       "menuBarIcon": {
         "description": "在 macOS 菜单栏中保留 Orca 快捷方式和活动指示器",
         "keyword": {

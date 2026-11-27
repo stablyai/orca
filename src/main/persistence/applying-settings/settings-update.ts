@@ -1,4 +1,5 @@
 import { publishSettingsUpdate } from './settings-update-effects'
+import { normalizeMacWindowCloseBehavior } from '../../../shared/app-lifecycle/windows/macos-window-close-behavior'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/settings/native-chat-appearance-settings'
@@ -74,6 +75,11 @@ export function updateSettings(
   // Normalize at the store boundary so every writer rejects truthy non-booleans.
   if ('minimizeToTrayOnClose' in updates) {
     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+  }
+  if ('macWindowCloseBehavior' in updates) {
+    sanitizedUpdates.macWindowCloseBehavior = normalizeMacWindowCloseBehavior(
+      updates.macWindowCloseBehavior
+    )
   }
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true

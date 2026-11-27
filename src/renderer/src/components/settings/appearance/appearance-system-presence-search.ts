@@ -79,6 +79,17 @@ const getMenuBarIconEntryCatalog = createLocalizedCatalog((): SettingsSearchEntr
   }
 ])
 
+const getMacWindowCloseBehaviorCatalog = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('settings.appearance.macWindowCloseBehavior.title', 'Window close behavior'),
+    description: translate(
+      'settings.appearance.macWindowCloseBehavior.description',
+      'Choose what the red close button does. When hidden, click the menu bar icon to reopen Orca.'
+    ),
+    keywords: getSystemTrayEntryCatalog()[0].keywords
+  }
+])
+
 type SystemPresenceSearchOptions = {
   showMenuBarIcon?: boolean
   showSystemTray?: boolean
@@ -99,5 +110,9 @@ export function getMenuBarIconEntries(
 ): SettingsSearchEntry[] {
   const show =
     options.showMenuBarIcon ?? (getRendererAppPlatform() === 'darwin' && !isWebClientLocation())
-  return show ? getMenuBarIconEntryCatalog() : []
+  return show ? [...getMenuBarIconEntryCatalog(), getMacWindowCloseBehaviorEntry()] : []
+}
+
+export function getMacWindowCloseBehaviorEntry(): SettingsSearchEntry {
+  return getMacWindowCloseBehaviorCatalog()[0]
 }

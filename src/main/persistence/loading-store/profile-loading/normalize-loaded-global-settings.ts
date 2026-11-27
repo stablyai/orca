@@ -1,4 +1,5 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
+import { normalizeMacWindowCloseBehavior } from '../../../../shared/app-lifecycle/windows/macos-window-close-behavior'
 import { normalizeUsageLimitAutoContinueDefaultOn } from '../../../../shared/native-chat/settings/native-chat-usage-limit-auto-continue'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
@@ -171,6 +172,9 @@ export function normalizeLoadedGlobalSettings(
     mobilePairingCustomAddresses,
     machineName: normalizeMachineName(parsed.settings?.machineName),
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
+    macWindowCloseBehavior: normalizeMacWindowCloseBehavior(
+      parsed.settings?.macWindowCloseBehavior
+    ),
     // Default-on values round-trip off-platform; macOS consumers gate the actual effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
     linuxTilingWindowMode: parsed.settings?.linuxTilingWindowMode === true,

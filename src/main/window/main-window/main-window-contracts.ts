@@ -21,6 +21,8 @@ export type MainWindowOpenOptions = Pick<
 export type CreateMainWindowOptions = {
   /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */
   getIsQuitting?: () => boolean
+  /** Uses the regular desktop quit path when the macOS close preference is Quit Orca. */
+  quitOnWindowClose?: () => void
   /** Clear the quit latch if renderer beforeunload vetoes app.quit. */
   onQuitAborted?: () => void
   onRendererProcessGone?: (
