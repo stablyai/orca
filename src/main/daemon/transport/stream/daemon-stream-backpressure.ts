@@ -5,15 +5,23 @@ import { STREAM_ENTRY_OVERHEAD_BYTES } from './daemon-stream-entry-accounting'
 // Worst case held per session is SESSION_HIGH_WATER_BYTES plus one PTY read.
 const SESSION_HIGH_WATER_BYTES = 256 * 1024
 const SESSION_LOW_WATER_BYTES = 128 * 1024
-// Last resort when many sessions flood at once: halve every session's watermarks until the total drains.
+// Last resort when many sessions flood at once: tighter per-session watermarks until the total drains.
 const HIGH_WATER_BYTES = 4 * 1024 * 1024
 const LOW_WATER_BYTES = 1024 * 1024
+const PRESSURED_SESSION_HIGH_WATER_BYTES = 64 * 1024
+const PRESSURED_SESSION_LOW_WATER_BYTES = 32 * 1024
+// A stall watchdog sheds backlog only when its client's socket made no progress this recently.
+const DELIVERY_PROGRESS_WINDOW_MS = 2_000
 const LONG_PAUSE_LOG_MS = 2_000
+const LONG_PAUSE_LOG_INTERVAL_MS = 10_000
+
+type StallReason = 'input' | 'timeout'
 
 type ClientBacklog = {
   queuedChars: Map<string, number>
   queuedMetadataBytes: Map<string, number>
   pendingWriteBytes: Map<string, number>
+  lastProgressAt: number
 }
 
 /** Counts held strings and socket writes together, including small writes that bypass the hold. */
@@ -25,13 +33,15 @@ export class DaemonStreamBackpressure {
   // Keep-tail dropping bounds stalled consumers; pausing again would freeze the shell behind them.
   private readonly stallReleasedSessions = new Set<string>()
   private pressured = false
+  private lastLongPauseLogAt = 0
+  private suppressedLongPauseLogs = 0
 
   constructor(
     private readonly setPaused: (
       sessionId: string,
       paused: boolean,
-      onStallTimeout?: () => void
-    ) => void,
+      onStallTimeout?: (reason: StallReason) => void
+    ) => boolean | void,
     private readonly isDroppable: (sessionId: string) => boolean,
     private readonly ownsSession: (clientId: string, sessionId: string) => boolean = () => true,
     // Stall release must reconcile cached droppability for already-queued data.
@@ -66,6 +76,7 @@ export class DaemonStreamBackpressure {
     socket.write(line, () => {
       // A disconnected client's callbacks must not debit a replacement connection's writes.
       if (this.clients.get(clientId) === client) {
+        client.lastProgressAt = Date.now()
         const remaining = (client.pendingWriteBytes.get(sessionId) ?? 0) - bytes
         if (remaining > 0) {
           client.pendingWriteBytes.set(sessionId, remaining)
@@ -115,20 +126,28 @@ export class DaemonStreamBackpressure {
 
     this.lastBytesBySession = bytesBySession
     this.lastTotalBytes = total
-    const pauseAt = this.pressured ? SESSION_LOW_WATER_BYTES : SESSION_HIGH_WATER_BYTES
-    const resumeAt = this.pressured ? SESSION_LOW_WATER_BYTES / 2 : SESSION_LOW_WATER_BYTES
+    const pauseAt = this.pressured ? PRESSURED_SESSION_HIGH_WATER_BYTES : SESSION_HIGH_WATER_BYTES
+    const resumeAt = this.pressured ? PRESSURED_SESSION_LOW_WATER_BYTES : SESSION_LOW_WATER_BYTES
     for (const sessionId of this.pausedAtBySession.keys()) {
       if ((bytesBySession.get(sessionId) ?? 0) <= resumeAt) {
         this.resume(sessionId, 'drained')
       }
     }
     for (const [sessionId, bytes] of bytesBySession) {
-      if (bytes >= pauseAt && !this.stallReleasedSessions.has(sessionId)) {
-        if (!this.pausedAtBySession.has(sessionId)) {
-          this.pausedAtBySession.set(sessionId, Date.now())
-        }
-        // Detach/termination may have released the session's pause since the last update.
-        this.setPaused(sessionId, true, () => this.releaseStalledSession(sessionId))
+      if (
+        bytes < pauseAt ||
+        this.stallReleasedSessions.has(sessionId) ||
+        // Background output has its own keep-tail budget; pause it only as the last resort.
+        (!this.pressured && this.isDroppable(sessionId))
+      ) {
+        continue
+      }
+      // Detach/termination may have released the session's pause since the last update.
+      const paused = this.setPaused(sessionId, true, (reason) => this.onStall(sessionId, reason))
+      if (paused === false) {
+        this.pausedAtBySession.delete(sessionId)
+      } else if (!this.pausedAtBySession.has(sessionId)) {
+        this.pausedAtBySession.set(sessionId, Date.now())
       }
     }
     for (const sessionId of this.stallReleasedSessions) {
@@ -139,12 +158,36 @@ export class DaemonStreamBackpressure {
     }
   }
 
+  private onStall(sessionId: string, reason: StallReason): void {
+    if (this.deliveryProgressed(sessionId)) {
+      // Slow but draining: resume without shedding; the next refresh re-pauses with a fresh watchdog.
+      if (this.pausedAtBySession.has(sessionId)) {
+        this.resume(sessionId, `${reason} watchdog, still draining`)
+      }
+      return
+    }
+    this.releaseStalledSession(sessionId, reason)
+  }
+
+  private deliveryProgressed(sessionId: string): boolean {
+    const now = Date.now()
+    for (const [clientId, client] of this.clients) {
+      if (
+        this.ownsSession(clientId, sessionId) &&
+        now - client.lastProgressAt < DELIVERY_PROGRESS_WINDOW_MS
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
   /** Release a stalled producer into keep-tail dropping; lost contact does not prove child exit. */
-  releaseStalledSession(sessionId: string): void {
+  private releaseStalledSession(sessionId: string, reason: StallReason): void {
     this.stallReleasedSessions.add(sessionId)
     this.onDroppabilityChanged(sessionId)
     if (this.pausedAtBySession.has(sessionId)) {
-      this.resume(sessionId, 'stall watchdog')
+      this.resume(sessionId, `${reason} watchdog, consumer stalled`)
     }
     this.refresh()
   }
@@ -163,16 +206,28 @@ export class DaemonStreamBackpressure {
     this.refresh()
   }
 
-  private resume(sessionId: string, reason: 'drained' | 'stall watchdog'): void {
+  private resume(sessionId: string, reason: string): void {
     const pausedAt = this.pausedAtBySession.get(sessionId)
     this.pausedAtBySession.delete(sessionId)
     this.setPaused(sessionId, false)
     const pausedMs = pausedAt === undefined ? 0 : Date.now() - pausedAt
     if (reason !== 'drained' || pausedMs >= LONG_PAUSE_LOG_MS) {
-      console.warn(
-        `[daemon] terminal output paused ${pausedMs}ms, resumed by ${reason}: session=${sessionId} sessionBacklogBytes=${this.lastBytesBySession.get(sessionId) ?? 0} totalBacklogBytes=${this.lastTotalBytes}`
-      )
+      this.logLongPause(sessionId, pausedMs, reason)
     }
+  }
+
+  private logLongPause(sessionId: string, pausedMs: number, reason: string): void {
+    const now = Date.now()
+    if (now - this.lastLongPauseLogAt < LONG_PAUSE_LOG_INTERVAL_MS) {
+      this.suppressedLongPauseLogs += 1
+      return
+    }
+    const suppressed = this.suppressedLongPauseLogs
+    this.lastLongPauseLogAt = now
+    this.suppressedLongPauseLogs = 0
+    console.warn(
+      `[daemon] terminal output paused ${pausedMs}ms, resumed (${reason}): session=${sessionId} sessionBacklogBytes=${this.lastBytesBySession.get(sessionId) ?? 0} totalBacklogBytes=${this.lastTotalBytes} suppressedSinceLast=${suppressed}`
+    )
   }
 
   private getOrCreateClient(clientId: string): ClientBacklog {
@@ -181,7 +236,8 @@ export class DaemonStreamBackpressure {
       client = {
         queuedChars: new Map(),
         queuedMetadataBytes: new Map(),
-        pendingWriteBytes: new Map()
+        pendingWriteBytes: new Map(),
+        lastProgressAt: Date.now()
       }
       this.clients.set(clientId, client)
     }

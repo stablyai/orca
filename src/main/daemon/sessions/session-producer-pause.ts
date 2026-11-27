@@ -1,11 +1,18 @@
 import type { SubprocessHandle } from './session-subprocess-handle'
+import {
+  isUntypedTerminalInput,
+  isTerminalPointerReportOnly
+} from '../../../shared/terminal/input/terminal-untyped-input'
+
+/** 'input' when typed input shortened the watchdog, so the stall owner can tell the two apart. */
+export type StreamStallReason = 'input' | 'timeout'
 
 // A dropped resume notification must not wedge a shell; a still-flooded client can pause it again.
 export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
 
 // Bound half-open consumer stalls; shed backlog before resuming the live producer.
 export const STREAM_BACKPRESSURE_STALL_WATCHDOG_MS = 60_000
-// Typed input behind a stalled stream must echo soon; shed backlog early rather than hold keystrokes.
+// Typed input behind a stalled stream must echo soon; the stall owner sheds only if delivery made no progress.
 export const STREAM_STALL_WITH_INPUT_WATCHDOG_MS = 2_000
 
 export class SessionProducerPause {
@@ -14,18 +21,23 @@ export class SessionProducerPause {
   private failsafeTimer: ReturnType<typeof setTimeout> | null = null
   private streamStallTimer: ReturnType<typeof setTimeout> | null = null
   private streamStallDeadline = 0
-  private onStreamStall: (() => void) | null = null
+  private streamStallReason: StreamStallReason = 'timeout'
+  private onStreamStall: ((reason: StreamStallReason) => void) | null = null
 
   constructor(private readonly subprocess: Pick<SubprocessHandle, 'pause' | 'resume'>) {}
 
-  /** Client pauses refresh the lost-resume failsafe; stream pauses use their own stall watchdog. */
-  pause(source?: 'stream', canPauseStream = true, onStreamStall?: () => void): void {
+  /** Client pauses refresh the lost-resume failsafe; stream pauses use their own stall watchdog. False when a stream pause was declined. */
+  pause(
+    source?: 'stream',
+    canPauseStream = true,
+    onStreamStall?: (reason: StreamStallReason) => void
+  ): boolean {
     if (source === 'stream') {
       if (canPauseStream) {
         this.onStreamStall = onStreamStall ?? null
         this.setStreamBackpressured(true)
       }
-      return
+      return canPauseStream
     }
     const wasPaused = this.paused || this.streamBackpressured
     this.paused = true
@@ -42,6 +54,7 @@ export class SessionProducerPause {
         this.subprocess.resume?.()
       }
     }, PRODUCER_PAUSE_FAILSAFE_MS)
+    return true
   }
 
   setStreamBackpressured(paused: boolean): void {
@@ -96,27 +109,33 @@ export class SessionProducerPause {
     }
   }
 
-  /** User input while stream-paused shortens the stall watchdog; it never lengthens it. */
-  noteUserInput(): void {
+  /** Typed input while stream-paused shortens the stall watchdog; replies and pointer reports don't, and it never lengthens. */
+  noteInput(data: string): void {
     if (
       this.streamStallTimer &&
-      this.streamStallDeadline - Date.now() > STREAM_STALL_WITH_INPUT_WATCHDOG_MS
+      this.streamStallDeadline - Date.now() > STREAM_STALL_WITH_INPUT_WATCHDOG_MS &&
+      !isUntypedTerminalInput(data) &&
+      !isTerminalPointerReportOnly(data)
     ) {
       clearTimeout(this.streamStallTimer)
-      this.armStreamStallWatchdog(STREAM_STALL_WITH_INPUT_WATCHDOG_MS)
+      this.armStreamStallWatchdog(STREAM_STALL_WITH_INPUT_WATCHDOG_MS, 'input')
     }
   }
 
-  private armStreamStallWatchdog(delayMs = STREAM_BACKPRESSURE_STALL_WATCHDOG_MS): void {
+  private armStreamStallWatchdog(
+    delayMs = STREAM_BACKPRESSURE_STALL_WATCHDOG_MS,
+    reason: StreamStallReason = 'timeout'
+  ): void {
     const onStreamStall = this.onStreamStall
     if (!onStreamStall) {
       return
     }
     this.streamStallDeadline = Date.now() + delayMs
+    this.streamStallReason = reason
     this.streamStallTimer = setTimeout(() => {
       this.streamStallTimer = null
       // Shed backlog before resuming; losing the consumer does not imply child exit.
-      onStreamStall()
+      onStreamStall(this.streamStallReason)
       this.setStreamBackpressured(false)
     }, delayMs)
   }

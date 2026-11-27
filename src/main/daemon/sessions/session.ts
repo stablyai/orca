@@ -2,7 +2,7 @@ import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from '../protocol/daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
-import { SessionProducerPause } from './session-producer-pause'
+import { SessionProducerPause, type StreamStallReason } from './session-producer-pause'
 import { SessionFocusReport } from './session-focus-report'
 import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
@@ -133,7 +133,7 @@ export class Session extends SessionProcessInspection {
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.shellReady.observeTypedInput(data)
-      this.producerPause.noteUserInput()
+      this.producerPause.noteInput(data)
       this.writeInput(data)
     }
   }
@@ -166,11 +166,10 @@ export class Session extends SessionProcessInspection {
   }
 
   /** Apply PTY backpressure with separate lost-resume and stream-stall protection. */
-  pauseProducer(source?: 'stream', onStreamStall?: () => void): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
-    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating, onStreamStall)
+  pauseProducer(source?: 'stream', onStreamStall?: (reason: StreamStallReason) => void): boolean {
+    const live = this._state !== 'exited' && !this._disposed
+    const canPause = this.hasAttachedClients && !this.isTerminating
+    return live && this.producerPause.pause(source, canPause, onStreamStall)
   }
 
   resumeProducer(source?: 'stream'): void {

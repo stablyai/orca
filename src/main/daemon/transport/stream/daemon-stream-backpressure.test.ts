@@ -5,7 +5,9 @@ describe('DaemonStreamBackpressure', () => {
   it('pauses a flooding session on its own backlog and never pauses its quiet sibling', () => {
     const paused = new Map<string, boolean>()
     const backpressure = new DaemonStreamBackpressure(
-      (sessionId, isPaused) => paused.set(sessionId, isPaused),
+      (sessionId, isPaused) => {
+        paused.set(sessionId, isPaused)
+      },
       () => false
     )
     // 400 KB of held output is far below the 4 MB global cap.

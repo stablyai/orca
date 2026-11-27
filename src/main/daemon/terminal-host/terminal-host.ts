@@ -46,6 +46,7 @@ import {
 } from './terminal-host-session-inspection-operations'
 
 import type { ForegroundExitWatches } from '../../pty/process-retirement/foreground-exit-watches'
+import type { StreamStallReason } from '../sessions/session-producer-pause'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
 
@@ -160,12 +161,16 @@ export class TerminalHost {
   }
 
   // Producer flow-control hints tolerate sessions that have already exited.
-  pauseProducer(sessionId: string, source?: 'stream', onStreamStall?: () => void): void {
+  pauseProducer(
+    sessionId: string,
+    source?: 'stream',
+    onStreamStall?: (reason: StreamStallReason) => void
+  ): boolean {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
-      return
+      return false
     }
-    session.pauseProducer(source, onStreamStall)
+    return session.pauseProducer(source, onStreamStall)
   }
 
   resumeProducer(sessionId: string, source?: 'stream'): void {
