@@ -14,7 +14,7 @@ export type ClaudeStreamedTextDelta = {
 
 export type StreamedBlock = { identity: AgentJournalItemIdentity; startedAt: number }
 
-/** `blank` holds a text block's whitespace until visible text shows. */
+/** `blank` holds the tail of a text block's whitespace until visible text shows. */
 type OpenBlock = StreamedBlock & { awaited: boolean; blank: string }
 
 type StreamedMessage = {
@@ -41,6 +41,9 @@ export type ClaudeStreamedBlockRegistry = {
 export function claudeSourceBlockId(messageId: string, index: number): string {
   return `block:${messageId}:${index}`
 }
+
+// Only the whitespace just before the text can indent it, so a short tail is enough.
+const HELD_BLANK_LIMIT = 256
 
 function scopeKey(sessionId: string, parentToolUseId: string | null): string {
   return `${sessionId}/${parentToolUseId ?? ''}`
@@ -83,7 +86,7 @@ export function createClaudeStreamedBlockRegistry(
       return text
     }
     if (blockType === 'text' && !/\S/.test(text)) {
-      block.blank += text
+      block.blank = (block.blank + text.slice(-HELD_BLANK_LIMIT)).slice(-HELD_BLANK_LIMIT)
       return null
     }
     block.awaited = true
