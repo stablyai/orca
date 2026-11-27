@@ -92,18 +92,7 @@ export async function applyClaudeMessageOptions(
     )
   }
   throwIfSignalAborted(signal)
-  const owed = session.keptModeOwed
-  if (owed) {
-    // A message never goes out in a looser mode than the one picked; only Full access may lag.
-    await waitForPromiseWithSignal(
-      applyKeptClaudeModeOwed(session, timeoutMs).catch((error: unknown) => {
-        if (owed !== 'bypassPermissions') {
-          throw error
-        }
-      }),
-      signal
-    )
-  }
+  await waitForPromiseWithSignal(applyKeptClaudeModeOwed(session, timeoutMs), signal)
   if (options.interactionMode !== undefined) {
     if (options.interactionMode === 'plan') {
       claimClaudePermissionModeRequest(session)
@@ -291,7 +280,10 @@ export async function dispatchClaudeMessage(
       // Claude's refusal mode is no choice of the chat's, so any input moves it to the fallback.
       await (messageOptions !== undefined
         ? applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
-        : applyClaudeFullAccessFallback(session, timeoutMs, input.signal))
+        : // A steer too: no input goes out in a looser mode than the one picked.
+          waitForPromiseWithSignal(applyKeptClaudeModeOwed(session, timeoutMs), input.signal).then(
+            () => applyClaudeFullAccessFallback(session, timeoutMs, input.signal)
+          ))
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.onExecutionSnapshot?.()

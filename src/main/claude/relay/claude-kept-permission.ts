@@ -171,8 +171,9 @@ export function noteKeptClaudeReattach(session: ClaudeSession): void {
   session.keptModeOwed = launched
 }
 
-/** Before a kept agent's message: its owed mode, kept owed until written (a failed write owes Ask),
- *  except in Plan, which leaving writes. The chat's saved Plan stands in for the mode only until
+/** Before a kept agent's message: its owed mode, kept owed until written (a failed write owes Ask
+ *  and throws, so no message goes out looser than picked; only Full access may lag), except in
+ *  Plan, which leaving writes. The chat's saved Plan stands in for the mode only until
  *  Claude reports one, so a stale launch-time Plan never drops an owed Ask. */
 export async function applyKeptClaudeModeOwed(
   session: ClaudeSession,
@@ -186,7 +187,13 @@ export async function applyKeptClaudeModeOwed(
   if (claudeInPlan(session) || (session.savedPlan === true && claudeModeUnreported(session))) {
     return
   }
-  await applyPick(session, owed, timeoutMs)
+  try {
+    await applyPick(session, owed, timeoutMs)
+  } catch (error) {
+    if (owed !== 'bypassPermissions') {
+      throw error
+    }
+  }
   if (session.keptModeOwed === owed) {
     session.keptModeOwed = undefined
   }
