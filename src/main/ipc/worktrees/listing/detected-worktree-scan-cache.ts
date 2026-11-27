@@ -32,6 +32,7 @@ import {
   readWorktreeCatalog
 } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 import { resolveWorktreeScanRuntime } from '../../../runtime/workspaces/catalog/runtime-worktree-scan-cache'
+import { createLocalAdminFingerprintVerifier } from '../../../runtime/workspaces/catalog/repo-worktree-admin-fingerprint'
 import {
   claimWorktreeCatalogHygiene,
   needsWorktreeCatalogHygieneClaim,
@@ -105,12 +106,17 @@ export async function listDetectedGitWorktrees(
       }
     }
   }
+  // WSL execution cannot be described by local admin reads; elsewhere unchanged repos skip `git worktree list`.
+  const verifier = localWorktreeGitOptions.wslDistro
+    ? undefined
+    : createLocalAdminFingerprintVerifier(repo)
   const { observation, superseded } = await readWorktreeCatalog(
     repo,
     runtimeKey,
     {
       kind: 'desktop',
       maxAgeMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
+      ...(verifier ? { verifier } : {}),
       needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo)
     },
     {

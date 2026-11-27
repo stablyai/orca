@@ -3087,9 +3087,9 @@
         "connectHost": "Connect",
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
-        "addSshHostHint": "Utilice una máquina existente sobre SSH",
+        "addSshHostHint": "Conectar por SSH",
         "addRemoteOrcaServer": "Agregar servidor remoto Orca",
-        "addRemoteOrcaServerHint": "Emparejar otro tiempo de ejecución Orca",
+        "addRemoteOrcaServerHint": "Orca en otro equipo",
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "No se pudo actualizar la rama predeterminada del proyecto. Inténtalo de nuevo.",
         "setLocation": "Establecer ubicación del proyecto",
@@ -7564,8 +7564,8 @@
           "addSshHost": "Agregar host SSH",
           "addRemoteServer": "Agregar servidor remoto",
           "addRemoteHost": "Agregar host remoto",
-          "addSshHostDetail": "Usa una máquina existente mediante SSH.",
-          "addRemoteServerDetail": "Empareja con Orca ejecutándose en otro equipo.",
+          "addSshHostDetail": "Conectarse a una máquina por SSH.",
+          "addRemoteServerDetail": "Orca en otro equipo, sin SSH.",
           "addRemoteHostDetail": "Host SSH o servidor Orca",
           "addWslHost": "Agregar distro WSL",
           "addWslHostDetail": "Ejecuta un servidor Orca dentro de una distro WSL 2. Experimental.",
@@ -7694,7 +7694,7 @@
           "serverSaveFailed": "No se pudo agregar el servidor remoto.",
           "serverTitle": "Agregar servidor remoto",
           "sshTitle": "Agregar host SSH",
-          "serverDescription": "Empareja con Orca ejecutándose en otro equipo.",
+          "serverDescription": "Emparejar con Orca en otro equipo de la misma red.",
           "serverRunsAsYou": "Este dispositivo podrá ejecutar comandos como tú en este servidor.",
           "sshDescription": "Agrega una máquina persistente donde puedas iniciar sesión por SSH.",
           "serverSshTitle": "Añadir host SSH a {{server}}",
@@ -14473,7 +14473,8 @@
             "741ff8a0d2": "Hacer push y crear {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos"
+            "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos",
+            "2f4483d6c4": "No hay archivos que coincidan con este filtro"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nueva carpeta",
@@ -14516,6 +14517,7 @@
             "31b4c3195d": "Más acciones del explorador",
             "d95e30fe28": "Actualizar explorador",
             "6026b16950": "Contraer todo",
+            "c1f3f3ec70": "Buscar en el contenido de los archivos",
             "openInApp": "Abrir en {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -14628,6 +14630,19 @@
             "localPortInUse": "El puerto {{port}} ya está en uso. Elige otro puerto local.",
             "localPortRequiresPrivileges": "El puerto {{port}} requiere privilegios elevados. Usa un puerto local ≥ 1024."
           },
+          "Search": {
+            "1abfb25a66": "Escriba para buscar en archivos",
+            "d56d140747": "Presione Enter para buscar",
+            "98c8435e36": "Seleccione un espacio de trabajo para buscar",
+            "dcc294f28d": "(resultados truncados)",
+            "resultsInFiles": "{{results}} en {{files}}",
+            "resultCount_one": "{{count}} resultado",
+            "resultCount_other": "{{count}} resultados",
+            "resultCount_many": "{{count}} resultados",
+            "fileCount_one": "{{count}} archivo",
+            "fileCount_other": "{{count}} archivos",
+            "fileCount_many": "{{count}} archivos"
+          },
           "SearchFilters": {
             "01e4671ccf": "archivos a excluir (por ejemplo, *.min.js, dist/**)",
             "0a6412a895": "Archivos para excluir",
@@ -14637,9 +14652,11 @@
           "SearchHeader": {
             "6234a5ef85": "Usar expresión regular",
             "4567e6e0b6": "Coincidir palabra completa",
-            "464ae3974f": "Distinguir mayúsculas y minúsculas"
+            "464ae3974f": "Distinguir mayúsculas y minúsculas",
+            "693cbeadd0": "Buscar"
           },
           "SearchQueryRow": {
+            "queryLabel": "Buscar archivos",
             "clearLabel": "Borrar búsqueda"
           },
           "SearchResultItems": {
@@ -14813,7 +14830,6 @@
             "c8e4a1f902": "Filtro: {{value0}}",
             "b3c8f1a902": "Filtrar archivos por nombre",
             "d4f8c2a901": "Limpiar y cerrar filtro",
-            "4b4a7de138": "Abrir página de revisión en el navegador",
             "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el issue y reintenta crear PR.",
             "pushRecovery": {
               "4b37ae99b0": "Iniciar el agente de AI predeterminado para corregir este fallo de push",
@@ -15829,6 +15845,16 @@
             "remoteDescription": "\"{{value0}}\" se eliminará de {{value2}}. Una vez eliminada, tampoco se podrá reanudar desde la línea de comandos de {{value1}}.",
             "confirm": "Eliminar"
           },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Buscar archivos",
+            "4d5a6b2a49": "Borrar filtro de archivos",
+            "7a9fb1e6aa": "Contenido"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Nombres",
+            "b3c8f1a902": "Filtrar archivos por nombre",
+            "f8a2c4d1e0": "Modo de búsqueda del explorador"
+          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No hay cambios de archivos en este commit"
           },
@@ -16477,34 +16503,11 @@
             "0bb39f8fe6": "Enviar",
             "69334b4b10": "Dictado de voz",
             "29f2d13839": "Escribe un comando…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Pegar",
             "985373052e": "Cambiar al modo teléfono",
-            "58a9ee6003": "formato de tool-call. ¿Quieres que agregue el diff a continuación?",
-            "aa64b519c6": "pantalla del terminal. Paleta Tokyonight, Menlo, real claude",
-            "e75112c834": "Reemplacé la diapositiva de escaneo de emparejamiento por una de alta fidelidad",
-            "3ce3e8c892": "14 aprobados, 1 omitido (1,8 s)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Se reemplazó la diapositiva de escaneo de emparejamiento por una sesión de terminal",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Editar",
-            "fc83e0d5ef": "⎿ Leídas 2103 líneas",
-            "80cc356591": "Leer",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Archivos",
             "94febb0976": "Control de código fuente",
             "8d6516312d": "2 terminales · claude activo",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Atrás"
           },
           "WorktreeListSlide": {
@@ -18459,8 +18462,6 @@
             "fa6ea61de3": "Cancelar",
             "c2ef0359b9": "Copiar contenido",
             "f2d0c22d67": "Eliminar anotación {{value0}}",
-            "11c5084aa2": "Borrar anotaciones",
-            "734e4343ec": "Borrar anotaciones del navegador",
             "95af781091": "Enviar comentarios a un agente",
             "ac39b9366b": "Enviar",
             "366bf5d62c": "Nueva pestaña",
@@ -18493,21 +18494,14 @@
             "143204e423": "Cambiar",
             "d51ef37351": "Copiar",
             "6f4ab3592b": "Copiado",
-            "499b31b84e": "Copiar todo",
             "168350ae6a": "Haz clic o pon el cursor sobre un elemento, luego presiona C para copiar o S para hacer una captura de pantalla.",
-            "e852e20cea": "Copiado — presiona S para hacer una captura de pantalla o selecciona otro elemento",
             "777b5bc4ec": "Haz clic en un elemento para agregar comentarios para el agente.",
             "b733a91bd9": "Agrega comentarios para el elemento seleccionado.",
             "4328a0a062": "Captura fallida: {{value0}}",
             "759f32af29": "Descargando",
             "4300f38145": "Descargando desde {{value0}}{{value1}}",
-            "cc4a071d3a": "Anotar elemento de la página ({{value0}})",
             "572046436a": "Navegador remoto",
             "b313a7275b": "Abrir navegador remoto",
-            "ea6af700da": "{{value0}} anotación",
-            "c13693fe27": "{{value0}} anotaciones",
-            "074f0ed10b": "{{value0}} anotación lista. Seleccione otro elemento o copie todos los comentarios.",
-            "a2164a6e5a": "{{value0}} anotaciones listas. Seleccione otro elemento o copie todos los comentarios.",
             "9f6f2e8c19": "La ruta del archivo descargado no está disponible.",
             "0c79b7634d": "No se pudo abrir el archivo descargado. Puede haberse movido o eliminado.",
             "397d9dc923": "No se pudo mostrar el archivo descargado. Puede haberse movido o eliminado.",
@@ -18519,7 +18513,9 @@
             "09a9489aa5": "Mostrar",
             "2a4c4b8e1f": "Copiar",
             "b71dc3d930": "Reconectar",
-            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo."
+            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo.",
+            "11c5084aa2": "Borrar anotaciones",
+            "734e4343ec": "Borrar anotaciones del navegador"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",
@@ -18602,8 +18598,6 @@
                     "c16f932cb3": "Ahorrar",
                     "09a7c1df70": "Editar anotación {{value0}}",
                     "449d2c2629": "Intención de la anotación",
-                    "38d320108c": "Contraer anotaciones",
-                    "9f209891a7": "Expandir anotaciones",
                     "includePageDetails": "Incluir detalles de la página",
                     "copyFeedback": "Copiar comentarios",
                     "copyFeedbackWithPageDetails": "Copiar comentarios con detalles de la página"
@@ -21011,7 +21005,6 @@
         "expand": "Expandir"
       },
       "question": {
-        "step": "Paso {{value0}}",
         "otherPlaceholder": "Escribe tu respuesta",
         "cancel": "Cancelar",
         "send": "Enviar",
@@ -21023,12 +21016,11 @@
         "recommended": "Recomendado",
         "stepOf": "{{value0}} de {{value1}}",
         "answered": "Respondida",
-        "title": "Pregunta",
         "previous": "Pregunta anterior",
         "nextQuestion": "Siguiente pregunta",
         "back": "Atrás",
         "skipAndSubmit": "Omitir y enviar",
-        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}} de {{value2}}"
       },
       "approval": {
         "needsNewerOrca": "Esta solicitud necesita una versión más reciente de Orca.",
@@ -21435,6 +21427,13 @@
           "followedUp": "Seguimiento",
           "handedOff": "Traspasado",
           "task": "Tarea"
+        },
+        "unnamedRecipient": "un agente",
+        "event": {
+          "followedUp": "Seguimiento enviado",
+          "update": "Actualización",
+          "message": "Mensaje",
+          "handedOff": "Traspasado"
         }
       },
       "goal": {
@@ -21531,6 +21530,7 @@
       "explicitChatWslMoveToHost": "El chat no está disponible en una carpeta WSL abierta desde Windows. Ejecuta el proyecto en un host WSL para chatear allí, o abre el agente en una terminal.",
       "explicitChatWslRunAsHost": "Ejecutar {{distro}} como host",
       "structuredSessionTerminalNotVisible": "Orca abrió {{value0}} en una terminal, pero no pudo mostrarlo aquí cuando finalizó el lanzamiento. Se mantuvo el borrador de tu chat.",
+      "explicitChatWorkspaceAccess": "Orca no tiene permiso para abrir esta carpeta del espacio de trabajo. Verifique los permisos de la carpeta e inténtelo de nuevo.",
       "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal.",
       "goalControl": {
         "settingsRejected": "Codex no pudo aplicar el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa la selección e inténtalo de nuevo.",
@@ -22200,7 +22200,20 @@
         "unlisted": "Trabajo en segundo plano en ejecución",
         "unread": "No se pudieron cargar los trabajadores",
         "unreadDetail": "Los trabajadores aparecerán aquí cuando se carguen",
-        "chipLabel": "{{label}}, el más reciente: {{title}}"
+        "chipLabel": "{{label}}, el más reciente: {{title}}",
+        "backgroundCommandCount_one": "{{count}} comando en segundo plano",
+        "backgroundCommandCount_many": "{{count}} comandos en segundo plano",
+        "backgroundCommandCount_other": "{{count}} comandos en segundo plano",
+        "commandCount_one": "{{count}} comando",
+        "commandCount_many": "{{count}} comandos",
+        "commandCount_other": "{{count}} comandos",
+        "mixedRegion": "Trabajadores y comandos en segundo plano",
+        "commandsRegion": "Comandos en segundo plano",
+        "stopSubagentsAndCommands": "Detener subagentes y comandos",
+        "workersKeepRunning": "Los trabajadores siguen en ejecución",
+        "clearFailedWorkers": "Borrar trabajadores con error",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Configura un webhook",
@@ -24519,10 +24532,13 @@
       "label": "Raíz del explorador",
       "full": "Raíz del repositorio",
       "back": "Volver a {{path}}",
+      "searchScope": "Ámbito: archivos del espacio de trabajo",
       "retry": "Reintentar",
       "sparseStatus": "Checkout disperso",
       "scopeDetails": "Acerca del alcance del checkout disperso",
       "scopeExplanation": "El selector de carpetas cambia lo que ves, no los archivos del checkout. La raíz del repositorio incluye los archivos presentes en la raíz y en las carpetas superiores.",
+      "searchExplanation": "Nombres filtra la carpeta que estás viendo. Contenido busca en todo el espacio de trabajo. No se buscan los archivos omitidos por el checkout disperso.",
+      "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
     },
@@ -25722,7 +25738,8 @@
     "filters": {
       "toggle": "Mostrar u ocultar detalles de búsqueda",
       "active": "{{count}} activos"
-    }
+    },
+    "noResults": "No hay resultados. Prueba otra búsqueda o ajusta los filtros."
   },
   "resourceManager": {
     "pty": {

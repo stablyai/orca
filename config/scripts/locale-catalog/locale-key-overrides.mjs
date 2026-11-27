@@ -205,7 +205,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'Discord'
   },
   'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1': {
-    ko: 'Orca 재시작',
+    ko: 'Orca 다시 시작',
     zh: '重启 Orca',
     ja: 'Orca を再起動'
   },
@@ -225,7 +225,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: '終了中…'
   },
   'auto.components.status.bar.ResourceUsageStatusSegment.53dd5560ae': {
-    ko: 'Orca 접기',
+    ko: 'Orca 축소',
     zh: '折叠 Orca',
     ja: 'Orca を折りたたむ'
   },
@@ -320,7 +320,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'Orca に接続'
   },
   'auto.App.caea5b51b9': {
-    ko: '지금 재시작',
+    ko: '지금 다시 시작',
     zh: '立即重启',
     ja: '今すぐ再起動'
   },
@@ -375,7 +375,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'このイシューを登録する前に、プロジェクトワークスペースからチームを選択してください。'
   },
   'auto.components.TaskPage.94d900518d': {
-    ko: '선택한 프리셋과 일치하는 이슈가 없습니다.',
+    ko: '선택한 사전 설정과 일치하는 이슈가 없습니다.',
     zh: '没有与所选预设匹配的议题',
     ja: '選択したプリセットに一致するイシューはありません。'
   },
@@ -440,7 +440,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'アプリ名を非表示'
   },
   'auto.lib.fix.checks.agent.launch.9f00d7df0c': {
-    ko: '검사 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
+    ko: '체크 수정 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
     zh: '检查提示为空。请更新源代码管理 AI 设置',
     ja: 'チェック プロンプトが空です。ソース管理 AI 設定を更新してください。'
   },

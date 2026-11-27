@@ -6,7 +6,7 @@ export function buildImageDataUri(
   mimeType: string | undefined,
   base64Content: string
 ): string | null {
-  if (!mimeType?.startsWith('image/')) {
+  if (!mimeType || !/^image\//i.test(mimeType)) {
     return null
   }
   const cleaned = base64Content.replace(/\s/g, '')

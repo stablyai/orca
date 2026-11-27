@@ -93,7 +93,7 @@ export async function getPRMetadata(
     } = JSON.parse(stdout)
     const metadata = {
       body: data.body ?? '',
-      bodyImageUrls: githubBodyImageUrls(data.body, data.body_html),
+      bodyImageUrls: await githubBodyImageUrls(data.body, data.body_html),
       ...(data.head?.sha ? { headSha: data.head.sha } : {}),
       ...(data.base?.sha ? { baseSha: data.base.sha } : {})
     }

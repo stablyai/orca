@@ -67,6 +67,7 @@ export function BotPictureCarousel({
   index,
   description,
   dropping,
+  badge,
   onIndexChange
 }: {
   faces: readonly BotPictureFace[]
@@ -75,6 +76,8 @@ export function BotPictureCarousel({
   dropping: boolean
   /** Announced when the picture changes, e.g. "Mascot 3 of 20". */
   description: string
+  /** Pinned to the current face's bottom-right corner, as the dialog's pencil is to its picture. */
+  badge?: React.ReactNode
   onIndexChange: (index: number) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -204,6 +207,10 @@ export function BotPictureCarousel({
           )
         })}
       </div>
+      {badge ? (
+        // Outside the clipped strip so it can overhang the face by 4 px, within the carousel's height.
+        <div className="absolute top-[calc(50%+36px)] left-[calc(50%+36px)] z-30">{badge}</div>
+      ) : null}
       <ArrowButton
         label={t('bots.new.nextPicture', 'Next picture')}
         side="right"

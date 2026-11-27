@@ -8,7 +8,8 @@ import { pathToFileURL } from 'node:url'
 const TRANSLATED_README_DIR = path.join('docs', 'readme')
 const EXTERNAL_TARGET = /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i
 const HTML_ATTRIBUTE = /\b(src|srcset|href)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
-const MARKDOWN_LINK = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+// CommonMark allows spaces and parentheses inside an angle-bracket destination.
+const MARKDOWN_LINK = /!?\[[^\]]*\]\((?:<([^<>\n]*)>|([^)\s]+))(?:\s+"[^"]*")?\)/g
 
 function readmeFiles(root) {
   const translated = readdirSync(path.join(root, TRANSLATED_README_DIR))
@@ -78,9 +79,20 @@ function* localTargets(markdown) {
       }
     }
   }
-  for (const match of markdown.matchAll(MARKDOWN_LINK)) {
-    yield match[1].replace(/^<|>$/g, '')
+  for (const [, angleDestination, bareDestination] of markdown.matchAll(MARKDOWN_LINK)) {
+    yield angleDestination ?? bareDestination
   }
+}
+
+// Decode only valid escape runs so a literal `%` in a file name stays as written.
+function decodePercentEscapes(value) {
+  return value.replace(/(?:%[0-9a-f]{2})+/gi, (escapes) => {
+    try {
+      return decodeURIComponent(escapes)
+    } catch {
+      return escapes
+    }
+  })
 }
 
 function resolveTarget(readme, target) {
@@ -89,7 +101,7 @@ function resolveTarget(readme, target) {
     return null
   }
   const resolved = path.posix.normalize(
-    path.posix.join(path.posix.dirname(readme), decodeURIComponent(bare))
+    path.posix.join(path.posix.dirname(readme), decodePercentEscapes(bare))
   )
   return resolved.startsWith('../') ? null : resolved
 }

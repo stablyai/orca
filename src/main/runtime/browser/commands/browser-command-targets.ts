@@ -28,6 +28,7 @@ import type {
 } from './browser-command-contracts'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { wakeBrowserClientPage } from '../../../browser/client-pages/lifecycle/browser-client-page-memory-registry'
+import { throwIfAdmissionAborted, untilAborted } from './browser-page-admission-cancel'
 
 const MAIN_WINDOW_READY_WAIT_MS = 8_000
 
@@ -50,13 +51,16 @@ export class RuntimeBrowserCommandTargets {
       params: BrowserCommandTargetParams,
       admitAnswer?: BrowserAnswerAdmission
     ) => Promise<T>,
-    mode: 'ordinary' | 'recover' | 'answer' = 'ordinary'
+    mode: 'ordinary' | 'recover' | 'answer' = 'ordinary',
+    signal?: AbortSignal
   ): Promise<T> {
     const explicitRelease = params.page ? claimBrowserMemoryPage(params.page, 'operation') : null
     let release = explicitRelease
+    // An aborted operation stops waiting and releases its claim; the page's own load continues.
+    const until = <R>(work: Promise<R>): Promise<R> => untilAborted(work, signal)
     try {
       const worktreeId = params.worktree
-        ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
+        ? (await until(this.host.resolveWorkspaceSelector(params.worktree))).id
         : undefined
       const bridge = this.host.getAgentBrowserBridge()
       if (
@@ -87,17 +91,19 @@ export class RuntimeBrowserCommandTargets {
         (bridge && this.coldRoutedPageId(bridge, worktreeId)) ??
         bridge?.getActivePageId(worktreeId)
       if (!browserPageId && bridge) {
-        await this.resolveBrowserWorktreeId(params.worktree)
+        await until(this.resolveBrowserWorktreeId(params.worktree))
         browserPageId = bridge.getActivePageId(worktreeId) ?? undefined
       }
       if (!browserPageId) {
+        throwIfAdmissionAborted(signal)
         return await execute(params)
       }
       release ??= claimBrowserMemoryPage(browserPageId, 'operation')
-      await this.ensureBrowserPageActive(worktreeId, browserPageId)
+      await until(this.ensureBrowserPageActive(worktreeId, browserPageId))
       const target = this.resolveBrowserPageWebContents(worktreeId, browserPageId)
       retainBrowserMemoryPageForAgent(browserPageId)
-      await waitForBrowserPageReady(browserPageId, target.webContents, mode === 'recover')
+      await until(waitForBrowserPageReady(browserPageId, target.webContents, mode === 'recover'))
+      throwIfAdmissionAborted(signal)
       return await execute(params)
     } finally {
       release?.()
@@ -162,22 +168,21 @@ export class RuntimeBrowserCommandTargets {
 
   async resolveBrowserCommandTarget(
     params: BrowserCommandTargetParams,
-    options: { waitForFirstLoad?: boolean } = {}
+    options: { waitForFirstLoad?: boolean; passive?: boolean } = {}
   ): Promise<ResolvedBrowserCommandTarget> {
     const browserPageId =
       typeof params.page === 'string' && params.page.length > 0 ? params.page : undefined
-    if (!browserPageId) {
-      return {
-        worktreeId: await this.resolveBrowserWorktreeId(params.worktree)
-      }
+    if (!browserPageId && !options.passive) {
+      return { worktreeId: await this.resolveBrowserWorktreeId(params.worktree) }
     }
-
     const worktreeId = params.worktree
       ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
       : undefined
     const bridge = this.host.getAgentBrowserBridge()
-    // The renderer never registers popups, so waking it for a closed one only stalls.
+    // Popups never register, so waking for a closed one only stalls; a passive lookup never wakes.
     if (
+      browserPageId &&
+      !options.passive &&
       bridge &&
       browserPopupPageWebContentsId(browserPageId) === null &&
       !hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)
