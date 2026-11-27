@@ -21,6 +21,25 @@ describe('textOnlyLabelsCopiedFiles', () => {
     expect(split).not.toHaveBeenCalled()
   })
 
+  it('rejects many long path-shaped lines beside as many files without splitting them', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const text = Array.from({ length: 64 }, () => '/a'.repeat(131_071)).join('\n')
+    expect(textOnlyLabelsCopiedFiles(text, manyFiles(64))).toBe(false)
+    expect(split).not.toHaveBeenCalled()
+  })
+
+  it('rejects 16 MiB of whitespace beside one copied file without a per-character regex', () => {
+    const regexTest = vi.spyOn(RegExp.prototype, 'test')
+    expect(textOnlyLabelsCopiedFiles(' '.repeat(16 * 1024 * 1024), ['/tmp/a'])).toBe(false)
+    expect(regexTest.mock.calls.length).toBeLessThanOrEqual(1)
+  })
+
+  it('matches a label line padded past the cap with whitespace', () => {
+    const pad = ' '.repeat(300_000)
+    const text = `b.txt\n${pad}a.txt${pad}\nc.txt`
+    expect(textOnlyLabelsCopiedFiles(text, ['/tmp/a.txt', '/tmp/b.txt', '/tmp/c.txt'])).toBe(true)
+  })
+
   it('matches a Windows long-path file URL whose CJK segments encode to 9 chars per unit', () => {
     const name = 'b.txt'
     const segment = encodeURIComponent('你'.repeat(200))
