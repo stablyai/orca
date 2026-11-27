@@ -191,6 +191,7 @@ function McpServerRow({
   run,
   dismissSignIn,
   openUrl,
+  result,
   t
 }: MobileNativeChatMcpPanelProps & { server: AgentSessionMcpServer; t: Translate }) {
   const styles = useThemedStyles(stylesSheet)
@@ -227,7 +228,9 @@ function McpServerRow({
             ? signingIn.finish === 'external'
               ? t('chat.mcp.status.finishOnPage', 'Finish on the page that opened')
               : t('chat.mcp.status.waitingForSignIn', 'Waiting for sign-in…')
-            : mobileMcpServerStatusLine(server, t)}
+            : result?.status === 'not-running' && server.status === 'not-started'
+              ? '' // The notice above already says they connect on the next message.
+              : mobileMcpServerStatusLine(server, t)}
         </Text>
         {signingIn ? (
           <>

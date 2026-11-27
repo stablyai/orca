@@ -275,6 +275,7 @@ function McpTrayList({
                   run={run}
                   dismissSignIn={dismissSignIn}
                   openUrl={openUrl}
+                  atRest={state.result?.status === 'not-running'}
                 />
               ))}
             </ul>
