@@ -7,8 +7,9 @@ import { translate } from '@/i18n/i18n'
 import { LocalBaseRefNotUpdatedCard } from './local-base-ref-not-updated-card'
 import {
   dismissLocalBaseRefToast,
-  isLocalBaseRefToastOpen,
   openLocalBaseRefToastId,
+  renderLocalBaseRefToast,
+  rerenderLocalBaseRefToast,
   retireLocalBaseRefToast
 } from './local-base-ref-toast-lifecycle'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
@@ -294,12 +295,9 @@ export function showLocalBaseRefRefreshToast(
     </>
   )
 
-  // Why re-shown on resize: opening Details grows the card, and sonner only measures on show.
-  const onResize = (): void => {
-    if (isLocalBaseRefToastOpen(target, id)) {
-      show()
-    }
-  }
+  // Why re-shown on resize: Details grows the card and sonner only measures on show. It re-renders the
+  // latest result, so a resize queued by an older result's card can't republish that result.
+  const onResize = (): void => rerenderLocalBaseRefToast(target, id)
   // Why an arrow: a hoisted function declaration would lose the `result` narrowing.
   const show = (): void => {
     if (!result.shallowHistory) {
@@ -360,5 +358,5 @@ export function showLocalBaseRefRefreshToast(
       ...CLEAR_CUSTOM_TOAST_FIELDS
     })
   }
-  show()
+  renderLocalBaseRefToast(target, id, show)
 }

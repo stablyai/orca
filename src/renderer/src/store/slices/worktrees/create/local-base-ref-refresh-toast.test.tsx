@@ -36,11 +36,17 @@ function shownTitles(): string[] {
   )
 }
 
+let resizeCallbacks: (() => void)[] = []
+
 beforeEach(() => {
   vi.useFakeTimers()
+  resizeCallbacks = []
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      constructor(callback: () => void) {
+        resizeCallbacks.push(callback)
+      }
       observe(): void {}
       disconnect(): void {}
     }
@@ -56,6 +62,7 @@ afterEach(() => {
   act(() => toast.dismiss())
   settle()
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
@@ -141,6 +148,18 @@ describe('local base ref refresh toast', () => {
     }
     expect(toast.getHistory().length - before).toBe(21)
     expect(shownTitles()).toEqual([REFRESH_TITLE])
+  })
+
+  it('re-renders the latest result when an older card reports a resize late', () => {
+    act(() => show(REFRESH))
+    act(() => vi.advanceTimersByTime(0))
+    const olderCardResize = resizeCallbacks.at(-1)!
+    act(() => show(SHALLOW))
+    act(() => vi.advanceTimersByTime(0))
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(120)
+    act(() => olderCardResize())
+    settle()
+    expect(shownTitles()).toEqual([SHALLOW_TITLE])
   })
 
   it('shows a result that arrives while the closed card is still leaving', () => {

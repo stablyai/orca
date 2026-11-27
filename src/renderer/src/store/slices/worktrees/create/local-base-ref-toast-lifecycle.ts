@@ -4,28 +4,42 @@ import { toast } from 'sonner'
 // open id, so there is nothing to race). Every close path retires the id first and for good, since sonner
 // may still act on it (exit timer, dismissal frames); the next result then gets a never-used id.
 // Results never grow sonner's history; each closed notice keeps one entry, like any other toast.
-const openToastIds = new Map<string, string>()
+// The latest result's render is kept so a late re-render (e.g. a resize) can't republish an older result.
+const openToasts = new Map<string, { id: string; render: () => void }>()
 let toastGeneration = 0
 
-/** The open toast's id for this target, or a fresh one; render with it. */
+/** The open toast's id for this target, or a fresh one; pass it to renderLocalBaseRefToast. */
 export function openLocalBaseRefToastId(target: string): string {
-  const open = openToastIds.get(target)
+  const open = openToasts.get(target)
   if (open) {
-    return open
+    return open.id
   }
   const id = `${target}:${++toastGeneration}`
-  openToastIds.set(target, id)
+  openToasts.set(target, { id, render: () => {} })
   return id
 }
 
-export function isLocalBaseRefToastOpen(target: string, id: string): boolean {
-  return openToastIds.get(target) === id
+/** Shows the latest result in the open toast and remembers it for later re-renders. */
+export function renderLocalBaseRefToast(target: string, id: string, render: () => void): void {
+  const open = openToasts.get(target)
+  if (open?.id === id) {
+    open.render = render
+    render()
+  }
+}
+
+/** Re-renders the open toast with its latest result, never the caller's. */
+export function rerenderLocalBaseRefToast(target: string, id: string): void {
+  const open = openToasts.get(target)
+  if (open?.id === id) {
+    open.render()
+  }
 }
 
 /** Every close path calls this before sonner acts: sonner's onDismiss (close button, swipe) and our dismissals. */
 export function retireLocalBaseRefToast(target: string, id: string): void {
-  if (openToastIds.get(target) === id) {
-    openToastIds.delete(target)
+  if (openToasts.get(target)?.id === id) {
+    openToasts.delete(target)
   }
 }
 
