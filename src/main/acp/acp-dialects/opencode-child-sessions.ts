@@ -1,6 +1,7 @@
 // OpenCode reports each subagent as a child session once the client opts in (2.x recordings).
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { AGENT_CHILD_WORK_LAST_MESSAGE_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work'
 import { normalizeChildWorkText } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
@@ -10,25 +11,29 @@ import type { AcpDialectNotification } from './acp-dialect'
 export const OPENCODE_CHILD_SESSION_CAPABILITY = 'opencode/child-session-updates'
 const CHILD_UPDATE_METHOD = 'opencode/session/child_update'
 
-const idSchema = z.string().trim().min(1)
-const childSchema = z.looseObject({
-  rootSessionId: idSchema,
-  childSessionId: idSchema,
-  parentSessionId: idSchema,
-  title: z.string().optional().catch(undefined),
-  _meta: z.looseObject({ isReplay: z.boolean().optional() }).nullish().catch(undefined)
-})
-const reportSchema = z.discriminatedUnion('type', [
-  childSchema.extend({
-    type: z.literal('status'),
-    status: z.string(),
-    error: z.looseObject({ message: z.string() }).optional().catch(undefined)
-  }),
-  childSchema.extend({
-    type: z.literal('update'),
-    update: z.looseObject({ sessionUpdate: z.string() })
+const idSchema = lazyZodSchema(() => z.string().trim().min(1))
+const childSchema = lazyZodSchema(() =>
+  z.looseObject({
+    rootSessionId: idSchema,
+    childSessionId: idSchema,
+    parentSessionId: idSchema,
+    title: z.string().optional().catch(undefined),
+    _meta: z.looseObject({ isReplay: z.boolean().optional() }).nullish().catch(undefined)
   })
-])
+)
+const reportSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('type', [
+    childSchema.extend({
+      type: z.literal('status'),
+      status: z.string(),
+      error: z.looseObject({ message: z.string() }).optional().catch(undefined)
+    }),
+    childSchema.extend({
+      type: z.literal('update'),
+      update: z.looseObject({ sessionUpdate: z.string() })
+    })
+  ])
+)
 
 // Map lookups avoid treating __proto__ as a recognized state.
 const CHILD_STATES: ReadonlyMap<string, NativeChatSubagentState> = new Map([

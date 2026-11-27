@@ -29,8 +29,9 @@ import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { McpServersError } from './mcp-servers-error'
 import { assertNotFromPlugin, pluginViewOf } from './mcp-plugin-server-mark'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
-const AgentFilesSchema = z.record(z.string(), z.unknown())
+const AgentFilesSchema = lazyZodSchema(() => z.record(z.string(), z.unknown()))
 const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
 export type HostEntry = BotToolEntry & { id: string }

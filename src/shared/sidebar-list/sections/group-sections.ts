@@ -7,8 +7,7 @@ import type { PRGroupKey } from '../../workspace-view/workspace-pr-groups'
 import type { NoticeHostContext } from '../hosts/host-labels'
 import {
   getHostWorktreeIds,
-  getLaneHostWorktreeCounts,
-  getLaneHostWorktreeIds,
+  getLaneHostWorktreeScope,
   getMixedHostContextLabels,
   getProjectHeaderHostRepos
 } from '../hosts/host-labels'
@@ -130,18 +129,7 @@ export function appendOrderedGroups(
                 label: definition?.label ?? workspaceStatus,
                 count: group.items.length + folderPairs.length,
                 icon: { kind: 'workspace-status' as const, status: workspaceStatus },
-                hostWorktreeCounts: getLaneHostWorktreeCounts(
-                  group.items,
-                  folderPairs,
-                  repoOf,
-                  defaultHostId
-                ),
-                hostWorktreeIds: getLaneHostWorktreeIds(
-                  group.items,
-                  folderPairs,
-                  repoOf,
-                  defaultHostId
-                ),
+                ...getLaneHostWorktreeScope(group.items, folderPairs, repoOf, defaultHostId),
                 worktreeIds: group.items.map((worktree) => worktree.id)
               }
             })()
@@ -152,18 +140,7 @@ export function appendOrderedGroups(
                 key,
                 count: group.items.length + folderPairs.length,
                 icon: { kind: 'pr-status' as const, prGroup },
-                hostWorktreeCounts: getLaneHostWorktreeCounts(
-                  group.items,
-                  folderPairs,
-                  repoOf,
-                  defaultHostId
-                ),
-                hostWorktreeIds: getLaneHostWorktreeIds(
-                  group.items,
-                  folderPairs,
-                  repoOf,
-                  defaultHostId
-                ),
+                ...getLaneHostWorktreeScope(group.items, folderPairs, repoOf, defaultHostId),
                 worktreeIds: group.items.map((worktree) => worktree.id)
               }
             })()

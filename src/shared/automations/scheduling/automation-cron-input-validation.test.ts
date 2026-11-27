@@ -3,7 +3,12 @@ import {
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter
 } from './automation-schedule-occurrences'
-import { isRunnableAutomationSchedule, parseCronExpression } from './automation-schedule-parsing'
+import {
+  isRunnableAutomationSchedule,
+  isValidAutomationCronSchedule,
+  isValidAutomationSchedule,
+  parseCronExpression
+} from './automation-schedule-parsing'
 
 const ascending = (values: Set<number>): number[] => [...values].sort((left, right) => left - right)
 const DTSTART = Date.parse('2027-01-01T00:00:00Z')
@@ -32,6 +37,25 @@ describe('cron oversized steps (#15895)', () => {
         new Date(2026, 4, 15, 9, 5).getTime()
       )
     ).toBe(new Date(2026, 4, 15, 10, 0).getTime())
+  })
+})
+
+describe('cron numbers in JavaScript notation (#49684)', () => {
+  it.each(['0x10 * * * *', '1e1 * * * *', '*/0b10 * * * *', '+5 * * * *', '5.0 * * * *'])(
+    'refuses %s as new input',
+    (schedule) => {
+      expect(isValidAutomationCronSchedule(schedule)).toBe(false)
+      expect(isValidAutomationSchedule(schedule)).toBe(false)
+    }
+  )
+
+  it('accepts decimal and named cron numbers as new input', () => {
+    expect(isValidAutomationCronSchedule('05 9 1-15/2 JAN-mar MON-fri')).toBe(true)
+  })
+
+  it('still runs a persisted hexadecimal minute at its old value', () => {
+    expect(isRunnableAutomationSchedule('0x10 * * * *')).toBe(true)
+    expect(ascending(parseCronExpression('0x10 * * * *').minutes)).toEqual([16])
   })
 })
 

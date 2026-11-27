@@ -8,10 +8,15 @@ import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAc
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import { useMobilePendingControl } from '../../../../components/controls/use-mobile-pending-control'
 import { MobileNativeChatMarkdown } from '../../transcript/message-content/MobileNativeChatMarkdown'
-import { styles as markdownStyles } from '../../../../components/markdown/mobile-markdown-styles'
-import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { stylesSheet as markdownStylesSheet } from '../../../../components/markdown/mobile-markdown-styles'
+import {
+  pressedStyle,
+  spacing,
+  typography,
+  type MobileColorScheme
+} from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import {
   isNewerApprovalSubject,
@@ -27,10 +32,7 @@ import {
   openUrlRequestPage
 } from './MobileNativeChatUrlRequest'
 import { structuredApprovalOptionId } from './mobile-structured-agent-prompts'
-import {
-  ASK_CHOICE_RADIUS,
-  mobileNativeChatAskStyles as askStyles
-} from './MobileNativeChatAsk.styles'
+import { ASK_CHOICE_RADIUS, mobileNativeChatAskStylesSheet } from './MobileNativeChatAsk.styles'
 
 // Option sends are keyed by their payload; the header's cancel by a key no payload can take.
 const CANCEL = '\0cancel'
@@ -61,7 +63,9 @@ function MobileNativeChatPermissionImpl({
   /** Why the last answer didn't go. */
   notice?: string | null
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const askStyles = useThemedStyles(mobileNativeChatAskStylesSheet)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   // An accepted answer keeps the card locked until the host retires it (the card remounts).
   const { pending, run } = useMobilePendingControl<string>({ holdAccepted: true })
@@ -179,7 +183,7 @@ function MobileNativeChatPermissionContext({
   onOpenWorker?: () => void
   note?: ReactNode
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const neededPath = approvalBlockedPathToShow(permission)
   if (
@@ -257,6 +261,8 @@ function MobileNativeChatPermissionDetail({
   onOpenWorker?: () => void
   note?: ReactNode
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const shell = detail ? readShellApprovalDetail(detail, toolName, description) : null
@@ -319,15 +325,18 @@ function MobileNativeChatPermissionDetail({
 
 const ICON_SIZE = 16
 
-const styles = themedStyleSheet(() => ({
+function markdownLineHeight(scheme: MobileColorScheme): number {
+  const { paragraph } = markdownStylesSheet.resolve(scheme)
+  return (paragraph.lineHeight * typography.bodySize) / paragraph.fontSize
+}
+
+const stylesSheet = themedStyleSheet((colors, scheme) => ({
   // Centred on the title's first line, as the question text sits in its row.
   icon: { marginTop: 13 },
   title: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,
-    lineHeight:
-      (markdownStyles.paragraph.lineHeight * typography.bodySize) /
-      markdownStyles.paragraph.fontSize,
+    lineHeight: markdownLineHeight(scheme),
     fontWeight: '500'
   },
   content: { gap: 6, marginBottom: 6 },

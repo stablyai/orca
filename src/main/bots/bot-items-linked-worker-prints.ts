@@ -23,7 +23,8 @@ const LONG_COLUMNS = new Set([
   'prior_owner_dispatch_ids',
   'resume_session',
   'spec',
-  'result'
+  'result',
+  'progress_note'
 ])
 
 function rowPrint(alias: string, columns: readonly string[]): string {

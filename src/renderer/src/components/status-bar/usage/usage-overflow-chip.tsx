@@ -2,6 +2,7 @@ import React from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useTranslate } from '@/i18n/use-translate'
+import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
 import { formatUsageChipTitle } from './usage-chip-title'
 
 /** Stands in for the chips a narrow bar leaves out; its tooltip names them and the popover lists them. */
@@ -17,7 +18,9 @@ export function UsageOverflowChip({
   hostLabel?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const names = hidden.map((p) => formatUsageChipTitle(p, display, t)).join(', ')
+  const names = hidden
+    .map((p) => formatUsageChipTitle(p, getStatusBarUsageSections(p, 'compact', t)[0], display, t))
+    .join(', ')
   return (
     <span
       title={[

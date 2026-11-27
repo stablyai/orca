@@ -1,6 +1,7 @@
 // The Slack mirror routes (`slack.mirror`): the owner's Orca-typed messages posted into the chat's
 // Slack thread under their name. Mirror of cloud/packages/connector-contract's slack-mirror messages.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { CONNECTOR_PATHS, type ConnectorConversation } from './connector-cloud-contract'
 import type { ConnectorCloudFeature } from '../connector-cloud-features'
 
@@ -63,7 +64,7 @@ export type SlackMirrorDeleteBody = {
   conversation: ConnectorConversation
 }
 
-export const SlackMirrorPostResponse = z.object({ ts: z.string().min(1) })
+export const SlackMirrorPostResponse = lazyZodSchema(() => z.object({ ts: z.string().min(1) }))
 
 /** The cloud's refusals (409, 429, 503); a code this build doesn't know reads as permanent. */
 export const SLACK_MIRROR_ERRORS = [
@@ -86,14 +87,16 @@ export const SLACK_MIRROR_ERRORS = [
 export type SlackMirrorError = (typeof SLACK_MIRROR_ERRORS)[number]
 
 /** GET `…/mirror/status`: what the chat's Slack menu says of the thread, cached by the cloud. */
-export const SlackMirrorStatus = z.object({
-  channelName: z.string().min(1).max(200).optional().catch(undefined),
-  external: z.literal(true).optional().catch(undefined),
-  archived: z.literal(true).optional().catch(undefined),
-  notInChannel: z.literal(true).optional().catch(undefined),
-  missing: z.literal(true).optional().catch(undefined),
-  dm: z.literal(true).optional().catch(undefined),
-  // The app has chat:write.customize (manifest rev 5): posts carry the owner's name and picture.
-  customize: z.boolean().catch(false)
-})
+export const SlackMirrorStatus = lazyZodSchema(() =>
+  z.object({
+    channelName: z.string().min(1).max(200).optional().catch(undefined),
+    external: z.literal(true).optional().catch(undefined),
+    archived: z.literal(true).optional().catch(undefined),
+    notInChannel: z.literal(true).optional().catch(undefined),
+    missing: z.literal(true).optional().catch(undefined),
+    dm: z.literal(true).optional().catch(undefined),
+    // The app has chat:write.customize (manifest rev 5): posts carry the owner's name and picture.
+    customize: z.boolean().catch(false)
+  })
+)
 export type SlackMirrorStatus = z.infer<typeof SlackMirrorStatus>

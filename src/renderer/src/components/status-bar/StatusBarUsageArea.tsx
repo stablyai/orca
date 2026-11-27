@@ -15,7 +15,6 @@ import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices
 import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
-import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import {
   ClippedRowProviderSegment,
   ProviderSegment,
@@ -44,7 +43,6 @@ export function StatusBarUsageArea({
   const t = useTranslate()
   const [usageAreaRef, usageWidths] = useUsageRowWidths()
   const {
-    antigravityAccounts,
     anyFetching,
     anyVisible,
     canSignInFromUsageRow,
@@ -192,16 +190,6 @@ export function StatusBarUsageArea({
                         />
                       )
                     }
-                    if (p.provider === 'antigravity') {
-                      return (
-                        <AntigravityUsageMenu
-                          antigravity={p}
-                          accounts={antigravityAccounts}
-                          triggerContent={rowNode}
-                          onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
-                        />
-                      )
-                    }
                     if (p.provider === 'codex') {
                       return (
                         <CodexSwitcherMenu
@@ -279,6 +267,7 @@ export function StatusBarUsageArea({
                   mode={levelMode(index)}
                   barMode={statusBarUsageMode}
                   countdownActive={false}
+                  measuring
                 />
               </span>
             ))

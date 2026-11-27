@@ -10,6 +10,7 @@ import {
   retryNotReplayable
 } from '../../../orchestration/db/mutation-receipts/replay-only-request'
 import type { RpcRequest } from '../../core'
+import { isTerminalSendRefusedBeforeWake } from '../../methods/terminal/terminal-send-pre-wake-refusal'
 import {
   attachMutationReceipt,
   EFFECT_FREE_WORKER_DONE_CHECKPOINT,
@@ -82,6 +83,12 @@ export class OrchestrationMutationExecutor {
     const existingPromptReceipt = isPromptMutation
       ? db.getMutationReceipt(callerFingerprint, requestId)
       : undefined
+    const refusedBeforeWake =
+      isPromptMutation && !existingPromptReceipt && (await isTerminalSendRefusedBeforeWake(params))
+    // Input the handler always refuses keeps no receipt, so nothing binds to (or wakes) a slept agent; a replay gets the same refusal.
+    if (refusedBeforeWake) {
+      return await invoke()
+    }
     if (isPromptMutation && !existingPromptReceipt) {
       // A slept agent resumes in place first, so the prompt binds to its woken process.
       await this.runtime.wakeSleptAgentHandle((params as { terminal: string }).terminal, {})

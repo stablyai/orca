@@ -6,6 +6,17 @@ import { reclaimMobileDrivenBrowserPagesForDesktop } from '@/runtime/browser/own
 import { restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 
 type TakeBackSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | undefined
+type RestoredViewportClaimer = (restoredPtyIds: ReadonlySet<string>) => void
+
+const restoredViewportClaimers = new Set<RestoredViewportClaimer>()
+
+/** Mounted terminal panes register here so every Take back all entry point claims their grids. */
+export function registerRestoredViewportClaimer(claimer: RestoredViewportClaimer): () => void {
+  restoredViewportClaimers.add(claimer)
+  return () => {
+    restoredViewportClaimers.delete(claimer)
+  }
+}
 
 function getMobileOwnedTerminalPtyIds(): string[] {
   const ptyIds = new Set(getMobileFitOverridePtyIds())
@@ -27,14 +38,17 @@ export async function takeBackAllFromPhone(
   settings: TakeBackSettings,
   { includeBrowserPages }: { includeBrowserPages: boolean }
 ): Promise<{ terminalsRestored: boolean; reclaimedBrowserPageIds: ReadonlySet<string> }> {
-  const [terminalsRestored, reclaimedBrowserPageIds] = await Promise.all([
+  const [restoredTerminalPtyIds, reclaimedBrowserPageIds] = await Promise.all([
     restoreTerminalFitsToDesktop(getMobileOwnedTerminalPtyIds(), settings),
     includeBrowserPages
       ? reclaimMobileDrivenBrowserPagesForDesktop()
       : Promise.resolve(new Set<string>())
   ])
-  if (terminalsRestored) {
+  if (restoredTerminalPtyIds.size > 0) {
+    for (const claimer of restoredViewportClaimers) {
+      claimer(restoredTerminalPtyIds)
+    }
     scheduleRestoredTerminalRefit()
   }
-  return { terminalsRestored, reclaimedBrowserPageIds }
+  return { terminalsRestored: restoredTerminalPtyIds.size > 0, reclaimedBrowserPageIds }
 }

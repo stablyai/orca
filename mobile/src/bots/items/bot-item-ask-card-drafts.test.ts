@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { makeTestBotItem } from '../../../../src/shared/bots/bot-item.test-fixture'
+import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import {
   botItemAskCardDraftsClock,
   botItemAskCardKey,
@@ -78,4 +79,50 @@ it('keeps a card typed or shown waiting after the list read was asked, as its it
   expect(readBotItemAskCardDraft(typedAfter, 'e1')).toEqual(typed(`words for ${typedAfter}`))
   expect(readBotItemAskCardDraft(shownAfter, 'e1')).toEqual(typed(`words for ${shownAfter}`))
   expect(readBotItemAskCardDraft(before, 'e1')).toBeUndefined()
+})
+
+it('looks at none of a list read’s rows while only other bots hold cards', () => {
+  save(botItemAskCardKey('scan-host', 'other', 'd-1'))
+  save(botItemAskCardKey('other-host', 'scan-bot', 'd-2'))
+  let visits = 0
+  const row = (uid: string): Pick<BotItem, 'uid' | 'status'> => ({
+    get uid() {
+      visits++
+      return uid
+    },
+    get status(): BotItem['status'] {
+      visits++
+      return 'done'
+    }
+  })
+
+  retireClosedBotItemAskCardDrafts(
+    'scan-host',
+    'scan-bot',
+    ['d-1', 'd-2', 'd-3'].map(row),
+    botItemAskCardDraftsClock()
+  )
+
+  expect(visits).toBe(0)
+  expect(
+    readBotItemAskCardDraft(botItemAskCardKey('scan-host', 'other', 'd-1'), 'e1')
+  ).toBeDefined()
+  expect(
+    readBotItemAskCardDraft(botItemAskCardKey('other-host', 'scan-bot', 'd-2'), 'e1')
+  ).toBeDefined()
+})
+
+it('drops a bot’s last card and keeps taking new ones for it', () => {
+  const key = botItemAskCardKey('refill-host', 'bot', 'e-1')
+  save(key)
+  retireClosedBotItemAskCardDrafts(
+    'refill-host',
+    'bot',
+    [{ uid: 'e-1', status: 'canceled' }],
+    botItemAskCardDraftsClock()
+  )
+  expect(readBotItemAskCardDraft(key, 'e1')).toBeUndefined()
+
+  save(key, 'typed again')
+  expect(readBotItemAskCardDraft(key, 'e1')).toEqual(typed('typed again'))
 })

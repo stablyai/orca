@@ -15,10 +15,14 @@ import {
   waitRowTime
 } from '../../../../../src/shared/automations/automation-chat-row'
 import { automationWhenText } from '../../../bots/mobile-bot-sheet-copy'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { typography } from '../../../theme/mobile-theme'
-import { scaledType, styles as chat } from './messages/mobile-native-chat-message-styles'
+import {
+  scaledType,
+  stylesSheet as chatStylesSheet
+} from './messages/mobile-native-chat-message-styles'
 import { mobileNativeChatRowId } from './viewport/mobile-native-chat-reading-place'
-import { styles } from './mobile-automation-run-row-styles'
+import { stylesSheet } from './mobile-automation-run-row-styles'
 import { MobileAutomationRowFrame } from './MobileAutomationRowFrame'
 import { MobileWebhookSetupCard } from './bot-cards/MobileWebhookSetupCard'
 import { automationHookId } from '../../../../../src/shared/automation-event-triggers'
@@ -26,6 +30,7 @@ import {
   MobileAutomationRunMessage,
   useMobileAutomationRowWording
 } from './MobileNativeChatAutomationRunRow'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 /** A transcript message's automation row (saved, a wait's ending, a run), or null for any other. */
 export function mobileAutomationRow(
@@ -53,6 +58,9 @@ export function MobileAutomationSavedMessage({
   rowKey?: string
   fontScale: number
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
+  const chat = useThemedStyles(chatStylesSheet)
+  const t = useMobileTranslation()
   const automation = message.automationSaved?.automation ?? message.waitEnded?.automation
   const bot = useContext(MobileNativeChatBotIdentityContext)
   const waits = useContext(MobileNativeChatBotWaitsContext)
@@ -69,7 +77,7 @@ export function MobileAutomationSavedMessage({
   }
   const { say } = wording
   const waitState = waitRowState(message, bot?.cancelledWaits, now, waits)
-  const when = automationWhenText(automation, true)
+  const when = automationWhenText(automation, true, t)
   const label = waitState
     ? waitRowLabel(waitState, say)
     : say(message.automationSaved?.change === 'updated' ? 'updatedAutomation' : 'createdAutomation')

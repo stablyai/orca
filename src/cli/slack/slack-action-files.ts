@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { openAsBlob } from 'node:fs'
 import { open, stat, unlink, type FileHandle } from 'node:fs/promises'
 import { basename, extname, resolve } from 'node:path'
+import { escapeWindowsDeviceName } from '../../shared/browser/downloads/browser-download-filename'
 import type { ConnectorActionArgs } from '../../shared/connector-action-contract'
 import { RuntimeClientError } from '../runtime/connection/types'
 
@@ -106,7 +107,7 @@ async function openDownload(
     .map((char) => (char < ' ' || '<>:"|?*'.includes(char) ? '_' : char))
     .join('')
     .replace(/[. ]+$/, '')
-  const name = safe || file.id
+  const name = escapeWindowsDeviceName(safe || file.id, process.platform)
   const ext = extname(name)
   const stem = name.slice(0, name.length - ext.length)
   for (let n = 1; ; n++) {

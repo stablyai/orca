@@ -1,36 +1,64 @@
-import { RuntimeLinearBrowseCommands } from './runtime-linear-browse-commands'
-import { RuntimeLinearCommandBase } from './runtime-linear-command-base'
-import { RuntimeLinearCommands } from './runtime-linear-connection-commands'
+import type { RuntimeLinearCommands } from './runtime-linear-connection-commands'
 
 type PublicMethods<T> = Pick<T, keyof T>
 
 export type RuntimeLinearCommandSurface = PublicMethods<RuntimeLinearCommands>
 
 type LinearFacadeInstance = {
-  linearCommands: RuntimeLinearCommands
+  loadLinearCommands(): Promise<RuntimeLinearCommands>
 }
 
 type LinearMethodBag = Record<string, (...values: unknown[]) => unknown>
 
+const LINEAR_COMMAND_NAMES = [
+  'linearConnect',
+  'linearDisconnect',
+  'linearSelectWorkspace',
+  'linearStatus',
+  'linearTestConnection',
+  'linearSearchIssues',
+  'linearSearchForAgents',
+  'linearIssueContext',
+  'linearTeamListForAgents',
+  'linearTeamMembersForAgents',
+  'linearTeamStatesForAgents',
+  'linearTeamLabelsForAgents',
+  'linearProjectListForAgents',
+  'linearIssueListForAgents',
+  'linearMcpIssueList',
+  'linearListIssues',
+  'linearCreateIssue',
+  'linearGetIssue',
+  'linearUpdateIssue',
+  'linearAddIssueComment',
+  'linearIssueAddComment',
+  'linearIssueAttachLink',
+  'linearCommentEdit',
+  'linearCommentDelete',
+  'linearIssueCreate',
+  'linearIssueSetState',
+  'linearIssueRelationWrite',
+  'linearSaveIssue',
+  'linearIssueUpdateTask',
+  'linearResolveCurrentIssue',
+  'linearIssueComments',
+  'linearListTeams',
+  'linearListProjects',
+  'linearCreateProject',
+  'linearGetProject',
+  'linearListProjectIssues',
+  'linearListCustomViews',
+  'linearGetCustomView',
+  'linearListCustomViewIssues',
+  'linearListCustomViewProjects',
+  'linearTeamStates',
+  'linearTeamLabels',
+  'linearTeamMembers'
+] as const satisfies readonly (keyof RuntimeLinearCommands)[]
+
+const LINEAR_COMMAND_NAME_SET: ReadonlySet<string> = new Set(LINEAR_COMMAND_NAMES)
 const delegators = new WeakSet<object>()
 const receiverByCommands = new WeakMap<LinearMethodBag, LinearMethodBag>()
-
-function collectMethodNames(
-  instancePrototype: RuntimeLinearBrowseCommands,
-  stopAt: RuntimeLinearBrowseCommands | null
-): Set<string> {
-  const names = new Set<string>()
-  let prototype: object | null = instancePrototype
-  while (prototype && prototype !== Object.prototype && prototype !== stopAt) {
-    for (const name of Object.getOwnPropertyNames(prototype)) {
-      if (name !== 'constructor') {
-        names.add(name)
-      }
-    }
-    prototype = Object.getPrototypeOf(prototype)
-  }
-  return names
-}
 
 // Preserve facade overrides/spies on reentrant this calls through the chain.
 function overrideAwareReceiver(
@@ -45,6 +73,7 @@ function overrideAwareReceiver(
   const receiver = new Proxy(commands, {
     get(target, property, proxyReceiver) {
       if (typeof property === 'string' && surfaceNames.has(property)) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: facade is the runtime instance that may carry test overrides for surface methods.
         const override = (facade as Record<string, unknown>)[property]
         if (typeof override === 'function' && !delegators.has(override)) {
           return override.bind(facade)
@@ -59,18 +88,15 @@ function overrideAwareReceiver(
 }
 
 export function installRuntimeLinearCommandSurface(target: LinearFacadeInstance): void {
-  const names = collectMethodNames(
-    RuntimeLinearCommands.prototype,
-    RuntimeLinearCommandBase.prototype
-  )
-  for (const name of collectMethodNames(RuntimeLinearBrowseCommands.prototype, null)) {
-    names.add(name)
-  }
-  for (const name of names) {
+  for (const name of LINEAR_COMMAND_NAMES) {
     const method = {
-      [name](this: LinearFacadeInstance, ...args: unknown[]): unknown {
-        const commands = this.linearCommands as unknown as LinearMethodBag
-        return commands[name].call(overrideAwareReceiver(this, commands, names), ...args)
+      async [name](this: LinearFacadeInstance, ...args: unknown[]): Promise<unknown> {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RuntimeLinearCommands implements every name in LINEAR_COMMAND_NAMES.
+        const commands = (await this.loadLinearCommands()) as unknown as LinearMethodBag
+        return commands[name].call(
+          overrideAwareReceiver(this, commands, LINEAR_COMMAND_NAME_SET),
+          ...args
+        )
       }
     }[name]
     delegators.add(method)

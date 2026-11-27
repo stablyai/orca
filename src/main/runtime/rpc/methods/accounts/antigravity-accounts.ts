@@ -123,6 +123,8 @@ function forgetAgyLogin(runtime: OrcaRuntimeService): void {
 /** Signs agy in where chats on agy's own home run it, with their environment. */
 const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost => ({
   agy: async () => {
+    // A launch restore that began before this sign-in finishes writing before agy's login can.
+    await (await getAntigravityAccountService({ runtime: 'host' })).settled()
     const settings = runtime.requireStore().getSettings()
     const shellEnv = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
     const input = await acpHostBackendInput(
@@ -140,10 +142,10 @@ const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost =
     }
     return { command: input.command, env }
   },
-  signedIn: (intent) => {
+  signedIn: async (intent) => {
     forgetAgyLogin(runtime)
     if (intent === 'changeAccount') {
-      void saveCurrentAgyLogin()
+      await saveCurrentAgyLogin()
     }
   }
 })

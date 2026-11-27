@@ -1,7 +1,7 @@
 import { View } from 'react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatBotMessageCardOf } from '../../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
-import { styles } from '../messages/mobile-native-chat-message-styles'
+import type { stylesSheet } from '../messages/mobile-native-chat-message-styles'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
 import { mobileNativeChatOtherBotCard } from './mobile-native-chat-bot-cards'
 import { MobileNativeChatBotCreatedRow } from '../MobileNativeChatBotRowNotes'
@@ -13,7 +13,8 @@ export function mobileNativeChatBotCardRow(
   message: NativeChatMessage,
   rowId: string,
   fontScale: number,
-  foldedIntoRequest: boolean
+  foldedIntoRequest: boolean,
+  styles: ReturnType<typeof stylesSheet.resolve>
 ): React.JSX.Element | null {
   if (message.orcaNotice === 'card-answer') {
     return <View testID={mobileNativeChatRowId(rowId)} />

@@ -128,7 +128,8 @@ function storeRemoteAnswerMail(
       ? importedAnswerSenderSnapshot(params.answerSenderReport, `run:${homeRunId}`)
       : undefined,
     body: params.body,
-    threadId: params.messageId
+    threadId: params.messageId,
+    replyTo: params.messageId
   })
 }
 

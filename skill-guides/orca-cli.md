@@ -23,7 +23,7 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 **Dev builds (`pnpm dev`):** after `pnpm build:cli` the dev CLI is `orca-dev`, and `./config/scripts/orca-dev.mjs` invokes it worktree-locally without depending on the /usr/local/bin symlink. Plain `orca` targets any installed production Orca.
 
-Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
+Prefer `--json` for agent-driven calls, but run `skills get` without it so the guide stays Markdown. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
 ## Full Handoffs
 

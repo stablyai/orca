@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { BrowserExpectedUrlMismatch } from './browser-expected-url'
 
 export const BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY = 'automation-v1' as const
@@ -82,65 +83,75 @@ export const BROWSER_CLIENT_AUTOMATION_METHODS = [
   'browser.exec'
 ] as const
 
-export const BrowserClientAutomationMethod = z.enum(BROWSER_CLIENT_AUTOMATION_METHODS)
+export const BrowserClientAutomationMethod = lazyZodSchema(() =>
+  z.enum(BROWSER_CLIENT_AUTOMATION_METHODS)
+)
 export type BrowserClientAutomationMethod = z.infer<typeof BrowserClientAutomationMethod>
 
-const BrowserClientAutomationParams = z
-  .record(z.string(), z.unknown())
-  .superRefine((params, context) =>
-    enforceJsonByteBudget(
-      params,
-      BROWSER_CLIENT_AUTOMATION_PARAMS_MAX_BYTES,
-      'Browser client automation params exceed their byte budget',
-      context
+const BrowserClientAutomationParams = lazyZodSchema(() =>
+  z
+    .record(z.string(), z.unknown())
+    .superRefine((params, context) =>
+      enforceJsonByteBudget(
+        params,
+        BROWSER_CLIENT_AUTOMATION_PARAMS_MAX_BYTES,
+        'Browser client automation params exceed their byte budget',
+        context
+      )
     )
-  )
+)
 
-const BrowserClientAutomationResultValue = z
-  .unknown()
-  .superRefine((value, context) =>
-    enforceJsonByteBudget(
-      value,
-      BROWSER_CLIENT_AUTOMATION_RESULT_MAX_BYTES,
-      'Browser client automation result exceeds its byte budget',
-      context
+const BrowserClientAutomationResultValue = lazyZodSchema(() =>
+  z
+    .unknown()
+    .superRefine((value, context) =>
+      enforceJsonByteBudget(
+        value,
+        BROWSER_CLIENT_AUTOMATION_RESULT_MAX_BYTES,
+        'Browser client automation result exceeds its byte budget',
+        context
+      )
     )
-  )
+)
 
-export const BrowserClientAutomationCommand = z.object({
-  type: z.literal('automation'),
-  method: BrowserClientAutomationMethod,
-  params: BrowserClientAutomationParams,
-  /** The host's caller was an agent's CLI; older hosts omit it and every command counts as one. */
-  agent: z.boolean().optional(),
-  /** The host assembles results sent as chunks; older hosts omit it and refuse results over one frame. */
-  stagedResults: z.literal(true).optional()
-})
+export const BrowserClientAutomationCommand = lazyZodSchema(() =>
+  z.object({
+    type: z.literal('automation'),
+    method: BrowserClientAutomationMethod,
+    params: BrowserClientAutomationParams,
+    /** The host's caller was an agent's CLI; older hosts omit it and every command counts as one. */
+    agent: z.boolean().optional(),
+    /** The host assembles results sent as chunks; older hosts omit it and refuse results over one frame. */
+    stagedResults: z.literal(true).optional()
+  })
+)
 export type BrowserClientAutomationCommand = z.infer<typeof BrowserClientAutomationCommand>
 
-export const BrowserClientAutomationResult = z.discriminatedUnion('status', [
-  z.object({
-    status: z.literal('completed'),
-    value: BrowserClientAutomationResultValue.optional(),
-    /** The value's JSON byte length, already sent as chunks; replaces `value`. */
-    stagedValueBytes: z
-      .number()
-      .int()
-      .positive()
-      .max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES)
-      .optional()
-  }),
-  z.object({
-    status: z.literal('failed'),
-    errorCode: z.string().min(1).max(256),
-    errorMessage: z
-      .string()
-      .min(1)
-      .max(BROWSER_CLIENT_AUTOMATION_ERROR_MESSAGE_MAX_LENGTH)
-      .optional(),
-    expectedUrlMismatch: BrowserExpectedUrlMismatch.optional()
-  })
-])
+export const BrowserClientAutomationResult = lazyZodSchema(() =>
+  z.discriminatedUnion('status', [
+    z.object({
+      status: z.literal('completed'),
+      value: BrowserClientAutomationResultValue.optional(),
+      /** The value's JSON byte length, already sent as chunks; replaces `value`. */
+      stagedValueBytes: z
+        .number()
+        .int()
+        .positive()
+        .max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES)
+        .optional()
+    }),
+    z.object({
+      status: z.literal('failed'),
+      errorCode: z.string().min(1).max(256),
+      errorMessage: z
+        .string()
+        .min(1)
+        .max(BROWSER_CLIENT_AUTOMATION_ERROR_MESSAGE_MAX_LENGTH)
+        .optional(),
+      expectedUrlMismatch: BrowserExpectedUrlMismatch.optional()
+    })
+  ])
+)
 export type BrowserClientAutomationResult = z.infer<typeof BrowserClientAutomationResult>
 
 export function truncateBrowserClientAutomationErrorMessage(message: string): string | undefined {

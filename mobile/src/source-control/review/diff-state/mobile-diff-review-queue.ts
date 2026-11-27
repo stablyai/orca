@@ -1,5 +1,5 @@
 import { compareFileNames } from '../../../../../src/shared/file-listing/file-name-sort'
-import { translate } from '../../../i18n/mobile-i18n'
+import type { Translate } from '../../../i18n/mobile-i18n'
 import type {
   DiffComment,
   DiffReviewScope,
@@ -27,6 +27,19 @@ import {
 export type MobileDiffReviewSection = DiffReviewScope | 'commit'
 export type MobileDiffReviewQueueFilter = 'all' | MobileDiffReviewSection
 
+export function mobileDiffReviewItemSubtitle(scope: MobileDiffReviewSection, t: Translate): string {
+  switch (scope) {
+    case 'staged':
+      return t('session.diffReviewQueue.staged', 'Staged')
+    case 'branch':
+      return t('session.diffReviewQueue.committedOnBranch', 'Committed on branch')
+    case 'commit':
+      return t('session.diffReviewQueue.inCommit', 'In this commit')
+    case 'unstaged':
+      return t('session.diffReviewQueue.unstaged', 'Unstaged')
+  }
+}
+
 export type MobileDiffReviewQueueItem = {
   key: string
   scope: MobileDiffReviewSection
@@ -35,7 +48,6 @@ export type MobileDiffReviewQueueItem = {
   oldPath?: string
   status: GitStatus.GitFileStatus
   title: string
-  subtitle: string
   added?: number
   removed?: number
   canStage: boolean
@@ -199,11 +211,6 @@ function statusEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    get subtitle() {
-      return scope === 'staged'
-        ? translate('session.diffReviewQueue.staged', 'Staged')
-        : translate('session.diffReviewQueue.unstaged', 'Unstaged')
-    },
     added: entry.added,
     removed: entry.removed,
     canStage: isMobileGitStageableEntry(entry),
@@ -239,9 +246,6 @@ function branchEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    get subtitle() {
-      return translate('session.diffReviewQueue.committedOnBranch', 'Committed on branch')
-    },
     added: entry.added,
     removed: entry.removed,
     canStage: false,
@@ -265,9 +269,6 @@ function commitEntryToQueueItem(entry: MobileGitChangedFile): MobileDiffReviewQu
     oldPath: entry.oldPath,
     status: entry.status ?? 'modified',
     title: entry.path,
-    get subtitle() {
-      return translate('session.diffReviewQueue.inCommit', 'In this commit')
-    },
     added: entry.added,
     removed: entry.removed,
     canStage: false,

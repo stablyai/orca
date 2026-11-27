@@ -115,12 +115,19 @@ function fillBlockSpan(span: HTMLElement): void {
   }
   const inlineFg = span.style.color
   const ownsColor = span.hasAttribute(FILL_ATTR) && inlineFg === 'transparent'
-  if (ownsColor && span.getAttribute(FILL_ATTR) === text) {
+  // xterm's cursor CSS sets a block cursor's `color` (blinking or not), so its fill follows currentColor.
+  const isBlockCursor = span.classList.contains('xterm-cursor-block')
+  if (span.getAttribute(FILL_ATTR) === text && (ownsColor || isBlockCursor)) {
     return
   }
-  const fg = ownsColor
-    ? span.style.getPropertyValue(BLOCK_FG_VAR)
-    : inlineFg || (typeof getComputedStyle === 'function' ? getComputedStyle(span).color : '')
+  let fg: string
+  if (isBlockCursor) {
+    fg = 'currentColor'
+  } else if (ownsColor) {
+    fg = span.style.getPropertyValue(BLOCK_FG_VAR)
+  } else {
+    fg = inlineFg || (typeof getComputedStyle === 'function' ? getComputedStyle(span).color : '')
+  }
   if (!fg) {
     return
   }
@@ -140,7 +147,9 @@ function fillBlockSpan(span: HTMLElement): void {
   }
   span.setAttribute(FILL_ATTR, text)
   span.style.setProperty(BLOCK_FG_VAR, fg)
-  span.style.color = 'transparent'
+  if (!isBlockCursor) {
+    span.style.color = 'transparent'
+  }
   span.style.backgroundImage = fill
   span.style.backgroundSize = `${100 / text.length}% 100%`
   span.style.backgroundRepeat = 'repeat-x'

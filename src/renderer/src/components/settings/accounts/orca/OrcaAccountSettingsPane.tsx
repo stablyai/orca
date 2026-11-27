@@ -98,7 +98,7 @@ export function OrcaAccountHeader({
             </Badge>
           ) : null}
         </div>
-        <p className="truncate text-xs text-muted-foreground">{line}</p>
+        <p className="text-xs text-muted-foreground wrap-anywhere">{line}</p>
       </div>
       {children}
     </div>

@@ -1,4 +1,5 @@
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { isDefaultGitHubHost } from '../../../../shared/github/repositories/repository-identity-key'
 import {
   authorFieldsFromUnknown,
   createdAtFromUnknown,
@@ -12,7 +13,10 @@ import {
   deriveWorkItemCheckSummary,
   type MainWorkItem
 } from './work-item-field-coercion'
-export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
+export function mapIssueWorkItem(
+  item: Record<string, unknown>,
+  ownerRepo: OwnerRepo | null = null
+): MainWorkItem {
   return {
     id: `issue:${String(item.number)}`,
     type: 'issue',
@@ -33,7 +37,9 @@ export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
     ...createdAtFromUnknown(item),
     ...authorFieldsFromUnknown(item),
     ...(typeof item.comments === 'number' ? { commentCount: item.comments } : {}),
-    ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
+    ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {}),
+    // GHES web URLs can name another host than the API; owner/repo stay URL-derived for renamed repos.
+    ...(ownerRepo?.host && !isDefaultGitHubHost(ownerRepo.host) ? { apiHost: ownerRepo.host } : {})
   }
 }
 

@@ -7,7 +7,7 @@ import {
   type NativeChatContextUsageSummary
 } from '../../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 
-/** The composer ring's readout, from desktop's rule; an older host's missing answer leaves the loaded window's facts. */
+/** The chat's context readout, from desktop's rule; an older host's missing answer leaves the loaded window's facts. */
 export function useMobileStructuredContextUsage(
   journalItems: readonly AgentJournalRenderItem[],
   support: AgentSessionOptionsResult['contextUsage'],

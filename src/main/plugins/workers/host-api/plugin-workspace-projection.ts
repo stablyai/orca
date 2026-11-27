@@ -21,6 +21,7 @@ import {
 } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { RuntimeTerminalSummary } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 /** One terminal of a workspace, as main's runtime lists it. */
 export type PluginWorkspaceTerminal = {
@@ -29,6 +30,26 @@ export type PluginWorkspaceTerminal = {
   title?: string
   /** `tabId:leafId`, which agent statuses carry. */
   paneKey?: string
+  /** The pane an orphaned live terminal (one no window shows) last recorded; absent if unknown. */
+  recordedPaneKey?: string
+}
+
+/** One terminal as the runtime's `listTerminals` returns it. */
+export type PluginListedTerminal = Pick<
+  RuntimeTerminalSummary,
+  'handle' | 'title' | 'paneTitle' | 'recordedPaneKey'
+> &
+  Partial<Pick<RuntimeTerminalSummary, 'tabId' | 'leafId'>>
+
+export function pluginWorkspaceTerminal(terminal: PluginListedTerminal): PluginWorkspaceTerminal {
+  return {
+    id: terminal.handle,
+    title: pluginTerminalTitle(terminal),
+    ...(terminal.tabId && terminal.leafId
+      ? { paneKey: `${terminal.tabId}:${terminal.leafId}` }
+      : {}),
+    ...(terminal.recordedPaneKey ? { recordedPaneKey: terminal.recordedPaneKey } : {})
+  }
 }
 
 /** One agent row from the hook server's status store (the fields plugins may see). */
@@ -122,15 +143,25 @@ export function projectPluginWorkspaceContext(
   }
 }
 
-/** The terminal an agent's pane is: by the handle its status names, else by pane key. */
+/** The terminal an agent's pane is: by the handle its status names, else by the pane it shows,
+ *  else by the pane it was restored for when exactly one terminal recorded that pane. */
 export function terminalForPane(
   terminals: readonly PluginWorkspaceTerminal[],
   row: Pick<PluginAgentStatusRow, 'paneKey' | 'terminalHandle'>
 ): PluginWorkspaceTerminal | undefined {
   return (
     terminals.find((terminal) => terminal.id === row.terminalHandle) ??
-    terminals.find((terminal) => terminal.paneKey === row.paneKey)
+    terminals.find((terminal) => terminal.paneKey === row.paneKey) ??
+    soleRecordedClaimant(terminals, row.paneKey)
   )
+}
+
+function soleRecordedClaimant(
+  terminals: readonly PluginWorkspaceTerminal[],
+  paneKey: string
+): PluginWorkspaceTerminal | undefined {
+  const claimants = terminals.filter((terminal) => terminal.recordedPaneKey === paneKey)
+  return claimants.length === 1 ? claimants[0] : undefined
 }
 
 /** `agents.list`: the focused workspace's agents, newest state first. */

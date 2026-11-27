@@ -6,8 +6,8 @@
 // - A field step is bounded by the count of distinct values the field holds; a step of 90 on
 //   minutes is one value at :00, never "every 90 minutes" (#15895).
 export type CronParseOptions = {
-  /** Reject oversized input steps, but preserve stored cadence instead of throwing on legacy rows mid-tick. */
-  rejectOversizedStep?: boolean
+  /** Reject oversized steps and non-decimal numbers in new input, but preserve stored cadence instead of throwing on legacy rows mid-tick. */
+  strictInput?: boolean
 }
 
 export const MONTH_NAMES: Record<string, number> = {
@@ -42,14 +42,20 @@ export const DAY_NAMES: Record<string, number> = {
   SAT: 6
 }
 
+// Cron numbers are decimal digits; stored rows keep Number()'s wider reading (`0x10` fires at :16).
+function parseCronInteger(value: string, strictInput: boolean): number {
+  return strictInput && !/^\d+$/.test(value) ? Number.NaN : Number(value)
+}
+
 function parseCronNumber(
   value: string,
   names: Record<string, number> | null,
-  field: string
+  field: string,
+  strictInput: boolean
 ): number {
   const normalized = value.toUpperCase()
   const named = names?.[normalized]
-  const parsed = named ?? Number(normalized)
+  const parsed = named ?? parseCronInteger(normalized, strictInput)
   if (!Number.isInteger(parsed)) {
     throw new Error(`Invalid cron ${field}.`)
   }
@@ -65,8 +71,9 @@ export function parseCronField(args: {
   normalize?: (value: number) => number
   // Bound by distinct values after aliases: weekday 0–7 holds seven days, so */8 is oversized.
   distinctValueCount?: number
-  rejectOversizedStep?: boolean
+  strictInput: boolean
 }): Set<number> {
+  const { strictInput } = args
   const result = new Set<number>()
   for (const rawPart of args.value.split(',')) {
     const part = rawPart.trim()
@@ -81,12 +88,12 @@ export function parseCronField(args: {
     if (!rangePart) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
-    const step = stepPart === undefined ? 1 : Number(stepPart)
+    const step = stepPart === undefined ? 1 : parseCronInteger(stepPart, strictInput)
     if (!Number.isInteger(step) || step < 1) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
     const domainSize = args.distinctValueCount ?? args.max - args.min + 1
-    if (args.rejectOversizedStep && step > domainSize) {
+    if (strictInput && step > domainSize) {
       throw new Error(`Cron ${args.field} step must be between 1 and ${domainSize}.`)
     }
 
@@ -101,10 +108,10 @@ export function parseCronField(args: {
         throw new Error(`Invalid cron ${args.field}.`)
       }
       const [startPart, endPart] = rangeParts
-      start = parseCronNumber(startPart, args.names ?? null, args.field)
-      end = parseCronNumber(endPart, args.names ?? null, args.field)
+      start = parseCronNumber(startPart, args.names ?? null, args.field, strictInput)
+      end = parseCronNumber(endPart, args.names ?? null, args.field, strictInput)
     } else {
-      start = parseCronNumber(rangePart, args.names ?? null, args.field)
+      start = parseCronNumber(rangePart, args.names ?? null, args.field, strictInput)
       // `N/step` is the open-ended `N-max/step` sequence; a bare `N` is only itself.
       end = stepPart === undefined ? start : args.max
     }

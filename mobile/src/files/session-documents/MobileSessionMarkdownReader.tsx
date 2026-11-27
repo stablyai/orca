@@ -1,18 +1,29 @@
 import { useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { RefreshCw } from 'lucide-react-native'
+import { View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MobileRichMarkdownEditor } from '../../components/rich-markdown/MobileRichMarkdownEditor'
-import { resolveMarkdownFloatingActionsBottom } from './markdown-floating-actions-layout'
 import { markdownReaderStatusText } from './mobile-markdown-reader-status'
-import { colors, spacing, pressedStyle } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { styles } from '../../session/mobile-session-styles'
+import type { MobilePalette } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import type { Translate } from '../../i18n/mobile-i18n'
+import type { SupportedUiLocale } from '../../../../src/shared/i18n/ui-locale'
+import { stylesSheet } from '../../session/mobile-session-styles'
 import type { MarkdownDocState } from './session-document-state'
 import { MobileLoadErrorState, MobileStateView } from '../../components/feedback/MobileStateView'
-import { useDocumentEditDraft } from '../../drafts/use-document-edit-draft'
-import { DocumentEditDraftOfferBar } from '../../drafts/DocumentEditDraftOfferBar'
+import { Presence } from '../../components/motion/AutoHeight'
+import {
+  useDocumentEditDraft,
+  type DocumentEditDraftOffer
+} from '../../drafts/use-document-edit-draft'
+import { documentEditDraftOfferText } from '../../drafts/DocumentEditDraftOfferBar'
+import { MobileMarkdownNoteBar, type MobileMarkdownNoteBarProps } from './MobileMarkdownNoteBar'
 
+type ReadyMarkdownDoc = Extract<MarkdownDocState, { status: 'ready' }>
+
+// Nothing floats over the note: its next step waits at the foot while the keyboard is down.
 export function MarkdownReader({
   documentId,
   draftKey,
@@ -21,7 +32,6 @@ export function MarkdownReader({
   onChange,
   onSave,
   onCopy,
-  onCopyPath,
   onDiscard,
   loadImageSource,
   keyboardLift
@@ -33,16 +43,18 @@ export function MarkdownReader({
   onChange: (content: string) => void
   onSave: () => void
   onCopy: (text: string) => void
-  onCopyPath: () => void
   onDiscard: () => void
   loadImageSource?: (path: string) => Promise<string>
+  /** The session's keyboard lift, which leaves out the safe area under the content. */
   keyboardLift: number
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
-  const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
-  const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
+  const locale = useMobileUiLocale()
+  const intlLocale = intlLocaleFor(locale)
+  const insets = useSafeAreaInsets()
+  const [editing, setEditing] = useState(false)
   const ready = doc?.status === 'ready' ? doc : null
   const editDraft = useDocumentEditDraft({
     draftKey,
@@ -60,15 +72,13 @@ export function MarkdownReader({
     return <MobileLoadErrorState error={doc.message} onRetry={onRefresh} />
   }
 
-  const statusText = markdownReaderStatusText(doc)
-  const showRefresh = (doc.stale && !doc.isDirty) || !doc.editable
-  const showSave = doc.isDirty || doc.saving
-  // Why: editor focus lives in a WebView, so lift native Save/Discard controls instead of resizing it.
-  const floatingBottom = resolveMarkdownFloatingActionsBottom({
-    keyboardLift: effectiveKeyboardLift,
-    restingBottom: spacing.lg,
-    liftedClearance: spacing.md
-  })
+  const bar = editDraft.offer
+    ? offerBar(editDraft.offer, t, intlLocale, colors, {
+        onDiscard: editDraft.discardOffer,
+        onRestore: editDraft.restore,
+        onCopy: () => onCopy(editDraft.offer?.content ?? '')
+      })
+    : noteBar(doc, t, locale, colors, { onSave, onDiscard, onRefresh })
 
   return (
     <View style={styles.markdownEditor}>
@@ -77,111 +87,77 @@ export function MarkdownReader({
         content={doc.localContent}
         editable={doc.editable && !doc.saving}
         onChange={onChange}
-        onKeyboardInsetChange={setWebviewKeyboardInset}
         loadImageSource={loadImageSource}
+        // Same sum as the terminal dock: the lift plus the safe area it leaves out.
+        formatRowBottom={keyboardLift + insets.bottom}
+        onEditingChange={setEditing}
       />
-      {editDraft.offer ? (
-        <DocumentEditDraftOfferBar
-          offer={editDraft.offer}
-          bottom={floatingBottom}
-          onDiscard={editDraft.discardOffer}
-          onRestore={editDraft.restore}
-          onCopy={() => onCopy(editDraft.offer?.content ?? '')}
-        />
-      ) : (
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.markdownFloatingBar,
-            // Why: editor focus lives in a WebView, so lift native Save/Discard controls instead of resizing it.
-            { bottom: floatingBottom }
-          ]}
-        >
-          {statusText ? (
-            <Text
-              style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
-              numberOfLines={2}
-            >
-              {statusText}
-            </Text>
-          ) : null}
-          <View style={styles.markdownFloatingActions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.markdownFloatingButton,
-                styles.markdownCopyButton,
-                pressed && pressedStyle
-              ]}
-              onPress={() => onCopy(doc.localContent)}
-              accessibilityRole="button"
-              accessibilityLabel={
-                doc.truncated
-                  ? t('session.markdownReader.copyLoadedSource', 'Copy loaded Markdown source')
-                  : t('session.markdownReader.copySource', 'Copy Markdown source')
-              }
-            >
-              <Text style={styles.markdownFloatingButtonText}>
-                {doc.truncated
-                  ? t('session.markdownReader.copyLoaded', 'Copy loaded')
-                  : t('common.copy', 'Copy')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.markdownFloatingButton,
-                styles.markdownCopyButton,
-                pressed && pressedStyle
-              ]}
-              onPress={onCopyPath}
-              accessibilityRole="button"
-              accessibilityLabel={t('session.markdownReader.copyPathLabel', 'Copy Markdown path')}
-            >
-              <Text style={styles.markdownFloatingButtonText}>
-                {t('session.markdownReader.copyPath', 'Copy path')}
-              </Text>
-            </Pressable>
-            {showRefresh ? (
-              <Pressable
-                style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
-                onPress={onRefresh}
-              >
-                <RefreshCw size={13} color={colors.textPrimary} />
-                <Text style={styles.markdownFloatingButtonText}>
-                  {t('common.refresh', 'Refresh')}
-                </Text>
-              </Pressable>
-            ) : null}
-            {doc.isDirty ? (
-              <Pressable
-                style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
-                onPress={onDiscard}
-              >
-                <Text style={styles.markdownFloatingButtonText}>
-                  {t('session.markdownReader.discard', 'Discard')}
-                </Text>
-              </Pressable>
-            ) : null}
-            {showSave ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.markdownFloatingButton,
-                  styles.markdownSaveButton,
-                  (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled,
-                  pressed && pressedStyle
-                ]}
-                disabled={!doc.editable || !doc.isDirty || doc.saving}
-                onPress={onSave}
-              >
-                {doc.saving ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <Text style={styles.markdownFloatingButtonText}>{t('common.save', 'Save')}</Text>
-                )}
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      )}
+      <Presence>{bar && !editing ? <MobileMarkdownNoteBar {...bar} /> : null}</Presence>
     </View>
   )
+}
+
+function noteBar(
+  doc: ReadyMarkdownDoc,
+  t: Translate,
+  locale: SupportedUiLocale,
+  colors: MobilePalette,
+  actions: { onSave: () => void; onDiscard: () => void; onRefresh: () => void }
+): MobileMarkdownNoteBarProps | null {
+  const status = markdownReaderStatusText(doc, t, locale)
+  const reason = status
+    ? { text: status, color: doc.saveError ? colors.statusRed : undefined }
+    : undefined
+  if (doc.isDirty || doc.saving) {
+    return {
+      reason,
+      quiet: {
+        label: t('session.markdownReader.discard', 'Discard'),
+        disabled: doc.saving,
+        onPress: actions.onDiscard
+      },
+      primary: {
+        label: t('common.save', 'Save'),
+        pending: doc.saving,
+        disabled: !doc.editable,
+        onPress: actions.onSave
+      }
+    }
+  }
+  if (!reason) {
+    return null
+  }
+  // Only a desktop change has a next step here; read-only and truncated notes just say so.
+  return doc.stale
+    ? {
+        reason,
+        primary: {
+          label: t('common.refresh', 'Refresh'),
+          secondary: true,
+          onPress: actions.onRefresh
+        }
+      }
+    : { reason }
+}
+
+function offerBar(
+  offer: DocumentEditDraftOffer,
+  t: Translate,
+  intlLocale: string,
+  colors: MobilePalette,
+  actions: { onDiscard: () => void; onRestore: () => void; onCopy: () => void }
+): MobileMarkdownNoteBarProps {
+  return {
+    reason: {
+      text: documentEditDraftOfferText(offer, t, intlLocale),
+      color: offer.baseMatches ? undefined : colors.statusAmber
+    },
+    quiet: { label: t('files.unsavedEditsOffer.discard', 'Discard'), onPress: actions.onDiscard },
+    primary: offer.baseMatches
+      ? { label: t('files.unsavedEditsOffer.restore', 'Restore'), onPress: actions.onRestore }
+      : {
+          label: t('files.unsavedEditsOffer.copyMyEdits', 'Copy My Edits'),
+          onPress: actions.onCopy
+        }
+  }
 }

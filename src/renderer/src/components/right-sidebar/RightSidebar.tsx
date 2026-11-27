@@ -37,10 +37,8 @@ import {
   shouldRenderDesktopWindowChrome
 } from '@/app-shell/chrome/desktop-window-chrome'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
-import {
-  ActivityBarPositionMenu,
-  useActivityBarContextPlugin
-} from './activity-bar/activity-bar-position-menu'
+import { ActivityBarPositionMenuHost } from './activity-bar/lazy-activity-bar-position-menu'
+import { useActivityBarContextPlugin } from './activity-bar/use-activity-bar-context-plugin'
 import { RightSidebarTopActivityBar } from './activity-bar/right-sidebar-top-activity-bar'
 import { cancelActivityBarFocusHandoff } from './activity-bar/activity-bar-focus-handoff'
 import { activityBarDragAnnouncements } from './activity-bar/activity-bar-drag-announcements'
@@ -58,6 +56,7 @@ import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/wor
 function RightSidebarInner(): React.JSX.Element {
   const t = useTranslate()
   const contextPlugin = useActivityBarContextPlugin()
+  const [sideContextMenuOpen, setSideContextMenuOpen] = useState(false)
   useUiLanguageRevision()
   useBotPanelMemory()
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
@@ -355,7 +354,7 @@ function RightSidebarInner(): React.JSX.Element {
         </div>
 
         {activityBarPosition === 'side' && (
-          <ContextMenu>
+          <ContextMenu onOpenChange={setSideContextMenuOpen}>
             <ContextMenuTrigger
               asChild
               onContextMenu={contextPlugin.onContextMenu}
@@ -384,7 +383,8 @@ function RightSidebarInner(): React.JSX.Element {
                 </TooltipProvider>
               </div>
             </ContextMenuTrigger>
-            <ActivityBarPositionMenu
+            <ActivityBarPositionMenuHost
+              open={sideContextMenuOpen}
               currentPosition={activityBarPosition}
               onChangePosition={setActivityBarPosition}
               pluginKey={contextPlugin.pluginKey}

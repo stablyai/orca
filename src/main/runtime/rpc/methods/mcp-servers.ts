@@ -303,12 +303,15 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.sessions.stale',
+    // Terminals that outlived the host's restart count only once it has taken them back.
+    requires: ['unshownPlacement'],
     permission: 'workspace',
     params: McpServerSessions,
     handler: (_params, context) => onHost(context, () => context.runtime.countMcpStaleTerminals())
   }),
   defineMethod({
     name: 'mcpServers.sessions.restart',
+    requires: ['unshownPlacement'],
     permission: 'workspace',
     params: McpServerSessions,
     handler: (_params, context) => onHost(context, () => context.runtime.restartMcpStaleTerminals())

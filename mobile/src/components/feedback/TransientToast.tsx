@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react'
 import { AccessibilityInfo, Animated, Pressable, Text, View } from 'react-native'
-import { transientToastStyles } from './transient-toast-styles'
+import { transientToastStylesSheet } from './transient-toast-styles'
 import { spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 /** One thing to do about the message, such as Restart, beside it in the toast. */
 export type TransientToastAction = { label: string; onPress: () => void }
@@ -40,7 +40,7 @@ export function TransientToast({
   bottomInset: number
   action?: TransientToastAction | null
 }) {
-  useMobileColorScheme()
+  const transientToastStyles = useThemedStyles(transientToastStylesSheet)
   // The live region stays mounted so a screen reader hears the message appear; the page has no announceForAccessibility.
   return (
     <View
@@ -67,13 +67,24 @@ export function TransientToast({
   )
 }
 
+function AnimatedToast({
+  message,
+  animatedStyle
+}: {
+  message: string
+  animatedStyle: ComponentProps<typeof Animated.View>['style']
+}) {
+  const styles = useThemedStyles(transientToastStylesSheet)
+  return (
+    <Animated.View pointerEvents="none" style={[styles.toast, animatedStyle]}>
+      <Text style={styles.toastText}>{message}</Text>
+    </Animated.View>
+  )
+}
+
 export function renderAnimatedToast(
   message: string | null,
   animatedStyle: ComponentProps<typeof Animated.View>['style']
 ) {
-  return message ? (
-    <Animated.View pointerEvents="none" style={[transientToastStyles.toast, animatedStyle]}>
-      <Text style={transientToastStyles.toastText}>{message}</Text>
-    </Animated.View>
-  ) : null
+  return message ? <AnimatedToast message={message} animatedStyle={animatedStyle} /> : null
 }

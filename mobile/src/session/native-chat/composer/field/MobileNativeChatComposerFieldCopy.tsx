@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
 import {
-  mobileNativeChatComposerSkillStyles as skillStyles,
+  mobileNativeChatComposerSkillStylesSheet,
   type MobileNativeChatComposerFieldProps
 } from './mobile-native-chat-composer-field-skill'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 function withoutHeightCap<T extends { maxHeight?: unknown }>({ maxHeight: _cap, ...style }: T) {
   return style
 }
 
 function TokenText({ text, skillToken }: { text: string; skillToken: string | null }) {
+  const skillStyles = useThemedStyles(mobileNativeChatComposerSkillStylesSheet)
   if (!skillToken || !text.startsWith(skillToken)) {
     return text
   }
@@ -34,6 +36,8 @@ export function MobileNativeChatComposerFieldCopy({
   fieldHeight: number
   scrollTop: number
 }) {
+  const skillStyles = useThemedStyles(mobileNativeChatComposerSkillStylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const [heardEnd, setHeardEnd] = useState(0)
   // The copy grows past the field's height cap so it can be shifted; the frame clips it.
   const copyStyle = withoutHeightCap(StyleSheet.flatten(composerInputStyles.messageText) ?? {})

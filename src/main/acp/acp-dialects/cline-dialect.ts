@@ -1,15 +1,20 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
 
 // Each built-in tool runs a batch (commands, files, queries) and reports one entry per item.
-const batchEntrySchema = z.looseObject({
-  result: z.string(),
-  error: z.string().optional(),
-  success: z.boolean().optional()
-})
-const batchSchema = z.array(batchEntrySchema).min(1)
-const commandsInputSchema = z.looseObject({ commands: z.array(z.string()).min(1) })
+const batchEntrySchema = lazyZodSchema(() =>
+  z.looseObject({
+    result: z.string(),
+    error: z.string().optional(),
+    success: z.boolean().optional()
+  })
+)
+const batchSchema = lazyZodSchema(() => z.array(batchEntrySchema).min(1))
+const commandsInputSchema = lazyZodSchema(() =>
+  z.looseObject({ commands: z.array(z.string()).min(1) })
+)
 const EXIT_LINE = /^\[Command exited with code (-?\d+)\](?:\n|$)/u
 
 // The editor and apply_patch report a single entry; a reopen replays any of them as JSON text,

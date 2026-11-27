@@ -3,21 +3,28 @@ import { Animated, Easing, Platform, Pressable, View } from 'react-native'
 import { ArrowDown } from 'lucide-react-native'
 import { SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
-import { colors, feedback } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { styles } from '../mobile-native-chat-view-styles'
+import { feedback } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { stylesSheet } from '../mobile-native-chat-view-styles'
+import { MobileEdgeFade } from '../../../components/list/MobileEdgeFade'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 const JUMP_EASING = Easing.bezier(...SHEET_CURVE)
 
+/** What floats over the transcript: its edge fades and the jump to the latest message. */
 export function MobileNativeChatFloatingControls({
   showJumpToTail,
-  onJumpToTail
+  onJumpToTail,
+  canvasFades = false
 }: {
   showJumpToTail: boolean
   onJumpToTail: () => void
+  /** A chat on the chat canvas; bot screens on other grounds draw none. */
+  canvasFades?: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const reducedMotion = useReducedMotionEnabled() === true
   const shown = useRef(new Animated.Value(showJumpToTail ? 1 : 0)).current
@@ -34,27 +41,34 @@ export function MobileNativeChatFloatingControls({
   }, [showJumpToTail, shown])
   const scale = reducedMotion ? 1 : shown.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
   return (
-    <View pointerEvents="box-none" style={styles.floatingControls}>
-      <Animated.View
-        pointerEvents={showJumpToTail ? 'box-none' : 'none'}
-        accessibilityElementsHidden={!showJumpToTail}
-        importantForAccessibility={showJumpToTail ? 'auto' : 'no-hide-descendants'}
-        style={{ opacity: shown, transform: [{ scale }] }}
-      >
-        <Pressable
-          accessibilityLabel={
-            showJumpToTail
-              ? t('session.nativeChatFloatingControls.scrollToLatest', 'Scroll to latest')
-              : undefined
-          }
-          disabled={!showJumpToTail}
-          focusable={showJumpToTail}
-          style={({ pressed }) => [styles.fab, pressed && { opacity: feedback.pressedOpacity }]}
-          onPress={onJumpToTail}
+    <>
+      {/* Rows fade into the canvas under the tabs and above the composer, not at a hard edge. */}
+      {canvasFades ? <MobileEdgeFade edge="top" color={colors.chatCanvas} /> : null}
+      {canvasFades ? <MobileEdgeFade edge="bottom" color={colors.chatCanvas} /> : null}
+      <View pointerEvents="box-none" style={styles.floatingControls}>
+        <Animated.View
+          pointerEvents={showJumpToTail ? 'box-none' : 'none'}
+          accessibilityElementsHidden={!showJumpToTail}
+          importantForAccessibility={showJumpToTail ? 'auto' : 'no-hide-descendants'}
+          style={{ opacity: shown, transform: [{ scale }] }}
         >
-          <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-      </Animated.View>
-    </View>
+          <Pressable
+            accessibilityLabel={
+              showJumpToTail
+                ? t('session.nativeChatFloatingControls.scrollToLatest', 'Scroll to latest')
+                : undefined
+            }
+            disabled={!showJumpToTail}
+            focusable={showJumpToTail}
+            style={({ pressed }) => [styles.fab, pressed && { opacity: feedback.pressedOpacity }]}
+            // A 44 pt target around the 38 pt button.
+            hitSlop={3}
+            onPress={onJumpToTail}
+          >
+            <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
+          </Pressable>
+        </Animated.View>
+      </View>
+    </>
   )
 }

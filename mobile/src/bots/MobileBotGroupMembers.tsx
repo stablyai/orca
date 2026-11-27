@@ -15,7 +15,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 import { groupCreate, groupUpdate } from './bot-group-operations'
 import { useBotPurposes } from './use-bot-purposes'
-import { groupStyles as styles } from './mobile-bot-group-styles'
+import { groupStylesSheet } from './mobile-bot-group-styles'
 import {
   BOT_GROUP_NAME_MAX_LENGTH,
   botGroupMissing,
@@ -23,9 +23,9 @@ import {
   botGroupPickOrder,
   botGroupUnchanged
 } from '../../../src/shared/bots/bot-group-pick'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
+import { useThemedStyles } from '../theme/themed-styles'
 
 // The desktop dialog's pop: faces spring in and out as members change.
 const POP = LayoutAnimation.create(
@@ -51,7 +51,8 @@ export function MobileBotGroupMembers({
   onClose: () => void
   onSaved: (group: BotGroup) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(groupStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const reduced = useReducedMotionEnabled()
   // In pick order: the picture and the suggested name follow it.

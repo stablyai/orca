@@ -68,7 +68,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const [actionError, setActionError] = useState<string | null>(null)
   const keyboardLift = useMobileSourceControlKeyboardLift()
   const busyActionRef = useRef<string | null>(null)
-  const worktreeLabel = getWorktreeLabel(name, worktreeId)
+  const worktreeLabel = getWorktreeLabel(name, worktreeId, t)
   const statusIdentityKey = `${hostId}\0${worktreeId}`
   const { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure } =
     useMobileSourceControlCommitFailure({ client, connState, worktreeId, worktreeLabel })
@@ -103,7 +103,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const sections = useMobileSourceControlSections(derivedEntries, settings.groupOrder)
   const branchCompareResult = branchCompareState.kind === 'ready' ? branchCompareState.result : null
   const branchCompareSection = useMemo(
-    () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? []),
+    () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? [], t),
     [branchCompareResult, t]
   )
   const branchCompareCanOpen = branchCompareResult
@@ -135,7 +135,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     () => entries.some((entry) => entry.conflictStatus === 'unresolved'),
     [entries]
   )
-  const branchLabel = formatBranchLabel(status?.branch, status?.head)
+  const branchLabel = formatBranchLabel(status?.branch, status?.head, t)
   const upstream = status?.upstreamStatus
   const upstreamKnown = upstream !== undefined
 

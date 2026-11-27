@@ -20,9 +20,9 @@ import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { googleChoiceLabel } from '../../session/native-chat/transcript/bot-cards/mobile-google-setup-copy'
 import { MobileNativeChatNoticePill } from '../../session/native-chat/transcript/notices/MobileNativeChatNoticePill'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import { openGoogleConsoleLink } from './connector-link'
 import type { PhoneGoogle, PhoneGoogleStatus } from './phone-google-accounts'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export type GoogleAccount = NonNullable<PhoneGoogleStatus['accounts']>[number]
 type Readiness = GoogleAccount['services'][number]
@@ -87,6 +87,7 @@ export function GoogleReadinessGroup(props: {
   /** Google's sign-in again, for what the person didn't allow; null where the host takes it only itself. */
   onAllowAgain: (() => void) | null
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const { account, google } = props

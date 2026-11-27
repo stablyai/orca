@@ -55,12 +55,12 @@ export type NodeRuntimeAsset = {
 
 // @generated-begin by config/scripts/node-runtime/archive-identity/update-node-runtime-pin.mjs
 export const NODE_RUNTIME_PIN: NodeRuntimePin = {
-  version: '24.22.1',
+  version: '24.22.3',
   electron: '45.4.1',
   napi: 10,
   headers: {
-    file: 'node-v24.22.1-headers.tar.gz',
-    sha256: '322e0a27db9088093ab8347bdc8c7e0aaa21dc9ed548390bf06b394494c09267'
+    file: 'node-v24.22.3-headers.tar.gz',
+    sha256: 'bc93bde109befc916a62348caae708a48f9550150d786398fea2d773607c18da'
   },
   windowsImportLibs: {
     'win32-arm64': {
@@ -77,69 +77,69 @@ export const NODE_RUNTIME_PIN: NodeRuntimePin = {
 export const NODE_RUNTIME_ASSETS: Record<ServerTarget, NodeRuntimeAsset> = {
   'darwin-arm64': {
     source: 'official',
-    archive: 'node-v24.22.1-darwin-arm64.tar.gz',
-    archiveSha256: '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7',
-    executableSha256: '6f32069480ec14d52b6d7b1f3c7124cfbbc46203abf5ddf5c65b127435f3f329',
-    executableSize: 122545856
+    archive: 'node-v24.22.3-darwin-arm64.tar.gz',
+    archiveSha256: 'ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd',
+    executableSha256: 'ba7073582822078d8c90bca3facacc46690bc5366fab4b815aeef9148cd6e854',
+    executableSize: 122586000
   },
   'darwin-x64': {
     source: 'official',
-    archive: 'node-v24.22.1-darwin-x64.tar.gz',
-    archiveSha256: 'd132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035',
-    executableSha256: 'cc6f41f72e3eb4460154952e56a35afdd96b6995cea51cd25e637355a2955a51',
-    executableSize: 125715808
+    archive: 'node-v24.22.3-darwin-x64.tar.gz',
+    archiveSha256: '977614af0504c81045e7fd85596dbca0e5f951b96681516dadafedcca8c447f7',
+    executableSha256: '796184b9a19ed300b1ba7cd0f7e49558fee9fc0f05080bb036025490a5a2edf3',
+    executableSize: 125755312
   },
   'linux-arm64-glibc': {
     source: 'official',
-    archive: 'node-v24.22.1-linux-arm64.tar.gz',
-    archiveSha256: '33c37be234ba8bee041961047b19160f4d7d0f164e8e246f78bdd10feff148b3',
-    executableSha256: 'c8c5721679d8d1a09e9987e345d5f9a64899bb85f7a384783ba8a93e6e62348a',
-    executableSize: 123377224
+    archive: 'node-v24.22.3-linux-arm64.tar.gz',
+    archiveSha256: '261af2af250dfd7e9f25cf151d1b2713a0adf8f10a9ad116c4947f68627affe8',
+    executableSha256: '8f9c2a55879e9705cb285b6cdd649d95df642c6720f052cb30f300d2677da99f',
+    executableSize: 123446736
   },
   'linux-x64-glibc': {
     source: 'official',
-    archive: 'node-v24.22.1-linux-x64.tar.gz',
-    archiveSha256: 'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c',
-    executableSha256: 'e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb',
-    executableSize: 126879696
+    archive: 'node-v24.22.3-linux-x64.tar.gz',
+    archiveSha256: '061ec3e3062115705b56b51fa9cc330ab50d34b6969387d4e4b1a50c6809acc2',
+    executableSha256: 'a7ec1b37e6ff9d187e4198c5b6df9a4eb1c74dd31804fb3bac55cc4ceca1ac01',
+    executableSize: 126891984
   },
   'linux-arm64-musl': {
     source: 'unofficial',
-    archive: 'node-v24.22.1-linux-arm64-musl.tar.gz',
-    archiveSha256: '8254125825a3e5e834bd8a260dab4c8303f720464a741506ec27989b9ba1769b',
-    executableSha256: '211a0371ba3e565863ae5358ffd06bc4fb4ffb0e53689d82c9a5b286ab4ad8d1',
-    executableSize: 129067232
+    archive: 'node-v24.22.3-linux-arm64-musl.tar.gz',
+    archiveSha256: '248c96a84f6c8338646b9fd73bf125124678f8fb08db5f23023f462055e0eedc',
+    executableSha256: '1851ee7c211e9352bf9d79c90d447f47ef8a678ed7e612371c3683099a699c8b',
+    executableSize: 129136528
   },
   'linux-x64-musl': {
     source: 'official',
-    archive: 'node-v24.22.1-linux-x64-musl.tar.gz',
-    archiveSha256: '9b250d29d6ab8ae38dd23019e2c04a6d6b2916ab1dad721c5f6e1da2b2901c6a',
-    executableSha256: '569128f3066ac7be59b10b9a0adef708def642ee37cbf9d560a9bdb68f872108',
-    executableSize: 132485920
+    archive: 'node-v24.22.3-linux-x64-musl.tar.gz',
+    archiveSha256: '5499b663f62c72093715da98f4aea6f83427ad8bab9cf9c75f0924e0e456ce14',
+    executableSha256: '7e027679034844bb06f53bead732673553cf5bb0de424bbbd257b35c989d34b0',
+    executableSize: 132502712
   },
   'win32-arm64': {
     source: 'official',
-    archive: 'node-v24.22.1-win-arm64.zip',
-    archiveSha256: 'a0c807319fede24c4a0d8f84564c82a619bd313b16b10c007c383c2609e99171',
-    executableSha256: '8bea91dc437fe01e7d92ef0efc6c9eaf654369aaba9b2d3e9841552ea7b95a00',
-    executableSize: 82150728
+    archive: 'node-v24.22.3-win-arm64.zip',
+    archiveSha256: 'b3cc74a295b39d4f273271e96f58c06dd2b35757ca12abec64c7d0598b434f14',
+    executableSha256: '172e320db179ce416fc012b96b9917dacfb442beb081de57c4deaed7b5a24644',
+    executableSize: 82173768
   },
   'win32-x64': {
     source: 'official',
-    archive: 'node-v24.22.1-win-x64.zip',
-    archiveSha256: 'd2046d28c2c3dcd211ac5145c0bf30e2047ef9dfb306693c8c6e2eccd8b95fa5',
-    executableSha256: 'd702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5',
-    executableSize: 93915464
+    archive: 'node-v24.22.3-win-x64.zip',
+    archiveSha256: 'e612af99f626ab415ea225af6bce5c971feb448cb5cae250bb1c3fa50c5f7d9f',
+    executableSha256: '86fc4785327db5f5c7558dc6156c543b433c313e813a222e088086222ab4afa6',
+    executableSize: 93944648
   }
 }
 
 export const NODE_RUNTIME_COMPAT_ASSETS: Record<CompatServerTarget, NodeRuntimeAsset> = {
   'linux-x64-glibc217': {
     source: 'unofficial',
-    archive: 'node-v24.22.1-linux-x64-glibc-217.tar.gz',
-    archiveSha256: '422ddeec2c08902a34ef80ae25de388c7b7e2920763030a5262d56b10675c570',
-    executableSha256: '6ecc984d4bd0ff3012e91efa39eaf5f7e519037d5b1cbab8a6e1bb5c7914e18a',
-    executableSize: 139795880
+    archive: 'node-v24.22.3-linux-x64-glibc-217.tar.gz',
+    archiveSha256: '773167bade05e3b2a9b34a6a58ca176274818f45dbbbf13c9d81726a04b9b3b5',
+    executableSha256: 'd09440b3d78298e285c342a2f15a0924c278e0a2cfbbc1b057f8e5ebf69bbd43',
+    executableSize: 139808056
   }
 }
 // @generated-end
