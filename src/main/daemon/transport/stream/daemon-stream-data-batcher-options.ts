@@ -10,4 +10,6 @@ export type DaemonStreamDataBatcherOptions = {
   isSessionDroppable?: (sessionId: string) => boolean
   /** Preserve terminal queries in dropped output: the hidden program may be waiting for their replies. */
   salvageDroppedData?: (dropped: string) => string
+  /** Rate-limited report of a pause of 2 s or more or a watchdog release; ids and sizes only. */
+  onLongProducerPause?: (details: Record<string, unknown>) => void
 }

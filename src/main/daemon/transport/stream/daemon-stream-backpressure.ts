@@ -45,7 +45,8 @@ export class DaemonStreamBackpressure {
     private readonly isDroppable: (sessionId: string) => boolean,
     private readonly ownsSession: (clientId: string, sessionId: string) => boolean = () => true,
     // Stall release must reconcile cached droppability for already-queued data.
-    private readonly onDroppabilityChanged: (sessionId: string) => void = () => {}
+    private readonly onDroppabilityChanged: (sessionId: string) => void = () => {},
+    private readonly reportLongPause: (details: Record<string, unknown>) => void = () => {}
   ) {}
 
   setQueued(
@@ -229,9 +230,14 @@ export class DaemonStreamBackpressure {
     const suppressed = this.suppressedLongPauseLogs
     this.lastLongPauseLogAt = now
     this.suppressedLongPauseLogs = 0
-    console.warn(
-      `[daemon] terminal output paused ${pausedMs}ms, resumed (${reason}): session=${sessionId} sessionBacklogBytes=${this.lastBytesBySession.get(sessionId) ?? 0} totalBacklogBytes=${this.lastTotalBytes} suppressedSinceLast=${suppressed}`
-    )
+    this.reportLongPause({
+      sessionId,
+      pausedMs,
+      reason,
+      sessionBacklogBytes: this.lastBytesBySession.get(sessionId) ?? 0,
+      totalBacklogBytes: this.lastTotalBytes,
+      suppressedSinceLast: suppressed
+    })
   }
 
   private getOrCreateClient(clientId: string): ClientBacklog {
