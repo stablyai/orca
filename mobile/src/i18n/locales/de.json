@@ -2610,7 +2610,6 @@
       "creatingTab": "Wird erstellt…",
       "fileTitle": "Datei",
       "loadingTerminal": "Terminal wird geladen",
-      "retryLoadingTerminal": "Terminal erneut laden",
       "terminalTakingLonger": "Das Laden des Terminals dauert länger als erwartet"
     },
     "agentChildRow": {
@@ -3395,14 +3394,9 @@
     "terminalLayoutSheet": {
       "title": "Terminal-Layout",
       "oneTerminal": "Ein Terminal",
-      "selected": "Ausgewählt",
       "auto": "Automatisch",
-      "autoHint": "An den verfügbaren Platz angepasst teilen",
       "sideBySide": "Nebeneinander",
-      "sideBySideHint": "Zwei Spalten, auch bei geöffneter Seitenleiste",
-      "stacked": "Untereinander",
-      "stackedHint": "Zwei Zeilen in jeder Ausrichtung",
-      "selectedHint": "Ausgewählt · {{hint}}"
+      "stacked": "Untereinander"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Layout konnte nicht gespeichert werden",
@@ -3423,8 +3417,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}, fokussiert",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, zum Fokussieren tippen",
-      "inputPane": "{{title}} · Eingabe"
+      "tapToFocusPane": "{{title}}, zum Fokussieren tippen"
     },
     "structuredOpen": {
       "goneGeneric": "Der Chat des Agenten ist nicht mehr auf diesem Host und kann hier nicht erneut geöffnet werden.",
@@ -4823,7 +4816,6 @@
     },
     "webviewEngineErrorState": {
       "code": "Code {{code}}",
-      "reload": "Neu laden",
       "rendererCrashed": "Renderer abgestürzt",
       "status": "Status {{statusCode}}",
       "title": "Terminal konnte nicht geladen werden"
