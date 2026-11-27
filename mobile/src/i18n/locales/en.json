@@ -3851,7 +3851,7 @@
         "waitingForSignIn": "Waiting for sign-in…",
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
-        "off": "Off",
+        "disabled": "Disabled",
         "notStarted": "Not started"
       },
       "title": "MCP servers",

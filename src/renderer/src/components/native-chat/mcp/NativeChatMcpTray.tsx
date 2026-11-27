@@ -156,6 +156,15 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
             </TooltipContent>
           </Tooltip>
         </div>
+        {listed && props.state.servers.some((server) => server.status === 'unreported') ? (
+          <p className="border-t border-border px-3 py-1.5 text-muted-foreground">
+            {t(
+              'components.native-chat.mcp.unreported',
+              '{{agent}} doesn’t report connection status',
+              { agent: props.agentLabel }
+            )}
+          </p>
+        ) : null}
         {listed ? <McpTrayList {...props} /> : null}
         {props.manageServers ? (
           <div className="flex h-8 items-center border-t border-border px-3">
@@ -177,7 +186,7 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
 const SEPARATOR = ' · '
 
 /** The header's words after the title: the counts, or the one line a panel-level state needs. */
-function McpTrayStatus({ state, agentLabel }: McpTrayViewProps): React.JSX.Element | null {
+function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
   const t = useTranslate()
   const loading = useDeferredPending(state.result === null)
   if (state.result === null) {
@@ -201,13 +210,7 @@ function McpTrayStatus({ state, agentLabel }: McpTrayViewProps): React.JSX.Eleme
           ? (state.result.message ?? t('components.native-chat.mcp.readFailed', 'Couldn’t load'))
           : state.servers.length === 0
             ? t('components.native-chat.mcp.empty', 'None set up for this chat')
-            : state.servers.some((server) => server.status === 'unreported')
-              ? t(
-                  'components.native-chat.mcp.unreported',
-                  '{{agent}} doesn’t report connection status',
-                  { agent: agentLabel }
-                )
-              : null
+            : null
   if (line !== null) {
     return (
       <span title={line}>

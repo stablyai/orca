@@ -1150,7 +1150,7 @@
         "finishOnPage": "열린 페이지에서 완료하세요",
         "needsAuth": "로그인 필요",
         "needsAuthAfterSend": "로그인이 필요합니다. 메시지를 보내면 여기서 로그인할 수 있습니다.",
-        "off": "꺼짐",
+        "disabled": "비활성화됨",
         "pending": "연결 중…",
         "tools_other": "도구 {{count}}개",
         "waitingForSignIn": "로그인을 기다리는 중…",
