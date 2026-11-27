@@ -3193,12 +3193,16 @@
         "failedCount": "{{value0}} com falha",
         "failed": "Falhou",
         "retryAll": "Tentar todos de novo",
-        "manualHelp": "Atualização manual de {{name}}"
+        "manualHelp": "Atualização manual de {{name}}",
+        "updateAllNarrow": "Tudo",
+        "retryAllNarrow": "Repetir"
       },
       "status": {
         "browserBlockGuidance": "Encerre o processo do navegador (PID {{pids}}) e tente de novo. O servidor dele continua em execução.",
         "browserBlockGuidanceMany": "Encerre os processos do navegador (PIDs {{pids}}) e tente de novo. Os servidores continuam em execução.",
-        "blocked": "Bloqueado"
+        "blocked": "Bloqueado",
+        "heldNarrow": "{{version}} em {{date}}",
+        "notes": "Notas"
       },
       "action": {
         "checkHeldNow": "Verificar {{version}} agora. Sua configuração de atraso continua a mesma.",

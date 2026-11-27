@@ -1935,12 +1935,16 @@
         "failedCount": "{{value0}} en échec",
         "failed": "Échec",
         "retryAll": "Tout réessayer",
-        "manualHelp": "Mise à jour manuelle de {{name}}"
+        "manualHelp": "Mise à jour manuelle de {{name}}",
+        "updateAllNarrow": "Tout",
+        "retryAllNarrow": "Réessayer"
       },
       "status": {
         "browserBlockGuidance": "Arrêtez le processus du navigateur (PID {{pids}}), puis réessayez. Son serveur continue de tourner.",
         "browserBlockGuidanceMany": "Arrêtez les processus du navigateur (PID {{pids}}), puis réessayez. Leurs serveurs continuent de tourner.",
-        "blocked": "Bloqué"
+        "blocked": "Bloqué",
+        "heldNarrow": "{{version}} dès {{date}}",
+        "notes": "Notes"
       },
       "action": {
         "checkHeldNow": "Rechercher {{version}} maintenant. Votre réglage de délai reste inchangé.",

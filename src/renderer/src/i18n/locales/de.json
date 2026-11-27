@@ -2282,12 +2282,16 @@
         "failedCount": "{{value0}} fehlgeschlagen",
         "failed": "Fehlgeschlagen",
         "retryAll": "Alle wiederholen",
-        "manualHelp": "Manuelles Update für {{name}}"
+        "manualHelp": "Manuelles Update für {{name}}",
+        "updateAllNarrow": "Alle",
+        "retryAllNarrow": "Wiederholen"
       },
       "status": {
         "browserBlockGuidance": "Beende den Browser-Prozess (PID {{pids}}) und versuche es erneut. Sein Server läuft weiter.",
         "browserBlockGuidanceMany": "Beende die Browser-Prozesse (PIDs {{pids}}) und versuche es erneut. Ihre Server laufen weiter.",
-        "blocked": "Blockiert"
+        "blocked": "Blockiert",
+        "heldNarrow": "{{version}} ab {{date}}",
+        "notes": "Notizen"
       },
       "action": {
         "checkHeldNow": "Jetzt nach {{version}} suchen. Deine Verzögerungseinstellung bleibt gleich.",

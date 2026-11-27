@@ -27,6 +27,18 @@ type Snapshot =
   | { phase: 'running'; request: Promise<RemoteServerUpdateCheck | undefined> }
   | { phase: 'ready'; check: RemoteServerUpdateCheck }
 
+/** A bulk label with a short form for the narrow header, where long translations would cover "Servers". */
+function narrowable(full: string, short: string): React.ReactNode {
+  return full === short ? (
+    full
+  ) : (
+    <>
+      <span className="@max-xs/about-row:hidden">{full}</span>
+      <span className="hidden @max-xs/about-row:inline">{short}</span>
+    </>
+  )
+}
+
 function isFocusable(element: HTMLElement): boolean {
   return (
     element.isConnected &&
@@ -271,10 +283,16 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
             onlyFailed
               ? eligible.length === 1
                 ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
-                : t('settings.about.servers.retryAll', 'Retry all')
+                : narrowable(
+                    t('settings.about.servers.retryAll', 'Retry all'),
+                    t('settings.about.servers.retryAllNarrow', 'Retry all')
+                  )
               : eligible.length === 1
                 ? t('settings.about.action.update', 'Update')
-                : t('settings.about.servers.updateAll', 'Update all')
+                : narrowable(
+                    t('settings.about.servers.updateAll', 'Update all'),
+                    t('settings.about.servers.updateAllNarrow', 'Update all')
+                  )
           }
           restingName={
             eligible.length === 1

@@ -2372,16 +2372,20 @@
         "failedCount": "Ошибок: {{value0}}",
         "failed": "Ошибка",
         "retryAll": "Повторить все",
-        "manualHelp": "Ручное обновление {{name}}"
+        "manualHelp": "Ручное обновление {{name}}",
+        "updateAllNarrow": "Все",
+        "retryAllNarrow": "Повторить"
       },
       "status": {
         "browserBlockGuidance": "Завершите процесс браузера (PID {{pids}}) и повторите попытку. Его сервер продолжит работу.",
         "browserBlockGuidanceMany": "Завершите процессы браузера (PID {{pids}}) и повторите попытку. Их серверы продолжат работу.",
-        "blocked": "Заблокировано"
+        "blocked": "Заблокировано",
+        "heldNarrow": "{{version}} с {{date}}",
+        "notes": "Заметки"
       },
       "action": {
         "checkHeldNow": "Проверить {{version}} сейчас. Настройка задержки не изменится.",
-        "check": "Проверить"
+        "check": "Проверка"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} — не релизная сборка, поэтому канал здесь изменить нельзя."

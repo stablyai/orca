@@ -2243,12 +2243,16 @@
         "failedCount": "{{value0}} 個失敗",
         "failed": "失敗",
         "retryAll": "全部重試",
-        "manualHelp": "手動更新 {{name}}"
+        "manualHelp": "手動更新 {{name}}",
+        "updateAllNarrow": "全部更新",
+        "retryAllNarrow": "全部重試"
       },
       "status": {
         "browserBlockGuidance": "結束瀏覽器程序（PID {{pids}}）後重試。其伺服器會繼續執行。",
         "browserBlockGuidanceMany": "結束瀏覽器程序（PID {{pids}}）後重試。這些伺服器會繼續執行。",
-        "blocked": "已封鎖"
+        "blocked": "已封鎖",
+        "heldNarrow": "{{version}} {{date}}起",
+        "notes": "說明"
       },
       "action": {
         "checkHeldNow": "立即檢查 {{version}}。你的延遲設定保持不變。",

@@ -1529,12 +1529,16 @@
         "failedCount": "{{value0}} 件失敗",
         "failed": "失敗",
         "retryAll": "すべて再試行",
-        "manualHelp": "{{name}} の手動更新"
+        "manualHelp": "{{name}} の手動更新",
+        "updateAllNarrow": "すべて更新",
+        "retryAllNarrow": "すべて再試行"
       },
       "status": {
         "browserBlockGuidance": "ブラウザープロセス (PID {{pids}}) を終了してから再試行してください。サーバーは動作し続けます。",
         "browserBlockGuidanceMany": "ブラウザープロセス (PID {{pids}}) を終了してから再試行してください。サーバーは動作し続けます。",
-        "blocked": "ブロック中"
+        "blocked": "ブロック中",
+        "heldNarrow": "{{version}} {{date}}から",
+        "notes": "ノート"
       },
       "action": {
         "checkHeldNow": "今すぐ {{version}} を確認します。遅延設定は変わりません。",

@@ -1557,12 +1557,16 @@
         "failedCount": "{{value0}} con error",
         "failed": "Error",
         "retryAll": "Reintentar todo",
-        "manualHelp": "Actualización manual de {{name}}"
+        "manualHelp": "Actualización manual de {{name}}",
+        "updateAllNarrow": "Todo",
+        "retryAllNarrow": "Reintentar"
       },
       "status": {
         "browserBlockGuidance": "Finaliza el proceso del navegador (PID {{pids}}) y vuelve a intentarlo. Su servidor sigue en marcha.",
         "browserBlockGuidanceMany": "Finaliza los procesos del navegador (PID {{pids}}) y vuelve a intentarlo. Sus servidores siguen en marcha.",
-        "blocked": "Bloqueado"
+        "blocked": "Bloqueado",
+        "heldNarrow": "{{version}} desde {{date}}",
+        "notes": "Notas"
       },
       "action": {
         "checkHeldNow": "Buscar {{version}} ahora. Tu ajuste de retraso no cambia.",

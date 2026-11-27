@@ -2284,6 +2284,8 @@
         "updateOne": "Update {{name}}",
         "retryOne": "Retry {{name}}",
         "retryAll": "Retry all",
+        "updateAllNarrow": "Update all",
+        "retryAllNarrow": "Retry all",
         "manualHelp": "Manual update for {{name}}",
         "updatingCount": "{{value0}} updating",
         "failedCount": "{{value0}} failed",

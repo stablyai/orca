@@ -1531,12 +1531,16 @@
         "failedCount": "{{value0}} 个失败",
         "failed": "失败",
         "retryAll": "全部重试",
-        "manualHelp": "手动更新 {{name}}"
+        "manualHelp": "手动更新 {{name}}",
+        "updateAllNarrow": "全部更新",
+        "retryAllNarrow": "全部重试"
       },
       "status": {
         "browserBlockGuidance": "结束浏览器进程（PID {{pids}}）后重试。其服务器会继续运行。",
         "browserBlockGuidanceMany": "结束浏览器进程（PID {{pids}}）后重试。这些服务器会继续运行。",
-        "blocked": "已阻止"
+        "blocked": "已阻止",
+        "heldNarrow": "{{version}} {{date}}起",
+        "notes": "说明"
       },
       "action": {
         "checkHeldNow": "立即检查 {{version}}。你的延迟设置保持不变。",

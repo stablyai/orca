@@ -6,7 +6,7 @@ import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 
 type ServerRestartButtonProps = {
   /** Resting label, e.g. "Update all", "Update" or "Retry". */
-  label: string
+  label: React.ReactNode
   /** Armed label in the same spot, e.g. "Restart 2?" or "Restart?". */
   armedLabel: string
   /** The full question, read as the armed button's name, e.g. "Restart 2 servers? Live sessions may drop." */
