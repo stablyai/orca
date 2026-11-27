@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
@@ -29,6 +29,23 @@ import { resolveRenderedTabStrip } from './strip/rendered-tab-strip'
 const EMPTY_ROWS: readonly ClientHostedBrowserRow[] = []
 const itemIdOf = (item: TabBarItem): string => item.id
 const idOf = (id: string): string => id
+
+type TabBarSurfaceRef = (node: HTMLDivElement | null) => void
+
+// Why: a hook result stays referentially stable under React Compiler; an inline ref is rebuilt
+// every render, detaching the file-drop owner and cancelling the pending menu focus handoff.
+function useTabBarSurfaceRef(
+  clearPendingNewTabMenuFocusOnUnmount: TabBarSurfaceRef,
+  attachFileDropOwner: (node: HTMLElement | null) => void
+): TabBarSurfaceRef {
+  return useCallback(
+    (node: HTMLDivElement | null) => {
+      clearPendingNewTabMenuFocusOnUnmount(node)
+      attachFileDropOwner(node)
+    },
+    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
+  )
+}
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const t = useTranslate()
@@ -176,10 +193,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   )
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
-  const surfaceRef = (node: HTMLDivElement | null): void => {
-    clearPendingNewTabMenuFocusOnUnmount(node)
-    attachFileDropOwner(node)
-  }
+  const surfaceRef = useTabBarSurfaceRef(clearPendingNewTabMenuFocusOnUnmount, attachFileDropOwner)
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
