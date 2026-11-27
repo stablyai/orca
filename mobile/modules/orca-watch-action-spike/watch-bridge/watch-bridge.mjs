@@ -94,7 +94,7 @@ function runtimeCall(method, params) {
       )
     )
     socket.on('data', (chunk) => {
-      buffer += chunk
+      buffer += String(chunk)
       const end = buffer.indexOf('\n')
       if (end === -1) {
         return
