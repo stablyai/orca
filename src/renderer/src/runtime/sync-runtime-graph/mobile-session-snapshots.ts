@@ -2,6 +2,8 @@ import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
+  getLiveFolderWorkspaceIds,
+  getMobileSessionWorktreeIds,
   graphState,
   jsonContentEquals,
   mobilePublicationEpoch
@@ -31,7 +33,6 @@ import {
   canReuseBrowserPageInventory,
   canReuseMobileSessionSnapshot
 } from './mobile-session-capture'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   collectDirtyMobileSessionWorkspaces,
   mobileSessionWorkspaceSourcesUnchanged,
@@ -62,16 +63,8 @@ export function buildMobileSessionTabSnapshots(
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     terminalTheme: getMobileTerminalTheme(state, systemPrefersDark)
   }
-  const liveFolderWorkspaceIds = new Set(
-    (selectFolderWorkspaces(state) ?? []).map((workspace) => workspace.id)
-  )
-  const worktreeIds = new Set<string>([
-    ...Object.keys(state.tabsByWorktree),
-    ...Object.keys(state.groupsByWorktree),
-    ...Object.keys(state.unifiedTabsByWorktree),
-    ...Object.keys(browserTabsByWorktree),
-    ...state.openFiles.map((file) => file.worktreeId)
-  ])
+  const liveFolderWorkspaceIds = getLiveFolderWorkspaceIds(state)
+  const worktreeIds = getMobileSessionWorktreeIds(state, browserTabsByWorktree)
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
   const sources = { state, publication: publicationInputs, ambiguousTerminalTabIds }
   const dirtyWorkspaces = collectDirtyMobileSessionWorkspaces(
