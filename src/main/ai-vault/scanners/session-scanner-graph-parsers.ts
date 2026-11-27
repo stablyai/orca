@@ -16,7 +16,7 @@ import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { rovoTranscriptPathForMetadata } from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
-import { withOmpSubagentTranscriptCount } from './omp/session-scanner-omp-subagent-transcripts'
+import { withGraphSubagentTranscriptCount } from './session-scanner-graph-subagent-transcripts'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -274,7 +274,7 @@ export function createMessageGraphSessionResumeState(
     }),
     persistedTitle: null
   })
-  return withOmpSubagentTranscriptCount(state, file.path)
+  return withGraphSubagentTranscriptCount(state, file.path)
 }
 
 function createMessageGraphResumeState(state: MessageGraphParseState): ResumableSessionParseState {

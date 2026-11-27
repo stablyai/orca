@@ -10,14 +10,14 @@ import type {
   AiVaultSubagentListResult
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 
-// Only Claude and OMP currently store Task subagents as sibling transcripts.
+// Only Claude, OMP and Pi store Task subagents as sibling transcripts.
 export async function listAiVaultSubagentSessions(
   args?: AiVaultSubagentListArgs
 ): Promise<AiVaultSubagentListResult> {
   // Untyped malformed IPC input follows the empty-result rejection contract.
   if (
     !args ||
-    (args.agent !== 'claude' && args.agent !== 'omp') ||
+    (args.agent !== 'claude' && args.agent !== 'omp' && args.agent !== 'pi') ||
     typeof args.parentFilePath !== 'string' ||
     !args.parentFilePath.trim()
   ) {
@@ -33,7 +33,7 @@ export async function listAiVaultSubagentSessions(
   const roots =
     args.agent === 'claude'
       ? claudeProjectsRootDirs({ wslHomeDirs })
-      : sessionRowRootDirs('omp', {}, wslHomeDirs)
+      : sessionRowRootDirs(args.agent, {}, wslHomeDirs)
   if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
     return { sessions: [], issues: [] }
   }

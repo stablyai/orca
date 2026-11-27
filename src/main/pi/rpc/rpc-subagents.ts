@@ -51,10 +51,10 @@ export class PiRpcSubagents {
       [...this.live].filter((id) => !next.has(id)).map((id) => [id, 'unknown'])
     )
     // A pruned child's own report can follow its unknown ending; the host refines it and ignores ids it never saw.
+    // A row that arrives already ended settled in the same snapshot: an awaited call completes between publishes.
     for (const [id, status] of ended ?? []) {
-      if (!next.has(id)) {
-        endings.set(id, OUTCOMES.get(status) ?? 'unknown')
-      }
+      endings.set(id, OUTCOMES.get(status) ?? 'unknown')
+      next.delete(id)
     }
     for (const [id, outcome] of endings) {
       evidence.push({ type: 'ended', observedAt, handle: { idKind: 'task_id', id }, outcome })
