@@ -14,7 +14,8 @@ export type ClaudeStreamedTextDelta = {
 
 export type StreamedBlock = { identity: AgentJournalItemIdentity; startedAt: number }
 
-type OpenBlock = StreamedBlock & { awaited: boolean }
+/** `blank` holds a text block's whitespace until visible text shows. */
+type OpenBlock = StreamedBlock & { awaited: boolean; blank: string }
 
 type StreamedMessage = {
   messageId: string | null
@@ -71,17 +72,25 @@ export function createClaudeStreamedBlockRegistry(
       sessionId,
       uuid: streamed.messageId ? claudeSourceBlockId(streamed.messageId, index) : uuid
     }
-    const block = { identity, startedAt, awaited: false }
+    const block = { identity, startedAt, awaited: false, blank: '' }
     streamed.blocks.set(index, block)
     return block
   }
 
   // Claude Code sends no final frame for a blank text block, so it gets no row until text shows.
-  const awaitFinal = (streamed: StreamedMessage, block: OpenBlock, text: string): void => {
-    if (!block.awaited && (blockType === 'thinking' || /\S/.test(text))) {
-      block.awaited = true
-      streamed.awaitingFinal.push(block)
+  const shownText = (streamed: StreamedMessage, block: OpenBlock, text: string): string | null => {
+    if (block.awaited) {
+      return text
     }
+    if (blockType === 'text' && !/\S/.test(text)) {
+      block.blank += text
+      return null
+    }
+    block.awaited = true
+    streamed.awaitingFinal.push(block)
+    const shown = block.blank + text
+    block.blank = ''
+    return shown
   }
 
   return {
@@ -121,9 +130,8 @@ export function createClaudeStreamedBlockRegistry(
         }
         const streamed = messageFor(scope)
         const started = mint(streamed, sessionId, index, uuid, observedAt)
-        const text = claudeText(block[blockType])
-        awaitFinal(streamed, started, text ?? '')
-        return text && started.awaited
+        const text = shownText(streamed, started, claudeText(block[blockType]) ?? '')
+        return text
           ? { identity: started.identity, startedAt: started.startedAt, text, parentToolUseId }
           : null
       }
@@ -138,9 +146,9 @@ export function createClaudeStreamedBlockRegistry(
       const streamed = messageFor(scope)
       const started =
         streamed.blocks.get(index) ?? mint(streamed, sessionId, index, uuid, observedAt)
-      awaitFinal(streamed, started, text)
-      return started.awaited
-        ? { identity: started.identity, startedAt: started.startedAt, text, parentToolUseId }
+      const shown = shownText(streamed, started, text)
+      return shown
+        ? { identity: started.identity, startedAt: started.startedAt, text: shown, parentToolUseId }
         : null
     },
     reconcile: (frame) => {
