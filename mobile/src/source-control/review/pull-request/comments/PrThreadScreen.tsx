@@ -67,6 +67,7 @@ export function PrThreadScreen({
     )
   }
   const { root, replies } = thread
+  const diffHunk = root.originalDiffHunk ?? root.diffHunk
   const messages = [root, ...replies]
   const location = prCommentLocation(root)
   const filePath = root.path
@@ -140,8 +141,15 @@ export function PrThreadScreen({
             }
           />
         ) : null}
-        {root.diffHunk && root.line ? (
-          <PrThreadCode lines={threadDiffLines(root.diffHunk, root.line, root.startLine)} />
+        {diffHunk && root.line ? (
+          <PrThreadCode
+            lines={threadDiffLines(
+              diffHunk,
+              root.line,
+              root.startLine,
+              root.originalDiffHunk ? 'LEFT' : 'RIGHT'
+            )}
+          />
         ) : null}
         {messages.map((comment) => (
           <View key={comment.id} style={styles.message}>

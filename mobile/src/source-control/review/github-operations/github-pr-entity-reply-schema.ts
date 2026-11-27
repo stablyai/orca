@@ -211,6 +211,7 @@ const prCommentSchema = z
     line: prCount('line'),
     startLine: prCount('startLine'),
     diffHunk: prText('diffHunk'),
+    originalDiffHunk: prText('originalDiffHunk'),
     isBot: prFlag('isBot')
   })
   .transform((comment): PRComment => ({
@@ -229,6 +230,7 @@ const prCommentSchema = z
     startLine: comment.startLine,
     // Newer hosts only; absent keeps the comment's shape unchanged for older ones.
     ...(comment.diffHunk ? { diffHunk: comment.diffHunk } : {}),
+    ...(comment.originalDiffHunk ? { originalDiffHunk: comment.originalDiffHunk } : {}),
     isBot: comment.isBot
   }))
 

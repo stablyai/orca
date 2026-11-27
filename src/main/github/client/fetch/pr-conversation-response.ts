@@ -48,6 +48,7 @@ const threadSchema = lazyZodSchema(() =>
     originalLine: z.number().nullable(),
     originalStartLine: z.number().nullable(),
     diffSide: z.string().nullish().catch(undefined),
+    startDiffSide: z.string().nullish().catch(undefined),
     rootHunk: z
       .object({ nodes: z.array(z.object({ diffHunk: z.string().nullish() }).nullable()) })
       .nullish()
@@ -203,10 +204,7 @@ export function mapPRConversationSources(sources: PRConversationSources): {
           thread
             ? thread.comments.nodes.filter(hasDatabaseId).map((c) =>
                 Object.assign(mapGraphQLComment(c), {
-                  // Left-side threads count old-file lines, which the shared tail numbering cannot place.
-                  ...(c === thread.comments.nodes[0] && thread.diffSide !== 'LEFT'
-                    ? rootDiffHunk(thread.rootHunk)
-                    : {}),
+                  ...(c === thread.comments.nodes[0] ? rootDiffHunk(thread) : {}),
                   path: c.path,
                   threadId: thread.id,
                   isResolved: thread.isResolved,
@@ -221,11 +219,25 @@ export function mapPRConversationSources(sources: PRConversationSources): {
   }
 }
 
-function rootDiffHunk(
-  rootHunk: { nodes: ({ diffHunk?: string | null } | null)[] } | null | undefined
-): { diffHunk?: string } {
-  const diffHunk = tailDiffHunk(rootHunk?.nodes[0]?.diffHunk)
-  return diffHunk ? { diffHunk } : {}
+function rootDiffHunk(thread: PRReviewThread): Pick<PRComment, 'diffHunk' | 'originalDiffHunk'> {
+  if (thread.diffSide === 'LEFT') {
+    const line = thread.line ?? thread.originalLine
+    const startLine = thread.startLine ?? thread.originalStartLine ?? line
+    // The stored hunk keeps its original coordinates when GitHub moves a thread.
+    if (
+      thread.startDiffSide === 'RIGHT' ||
+      line !== thread.originalLine ||
+      startLine !== (thread.originalStartLine ?? thread.originalLine)
+    ) {
+      return {}
+    }
+  }
+  const diffHunk = tailDiffHunk(thread.rootHunk?.nodes[0]?.diffHunk)
+  return diffHunk
+    ? thread.diffSide === 'LEFT'
+      ? { originalDiffHunk: diffHunk }
+      : { diffHunk }
+    : {}
 }
 
 const restCommentSchema = lazyZodSchema(() =>

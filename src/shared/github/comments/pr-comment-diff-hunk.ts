@@ -21,12 +21,13 @@ export type DiffHunkLine = {
 
 /**
  * The lines a thread is about (startLine..endLine, or just endLine), numbered back from endLine.
- * Removed lines inside the range show unnumbered; "\ No newline" markers are skipped.
+ * Opposite-side lines inside the range show unnumbered; "\ No newline" markers are skipped.
  */
 export function threadDiffLines(
   hunkTail: string,
   endLine: number,
-  startLine?: number
+  startLine?: number,
+  side: 'LEFT' | 'RIGHT' = 'RIGHT'
 ): DiffHunkLine[] {
   const first = Math.max(startLine ?? endLine, endLine - HUNK_TAIL_LINES + 1)
   const lines = hunkTail.split('\n')
@@ -39,7 +40,7 @@ export function threadDiffLines(
     }
     const sign = raw.startsWith('+') ? '+' : raw.startsWith('-') ? '-' : ' '
     const text = sign === ' ' && !raw.startsWith(' ') ? raw : raw.slice(1)
-    if (sign === '-') {
+    if (sign === (side === 'LEFT' ? '+' : '-')) {
       out.unshift({ index, number: null, sign, text })
       continue
     }
