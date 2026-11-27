@@ -27,6 +27,7 @@ import {
   TUI_AGENT_CONFIG
 } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { ManagedAgentCommands } from '../../shared/agent-launch/startup/managed-agent-launch-program'
+import { configureInventoryOverrideCommands } from './agent-command-inventory-publication'
 
 export type { ManagedAgentCommands }
 
@@ -112,6 +113,17 @@ function overrideProbeCommands(
     probes.set(id, { command, requiredCommands })
   }
   return probes
+}
+
+export function configureInstalledAgentInventoryOverrides(
+  readOverrides: () => InstalledAgentDetectionOptions['agentCmdOverrides']
+): void {
+  configureInventoryOverrideCommands((runtime) =>
+    Array.from(
+      overrideProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, readOverrides(), runtime).values(),
+      ({ command }) => command
+    )
+  )
 }
 
 export type InstalledAgentInventory = {

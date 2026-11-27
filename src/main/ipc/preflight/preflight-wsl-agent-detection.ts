@@ -9,13 +9,18 @@ import {
 import { runWslProcess, type WslSpec } from '../../wsl/execution/wsl-runner'
 import { getWslGuestEnvironmentGeneration } from '../../wsl/execution/wsl-guest-environment'
 import {
+  abortSignalReason,
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../../shared/concurrency/abort-signal-reason'
+import { PromiseSettlementWaiters } from '../../../shared/concurrency/promise-settlement-waiters'
 
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
-const wslAgentRechecks = new Map<string, Promise<string | undefined>>()
+const wslAgentRechecks = new Map<
+  string,
+  { controller: AbortController; waiters: PromiseSettlementWaiters<string | undefined> }
+>()
 
 export type WslPreflightTarget = {
   distro?: string
@@ -58,23 +63,45 @@ export function recheckWslAgentPath(
     distro.toLowerCase(),
     candidate
   ])
-  const existing = wslAgentRechecks.get(key)
-  if (existing) {
-    return waitForPromiseWithSignal(existing, signal)
+  let recheck = wslAgentRechecks.get(key)
+  if (!recheck) {
+    const controller = new AbortController()
+    const waiters = new PromiseSettlementWaiters(
+      probeWslAgentPath(distro, candidate, controller.signal),
+      () => {
+        if (wslAgentRechecks.get(key)?.controller === controller) {
+          wslAgentRechecks.delete(key)
+        }
+      }
+    )
+    recheck = { controller, waiters }
+    wslAgentRechecks.set(key, recheck)
   }
-  const recheck = probeWslAgentPath(distro, candidate).finally(() => {
-    wslAgentRechecks.delete(key)
+  const { controller, waiters } = recheck
+  return waiters.wait({
+    signal,
+    deferSettled: true,
+    createAbortError: () => abortSignalReason(signal),
+    onAbandon: () => {
+      if (waiters.waiterCount === 0 && wslAgentRechecks.get(key)?.controller === controller) {
+        wslAgentRechecks.delete(key)
+        controller.abort()
+      }
+    }
   })
-  wslAgentRechecks.set(key, recheck)
-  return waitForPromiseWithSignal(recheck, signal)
 }
 
-async function probeWslAgentPath(distro: string, candidate: string): Promise<string | undefined> {
+async function probeWslAgentPath(
+  distro: string,
+  candidate: string,
+  signal: AbortSignal
+): Promise<string | undefined> {
   const result = await runWslAgentProbe({
     distro,
     loginPath: 'none',
     script: WSL_AGENT_PATH_RECHECK,
-    args: [candidate]
+    args: [candidate],
+    signal
   })
   return result?.stdout.endsWith('.') && path.posix.isAbsolute(result.stdout)
     ? result.stdout.slice(0, -1)

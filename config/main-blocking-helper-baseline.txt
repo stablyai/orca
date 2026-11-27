@@ -1484,7 +1484,7 @@
 7 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
 2 src/main/wsl/filesystem/wsl-drive-unc-mounts.ts
 1 src/main/wsl/filesystem/wsl-guest-drive-path.ts
-8 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
+7 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
 4 src/main/wsl/host-lifecycle/wsl-host-connector.ts

@@ -1,7 +1,7 @@
 import '../../../../shared/git/admission/git-admission-state'
 import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { join } from 'node:path'
-import { detectInstalledAgentsWithShellPathHydration } from '../../../preflight/installed-agent-detection'
+import { detectLocalSkillInstallProviders } from '../../../skills/providers/skill-provider-presence'
 import { executeSkillInstallRequest } from '../../../skills/install/skill-install-request'
 import { executeSkillBundleInstallRequest } from '../../../skills/install/skill-bundle-install-request'
 import { SkillUploadSessionService } from '../../../skills/runtime-upload/skill-upload-session-service'
@@ -100,8 +100,7 @@ export class RuntimeSkillInstallCommands {
       allowedDownloadOrigins: [...new Set(origins)],
       requireHttps: this.host.isPackaged(),
       resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
-      detectProviders: () =>
-        detectInstalledAgentsWithShellPathHydration(undefined, undefined, signal),
+      detectProviders: () => detectLocalSkillInstallProviders(signal),
       resolveProviderRootOverrides: (destination) => this.roots(destination),
       signal
     })
@@ -169,8 +168,7 @@ export class RuntimeSkillInstallCommands {
         allowedDownloadOrigins: [...new Set(origins)],
         requireHttps: this.host.isPackaged(),
         resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
-        detectProviders: () =>
-          detectInstalledAgentsWithShellPathHydration(undefined, undefined, controller.signal),
+        detectProviders: () => detectLocalSkillInstallProviders(controller.signal),
         resolveProviderRootOverrides: (destination) => this.roots(destination),
         signal: controller.signal,
         onProgress: report

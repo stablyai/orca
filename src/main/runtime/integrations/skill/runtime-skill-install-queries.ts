@@ -6,7 +6,7 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../../../shared/concurrency/abort-signal-reason'
-import { detectInstalledAgentsWithShellPathHydration } from '../../../preflight/installed-agent-detection'
+import { detectLocalSkillInstallProviders } from '../../../skills/providers/skill-provider-presence'
 import { listManagedSkillInstalls } from '../../../skills/transaction-state/skill-install-provenance'
 import { WslSkillInstallFilesystem } from '../../../skills/filesystem/skill-wsl-install-filesystem'
 import { nativeSkillInstallFilesystem } from '../../../skills/filesystem/skill-install-filesystem'
@@ -45,8 +45,7 @@ export class RuntimeSkillInstallQueries extends RuntimeSkillInstallCommands {
       previewSharedSkillInstall(request, {
         authority: this.authority(),
         stateDirectory: this.userDataPath(),
-        detectProviders: () =>
-          detectInstalledAgentsWithShellPathHydration(undefined, undefined, signal),
+        detectProviders: () => detectLocalSkillInstallProviders(signal),
         resolveProviderRootOverrides: (destination) => this.roots(destination)
       }),
       signal
@@ -58,7 +57,7 @@ export class RuntimeSkillInstallQueries extends RuntimeSkillInstallCommands {
     return previewSharedSkillBundleInstall(request, {
       authority: this.authority(),
       stateDirectory: this.userDataPath(),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      detectProviders: detectLocalSkillInstallProviders,
       resolveProviderRootOverrides: (destination) => this.roots(destination)
     })
   }
@@ -68,7 +67,7 @@ export class RuntimeSkillInstallQueries extends RuntimeSkillInstallCommands {
     return removeSharedSkillInstall(request, {
       authority: this.authority(),
       stateDirectory: this.userDataPath(),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      detectProviders: detectLocalSkillInstallProviders,
       resolveProviderRootOverrides: (destination) => this.roots(destination)
     })
   }

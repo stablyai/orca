@@ -11,7 +11,10 @@ import {
   type AgentStartupShell
 } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
-import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
+import {
+  readLaunchArguments,
+  readLaunchPosition
+} from '../../../../shared/agent-launch/startup/launch-position'
 import { hermesStartupQueryFits } from '../../../../shared/agent-launch/startup/hermes-startup-query'
 import { agentLaunchUnbuildableMessage } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentProgramBlockReason } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -258,19 +261,26 @@ async function prepareDirectLaunch(
   if (!invocation) {
     return authored ? command : withClaudeDirectLaunchCommand(command, shell)
   }
+  const { launch } = invocation
+  const absolute = isAbsolute(launch.executable)
+  const probeInvocation =
+    authored && local && absolute && shell === 'powershell' && !invocation.args
+      ? {
+          launch,
+          args: readLaunchArguments(command, shell, launch, undefined, 'preserve-expansions')
+        }
+      : invocation
   const supported = await planCodexNoDaemonLaunch(
     {
       command,
-      executesOnThisHost:
-        local && (!authored || shell === 'cmd' || isAbsolute(invocation.launch.executable)),
+      executesOnThisHost: local && (!authored || shell === 'cmd' || absolute),
       env,
       envToDelete: input.envToDelete,
       cwd: input.cwd
     },
     shell,
-    invocation
+    probeInvocation
   )
-  const { launch } = invocation
   const prepared = supported
     ? `${command.slice(0, launch.end)} --no-daemon${command.slice(launch.end)}`
     : command

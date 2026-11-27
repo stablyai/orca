@@ -267,13 +267,14 @@ export function readLaunchArguments(
   command: string,
   shell: AgentStartupShell,
   launch: Pick<LaunchPosition, 'end'>,
-  maxChars = LAUNCH_ARGUMENT_SCAN_MAX_CHARS
+  maxChars = LAUNCH_ARGUMENT_SCAN_MAX_CHARS,
+  literalMode: true | 'preserve-expansions' = true
 ): string[] | null {
   if (command.length > maxChars) {
     return null
   }
   const suffix = command.slice(launch.end)
-  const parsed = tokenizeStartupCommand(suffix, shell, true)
+  const parsed = tokenizeStartupCommand(suffix, shell, literalMode)
   if (!parsed.ok || (shell === 'cmd' && /[\r\n]/.test(suffix))) {
     return null
   }

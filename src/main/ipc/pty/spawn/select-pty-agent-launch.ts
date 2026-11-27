@@ -43,6 +43,7 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   } = await alignManagedAgentLaunchAtSpawn(
     {
       ...input,
+      signal: args.signal,
       launchCommand: sequenced || input.launchCommand,
       launchAgent,
       shellPath: process.platform === 'win32' ? undefined : input.shellOverride,

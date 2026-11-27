@@ -73,6 +73,7 @@ import {
 } from './orchestration/federation/peer-mail/peer-mail-relay'
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
+import { configureInstalledAgentInventoryOverrides } from '../preflight/installed-agent-detection'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
 class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
@@ -203,6 +204,8 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
 
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithRelayHostNotices>) {
     super(...args)
+    const { store } = this
+    configureInstalledAgentInventoryOverrides(() => store?.getSettings?.().agentCmdOverrides)
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))

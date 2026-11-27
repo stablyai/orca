@@ -1,10 +1,6 @@
 import { join } from 'node:path'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
-import {
-  isSkillInstallProviderId,
-  type SkillInstallProviderId
-} from '../../../shared/skills/installation/skill-install-providers'
-import { detectInstalledAgentsWithShellPathHydration } from '../../preflight/installed-agent-detection'
+import type { SkillInstallProviderId } from '../../../shared/skills/installation/skill-install-providers'
 import { enableCliInventoryDirectoryReads } from '../../ipc/command-path/command-path-directory-worker-client'
 import { killActiveShellProbes } from '../../startup/shell-environment/shell-probe-lifetime'
 import {
@@ -15,6 +11,7 @@ import {
   resolveEnvironmentSkillProviderRoots,
   withClaudeSkillProviderRoot
 } from '../providers/skill-provider-runtime-roots'
+import { detectLocalSkillInstallProviders } from '../providers/skill-provider-presence'
 import type { BundledSkillServiceInput } from './bundled-skill-installation'
 import type { BundledSkillTargetRequest } from './bundled-skill-targets'
 
@@ -27,12 +24,6 @@ export type BundledSkillSelection = {
   names?: readonly string[]
   force?: readonly string[] | 'all'
   installedOnly?: boolean
-}
-
-async function detectBundledSkillAgents(signal?: AbortSignal): Promise<SkillInstallProviderId[]> {
-  return (await detectInstalledAgentsWithShellPathHydration(undefined, undefined, signal)).filter(
-    isSkillInstallProviderId
-  )
 }
 
 export async function sendCliSkillAgentInventory(): Promise<void> {
@@ -52,7 +43,7 @@ export async function sendCliSkillAgentInventory(): Promise<void> {
   enableCliInventoryDirectoryReads()
   let reply: SkillInstallProviderId[] | string
   try {
-    reply = await detectBundledSkillAgents()
+    reply = await detectLocalSkillInstallProviders()
   } catch (error) {
     reply = error instanceof Error ? error.message : String(error)
   }
@@ -73,7 +64,7 @@ export async function localBundledSkillInput(options: {
 }): Promise<BundledSkillServiceInput> {
   const { destination, selection, signal } = options
   throwIfSignalAborted(signal)
-  const agents = options.agents ?? (await detectBundledSkillAgents(signal))
+  const agents = options.agents ?? (await detectLocalSkillInstallProviders(signal))
   return {
     destination,
     agents,

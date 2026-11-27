@@ -1,4 +1,15 @@
+import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
 import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
+
+let readInventoryOverrideCommands: (
+  runtime: TuiAgentDetectionRuntime
+) => readonly string[] = () => []
+
+export function configureInventoryOverrideCommands(
+  read: typeof readInventoryOverrideCommands
+): void {
+  readInventoryOverrideCommands = read
+}
 
 export type CommandInventory = {
   found: Set<string>
@@ -66,7 +77,7 @@ export function mergeInventory(
 }
 
 export function publishInventory(
-  slot: InventoryPublications,
+  slot: InventoryPublications & { stockCommands: readonly string[]; distro?: string },
   inventory: CommandInventory,
   {
     targeted,
@@ -79,18 +90,57 @@ export function publishInventory(
   },
   partial = false
 ): InventoryPublication {
-  const previous = slot.completed?.generation === generation ? slot.completed?.inventory : undefined
+  const retained = new Set([
+    ...slot.stockCommands,
+    ...readInventoryOverrideCommands(slot.distro ? 'wsl' : process.platform)
+  ])
+  const completed = slot.completed && retainInventoryCommands(slot.completed, retained)
+  const previous = completed?.generation === generation ? completed?.inventory : undefined
   const publication = {
     inventory: !partial && targeted ? mergeInventory(inventory, previous, commands) : inventory,
     generation,
     sequence: (slot.published?.sequence ?? 0) + 1,
     partial
   }
-  slot.published = publication
-  if (!partial) {
-    slot.completed = publication
-  }
+  // A scan may still owe a result for a command that changed while it was running.
+  slot.published = retainInventoryCommands(publication, retained)
+  slot.completed = partial ? completed : slot.published
   return publication
+}
+
+function retainInventoryCommands(
+  publication: InventoryPublication,
+  retained: ReadonlySet<string>
+): InventoryPublication {
+  const { inventory } = publication
+  const hasObsolete = (commands: Iterable<string>): boolean => {
+    for (const command of commands) {
+      if (!retained.has(command)) {
+        return true
+      }
+    }
+    return false
+  }
+  if (
+    !hasObsolete(inventory.probed) &&
+    !hasObsolete(inventory.found) &&
+    !hasObsolete(inventory.matches.keys()) &&
+    (!inventory.fallbackMisses || !hasObsolete(inventory.fallbackMisses))
+  ) {
+    return publication
+  }
+  const keep = (command: string) => retained.has(command)
+  return {
+    ...publication,
+    inventory: {
+      ...inventory,
+      found: new Set([...inventory.found].filter(keep)),
+      matches: new Map([...inventory.matches].filter(([command]) => keep(command))),
+      probed: new Set([...inventory.probed].filter(keep)),
+      fallbackMisses:
+        inventory.fallbackMisses && new Set([...inventory.fallbackMisses].filter(keep))
+    }
+  }
 }
 
 export function completeInventoryAfter(

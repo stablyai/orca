@@ -196,7 +196,7 @@ export async function selectWslTerminalAgentProgram(
     return { program: programs[0], result: { kind: 'unknown' } }
   }
   for (let retry = false; ; retry = true) {
-    await readInventory(
+    const publication = await readInventory(
       slot,
       programs,
       retry ? 'refresh' : options.refresh ? 'revalidate' : 'read',
@@ -206,7 +206,11 @@ export async function selectWslTerminalAgentProgram(
         waitForCompletion: true
       }
     ).wait(signal)
-    const inventory = currentInventoryPublication(slot, 'complete')?.inventory
+    const completed = currentInventoryPublication(slot, 'complete')
+    const inventory =
+      publication && publication.sequence === completed?.sequence
+        ? publication.inventory
+        : completed?.inventory
     if (!inventory) {
       return { program: programs[0], result: { kind: 'unknown' } }
     }
