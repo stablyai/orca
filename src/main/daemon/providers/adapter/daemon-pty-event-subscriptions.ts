@@ -240,7 +240,11 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.producerResumesOwedOnReconnect.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
-    if (this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
+    // A daemon that already accepted idle retirement is leaving; asking again would only reconnect.
+    if (
+      this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION &&
+      this.idleRetirementState !== 'retiring'
+    ) {
       try {
         // Only the authenticated daemon can prove emptiness atomically; share a short quit-time budget.
         const deadlineMs = Date.now() + 250

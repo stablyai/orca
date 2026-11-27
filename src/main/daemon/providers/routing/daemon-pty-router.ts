@@ -24,6 +24,7 @@ import { DaemonRouterRetirement } from './daemon-router-retirement'
 import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
 import { findLegacySessionOwner } from './daemon-router-legacy-owner'
 import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
+import { DaemonRouterLegacyIdleRetirement } from './daemon-router-legacy-idle-retirement'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 
@@ -36,10 +37,23 @@ export class DaemonPtyRouter implements IPtyProvider {
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
   private readonly legacyExitProof = new LegacyDaemonExitProof()
   readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
+  private readonly legacyIdleRetirement: DaemonRouterLegacyIdleRetirement
 
-  constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
+  constructor(opts: {
+    current: DaemonPtyAdapter
+    legacy: DaemonPtyAdapter[]
+    legacyIdleRetirementTiming?: ConstructorParameters<
+      typeof DaemonRouterLegacyIdleRetirement
+    >[0]['timing']
+  }) {
     this.current = opts.current
     this.legacy = opts.legacy
+    this.legacyIdleRetirement = new DaemonRouterLegacyIdleRetirement({
+      current: () => this.current,
+      legacy: () => this.legacy,
+      drop: (adapter) => this.dropIdleRetiredLegacy(adapter),
+      ...(opts.legacyIdleRetirementTiming ? { timing: opts.legacyIdleRetirementTiming } : {})
+    })
     for (const adapter of this.allAdapters()) {
       // A close that finds no session asks every daemon this router knows before ending history.
       if (typeof adapter.shareSessionListingWith === 'function') {
@@ -61,6 +75,7 @@ export class DaemonPtyRouter implements IPtyProvider {
       // Another generation's exit for a reused ID must not unroute its live owner.
       (id, adapter) => {
         this.ownerResolver.forgetRoute(id, adapter)
+        this.legacyIdleRetirement.schedule(adapter)
       },
       (adapter) => this.ownerResolver.invalidateProvider(adapter)
     )
@@ -70,10 +85,15 @@ export class DaemonPtyRouter implements IPtyProvider {
   async discoverLegacySessions(): Promise<void> {
     await this.ownerResolver.discoverRoutes()
     this.legacyExitProof.record(this.legacy)
+    this.legacyIdleRetirement.scheduleAll()
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    // Only a known session can belong to an older generation; fresh ones always start on current.
+    const releaseReattach =
+      opts.sessionId && !opts.isNewSession ? await this.legacyIdleRetirement.admitReattach() : null
     if (this.retirement.admissionClosed) {
+      releaseReattach?.()
       throw new Error('Terminal daemon is decommissioning')
     }
     // Retirement census must account for spawns that have not published their sessions yet.
@@ -93,6 +113,7 @@ export class DaemonPtyRouter implements IPtyProvider {
       return result
     } finally {
       this.retirement.spawnInFlight--
+      releaseReattach?.()
     }
   }
 
@@ -288,6 +309,20 @@ export class DaemonPtyRouter implements IPtyProvider {
     return processes
   }
 
+  private dropIdleRetiredLegacy(adapter: DaemonPtyAdapter): void {
+    const index = this.legacy.indexOf(adapter)
+    if (index === -1) {
+      return
+    }
+    this.legacy.splice(index, 1)
+    this.subscriptions.dropAdapter(adapter)
+    this.ownerResolver.forgetProvider(adapter)
+    // It owns nothing; releasing its connection is all that is left.
+    void Promise.resolve()
+      .then(() => adapter.disconnectOnly())
+      .catch(() => undefined)
+  }
+
   private retireExitedLegacy(adapter: DaemonPtyAdapter, error: unknown): ExitedLegacyVerdict {
     const { current, legacy, legacyExitProof: exitProof, subscriptions } = this
     return retireExitedLegacyAdapter({ adapter, error, current, legacy, exitProof, subscriptions })
@@ -336,6 +371,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   dispose(): void {
+    this.legacyIdleRetirement.dispose()
     this.subscriptions.dispose()
     for (const adapter of this.allAdapters()) {
       adapter.dispose()
@@ -344,10 +380,12 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   // Restart reuses legacy adapters; detach subscriptions without disposing those adapters.
   disposeRouterOnly(): void {
+    this.legacyIdleRetirement.dispose()
     this.subscriptions.dispose()
   }
 
   async disconnectOnly(): Promise<void> {
+    this.legacyIdleRetirement.dispose()
     this.subscriptions.dispose()
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
