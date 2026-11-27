@@ -1709,7 +1709,9 @@
         "permissionAcceptEditsDescription": "ファイルの編集とファイル操作コマンドを承認し、それ以外は確認します",
         "permissionAutoDescription": "承認リクエストを代わりに審査します",
         "permissionFullAccessCodexDescription": "確認しません。任意のファイルを編集し、ネットワークを使用できます",
-        "permissionFullAccessDescription": "編集やコマンドの前に確認しません"
+        "permissionFullAccessDescription": "編集やコマンドの前に確認しません",
+        "permissionAgentSettings": "{{agent}} の設定",
+        "permissionFromAgentSettings": "{{mode}}（{{agent}} の設定より）"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
@@ -3836,9 +3838,6 @@
       "title": "音声",
       "toggleMode": "トグル",
       "updateFailed": "更新できませんでした"
-    },
-    "agents": {
-      "permissionOwnAll": "Agent 独自の設定"
     },
     "voiceTranscribeOn": {
       "heading": "文字起こしの場所",

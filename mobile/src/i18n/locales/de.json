@@ -1713,7 +1713,9 @@
         "permissionAcceptEditsDescription": "Genehmigt Dateiänderungen und Dateibefehle; fragt bei allem anderen nach",
         "permissionAutoDescription": "Prüft Genehmigungsanfragen stellvertretend",
         "permissionFullAccessCodexDescription": "Fragt nie nach; kann jede Datei bearbeiten und das Netzwerk nutzen",
-        "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen"
+        "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen",
+        "permissionAgentSettings": "{{agent}}-Einstellungen",
+        "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen"
       },
       "goal": {
         "sentAsGoal": "Als Ziel gesendet"
@@ -3843,9 +3845,6 @@
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
-    },
-    "agents": {
-      "permissionOwnAll": "Eigene Einstellungen der Agenten"
     },
     "voiceTranscribeOn": {
       "heading": "Transkribieren auf",

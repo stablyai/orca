@@ -1818,7 +1818,9 @@
         "permissionAcceptEditsDescription": "Dosya düzenlemelerini ve dosya komutlarını onaylar; diğer işlemler için sorar",
         "permissionAutoDescription": "Onay isteklerini sizin yerinize değerlendirir",
         "permissionFullAccessCodexDescription": "Asla sormaz; tüm dosyaları düzenleyebilir ve ağı kullanabilir",
-        "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz"
+        "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz",
+        "permissionAgentSettings": "{{agent}} ayarları",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından"
       },
       "goal": {
         "sentAsGoal": "Hedef olarak gönderildi"
@@ -4105,9 +4107,6 @@
       "runsOn": "{{name}} üzerinde çalışır",
       "dictationOffFooter": "Sohbetlerde ve terminallerde yazmak yerine konuşun.",
       "swipeToDelete": "İndirilen modeli silmek için sola kaydırın."
-    },
-    "agents": {
-      "permissionOwnAll": "Ajanların kendi ayarları"
     },
     "voiceTranscribeOn": {
       "heading": "Yazıya dökme yeri",

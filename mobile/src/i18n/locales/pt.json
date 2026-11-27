@@ -1736,7 +1736,9 @@
         "permissionAcceptEditsDescription": "Aprova edições e comandos de arquivo; pede aprovação para o restante",
         "permissionAutoDescription": "Analisa os pedidos de aprovação por você",
         "permissionFullAccessCodexDescription": "Nunca pede aprovação; pode editar qualquer arquivo e usar a rede",
-        "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos"
+        "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos",
+        "permissionAgentSettings": "Configurações do {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, conforme as configurações do {{agent}}"
       },
       "turnDiff": {
         "partial": "Diff parcial",
@@ -3963,9 +3965,6 @@
       "toggleMode": "Alternar",
       "updateFailed": "Não foi possível atualizar",
       "loading": "Carregando configurações de voz…"
-    },
-    "agents": {
-      "permissionOwnAll": "Configurações próprias dos agentes"
     },
     "voiceTranscribeOn": {
       "heading": "Transcrever em",
