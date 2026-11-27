@@ -257,6 +257,29 @@ export function WorktreeReferenceStack({
   )
 }
 
+// Memoized so re-clamping the open peek doesn't re-render every row.
+const ReferencePeekList = React.memo(function ReferencePeekList({
+  listRef,
+  ordered,
+  details
+}: {
+  listRef: React.RefObject<HTMLUListElement | null>
+  ordered: readonly WorkspaceAttachment[]
+  details: WorkspaceReferenceDetailsMap
+}): React.JSX.Element {
+  return (
+    <ul
+      ref={listRef}
+      // Why: spans the padded card so the scrollbar sits on its edge; short windows shrink the cap.
+      className="scrollbar-sleek -m-3 flex max-h-[min(10.5rem,calc(var(--radix-tooltip-content-available-height)-2px))] flex-col overflow-x-hidden overflow-y-auto p-3"
+    >
+      {ordered.map((item) => (
+        <ReferencePeekRow key={getWorkspaceAttachmentKey(item)} item={item} details={details} />
+      ))}
+    </ul>
+  )
+})
+
 function ReferencePeek({
   items,
   ordered,
@@ -276,16 +299,34 @@ function ReferencePeek({
   const [geometry, setGeometry] = React.useState<PeekGeometry | null>(null)
   const [open, setOpen] = React.useState(false)
   const front = ordered[0]
-  // Re-clamp while open so a resized card never leaves the peek wider than it.
   React.useEffect(() => {
     const trigger = triggerRef.current
     const card = trigger?.closest('[data-worktree-card-surface]')
     if (!open || !trigger || !card) {
       return
     }
-    const observer = new ResizeObserver(() => setGeometry(measurePeek(trigger)))
-    observer.observe(card)
-    return () => observer.disconnect()
+    // Why: a focus-opened peek must keep the card's details hover shut wherever the pointer rests.
+    card.setAttribute('data-activity-thread-control', '')
+    // Re-clamp when the card resizes or its title row reflows the glyph.
+    const remeasure = (): void =>
+      setGeometry((previous) => {
+        const next = measurePeek(trigger)
+        return previous &&
+          next &&
+          previous.width === next.width &&
+          previous.alignOffset === next.alignOffset
+          ? previous
+          : next
+      })
+    const resize = new ResizeObserver(remeasure)
+    resize.observe(card)
+    const reflow = new MutationObserver(remeasure)
+    reflow.observe(card, { childList: true, subtree: true, characterData: true })
+    return () => {
+      resize.disconnect()
+      reflow.disconnect()
+      card.removeAttribute('data-activity-thread-control')
+    }
   }, [open])
   return (
     <Tooltip
@@ -350,15 +391,7 @@ function ReferencePeek({
         // Why: React bubbles portal wheels to the sidebar, whose handler treats them as list scrolls.
         onWheel={(event) => event.stopPropagation()}
       >
-        <ul
-          ref={listRef}
-          // Why: the list spans the padded card so its scrollbar sits on the edge.
-          className="scrollbar-sleek -m-3 flex max-h-42 flex-col overflow-x-hidden overflow-y-auto p-3"
-        >
-          {ordered.map((item) => (
-            <ReferencePeekRow key={getWorkspaceAttachmentKey(item)} item={item} details={details} />
-          ))}
-        </ul>
+        <ReferencePeekList listRef={listRef} ordered={ordered} details={details} />
       </TooltipContent>
     </Tooltip>
   )
