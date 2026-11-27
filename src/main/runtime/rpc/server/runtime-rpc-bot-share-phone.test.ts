@@ -134,7 +134,6 @@ async function teammateComputer(): Promise<BotShareDevice> {
   return await server.getBotShareDevices()!.add({
     botId: 'bot-1',
     accountId: 'acct-alice',
-    name: 'Alice',
     scope: 'runtime',
     devicePublicKeyB64: b64(nacl.sign.keyPair().publicKey)
   })

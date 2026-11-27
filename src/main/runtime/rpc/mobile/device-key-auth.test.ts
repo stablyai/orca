@@ -293,7 +293,11 @@ describe('device-key authentication (host)', () => {
     ]
     // The store as the server makes it: rows stand on the bot's share list.
     const shareStore = (dir: string, bots: () => readonly Pick<Bot, 'id' | 'shares'>[]) =>
-      new BotShareDeviceStore(dir, (grant) => botSharedWithAccount(bots(), grant))
+      new BotShareDeviceStore(
+        dir,
+        (grant) => botSharedWithAccount(bots(), grant),
+        (grant) => grant.accountId
+      )
 
     it('signs in as its one-bot grant, never as a paired device, and is cut off once removed', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-share-key-'))
@@ -303,7 +307,6 @@ describe('device-key authentication (host)', () => {
       const device = await shares.add({
         botId: 'bot-1',
         accountId: 'acct-alice',
-        name: 'Alice',
         scope: 'runtime',
         devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64')
       })
@@ -314,11 +317,7 @@ describe('device-key authentication (host)', () => {
       const { connect, transport } = harness(registry, relay(device.deviceId), shares)
       const signedIn = connect(keyAuth)
       expect(signedIn.reply).toMatchObject({ type: 'e2ee_authenticated' })
-      expect(signedIn.socket?.device.botShare).toEqual({
-        botId: 'bot-1',
-        accountId: 'acct-alice',
-        name: 'Alice'
-      })
+      expect(signedIn.socket?.device.botShare).toEqual({ botId: 'bot-1', accountId: 'acct-alice' })
       expect(registry.getDevice(device.deviceId)).toBeNull()
       // Relay's outer authorization for another device can't choose this one.
       expect(harness(registry, relay('someone-else'), shares).connect(keyAuth).reply).toEqual({
@@ -344,7 +343,6 @@ describe('device-key authentication (host)', () => {
       const device = await shares.add({
         botId: 'bot-1',
         accountId: 'acct-alice',
-        name: 'Alice',
         scope: 'runtime',
         devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64')
       })

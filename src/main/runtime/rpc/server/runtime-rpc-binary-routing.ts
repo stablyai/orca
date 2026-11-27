@@ -1,3 +1,4 @@
+import { botSharePersonName } from '../../../../shared/bots/bot-home-of'
 import type { WebSocket } from 'ws'
 import type { TerminalStreamFrame } from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { DeviceRegistry } from './pairing/device-registry'
@@ -161,8 +162,14 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     return {
       ok: true,
       deviceRegistry,
-      botShareDevices: new BotShareDeviceStore(this.userDataPath, (grant) =>
-        botSharedWithAccount(this.runtime.bots.list(), grant)
+      botShareDevices: new BotShareDeviceStore(
+        this.userDataPath,
+        (grant) => botSharedWithAccount(this.runtime.bots.list(), grant),
+        (grant) =>
+          botSharePersonName(
+            this.runtime.bots.list().find((bot) => bot.id === grant.botId) ?? {},
+            grant.accountId
+          )
       ),
       e2eeKeypair
     }

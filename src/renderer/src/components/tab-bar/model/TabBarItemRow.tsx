@@ -30,7 +30,11 @@ import {
   isBotSideChatTab,
   isHostedBotChatTab
 } from '../../../../../shared/bots/bot-home-tab'
-import { botHomeTitleOf } from '../../../../../shared/bots/bot-home-of'
+import {
+  botHomeOfSession,
+  botSharePersonName,
+  isOwnBotHome
+} from '../../../../../shared/bots/bot-home-of'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
@@ -100,15 +104,18 @@ function TabBarItemRow({
   )
   const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
   const homeRule = useBotHomeRuleApplies(bot)
-  const homeTitle = item.type === 'agent-session' ? botHomeTitleOf(bot, item.data.entityId) : null
-  const teammateName = homeTitle?.kind === 'teammate' ? homeTitle.name : null
+  const ownHome = item.type === 'agent-session' && isOwnBotHome(bot, item.data.entityId)
+  const teammateOf =
+    item.type === 'agent-session' && bot && !ownHome
+      ? botHomeOfSession(bot, item.data.entityId)
+      : null
+  const teammateName =
+    bot && teammateOf && teammateOf !== 'owner'
+      ? botSharePersonName(bot, teammateOf.accountId)
+      : null
   const sharedHost = useSharedBotHostOf(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID)
-  const conversationName =
-    homeTitle?.kind === 'own'
-      ? t('bots.tabs.homeTitle', 'Home')
-      : teammateName !== null
-        ? t('bots.chats.personHome', '{{name}}’s Home', { name: teammateName })
-        : chatNaming.name
+  // Only the viewer's own Home is retitled here; a teammate's comes titled from the host's records.
+  const conversationName = ownHome ? t('bots.tabs.homeTitle', 'Home') : chatNaming.name
   const ruledHome = useAppStore(
     (state) =>
       state.workspaceSessionReady &&

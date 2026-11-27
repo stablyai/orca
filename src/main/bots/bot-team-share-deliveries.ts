@@ -68,8 +68,6 @@ export async function resolveBotShareInvite(
 export type BotShareOfferMint = (input: {
   botId: string
   accountId: string
-  /** The teammate as the share names them. */
-  name: string
   devicePublicKey: string
 }) => Promise<BotTeamShareOffer>
 
@@ -161,7 +159,6 @@ export async function acceptBotShare(
   const offer = await deps.mintOffer({
     botId: delivery.botId,
     accountId: share.accountId,
-    name: share.name ?? share.email,
     devicePublicKey: delivery.devicePublicKey
   })
   // A remove that landed during the mint found no row to end; end the one just minted.

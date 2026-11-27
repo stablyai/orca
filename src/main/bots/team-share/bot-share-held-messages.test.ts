@@ -55,14 +55,15 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'orca-held-'))
   db = new OrchestrationDb(join(dir, 'orchestration.db'))
   // As the server makes it: rows stand on the bot's share list.
-  store = new BotShareDeviceStore(dir, (grant) =>
-    botSharedWithAccount([{ id: 'bot-1', shares }], grant)
+  store = new BotShareDeviceStore(
+    dir,
+    (grant) => botSharedWithAccount([{ id: 'bot-1', shares }], grant),
+    (grant) => grant.accountId
   )
   aliceKeys = nacl.sign.keyPair()
   aliceDevice = await store.add({
     botId: 'bot-1',
     accountId: 'acct-alice',
-    name: 'Alice',
     scope: 'runtime',
     devicePublicKeyB64: b64(aliceKeys.publicKey)
   })
@@ -219,7 +220,6 @@ describe('a held message on the host', () => {
     await store.add({
       botId: 'bot-1',
       accountId: 'acct-bob',
-      name: 'Bob',
       scope: 'runtime',
       devicePublicKeyB64: b64(bob.publicKey)
     })

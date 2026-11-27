@@ -35,7 +35,7 @@ import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 import type { Bot } from '../../../../src/shared/bot-types'
-import { botHomeTitleOf } from '../../../../src/shared/bots/bot-home-of'
+import { isOwnBotHome } from '../../../../src/shared/bots/bot-home-of'
 
 const SWIPE_SETTLE_MS = 250
 // A tab arriving from the side starts this far out, as a share of the tab cell's width.
@@ -77,7 +77,7 @@ export function MobileSessionTabBar({
   controller: MobileSessionController
   inTopBar: boolean
   actionsCollapsed?: boolean
-  /** The route's agent, whose Home tabs are titled as `botHomeTitleOf` names them. */
+  /** The route's agent, whose own Home tab is titled Home (`isOwnBotHome`). */
   homeBot?: Pick<Bot, 'chatSessionId' | 'shares'> | null
 }) {
   useMobileColorScheme()
@@ -99,16 +99,11 @@ export function MobileSessionTabBar({
     () =>
       visibleTabs.map((tab) => {
         const built = buildMobileSessionTabSummary(tab, terminals, now)
-        const home = tab.type === 'agent-session' ? botHomeTitleOf(homeBot, tab.sessionId) : null
+        // A teammate's Home comes titled from the host's records; only the viewer's own is "Home".
         const summary =
-          home?.kind === 'own'
+          tab.type === 'agent-session' && isOwnBotHome(homeBot, tab.sessionId)
             ? { ...built, title: t('bots.tabs.homeTitle', 'Home') }
-            : home?.kind === 'teammate'
-              ? {
-                  ...built,
-                  title: t('bots.chats.personHome', '{{name}}’s Home', { name: home.name })
-                }
-              : built
+            : built
         // The tab on screen is being read (useMarkViewedAgentRead), so it never rings.
         return summary.unread && tab.id === activeSessionTabId
           ? { ...summary, unread: false }

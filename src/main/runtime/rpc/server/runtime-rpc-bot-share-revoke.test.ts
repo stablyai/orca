@@ -40,7 +40,6 @@ describe('revoking a teammate’s share devices', () => {
       const bob = await shares.add({
         ...grant,
         accountId: 'acct-bob',
-        name: 'Bob',
         scope: 'runtime',
         devicePublicKeyB64: key()
       })
@@ -98,7 +97,6 @@ describe('revoking a teammate’s share devices', () => {
       const desktop = await shares.add({
         botId: 'bot-1',
         accountId: 'acct-alice',
-        name: 'Alice',
         scope: 'runtime',
         devicePublicKeyB64: key()
       })
@@ -139,7 +137,6 @@ describe('revoking a teammate’s share devices', () => {
       await shares.add({
         ...grant,
         accountId: 'acct-bob',
-        name: 'Bob',
         scope: 'runtime',
         devicePublicKeyB64: key()
       })
@@ -169,6 +166,7 @@ describe('revoking a teammate’s share devices', () => {
       revokeBotSharePhone: vi.fn(),
       reachedAccounts: vi.fn(),
       isOwnerDevice: vi.fn(),
+      syncBotShareDeviceNames: vi.fn(),
       revokeBotShareDevices: vi.fn(async () => {
         throw new Error('disk full')
       })

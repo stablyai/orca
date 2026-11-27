@@ -48,7 +48,6 @@ export async function bindBotShareDevice(
     {
       botId: ask.botId,
       accountId: ask.accountId,
-      name: ask.name,
       scope: ask.phone ? 'mobile' : 'runtime',
       devicePublicKeyB64: ask.devicePublicKey,
       ...ask.phone

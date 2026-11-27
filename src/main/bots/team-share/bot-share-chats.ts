@@ -5,6 +5,7 @@ import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
 import type { Bot } from '../../../shared/bot-types'
 import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
 import { botChatPerson } from '../../../shared/bots/bot-chat-people'
+import { botSharePersonName } from '../../../shared/bots/bot-home-of'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -24,13 +25,16 @@ export function botShareScopeOf(
   return context.callerScope?.kind === 'bot-share' ? context.callerScope : null
 }
 
-/** Whom a teammate's new chat acts for: them, as their share row names them, never the owner. */
-export function botShareAsker(scope: BotShareCallerScope): BotRequestPerson {
+/** Whom a teammate's new chat acts for: them, as their share row names them now, never the owner. */
+export function botShareAsker(
+  bot: Pick<Bot, 'shares'>,
+  scope: BotShareCallerScope
+): BotRequestPerson {
   return {
     kind: 'person',
     source: 'orca',
     userId: scope.accountId,
-    name: scope.name,
+    name: botSharePersonName(bot, scope.accountId),
     workspaceId: null,
     role: 'member'
   }

@@ -100,7 +100,6 @@ it(
     const shareDevice = await host.server.getBotShareDevices()!.add({
       botId: 'bot-1',
       accountId: 'acct-teammate',
-      name: 'Teammate',
       scope: 'runtime',
       devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64')
     })

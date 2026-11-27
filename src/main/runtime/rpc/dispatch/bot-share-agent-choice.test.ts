@@ -17,8 +17,7 @@ vi.mock('../../../preflight/workspace-agent-detection', async (original) => ({
 const SCOPE: BotShareCallerScope = {
   kind: 'bot-share',
   botId: 'bot-shared',
-  accountId: 'acct-alice',
-  name: 'Alice'
+  accountId: 'acct-alice'
 }
 
 let dispatcher: RpcDispatcher

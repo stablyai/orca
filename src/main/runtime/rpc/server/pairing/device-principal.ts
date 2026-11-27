@@ -37,7 +37,6 @@ export function callerScopeOf(device: DeviceEntry): RpcCallerScope {
       kind: 'bot-share',
       botId: '',
       accountId: device.deviceId,
-      name: device.name,
       workspaceTier: true
     }
   }
@@ -60,7 +59,7 @@ export function botSharePrincipalOf(
     clientId: device.deviceId,
     callerFingerprint: fingerprintAuthenticatedPairingCredential(`bot-share:${device.deviceId}`),
     credentialRevision: 0,
-    botShare: { botId: device.botId, accountId: device.accountId, name: device.name }
+    botShare: { botId: device.botId, accountId: device.accountId }
   }
 }
 
@@ -74,7 +73,6 @@ export function botShareCallerScopeOf(
     kind: 'bot-share',
     botId: device.botId,
     accountId: device.accountId,
-    name: device.name,
     ...(clientCapabilities?.includes(BOTS_SHARE_WORKSPACES_CAPABILITY)
       ? { workspaceTier: true as const }
       : {})

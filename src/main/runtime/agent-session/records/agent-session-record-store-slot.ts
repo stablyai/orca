@@ -1,3 +1,4 @@
+import type { TeammateHomeBots } from './agent-session-record-home-names'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 // Launch admission opens the single-writer store before chat-host installation; both must reuse this instance.
 
@@ -19,6 +20,8 @@ export type AgentSessionRecordStoreLocation = {
   hostId: string
   logger: StructuredAgentSessionLogger
   legacySessionTabIds: readonly string[]
+  /** The bots whose share rows title teammates' Homes; the store reads them from its first read on. */
+  teammateHomeBots: TeammateHomeBots
   maintenanceAfter?: Promise<void>
   /** Required: whichever opener wins the once-slot owns the store's maintenance pass for every later caller. */
   onMaintenanceTick: () => void
@@ -145,7 +148,8 @@ async function openRecordStore(
         records,
         hostId: location.hostId,
         legacySessionTabIds: location.legacySessionTabIds,
-        deletedChats: await readDeletedChats(journalDatabase)
+        deletedChats: await readDeletedChats(journalDatabase),
+        teammateHomeBots: location.teammateHomeBots
       })
     }
   } catch (error) {
