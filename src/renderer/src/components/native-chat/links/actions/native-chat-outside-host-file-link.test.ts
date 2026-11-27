@@ -6,9 +6,12 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import type { NativeChatFileLinkHost } from './native-chat-file-link-existence'
 
 const hostFileLinkTargetExists = vi.hoisted(() => vi.fn(async () => true))
-const fileContext = vi.hoisted(() => ({
-  current: null as TerminalFilePathMapping.TerminalFileContext | null
-}))
+const fileContext = vi.hoisted(() => {
+  const box: { current: TerminalFilePathMapping.TerminalFileContext | null } = {
+    current: null
+  }
+  return box
+})
 
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => ({ worktreesByRepo: {} }), subscribe: () => () => {} }
