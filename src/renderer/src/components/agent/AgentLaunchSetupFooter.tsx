@@ -1,18 +1,22 @@
 import { terminalPendingLabel } from './launch-menu/new-tab-agent-menu-model'
-import { useImperativeHandle, useRef, type Ref } from 'react'
+import { Suspense, useCallback, useImperativeHandle, useRef, type Ref } from 'react'
 import { CornerDownLeft, MessageSquare, SquareTerminal } from 'lucide-react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { Button } from '@/components/ui/button'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { useTranslate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
-import { AgentLaunchPromptComposer } from './AgentLaunchPromptComposer'
 import {
   agentPickerButtonOrder,
   type AgentPickerEntry,
   type AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { formatKeybinding } from '../../../../shared/keybindings/formatting'
+
+const AgentLaunchPromptComposer = lazy(() =>
+  import('./AgentLaunchPromptComposer').then((m) => ({ default: m.AgentLaunchPromptComposer }))
+)
 
 export type AgentLaunchSetupFooterHandle = { launch: (surface: AgentPickerSurface) => void }
 
@@ -65,7 +69,6 @@ export function AgentLaunchSurfaceButtons({
             }
             disabled={disabled || reason !== undefined}
             aria-description={reason}
-            title={reason}
             variant={isPrimary ? 'default' : 'outline'}
             onClick={() => onSelect(next)}
           >
@@ -103,6 +106,15 @@ export function AgentLaunchSetupFooter({
 }): React.JSX.Element {
   const t = useTranslate()
   const composer = useRef<NativeChatComposerHandle>(null)
+  // A launch asked for while the lazy composer is still loading; it submits on mount.
+  const pendingLaunch = useRef(false)
+  const attachComposer = useCallback((handle: NativeChatComposerHandle | null): void => {
+    composer.current = handle
+    if (handle?.submit && pendingLaunch.current) {
+      pendingLaunch.current = false
+      handle.submit()
+    }
+  }, [])
   // Enter launches the default way; a Launch button names its own before it submits the prompt.
   const surface = useRef(entry.defaultSurface)
   const launch = (next: AgentPickerSurface): void => {
@@ -111,7 +123,12 @@ export function AgentLaunchSetupFooter({
     }
     // The composer resolves pastes and pending files, then hands the text to onLaunch.
     surface.current = next
-    composer.current?.submit?.()
+    if (composer.current?.submit) {
+      composer.current.submit()
+    } else {
+      // Launching without the composer would skip its saved draft and paste resolution.
+      pendingLaunch.current = true
+    }
   }
   useImperativeHandle(ref, () => ({ launch }))
   return (
@@ -124,16 +141,18 @@ export function AgentLaunchSetupFooter({
           }
         }}
       >
-        <AgentLaunchPromptComposer
-          entry={entry}
-          composerRef={composer}
-          disabled={disabled}
-          onLaunch={(prompt) =>
-            surface.current === 'terminal' && terminalBlocked
-              ? false
-              : onLaunch(surface.current, prompt)
-          }
-        />
+        <Suspense fallback={<div className="min-h-[54px]" />}>
+          <AgentLaunchPromptComposer
+            entry={entry}
+            composerRef={attachComposer}
+            disabled={disabled}
+            onLaunch={(prompt) =>
+              surface.current === 'terminal' && terminalBlocked
+                ? false
+                : onLaunch(surface.current, prompt)
+            }
+          />
+        </Suspense>
       </div>
       <div className="flex items-center px-2 pb-2">
         <AgentLaunchSurfaceButtons

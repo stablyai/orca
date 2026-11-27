@@ -12,9 +12,9 @@ import { FilterChip } from '../components/nav-bar/FilterChip'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { templateProposal, type BotProposal } from '../../../src/shared/bots/bot-proposal'
 import {
   BOT_TEMPLATE_CATEGORIES,
@@ -22,11 +22,12 @@ import {
   type BotTemplate,
   type BotTemplateCategory
 } from '../../../src/shared/bots/bot-templates'
+import { botTemplateGroups, botTemplateMatches } from '../../../src/shared/bots/bot-template-view'
 import {
-  botTemplateGroups,
-  botTemplateMatches,
-  freeBotName
-} from '../../../src/shared/bots/bot-template-view'
+  botTemplateBotName,
+  botTemplateText,
+  botTemplateWord
+} from '../../../src/shared/bots/bot-template-text'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotTemplateDetail } from './MobileBotTemplateDetail'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
@@ -42,7 +43,8 @@ export function MobileBotTemplatesSheet(props: {
   onClose: () => void
   onPick: (pick: BotTemplatePick) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const label = useBotTemplateCategoryLabel()
   const [query, setQuery] = useState('')
@@ -62,13 +64,15 @@ export function MobileBotTemplatesSheet(props: {
   const groups = botTemplateGroups(
     (template) =>
       (category === null || template.category === category) &&
-      botTemplateMatches(template, query, label)
+      botTemplateMatches(template, query, label, (english) => botTemplateText(english, t))
   )
   const pick = (template: BotTemplate) => {
     props.onPick({
-      proposal: templateProposal(template, { name: freeBotName(template.name, props.botNames) }),
+      proposal: templateProposal(template, {
+        name: botTemplateBotName(template, props.botNames, t)
+      }),
       origin: t('bots.templates.originTemplateNamed', 'From the {{template}} template', {
-        template: template.name
+        template: botTemplateWord(template, 'name', t)
       })
     })
   }
@@ -125,8 +129,8 @@ export function MobileBotTemplatesSheet(props: {
                       size={AVATAR_SIZE}
                     />
                   }
-                  title={template.name}
-                  subtitle={template.line}
+                  title={botTemplateWord(template, 'name', t)}
+                  subtitle={botTemplateWord(template, 'line', t)}
                   navigates
                   onPress={() => {
                     // The search field stays mounted under the page, so its keyboard would cover the detail.
@@ -178,7 +182,7 @@ export function MobileBotTemplatesSheet(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   page: { flex: 1 },
   pills: { flexGrow: 0, marginTop: spacing.xs },
   pillRow: { gap: spacing.sm }

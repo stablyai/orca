@@ -193,7 +193,7 @@ export default function RepoCombobox({
                 <RepoBadgeLabel
                   name={selectedRepo.displayName}
                   color={selectedRepo.badgeColor}
-                  badgeClassName="size-1.5"
+                  repo={selectedRepo}
                 />
                 {selectedRepo.connectionId && (
                   <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
@@ -252,6 +252,7 @@ export default function RepoCombobox({
                       <RepoBadgeLabel
                         name={repo.displayName}
                         color={repo.badgeColor}
+                        repo={repo}
                         className="max-w-full"
                       />
                       {repo.connectionId && (

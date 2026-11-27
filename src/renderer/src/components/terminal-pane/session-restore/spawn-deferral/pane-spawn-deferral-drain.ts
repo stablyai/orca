@@ -99,13 +99,3 @@ async function run(environmentId: string | null, drain: HostDrain): Promise<void
     hosts.delete(hostKey(environmentId))
   }
 }
-
-export function resetDeferredRestoreDrainForTests(): void {
-  for (const drain of hosts.values()) {
-    if (drain.timer !== null) {
-      clearTimeout(drain.timer)
-    }
-  }
-  hosts.clear()
-  waiting.clear()
-}

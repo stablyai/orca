@@ -20,6 +20,7 @@ import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
 } from '../ownership/structured-agent-session-owner-probe'
+import { installProviderRelayDurability } from '../../../provider-relay/app-provider-relays'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
 import { createStructuredAgentSessionLifecycleDelivery } from '../lifecycle/structured-agent-session-lifecycle-delivery'
@@ -91,6 +92,7 @@ export async function installOnJournal(
     ...(deps.onIdleProviderDeath ? { onIdleProviderDeath: deps.onIdleProviderDeath } : {}),
     observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
+    ...(deps.readWorkerDockPresence ? { readWorkerDockPresence: deps.readWorkerDockPresence } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming
       ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }
@@ -108,6 +110,11 @@ export async function installOnJournal(
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(catalogOwner.modelCatalog ? { modelCatalog: catalogOwner.modelCatalog } : {})
   })
+  // Relayed output is acked once the writes covering it landed; streamed text is flushed only on
+  // ask. A forced ack (the daemon's ask, a hand-off) saves all streamed text, deferrable included.
+  installProviderRelayDurability((sessionId, force) =>
+    force ? host.flushStreamedEvents(sessionId) : host.flushStreamedEvents(sessionId, true)
+  )
   if (deps.attentionDelivery) {
     const installed = host
     const delivery = deps.attentionDelivery
@@ -168,6 +175,9 @@ export async function installOnJournal(
       stateDirectory: deps.stateDirectory,
       store,
       journalDatabase,
+      retainedUploadIds: deps.owedItemAttachmentUploads
+        ? (root) => deps.owedItemAttachmentUploads!(deps.stateDirectory, root)
+        : undefined,
       logger: deps.logger
     })
     stopVisualsSweep = deps.nativeChatVisuals

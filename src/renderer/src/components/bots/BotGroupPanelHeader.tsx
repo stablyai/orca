@@ -1,6 +1,7 @@
 // The top of a group's Items tab, in a bot header's shape: the group's own picture (its sidebar row's
 // faces) opening its member list, its name, a counts-only line, then the filter, gear and more.
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { MoreHorizontal, Settings, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
+import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaceOnHost } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { Bot } from '../../../../shared/bot-types'
@@ -20,8 +22,12 @@ import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { BOT_GROUP_FACE_SLOT, botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
 import { BotAvatar } from './BotAvatar'
 import { BotGroupFaces } from './BotGroupFaces'
-import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { botQuietLine } from './BotPanelHeader'
+
+const LazyBotGroupMembersDialog = lazy(() =>
+  import('./BotGroupMembersDialog').then((module) => ({ default: module.BotGroupMembersDialog }))
+)
+import { BotPanelHostLine } from './BotPanelHostLine'
 import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 import { useBotGroupDelete } from './use-bot-group-delete'
 
@@ -81,6 +87,8 @@ export function BotGroupPanelHeader({
   filter: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  // The group's own server, so an empty room still says it is down.
+  const offline = useBotHostOffline(group.hostId)
   const [managing, setManaging] = useState(false)
   const deleteGroup = useBotGroupDelete()
   const names = members.slice(0, NAMED).map((bot) => bot.name)
@@ -105,7 +113,7 @@ export function BotGroupPanelHeader({
     { running: null, next: next ? { name: next.bot.name, at: next.at } : null },
     now
   )
-  const line =
+  const line = (compact: boolean): React.ReactNode =>
     needsYou > 0 || working > 0 ? (
       <>
         {needsYou > 0 ? needs : null}
@@ -115,8 +123,8 @@ export function BotGroupPanelHeader({
           workingText
         ) : null}
       </>
-    ) : idle.short === null ? (
-      idle.text
+    ) : idle.short === null || compact ? (
+      (idle.short ?? idle.text)
     ) : (
       <>
         <span className="@max-[284px]:hidden">{idle.text}</span>
@@ -175,9 +183,13 @@ export function BotGroupPanelHeader({
       </DropdownMenu>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold leading-5">{group.name}</div>
-        <div className="truncate text-xs leading-4 text-muted-foreground" title={fullLine}>
-          {members.length > 0 ? line : t('bots.groups.panel.noMembers', 'No bots in this group')}
-        </div>
+        <BotPanelHostLine hostId={group.hostId} offline={offline} title={fullLine}>
+          {(compact) =>
+            members.length > 0
+              ? line(compact)
+              : t('bots.groups.panel.noMembers', 'No bots in this group')
+          }
+        </BotPanelHostLine>
       </div>
       {filter}
       <Tooltip>
@@ -219,7 +231,11 @@ export function BotGroupPanelHeader({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {managing ? <BotGroupMembersDialog group={group} onClose={() => setManaging(false)} /> : null}
+      {managing ? (
+        <Suspense fallback={null}>
+          <LazyBotGroupMembersDialog group={group} onClose={() => setManaging(false)} />
+        </Suspense>
+      ) : null}
     </div>
   )
 }

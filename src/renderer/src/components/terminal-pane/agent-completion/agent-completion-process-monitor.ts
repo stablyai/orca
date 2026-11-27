@@ -9,10 +9,12 @@ import {
 import { isShellProcess } from '../../../../../shared/agent-status/process/shell-process-detection'
 import {
   clientOnlyUnverifiableInspection,
-  isClientOnlyUnverifiableInspection
+  isClientOnlyUnverifiableInspection,
+  type TerminalProcessInspection
 } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { ProcessMonitorOptions } from './agent-completion-process-types'
 import { createAgentCompletionPollScheduler } from './agent-completion-poll-scheduler'
+import { HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS } from '../../../../../shared/terminal/replay/pty-model-restore-marker'
 import {
   handleAgentCompletionInspectionResult,
   type RemoteInspectionState
@@ -21,7 +23,6 @@ import {
 export function createAgentCompletionProcessMonitor({
   options,
   state,
-  identityScope,
   pendingTitle,
   establishAgentEvidence,
   clearAgentRunEvidence,
@@ -50,21 +51,38 @@ export function createAgentCompletionProcessMonitor({
     // Invalidate reads queued for a prior same-id incarnation.
     state.inspectionGeneration += 1
   }
-  const { clearPollTimer, scheduleNextPoll, shouldRunCadenceInspection } =
-    createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
+  const {
+    clearPollTimer,
+    scheduleNextPoll,
+    shouldRunCadenceInspection,
+    noteForegroundEvent,
+    requestFollowUp,
+    consumeReadDue
+  } = createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
+
+  function recordActivityUntil(until: number, eventAt: number, inputOnly = false): void {
+    state.lastPaneActivityAt = Math.max(state.lastPaneActivityAt ?? until, until)
+    if (!inputOnly) {
+      state.lastPacingActivityAt = Math.max(state.lastPacingActivityAt ?? until, until)
+    }
+    noteForegroundEvent(eventAt, inputOnly)
+  }
+
+  function observationPredatesActivity(result: TerminalProcessInspection): boolean {
+    const capturedAgeMs = isClientOnlyUnverifiableInspection(result)
+      ? undefined
+      : result.foregroundProcessEvidence?.capturedAgeMs
+    const lastActivity = state.lastPaneActivityAt
+    return (
+      capturedAgeMs !== undefined &&
+      lastActivity !== null &&
+      lastActivity <= Date.now() &&
+      Date.now() - capturedAgeMs < lastActivity
+    )
+  }
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
     state.pendingProcessExit = null
-    const replayIdentity = identityScope.getLast()
-    if (
-      !state.lastForegroundAgent &&
-      state.processSession > 0 &&
-      !identityScope.hasUnconsumedStampedTail() &&
-      replayIdentity?.source === 'hook' &&
-      replayIdentity.agentIdentity === process.agent
-    ) {
-      identityScope.deleteLast()
-    }
     if (state.lastForegroundAgent?.agent !== process.agent) {
       if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
         if (
@@ -111,11 +129,13 @@ export function createAgentCompletionProcessMonitor({
       // Local reads share one capture; remote reads consume separate host round trips.
       sharesHostObservation: options.isRemotePtyId?.(ptyId) !== true,
       run: async () => {
+        consumeReadDue()
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
           const steadyState = priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
-          // Child evidence matters only while an agent is tracked; skip the Windows table read otherwise.
+          // A proven idle macOS shell answers from its group; newer daemons ignore it elsewhere for shells, and an older
+          // daemon keeps its cheap job-only read (it never proves a shell idle, so the pane keeps re-checking anyway).
           const jobMembershipOnly =
             steadyState && !(state.lastForegroundAgent && state.hasAgentRunEvidence)
           // Only local cadence reads may omit evidence; pending-title and remote decisions require the full capture.
@@ -131,6 +151,7 @@ export function createAgentCompletionProcessMonitor({
             : options.inspectProcess(ptyId))
           // An agent tracked while a job-only read was in flight needs full child evidence; the next poll gets it.
           if (jobMembershipOnly && state.lastForegroundAgent && state.hasAgentRunEvidence) {
+            requestFollowUp('unresolved')
             return
           }
           // A stale shell cache must not retire a live agent and disable its mouse reporting (#29996).
@@ -179,27 +200,32 @@ export function createAgentCompletionProcessMonitor({
                 requestStartedAtMonotonic,
                 options,
                 state,
-                identityScope,
                 clearAgentRunEvidence,
                 hasPendingHookDone,
-                scheduleNextPoll,
+                requestFollowUp,
                 handleRecognizedProcess,
                 dispatchCompletion,
                 remoteInspection
               })
+              // A shared capture can predate the output that asked for this read; read once more after it.
+              if (observationPredatesActivity(result)) {
+                requestFollowUp('unresolved')
+              }
             }
             inspectionSucceeded = true
           }
         } catch {
           state.pendingProcessExit = null
           state.consecutiveInspectionErrors += 1
+          requestFollowUp('error')
         } finally {
           state.inspectionInFlight = false
           if (generationAtRequest !== state.inspectionGeneration) {
             if (pendingTitle.get()) {
               requestInspection('pending-title')
             } else {
-              scheduleNextPoll()
+              // The discarded read answered nothing.
+              requestFollowUp('unresolved')
             }
           } else {
             const currentPendingTitle = pendingTitle.get()
@@ -233,22 +259,44 @@ export function createAgentCompletionProcessMonitor({
     observeRecognizedProcess: (process: RecognizedAgentProcess) => {
       if (!state.disposed) {
         handleRecognizedProcess(process)
+        // Another reader found the agent; a read lets the host watch its exit.
+        noteForegroundEvent()
       }
     },
     start: () => {
-      // A newly bound PTY polls fast while its foreground identity settles; visibility re-syncs don't count as activity.
+      // A new binding is an event; visibility re-syncs only release a read deferred while hidden.
       const ptyId = options.getPtyId()
       if (!state.pollTrackingStarted || ptyId !== trackedPtyId) {
         state.pollTrackingStarted = true
         trackedPtyId = ptyId
-        state.lastPaneActivityAt = Date.now()
+        const now = Date.now()
+        recordActivityUntil(now, now)
+        return
+      }
+      // A detached client misses the host's exit notice, so a tracked agent is read again on reattach.
+      if (state.lastForegroundAgent !== null) {
+        noteForegroundEvent()
+        return
       }
       scheduleNextPoll()
     },
     recordActivity: () => {
-      state.lastPaneActivityAt = Date.now()
-      // The scheduler replaces a slower pending timer (quiet or no-evidence) with the faster tier.
-      scheduleNextPoll()
+      const now = Date.now()
+      recordActivityUntil(now, now)
+    },
+    // A command pane's 15 s re-check already answers input that prints nothing, so it never reads above main's pace.
+    // Elsewhere input that prints nothing gets one read on main's 15 s grid (`read -s -n1; run-agent`); echo is output.
+    recordInputActivity: () => {
+      if (state.foregroundIsCommand && !state.lastForegroundAgent && !state.hasAgentRunEvidence) {
+        return
+      }
+      const now = Date.now()
+      recordActivityUntil(now, now, true)
+    },
+    // Main reports hidden output only on the leading edge of its throttle window, so read after that window.
+    recordHiddenOutputActivity: () => {
+      const until = Date.now() + HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS
+      recordActivityUntil(until, until)
     },
     incrementGeneration: () => {
       state.inspectionGeneration += 1

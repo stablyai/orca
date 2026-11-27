@@ -3,12 +3,13 @@ import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/
 import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
 
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
-import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import {
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
-import { toast } from 'sonner'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
@@ -18,7 +19,7 @@ import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/agent-launch/permi
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   agentPermissionArgs,
-  agentPermissionEnv,
+  agentPermissionHasTerminalChoice,
   agentPermissionChoices,
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
@@ -26,7 +27,7 @@ import {
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
-import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
+import { toastLiftedAgentPermission } from './agent-permission-lift-toast'
 import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSetting'
 import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
 import type { AgentPermissionsSettingProps } from '@/components/settings/agents/permissions/AgentPermissionsSetting'
@@ -191,11 +192,9 @@ export function AgentLaunchSettingsCatalog({
       choices,
       chatOwnSupported,
       ...resolved,
-      terminalChoice:
-        agentPermissionArgs(agent, resolved.choice) ||
-        Object.keys(agentPermissionEnv(agent, resolved.choice)).length
-          ? resolved.choice
-          : 'own',
+      terminalChoice: agentPermissionHasTerminalChoice(agent, resolved.choice)
+        ? resolved.choice
+        : 'own',
       chatChoice:
         chatSupport && resolved.choice !== 'own'
           ? savedChatPermissionMode(chatSupport, resolved.choice)
@@ -212,21 +211,13 @@ export function AgentLaunchSettingsCatalog({
     const lifted = liftAgentPermissionArgs(agent, value)
     await mutate({ type: 'user-arguments', agent, value })
     if (lifted.choice) {
-      const chatSupported = nativeChatPermissionsSupported && agentChatPermissionModes(agent)
-      const values = { agent: label, mode: agentPermissionChoiceLabel(lifted.choice, label) }
-      toast.success(
-        chatSupported
-          ? t(
-              'settings.agents.permissionFromArgs',
-              '{{agent}} set to {{mode}} in terminals and new chats.',
-              values
-            )
-          : t(
-              'settings.agents.permissionFromArgsTerminals',
-              '{{agent}} set to {{mode}} in terminals.',
-              values
-            )
-      )
+      toastLiftedAgentPermission({
+        agent,
+        label,
+        choice: lifted.choice,
+        chatPermissionsSupported: nativeChatPermissionsSupported,
+        t
+      })
     }
   }
   const permissions = buildAgentRowPermissions({

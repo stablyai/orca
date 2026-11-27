@@ -11,6 +11,7 @@ import {
 } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
 import { PairedRuntimeBrowserNetworkTransport } from './paired-runtime-browser-network-transport'
 import { RemoteBrowserSocksServer } from '../tunnels/remote-browser-socks-server'
+import { browserNetworkTunnelAttach } from './browser-network-tunnel-attach'
 
 const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
 
@@ -136,14 +137,17 @@ export class PairedRuntimeBrowserNetworkRoute {
     if (!outboundMemory) {
       throw new Error('Browser network route memory lease is unavailable')
     }
+    const { lease } = this.options
     const transport = new PairedRuntimeBrowserNetworkTransport({
       connection: this.options.connection,
-      lease: this.options.lease,
-      executionHost: this.options.executionHost ?? {
-        kind: 'native',
-        runtimeId: this.options.lease.authorityRuntimeId,
-        revision: this.options.executionHostRevision
-      },
+      attach: browserNetworkTunnelAttach(
+        lease,
+        this.options.executionHost ?? {
+          kind: 'native',
+          runtimeId: lease.authorityRuntimeId,
+          revision: this.options.executionHostRevision
+        }
+      ),
       timeoutMs: this.options.timeoutMs ?? 15_000,
       subscription: this.options.subscription,
       outboundMemory,

@@ -468,8 +468,16 @@ final class Provider {
             let inSpaces = WindowSpaces.windowsInAnySpace(unlisted) ?? Set(unlisted)
             // Why: kAXWindowsAttribute leaves out windows on other Spaces; skip the lookup when the app stopped answering.
             if status != .cannotComplete {
+                // Why: the app still returns its main and focused window from another Space, which the remote-token
+                // scan misses until something has read that window once.
+                for attribute in [kAXMainWindowAttribute, kAXFocusedWindowAttribute] where !inSpaces.isSubset(of: elements.keys) {
+                    if let window = copyElement(appElement, attribute), let id = windowNumber(window), inSpaces.contains(id) {
+                        elements[id] = window
+                    }
+                }
                 let live = Set(all.map(\.windowId))
-                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: inSpaces, live: live)) { listed, _ in listed }
+                let wanted = inSpaces.subtracting(elements.keys)
+                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: wanted, live: live)) { listed, _ in listed }
             }
             unreadable = inSpaces.subtracting(elements.keys)
         }
@@ -4498,6 +4506,7 @@ private final class PermissionDragAssistantController: NSWindowController {
         let isVisible: Bool
     }
 
+    private static let systemSettingsBundleIdentifier = "com.apple.systempreferences"
     private let fallbackVisibleFrame: NSRect?
     private let onRefreshPermissions: () -> Void
     private let onClose: () -> Void
@@ -4660,7 +4669,7 @@ private final class PermissionDragAssistantController: NSWindowController {
 
     private func systemSettingsIsFrontmost() -> Bool {
         let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        return bundleId == "com.apple.systempreferences" || bundleId == "com.apple.SystemSettings"
+        return bundleId == Self.systemSettingsBundleIdentifier || bundleId == "com.apple.SystemSettings"
     }
 
     private func positionNearSettingsWindow(_ settingsFrame: NSRect) {
@@ -4697,12 +4706,18 @@ private final class PermissionDragAssistantController: NSWindowController {
         guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
             return nil
         }
+        let settingsProcessIdentifiers = Set(
+            NSRunningApplication.runningApplications(withBundleIdentifier: Self.systemSettingsBundleIdentifier)
+                .map(\.processIdentifier)
+        )
         var occludingFrames: [NSRect] = []
         for windowInfo in windows {
             guard let frame = cgWindowFrame(windowInfo), isNormalWindow(windowInfo), frame.width > 0, frame.height > 0 else {
                 continue
             }
-            if isSystemSettingsWindow(windowInfo), frame.width > 520, frame.height > 360 {
+            // Why: kCGWindowOwnerName is UI-localized ("系统设置"), so match the Settings process by bundle id.
+            if let pid = windowInfo[kCGWindowOwnerPID as String] as? pid_t, settingsProcessIdentifiers.contains(pid),
+               frame.width > 520, frame.height > 360 {
                 return SettingsWindowState(
                     frame: appKitFrameForCGWindowFrame(frame),
                     isVisible: !isWindowFullyCovered(frame, by: occludingFrames)
@@ -4711,13 +4726,6 @@ private final class PermissionDragAssistantController: NSWindowController {
             occludingFrames.append(frame)
         }
         return nil
-    }
-
-    private func isSystemSettingsWindow(_ windowInfo: [String: Any]) -> Bool {
-        guard let ownerName = windowInfo[kCGWindowOwnerName as String] as? String else {
-            return false
-        }
-        return ownerName == "System Settings" || ownerName == "System Preferences"
     }
 
     private func isNormalWindow(_ windowInfo: [String: Any]) -> Bool {

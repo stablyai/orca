@@ -3,7 +3,7 @@ import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { wslExeProcessSpec } from '../execution/wsl-exe-process'
 import { notifyWslDiscoveryChanged } from './wsl-discovery-change'
-import { _resetWslInstallationForTests, readWslInstallation } from './wsl-installation'
+import { readWslInstallation } from './wsl-installation'
 
 type WslAvailabilityCache =
   | { available: true }
@@ -183,24 +183,4 @@ export function dropStaleWslAvailabilityFailure(): void {
     wslAvailableCache = null
     notifyWslDiscoveryChanged()
   }
-}
-
-export function _resetWslAvailabilityCacheForTests(): void {
-  wslAvailableCache = null
-  wslAvailabilityProbeInFlight = null
-  wslAvailabilityCacheGeneration = 0
-  _resetWslInstallationForTests()
-}
-
-export function _setWslAvailabilityCacheForTests(
-  available: boolean | null | undefined,
-  retryable: boolean
-): void {
-  writeWslAvailabilityCache(
-    available === true
-      ? { available: true }
-      : available === false
-        ? { available: false, cachedAt: Date.now(), retryable, failures: 1 }
-        : null
-  )
 }

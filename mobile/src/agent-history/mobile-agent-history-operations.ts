@@ -5,6 +5,7 @@ import {
   agentHistoryHostStatusSchema,
   agentHistoryProjectSetupsSchema,
   agentHistorySessionScanSchema,
+  aiVaultSessionHandoffPromptSchema,
   resumeMetadataListSchema,
   resumeRepoListSchema
 } from './agent-history-reply-schema'
@@ -89,5 +90,16 @@ export const resumeWorktreeListRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('resume-worktrees', resumeMetadataListSchema)
+  })
+)
+
+// The host builds the hand-off prompt (and saves a database row first); a refusal fails the hand-off.
+export const aiVaultSessionHandoffPromptRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'aiVault.session-handoff-prompt',
+    method: 'aiVault.prepareSessionHandoffPrompt',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('session-handoff-prompt', aiVaultSessionHandoffPromptSchema)
   })
 )

@@ -132,7 +132,3 @@ export function __clearSelfWriteRegistryForTests(): void {
   clearExpiryTimer()
   stamps.clear()
 }
-
-export function __getSelfWriteRegistrySizeForTests(): number {
-  return stamps.size
-}

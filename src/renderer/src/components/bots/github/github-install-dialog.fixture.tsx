@@ -1,50 +1,17 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
-import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
-import { publishBots } from '@/lib/bot-catalog-snapshot'
-import { stopAwaitingGitHub } from '@/lib/bot-github-state'
-import { cancelConnectorConnect } from '@/lib/connector-connect-state'
-import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { makeRepo } from '../../worktree-jump/worktree-jump-palette-test-fixtures'
-import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
 import {
-  openGitHubInstall,
-  resetGitHubInstallForTests,
-  useGitHubInstallRecord
-} from '@/lib/bot-github-install-record'
-import { BotGitHubSetupDialog } from './BotGitHubSetupDialog'
-import { GitHubInstallPill } from './GitHubInstallPill'
+  Setup,
+  clickAddRepositories,
+  inOrcaStore,
+  marketing,
+  settle,
+  setGitHubInstallations,
+  stablyai,
+  stubGitHub
+} from './github-setup-dialog.test-fixture'
 
-const marketing: Bot = {
-  id: 'bot-marketing',
-  name: 'Marketing - X - Manager',
-  hostId: 'local',
-  folder: 'marketing',
-  folderWorkspaceId: 'fw-marketing',
-  agent: 'claude',
-  avatar: null,
-  paused: false,
-  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
-  members: [],
-  slack: null,
-  linear: null,
-  github: null,
-  chatSessionId: null,
-  createdAt: 1,
-  updatedAt: 1
-}
-
-const stablyai: ConnectorGitHubInstallation = {
-  installationId: '1',
-  accountLogin: 'stablyai',
-  repositories: [
-    { fullName: 'stablyai/orca' },
-    { fullName: 'stablyai/website' },
-    { fullName: 'acme/widgets' }
-  ]
-}
 // What GitHub's install page saved: a repository on the first install, and a new organization.
 const afterGitHub: ConnectorGitHubInstallation[] = [
   {
@@ -63,68 +30,6 @@ const triage: Bot = {
   id: 'bot-triage',
   name: 'GitHub issue triage',
   folder: 'github-issue-triage'
-}
-
-let installations: ConnectorGitHubInstallation[] = [stablyai]
-let account: { userId: string; login: string } | null = { userId: '42', login: 'carol-gh' }
-let shownBot = marketing
-const neverReturns = (): Promise<never> => new Promise(() => {})
-
-function stubGitHub(
-  options: {
-    bot?: Bot
-    signedIn?: boolean
-    with?: ConnectorGitHubInstallation[]
-  } = {}
-): void {
-  installations = options.with ?? [stablyai]
-  account = options.signedIn === false ? null : { userId: '42', login: 'carol-gh' }
-  shownBot = options.bot ?? marketing
-  stopAwaitingGitHub('local')
-  cancelConnectorConnect('local', 'github')
-  resetGitHubInstallForTests()
-  publishBots([shownBot])
-  openGitHubInstall(shownBot)
-  Reflect.set(window.api, 'botGitHub', {
-    state: async () => ({
-      ok: true,
-      value: {
-        installUrl: 'https://github.com/apps/orca-ide/installations/new',
-        account,
-        installations,
-        defaultBotId: null
-      }
-    }),
-    users: async () => ({ ok: false, error: 'fixture' }),
-    connect: neverReturns,
-    cancelConnect: async () => undefined,
-    unlink: neverReturns
-  })
-  Reflect.set(window.api, 'shell', { ...window.api.shell, openUrl: async () => undefined })
-  withBotConnectorRuntime(window.api)
-}
-
-const WORKSPACE = makeWorktree({ id: 'repo-1::/marketing', repoId: 'repo-1', path: '/marketing' })
-// Link setting = open in Orca, in the bot's workspace.
-const inOrcaStore = {
-  settings: { ...getDefaultSettings('/home/fixture'), openLinksInApp: true },
-  activeWorktreeId: WORKSPACE.id,
-  repos: [makeRepo()],
-  worktreesByRepo: { 'repo-1': [WORKSPACE] }
-}
-
-/** The setup as the app mounts it: the dialog, or minimized to the pill. */
-function Setup(): React.JSX.Element | null {
-  const record = useGitHubInstallRecord()
-  if (!record) {
-    return null
-  }
-  return (
-    <ConfirmationDialogProvider>
-      <BotGitHubSetupDialog bot={shownBot} record={record} />
-      {record.surface === 'pill' ? <GitHubInstallPill record={record} /> : null}
-    </ConfirmationDialogProvider>
-  )
 }
 
 /** Stand-ins for the bot's chat and Orca's browser pane beside it, under the pill. */
@@ -172,21 +77,6 @@ function Scene({ chatWidth = 300 }: { chatWidth?: number }): React.JSX.Element {
   )
 }
 
-async function clickWhenShown(name: string): Promise<void> {
-  for (let tries = 0; tries < 80; tries++) {
-    const button = [...document.querySelectorAll('button')].find(
-      (candidate) => candidate.textContent?.trim() === name
-    )
-    if (button) {
-      button.click()
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
-}
-
-const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-
 export const before = defineFixture({
   width: 1100,
   store: inOrcaStore,
@@ -225,7 +115,7 @@ export const inOrcaMinimized = defineFixture({
   store: inOrcaStore,
   setup: () => stubGitHub(),
   render: () => <Scene />,
-  interact: () => clickWhenShown('Add repositories or an organization')
+  interact: () => clickAddRepositories()
 })
 
 // GitHub reported the save: the pill says what was added, before it expands.
@@ -235,8 +125,8 @@ export const inOrcaDone = defineFixture({
   setup: () => stubGitHub(),
   render: () => <Scene />,
   interact: async () => {
-    await clickWhenShown('Add repositories or an organization')
-    installations = afterGitHub
+    await clickAddRepositories()
+    setGitHubInstallations(afterGitHub)
     // The next poll (every 3 s) sees the change.
     await settle(3300)
   }
@@ -249,8 +139,8 @@ export const inOrcaExpanded = defineFixture({
   setup: () => stubGitHub(),
   render: () => <Scene />,
   interact: async () => {
-    await clickWhenShown('Add repositories or an organization')
-    installations = afterGitHub
+    await clickAddRepositories()
+    setGitHubInstallations(afterGitHub)
     await settle(5200)
   }
 })
@@ -259,5 +149,5 @@ export const systemBrowserWaiting = defineFixture({
   width: 1100,
   setup: () => stubGitHub(),
   render: () => <Scene />,
-  interact: () => clickWhenShown('Add repositories or an organization')
+  interact: () => clickAddRepositories()
 })

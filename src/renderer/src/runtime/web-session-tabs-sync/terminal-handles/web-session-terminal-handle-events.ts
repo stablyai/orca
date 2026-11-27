@@ -1,6 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 
 export type WebSessionTerminalHandleUpdate = {
   surfacePresent: boolean
@@ -111,12 +111,4 @@ export function queueAcceptedWebSessionTerminalSnapshot(
       }
     }
   })
-}
-
-export function getWebSessionTerminalHandleSubscriberCountForTests(): number {
-  let count = 0
-  for (const subscribers of subscribersBySession.values()) {
-    count += subscribers.size
-  }
-  return count
 }

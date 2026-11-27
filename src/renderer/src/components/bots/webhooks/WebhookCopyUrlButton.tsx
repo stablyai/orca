@@ -1,18 +1,26 @@
+import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { usePendingWebhookSummary } from './use-webhook-data'
 import { useWebhookKey } from './use-webhook-key'
 
-/** Copies the hook's whole URL, key included, fetched from its host on click and never shown. */
+/** Copies the hook's whole URL, key included, fetched from its host on click and never shown. With
+ *  `onCopied` the caller confirms the copy (`copied`), so no toast. */
 export function WebhookCopyUrlButton({
   target,
   hookId,
-  botName
+  botName,
+  variant = 'outline',
+  copied = false,
+  onCopied
 }: {
   target: RuntimeClientTarget
   hookId: string
   botName: string
+  variant?: 'outline' | 'default'
+  copied?: boolean
+  onCopied?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const key = useWebhookKey({ target, hookId, botName })
@@ -23,14 +31,27 @@ export function WebhookCopyUrlButton({
   return (
     <Button
       type="button"
-      variant="outline"
+      variant={variant}
       size="xs"
       disabled={pending || key.busy}
-      onClick={() => key.copy('url')}
+      onClick={() =>
+        void key.copy('url', { quiet: onCopied !== undefined }).then((done) => {
+          if (done) {
+            onCopied?.()
+          }
+        })
+      }
     >
-      {pending
-        ? t('components.native-chat.automationSaved.gettingUrl', 'Getting the URL…')
-        : t('bots.webhooks.copyUrl', 'Copy URL')}
+      {pending ? (
+        t('components.native-chat.automationSaved.gettingUrl', 'Getting the URL…')
+      ) : copied ? (
+        <>
+          <Check aria-hidden />
+          {t('bots.webhooks.copied', 'Copied')}
+        </>
+      ) : (
+        t('bots.webhooks.copyUrl', 'Copy URL')
+      )}
     </Button>
   )
 }

@@ -15,6 +15,7 @@ import {
   sessionTabsEnvironmentsByWorktree,
   lastHostTerminalTabCountByWorktree,
   sessionTabsInventoryOmissionsByWorktree,
+  hostSessionGroupIdByLocalKey,
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree,
   markHostSessionTabMappingsChanged,
@@ -58,6 +59,10 @@ import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/agent-sess
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
 import { clearHostSessionTabIdMappings } from '../identity/tracking-mappings'
 import { untrackWebSessionTabsWorktree, removeWebSessionTabsEnvironment } from './tracking'
+import {
+  clearDirectlyOpenedChats,
+  clearDirectlyOpenedChatsForWorktree
+} from './directly-opened-chat-tabs'
 
 const sessionTabsTrackingGenerations = createBoundedGenerationMap(512)
 
@@ -83,6 +88,7 @@ export function getLatestWebSessionTabsPublicationEpoch(
 }
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
+  clearDirectlyOpenedChats(() => true)
   latestSessionTabsSnapshotByWorktree.clear()
   replayableSessionTabsSnapshotByWorktree.clear()
   latestReceivedSessionTabsSnapshotByWorktree.clear()
@@ -96,6 +102,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   resetReceivedSessionTabsFrameSequence()
   lastHostTerminalTabCountByWorktree.clear()
   sessionTabsInventoryOmissionsByWorktree.clear()
+  hostSessionGroupIdByLocalKey.clear()
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
   markHostSessionTabMappingsChanged()
@@ -106,38 +113,12 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   resetMirroredTerminalHandlesForTests()
 }
 
-export function _getWebSessionTabsTrackingCountsForTest(): {
-  freshness: number
-  hostMappings: number
-  hostMappingWorktrees: number
-} {
-  let hostMappingWorktrees = 0
-  for (const mappingKeysByWorktree of hostSessionTabMappingKeysByEnvironmentAndWorktree.values()) {
-    hostMappingWorktrees += mappingKeysByWorktree.size
-  }
-  return {
-    freshness: latestSessionTabsSnapshotByWorktree.size,
-    hostMappings: hostSessionTabIdByLocalKey.size,
-    // Why: the mapping index is a parallel structure, so leak tests must see it drain alongside the flat map.
-    hostMappingWorktrees
-  }
-}
-
-export function _getWebSessionTabsReceiptTrackingCountsForTest(): {
-  receipts: number
-  removalWatermarks: number
-} {
-  return {
-    receipts: latestReceivedSessionTabsSnapshotByWorktree.size,
-    removalWatermarks: sessionTabsRemovalWatermarkByWorktree.size
-  }
-}
-
 export function clearWebSessionTabsTrackingForWorktree(
   environmentId: string,
   worktreeId: string
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  clearDirectlyOpenedChatsForWorktree(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
   forgetRetiredEpochCensuses((candidate) => candidate === key)
@@ -164,6 +145,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     return
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
+  clearDirectlyOpenedChats((key) => key.startsWith(keyPrefix))
   sessionTabsTrackingGenerations.advance(trimmedEnvironmentId)
   forgetRetiredEpochCensuses((key) => key.startsWith(keyPrefix))
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
@@ -215,6 +197,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     for (const mappingKeys of mappingKeysByWorktree.values()) {
       for (const mappingKey of mappingKeys) {
         hostSessionTabIdByLocalKey.delete(mappingKey)
+        hostSessionGroupIdByLocalKey.delete(mappingKey)
       }
     }
     hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(trimmedEnvironmentId)

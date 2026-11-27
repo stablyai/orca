@@ -5,6 +5,7 @@ import type {
 import { isEligibleLocalCertificateHost } from '../../../../../shared/browser/navigation/browser-url'
 import { startSpan } from '../../../../observability/tracer'
 import { observeBrowserGuestRequests } from '../../../sessions/requests/browser-session-web-request-observer'
+import { isBrowserSessionWebRequestHeld } from '../../../sessions/requests/browser-session-web-request-owner'
 import { blockedMainFrameRequestBeingReported } from '../../../sessions/requests/browser-session-request-decisions'
 import {
   onBrowserGuestSemanticVisibilityChanged,
@@ -167,7 +168,9 @@ export function installBrowserNavigationStallWatchdog(
       origin: url.origin,
       url,
       startedAt: performance.now(),
-      phase: 'no-request-seen',
+      phase: isBrowserSessionWebRequestHeld(session, 'onBeforeRequest')
+        ? 'no-request-seen'
+        : 'unobserved',
       requestId: null,
       timer: null,
       stalled: false

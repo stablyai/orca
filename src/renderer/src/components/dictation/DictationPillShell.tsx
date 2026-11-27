@@ -1,10 +1,6 @@
-import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-press'
+import { keepFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { cn } from '@/lib/class-names'
 import { useDictationPillBox, type DictationPillAnchor } from './dictation-pill-anchor'
-
-// Presses on the pill keep focus where the words are going.
-const keepFocus = (event: React.MouseEvent): void => event.preventDefault()
-const keepFocusProps = { [KEEPS_FOCUS_ATTRIBUTE]: '', onMouseDown: keepFocus }
 
 /** The pill's floating container: over the anchor pane, or at the window's bottom centre without one. */
 export function DictationPillShell({
@@ -34,7 +30,8 @@ export function DictationPillShell({
         className
       )}
       style={!inline && box ? { left: box.left, bottom: box.bottom, width: box.width } : undefined}
-      {...keepFocusProps}
+      // Presses on the pill keep focus where the words are going.
+      {...keepFocusPressProps}
     >
       {children}
     </div>

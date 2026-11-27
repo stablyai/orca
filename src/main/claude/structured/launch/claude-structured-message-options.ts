@@ -1,4 +1,20 @@
+import { setTimeout as delay } from 'node:timers/promises'
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
+import {
+  claudePermissionPickHolds,
+  recordClaudeBuildMode
+} from '../permissions/claude-permission-picks'
+import {
+  claudeBypassRefused,
+  claudeInPlan,
+  claudeOwesFullAccessFallback
+} from '../permissions/claude-full-access-refusal'
+import {
+  claimClaudePermissionModeRequest,
+  ClaudePermissionModeUnsettled,
+  setClaudeAllowedPermissionMode
+} from '../permissions/claude-permission-mode-ladder'
 import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
 import { claudeExecutionObservations } from '../turns/claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../dispatch/claude-structured-dispatch'
@@ -14,6 +30,12 @@ import {
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import {
+  applyKeptClaudeModeOwed,
+  askKeptBypassLeavingPlan,
+  keptCliRefusedFlagSettings,
+  sendKeptPickMadeLeavingPlan
+} from '../../relay/claude-kept-permission'
 import {
   isAbortSignalReason,
   throwIfSignalAborted,
@@ -52,7 +74,9 @@ export async function applyClaudeMessageOptions(
   const effort = takesFlagSettings ? options.effort : undefined
   if (effort && session.appliedInputOptions.get('effort') !== effort) {
     await waitForPromiseWithSignal(
-      setClaudeStructuredOption(session, { key: 'effort', value: effort }, timeoutMs),
+      setClaudeStructuredOption(session, { key: 'effort', value: effort }, timeoutMs).catch(
+        (error: unknown) => keptCliRefusedFlagSettings(session, error)
+      ),
       signal
     )
   }
@@ -61,23 +85,131 @@ export async function applyClaudeMessageOptions(
   const fastMode = takesFlagSettings ? options.fastMode : undefined
   if (fastMode !== undefined && session.appliedInputOptions.get('fastMode') !== fastMode) {
     await waitForPromiseWithSignal(
-      setClaudeStructuredOption(session, { key: 'fastMode', value: fastMode }, timeoutMs),
+      setClaudeStructuredOption(session, { key: 'fastMode', value: fastMode }, timeoutMs).catch(
+        (error: unknown) => keptCliRefusedFlagSettings(session, error)
+      ),
       signal
     )
   }
   throwIfSignalAborted(signal)
+  await waitForPromiseWithSignal(applyKeptClaudeModeOwed(session, timeoutMs), signal)
   if (options.interactionMode !== undefined) {
-    const mode = options.interactionMode === 'plan' ? 'plan' : claudeBuildPermissionMode(session)
-    await waitForPromiseWithSignal(
-      session.connection.setPermissionMode(mode, { timeoutMs }),
-      signal
-    )
-    session.appliedInputOptions.set('interactionMode', options.interactionMode)
-    if (options.interactionMode === 'default') {
-      session.appliedInputOptions.set('buildPermissionMode', mode)
+    if (options.interactionMode === 'plan') {
+      claimClaudePermissionModeRequest(session)
+      // Recorded ahead of the answer, so a live pick meanwhile only records its mode for later.
+      const before = session.appliedInputOptions.get('interactionMode')
+      session.appliedInputOptions.set('interactionMode', 'plan')
+      try {
+        await waitForPromiseWithSignal(
+          session.connection.setPermissionMode('plan', { timeoutMs }),
+          signal
+        )
+      } catch (error) {
+        if (before === undefined) {
+          session.appliedInputOptions.delete('interactionMode')
+        } else {
+          session.appliedInputOptions.set('interactionMode', before)
+        }
+        throw error
+      }
+    } else {
+      await waitForClaudeStartupSettings(session, signal)
+      const leavingPlan = claudeInPlan(session)
+      const asked = leavingPlan ? askKeptBypassLeavingPlan(session, timeoutMs) : undefined
+      if (asked) {
+        await waitForPromiseWithSignal(asked, signal)
+      }
+      const refused = claudeBypassRefused(session)
+      // A live pick during this write goes out behind it and records its own mode.
+      const holds = claudePermissionPickHolds(session)
+      // A refused Full access chat already running its fallback needs no write.
+      const written =
+        !leavingPlan && refused && !claudeOwesFullAccessFallback(session)
+          ? null
+          : await waitForPromiseWithSignal(
+              writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused, holds),
+              signal
+            )
+      const sent = leavingPlan
+        ? await waitForPromiseWithSignal(
+            sendKeptPickMadeLeavingPlan(session, written, holds, timeoutMs),
+            signal
+          )
+        : { mode: written, holds }
+      session.appliedInputOptions.set('interactionMode', options.interactionMode)
+      if (sent.mode !== null) {
+        recordClaudeBuildMode(session, sent.holds, sent.mode)
+      }
     }
+  } else {
+    await applyClaudeFullAccessFallback(session, timeoutMs, signal)
   }
   throwIfSignalAborted(signal)
+}
+
+const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
+
+/** A failed switch leaves Claude's mode unknown, so the recorded fallback goes: the warning waits
+ *  and the next input asks again. It fails the input only where the chat may still be in Plan,
+ *  unless Claude accepted a step out of it, or where the chat picked the mode itself. */
+function writeClaudeBuildMode(
+  session: ClaudeSession,
+  timeoutMs: number | undefined,
+  tolerate: boolean,
+  holds: () => boolean
+): Promise<PermissionMode | null> {
+  return setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
+    timeoutMs
+  }).catch((error: unknown) => {
+    if (!tolerate && !(error instanceof ClaudePermissionModeUnsettled)) {
+      throw error
+    }
+    recordClaudeBuildMode(session, holds, null)
+    return null
+  })
+}
+
+/** A Full access chat's first send waits briefly for the startup settings read that says
+ *  whether Claude allows it, so one write usually settles the mode. */
+async function waitForClaudeStartupSettings(
+  session: ClaudeSession,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  if (
+    session.launchIntent?.permissionMode === 'bypassPermissions' &&
+    session.bypassDisabled === undefined &&
+    !session.firstRootInit &&
+    session.startupSettings
+  ) {
+    await waitForPromiseWithSignal(
+      Promise.race([
+        session.startupSettings,
+        delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, undefined, { ref: false, signal })
+      ]),
+      signal
+    )
+  }
+}
+
+/** Claude starts a refused Full access chat in its own fallback; the chat's is Approve for me. A
+ *  failed switch leaves the send to run as Claude stands (the next send tries again). */
+export async function applyClaudeFullAccessFallback(
+  session: ClaudeSession,
+  timeoutMs: number | undefined,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  await waitForClaudeStartupSettings(session, signal)
+  if (!claudeOwesFullAccessFallback(session)) {
+    return
+  }
+  const holds = claudePermissionPickHolds(session)
+  const mode = await waitForPromiseWithSignal(
+    writeClaudeBuildMode(session, timeoutMs, true, holds),
+    signal
+  )
+  if (mode !== null) {
+    recordClaudeBuildMode(session, holds, mode)
+  }
 }
 
 // Bounded so an unanswered request still lets the steer through.
@@ -145,9 +277,13 @@ export async function dispatchClaudeMessage(
         input.body.from?.orchestration?.message === 'mail-notice'
           ? undefined
           : input.executionOptions
-      if (messageOptions !== undefined) {
-        await applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
-      }
+      // Claude's refusal mode is no choice of the chat's, so any input moves it to the fallback.
+      await (messageOptions !== undefined
+        ? applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
+        : // A steer too: no input goes out in a looser mode than the one picked.
+          waitForPromiseWithSignal(applyKeptClaudeModeOwed(session, timeoutMs), input.signal).then(
+            () => applyClaudeFullAccessFallback(session, timeoutMs, input.signal)
+          ))
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.onExecutionSnapshot?.()

@@ -70,13 +70,14 @@ export function useConfirmBotAgentSwitch(): (
             <li>
               {translate(
                 'bots.agentSwitch.threads',
-                'Slack threads already running stay on {{agent}} until they finish',
-                { agent: botAgentLabel(bot.agent) }
+                "Slack threads with an existing Orca chat keep that chat's agent"
               )}
             </li>
           </ul>
         ),
-        confirmLabel: translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent })
+        confirmLabel: translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent }),
+        // A tab in the bot's agent picker switches agents with the picker still open.
+        aboveMenus: true
       })
     },
     [confirm]

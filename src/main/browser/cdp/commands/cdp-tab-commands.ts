@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { webContents } from 'electron'
 import type {
   BrowserTabInfo,
@@ -47,8 +48,8 @@ export class CdpTabCommands {
     }
     return {
       browserPageId: resolvedPageId,
-      url: guest.getURL(),
-      title: guest.getTitle()
+      url: redactKagiSessionToken(guest.getURL()),
+      title: redactKagiSessionToken(guest.getTitle())
     }
   }
 
@@ -64,8 +65,8 @@ export class CdpTabCommands {
       tabs.push({
         browserPageId: tabId,
         index,
-        url: guest.getURL(),
-        title: guest.getTitle(),
+        url: redactKagiSessionToken(guest.getURL()),
+        title: redactKagiSessionToken(guest.getTitle()),
         active: wcId === this.bridgeState.activeWebContentsId
       })
       index++

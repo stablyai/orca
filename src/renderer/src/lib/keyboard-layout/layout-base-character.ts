@@ -157,27 +157,3 @@ export function getLayoutCharacterForCode(code: string, shifted: boolean): strin
   }
   return normalizeLayoutCharacter(base.toUpperCase())
 }
-
-/** Test-only: replace or clear the cached layout map. */
-export function _setLayoutMapForTests(map: LayoutMapLike | null): void {
-  cachedLayoutCharacters = { ...cachedLayoutCharacters, layoutMap: map }
-}
-
-/** Test-only: replace or clear the native modifier-layer snapshot. */
-export function _setLayoutSnapshotForTests(snapshot: KeyboardLayoutSnapshot | null): void {
-  cachedLayoutCharacters = {
-    ...cachedLayoutCharacters,
-    nativeKeyCharacters: snapshot?.keyCharacters ?? null
-  }
-}
-
-export function _resetLayoutCharacterListenersForTests(): void {
-  attachedWindow?.removeEventListener('focus', refreshOnFocus)
-  unsubscribeLayoutChange?.()
-  attachedWindow = null
-  unsubscribeLayoutChange = null
-  focusListenerAttached = false
-  layoutChangeGeneration = 0
-  layoutRefreshBlocked = false
-  ++refreshGeneration
-}

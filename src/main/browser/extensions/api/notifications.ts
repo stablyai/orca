@@ -1,6 +1,7 @@
 import { Notification, nativeImage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
@@ -19,21 +20,24 @@ import {
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
 import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
+import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 
-const optionsSchema = z
-  .object({
-    type: z.enum(['basic', 'image', 'list', 'progress']),
-    iconUrl: z.string(),
-    title: z.string(),
-    message: z.string(),
-    contextMessage: z.string(),
-    buttons: z.array(z.object({ title: z.string() }).loose()).max(2),
-    requireInteraction: z.boolean(),
-    silent: z.boolean(),
-    priority: z.number().int()
-  })
-  .partial()
-  .loose()
+const optionsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.enum(['basic', 'image', 'list', 'progress']),
+      iconUrl: z.string(),
+      title: z.string(),
+      message: z.string(),
+      contextMessage: z.string(),
+      buttons: z.array(z.object({ title: z.string() }).loose()).max(2),
+      requireInteraction: z.boolean(),
+      silent: z.boolean(),
+      priority: z.number().int()
+    })
+    .partial()
+    .loose()
+)
 
 type NotificationOptions = z.infer<typeof optionsSchema>
 
@@ -51,9 +55,14 @@ function shownFor(caller: BrowserExtensionCaller): Map<string, Shown> {
     byExtension = new Map()
     shownBySession.set(caller.session, byExtension)
     const owned = byExtension
+    const profileId = caller.browserProfileId
     caller.session.extensions.on('extension-unloaded', (_event, extension) => {
       const shown = owned.get(extension.id)
       owned.delete(extension.id)
+      // Why: the notifications close with no event, so only a clean start shows them again.
+      if (shown && shown.size > 0) {
+        noteBrowserExtensionNeedsCleanStart(profileId, extension.id)
+      }
       for (const entry of shown?.values() ?? []) {
         detach(entry)
       }

@@ -13,10 +13,7 @@ import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  setAppEnvironment,
-  type AppEnvironment
-} from '../../../../../shared/app-lifecycle/app-environment'
+import { setAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 
 const hostApp = {
   isPackaged: true,
@@ -34,7 +31,7 @@ function installHostApp(): void {
     onWillQuit: () => {},
     exit: () => {},
     getAppMetrics: () => []
-  } as AppEnvironment)
+  })
 }
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import {

@@ -1,44 +1,21 @@
 import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
-import { confirmBrowserPasswordOwner } from '../../browser-passwords/browser-password-reauth'
-import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
-import { listSystemFontFamilies } from '../../window/desktop-integration/system-fonts'
-import { registerSettingsImportHandlers } from './settings-import-handlers'
-import { setMainUiLanguage } from '../../i18n/main-i18n'
-import { rebuildAppMenu } from '../../menu/register-app-menu'
-import { rebuildSystemTrayMenu } from '../../tray/system-tray'
-import { track } from '../../telemetry/client'
-import {
-  SETTINGS_CHANGED_WHITELIST,
-  type SettingsChangedKey
-} from '../../../shared/telemetry/schemas/telemetry-property-schemas'
+import { registerLazySettingsImportAndAppIconHandlers } from './lazy-settings-import-and-app-icon-ipc'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from '../worktrees/floating-workspace-directory'
-import { applyAgentStatusHooksEnabled } from '../../agent-hooks/installation/managed-agent-hook-controls'
-import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { recordManagedHookInstallFailure } from '../../agent-hooks/installation/install-telemetry'
-import { applyElectronProxySettings } from '../../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../../browser/sessions/proxy/browser-session-proxy'
-import { applyProxyToElectronUpdaterSession } from '../../updater/lifecycle/electron-updater-proxy-session'
 import { applyAutomaticUpdatesSetting } from '../../updater/updater-service'
-import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
-import { applyAppIcon } from '../../window/desktop-integration/app-icon'
-import { registerCustomAppIconHandlers } from '../custom-app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal/appearance/terminal-line-height-settings'
-import { prepareLocalWorktreeRootsForRepos } from '../../workspaces/creation/worktree-root-preparation'
-import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktrees/creation/worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { readSettingsWithRuntimeEnvironmentPreference } from '../runtime-environments/catalog/runtime-environment-preference'
-import { haveSameDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
@@ -48,25 +25,15 @@ import {
   normalizeComputerAwakeMode
 } from '../../../shared/app-lifecycle/computer-awake-mode'
 import { resolveAiVaultSearchSettings } from '../../../shared/ai-vault/search/ai-vault-search-settings'
-import { applySessionSearchSettingsChange } from '../../ai-vault-search/session-search-enablement'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 
-const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
 const registryRoot = getRuntimeEnvironmentRegistryRoot
-
-// Electron menus do not react to settings; rebuild appearance checkboxes after writes.
-const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
-  'showTasksButton',
-  'showAutomationsButton',
-  'showMobileButton',
-  'showTitlebarAppName'
-]
 
 export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
-  registerCustomAppIconHandlers(store)
+  registerLazySettingsImportAndAppIconHandlers(store)
   ipcMain.handle(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
@@ -175,14 +142,17 @@ export function registerSettingsHandlers(
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
-    if (
-      sanitizedArgs.browserPasswordsFillRequiresReauth === false &&
-      (store.getSettings().browserPasswordsFillRequiresReauth !== true ||
+    if (sanitizedArgs.browserPasswordsFillRequiresReauth === false) {
+      const { confirmBrowserPasswordOwner } =
+        await import('../../browser-passwords/browser-password-reauth')
+      if (
+        store.getSettings().browserPasswordsFillRequiresReauth !== true ||
         !(await confirmBrowserPasswordOwner('turn off saved password fill authentication', {
           always: true
-        })))
-    ) {
-      delete sanitizedArgs.browserPasswordsFillRequiresReauth
+        }))
+      ) {
+        delete sanitizedArgs.browserPasswordsFillRequiresReauth
+      }
     }
     // No-op UI saves must not inflate settings_changed adoption telemetry.
     const before = store.getSettings()
@@ -195,98 +165,22 @@ export function registerSettingsHandlers(
       'alwaysForceDeletePreservedBranches' in sanitizedArgs
         ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
         : store.updateSettings(sanitizedArgs, updateOptions)
-    if (
-      'experimentalAgentDashboardPopout' in sanitizedArgs &&
-      before.experimentalAgentDashboardPopout !== result.experimentalAgentDashboardPopout
-    ) {
-      track('agent_dashboard_enabled', {
-        enabled: result.experimentalAgentDashboardPopout === true
-      })
-    }
-    const proxySettingsChanged =
-      ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
-      ('httpProxyBypassRules' in sanitizedArgs &&
-        before.httpProxyBypassRules !== result.httpProxyBypassRules)
-    if (proxySettingsChanged) {
-      // Start every authority before yielding so requests cannot enter between their barriers.
-      const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
-        applyElectronProxySettings(result),
-        applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), result),
-        applyProxyToElectronUpdaterSession(result)
-      ])
-      if (defaultSessionResult.status === 'rejected') {
-        console.warn('[settings] failed to apply network proxy settings')
-      }
-      if (browserSessionsResult.status === 'rejected') {
-        console.warn('[settings] failed to apply network proxy settings to browser sessions')
-      }
-    }
-    if (
-      'computerAwakeMode' in sanitizedArgs ||
-      'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
-    ) {
-      agentAwakeService?.setMode(
-        normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
-      )
-    }
-    await getClaudeAgentViewService().reconcile(result)
-    const hookSettingChanged =
-      ('agentStatusHooksEnabled' in sanitizedArgs &&
-        before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
-      ('disabledTuiAgents' in sanitizedArgs &&
-        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
-    if (hookSettingChanged) {
-      try {
-        await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
-          userInitiated: true,
-          shouldHydrateShellPath: app.isPackaged,
-          onInstallError: recordManagedHookInstallFailure,
-          shouldContinue: (agent) => isAgentStatusHooksEnabledForAgent(store.getSettings(), agent)
-        })
-      } catch (error) {
-        console.warn('[settings] failed to reconcile managed agent hooks:', error)
-      }
-    }
-    if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
-      await setMainUiLanguage(result.uiLanguage)
-      rebuildAppMenu()
-      rebuildSystemTrayMenu()
-    }
-    if (
-      ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
-      ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces)
-    ) {
-      void prepareLocalWorktreeRootsForRepos(store)
-      scheduleCurrentWorktreeBaseDirectoryWatcherSync()
-    }
-    if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
-      rebuildAppMenu()
-    }
+    const { applySettingsUpdateSideEffects } = await import('./settings-update-side-effects')
+    await applySettingsUpdateSideEffects({
+      store,
+      agentAwakeService,
+      sanitizedArgs,
+      before,
+      result
+    })
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
+      const { applyAppIcon } = await import('../../window/desktop-integration/app-icon')
       applyAppIcon(result.appIcon)
     }
     if ('aiVaultSearch' in sanitizedArgs) {
+      const { applySessionSearchSettingsChange } =
+        await import('../../ai-vault-search/session-search-enablement')
       applySessionSearchSettingsChange(before, result)
-    }
-
-    // Emit only allowlisted keys without raw values; new value kinds require matching schema support.
-    for (const key of Object.keys(sanitizedArgs)) {
-      if (!SETTINGS_CHANGED_WHITELIST_SET.has(key)) {
-        continue
-      }
-      const beforeValue = (before as Record<string, unknown>)[key]
-      const afterValue = (result as Record<string, unknown>)[key]
-      if (beforeValue === afterValue) {
-        continue
-      }
-      if (typeof afterValue !== 'boolean') {
-        // Unsupported value kinds must not be guessed.
-        continue
-      }
-      track('settings_changed', {
-        setting_key: key as SettingsChangedKey,
-        value_kind: 'bool'
-      })
     }
 
     return store.getSettings()
@@ -309,9 +203,10 @@ export function registerSettingsHandlers(
     }
   )
 
-  ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
-
-  registerSettingsImportHandlers(store)
+  ipcMain.handle('settings:listFonts', async () => {
+    const { listSystemFontFamilies } = await import('../../window/desktop-integration/system-fonts')
+    return listSystemFontFamilies()
+  })
 
   ipcMain.handle('cache:getGitHub', () => {
     return store.getGitHubCache()

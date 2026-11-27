@@ -104,7 +104,12 @@ export type AgentSessionJournalReads = {
     uuids: readonly string[]
   ): Promise<readonly JournalHistoryPrompt[]>
   submission(clientMessageId: string): Promise<AgentJournalSubmission | undefined>
-  submissionBody(clientMessageId: string): Promise<AgentJournalMessageItem | null>
+  /** `family`: when no send has that id, the current send a queued card of that id was handed over
+   *  as (its admission family). */
+  submissionBody(
+    clientMessageId: string,
+    options?: { family?: true }
+  ): Promise<AgentJournalMessageItem | null>
   receiptFor(clientMessageId: string): Promise<AgentJournalAcceptanceReceipt | null>
   pendingSubmissions(): Promise<AgentJournalSubmission[]>
   lastProviderActivityAt(fence: number): Promise<number | undefined>

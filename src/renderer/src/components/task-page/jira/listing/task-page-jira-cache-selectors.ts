@@ -109,10 +109,15 @@ export function resolveTaskPageJiraIssues(
     if (!cached) {
       return issue
     }
-    const fetchedTime = Date.parse(issue.updatedAt)
-    const cachedTime = Date.parse(cached.updatedAt)
-    return !Number.isNaN(fetchedTime) && (Number.isNaN(cachedTime) || fetchedTime > cachedTime)
-      ? issue
-      : cached
+    return pickNewerJiraIssue(issue, cached)
   })
+}
+
+// Why: a refreshed row must win over an older cached copy wherever it is shown, list or detail.
+export function pickNewerJiraIssue(fetched: JiraIssue, cached: JiraIssue): JiraIssue {
+  const fetchedTime = Date.parse(fetched.updatedAt)
+  const cachedTime = Date.parse(cached.updatedAt)
+  return !Number.isNaN(fetchedTime) && (Number.isNaN(cachedTime) || fetchedTime > cachedTime)
+    ? fetched
+    : cached
 }

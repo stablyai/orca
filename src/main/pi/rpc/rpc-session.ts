@@ -11,6 +11,7 @@ import { ReaderPauseHolds } from '../../jsonl-rpc/reader-pause-holds'
 import { JsonlRpcAgentConnection } from '../../jsonl-rpc/agent-connection'
 import { piExitFailure } from './rpc-exit-classification'
 import { PiRpcTurns } from './rpc-turns'
+import { PiRpcJoinedTurns } from './rpc-joined-turns'
 import { PI_RPC_PEER_OPTIONS } from './prompts/rpc-prompt'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
 import { PiRpcOptionObservations, type PiRpcOptionWrite } from './options/rpc-options'
@@ -27,6 +28,7 @@ export class PiRpcSession {
   readonly connection: PiRpcConnection
   readonly lane: JsonlRpcTimelineLane
   readonly turns: PiRpcTurns
+  private readonly joinedTurns: PiRpcJoinedTurns
   readonly dialogs: PiRpcDialogCallbacks
   readonly selected = new Map<string, string>()
   /** Hold sends from handover through settlement. */
@@ -80,10 +82,7 @@ export class PiRpcSession {
       ...this.reading.control('lane'),
       onFailed: (reason) => this.fail(new Error(reason)),
       onInputAccepted: (clientMessageId) =>
-        this.settle(clientMessageId, {
-          state: 'accepted',
-          providerIdentity: { provider: 'orca', clientMessageId }
-        })
+        this.settle(clientMessageId, this.joinedTurns.accepted(clientMessageId))
     })
     this.turns = new PiRpcTurns({
       lane: this.lane,
@@ -95,6 +94,7 @@ export class PiRpcSession {
           this.startup.reportOptions(generation, current)
         ),
       settled: (id, outcome) => this.settle(id, outcome),
+      accepting: (id, opener) => this.joinedTurns.accepting(id, opener),
       idle: () => this.dialogs.cancelAll(),
       turnEnded: () => this.history.turnEnded(),
       failed: (error) => this.fail(error),
@@ -105,6 +105,7 @@ export class PiRpcSession {
           error
         })
     })
+    this.joinedTurns = new PiRpcJoinedTurns(this.turns, this.lane)
     this.dialogs = new PiRpcDialogCallbacks(
       this.lane,
       (frame) => this.connection.send(frame),

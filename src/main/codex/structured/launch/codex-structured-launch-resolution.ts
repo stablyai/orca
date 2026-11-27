@@ -1,5 +1,11 @@
-import { codexBotToolsThreadConfig } from '../../../bots/bot-tools-codex'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import {
+  codexBotToolsThreadConfig,
+  readCodexInheritedToolNames,
+  readCodexStdioToolNames
+} from '../../../bots/bot-tools-codex'
+import { deliverHostMcpServers } from '../../../mcp-servers/session-host-mcp-delivery'
+import { agentOwnMcpServerNames } from '../../../mcp-servers/agent-own-mcp-server-names'
+import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
 import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
@@ -30,7 +36,7 @@ import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
 import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
-import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import { codexArgsMcpServerNames, codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { codexReadOnlyThreadConfig } from '../prompts/codex-structured-read-only'
 import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
@@ -73,9 +79,8 @@ export type CodexStructuredInvocationDeps = Pick<
   resolveWorkingDirectory?: () => Promise<string> | string
 }
 
-export type CodexStructuredInvocation = {
-  command: string
-  prefixArgs: string[]
+/** The resolver's own shape, so a renamed field can't silently read as absent. */
+export type CodexStructuredInvocation = StructuredAgentCommand & {
   environment: NodeJS.ProcessEnv | undefined
 }
 
@@ -138,7 +143,7 @@ export function codexStructuredLaunchPart(
   return async (basis) => {
     const { record } = basis
     const recordHome = requireLegacyAgentSessionAccountHome(record.accountHome)
-    const { command, prefixArgs } = await resolveCodexStructuredInvocation({
+    const { command, prefixArgs, configuredProgram } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
       resolveWorkingDirectory: basis.launchDirectory,
@@ -171,11 +176,22 @@ export function codexStructuredLaunchPart(
     const developerInstructions = await basis.instructions(
       linkedSkillsSection(linkedSkills.projects, [])
     )
-    const tools = await basis.toolServers()
+    const codexHome = accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
+    // Codex merges a same-named server from Orca into one of its own, so that one runs alone.
+    const tools = await deliverHostMcpServers(
+      record.sessionId,
+      'Codex',
+      await basis.toolServers(),
+      async () => [
+        ...(await readCodexInheritedToolNames(codexHome)),
+        ...(await agentOwnMcpServerNames('codex', environment, launchDirectory)),
+        ...codexArgsMcpServerNames(args)
+      ]
+    )
     const threadConfig = basis.readOnly
       ? codexReadOnlyThreadConfig(basis.readOnly)
       : tools.servers.length > 0
-        ? codexBotToolsThreadConfig(tools)
+        ? codexBotToolsThreadConfig(tools, await readCodexStdioToolNames(codexHome))
         : null
     // Codex saves a thread at its first turn; one that exchanged a turn lost its history, not nothing.
     // Turns written since this thread's creation fence ran on it, even before Codex echoed the send.
@@ -192,15 +208,12 @@ export function codexStructuredLaunchPart(
       launch: {
         command,
         prefixArgs,
+        // A custom command may be a wrapper that depends on its folder; it never shares a server.
+        ...(configuredProgram ? { customCommand: true } : {}),
+        // A token this app's tool relay issued for this run ends with it, so the agent does too.
+        ...(tools.appBound ? { appBoundGrants: true as const } : {}),
         // Before the user's args: a later -c table replaces this one, so their hooks.state wins.
-        args: [
-          ...prefixArgs,
-          ...codexOrcaHooksOffArgs(
-            accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
-          ),
-          ...args,
-          'app-server'
-        ],
+        args: [...prefixArgs, ...codexOrcaHooksOffArgs(codexHome), ...args, 'app-server'],
         codexHome: accountHome.path,
         resumeThreadId,
         ...(supersedeIfUnsaved ? { supersedeIfUnsaved } : {}),
@@ -225,7 +238,7 @@ export function codexStructuredLaunchPart(
         ...(basis.readOnly && threadConfig ? { readOnly: basis.readOnly } : {})
       },
       env: withNativeChatVisualsEnv(
-        withBotLaunchToolsEnv(
+        withSessionMcpToolsEnv(
           { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
           tools
         ),

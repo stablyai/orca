@@ -67,7 +67,8 @@ export function findActiveNativeChatRailItem({
     return railTickOf(slots, ticks, virtualItems[0]?.index ?? -1)
   }
   // A fold beyond the virtual window is stale; retain the previous tick until commit catches up.
-  if (fold.end <= scrollTop) {
+  // A mounted next row means the top edge rests in the gap below the fold, which the fold still owns.
+  if (fold.end <= scrollTop && !virtualItems.some((item) => item.index === fold.index + 1)) {
     return previousActiveId
   }
   return railTickOf(slots, ticks, fold.index)

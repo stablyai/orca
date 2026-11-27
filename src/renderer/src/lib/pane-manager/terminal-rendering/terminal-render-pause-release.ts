@@ -9,6 +9,7 @@ type MaybePausableRenderService = {
   _needsFullRefresh?: boolean
   _pausedResizeTask?: { flush?: () => void } | null
   refreshRows?: (start: number, end: number, sync?: boolean) => void
+  _renderDebouncer?: { _rowStart?: number; _rowEnd?: number }
   _renderer?: { value?: MaybeWebglRenderer | null } | MaybeWebglRenderer | null
 }
 
@@ -148,6 +149,31 @@ export function isSynchronizedOutputHeld(terminal: unknown): boolean {
     (core?.coreService?.decPrivateModes ?? core?._coreService?.decPrivateModes)
       ?.synchronizedOutput === true
   )
+}
+
+/** Paints an unpaused viewport now: a replacement canvas is blank until it paints, and a DEC 2026 frame parsed before a scheduled paint would hold it blank until the frame closes. */
+export function paintReplacementCanvasNow(terminal: unknown): void {
+  const service = getRenderService(terminal)
+  const rows = (terminal as TerminalWithRenderService | null)?.rows
+  if (!service || service._isPaused === true || typeof rows !== 'number' || rows < 1) {
+    return
+  }
+  // This paint covers the full refresh attach queued; drop it first so the next frame repaints only what the paint itself requests (selection restore, later output).
+  const debouncer = service._renderDebouncer
+  const queued = debouncer && { start: debouncer._rowStart, end: debouncer._rowEnd }
+  if (debouncer) {
+    debouncer._rowStart = undefined
+    debouncer._rowEnd = undefined
+  }
+  try {
+    service.refreshRows(0, rows - 1, true)
+  } catch {
+    // A pane disposed mid-rebuild keeps its scheduled refresh.
+    if (debouncer && queued) {
+      debouncer._rowStart = queued.start
+      debouncer._rowEnd = queued.end
+    }
+  }
 }
 
 /** A new or resized WebGL canvas holds no frame to keep, so DEC 2026 must not leave it blank until the frame closes. A paused one paints on its reveal present instead. */

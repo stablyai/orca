@@ -46,9 +46,9 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
+| `contributes.mcpServers` | [McpServerContribution](#mcpservercontribution)[] | no | 1.4.276 | MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
-| `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
 | `contributes.taskSources` | any[] | no | 1.4.245 | Reserved for task sources; must be empty until their format is defined. |
 | `contributes.connections` | any[] | no | 1.4.245 | Reserved for account connections; must be empty until their format is defined. |
 | `contributes.sidebarCards` | any[] | no | 1.4.245 | Reserved for sidebar cards; must be empty until their format is defined. |
@@ -67,7 +67,7 @@ A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.
 | --- | --- | --- | --- | --- |
 | `id` | string | yes | 1.4.160 | Panel id, unique among this plugin's panels. The reserved names `constructor` and `prototype` are refused. Example: `"dashboard"` |
 | `title` | string | yes | 1.4.160 | Title shown on the panel tab and its tooltip. Example: `"Dashboard"` |
-| `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` \| `"add"` \| `"remove"` \| `"delete"` \| `"edit"` \| `"refresh"` \| `"search"` \| `"settings"` \| `"check"` \| `"close"` \| `"info"` \| `"warning"` \| `"error"` \| `"open-external"` \| `"copy"` \| `"download"` \| `"upload"` \| `"play"` \| `"pause"` \| `"stop"` \| `"more"` \| `"expand"` \| `"collapse"` \| `"next"` \| `"filter"` \| `"branch"` \| `"file"` \| `"agent"` \| `"link"` | no | 1.4.160 | Icon shown in the right-sidebar activity bar. Defaults to `plug`. Example: `"database"` |
+| `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` \| `"add"` \| `"remove"` \| `"delete"` \| `"edit"` \| `"refresh"` \| `"search"` \| `"settings"` \| `"check"` \| `"close"` \| `"info"` \| `"warning"` \| `"error"` \| `"open-external"` \| `"copy"` \| `"download"` \| `"upload"` \| `"play"` \| `"pause"` \| `"stop"` \| `"more"` \| `"expand"` \| `"collapse"` \| `"next"` \| `"filter"` \| `"branch"` \| `"file"` \| `"agent"` \| `"link"` \| object | no | 1.4.160 | Icon shown in the right-sidebar activity bar. Defaults to `puzzle`. Either a built-in name, or (manifest format 2, needs `engines.orca` `>=1.4.274`) an object with inline SVG path data that Orca draws in the theme color: `path` (required; up to 4096 characters of SVG path data starting with `M`, separated only by spaces, tabs, line breaks and commas), `viewBox` (`"0 0 W H"`, W and H from 1 to 1024; default `"0 0 24 24"`) and `mode` (`stroke`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above 48; `fill` fills the shape). Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path icon, or a string ending in `.svg`, shows `puzzle` with a warning; any other value (a misspelled name, `null`, an array, a number or a boolean) is a manifest error. Format 1 shows `puzzle` with a warning for any icon that isn't a built-in name. Orca draws a single `<path>`: for an icon made of several `<path>` elements or other shapes (`<circle>`, `<rect>`, `<line>`), convert each shape to path commands and join every `d` into one `path`. Example: `{ "path": "M4 4h16v16H4z", "mode": "stroke" }`. Example: `"database"` |
 | `entry` | string | yes | 1.4.160 | What the panel runs: an HTML page for `ui: "html"`, a `.js`/`.mjs` module for `ui: "components"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/panel.html"` |
 | `ui` | `"html"` \| `"components"` | no | 1.4.246 | How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls. Example: `"components"` |
 
@@ -231,6 +231,18 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 | `tooltip` | string | no | 1.4.248 | Shown on hover. Defaults to the plugin name. |
 | `command` | string | no | 1.4.248 | Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed. Example: `"guard.showLog"` |
 
+## McpServerContribution
+
+An MCP server Orca offers to the agents it launches, beside the user’s own.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `name` | string | yes | 1.4.276 | Server name agents see, unique in this plugin: letters, digits, `-` and `_`, at most 64. Example: `"datadog"` |
+| `url` | string | no | 1.4.276 | Streamable HTTP address of a remote server. Give either `url` or `command`. Example: `"https://mcp.datadoghq.com/mcp"` |
+| `command` | string | no | 1.4.276 | Executable that starts a local (stdio) server. Example: `"npx"` |
+| `args` | string[] | no | 1.4.276 | Arguments for `command`. Example: `["-y","@acme/mcp-server"]` |
+| `env` | object | no | 1.4.276 | Environment variables for `command`; nothing secret. |
+
 ## Capability
 
 A host API the plugin may call once the user consents.
@@ -258,7 +270,7 @@ One screenshot of the plugin in use.
 - **`terminal:send` needs `trusted-worker`.** Panels get no host method that types into a terminal, so Orca refuses the capability on any other profile instead of asking the user to grant something the plugin can never use.
 - **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.
 - **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.
-- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills` and `mcpServers` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
+- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `taskSources`, `connections` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills` keeps the meaning agent-plugin formats such as Claude Code's give it; `agents` stays unclaimed because those formats use it for subagent files.
 
 ## Planned contribution points
 
@@ -268,7 +280,6 @@ Each reserved point is planned as declared data that Orca renders and enforces, 
 - `connections`: Account providers with a host-run sign-in, so a plugin never handles credentials itself.
 - `agentHarnesses`: New coding-agent harnesses described as data: how to launch them and read their status.
 - `sidebarCards`: Declarative left-sidebar cards with fixed layouts whose values a worker updates.
-- `mcpServers`: MCP server definitions that Orca offers to the agents it launches.
 - `skills`: Agent skills shipped as files that Orca installs for the agents it launches.
 
 ## Legacy format 1

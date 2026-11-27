@@ -1,4 +1,5 @@
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 // Include the zone to distinguish repeated times when clocks fall back.
 const GIT_HISTORY_TIMESTAMP_OPTIONS: Intl.DateTimeFormatOptions = {
   dateStyle: 'medium',
@@ -17,4 +18,12 @@ export function formatGitHistoryTimestamp(
     return ''
   }
   return uiDateTimeFormat(GIT_HISTORY_TIMESTAMP_OPTIONS, intlLocale).format(date)
+}
+
+/** Relative commit age ("2 hours ago") for compact commit rows. */
+export function formatGitHistoryAge(timestamp: number | undefined, intlLocale?: string): string {
+  if (timestamp == null || !Number.isFinite(timestamp)) {
+    return ''
+  }
+  return formatUiRelativeTime(timestamp - Date.now(), intlLocale)
 }

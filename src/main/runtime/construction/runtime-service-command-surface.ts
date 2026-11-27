@@ -6,6 +6,7 @@ import type { RuntimeMessageWaiters } from '../orchestration/mailbox/runtime-mes
 import type { RuntimeMobileDictationController } from '../speech/runtime-mobile-dictation-controller'
 import type { RuntimeMobileNotificationController } from '../push/notifications/runtime-mobile-notification-controller'
 import type { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
+import type { LazyMobileSpeechOwners } from '../speech/lazy-mobile-speech-owners'
 import type { RuntimeNativeChatDraftResolutions } from '../agent-session/launch/runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
@@ -48,6 +49,7 @@ export type RuntimeServiceCommandSurface = {
   testMobilePushDevice: RuntimeMobileNotificationController['testPushDevice']
   registerMobilePushDevice: RuntimeMobileNotificationController['registerPushDevice']
   unregisterMobilePushDevice: RuntimeMobileNotificationController['unregisterPushDevice']
+  coveredMobilePushTokenDigests: RuntimeMobileNotificationController['coveredPushTokenDigests']
   setAccountServices: RuntimeAccountController['setServices']
   getDataAccountsSnapshot: RuntimeAccountController['dataAccountsSnapshot']
   setCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['setCommitMessageAgentEnvironment']
@@ -103,8 +105,7 @@ type RuntimeServiceCommandOwners = {
   subscriptions: RuntimeSubscriptionRegistry
   mobileNotifications: RuntimeMobileNotificationController
   accounts: RuntimeAccountController
-  mobileSpeech: RuntimeMobileSpeechCatalog
-  mobileDictation: RuntimeMobileDictationController
+  mobileSpeechOwners: LazyMobileSpeechOwners
   browserDrivers: RuntimeBrowserDriverController
   messageWaiters: RuntimeMessageWaiters
 }
@@ -120,8 +121,7 @@ export function installRuntimeServiceCommandSurface(
   const subscriptions = owners.subscriptions
   const notifications = owners.mobileNotifications
   const accounts = owners.accounts
-  const speech = owners.mobileSpeech
-  const dictation = owners.mobileDictation
+  const speechOwners = owners.mobileSpeechOwners
   const browsers = owners.browserDrivers
   const waiters = owners.messageWaiters
   Object.assign(target, {
@@ -166,6 +166,7 @@ export function installRuntimeServiceCommandSurface(
     testMobilePushDevice: notifications.testPushDevice.bind(notifications),
     registerMobilePushDevice: notifications.registerPushDevice.bind(notifications),
     unregisterMobilePushDevice: notifications.unregisterPushDevice.bind(notifications),
+    coveredMobilePushTokenDigests: notifications.coveredPushTokenDigests.bind(notifications),
     setAccountServices: accounts.setServices.bind(accounts),
     getDataAccountsSnapshot: accounts.dataAccountsSnapshot.bind(accounts),
     setCommitMessageAgentEnvironmentResolvers:
@@ -196,18 +197,35 @@ export function installRuntimeServiceCommandSurface(
     onAccountsChanged: accounts.onChanged.bind(accounts),
     setHostAccountLaunchEnv: accounts.setHostLaunchEnv.bind(accounts),
     restoreHostAccountLaunchEnv: accounts.restoreHostLaunchEnv.bind(accounts),
-    listMobileSpeechModels: speech.list.bind(speech),
-    downloadMobileSpeechModel: speech.download.bind(speech),
-    deleteMobileSpeechModel: speech.delete.bind(speech),
-    configureMobileDictation: speech.configure.bind(speech),
-    getOpenAiSpeechKeyStatus: speech.openAiKeyStatus.bind(speech),
-    setOpenAiSpeechKey: speech.setOpenAiKey.bind(speech),
-    clearOpenAiSpeechKey: speech.clearOpenAiKey.bind(speech),
-    startMobileDictation: dictation.start.bind(dictation),
-    feedMobileDictation: dictation.feed.bind(dictation),
+    listMobileSpeechModels: (worktreeId) =>
+      speechOwners.loadMobileSpeech().then((speech) => speech.list(worktreeId)),
+    downloadMobileSpeechModel: (modelId) =>
+      speechOwners.loadMobileSpeech().then((speech) => speech.download(modelId)),
+    deleteMobileSpeechModel: (modelId) =>
+      speechOwners.loadMobileSpeech().then((speech) => speech.delete(modelId)),
+    configureMobileDictation: (params) =>
+      speechOwners.loadMobileSpeech().then((speech) => speech.configure(params)),
+    getOpenAiSpeechKeyStatus: () =>
+      speechOwners.loadMobileSpeech().then((speech) => speech.openAiKeyStatus()),
+    setOpenAiSpeechKey: (apiKey) =>
+      speechOwners.loadMobileSpeech().then((speech) => speech.setOpenAiKey(apiKey)),
+    clearOpenAiSpeechKey: () =>
+      speechOwners.loadMobileSpeech().then((speech) => speech.clearOpenAiKey()),
+    startMobileDictation: (params) =>
+      speechOwners.loadMobileDictation().then((dictation) => dictation.start(params)),
+    feedMobileDictation: (params) => {
+      const dictation = speechOwners.getLoadedMobileDictation()
+      if (!dictation) {
+        throw new Error('dictation_stream_not_started')
+      }
+      return dictation.feed(params)
+    },
     finishMobileDictation: (params) =>
-      dictation.finish(params, accounts.getCommitMessageAgentEnvironment()),
-    cancelMobileDictation: dictation.cancel.bind(dictation),
+      speechOwners
+        .loadMobileDictation()
+        .then((dictation) => dictation.finish(params, accounts.getCommitMessageAgentEnvironment())),
+    cancelMobileDictation: (params) =>
+      speechOwners.loadMobileDictation().then((dictation) => dictation.cancel(params)),
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),
     waitForMessage: waiters.wait.bind(waiters),

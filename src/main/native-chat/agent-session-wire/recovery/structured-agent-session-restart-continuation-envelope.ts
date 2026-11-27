@@ -1,3 +1,6 @@
+import { restartConnectorClaim } from './structured-agent-session-connector-claims'
+import { agentSessionMessagePayload } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentJournalConnectorClaim } from '../../../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
@@ -6,12 +9,14 @@ import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 
 export function restartContinuationBody(
-  marker: Pick<AgentSessionResumeMarker, 'activity'>
+  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  claim?: AgentJournalConnectorClaim
 ): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: restartContinuationMessage(marker) }]
+    blocks: [{ type: 'text', text: restartContinuationMessage(marker) }],
+    ...(claim ? { connectorClaim: claim } : {})
   }
 }
 
@@ -53,20 +58,34 @@ export function restartContinuationEnvelope(
   sessionId: string,
   fence: number,
   marker: Pick<AgentSessionResumeMarker, 'activity'>,
-  continuationId: string
+  continuationId: string,
+  claim?: AgentJournalConnectorClaim
 ): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
-  const body = restartContinuationBody(marker)
+  const body = restartContinuationBody(marker, claim)
   return {
     body,
     envelope: {
       sessionId,
       clientOperationId: continuationId,
       expectedRuntimeFence: fence,
+      // Over what the provider gets, as every send's: a host-written claim never reaches it.
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
         sessionId,
-        fields: { body }
+        fields: { body: agentSessionMessagePayload(body) }
       })
     }
   }
+}
+
+/** The envelope a continuation sends: claiming, for its marker's cut, the connector requests that
+ *  cut owes (Phase 1). */
+export async function continuationEnvelopeOf(
+  sessionId: string,
+  fence: number,
+  marker: Pick<AgentSessionResumeMarker, 'activity'> & { work?: { id: string } },
+  continuationId: string
+): Promise<{ envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem }> {
+  const claim = await restartConnectorClaim(sessionId, marker)
+  return restartContinuationEnvelope(sessionId, fence, marker, continuationId, claim)
 }

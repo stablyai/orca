@@ -118,7 +118,7 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
   }
 
   reconcileMissing(
-    candidate: LegacyWorkerRecoveryCandidate,
+    candidate: Pick<LegacyWorkerRecoveryCandidate, 'dispatchId' | 'terminalHandle' | 'ptyId'>,
     lostWorkers: LostWorkerReport | null = null
   ): boolean {
     try {

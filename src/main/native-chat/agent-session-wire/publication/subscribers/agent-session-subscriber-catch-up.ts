@@ -1,3 +1,4 @@
+import type { LiveTextReaders } from '../../journal-ingress/structured-agent-session-event-sink'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionSlashCommand,
@@ -32,6 +33,8 @@ import {
 } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { Subscriber } from './agent-session-subscribe-input'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import * as liveText from './agent-session-subscriber-live-text'
 
 export type SubscriberDeliveryPort = {
   hooks: SubscriberFieldHooks & {
@@ -41,6 +44,10 @@ export type SubscriberDeliveryPort = {
       journal: AgentSessionJournal
     ) => Promise<StructuredAgentSessionObservedWork | null>
     readWorkFrame?: StructuredAgentSessionWorkFrameReader
+    readLiveText?: (
+      sessionId: string,
+      readers?: LiveTextReaders
+    ) => readonly AgentJournalRenderItem[]
     /** In-lane queue for a captured frame; never admits the lane itself. */
     captureQueuePublication?: (
       sessionId: string,
@@ -132,7 +139,11 @@ async function deliver(
     }
     const result = withPublishedWorkResult(frame.value, work)
     if (!result.ok) {
-      const page = { ...result.page, fence: subscriber.fence }
+      const page = {
+        ...result.page,
+        items: liveText.pageWithSubscriberLiveText(port, subscriber, result.page, reader),
+        fence: subscriber.fence
+      }
       await delivery.emit(subscriber, {
         type: 'reset',
         sessionId: subscriber.sessionId,
@@ -147,6 +158,7 @@ async function deliver(
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.workView = undefined
       await refreshPublishedWork(delivery, subscriber, journal, work, shared)
+      await liveText.followPageWithLiveText(port, subscriber, journal, shared.hostNow)
       return frame
     }
     const page = result.page
@@ -166,7 +178,7 @@ async function deliver(
         sessionId: subscriber.sessionId,
         batch: {
           cursor: page.window.nextCursor,
-          items: page.items,
+          items: liveText.batchWithSubscriberLiveText(port, subscriber, page, reader),
           removedItemIds: page.removedItemIds,
           submissions: page.submissions
         },
@@ -282,7 +294,9 @@ async function publishSnapshotFrame(
     return undefined
   }
   const delivery = capturedPort(port, journal, frame)
-  const page = withPublishedWork(frame.value, frame.work)
+  const durable = withPublishedWork(frame.value, frame.work)
+  const items = liveText.pageWithSubscriberLiveText(port, subscriber, durable, reader)
+  const page = { ...durable, items }
   await delivery.emit(subscriber, {
     type: 'snapshot',
     sessionId: subscriber.sessionId,
@@ -300,5 +314,6 @@ async function publishSnapshotFrame(
   // The replacement dropped client restatements; owe them until every follow-up lands.
   subscriber.workView = undefined
   await refreshPublishedWork(delivery, subscriber, journal, frame.work, shared)
+  await liveText.followPageWithLiveText(port, subscriber, journal, shared.hostNow)
   return frame
 }

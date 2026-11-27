@@ -1,4 +1,4 @@
-import { botGroupRoom } from '../../shared/bots/bot-group'
+import { botGroupRemoteKey, botGroupRoom } from '../../shared/bots/bot-group'
 import { structuredAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { mintAgentSessionOperationId } from '../runtime/orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
@@ -21,6 +21,19 @@ export function stopBotGroup(
     const members = previous.members.map((member) =>
       stopping(member) ? { ...member, stoppedThroughSequence: sequence } : member
     )
+    // Remote members can't be stopped from here: their unanswered asks only say so.
+    for (const message of groups.store.roomMessages(groupId, threadId, 40)) {
+      const stops = (ask: NonNullable<typeof message.remoteAsks>[number]) =>
+        !ask.reply && !ask.stopped && stopping({ botId: botGroupRemoteKey(ask) })
+      if (message.remoteAsks?.some(stops)) {
+        groups.store.update({
+          ...message,
+          remoteAsks: message.remoteAsks.map((ask) =>
+            stops(ask) ? { ...ask, stopped: true as const } : ask
+          )
+        })
+      }
+    }
     groups.store.put({
       ...group,
       revision: group.revision + 1,
@@ -32,7 +45,7 @@ export function stopBotGroup(
           }
         : { members })
     })
-    groups.changed()
+    groups.changed(group.id)
     const host = await requireStructuredHost(groups.runtime)
     return Promise.all(
       previous.members.filter(stopping).map(({ sessionId }) =>

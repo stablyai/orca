@@ -1,8 +1,8 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
-import { useLayoutEffect, useRef, useState } from 'react'
-import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
+import { useId, useRef } from 'react'
+import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
 import { NativeChatApprovalDetail } from './NativeChatApprovalDetail'
-import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
+import { NativeChatApprovalOption } from './NativeChatApprovalOption'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
@@ -18,7 +18,13 @@ import {
 import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
-import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import {
+  PROMPT_CARD_FOCUS_TARGET_SELECTOR,
+  useNativeChatPromptCardFocus
+} from './use-native-chat-prompt-card-focus'
+import { useNativeChatApprovalQuietDetail } from './use-native-chat-approval-quiet-detail'
+import { useApprovalCardFrameClasses } from './native-chat-approval-card-frame'
+import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
 export type NativeChatApprovalCardProps = {
@@ -40,10 +46,14 @@ export type NativeChatApprovalCardProps = {
   worker?: { name: string; onOpen: () => void }
   /** Live time left before the agent decides on its own, shown only when its screen shows it. */
   countdown?: string
-  /** `stacked`: one of several cards above the composer, not the chat's own slot (no slot height, no focus). */
-  placement?: 'composer' | 'stacked'
+  /** `stacked`: one of several cards above the composer, not the chat's own slot (no slot height, no focus).
+   *  `dock`: stacked inside the worker dock, which draws the frame and scrolls. */
+  placement?: 'composer' | 'stacked' | 'dock'
   /** Read off a terminal screen (folder trust, startup menus): keeps the full card. */
   parsedFromTerminal?: boolean
+  /** Shown as the title, with mention pills; `approval.title` stays its name for assistive tech. */
+  titleContent?: React.ReactNode
+  wrapOptions?: boolean
 }
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
@@ -59,10 +69,13 @@ export function NativeChatApprovalCard({
   worker,
   countdown,
   placement = 'composer',
-  parsedFromTerminal = false
+  parsedFromTerminal = false,
+  titleContent,
+  wrapOptions = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
+  const contentId = useId()
   const contentRef = useRef<HTMLDivElement>(null)
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
@@ -81,32 +94,24 @@ export function NativeChatApprovalCard({
         : option.send === URL_APPROVAL_DECLINE_OPTION_ID
           ? t('components.native-chat.urlRequest.decline', 'Decline')
           : option.label
-  const stacked = placement === 'stacked'
+  const stacked = placement !== 'composer'
+  const joined = placement === 'dock'
   // A tool call's prompt reads as a quiet transcript row; plan reviews, sign-ins and prompts read
   // off a terminal screen keep the full card.
   const quiet = !parsedFromTerminal && url === null && !isPlanApprovalSubject(approval.subject)
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [detailClamped, setDetailClamped] = useState(false)
-  const detailRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const node = detailRef.current
-    if (!node || detailOpen) {
-      return undefined
-    }
-    const measure = (): void => setDetailClamped(node.scrollHeight > node.clientHeight + 1)
-    measure()
-    // A narrower pane can wrap a short command past the clamp.
-    if (typeof ResizeObserver === 'undefined') {
-      return undefined
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [approval.detail, detailOpen])
-  const quietDetail = quiet ? (approval.detail ?? null) : null
-  const showsDetailToggle =
-    quietDetail !== null &&
-    (detailOpen || detailClamped || approvalDetailPreview(quietDetail) !== quietDetail)
+  const {
+    text: quietDetailText,
+    otherArguments: quietOtherArguments,
+    textRef: quietDetailRef,
+    otherArgumentsRef: quietOtherArgumentsRef,
+    open: quietDetailOpen,
+    setOpen: setQuietDetailOpen,
+    showsToggle: showsQuietDetailToggle
+  } = useNativeChatApprovalQuietDetail(
+    quiet ? (approval.detail ?? null) : null,
+    approval.toolName,
+    approval.description
+  )
   const hasContext = Boolean(
     countdown ||
     approval.description ||
@@ -116,51 +121,57 @@ export function NativeChatApprovalCard({
     approval.detail
   )
   useNativeChatPromptCardFocus(cardRef, shouldFocus && !stacked)
+  // The dock observes no box that grows with this capped content: a new countdown or detail asks it to re-fit.
+  useNativeChatDockRefit(cardRef, !stacked, [
+    countdown,
+    approval.description,
+    approval.decisionReason,
+    neededPath,
+    approval.subject,
+    approval.detail
+  ])
   const escape = onCancel ?? (isSubmitting ? undefined : onCollapse)
+  const frame = useApprovalCardFrameClasses({ stacked, joined, quiet })
 
   return (
     <SecuritySurface>
-      <div className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}>
-        <div
-          className={cn(
-            'flex w-full px-3 pt-2 pb-1 sm:px-4',
-            // Quiet: the transcript scroller's gutters too, which narrow panes show.
-            quiet
-              ? 'scrollbar-sleek overflow-hidden [scrollbar-gutter:stable_both-edges]'
-              : 'mx-auto max-w-(--chat-content-max-width)',
-            !stacked && 'h-full min-h-0 max-h-full'
-          )}
-        >
-          {/* Quiet: laid out as the transcript column is, so the card's edges meet its rows' icon and time. */}
-          <div
-            className={cn(
-              'flex w-full',
-              quiet && 'mx-auto max-w-(--chat-content-max-width) px-[5px]',
-              !stacked && 'h-full min-h-0 max-h-full'
-            )}
-          >
+      <div className={frame.outer}>
+        <div className={frame.gutter}>
+          <div className={frame.column}>
             <div
               ref={cardRef}
-              data-native-chat-prompt-card-focus={shouldFocus || undefined}
+              data-native-chat-prompt-card-focus={(shouldFocus && !stacked) || undefined}
               data-native-chat-approval-card="true"
               role="group"
               aria-label={title}
               tabIndex={-1}
               onKeyDown={(event) => {
+                // Held on the card past a draft, the first Tab reaches the default, not Cancel.
+                const answer =
+                  event.key === 'Tab' && !event.shiftKey && event.target === event.currentTarget
+                    ? event.currentTarget.querySelector<HTMLElement>(
+                        PROMPT_CARD_FOCUS_TARGET_SELECTOR
+                      )
+                    : null
+                if (answer) {
+                  event.preventDefault()
+                  answer.focus()
+                  return
+                }
                 if (event.key === 'Escape' && !event.nativeEvent.isComposing && escape) {
                   event.preventDefault()
                   event.stopPropagation()
                   escape()
                 }
               }}
-              className={cn(
-                'flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                quiet
-                  ? 'gap-1.5 border-border px-2.5 pt-1.5 pb-2'
-                  : 'gap-2 border-input px-4 py-3 shadow-xs'
-              )}
+              // The chat's own approval keeps its title and choices visible as the dock fits a short pane.
+              data-native-chat-dock-clip={stacked ? undefined : ''}
+              className={frame.card}
             >
-              <div className={cn('flex shrink-0 items-start', quiet ? 'min-h-6 gap-1.5' : 'gap-2')}>
+              <div
+                data-native-chat-dock-pinned={stacked ? undefined : ''}
+                className={cn('flex shrink-0 items-start', quiet ? 'min-h-6 gap-1.5' : 'gap-2')}
+              >
                 <ShieldQuestion
                   className={cn(
                     'shrink-0',
@@ -178,7 +189,7 @@ export function NativeChatApprovalCard({
                         : 'font-semibold text-foreground'
                     )}
                   >
-                    {title}
+                    {titleContent ?? title}
                   </p>
                   {worker ? (
                     <p
@@ -220,6 +231,15 @@ export function NativeChatApprovalCard({
                   >
                     <X className={quiet ? 'size-3.5' : 'size-4'} />
                   </button>
+                ) : onCollapse && joined ? (
+                  <button
+                    type="button"
+                    onClick={onCollapse}
+                    disabled={isSubmitting}
+                    className="min-h-11 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    {t('components.native-chat.workerDock.notNow', 'Not now')}
+                  </button>
                 ) : onCollapse ? (
                   <NativeChatPromptCollapseToggle
                     expanded
@@ -231,10 +251,15 @@ export function NativeChatApprovalCard({
               {hasContext ? (
                 <div
                   ref={contentRef}
+                  id={contentId}
                   data-native-chat-approval-content="true"
                   tabIndex={0}
+                  // The dock fit must leave two lines of the request in view (or all of it, if shorter).
+                  data-native-chat-dock-floor-lines={stacked ? undefined : 2}
                   className={cn(
-                    'min-h-0 max-h-72 shrink overflow-auto text-sm scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    'min-h-0 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    // Joined: the dock's frame scrolls, so the content never nests a scroller.
+                    joined ? 'shrink-0' : 'max-h-72 shrink overflow-auto scrollbar-sleek',
                     // Quiet: under the title, as a folded row's lines sit under its own.
                     quiet
                       ? 'space-y-1.5 pl-5 text-chat-foreground-faint'
@@ -291,18 +316,31 @@ export function NativeChatApprovalCard({
                     </div>
                   ) : url !== null ? (
                     <NativeChatUrlTarget url={url} />
-                  ) : quietDetail !== null ? (
-                    <div
-                      ref={detailRef}
-                      data-native-chat-approval-detail="true"
-                      data-native-chat-code-content
-                      className={cn(
-                        'whitespace-pre-wrap break-words font-mono text-chat-code text-chat-code-foreground',
-                        !detailOpen && 'line-clamp-3'
-                      )}
-                    >
-                      {quietDetail}
-                    </div>
+                  ) : quietDetailText !== null ? (
+                    <>
+                      <div
+                        ref={quietDetailRef}
+                        data-native-chat-approval-detail="true"
+                        data-native-chat-code-content
+                        className={cn(
+                          'whitespace-pre-wrap break-words font-mono text-chat-code text-chat-code-foreground',
+                          !quietDetailOpen && 'line-clamp-3'
+                        )}
+                      >
+                        {quietDetailText}
+                      </div>
+                      {quietOtherArguments !== null ? (
+                        <div
+                          ref={quietOtherArgumentsRef}
+                          className={cn(
+                            'break-words font-mono text-chat-code',
+                            !quietDetailOpen && 'line-clamp-2'
+                          )}
+                        >
+                          {quietOtherArguments}
+                        </div>
+                      ) : null}
+                    </>
                   ) : approval.detail ? (
                     <NativeChatApprovalDetail
                       detail={approval.detail}
@@ -321,46 +359,34 @@ export function NativeChatApprovalCard({
               ) : null}
               <div
                 data-native-chat-approval-actions="true"
-                className={cn('flex shrink-0 flex-wrap', quiet ? 'gap-1.5 pl-5' : 'gap-2')}
+                data-native-chat-dock-pinned={stacked ? undefined : ''}
+                className={cn(
+                  'flex shrink-0 flex-wrap',
+                  quiet ? 'gap-1.5 pl-5' : 'gap-2',
+                  wrapOptions && '[&>button]:h-auto [&>button]:min-h-6 [&>button]:py-1'
+                )}
               >
                 {approval.options.map((opt, i) => {
                   const opensUrl = url !== null && opt.send === URL_APPROVAL_OPEN_OPTION_ID
                   return (
-                    <button
+                    <NativeChatApprovalOption
                       key={`${opt.label}-${i}`}
-                      type="button"
+                      label={optionLabel(opt)}
+                      primary={i === 0 && !approval.neutralOptions}
+                      describedBy={hasContext ? contentId : undefined}
+                      urlRequest={url !== null}
+                      quiet={quiet}
                       disabled={
                         newerSubject || isSubmitting || (opensUrl && readApprovalUrl(url) === null)
                       }
+                      sending={isSubmitting && opt.send === submittingOption}
                       onClick={() => {
                         if (opensUrl) {
                           openUrlRequestPage(url)
                         }
                         onChoose(opt.send)
                       }}
-                      className={cn(
-                        'rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                        quiet
-                          ? 'h-6 px-2.5 text-xs font-medium'
-                          : 'px-4 py-1.5 text-sm font-semibold',
-                        i === 0 && !approval.neutralOptions
-                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                          : url !== null
-                            ? 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                            : quiet
-                              ? 'bg-chat-foreground/5 text-chat-foreground hover:bg-chat-foreground/10'
-                              : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
-                      )}
-                    >
-                      {isSubmitting && opt.send === submittingOption ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                          {optionLabel(opt)}
-                        </span>
-                      ) : (
-                        optionLabel(opt)
-                      )}
-                    </button>
+                    />
                   )
                 })}
                 {approval.options.length === 0 && onOpenTerminal ? (
@@ -375,16 +401,16 @@ export function NativeChatApprovalCard({
                     {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
                   </button>
                 ) : null}
-                {showsDetailToggle ? (
+                {showsQuietDetailToggle ? (
                   <button
                     type="button"
-                    aria-expanded={detailOpen}
-                    onClick={() => setDetailOpen(!detailOpen)}
+                    aria-expanded={quietDetailOpen}
+                    onClick={() => setQuietDetailOpen(!quietDetailOpen)}
                     className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-chat-foreground-faint transition-colors hover:bg-chat-foreground/5 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t('components.native-chat.notices.details', 'Details')}
                     <ChevronDown
-                      className={cn('size-3.5', detailOpen && 'rotate-180')}
+                      className={cn('size-3.5', quietDetailOpen && 'rotate-180')}
                       aria-hidden
                     />
                   </button>

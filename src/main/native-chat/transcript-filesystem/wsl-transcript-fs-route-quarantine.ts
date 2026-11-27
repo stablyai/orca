@@ -54,11 +54,3 @@ export function quarantineRoute(route: string, deadlineMs: number, taskStartedAt
 export function liftRouteQuarantine(route: string): void {
   blockedRoutes.delete(route)
 }
-
-export function resetRouteQuarantinesForTests(): void {
-  blockedRoutes.clear()
-}
-
-export function _getBlockedRouteCountForTests(): number {
-  return blockedRoutes.size
-}

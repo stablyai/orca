@@ -90,6 +90,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.onUnpairedDeviceAuthFailure = callback
   }
 
+  // Registry instances are replaced on restart, so the listener lives here and is rebound per instance.
+  setOnPairedDevicesChanged(callback: (() => void) | null): void {
+    this.onPairedDevicesChanged = callback
+  }
+
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
     this.mobileRelayPairingProvider = provider
   }
@@ -142,6 +147,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           this.runtime.onClientEvent(listener, { consumesTerminalSideEffects: false }),
         changed: () => this.runtime.notifyRelayHostsChanged()
       }) ?? null
+    const detachRowChanges =
+      this.mobileRelayHostCatalog?.publishRowChanges((hostId) =>
+        this.runtime.notifyRelayHostRowsChanged(hostId)
+      ) ?? null
     // Phones filter pending VM checkouts when they read; a change makes them read again.
     const detachPendingVmChanges = this.mobileRelayHostCatalog
       ? publishPendingVmCheckoutRepoChanges(pendingVmCheckouts, (repoId) =>
@@ -149,9 +158,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         )
       : null
     this.detachRelayHostsChanges =
-      detachListChanges || detachPendingVmChanges
+      detachListChanges || detachRowChanges || detachPendingVmChanges
         ? () => {
             detachListChanges?.()
+            detachRowChanges?.()
             detachPendingVmChanges?.()
           }
         : null

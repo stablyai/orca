@@ -8,7 +8,11 @@ export type UsageLimitCutReads = {
   readLoadedCut: (id: string) => Promise<HostUsageLimitCut | null>
 }
 
-type Deps = UsageLimitCutReads & { logger: HostDeps['logger'] }
+type Deps = UsageLimitCutReads & {
+  logger: HostDeps['logger']
+  /** The cut with a switch standing in for its unknown reset (UsageLimitAccountHolds). */
+  switchReset: (id: string, cut: HostUsageLimitCut) => HostUsageLimitCut
+}
 
 /** The cuts of chats that aren't loaded, read from history a few per pass. */
 export class UsageLimitColdCuts {
@@ -29,7 +33,14 @@ export class UsageLimitColdCuts {
     return this.cuts.has(id)
   }
 
+  /** The cut as the journal stands now, with a switch standing in for an unknown reset. */
   async read(id: string, cold = false): Promise<HostUsageLimitCut | null> {
+    const cut = await this.readJournal(id, cold)
+    return cut && this.deps.switchReset(id, cut)
+  }
+
+  /** The sweep reads the journal's own cut: it attributes the chat before a switch can stand in. */
+  private async readJournal(id: string, cold = false): Promise<HostUsageLimitCut | null> {
     if (this.deps.sessions.has(id)) {
       this.cuts.delete(id)
       return this.deps.readLoadedCut(id)
@@ -43,7 +54,7 @@ export class UsageLimitColdCuts {
   /** One chat that can't be read (a corrupt journal) is skipped this pass instead of failing it. */
   async readForSweep(id: string): Promise<HostUsageLimitCut | null | 'unreadable'> {
     try {
-      const cut = await this.read(id)
+      const cut = await this.readJournal(id)
       this.sweepFailures.delete(id)
       return cut
     } catch (error) {
@@ -66,7 +77,7 @@ export class UsageLimitColdCuts {
     unread.sort((a, b) => (this.failures.get(a) ?? 0) - (this.failures.get(b) ?? 0))
     for (const id of unread.slice(0, 3)) {
       try {
-        await this.read(id, true)
+        await this.readJournal(id, true)
         this.failures.delete(id)
       } catch (error) {
         if (!this.failures.has(id)) {

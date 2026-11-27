@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { AcpRpcError, acpErrorDataWords, type AcpAgentError } from '../transport/acp-errors'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
@@ -8,8 +9,11 @@ import {
 } from '../requests/acp-form-elicitation'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
+import { antigravityExecutorErrorWords } from './antigravity-executor-error'
+import { antigravityQuotaFailure, isAntigravityQuotaNotice } from './antigravity-quota-notice'
 import {
   ANTIGRAVITY_EFFORT_LEVELS,
   ANTIGRAVITY_LEVEL_SUFFIX
@@ -17,7 +21,9 @@ import {
 
 // The server's question forms open with only a count; each field's title is the real question.
 const QUESTION_FORM_MESSAGE = /^The agent has (?:a question|\d+ questions)\.$/
-const formMessageSchema = z.looseObject({ mode: z.literal('form'), message: z.string() })
+const formMessageSchema = lazyZodSchema(() =>
+  z.looseObject({ mode: z.literal('form'), message: z.string() })
+)
 
 function questionForm(method: string, params: unknown): AcpRequestPresentation | undefined {
   if (method !== ACP_FORM_ELICITATION_METHOD) {
@@ -69,12 +75,14 @@ function questionRequest(method: string, params: unknown): AcpRequestPresentatio
 }
 
 const WARNING_MAX_CHARS = 512
-const securityWarningSchema = z.looseObject({
-  'agy.security.warning': z.looseObject({
-    title: z.string().optional(),
-    message: z.string().optional()
+const securityWarningSchema = lazyZodSchema(() =>
+  z.looseObject({
+    'agy.security.warning': z.looseObject({
+      title: z.string().optional(),
+      message: z.string().optional()
+    })
   })
-})
+)
 
 // Risky Allow Always options carry warnings in option metadata.
 function warnedApproval(method: string, params: unknown): AcpRequestPresentation | undefined {
@@ -90,21 +98,23 @@ function warnedApproval(method: string, params: unknown): AcpRequestPresentation
 }
 
 // Normalize the server's command-field variants to command/cwd and stdout/exitCode.
-const optionalText = z.string().optional()
-const commandFieldsSchema = z.looseObject({
-  CommandLine: optionalText,
-  command_line: optionalText,
-  commandLine: optionalText,
-  Cwd: optionalText,
-  WorkingDirectory: optionalText,
-  working_dir: optionalText,
-  workingDir: optionalText,
-  cwd: optionalText,
-  combinedOutput: optionalText,
-  combined_output: optionalText,
-  exitCode: z.number().int().safe().optional(),
-  exit_code: z.number().int().safe().optional()
-})
+const optionalText = lazyZodSchema(() => z.string().optional())
+const commandFieldsSchema = lazyZodSchema(() =>
+  z.looseObject({
+    CommandLine: optionalText,
+    command_line: optionalText,
+    commandLine: optionalText,
+    Cwd: optionalText,
+    WorkingDirectory: optionalText,
+    working_dir: optionalText,
+    workingDir: optionalText,
+    cwd: optionalText,
+    combinedOutput: optionalText,
+    combined_output: optionalText,
+    exitCode: z.number().int().safe().optional(),
+    exit_code: z.number().int().safe().optional()
+  })
+)
 
 function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   const input = commandFieldsSchema.safeParse(update.rawInput).data
@@ -130,9 +140,11 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
-const cloudCodeErrorSchema = z.object({
-  error: z.object({ message: z.string().trim().min(1) })
-})
+const cloudCodeErrorSchema = lazyZodSchema(() =>
+  z.object({
+    error: z.object({ message: z.string().trim().min(1) })
+  })
+)
 
 function promptErrorDetail(error: AcpAgentError): string | undefined {
   const text = acpErrorDataWords(error.data) ?? error.message
@@ -151,10 +163,28 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
 // agy 1.5+ retries an empty model reply until it gets output, sending this text each time.
 const RETRY_NOTICE = /^\s*\u26a0 (Model produced invalid output\.)\s*$/
 
-// agy ends a turn whose request outlived its OAuth token with a one-line notice; Orca's server
-// answers a rejected Gemini API key or missing gcloud credentials the same way, as its whole reply.
-const AUTH_FAILURE_NOTICE =
-  /^\s*(?:\u26a0 UNAUTHENTICATED \(code 401\): [^\n]*|API key not valid\. Please pass a valid API key\.|Agent execution error: failed to create Gemini client: [^\n]*)\s*$/
+// Notices that end a turn as failed: agy's when a request outlived its OAuth token, its
+// executor-error line when it couldn't run the turn at all (a rejected Gemini API key, quota, a
+// server error), and the one when it could not rebuild its agent, whose reason may span lines;
+// Orca's server answers a rejected key or missing gcloud credentials the same way.
+const TURN_FAILURE_NOTICE =
+  /^(?:\u26a0 (?:UNAUTHENTICATED \(code 401\)|agent executor error): [^\n]*|API key not valid\. Please pass a valid API key\.|Agent execution error: failed to create Gemini client: [^\n]*|Agent connection was lost and could not be re-established: Failed to rebuild agent: [\s\S]*)$/
+// agy drops a session whose agent it cannot rebuild; later prompts find no session.
+const REBUILD_FAILED = 'Failed to rebuild agent: '
+
+const FAILURE_NOTICE = {
+  // Trimmed, so no trailing `\s*` follows `[^\n]*`: that pair backtracks quadratically on spaces.
+  test: (text: string) => TURN_FAILURE_NOTICE.test(text.trim()) || isAntigravityQuotaNotice(text)
+}
+
+// Google's sentence for an API error; a quota notice is a usage limit, reset read as observed.
+function noticeFailure(notice: string, at: number) {
+  const words = antigravityExecutorErrorWords(notice)
+  const quota = antigravityQuotaFailure(notice, at)
+  return quota
+    ? { ...(words ?? { failureDetail: notice.replace(/^\u26a0\s*/, '') }), ...quota }
+    : words
+}
 
 // Model options list families; availableModels lists each level as "<family>-<level>".
 function familyEfforts(family: string, models: readonly ModelInfo[]) {
@@ -192,6 +222,22 @@ export function antigravityModelChoices(
   return [...choices].map(([id, label]) => ({ id, label }))
 }
 
+/** A level id as the family row and level a chat lists in its place; null when the listing names
+ *  the id itself or the family does not offer that level and the requested effort. */
+export const antigravityListedFamilySelection: StructuredAgentListedSelection = (
+  options,
+  listed
+) => {
+  const [, family, level] = ANTIGRAVITY_LEVEL_SUFFIX.exec(options.model ?? '') ?? []
+  const offered = listed.find((model) => model.id === family)?.efforts.map(({ value }) => value)
+  const effort = options.effort ?? level
+  return offered?.includes(level) &&
+    offered.includes(effort) &&
+    !listed.some((model) => model.id === options.model)
+    ? { ...options, model: family, effort }
+    : null
+}
+
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // With forms, ask_question carries a write-in field per question; permissions cannot carry text.
   clientCapabilities: { elicitation: { form: {} } },
@@ -203,12 +249,46 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   reactiveWakeups: true,
   normalizeToolUpdate,
   promptErrorDetail,
-  // Not marked signed out: agy may already hold a refreshed token for the next prompt.
-  notification: (method, params) => acpReplyNoticeFailure(method, params, AUTH_FAILURE_NOTICE),
-  providerRetry: (text) => RETRY_NOTICE.exec(text)?.[1],
+  sessionLost: (error, sessionId) => {
+    const detail = acpErrorDataWords(error.data)
+    return (
+      detail === `Session not found: ${sessionId}` || detail?.startsWith(REBUILD_FAILED) === true
+    )
+  },
+  // A rebuild that fails mid-turn arrives as a reply notice, and the prompt then ends normally.
+  sessionLostNotice: (notice) => notice.includes(REBUILD_FAILED),
+  // Not marked signed out: agy may already hold a refreshed token for the next prompt. A Google API
+  // error leads with Google's sentence, its full line under Details.
+  notification: (method, params, at) =>
+    acpReplyNoticeFailure(method, params, FAILURE_NOTICE, {}, (notice) =>
+      noticeFailure(notice, at)
+    ),
+  promptFailure: (error, at) =>
+    antigravityQuotaFailure([acpErrorDataWords(error.data), error.message].join('\n'), at),
+  providerRetry: (update) => {
+    const cause =
+      update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'
+        ? RETRY_NOTICE.exec(update.content.text)?.[1]
+        : undefined
+    return cause === undefined ? undefined : { cause }
+  },
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
-  familyEfforts
+  familyEfforts,
+  listedSelection: antigravityListedFamilySelection
+}
+
+// agy answers "Authentication required" alone; on Orca's home it couldn't use the saved method
+// (a key, gcloud, or agy's Google login for Enterprise), so the notice points where that is set.
+const ORCA_HOME_SIGN_IN =
+  "agy couldn't sign in with this chat's sign-in method. Check it under Settings → Accounts → Antigravity."
+
+/** agy running on Orca's home (any method but a Google account): Sign in opens Settings. */
+export const ANTIGRAVITY_AGY_ORCA_HOME_DIALECT: AcpDialect = {
+  ...ANTIGRAVITY_ACP_DIALECT,
+  signInAccount: 'managed',
+  promptErrorDetail: (error) =>
+    error.code === -32000 ? ORCA_HOME_SIGN_IN : ANTIGRAVITY_ACP_DIALECT.promptErrorDetail?.(error)
 }

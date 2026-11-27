@@ -20,7 +20,8 @@ import {
   acquire,
   snapshotKey,
   cachedSnapshot,
-  effectiveAgentLaunchPreferences
+  effectiveAgentLaunchPreferences,
+  isInheritedAgentLaunchPreferences
 } from './host-agent-launch-preferences-resource'
 
 const cancelled = (): DOMException => new DOMException('Agent preferences cancelled', 'AbortError')
@@ -169,7 +170,8 @@ export function useHostAgentMenuSettings(
       preferences.agentDefaultArgs,
       preferences.agentPermissionDefault,
       preferences.agentPermissionOverrides,
-      snapshot === null
+      snapshot === null,
+      isInheritedAgentLaunchPreferences(preferences)
     ] as const
   })
   const [
@@ -179,7 +181,8 @@ export function useHostAgentMenuSettings(
     agentDefaultArgs,
     agentPermissionDefault,
     agentPermissionOverrides,
-    pending
+    pending,
+    inherited
   ] = useAppViewExternalStore(
     useCallback(
       (listener: () => void) => subscribeHostPreferences(subscription, listener),
@@ -189,10 +192,11 @@ export function useHostAgentMenuSettings(
     () => effectiveSnapshot(undefined)
   )
   if (!environmentId) {
-    return { settings: desktopSettings, pending: false }
+    return { settings: desktopSettings, pending: false, inherited: false }
   }
   return {
     pending,
+    inherited,
     settings: {
       ...desktopSettings,
       defaultTuiAgent,

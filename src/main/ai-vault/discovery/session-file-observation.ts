@@ -46,7 +46,7 @@ export async function observeSessionFile(
 }
 
 /** Only missing sidecars are none; other stat failures stay unknown so cached enrichment can retry. */
-async function observeSessionSidecar(
+export async function observeSessionSidecar(
   filePath: string | undefined,
   signal?: AbortSignal
 ): Promise<SessionSidecarObservation> {

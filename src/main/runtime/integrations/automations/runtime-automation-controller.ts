@@ -64,7 +64,7 @@ export class RuntimeAutomationController {
   /** Who a rule's from= names, where this host's Orca Cloud takes it; set with the connector. */
   triggerPeople: (bot: Bot) => TriggerPeopleSearch | null = () => null
   /** Which rules this host's Orca Cloud takes (CloudTriggers); set with the connector. */
-  cloudTriggers = () => ({ own: false, github2: false, workflows: false })
+  cloudTriggers = () => ({ own: false, github2: false, workflows: false, ciFinished: false })
   /** A bot's chat a run may continue; set with the runtime, which reads its chats. */
   botChat: BotChatLookup = async () => null
 

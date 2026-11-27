@@ -48,7 +48,9 @@ export const REPO_METHODS = [
       const reply = {
         repos: context.runtime
           .listVisibleRepos()
-          .map((repo) => projectRepoVisibilityForClient(repo, context))
+          .map((repo) => projectRepoVisibilityForClient(repo, context)),
+        // Image icons' ids for sidebarInputs.repoIcons: a phone draws no https image itself.
+        repoIconIds: context.runtime.repoIconDataUrls.idsByRepo()
       }
       return resolveReplySnapshot(reply, params.afterSnapshotId)
     }

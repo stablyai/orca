@@ -126,7 +126,12 @@ export function journalClaudeResult(
   // A sign-in notice from the hidden reply outranks quota, as on an ordinary send. Claude also
   // labels a 403 access denial authentication_failed; its result, not sign-in guidance, says why.
   const notice = compactionFailure && message.api_error_status !== 403 ? command?.notice : null
-  const terminalFailure = notice || usageLimit
+  // Orca interrupted the retries of a rejected credential, so the cut-short result is that failure.
+  const authRetry = settlesTurn && !command ? assistantFailures.takeAuthFailure(turnId) : null
+  // A retry that got through before the interrupt landed is no failure.
+  const authFailure = claudeResultOutcome(message) === 'success' ? null : authRetry
+  const terminalFailure =
+    notice || usageLimit || (authFailure && !authFailure.shown ? authFailure.row : null)
   if (command && commandResult?.row && !terminalFailure) {
     sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
   } else if (command && commandResult?.row && stopCheck) {
@@ -149,12 +154,14 @@ export function journalClaudeResult(
     writeClaudeTerminalFailure(sink, endedTurnIdentity, terminalFailure, stopCheck)
   }
   if (settlesTurn) {
-    turn.suppressReopenOnFailure(message.is_error === true)
+    turn.suppressReopenOnFailure(message.is_error === true || authFailure !== null)
     corrections.abandon()
     streamedText.finish({ completedAt: observedAt })
+    const end = claudeTurnEndForResult(message, observedAt)
     context.settle(
       message,
-      commandResult?.end ?? claudeTurnEndForResult(message, observedAt),
+      commandResult?.end ??
+        (authFailure ? { ...end, state: 'completed', outcome: 'failure' } : end),
       stopCheck && !commandResult
         ? { check: stopCheck, end: claudeTurnEndForResult(message, observedAt, true) }
         : undefined

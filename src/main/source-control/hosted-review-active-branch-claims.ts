@@ -28,8 +28,3 @@ export function isActiveBranch(key: string): boolean {
   const claimedAt = activeClaims.get(key)
   return claimedAt !== undefined && Date.now() - claimedAt <= ACTIVE_CLAIM_TTL_MS
 }
-
-/** @internal - exposed for tests only */
-export function __resetHostedReviewActiveClaimsForTests(): void {
-  activeClaims.clear()
-}

@@ -1,3 +1,4 @@
+import type { DivergedUpstreamProbe } from './git-upstream-status'
 import type { GitUpstreamStatus } from '../status/git-status-types'
 import type { GitPushTarget } from '../../worktree/types'
 import { parseGitRevListAheadBehindCounts } from '../refs/git-rev-list-output'
@@ -27,7 +28,7 @@ function isMissingRemoteTrackingRefError(error: unknown): boolean {
 export async function getPublishTargetStatus(
   runGit: GitCommandRunner,
   target: GitPushTarget,
-  getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
+  probeDivergedUpstream?: (upstreamName: string) => Promise<DivergedUpstreamProbe>
 ): Promise<GitUpstreamStatus> {
   const upstreamName = getPublishTargetDisplayName(target)
   const remoteRef = getPublishTargetRemoteRef(target)
@@ -56,9 +57,9 @@ export async function getPublishTargetStatus(
     throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(stdout)}`)
   }
 
-  const behindCommitsArePatchEquivalent =
-    counts.ahead > 0 && counts.behind > 0 && getBehindCommitsArePatchEquivalent
-      ? await getBehindCommitsArePatchEquivalent(remoteRef)
+  const diverged =
+    counts.ahead > 0 && counts.behind > 0 && probeDivergedUpstream
+      ? await probeDivergedUpstream(remoteRef)
       : undefined
 
   return {
@@ -66,6 +67,11 @@ export async function getPublishTargetStatus(
     upstreamName,
     ahead: counts.ahead,
     behind: counts.behind,
-    ...(behindCommitsArePatchEquivalent !== undefined ? { behindCommitsArePatchEquivalent } : {})
+    ...(diverged
+      ? {
+          behindCommitsArePatchEquivalent: diverged.behindCommitsArePatchEquivalent,
+          ...(diverged.upstreamOid ? { upstreamOid: diverged.upstreamOid } : {})
+        }
+      : {})
   }
 }

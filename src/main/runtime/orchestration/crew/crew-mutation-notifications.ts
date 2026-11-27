@@ -39,6 +39,8 @@ const mutations = [
   'prepareStartingWorkerAuthority',
   'markWorkerDispatchReady',
   'recordWorkerStage',
+  'recordWorkerProgress',
+  'retainWorkerLaunchObservation',
   'completeDispatch',
   'completeActiveDispatchesForTask',
   'failActiveDispatchForTask',
@@ -124,6 +126,7 @@ const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> =
       : undefined
   },
   recordWorkerStage: () => [],
+  recordWorkerProgress: () => [],
   recordAttemptObservation: () => []
 }
 
@@ -138,9 +141,10 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   }
   if (hasDomainMethod(prototype, 'settleWorkerTerminalRelease')) {
     const release = prototype.settleWorkerTerminalRelease
-    prototype.settleWorkerTerminalRelease = function (this: OrchestrationDb, resourceId) {
+    // Forward every argument: the owner fence is part of the settle, not of the notification.
+    prototype.settleWorkerTerminalRelease = function (this: OrchestrationDb, resourceId, owner) {
       const before = this.getWorkerTerminalResource(resourceId)?.release_state
-      const result = release.call(this, resourceId)
+      const result = release.call(this, resourceId, owner)
       if (before !== result.release_state) {
         this.crewChanges.notify(new Set(['topology']))
       }
@@ -180,6 +184,9 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   const insert = prototype.insertMessage
   prototype.insertMessage = function (this: OrchestrationDb, message) {
     const result = insert.call(this, message)
+    if (result.type === 'worker_done' && result.to_handle.startsWith('orca_session_id:')) {
+      this.workerDockSources?.invalidate(result.to_handle.slice('orca_session_id:'.length))
+    }
     if (result.type !== 'heartbeat') {
       const notice: CrewInvalidation =
         result.delivery_contract === 'legacy_direct'
@@ -225,6 +232,21 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
+        if (name === 'recordAttemptObservation') {
+          const observation = args[0]
+          if (
+            observation &&
+            typeof observation === 'object' &&
+            'dispatchId' in observation &&
+            typeof observation.dispatchId === 'string'
+          ) {
+            this.workerDockSources?.changedDispatch(observation.dispatchId)
+          }
+        } else if (name === 'resetAll' || name === 'resetTasks') {
+          this.workerDockSources?.forgetWorkers()
+        } else if (name === 'resetMessages') {
+          this.workerDockSources?.changedHistory()
+        }
         const mailboxes = mailboxScopes[name]?.(args, result)
         const notify = (change: CrewInvalidation) =>
           this.crewChanges.notify(
@@ -239,6 +261,10 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
             })
           )
         } else if (noticed && written) {
+          // Includes a Task's Dispatches when the Task changed: a completed Task hides its failures.
+          for (const id of written.dispatchIds) {
+            this.workerDockSources?.changedDispatch(id)
+          }
           // Nothing noticed: the call wrote no row a crew shows.
           if (written.dispatchIds.size > 0) {
             notify(

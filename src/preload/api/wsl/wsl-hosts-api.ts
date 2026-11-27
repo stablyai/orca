@@ -7,6 +7,7 @@ import {
   type WslHostAddProgress,
   type WslHostAddResult,
   type WslHostConnectIntent,
+  type WslHostPastUncountedTerminals,
   type WslHostCapability,
   type WslHostDistro,
   type WslHostServerStop,
@@ -28,6 +29,7 @@ export type WslHostsPreloadApi = {
   connect: (args: {
     environmentId: string
     intent?: WslHostConnectIntent
+    pastUncountedTerminals?: WslHostPastUncountedTerminals
     withdrawPendingRemoval?: boolean
   }) => Promise<void>
   getStatuses: () => Promise<WslHostStatus[]>

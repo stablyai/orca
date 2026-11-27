@@ -22,6 +22,9 @@ export type BrowserPagePromptKinds = {
 
 export type BrowserPagePromptKind = keyof BrowserPagePromptKinds
 
+/** Prompts a server page asks its screencast viewers; streams carry JavaScript dialogs as `dialog`. */
+export type BrowserStreamedPagePromptKind = Exclude<BrowserPagePromptKind, 'javascript-dialog'>
+
 export type BrowserPagePromptDetails<K extends BrowserPagePromptKind> =
   BrowserPagePromptKinds[K]['details']
 

@@ -5,10 +5,10 @@ import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router
 import { OrcaMobileWebShellView } from '../../modules/orca-mobile-web-shell/src/index'
 import { parseMobileWebShellLoadState } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
-import { colors } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { botLinkUpdateNeededLine } from '../bots/bot-link-copy'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { reportPageRouteRefusal } from './routing/page-route-refusal'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
@@ -43,7 +43,7 @@ import {
   storageReadParamsSchema,
   type BridgeNativeVerb
 } from './bridge/native-capabilities/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
+import { ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
   useReportedShellOverlayLoad,
@@ -93,6 +93,7 @@ export function MobileWebShellScreen({
   runtime,
   notice
 }: MobileWebShellScreenProps) {
+  const styles = useThemedStyles(stylesSheet)
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
   const uiLocale = useMobileUiLocale()
@@ -263,12 +264,12 @@ export function MobileWebShellScreen({
     snapshot,
     readStorage,
     onStorageWrite: writeStorage,
-    // Treat a page that never renders as document-load-failed: remount the same bytes once, then fail visibly; Try again downloads fresh.
+    // Remount the same bytes once, then fail visibly.
     // Never throw from the page error boundary/native frame callback.
     onPageFault: (error) => {
       console.warn('[web-shell] the page faulted', error)
       recordShellLifecycleLine(hostId, pageFaultLine(error))
-      reportShellFailure('document-load-failed')
+      reportShellFailure('page-fault')
     },
     // init already sees app writes in the map; refresh from persisted storage afterward on every ready, including document reloads.
     onPageReady: () => {
@@ -297,9 +298,11 @@ export function MobileWebShellScreen({
         updateNeeded: () =>
           Alert.alert(
             t('bots.link.openFailed', 'Couldn’t open this link'),
-            botLinkUpdateNeededLine(t, [
-              snapshot?.host.name ?? t('bots.link.computer', 'your computer')
-            ])
+            botLinkUpdateNeededLine(
+              t,
+              [snapshot?.host.name ?? t('bots.link.computer', 'your computer')],
+              getUiIntlLocale()
+            )
           ),
         documentFailed: () => reportShellFailure('document-load-failed')
       })
@@ -426,15 +429,13 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
-      )}
+      {overlay ? null : <ShellPageCover visible={pageFrame === 'unpainted'} />}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   shellRoot: {
     flex: 1,
     backgroundColor: colors.bgBase

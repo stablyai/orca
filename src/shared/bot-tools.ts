@@ -3,92 +3,125 @@
 import * as z from 'zod'
 import type { BotToolSignInStatus } from './bot-tool-sign-in'
 import type { BotAgent } from './bot-types'
+import { englishTranslate, type CopyTranslate } from './i18n/english-translate'
+import { lazyZodSchema } from './schema/lazy-zod-schema'
 
 export const BOT_TOOL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
-const BotToolName = z.string().regex(BOT_TOOL_NAME_PATTERN)
+const BotToolName = lazyZodSchema(() => z.string().regex(BOT_TOOL_NAME_PATTERN))
 
 /** One of the bot's own servers, as its agent's config holds it. */
 export const BOT_TOOL_HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
 export const BOT_TOOL_ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
-const Text = z
-  .string()
-  .max(4096)
-  .refine((value) => !value.includes('\0'))
-export const BotToolUrl = z
-  .string()
-  .max(2048)
-  .refine((value) => {
-    try {
-      const url = new URL(value)
-      return (
-        /^https?:\/\//i.test(value) &&
-        ['http:', 'https:'].includes(url.protocol) &&
-        !url.username &&
-        !url.password
-      )
-    } catch {
-      return false
-    }
-  }, 'Use an HTTP or HTTPS URL without embedded credentials')
-const Executable = Text.pipe(z.string().min(1).max(1024)).refine(
-  (value) => value.trim() === value && !/[\r\n]/.test(value),
-  'Enter one executable path'
+const Text = lazyZodSchema(() =>
+  z
+    .string()
+    .max(4096)
+    .refine((value) => !value.includes('\0'))
 )
-export const BotToolServerSchema = z.union([
-  z.object({
-    name: BotToolName,
-    url: BotToolUrl,
-    transport: z.literal('http').optional(),
-    headers: z
-      .record(
-        z.string().regex(BOT_TOOL_HEADER_NAME_PATTERN),
-        Text.refine((value) => !/[\r\n]/.test(value))
-      )
-      .optional(),
-    /** Its headers, kept by the host outside the bot's folder; the agent reaches it through Orca's relay. */
-    credential: z
-      .string()
-      .regex(/^[A-Za-z0-9_-]{8,64}$/)
-      .optional()
-  }),
-  z.object({
-    name: BotToolName,
-    command: Executable,
-    args: z.array(Text).max(64),
-    env: z.record(z.string().regex(BOT_TOOL_ENV_NAME_PATTERN), Text).optional()
-  })
-])
+// React Native's URL reads username, password and origin with regexes over the whole text, so an `@`
+// in a path (https://server.smithery.ai/@owner/mcp) reads as a user there; read the authority instead.
+function botToolUrlAuthority(value: string): { userinfo: string; hostPort: string } | null {
+  const authority = /^https?:\/\/[/\\]*([^/?#\\]*)/i.exec(value)?.[1]
+  if (authority === undefined) {
+    return null
+  }
+  const at = authority.lastIndexOf('@')
+  return { userinfo: at === -1 ? '' : authority.slice(0, at), hostPort: authority.slice(at + 1) }
+}
+/** A valid tool URL's origin, as `new URL().origin` gives it in Node and browsers. */
+export function botToolUrlOrigin(value: string): string {
+  const scheme = /^https?:/i.exec(value)?.[0].toLowerCase() ?? ''
+  const hostPort = (botToolUrlAuthority(value)?.hostPort ?? '').toLowerCase()
+  return `${scheme}//${hostPort.replace(scheme === 'https:' ? /:443$/ : /:80$/, '')}`
+}
+export const BotToolUrl = lazyZodSchema(() =>
+  z
+    .string()
+    .max(2048)
+    .refine((value) => {
+      try {
+        new URL(value)
+        // The authority read only matches http(s)://, so it settles the scheme too. An empty user and
+        // password (`https://@host`, `https://:@host`) is no credential.
+        const authority = botToolUrlAuthority(value)
+        return authority !== null && (authority.userinfo === '' || authority.userinfo === ':')
+      } catch {
+        return false
+      }
+    }, 'Use an HTTP or HTTPS URL without embedded credentials')
+)
+const Executable = lazyZodSchema(() =>
+  Text.pipe(z.string().min(1).max(1024)).refine(
+    (value) => value.trim() === value && !/[\r\n]/.test(value),
+    'Enter one executable path'
+  )
+)
+export const BotToolServerSchema = lazyZodSchema(() =>
+  z.union([
+    z.object({
+      name: BotToolName,
+      url: BotToolUrl,
+      transport: z.literal('http').optional(),
+      headers: z
+        .record(
+          z.string().regex(BOT_TOOL_HEADER_NAME_PATTERN),
+          Text.refine((value) => !/[\r\n]/.test(value))
+        )
+        .optional(),
+      /** Its headers, kept by the host outside the bot's folder; the agent reaches it through Orca's relay. */
+      credential: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{8,64}$/)
+        .optional()
+    }),
+    z.object({
+      name: BotToolName,
+      command: Executable,
+      args: z.array(Text).max(64),
+      env: z.record(z.string().regex(BOT_TOOL_ENV_NAME_PATTERN), Text).optional()
+    })
+  ])
+)
 export type BotToolServer = z.infer<typeof BotToolServerSchema>
 
-const SecretRow = z
-  .strictObject({
-    key: z.string().min(1).max(256),
-    value: Text.optional(),
-    keep: z.literal(true).optional()
-  })
-  .refine(
-    (row) => (row.keep === true) !== (row.value !== undefined),
-    'Enter a value or keep a saved value'
-  )
-const Secrets = z.array(SecretRow).max(64)
-export const BotToolInputSchema = z.union([
-  z.strictObject({
-    name: BotToolName,
-    url: BotToolUrl,
-    transport: z.literal('http'),
-    headers: Secrets
-  }),
-  z.strictObject({
-    name: BotToolName,
-    command: Executable,
-    args: z.array(Text).max(64),
-    env: Secrets
-  })
-])
+const SecretRow = lazyZodSchema(() =>
+  z
+    .strictObject({
+      key: z.string().min(1).max(256),
+      value: Text.optional(),
+      keep: z.literal(true).optional()
+    })
+    .refine(
+      (row) => (row.keep === true) !== (row.value !== undefined),
+      'Enter a value or keep a saved value'
+    )
+)
+const Secrets = lazyZodSchema(() => z.array(SecretRow).max(64))
+export const BotToolInputSchema = lazyZodSchema(() =>
+  z.union([
+    z.strictObject({
+      name: BotToolName,
+      url: BotToolUrl,
+      transport: z.literal('http'),
+      headers: Secrets
+    }),
+    z.strictObject({
+      name: BotToolName,
+      command: Executable,
+      args: z.array(Text).max(64),
+      env: Secrets
+    })
+  ])
+)
 export type BotToolInput = z.infer<typeof BotToolInputSchema>
-export function botToolInputError(input: BotToolInput, platform: NodeJS.Platform): string | null {
+/** Why the editor can't save `input`, in the reader's words (English for main and the CLI). */
+export function botToolInputError(
+  input: BotToolInput,
+  platform: NodeJS.Platform,
+  t: CopyTranslate = englishTranslate
+): string | null {
   if (!BotToolInputSchema.safeParse(input).success) {
-    return 'Enter a valid server name and URL or executable.'
+    return t('bots.tools.input.invalid', 'Enter a valid server name and URL or executable.')
   }
   const remote = 'url' in input
   const rows = remote ? input.headers : input.env
@@ -96,7 +129,7 @@ export function botToolInputError(input: BotToolInput, platform: NodeJS.Platform
     remote || platform === 'win32' ? row.key.toLowerCase() : row.key
   )
   if (new Set(names).size !== rows.length) {
-    return 'Each header or environment name must be unique.'
+    return t('bots.tools.input.namesRepeat', 'Each header or environment name must be unique.')
   }
   if (
     rows.some(
@@ -106,7 +139,10 @@ export function botToolInputError(input: BotToolInput, platform: NodeJS.Platform
         (remote && /[\r\n]/.test(row.value ?? ''))
     )
   ) {
-    return 'Enter a valid name and value for every row, or remove the row.'
+    return t(
+      'bots.tools.input.rowInvalid',
+      'Enter a valid name and value for every row, or remove the row.'
+    )
   }
   return null
 }
@@ -147,6 +183,8 @@ export type BotTools = {
   own: BotOwnTool[]
   /** Read from Claude Code's or Codex's config; another agent's own config isn't read, so none. */
   inherited: BotInheritedTool[]
+  /** Whether its sessions also take the host's MCP server list; absent while the host's switch is off. */
+  hostMcpServers?: boolean
 }
 
 export const botToolDetail = (server: BotToolServer): string =>

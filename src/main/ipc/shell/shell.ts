@@ -1,5 +1,6 @@
 import { translateMain } from '../../i18n/main-i18n'
 import { BrowserWindow, ipcMain, shell } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { showSingleFlightOpenDialog } from '../dialogs/single-flight-open-dialog'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, extname, posix, win32 } from 'node:path'
@@ -23,6 +24,7 @@ import {
 import { resolveRemoteSshEditorLaunchSpec } from '../../external-editors/remote-ssh-editor-launch'
 import { resolveOpenInEditorCommand } from '../../external-editors/open-in-editor-command'
 import { openPathInDefaultApp } from '../../external-editors/default-app-location-open'
+import { registerForwardedUrlOpenHandler } from './forwarded-url-open-handler'
 import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -149,9 +151,10 @@ async function openWithSystemDefault(
 
 export function registerShellHandlers(
   store: ShellHandlerStore,
-  listRuntimeEnvironments: ListRuntimeEnvironments = listAppRuntimeEnvironments
+  listRuntimeEnvironments: ListRuntimeEnvironments = listAppRuntimeEnvironments,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
-  ipcMain.handle(
+  ipc.handle(
     'shell:openPath',
     async (_event, path: string, ownerHostId: unknown): Promise<void> => {
       // Preserve the legacy fire-and-forget contract while applying the common path validation.
@@ -159,19 +162,21 @@ export function registerShellHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'shell:openInFileManager',
     (_event, path: string, ownerHostId: unknown): Promise<ShellOpenLocalPathResult> =>
       openInFileManager(path, ownerHostId)
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'shell:openInExternalEditor',
     (_event, request: ShellOpenExternalEditorRequest): Promise<ShellOpenExternalEditorResult> =>
       openInExternalEditor(store, request, listRuntimeEnvironments)
   )
 
-  ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
+  registerForwardedUrlOpenHandler(ipc)
+
+  ipc.handle('shell:openUrl', (_event, rawUrl: string) => {
     let parsed: URL
     try {
       parsed = new URL(rawUrl)
@@ -186,7 +191,7 @@ export function registerShellHandlers(
     return shell.openExternal(parsed.toString())
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'shell:openFilePath',
     async (
       _event,
@@ -197,7 +202,7 @@ export function registerShellHandlers(
       (await openWithSystemDefault(filePath, ownerHostId, false, location)) !== 'failed'
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'shell:openFileUri',
     async (_event, rawUri: string, ownerHostId: unknown): Promise<ShellOpenFileResult> => {
       const filePath = localFileUriPath(rawUri)
@@ -206,9 +211,9 @@ export function registerShellHandlers(
     }
   )
 
-  registerShellPathExistenceHandlers()
+  registerShellPathExistenceHandlers(ipc)
 
-  ipcMain.handle(
+  ipc.handle(
     'shell:pickDirectory',
     async (event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await showSingleFlightOpenDialog(
@@ -227,7 +232,7 @@ export function registerShellHandlers(
   )
 
   // Native dialogs avoid Electron prompt/file-input reliability issues.
-  ipcMain.handle('shell:pickAttachment', async (event): Promise<string | null> => {
+  ipc.handle('shell:pickAttachment', async (event): Promise<string | null> => {
     const result = await showSingleFlightOpenDialog(
       {
         properties: ['openFile']
@@ -241,7 +246,7 @@ export function registerShellHandlers(
   })
 
   // Keep single-file callers, including interpreter selection, on pickAttachment.
-  ipcMain.handle('shell:pickAttachments', async (event): Promise<string[]> => {
+  ipc.handle('shell:pickAttachments', async (event): Promise<string[]> => {
     const result = await showSingleFlightOpenDialog(
       {
         properties: ['openFile', 'multiSelections']
@@ -251,7 +256,7 @@ export function registerShellHandlers(
     return result.canceled ? [] : result.filePaths
   })
 
-  ipcMain.handle('shell:pickImage', async (event): Promise<string | null> => {
+  ipc.handle('shell:pickImage', async (event): Promise<string | null> => {
     const result = await showSingleFlightOpenDialog(
       {
         properties: ['openFile'],
@@ -270,7 +275,7 @@ export function registerShellHandlers(
     return result.filePaths[0]
   })
 
-  ipcMain.handle('shell:pickRepoIconImage', async (event): Promise<RepoIconPickResult> => {
+  ipc.handle('shell:pickRepoIconImage', async (event): Promise<RepoIconPickResult> => {
     const result = await showSingleFlightOpenDialog(
       {
         properties: ['openFile'],
@@ -306,7 +311,7 @@ export function registerShellHandlers(
     }
   })
 
-  ipcMain.handle('shell:pickAudio', async (event): Promise<string | null> => {
+  ipc.handle('shell:pickAudio', async (event): Promise<string | null> => {
     const result = await showSingleFlightOpenDialog(
       {
         properties: ['openFile'],

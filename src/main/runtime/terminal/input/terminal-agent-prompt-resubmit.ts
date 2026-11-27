@@ -2,7 +2,8 @@ import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pan
 import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import {
   AGENT_PROMPT_SUBMIT,
-  isHeldAgentPromptDraft
+  isHeldAgentPromptDraft,
+  openCodeCollapsesPaste
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 import {
@@ -10,6 +11,8 @@ import {
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { readOpenCodeComposerDraft } from '../../../../shared/terminal/input/opencode-composer'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 
 /** How often a held prompt is re-read when the agent sets no blind-retry delay. */
 const HELD_PROMPT_RECHECK_MS = 1000
@@ -21,17 +24,113 @@ type HeldAgentPrompt = {
   heldBudgetMs: number
 }
 
+/** Whether an OpenCode send keeps retrying past its resolution: OpenCode inserts a paste it
+ *  collapses into `[Pasted ~N lines]` asynchronously, so an Enter that beats it leaves the prompt
+ *  unsent (#45760). */
+function armsOpenCodePasteRetry(held: HeldAgentPrompt): boolean {
+  return (
+    // Why: a busy OpenCode steers or queues the send with no new turn edge to end the wait on.
+    held.baseline.status !== 'working' &&
+    held.prompt !== undefined &&
+    openCodeCollapsesPaste(held.prompt)
+  )
+}
+
 export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithTitlelessPaneAgentIdentity {
-  /** Retry blind Enter and drafts held by Windows input-record pastes or unopened dsh launchpads; retries cannot fail a submitted prompt. */
-  protected async resubmitHeldAgentPrompt(
+  /** The extra Enters a send waits for; OpenCode's paste retry runs on after the send instead. */
+  protected resubmitHeldAgentPromptForSend(
     ptyId: string,
     generation: number,
     options: RuntimeAgentPromptWriteOptions,
     held: HeldAgentPrompt
   ): Promise<number> {
     const agent = this.getPtyAgent(ptyId)
+    if (agent !== 'opencode' && agent !== 'opencode2') {
+      return this.resubmitHeldAgentPrompt(ptyId, generation, agent, options, held)
+    }
+    if (armsOpenCodePasteRetry(held)) {
+      // Why: its first recheck is a second away, so it must not delay the send's acceptance.
+      const retry = this.resubmitHeldAgentPrompt(ptyId, generation, agent, options, held).then(
+        () => undefined,
+        () => undefined
+      )
+      options.onHeldPromptRetry?.(retry)
+    }
+    return Promise.resolve(0)
+  }
+
+  /** Arms, before a typed mailbox notice's Enter, the same held-prompt retry a send gets: at most one
+   *  more Enter while the composer shows exactly the notice. Resolves true when it still waits there
+   *  or the screen can't be read; null when the agent is busy, whose queued notice starts no turn to confirm it by. */
+  protected armMailNoticeSubmitCheck(
+    handle: string,
+    ptyId: string,
+    notice: string,
+    isCurrent: () => boolean
+  ): (() => Promise<boolean>) | null {
+    let baseline: AgentPromptActivity
+    try {
+      baseline = this.getAgentPromptActivity(handle, ptyId)
+    } catch {
+      return null
+    }
+    if (baseline.status === 'working' || baseline.status === 'permission') {
+      return null
+    }
+    const agent = this.getPtyAgent(ptyId)
+    const openCode = agent === 'opencode' || agent === 'opencode2'
+    const held: HeldAgentPrompt = {
+      baseline,
+      readActivity: () => this.getAgentPromptActivity(handle, ptyId),
+      prompt: notice,
+      // Why one retry interval: the notice's Enter already waited out its paste.
+      heldBudgetMs:
+        (agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined) ?? HELD_PROMPT_RECHECK_MS
+    }
+    const options: RuntimeAgentPromptWriteOptions = {
+      inputKind: 'orchestration',
+      signal: this.getPtyLifecycleSignal(ptyId),
+      beforeWrite: () => {
+        if (!isCurrent()) {
+          throw new Error('terminal_handle_stale')
+        }
+      }
+    }
+    return async () => {
+      const resubmits = await this.resubmitHeldAgentPrompt(
+        ptyId,
+        baseline.generation,
+        agent,
+        options,
+        held
+      )
+      try {
+        if (!isCurrent() || (await agentPromptSettledWithin(held, 0, options.signal))) {
+          return false
+        }
+        const draft = await this.readHeldPromptDraft(ptyId, openCode)
+        // An unreadable screen can't show the notice was taken: report it as one that may wait.
+        return (
+          isCurrent() && (draft === null || isHeldAgentPromptDraft(draft, notice, 1 + resubmits))
+        )
+      } catch {
+        return isCurrent()
+      }
+    }
+  }
+
+  /** Retry blind Enter and drafts held by Windows input-record pastes, unopened dsh launchpads or
+   *  OpenCode's async paste; retries cannot fail a submitted prompt. */
+  private async resubmitHeldAgentPrompt(
+    ptyId: string,
+    generation: number,
+    agent: TerminalAgent | null,
+    options: RuntimeAgentPromptWriteOptions,
+    held: HeldAgentPrompt
+  ): Promise<number> {
     const retryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
     const prompt = held.prompt
+    const openCode = agent === 'opencode' || agent === 'opencode2'
     const gated = held.heldBudgetMs > 0 && prompt !== undefined
     // Why: the draft reader knows dsh's launchpad, which its first-run guide covers once ready.
     const readsLaunchDraft = agent === 'dsh'
@@ -55,14 +154,15 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         const holdsPrompt = async (): Promise<boolean> =>
           prompt !== undefined &&
           isHeldAgentPromptDraft(
-            (await this.readCurrentTerminalWaitScreen(ptyId))?.draft,
+            (await this.readHeldPromptDraft(ptyId, openCode)) ?? undefined,
             prompt,
             1 + resubmits
           )
         if (!blind && !(await holdsPrompt())) {
           // Gone after a gated retry means it was taken; before one, the burst may still be read.
-          // dsh paints its draft at once, so gone means it was taken or the guide covers it.
-          if (gatedResubmits > 0 || readsLaunchDraft) {
+          // dsh paints its draft at once and OpenCode once a file stat resolves, so gone means
+          // it was taken (or dsh's guide covers it).
+          if (gatedResubmits > 0 || readsLaunchDraft || openCode) {
             return resubmits
           }
           continue
@@ -89,6 +189,24 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
       // Why: a refused retry leaves the first Enter's verdict to the verification that follows.
     }
     return resubmits
+  }
+
+  /** The composer's text: undefined when empty, null when the screen could not be read. */
+  private async readHeldPromptDraft(
+    ptyId: string,
+    openCode: boolean
+  ): Promise<string | null | undefined> {
+    // Why: this read also catches the emulator up to the latest output.
+    const screen = await this.readCurrentTerminalWaitScreen(ptyId)
+    if (!screen) {
+      return null
+    }
+    if (!openCode) {
+      return screen.draft
+    }
+    // Why: OpenCode's composer has no prompt glyph, so read its box from the caught-up grid.
+    const context = this.readWholeScreenModel(ptyId)?.emulator.getCursorLineContext()
+    return (context && readOpenCodeComposerDraft(context)) ?? undefined
   }
 }
 

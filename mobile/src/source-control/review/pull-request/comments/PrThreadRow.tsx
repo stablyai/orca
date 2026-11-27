@@ -22,9 +22,9 @@ import {
 } from '../../../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { isBotPRComment } from '../../../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import { threadDiffLines } from '../../../../../../src/shared/github/comments/pr-comment-diff-hunk'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
 import { canEditComment, isResolvableComment } from './pr-comment-actions'
@@ -83,7 +83,8 @@ export function PrThreadRow({
   now,
   onOpenFile,
   onOpenThread,
-  askToFix
+  askToFix,
+  atLine = false
 }: {
   group: PRCommentGroup
   actions?: PrThreadActions
@@ -93,8 +94,11 @@ export function PrThreadRow({
   onOpenThread?: (focusReply: boolean) => void
   /** Bot findings offer the same agent launch as desktop's Resolve comments with AI. */
   askToFix?: PrAskToFix
+  /** Drawn under its own line in the diff, so the file link and quoted code would repeat it. */
+  atLine?: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -105,7 +109,7 @@ export function PrThreadRow({
   const lastReply = replies.at(-1)
   const bot = isBotPRComment(root, botAuthorOverrides)
   const severity = bot ? prCommentSeverity(root.body) : null
-  const location = prCommentLocation(root)
+  const location = atLine ? null : prCommentLocation(root)
   const filePath = root.path
   const canResolve = actions !== undefined && isResolvableComment(root)
   const resolveBusy = canResolve && root.threadId ? actions.isResolveBusy(root.threadId) : false
@@ -181,7 +185,7 @@ export function PrThreadRow({
             onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : openThread}
           />
         ) : null}
-        {root.diffHunk && root.line ? (
+        {!atLine && root.diffHunk && root.line ? (
           <PrThreadCode lines={threadDiffLines(root.diffHunk, root.line).slice(-1)} />
         ) : null}
         {editing && actions ? (
@@ -298,7 +302,8 @@ export function PrCommentFileLink({
   location: string
   onPress?: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   return (
     <Pressable
       onPress={onPress}
@@ -316,7 +321,8 @@ export function PrCommentFileLink({
 }
 
 function SeverityPill({ severity }: { severity: PrCommentSeverity }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const color =
     severity === 'critical'
@@ -337,7 +343,7 @@ function SeverityPill({ severity }: { severity: PrCommentSeverity }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -345,7 +351,7 @@ const styles = themedStyleSheet(() => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
   },
-  rowPressed: { backgroundColor: colors.bgPanel },
+  rowPressed: { backgroundColor: colors.translucentFill },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 32 },
   author: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', flexShrink: 1 },
   botTag: {

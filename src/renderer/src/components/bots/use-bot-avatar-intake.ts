@@ -45,11 +45,18 @@ export type BotAvatarIntake = {
 
 export function useBotAvatarIntakeState({
   onPicture,
-  undoable
+  undoable,
+  onTake,
+  disabled = false
 }: {
   onPicture: (png: string) => void
   /** The picture saves at once, so "Picture updated · Undo" follows it. */
   undoable: boolean
+  /** A picture is being taken in: a choice as it begins, before it is read. The returned call runs
+   *  once that read settles, whichever way. */
+  onTake?: () => () => void
+  /** Takes nothing in (New bot while Create runs). */
+  disabled?: boolean
 }): BotAvatarIntake {
   const [line, setLineState] = useState<BotAvatarIntakeLine>(HINT)
   const [reading, setReading] = useState(false)
@@ -60,10 +67,17 @@ export function useBotAvatarIntakeState({
   const landed = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // A decode can finish after the carousel moved; the picture lands where it is now.
-  const latest = useRef({ onPicture, undoable })
+  const latest = useRef({ onPicture, undoable, onTake, disabled })
   useEffect(() => {
-    latest.current = { onPicture, undoable }
+    latest.current = { onPicture, undoable, onTake, disabled }
   })
+  // The read in flight's settle call, run when it lands, fails, or is dropped.
+  const settleTake = useRef<(() => void) | null>(null)
+  const settle = (): void => {
+    const end = settleTake.current
+    settleTake.current = null
+    end?.()
+  }
 
   const setLine = (next: BotAvatarIntakeLine, resetAfterMs?: number): void => {
     if (timer.current) {
@@ -78,6 +92,7 @@ export function useBotAvatarIntakeState({
 
   const dismiss = (): void => {
     run.current += 1
+    settle()
     setReading(false)
     setLine(HINT)
   }
@@ -89,8 +104,13 @@ export function useBotAvatarIntakeState({
   }
 
   const take = (image: Blob): void => {
+    if (latest.current.disabled) {
+      return
+    }
     run.current += 1
+    settle()
     const id = run.current
+    settleTake.current = latest.current.onTake?.() ?? null
     setReading(true)
     setLine(HINT)
     void avatarPngFromBlob(image).then(
@@ -102,6 +122,7 @@ export function useBotAvatarIntakeState({
         landed.current += 1
         setTaken((count) => count + 1)
         latest.current.onPicture(png)
+        settle()
         if (latest.current.undoable) {
           setLine({ kind: 'saved' }, SAVED_MS)
         } else {
@@ -112,6 +133,7 @@ export function useBotAvatarIntakeState({
         if (run.current !== id) {
           return
         }
+        settle()
         setReading(false)
         if (error instanceof BotAvatarIntakeFailure) {
           setLine({ kind: 'error', error: error.error }, ERROR_MS)
@@ -132,6 +154,7 @@ export function useBotAvatarIntakeState({
   useEffect(
     () => () => {
       run.current += 1
+      settle()
       if (timer.current) {
         clearTimeout(timer.current)
       }

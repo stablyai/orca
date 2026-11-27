@@ -8,7 +8,9 @@ import { attachCoordinatorRunStore } from './coordinator-runs/coordinator-run-st
 import { attachDecisionGateStore } from './decision-gates/decision-gate-store'
 import { attachDispatchCompletion } from './dispatch-context/dispatch-completion'
 import { attachDispatchContextStore } from './dispatch-context/dispatch-context-store'
+import { attachDispatchProgress } from './dispatch-context/dispatch-progress'
 import { attachDispatchLinksById } from './dispatch-context/dispatch-links-by-id'
+import { attachSessionPartyRows } from './worker-terminal/session-party-rows'
 import { attachDispatchLookup } from './dispatch-context/dispatch-lookup'
 import { attachDispatchDepth } from './dispatch-depth'
 import { attachWorkerReportSettlement } from './dispatch-context/worker-report-settlement'
@@ -64,6 +66,7 @@ import { attachWorkerTerminalAutoRelease } from './worker-terminal/worker-termin
 import { attachWorkerTerminalListing } from './worker-terminal/worker-terminal-listing'
 import { attachWorkerTerminalRelease } from './worker-terminal/worker-terminal-release'
 import { attachWorkerTerminalResourceStore } from './worker-terminal/worker-terminal-resource-store'
+import { attachMailWakeAttemptStore } from './messages/mail-wake-attempt-store'
 import { attachWorkerTerminalTransfer } from './worker-terminal/worker-terminal-transfer'
 
 export function attachOrchestrationDbMethods(ctor: { prototype: object }): void {
@@ -71,6 +74,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachBotRequestStore(ctor)
   attachBotConversationActsForStore(ctor)
   attachBotRunResendStore(ctor)
+  attachMailWakeAttemptStore(ctor)
   attachBotRequestOutcomes(ctor)
   attachCreateTables(ctor)
   attachSchemaMigrate(ctor)
@@ -126,9 +130,11 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachWorkerTerminalListing(ctor)
   attachDispatchContextStore(ctor)
   attachDispatchLinksById(ctor)
+  attachSessionPartyRows(ctor)
   attachDispatchLookup(ctor)
   attachDispatchDepth(ctor)
   attachDispatchCompletion(ctor)
+  attachDispatchProgress(ctor)
   attachWorkerReportSettlement(ctor)
   attachDecisionGateStore(ctor)
   attachCoordinatorRunStore(ctor)

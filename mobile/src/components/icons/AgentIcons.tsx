@@ -1,6 +1,5 @@
 import Svg, { Path } from 'react-native-svg'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 // Use desktop status-bar SVG paths to keep Claude/Codex branding identical.
 
@@ -17,7 +16,7 @@ export function ClaudeIcon({ size = 16 }: { size?: number }) {
 }
 
 export function OpenAIIcon({ size = 16, color }: { size?: number; color?: string }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path

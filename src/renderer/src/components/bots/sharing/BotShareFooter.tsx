@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
 import { OrcaCloudSignInButton } from '../orca-cloud-sign-in'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
-import type { BotShareFlagSpot } from './bot-share-flags'
+import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
 import type { BotShareContext } from './bot-share-pages'
 import { BotShareOverview, BotShareOverviewSkeleton } from './BotShareOverview'
 import type { BotShareCandidateState } from './use-bot-share-candidate'
@@ -217,7 +217,7 @@ export function Footer({
       )
       primary = (
         <Button type="button" disabled={off} onClick={onPublish}>
-          {busy || state.building ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           {busy ? t('bots.share.updating', 'Updating…') : t('bots.share.updateLink', 'Update link')}
         </Button>
       )
@@ -235,7 +235,7 @@ export function Footer({
       </OrcaCloudSignInButton>
     ) : (
       <Button type="button" disabled={off || read.kind !== 'read'} onClick={onPublish}>
-        {busy || (state.building && candidate) ? <Loader2 className="animate-spin" /> : <Share2 />}
+        {busy ? <Loader2 className="animate-spin" /> : <Share2 />}
         {busy
           ? t('bots.share.publishing', 'Publishing…')
           : t('bots.share.publishLink', 'Publish link')}

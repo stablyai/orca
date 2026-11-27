@@ -36,6 +36,8 @@ export type WslMoveManifestExporter = (
   request: WslMoveManifestExportRequest
 ) => WslMoveManifestExport
 
+export type WslMoveHostServerState = 'update-pending' | 'restart-offered' | 'current'
+
 /** The distro's WSL host, connected. */
 export type WslMoveHost = {
   environmentId: string
@@ -43,6 +45,12 @@ export type WslMoveHost = {
   /** The distro's registry id, which binds the move to this exact distro; absent when unknown. */
   distroGuid?: string
   capabilities: readonly string[]
+  /**
+   * What a missing WSL capability means: `update-pending`, it waits on an update; `restart-offered`,
+   * it was not started as a WSL host and its row offers Restart as WSL host; `current`, it waits on
+   * no update and offers no restart. Absent when the host is not ready.
+   */
+  serverState?: WslMoveHostServerState
   /** Read after the connect re-saved the deployment link; absent when no Orca profile is active. */
   browserLoginsNotCarried?: WslMoveBrowserCookieFreshPartitionReason
   catalog: OrcadMigrationDestinationCatalog

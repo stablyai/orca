@@ -25,9 +25,12 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
-import { botGroupRoomPaneKey } from '../../../../shared/bots/bot-group-room-pane-key'
+import { botGroupRoomPaneKey } from '../../../../shared/bots/bot-notification-pane-keys'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
-import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
+import {
+  buildNotificationOptions,
+  notificationNeedsSlackReplyCheck
+} from '../../../ipc/notifications/notification-options'
 import type { MobileNotificationDispatchEvent } from '../../push/notifications/runtime-mobile-notification-controller'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
@@ -54,6 +57,8 @@ export type StructuredAttentionMobileDeliveryDeps = {
   readOrchestration: (paneKey: string) => AgentStatusOrchestrationContext | undefined
   /** The group room a member session talks in; null for any other session. */
   readBotGroupRoom?: (sessionId: string) => BotGroupRoomOfSession | null
+  /** Whether the session answers a Slack thread; its replies are written in Slack's markup. */
+  repliesInSlack?: (sessionId: string) => boolean
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
@@ -175,7 +180,9 @@ export function createStructuredAttentionMobileDelivery(
           : {})
       }
       const { title, body } = buildNotificationOptions(
-        request,
+        notificationNeedsSlackReplyCheck(request) && deps.repliesInSlack?.(sessionId)
+          ? { ...request, agentRepliesInSlack: true }
+          : request,
         getRuntimeDesktopSurface().translateNotification
       )
       // Apply the desktop fan-out preferences to phone delivery too.

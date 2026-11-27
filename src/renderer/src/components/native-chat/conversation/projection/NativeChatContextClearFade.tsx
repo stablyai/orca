@@ -1,4 +1,11 @@
-import type { ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
+
+const NativeChatTranscriptInteractiveContext = createContext(true)
+
+/** False while a /clear fades the transcript out: nothing in it should open or take input. */
+export function useNativeChatTranscriptInteractive(): boolean {
+  return useContext(NativeChatTranscriptInteractiveContext)
+}
 
 /** Swap the transcript while hidden during the live /clear fade, then reveal it again. */
 export function NativeChatContextClearFade({
@@ -20,7 +27,9 @@ export function NativeChatContextClearFade({
         inert={clearing}
         className="flex min-h-0 flex-1 flex-col transition-opacity duration-150 ease-out data-[clearing=true]:opacity-0"
       >
-        {children}
+        <NativeChatTranscriptInteractiveContext value={!clearing}>
+          {children}
+        </NativeChatTranscriptInteractiveContext>
       </div>
     </div>
   )

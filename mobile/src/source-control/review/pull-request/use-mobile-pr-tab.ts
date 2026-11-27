@@ -140,7 +140,8 @@ export function useMobilePrTab(input: Input) {
     queries,
     state,
     live: input.live ?? false,
-    connected: connState === 'connected'
+    connected: connState === 'connected',
+    hasPendingCommentWrites: commentActions.hasPendingWrites
   })
   const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
   const ownTriage = useMobilePrAiTriage({

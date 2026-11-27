@@ -22,6 +22,7 @@ import {
   readJournalSqlTurnFailure
 } from './journal-sql-status-requests'
 import { readJournalSqlOpenAsyncQuestion } from './journal-sql-status-async-questions'
+import { structuredAgentSessionAwaitedPrompt } from '../../../shared/agent-session/view/structured-agent-session-awaited-prompt'
 
 export type { JournalStatusState } from './journal-status-state'
 import type { JournalStatusState } from './journal-status-state'
@@ -109,6 +110,7 @@ export function readJournalSqlStatusState(
   const turnFailure =
     turnOutcome === 'failure' ? readJournalSqlTurnFailure(state, floor, request) : undefined
   const openAsyncQuestion = readJournalSqlOpenAsyncQuestion(state, floor)
+  const awaited = status === 'attention' ? structuredAgentSessionAwaitedPrompt(actionable) : {}
   return {
     latestRequest: requests.latestRequest,
     ...(turnFailure ? { turnFailure } : {}),
@@ -125,7 +127,8 @@ export function readJournalSqlStatusState(
         : {}),
       ...(turnOutcome ? { turnOutcome } : {}),
       ...(statusStartedAt !== undefined ? { statusStartedAt } : {}),
-      ...(openAsyncQuestion ? { openAsyncQuestion } : {})
+      ...(openAsyncQuestion ? { openAsyncQuestion } : {}),
+      ...awaited
     }
   }
 }

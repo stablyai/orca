@@ -1,6 +1,7 @@
 import { isRenderableImageUri } from '../../visual/mobile-native-chat-image-preview'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import type { SupportedUiLocale } from '../../../../../../src/shared/i18n/ui-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../../../i18n/use-mobile-translation'
 import {
   ActivityIndicator,
   Image,
@@ -11,15 +12,9 @@ import {
   View
 } from 'react-native'
 import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
-import {
-  colors,
-  concentricRadius,
-  radii,
-  spacing,
-  pressedStyle
-} from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { concentricRadius, radii, spacing, pressedStyle } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { formatPreviewByteLength } from '../../../../files/preview/mobile-file-preview-response'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
@@ -32,14 +27,15 @@ const ITEM_RADIUS = concentricRadius(radii.floating, 12)
 
 function composerFileMeta(
   file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>,
-  t: Translate
+  t: Translate,
+  locale: SupportedUiLocale
 ) {
   const extension = /\.([a-z0-9]{1,8})$/i.exec(file.name)?.[1]
   const subtype = /^[^/]+\/([a-z0-9]{1,8})$/i.exec(file.mime)?.[1]
   const type = (extension ?? subtype ?? t('chat.composerAttachments.file', 'File')).toUpperCase()
   return t('chat.composerAttachments.fileMeta', '{{type}} · {{size}}', {
     type,
-    size: formatPreviewByteLength(file.byteLength)
+    size: formatPreviewByteLength(file.byteLength, t, locale)
   })
 }
 
@@ -47,15 +43,21 @@ export function MobileNativeChatComposerAttachments({
   images,
   files,
   onRemoveImage,
-  onRemoveFile
+  onRemoveFile,
+  numbered = false
 }: {
+  /** An image with no path yet is still uploading. */
   images: readonly PendingNativeChatImage[]
   files: readonly PendingNativeChatFile[]
   onRemoveImage?: (id: string) => void
   onRemoveFile?: (id: string) => void
+  /** Each image shows its number, the N of the [Image #N] the words name it by. */
+  numbered?: boolean
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
   const onOpenFile = useMobileNativeChatOpenFile()
   if (images.length === 0 && files.length === 0) {
     return null
@@ -69,7 +71,7 @@ export function MobileNativeChatComposerAttachments({
       style={styles.strip}
       contentContainerStyle={styles.stripContent}
     >
-      {images.map((image) => (
+      {images.map((image, index) => (
         <View key={image.id} style={styles.thumb}>
           {isRenderableImageUri(image.previewUri) ? (
             <Image
@@ -89,6 +91,19 @@ export function MobileNativeChatComposerAttachments({
               <ImageIcon size={17} color={colors.textSecondary} strokeWidth={2} />
             </View>
           )}
+          {image.path ? null : (
+            <View
+              style={styles.uploading}
+              accessibilityLabel={t('chat.composerAttachments.uploadingImage', 'Uploading image')}
+            >
+              <ActivityIndicator size="small" color={colors.onAccent} />
+            </View>
+          )}
+          {numbered ? (
+            <View style={styles.number}>
+              <Text style={styles.numberText}>{index + 1}</Text>
+            </View>
+          ) : null}
           {onRemoveImage ? (
             <RemoveBadge
               label={t('chat.composerAttachments.removeImage', 'Remove image')}
@@ -112,7 +127,7 @@ export function MobileNativeChatComposerAttachments({
               {chatTextAttachmentName(file.name, pastedText)}
             </Text>
             <Text style={styles.fileMeta} numberOfLines={1}>
-              {composerFileMeta(file, t)}
+              {composerFileMeta(file, t, locale)}
             </Text>
           </Pressable>
           {file.path === null ? (
@@ -142,20 +157,22 @@ export function MobileNativeChatComposerAttachments({
 }
 
 function RemoveBadge({ label, onPress }: { label: string; onPress: () => void }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       accessibilityLabel={label}
       style={({ pressed }) => [styles.remove, pressed && pressedStyle]}
       onPress={onPress}
-      hitSlop={8}
+      // A 44 pt target around the 20 pt badge.
+      hitSlop={12}
     >
       <X size={11} color={colors.textPrimary} strokeWidth={3} />
     </Pressable>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   strip: {
     flexGrow: 0,
     marginBottom: 10
@@ -218,6 +235,24 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.45)'
+  },
+  number: {
+    position: 'absolute',
+    left: 4,
+    bottom: 4,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)'
+  },
+  numberText: {
+    color: colors.onAccent,
+    fontSize: 10,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums']
   },
   // Keep most of the badge inside its item for Android touch delivery; strip padding protects the overhang.
   remove: {

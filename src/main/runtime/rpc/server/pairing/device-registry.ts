@@ -227,7 +227,10 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     return mobilePairingConnectionModeOf(this.getDevice(deviceId))
   }
 
-  listDevices(): readonly DeviceEntry[] {
+  listDevices(options: { fresh?: boolean } = {}): readonly DeviceEntry[] {
+    if (options.fresh) {
+      this.adoptExternalEdits({ fresh: true })
+    }
     return this.devices
   }
 

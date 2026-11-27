@@ -19,12 +19,13 @@ import { isMainWindowVisible } from '../../window/visibility/main-window-visibil
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
+import { sessionRepliesInSlack } from '../../external-conversations/external-conversation-links'
 import { createNotificationDeliveryService } from '../../notifications/notification-delivery-service'
 import {
   createAnnouncedNotificationRegistry,
   type AnnouncedNotification
 } from '../../notifications/announced-notification-registry'
-import { registerNotificationSoundHandlers } from './notification-sound-ipc'
+import { registerLazyIpcHandleGroup } from '../lazy-ipc-handle-group'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import { isStructuredAttentionRead } from '../../../shared/agent-session/view/agent-session-attention'
 import { isAgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -238,6 +239,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     platform: process.platform,
     now: () => Date.now(),
     wasRead: announced.wasRead,
+    repliesInSlack: (sessionId) => sessionRepliesInSlack(store, sessionId),
     reserveNative: (request) => {
       if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
         return undefined
@@ -306,5 +308,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       deliveryService.dispatch(args)
   )
 
-  registerNotificationSoundHandlers(store)
+  ipcMain.removeHandler('notifications:resolveSoundPath')
+  ipcMain.removeHandler('notifications:loadSound')
+  registerLazyIpcHandleGroup(
+    ['notifications:resolveSoundPath', 'notifications:loadSound'],
+    async (ipc) => {
+      const { registerNotificationSoundHandlers } = await import('./notification-sound-ipc')
+      registerNotificationSoundHandlers(store, ipc)
+    }
+  )
 }

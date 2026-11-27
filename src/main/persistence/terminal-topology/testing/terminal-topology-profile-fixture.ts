@@ -23,6 +23,13 @@ export function emptyTerminalSessionProfile(): string {
   })
 }
 
+const trackedStores: Store[] = []
+
+/** Windows refuses to delete a directory while its SQLite file is open, so close before rmSync. */
+export async function closeTrackedTopologyStores(): Promise<void> {
+  await Promise.all(trackedStores.splice(0).map((store) => store.freezeWritesAsync()))
+}
+
 export async function openTopologyStore(directory: string, seed?: string): Promise<Store> {
   return (await openTopologyStoreWithAuthority(directory, seed)).store
 }
@@ -41,6 +48,7 @@ export async function openTopologyStoreWithAuthority(
     dataFile: join(directory, 'orca-data.json'),
     profileStateAuthority: authority
   })
+  trackedStores.push(store)
   await store.flushPendingOrThrowAsync()
   return { store, authority }
 }

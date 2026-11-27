@@ -143,7 +143,3 @@ export function isClosedPaneFenced(paneKey: string): boolean {
   }
   return true
 }
-
-export function _resetClosedPaneFencesForTests(): void {
-  closedAtByPaneKey.clear()
-}

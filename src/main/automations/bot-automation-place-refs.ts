@@ -125,6 +125,18 @@ export async function withPlaceRefs(
     const refusal = `${role === 'place' ? 'in=' : 'subject='} takes ${words}, not "${value}": ${NO_LOOKUP}.`
     return await asRef(resolve, { botId, source: rule.source, role, value }, legacy, refusal)
   }
+  // A pull request watch names one subject on every rule: look each one up once.
+  const looked = new Map<string, Promise<{ ref: string; label?: string }>>()
+  const lookUp = (rule: AutomationConnectorEventTrigger, role: ConnectorRefRole, value: string) => {
+    const key = JSON.stringify([rule.source, needsWorkflows(rule), role, value])
+    const known = looked.get(key)
+    if (known) {
+      return known
+    }
+    const found = ruleRef(rule, role, value)
+    looked.set(key, found)
+    return found
+  }
   const on =
     next.on &&
     (await Promise.all(
@@ -133,8 +145,8 @@ export async function withPlaceRefs(
           return rule
         }
         const places =
-          rule.in && (await Promise.all(rule.in.map((place) => ruleRef(rule, 'place', place))))
-        const subject = rule.subject ? await ruleRef(rule, 'subject', rule.subject) : undefined
+          rule.in && (await Promise.all(rule.in.map((place) => lookUp(rule, 'place', place))))
+        const subject = rule.subject ? await lookUp(rule, 'subject', rule.subject) : undefined
         const found = [...(places ?? []), ...(subject ? [subject] : [])].flatMap((each) =>
           shownName(rule.source, each) ? [[each.ref, each.label] as const] : []
         )

@@ -199,14 +199,19 @@ export function codexHookEventState(
 export function codexLeadStateForHookEvent(
   eventName: string | undefined,
   normalizedState?: ParsedAgentStatusPayload['state'],
-  toolName?: string
+  toolName?: string,
+  hostLeadState?: AgentMainAgentStatus['state']
 ): CodexLeadTurnState['state'] | undefined {
   // Preserve execution-host reviewer ownership; event names alone would turn every relayed approval into waiting.
   if (eventName === 'PermissionRequest' && normalizedState === 'working') {
     return 'working'
   }
-  // The execution host tracks Codex's async questions; its waiting outlasts the events around it.
-  if (normalizedState === 'waiting' && toolName === CODEX_ASYNC_QUESTION_TOOL) {
+  // The execution host tracks Codex's async questions; its waiting lead outlasts the events around it.
+  // An approval can cover the question and the tool name outlive it, so trust it only without that lead.
+  if (
+    normalizedState === 'waiting' &&
+    (hostLeadState ? hostLeadState === 'waiting' : toolName === CODEX_ASYNC_QUESTION_TOOL)
+  ) {
     return 'waiting'
   }
   return codexHookEventState(eventName, toolName)
@@ -271,7 +276,12 @@ export function reconcileRemoteCodexState(
       finishCodexSubagent(roster, agentId)
     }
   } else {
-    const leadState = codexLeadStateForHookEvent(eventName, payload.state, payload.toolName)
+    const leadState = codexLeadStateForHookEvent(
+      eventName,
+      payload.state,
+      payload.toolName,
+      payload.mainAgent?.state
+    )
     if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
       roster.clear()
     }

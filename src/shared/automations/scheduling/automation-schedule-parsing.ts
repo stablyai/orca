@@ -1,11 +1,15 @@
 import type { AutomationSchedulePreset } from '../automation-definition'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
+import {
+  formatScheduleRefusal,
+  type AutomationScheduleRefusalHints
+} from './automation-schedule-refusal'
 
 import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 import {
   DAY_NAMES,
   MONTH_NAMES,
-  isCronDayFieldRestricted,
+  isCronFieldRestricted,
   parseCronField,
   type CronParseOptions
 } from './automation-cron-field-parsing'
@@ -30,6 +34,8 @@ export type ParsedCron = {
   daysOfWeek: Set<number>
   dayOfMonthRestricted: boolean
   dayOfWeekRestricted: boolean
+  /** No `*` term in minute or hour: each time names one wall-clock moment, so DST must not skip or repeat it. */
+  fixedTime: boolean
 }
 
 export type ParsedSchedule = ParsedRrule | ParsedCron
@@ -111,7 +117,7 @@ export function parseCronExpression(
     throw new Error('Cron schedule must have five fields.')
   }
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
-  const rejectOversizedStep = options.rejectOversizedStep ?? false
+  const strictInput = options.strictInput ?? false
   return {
     kind: 'cron',
     minutes: parseCronField({
@@ -119,15 +125,15 @@ export function parseCronExpression(
       min: 0,
       max: 59,
       field: 'minute',
-      rejectOversizedStep
+      strictInput
     }),
-    hours: parseCronField({ value: hour, min: 0, max: 23, field: 'hour', rejectOversizedStep }),
+    hours: parseCronField({ value: hour, min: 0, max: 23, field: 'hour', strictInput }),
     daysOfMonth: parseCronField({
       value: dayOfMonth,
       min: 1,
       max: 31,
       field: 'day of month',
-      rejectOversizedStep
+      strictInput
     }),
     months: parseCronField({
       value: month,
@@ -135,7 +141,7 @@ export function parseCronExpression(
       max: 12,
       field: 'month',
       names: MONTH_NAMES,
-      rejectOversizedStep
+      strictInput
     }),
     daysOfWeek: parseCronField({
       value: dayOfWeek,
@@ -145,10 +151,11 @@ export function parseCronExpression(
       names: DAY_NAMES,
       normalize: (value) => (value === 7 ? 0 : value),
       distinctValueCount: 7,
-      rejectOversizedStep
+      strictInput
     }),
-    dayOfMonthRestricted: isCronDayFieldRestricted(dayOfMonth),
-    dayOfWeekRestricted: isCronDayFieldRestricted(dayOfWeek)
+    dayOfMonthRestricted: isCronFieldRestricted(dayOfMonth),
+    dayOfWeekRestricted: isCronFieldRestricted(dayOfWeek),
+    fixedTime: isCronFieldRestricted(minute) && isCronFieldRestricted(hour)
   }
 }
 
@@ -218,25 +225,30 @@ function cronScheduleRuns(schedule: string, options: CronParseOptions): boolean 
   }
 }
 
-/** Why new input is refused, naming a part the scheduler would drop; null when accepted. */
+/** Why new input is refused, naming what is accepted; null when accepted. */
 export function getAutomationScheduleInputError(
   schedule: string,
-  label = 'Invalid automation trigger'
+  label = 'Invalid automation trigger.',
+  hints: AutomationScheduleRefusalHints = {}
 ): string | null {
+  let ignoredPart: string | null = null
   try {
-    const parsed = parseSchedule(schedule, { rejectOversizedStep: true })
-    if (parsed.kind === 'cron') {
-      return cronHasPossibleOccurrence(parsed, Date.now()) ? null : label
+    const parsed = parseSchedule(schedule, { strictInput: true })
+    if (
+      parsed.kind === 'cron'
+        ? cronHasPossibleOccurrence(parsed, Date.now())
+        : parsed.ignoredPart === null
+    ) {
+      return null
     }
-    return parsed.ignoredPart === null
-      ? null
-      : `${label}. RRULE part ${JSON.stringify(parsed.ignoredPart)} is not supported. Use FREQ=HOURLY with BYMINUTE, FREQ=DAILY with BYHOUR and BYMINUTE, or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE.`
+    ignoredPart = parsed.kind === 'rrule' ? parsed.ignoredPart : null
   } catch {
-    return label
+    // Unparseable input gets the same refusal, without a named part.
   }
+  return formatScheduleRefusal(schedule, label, ignoredPart, hints)
 }
 
-/** Accepts a schedule as new input, oversized-step (#15895) and ignored-part (#45519) refusals included. */
+/** Accepts a schedule as new input, oversized-step (#15895), non-decimal cron number (#49684) and ignored-part (#45519) refusals included. */
 export function isValidAutomationSchedule(schedule: string): boolean {
   return getAutomationScheduleInputError(schedule) === null
 }
@@ -260,7 +272,7 @@ export function withoutIgnoredRruleParts(schedule: string): string {
 }
 
 export function isValidAutomationCronSchedule(schedule: string): boolean {
-  return cronScheduleRuns(schedule, { rejectOversizedStep: true })
+  return cronScheduleRuns(schedule, { strictInput: true })
 }
 
 // Read saved/provider-owned schedules under legacy cadence, not new-input step gates, so renames cannot force schedule re-authoring.

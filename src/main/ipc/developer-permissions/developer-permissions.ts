@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import dgram from 'node:dgram'
 import { ipcMain, shell, systemPreferences } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { getMacosFullDiskAccessStatus } from '../../macos-permissions/macos-full-disk-access-status'
 import { getTerminalHostsFullDiskAccessStatus } from '../../daemon/permissions/daemon-full-disk-access-status'
 import { testLocalNetworkConnection } from './local-network-connection-test'
@@ -216,15 +217,12 @@ async function requestPermission(
   return { id, status: (await getPermissionState(id)).status, openedSystemSettings: true }
 }
 
-export function registerDeveloperPermissionHandlers(): void {
-  ipcMain.handle(
-    'developerPermissions:getStatus',
-    async (): Promise<DeveloperPermissionState[]> => {
-      return Promise.all(DEVELOPER_PERMISSION_IDS.map(getPermissionState))
-    }
-  )
+export function registerDeveloperPermissionHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('developerPermissions:getStatus', async (): Promise<DeveloperPermissionState[]> => {
+    return Promise.all(DEVELOPER_PERMISSION_IDS.map(getPermissionState))
+  })
 
-  ipcMain.handle(
+  ipc.handle(
     'developerPermissions:request',
     async (
       _event,
@@ -237,14 +235,14 @@ export function registerDeveloperPermissionHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'developerPermissions:openSettings',
     async (_event, args: { id: DeveloperPermissionId }): Promise<void> => {
       await openPrivacyPane(args.id)
     }
   )
 
-  ipcMain.handle('developerPermissions:testLocalNetworkConnection', async (_event, args: unknown) =>
+  ipc.handle('developerPermissions:testLocalNetworkConnection', async (_event, args: unknown) =>
     testLocalNetworkConnection(
       args && typeof args === 'object' ? (args as { host?: unknown; port?: unknown }) : {}
     )

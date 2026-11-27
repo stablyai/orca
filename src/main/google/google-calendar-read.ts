@@ -2,6 +2,7 @@
 // in the calendar's own time zone), one event in full, or the calendars there are. Repeating events
 // come back as single occurrences.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type {
   CalendarAttendee,
   CalendarEventSummary,
@@ -15,73 +16,88 @@ import { addDays, windowBound, zonedDate, zonedMidnight } from './google-time-zo
 
 export const CALENDAR = 'https://www.googleapis.com/calendar/v3'
 const LIST_MAX = 250
+// 20 pages of 250: up to 5,000 calendars.
+const MAX_CALENDAR_LIST_PAGES = 20
 
-const CalendarEntrySchema = z.object({
-  id: z.string(),
-  summary: z.string().optional(),
-  summaryOverride: z.string().optional(),
-  timeZone: z.string().optional(),
-  primary: z.boolean().optional(),
-  accessRole: z.string().optional()
-})
+const CalendarEntrySchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    summary: z.string().optional(),
+    summaryOverride: z.string().optional(),
+    timeZone: z.string().optional(),
+    primary: z.boolean().optional(),
+    accessRole: z.string().optional()
+  })
+)
 export type CalendarEntry = z.infer<typeof CalendarEntrySchema>
-const CalendarListSchema = z.object({ items: z.array(CalendarEntrySchema).default([]) })
+const CalendarListSchema = lazyZodSchema(() =>
+  z.object({
+    items: z.array(CalendarEntrySchema).default([]),
+    nextPageToken: z.string().optional()
+  })
+)
 
-const When = z.object({
-  dateTime: z.string().optional(),
-  date: z.string().optional(),
-  timeZone: z.string().optional()
-})
-export const EventSchema = z.object({
-  id: z.string(),
-  status: z.string().optional(),
-  summary: z.string().optional(),
-  description: z.string().optional(),
-  location: z.string().optional(),
-  htmlLink: z.string().optional(),
-  hangoutLink: z.string().optional(),
-  recurringEventId: z.string().optional(),
-  // Set only on a repeating event's series, never on one occurrence.
-  recurrence: z.array(z.string()).optional(),
-  start: When.default({}),
-  end: When.default({}),
-  organizer: z
-    .object({
-      email: z.string().optional(),
-      displayName: z.string().optional(),
-      self: z.boolean().optional()
-    })
-    .optional(),
-  attendees: z
-    .array(
-      z
-        .object({
-          email: z.string().default(''),
-          displayName: z.string().optional(),
-          responseStatus: z
-            .enum(['accepted', 'declined', 'tentative', 'needsAction'])
-            .catch('needsAction')
-            .default('needsAction'),
-          organizer: z.boolean().optional(),
-          self: z.boolean().optional()
-        })
-        // A write sends attendees back whole; fields Orca doesn't show (optional, comment) stay.
-        .passthrough()
-    )
-    .default([]),
-  conferenceData: z
-    .object({
-      entryPoints: z
-        .array(z.object({ entryPointType: z.string().optional(), uri: z.string().optional() }))
-        .default([])
-    })
-    .optional()
-})
+const When = lazyZodSchema(() =>
+  z.object({
+    dateTime: z.string().optional(),
+    date: z.string().optional(),
+    timeZone: z.string().optional()
+  })
+)
+export const EventSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    status: z.string().optional(),
+    summary: z.string().optional(),
+    description: z.string().optional(),
+    location: z.string().optional(),
+    htmlLink: z.string().optional(),
+    hangoutLink: z.string().optional(),
+    recurringEventId: z.string().optional(),
+    // Set only on a repeating event's series, never on one occurrence.
+    recurrence: z.array(z.string()).optional(),
+    start: When.default({}),
+    end: When.default({}),
+    organizer: z
+      .object({
+        email: z.string().optional(),
+        displayName: z.string().optional(),
+        self: z.boolean().optional()
+      })
+      .optional(),
+    attendees: z
+      .array(
+        z
+          .object({
+            email: z.string().default(''),
+            displayName: z.string().optional(),
+            responseStatus: z
+              .enum(['accepted', 'declined', 'tentative', 'needsAction'])
+              .catch('needsAction')
+              .default('needsAction'),
+            organizer: z.boolean().optional(),
+            self: z.boolean().optional()
+          })
+          // A write sends attendees back whole; fields Orca doesn't show (optional, comment) stay.
+          .passthrough()
+      )
+      .default([]),
+    conferenceData: z
+      .object({
+        entryPoints: z
+          .array(z.object({ entryPointType: z.string().optional(), uri: z.string().optional() }))
+          .default([])
+      })
+      .optional()
+  })
+)
 export type CalendarEvent = z.infer<typeof EventSchema>
-const EventsSchema = z.object({
-  items: z.array(EventSchema).default([]),
-  nextPageToken: z.string().optional()
-})
+const EventsSchema = lazyZodSchema(() =>
+  z.object({
+    items: z.array(EventSchema).default([]),
+    nextPageToken: z.string().optional()
+  })
+)
 
 /** `calendar:<calendar id>:event:<event id>`, as list prints it; a bare event id is on --calendar. */
 export function parseCalendarEventRef(
@@ -136,8 +152,27 @@ export async function pickCalendar(
 }
 
 async function listCalendarEntries(api: GoogleApi): Promise<CalendarEntry[]> {
-  const url = `${CALENDAR}/users/me/calendarList?maxResults=${LIST_MAX}`
-  return (await api.get('calendar', url, parseGoogleJson(CalendarListSchema))).items
+  const url = new URL(`${CALENDAR}/users/me/calendarList`)
+  url.searchParams.set('maxResults', String(LIST_MAX))
+  const entries: CalendarEntry[] = []
+  let pageToken: string | undefined
+  for (let pageIndex = 0; pageIndex < MAX_CALENDAR_LIST_PAGES; pageIndex++) {
+    if (pageToken) {
+      url.searchParams.set('pageToken', pageToken)
+    }
+    const page = await api.get('calendar', url.toString(), parseGoogleJson(CalendarListSchema))
+    entries.push(...page.items)
+    pageToken = page.nextPageToken
+    if (!pageToken) {
+      break
+    }
+  }
+  if (pageToken) {
+    throw new GoogleToolError(
+      `The calendar list exceeds the ${MAX_CALENDAR_LIST_PAGES}-page limit, so the listing is incomplete. Pass a calendar id instead of a name.`
+    )
+  }
+  return entries
 }
 
 export function eventSummary(calendarId: string, event: CalendarEvent): CalendarEventSummary {

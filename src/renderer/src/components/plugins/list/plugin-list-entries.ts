@@ -60,6 +60,10 @@ export type PluginVerifiedSource =
   | { kind: 'official' | 'bundled' | 'dev' | 'unverified' }
   | { kind: 'catalog'; catalog: string | null; owner: string | null }
 
+export function pluginEntryManagingTeams(entry: PluginListEntry): string[] | undefined {
+  return entry.installed ? entry.installed.managedByTeams : entry.listing?.managedByTeams
+}
+
 function installedVerifiedSource(
   plugin: PluginHostListEntry,
   catalog: string | null

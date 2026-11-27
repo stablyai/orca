@@ -1,14 +1,21 @@
 import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { app, type Event } from 'electron'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { closeAllPairedPortForwards } from '../../ports/paired-forwards/paired-port-forwards'
 import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
-import { settleTeardownWithinDeadline, type NamedQuitTeardown } from './quit-teardown-deadline'
+import {
+  finishQuitTeardown,
+  quitTeardownDeadlineMs,
+  quitWorkerStoreDeadlineMs,
+  type NamedQuitTeardown
+} from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
+import { abortPluginGitForShutdown } from '../../plugins/installation/plugin-git-repository'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
-import { isQuittingForUpdate } from '../../updater/updater-service'
+import { applyTeamPolicyBeforeQuit, isQuittingForUpdate } from '../../updater/updater-service'
 import { swapCompactedOrchestrationDbAtQuit } from '../../runtime/orchestration/db/maintenance/orchestration-db-compaction-quit'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
@@ -32,6 +39,7 @@ function installBeforeQuitHandler(): void {
     if (event.defaultPrevented) {
       return
     }
+    applyTeamPolicyBeforeQuit()
     if (isQuittingForUpdate()) {
       recordUpdaterLifecycle('before_quit_allowed', undefined, {
         message: 'before-quit allowed for update install'
@@ -81,6 +89,7 @@ function retireBrowsers(): NamedQuitTeardown[] {
       .catch(() => {})
   browserManager.setBrowserGuestStateChangedListener(null)
   browserManager.setOffscreenTabOpener(null)
+  browserManager.setServerPagePopupPresenter(null)
   return [
     { name: 'browser', promise: browserShutdown },
     { name: 'browser-session-cookies', promise: browserSessionCookieFlush },
@@ -98,6 +107,8 @@ function installWillQuitHandler(): void {
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
+    // Not awaited: signals catalog git to stop without delaying quit; the startup sweep catches leftovers.
+    abortPluginGitForShutdown()
     const updateQuitInProgress = isQuittingForUpdate()
     const coreTeardowns = beginDesktopCoreShutdown(
       state.core,
@@ -116,51 +127,40 @@ function installWillQuitHandler(): void {
         retireBrowserClientHosts: () => {
           disposeDesktopBrowserBridge()
           return [
-            { name: 'browser-client-hosts', promise: shutdownPairedRuntimeBrowserClientHosts() }
+            { name: 'browser-client-hosts', promise: shutdownPairedRuntimeBrowserClientHosts() },
+            { name: 'paired-port-forwards', promise: closeAllPairedPortForwards() }
           ]
         },
         isDevParentShutdown: isDevParentShutdownRequested
       }
     )
-    // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
-    // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
-    const teardowns = [
-      ...coreTeardowns,
-      { name: 'install-park', promise: pendingServeSupervisorQuitCommit() }
-    ]
-    const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
-    // Desktop quits only, and only after every teardown fulfilled.
-    let mayCompact = !state.isServeMode
-    settleTeardownWithinDeadline([
-      ...teardowns,
-      { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
-    ])
-      .then((pendingTeardowns) => {
-        if (pendingTeardowns.length > 0) {
-          console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
-        }
-        return pendingTeardowns.length === 0 ? teardownSettlement : null
-      })
-      .then((settled) => {
-        // Settled is not clean: a rejected teardown may have left a writer behind.
-        mayCompact &&= settled?.every((result) => result.status === 'fulfilled') === true
-      })
-      .then(() => shutdownTelemetry())
-      .then(() => shutdownObservability())
-      .catch(() => {
-        /* swallow — telemetry must never prevent app.quit() */
-      })
-      // Last before quitting, so it saves every extension write accepted during teardown.
-      .then(() =>
+    // Bound unsettled transports so quit cannot hang (#9447); atomic swaps preserve old files if a debounce is lost.
+    void finishQuitTeardown({
+      teardowns: [
+        ...coreTeardowns,
+        { name: 'install-park', promise: pendingServeSupervisorQuitCommit() }
+      ],
+      deadlineMs: quitTeardownDeadlineMs(updateQuitInProgress),
+      // After the teardown, so they save every write it accepted; each never rejects.
+      closeDataStores: () =>
         Promise.all([
           closeBrowserExtensionProfileDocumentStores(),
           closeBrowserExtensionProfileStateStore()
-        ])
-      )
-      // After everything else: nothing can reach the orchestration database again. Renames only, capped.
-      .then(() =>
-        // Update installs included: the swap is a rename, and they are most quits for an app left open.
-        mayCompact && !isDevParentShutdownRequested()
+        ]),
+      closeWorkerStores: closeEnvironmentStore,
+      workerStoreDeadlineMs: quitWorkerStoreDeadlineMs(updateQuitInProgress),
+      shutdownDiagnostics: async () => {
+        await shutdownTelemetry()
+        await shutdownObservability()
+      }
+    })
+      // Last: nothing can reach the orchestration database again. Renames only, capped. Desktop quits
+      // whose teardowns all fulfilled; not Windows updates, whose exit watchdog leaves no room for it.
+      .then(({ teardownsFulfilled }) =>
+        teardownsFulfilled &&
+        !state.isServeMode &&
+        !isDevParentShutdownRequested() &&
+        !(updateQuitInProgress && process.platform === 'win32')
           ? swapCompactedOrchestrationDbAtQuit(state.core.runtime)
           : undefined
       )

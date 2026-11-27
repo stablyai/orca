@@ -37,7 +37,7 @@ function storeKey(hostId: ExecutionHostId): string {
 
 function serialize(listing: ListedHostBots): string {
   // Unseen counts move with every bot turn and a dimmed row shows none, so they never count as a change.
-  const { avatarUris: _pictures, offline: _offline, unseen: _unseen, ...kept } = listing
+  const { offline: _offline, unseen: _unseen, ...kept } = listing
   return JSON.stringify(kept)
 }
 
@@ -143,9 +143,7 @@ export async function readKeptServerBotListings(
     }
     try {
       const parsed = keptListingSchema.safeParse(JSON.parse(raw))
-      return parsed.success && parsed.data.hostId === hostId
-        ? [{ ...parsed.data, avatarUris: new Map<string, string>() }]
-        : []
+      return parsed.success && parsed.data.hostId === hostId ? [parsed.data] : []
     } catch {
       return []
     }

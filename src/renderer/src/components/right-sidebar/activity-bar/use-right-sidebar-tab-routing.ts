@@ -6,6 +6,7 @@ import { normalizeRightSidebarRoute } from '@/store/slices/right-sidebar/right-s
 import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
 import { useInstalledPluginRouteReconciliation } from '../plugin-panels/use-installed-plugin-route-reconciliation'
 import type { ActivityBarItem } from './activity-bar-buttons'
+import { openBotConnectorPage } from '@/components/bots/bot-connector-page'
 
 // The last route request the panel saw, kept across unmounts: Settings unmounts it, and a request
 // made there (open a bot's Connectors) is still new when the panel mounts again.
@@ -13,7 +14,7 @@ let seenRouteRequestId: number | null = null
 
 export type RightSidebarTabRouting = {
   effectiveTab: ActiveRightSidebarTab
-  selectActivityTab: (tab: ActiveRightSidebarTab) => void
+  selectActivityTab: (tab: ActiveRightSidebarTab, fromKeyboard: boolean) => void
 }
 
 export function useRightSidebarTabRouting({
@@ -86,7 +87,7 @@ export function useRightSidebarTabRouting({
     }
     rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = effectiveTab
   }, [activeFolderWorkspaceKey, effectiveTab, visibleItems])
-  const selectActivityTab = (tab: ActiveRightSidebarTab): void => {
+  const selectActivityTab = (tab: ActiveRightSidebarTab, fromKeyboard: boolean): void => {
     if (activeFolderWorkspaceKey) {
       rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = tab
     }
@@ -94,7 +95,12 @@ export function useRightSidebarTabRouting({
       showRightSidebarFiles()
       return
     }
-    setRightSidebarTab(tab)
+    // Connectors again, while it shows a connector's page: back to the list.
+    if (tab === 'bot-connectors' && effectiveTab === 'bot-connectors') {
+      openBotConnectorPage(null)
+    }
+    // A mouse switch leaves focus where it is (#46611); keyboard activation moves into Agents search.
+    setRightSidebarTab(tab, { focusVaultSearch: fromKeyboard })
   }
 
   return { effectiveTab, selectActivityTab }

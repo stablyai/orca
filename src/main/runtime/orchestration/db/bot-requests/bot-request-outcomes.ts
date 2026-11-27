@@ -22,11 +22,19 @@ export function recordBotRequestOutcome(
   messageId: string,
   outcome: BotRequestOutcome
 ): boolean {
-  return (
+  const recorded =
     this.db
       .prepare('INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)')
       .run(messageId, outcome).changes > 0
-  )
+  settleAwaitedQuestion(this, messageId)
+  return recorded
+}
+
+/** Any outcome ends what its asker may still be owed, so nothing decided later sends it again. */
+function settleAwaitedQuestion(db: OrchestrationDb, messageId: string): void {
+  db.db
+    .prepare('UPDATE bot_requests SET awaiting = NULL WHERE message_id = ? AND awaiting = 1')
+    .run(messageId)
 }
 
 /** Records a bot's answer by mail: the first, or the one after its post in the thread (`posted`);
@@ -45,6 +53,7 @@ export function recordBotAnswer(
        ON CONFLICT(message_id) DO UPDATE SET outcome = 'answered'`
     )
     .run(messageId)
+  settleAwaitedQuestion(this, messageId)
   return { posted: before === 'posted' }
 }
 

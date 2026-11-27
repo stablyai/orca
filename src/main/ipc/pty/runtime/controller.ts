@@ -34,19 +34,26 @@ import {
   inspectProcessFromRuntimeController,
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
-  serializeProviderBufferFromRuntimeController,
   waitForRendererSerializerFromRuntimeController,
   writePtyFromRuntimeController
 } from './operations'
+import {
+  canProvideAuthoritativeBufferSnapshotFromRuntimeController,
+  serializeProviderBufferFromRuntimeController,
+  supportsVisibleProjectionSnapshotFromRuntimeController
+} from './provider-buffer-snapshot'
 import { supportsForegroundProcessEvidenceFromRuntimeController } from './foreground-process-evidence-capability'
 import {
+  listLocalProcessesForExitProofFromRuntimeController,
   listProcessesFromRuntimeController,
   listProcessesWithHostScopeFromRuntimeController
 } from './inventory-operations'
+import { observeInProcessWorkerExits } from './in-process-exit-observer'
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
 
+  observeInProcessWorkerExits(runtime)
   runtime?.setPtyController({
     claimStablePaneCreate: (args) => {
       const paneKey = makePaneKey(args.tabId, args.leafId)
@@ -103,6 +110,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     hasPty: (ptyId) => hasPtyFromRuntimeController(deps, ptyId),
     getPtyAvailability: (ptyId) => getPtyAvailabilityFromRuntimeController(deps, ptyId),
     listProcesses: (hostId, opts) => listProcessesFromRuntimeController(deps, hostId, opts),
+    listLocalProcessesForExitProof: () => listLocalProcessesForExitProofFromRuntimeController(deps),
     listProcessesWithHostScope: (opts) =>
       listProcessesWithHostScopeFromRuntimeController(deps, opts),
     supportsForegroundProcessEvidence: (hostId) =>
@@ -111,8 +119,10 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       // Mobile needs exact screen state and geometry before rendering live TUI output.
       return requestSerializedBuffer(ptyId, opts)
     },
-    serializeProviderBuffer: (ptyId, opts) =>
-      serializeProviderBufferFromRuntimeController(ptyId, opts),
+    serializeProviderBuffer: serializeProviderBufferFromRuntimeController,
+    supportsVisibleProjectionSnapshot: supportsVisibleProjectionSnapshotFromRuntimeController,
+    canProvideAuthoritativeBufferSnapshot:
+      canProvideAuthoritativeBufferSnapshotFromRuntimeController,
     hasRendererSerializer: (ptyId) => hasRendererSerializerFromRuntimeController(ptyId),
     getRendererSerializerGeneration: (ptyId) =>
       getRendererSerializerGenerationFromRuntimeController(ptyId),

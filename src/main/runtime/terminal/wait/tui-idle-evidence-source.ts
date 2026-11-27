@@ -20,7 +20,7 @@ import {
   isCurrentCommandStatus,
   isCurrentFirstPartyReport,
   isShellInFront
-} from '../input/terminal-command-paint'
+} from '../input/terminal-command-paint-record'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { titleCommandLaunchesInteractiveTui } from '../../../../shared/agent-status/title/interactive-agent-title-command'
@@ -48,9 +48,13 @@ export type TuiIdleEvidenceSource = {
   getOutputClockAt?(ptyId: string | null | undefined): number | null
   /** Whether mail delivery would type into this pane now (drafts, prompts and overlays hold it). */
   isSettledForDelivery?(ptyId: string): boolean
+  /** Whether the caught-up screen's cursor rests in a composer with no typed text and no prompt is up. */
+  hasEmptyInputComposer?(ptyId: string): boolean
   /** The foreground process a poll read during the pane's current quiet stretch; absent before any
    *  such read, and once output has moved on. Only the idle polls supply it. */
   getQuietForegroundProcess?(ptyId: string | null | undefined): string | null
+  /** The settled screen when it proves the tail's blocked text a dialog erased in place; null keeps the tail. */
+  readScreenClearingBlockedTail?(ptyId: string): string | null
 }
 
 /** One clock per terminal, read by ptyId. */
@@ -166,9 +170,13 @@ function paintAgent(
 export function ptyTuiIdleEvidence(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
-  readWaitText: () => string
+  readWaitText: () => string,
+  acceptsMidTurnInput = false
 ): TuiIdleEvaluationInput {
-  const waitText = lazyWaitText(readWaitText)
+  const tailText = lazyWaitText(readWaitText)
+  // Why only after a tail block: the screen may clear one (#24187), and a clear tail never pays the read.
+  let clearingScreenText: string | null = null
+  const waitText = () => clearingScreenText ?? tailText()
   const agent = source.getPaneAgent(pty.ptyId)
   const readScreen = screenReader(source, agent, pty.ptyId)
   // Why: an agent's own ready report (explicit idle title, adopted idle, first-party done) from a
@@ -197,7 +205,14 @@ export function ptyTuiIdleEvidence(
   const readScreenPainted = () => !isShellInFront(pty) && readCommandPainted()
   return {
     record,
-    readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    readTailBlockedReason: () => {
+      const reason = detectTerminalWaitBlockedReason(tailText())
+      if (reason === null) {
+        return null
+      }
+      clearingScreenText = source.readScreenClearingBlockedTail?.(pty.ptyId) ?? null
+      return clearingScreenText === null ? reason : null
+    },
     // Why the paint fence on screens: a reused pane still shows the previous agent's ready screen
     // until the command now running paints its own.
     readPositiveBodyEvidence: () =>
@@ -212,6 +227,10 @@ export function ptyTuiIdleEvidence(
       isQuietReadyScreenBody(waitText(), agent, readScreen) && readScreenPainted(),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, record, readScreen, waitText),
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
+    readReusableComposer:
+      acceptsMidTurnInput && agent === 'claude'
+        ? () => readScreenPainted() && source.hasEmptyInputComposer?.(pty.ptyId) === true
+        : undefined,
     readProgramSignInWaitScreen: () => isProgramSignInWaitScreen(waitText()),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,

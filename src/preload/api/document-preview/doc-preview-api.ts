@@ -3,15 +3,13 @@ import type {
   DocPreviewFailure
 } from '../../../shared/document-preview/doc-preview-scheme'
 
-export type DocPreviewGrantOwner =
-  | { kind: 'ssh'; connectionId: string }
-  | {
-      kind: 'runtime'
-      environmentId: string
-      worktreeSelector: string
-      worktreeRoot: string
-      fileAccess?: 'terminal-artifact'
-    }
+export type DocPreviewGrantOwner = {
+  kind: 'runtime'
+  environmentId: string
+  worktreeSelector: string
+  worktreeRoot: string
+  fileAccess?: 'terminal-artifact'
+}
 
 export type DocPreviewGrantRequest = {
   owner: DocPreviewGrantOwner

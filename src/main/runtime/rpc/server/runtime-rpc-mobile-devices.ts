@@ -10,6 +10,7 @@ import type {
   DelegatedMobileDeviceSyncResult
 } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
+import { settleRemovedPairedClient } from '../../orchestration/federation/client-asks/client-ask-queue'
 
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
 export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
@@ -69,6 +70,10 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
       }
       this.runtime.forgetClientNavigationState(deviceId)
+      if (device.scope === 'runtime') {
+        // Asks this Orca's agents sent that computer under this pairing will not be answered.
+        settleRemovedPairedClient(this.runtime, device)
+      }
       this.mobileSocketWiring?.terminateDeviceConnections(deviceId)
     }
     return true

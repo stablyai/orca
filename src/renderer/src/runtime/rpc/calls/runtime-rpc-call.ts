@@ -8,6 +8,7 @@ import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { hasRecentUserGestureFor, isBackgroundRuntimeCall } from './runtime-rpc-background-read'
 import { captureRuntimeEnvironmentRequestRevision } from '../environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ensureRuntimeEnvironmentCompatible } from '../compatibility/runtime-compatibility-probe'
@@ -18,10 +19,16 @@ type RuntimeRpcCallOptions = {
   reuseRecentCompatibilityFailure?: boolean
   skipCompatibilityCheck?: boolean
   signal?: AbortSignal
+  /** Stops waiting for compatibility without changing how the admitted RPC is transported. */
+  admissionSignal?: AbortSignal
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
   beforeSend?: () => void
   paramsForStatus?: (status: RuntimeStatus | null) => unknown
+  /** A poll or refresh the user didn't ask for: no use of an idle WSL host (#46567). */
+  background?: boolean
+  /** The user asked for it: it may wake a WSL host Orca stopped idle. Defaults to a recent gesture. */
+  wake?: boolean
 }
 
 export async function callRuntimeRpc<TResult>(
@@ -39,9 +46,14 @@ export async function callRuntimeRpcResponse<TResult>(
   params?: unknown,
   options: RuntimeRpcCallOptions = {}
 ): Promise<RuntimeRpcSuccess<TResult>> {
-  if (options.signal?.aborted) {
+  if (options.signal?.aborted || options.admissionSignal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
+  const background = isBackgroundRuntimeCall(options.background, params)
+  // Captured before any await: only a call made while the user acts may boot a stopped host.
+  const wake =
+    options.wake ??
+    (!background && target.kind === 'environment' && hasRecentUserGestureFor(target.environmentId))
   const expectedEnvironmentPairingRevision =
     target.kind === 'environment'
       ? captureRuntimeEnvironmentRequestRevision(
@@ -56,12 +68,13 @@ export async function callRuntimeRpcResponse<TResult>(
       ? await waitForPromiseWithSignal(
           ensureRuntimeEnvironmentCompatible(target.environmentId, {
             ...options,
-            expectedEnvironmentPairingRevision
+            expectedEnvironmentPairingRevision,
+            wake
           }),
-          options.signal
+          options.admissionSignal ?? options.signal
         )
       : null
-  if (options.signal?.aborted) {
+  if (options.signal?.aborted || options.admissionSignal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
   const selectedParams = options.paramsForStatus
@@ -83,11 +96,13 @@ export async function callRuntimeRpcResponse<TResult>(
           expectedEnvironmentPairingRevision,
           expectedEnvironmentRuntimeId:
             options.expectedEnvironmentRuntimeId ??
-            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
+            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined),
+          background,
+          wake
         })
   const envelope = response as RuntimeRpcResponse<TResult>
   if (!envelope.ok) {
-    throw new RuntimeRpcCallError(envelope)
+    throw new RuntimeRpcCallError(envelope, target)
   }
   return envelope
 }

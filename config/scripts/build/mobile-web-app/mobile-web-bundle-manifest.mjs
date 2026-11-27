@@ -59,11 +59,17 @@ export function contentTypeForExtension(extension) {
   return contentType
 }
 
+// Phones match cached assets by the manifest's full sha256, so a name only has to be unique in one
+// bundle. Every chunk import repeats the name; 16 hex digits keep it unique at a quarter of the bytes.
+export function contentAssetName(sha256, extension) {
+  return `${sha256.slice(0, 16)}.${extension}`
+}
+
 export function hashedAsset(bytes, extension) {
   const sha256 = sha256Hex(bytes)
   return {
     bytes,
-    path: `assets/${sha256}.${extension}`,
+    path: `assets/${contentAssetName(sha256, extension)}`,
     sha256,
     byteLength: bytes.byteLength,
     contentType: contentTypeForExtension(extension)
@@ -164,6 +170,12 @@ export async function writeMobileWebBundleTree({
       }
     })
     .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+  // Names are shortened content hashes; two different files on one name would drop one.
+  for (const [index, asset] of assets.entries()) {
+    if (assets[index + 1]?.path === asset.path && assets[index + 1].sha256 !== asset.sha256) {
+      throw new Error(`[mobile-web-bundle-manifest] two different assets are named ${asset.path}`)
+    }
+  }
   const manifest = {
     schemaVersion: MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
     buildId: computeMobileWebBundleBuildId(assets),

@@ -6,6 +6,7 @@ import {
   BotGroupStop,
   BotGroupDelete,
   BotGroupNewThread,
+  BotGroupRenameThread,
   BotGroupReorder
 } from '../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../bots/bot-group-runtime'
@@ -19,6 +20,18 @@ export function assertBotGroupOwner(context: Pick<RpcContext, 'caller'>): void {
   throw new Error(
     'Use the group chat as its human owner. Bots use the explicit question or handoff action.'
   )
+}
+
+/** Bots on other computers join or leave only from this computer's own window. */
+function assertRemoteRosterCaller(
+  context: Pick<RpcContext, 'caller' | 'runtime'>,
+  remoteBots: readonly unknown[] | undefined
+): void {
+  if (remoteBots !== undefined && context.caller?.kind !== 'desktop') {
+    throw new Error(
+      `To add or remove bots from other computers, use ${context.runtime.readMachineName()}.`
+    )
+  }
 }
 
 export const BOT_GROUP_METHODS = [
@@ -36,6 +49,7 @@ export const BOT_GROUP_METHODS = [
     params: BotGroupCreate,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
+      assertRemoteRosterCaller(context, params.remoteBots)
       return { group: await runtimeBotGroups(context.runtime).create(params) }
     }
   }),
@@ -45,6 +59,7 @@ export const BOT_GROUP_METHODS = [
     params: BotGroupUpdate,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
+      assertRemoteRosterCaller(context, params.remoteBots)
       return { group: await runtimeBotGroups(context.runtime).update(params) }
     }
   }),
@@ -109,6 +124,15 @@ export const BOT_GROUP_METHODS = [
     handler: async (params, context) => {
       assertBotGroupOwner(context)
       return runtimeBotGroups(context.runtime).newThread(params.groupId)
+    }
+  }),
+  defineMethod({
+    name: 'bots.groups.renameThread',
+    permission: 'workspace',
+    params: BotGroupRenameThread,
+    handler: async (params, context) => {
+      assertBotGroupOwner(context)
+      return { group: await runtimeBotGroups(context.runtime).renameThread(params) }
     }
   }),
   defineMethod({

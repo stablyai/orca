@@ -5,6 +5,7 @@ import { AgentStateDot, type AgentDotState } from '@/components/agent/status/Age
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { Button } from '@/components/ui/button'
 import { ActivityRowButton } from './ActivityRowButton'
+import { useBotRowCardPlacement } from './use-bot-row-card-placement'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
@@ -77,11 +78,19 @@ function Elapsed({
   )
 }
 
-function Detail({ label, value }: { label: string; value: string }): React.JSX.Element {
+function Detail({
+  label,
+  value,
+  wrap
+}: {
+  label: string
+  value: string
+  wrap?: boolean
+}): React.JSX.Element {
   return (
     <>
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate">{value}</dd>
+      <dd className={cn('min-w-0', wrap ? 'break-words' : 'truncate')}>{value}</dd>
     </>
   )
 }
@@ -95,15 +104,16 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
     props.workspaceId ? selectOrchestrationWorkerWorkspaceLabel(state, props.workspaceId) : null
   )
   const look = worker ? sessionWorkerLook(worker) : null
+  const placement = useBotRowCardPlacement()
   return (
-    <HoverCard openDelay={400} closeDelay={100}>
+    <HoverCard openDelay={400} closeDelay={100} {...placement.root}>
       <div
         className={cn(
-          'group/worker flex w-full min-w-0 items-start gap-1 rounded-sm hover:bg-accent',
+          'group/worker flex w-full min-w-0 items-start gap-1 rounded-sm hover:bg-accent has-[[data-state=open]]:bg-accent',
           props.nested && 'relative'
         )}
       >
-        <HoverCardTrigger asChild>
+        <HoverCardTrigger asChild {...placement.trigger}>
           <ActivityRowButton
             disabled={!props.onOpen}
             onClick={props.onOpen}
@@ -134,19 +144,24 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
                 props.detail
               ) : (
                 <span className="block truncate text-2xs text-muted-foreground">
-                  {workspace ?? props.origin}
+                  {[
+                    worker && sessionWorkerIsRunning(worker) ? worker.progressNote : null,
+                    workspace ?? props.origin
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
               )
             }
           />
         </HoverCardTrigger>
         {props.running && props.canStop ? (
-          // Shown on hover, as the row's other actions are.
+          // Shown on hover, as the row's other actions are; centered on the title's line box.
           <span
             className={cn(
-              'mt-1.5 mr-1 opacity-0 transition-opacity group-hover/worker:opacity-100 focus-within:opacity-100',
+              'mr-1 flex items-center opacity-0 transition-opacity group-hover/worker:opacity-100 focus-within:opacity-100',
               // Nested rows are narrow: Stop covers the time on hover rather than taking width from the title.
-              props.nested && 'absolute top-0 right-0 rounded-sm bg-accent'
+              props.nested ? 'absolute top-1.5 right-0 h-4 rounded-sm bg-accent' : 'mt-1.5 h-5'
             )}
           >
             <Button
@@ -164,9 +179,14 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
           </span>
         ) : null}
       </div>
-      <HoverCardContent side="left" align="start" variant="workspace-details">
+      <HoverCardContent {...placement.content} variant="workspace-details">
         <WorkerActivityDetails
           agent={worker?.agent ?? props.agent}
+          progressNote={
+            worker && sessionWorkerIsRunning(worker)
+              ? (worker.progressNote ?? undefined)
+              : undefined
+          }
           summary={worker?.summary ?? props.summary}
           chat={props.chat}
           workspaceId={props.workspaceId}
@@ -198,6 +218,7 @@ export function useWorkerStop(
 export function WorkerActivityDetails({
   title,
   agent: agentId,
+  progressNote,
   summary,
   chat,
   workspaceId,
@@ -205,6 +226,7 @@ export function WorkerActivityDetails({
 }: {
   title?: string
   agent?: string
+  progressNote?: string
   summary?: string
   chat?: string
   workspaceId: string | null
@@ -222,6 +244,9 @@ export function WorkerActivityDetails({
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
       {title ? <dd className="col-span-2 break-words font-medium">{title}</dd> : null}
       {agent ? <Detail label={t('bots.activity.agent', 'Agent')} value={agent} /> : null}
+      {progressNote ? (
+        <Detail label={t('bots.activity.progress', 'Progress')} value={progressNote} wrap />
+      ) : null}
       {summary ? <Detail label={t('bots.activity.result', 'Result')} value={summary} /> : null}
       {chat ? <Detail label={t('bots.activity.chat', 'Chat')} value={chat} /> : null}
       {workspace ? (

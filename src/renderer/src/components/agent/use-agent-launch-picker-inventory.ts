@@ -1,4 +1,5 @@
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import { fingerprintString } from '../../../../shared/text/string-fingerprint'
 import { recomputeOn } from '@/lib/recompute-on'
 import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import {
@@ -38,7 +39,7 @@ import {
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
-import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import {
   currentAgentPickerAcquisition,
   observeAgentPickerAcquisition
@@ -174,27 +175,29 @@ export function useAgentLaunchPickerInventorySource(
     model.state === 'settled' && model.rows.some(reads.refreshOnInvalidation)
   const key = useMemo(
     () =>
-      JSON.stringify([
-        context?.key,
-        context?.workspace,
-        context?.pairingRevision,
-        context?.runtimeId,
-        ...(observesHostCatalog ? [registeredAgents, coherentCatalog] : []),
-        worktreeId,
-        selector,
-        executionHostId,
-        model.state === 'settled' ? model.rows : [],
-        model.state === 'settled' ? model.detection.detectedIds : [],
-        model.state === 'settled' ? model.defaultTuiAgent : undefined,
-        settings && {
-          agentDefaultArgs: settings.agentDefaultArgs,
-          agentLaunchChoices: settings.agentLaunchChoices,
-          agentPermissionDefault: settings.agentPermissionDefault,
-          agentPermissionOverrides: settings.agentPermissionOverrides,
-          nativeChatSessionOptions: settings.nativeChatSessionOptions,
-          nativeChatPermissionMode: settings.nativeChatPermissionMode
-        }
-      ]),
+      fingerprintString(
+        JSON.stringify([
+          context?.key,
+          context?.workspace,
+          context?.pairingRevision,
+          context?.runtimeId,
+          ...(observesHostCatalog ? [registeredAgents, coherentCatalog] : []),
+          worktreeId,
+          selector,
+          executionHostId,
+          model.state === 'settled' ? model.rows : [],
+          model.state === 'settled' ? model.detection.detectedIds : [],
+          model.state === 'settled' ? model.defaultTuiAgent : undefined,
+          settings && {
+            agentDefaultArgs: settings.agentDefaultArgs,
+            agentLaunchChoices: settings.agentLaunchChoices,
+            agentPermissionDefault: settings.agentPermissionDefault,
+            agentPermissionOverrides: settings.agentPermissionOverrides,
+            nativeChatSessionOptions: settings.nativeChatSessionOptions,
+            nativeChatPermissionMode: settings.nativeChatPermissionMode
+          }
+        ])
+      ),
     [
       context,
       worktreeId,
@@ -213,7 +216,7 @@ export function useAgentLaunchPickerInventorySource(
           model.rows,
           model.detection.detectedIds ?? [],
           (agent) => agentPickerChoiceSeeds(agent, defaults),
-          formatAgentTypeLabel,
+          getAgentLabel,
           model.defaultTuiAgent
         ).map((entry) => ({
           ...entry,

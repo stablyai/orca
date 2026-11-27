@@ -15,6 +15,7 @@ import type {
 import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { openNativeChatTranscript } from '../native-chat/transcript-discovery/native-chat-open-wake'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 
 export type NativeChatReadSessionArgs = {
   agent: AgentType
@@ -99,7 +100,7 @@ const liveSubscriptions = new Map<number, Map<string, LiveSubscription>>()
 const pendingSubscriptions = new Map<number, Map<string, PendingSubscription>>()
 const senderLifetimes = new Map<number, ReturnType<typeof abortWhenRendererGone>>()
 
-function teardownSubscription(senderId: number, subscriptionId: string): void {
+export function teardownSubscription(senderId: number, subscriptionId: string): void {
   const pendingBySubId = pendingSubscriptions.get(senderId)
   pendingBySubId?.get(subscriptionId)?.controller.abort()
   pendingBySubId?.delete(subscriptionId)
@@ -307,31 +308,28 @@ export function clearNativeChatSubscriptions(): void {
   pendingSubscriptions.clear()
 }
 
-export function _getNativeChatSenderCleanupCountForTest(): number {
-  return senderLifetimes.size
+export function registerNativeChatHandleChannels(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
+    readSession(args)
+  )
+  // Failure output is local-only because paired hosts do not transmit agent output.
+  ipc.handle('nativeChat:conversationNameFailureOutput', (_event, sessionId: unknown) => {
+    const naming = getStructuredAgentSessionHost()?.deps.conversationNaming
+    return typeof sessionId === 'string' ? (naming?.failureOutput(sessionId) ?? null) : null
+  })
 }
 
-export function _getNativeChatPendingSubscriptionCountForTest(): number {
-  let count = 0
-  for (const bySubId of pendingSubscriptions.values()) {
-    count += bySubId.size
-  }
-  return count
+export function handleNativeChatSubscribeEvent(
+  event: IpcMainEvent,
+  args: NativeChatSubscribeArgs
+): void {
+  void handleSubscribe(event, args)
 }
 
 export function registerNativeChatHandlers(): void {
-  ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
-    readSession(args)
-  )
-  ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
-    void handleSubscribe(event, args)
-  })
+  registerNativeChatHandleChannels(ipcMain)
+  ipcMain.on('nativeChat:subscribe', handleNativeChatSubscribeEvent)
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)
-  })
-  // Failure output is local-only because paired hosts do not transmit agent output.
-  ipcMain.handle('nativeChat:conversationNameFailureOutput', (_event, sessionId: unknown) => {
-    const naming = getStructuredAgentSessionHost()?.deps.conversationNaming
-    return typeof sessionId === 'string' ? (naming?.failureOutput(sessionId) ?? null) : null
   })
 }

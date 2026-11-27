@@ -23,6 +23,12 @@ export type RestartWorkerStopReportDeps = {
   reportDeps: WorkerTurnStopReportDeps
   /** A terminal worker's pane at rest, reported as its live stop would have been. */
   reportRestingPane: (paneKey: string) => Promise<void>
+  /** A start whose turn was never seen begin, or that the restart cut, reported once. */
+  reportUnconfirmedStart: (dispatchId: string) => Promise<void>
+  /** Re-arms the notice of a recorded background wait from its turn end; others are left alone. */
+  armBackgroundWait?: (dispatchId: string) => void
+  /** A terminal worker resuming after the restart reports for itself once it runs again. */
+  resuming?: (dispatchId: string) => boolean
   /** Opens a chat so its status is read from its journal; null when this host runs no chats. */
   chats: {
     /** Only these chats were cut by the run that just ended; no other worker chat is opened. */
@@ -189,13 +195,17 @@ export async function reportWorkerStopsAcrossRestart(
   for (const dispatchId of openDispatchIds(db)) {
     // Re-read: an earlier report, a worker's own report or the terminal sweep may have closed it.
     const dispatch = db.getDispatchContextById(dispatchId)
-    if (
-      !dispatch ||
-      (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
-      // Its brief may not have reached the worker yet, as the live report waits out too; a stop its
-      // coordinator asked for is no news.
-      isWorkerStartOrStopUndecided(db.getWorkerDispatch(dispatchId)?.state)
-    ) {
+    if (!dispatch || (dispatch.status !== 'pending' && dispatch.status !== 'dispatched')) {
+      continue
+    }
+    const state = db.getWorkerDispatch(dispatchId)?.state
+    // No receipt outlives a restart: a start still undecided is decided now, as its live report would be.
+    if (state === 'starting' || state === 'start_unknown') {
+      visit(dispatchId, () => deps.reportUnconfirmedStart(dispatchId))
+      continue
+    }
+    // A stop its coordinator asked for is no news, nor is a worker resuming after the restart.
+    if (isWorkerStartOrStopUndecided(state) || deps.resuming?.(dispatchId)) {
       continue
     }
     const sessionId = dispatch.assignee_orca_session_id
@@ -220,6 +230,10 @@ export async function reportWorkerStopsAcrossRestart(
   }
   // No wait for mail outlives a restart, so none holds back a rest any more.
   for (const dispatchId of listUndecidedWorkerRests(db)) {
+    if (deps.resuming?.(dispatchId)) {
+      continue
+    }
+    deps.armBackgroundWait?.(dispatchId)
     const session = db.getDispatchContextById(dispatchId)?.assignee_orca_session_id
     if (!session || (awaitingDecision && !awaitingDecision.has(session))) {
       visit(dispatchId, () => void reconsiderWorkerRest(db, dispatchId, deps.reportDeps))

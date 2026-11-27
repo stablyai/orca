@@ -68,8 +68,6 @@ export type WorktreeRowView = WorktreeHostContextView & {
   botChat?: MobileBotChatRowFacts
   /** A chat's worker paging row ("Show 8 more workers · Show fewer"), drawn over its bot's home row. */
   botChatPaging?: MobileBotChatPagingFacts
-  /** Holds a bot's place until its first chats read lands, so its rows don't swap under you. */
-  botChatLoading?: true
   /** A bot worker's workspace under its chat, drawn as one line. */
   botChatLine?: MobileBotChatLineFacts
   /** Drawn faded, as a paused bot and its workspaces are. */
@@ -116,14 +114,16 @@ export type Section = {
   botCount?: number
   /** Quiet lines after a Bots list's last row, e.g. a computer too old to list its bots. */
   endLines?: BotsListEndLine[]
+  /** Each listed bot's state, which the folded header sums up. */
   botPreview?: {
-    id: string
-    name: string
-    avatar: MobileBotRowFacts['avatar']
     status: WorktreeStatus
     unread: boolean
     paused: boolean
     attention?: boolean
+    needs: {
+      line: Pick<MobileBotRowFacts['line'], 'workers' | 'itemsNeedingYou'>
+      agents: NonNullable<Worktree['agents']>
+    }
   }[]
   data: WorkspaceListItem[]
 }

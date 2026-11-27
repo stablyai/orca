@@ -1,11 +1,11 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import {
-  clearSidebarFilters,
   selectSidebarFilterState,
   sidebarHasActiveFilters,
   sidebarWorkspaceRowFilters
 } from '../controls/sidebar-filter-actions'
+import { clearSidebarFiltersKeepingActiveRow } from '../controls/sleeping-workspaces-visibility'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
 import {
@@ -138,15 +138,10 @@ export function useSidebarWorktreeFilters() {
     }
   }, [])
 
-  const clearFilters = useCallback(
-    () => clearSidebarFilters(filterState, useAppStore.getState()),
-    [filterState]
-  )
-
   return {
     filterState,
     hasFilters: sidebarHasActiveFilters(filterState),
-    clearFilters,
+    clearFilters: clearSidebarFiltersKeepingActiveRow,
     revealWorkspaceFilters
   }
 }

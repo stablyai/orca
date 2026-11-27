@@ -5,7 +5,6 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type {
   DashboardCard,
-  DashboardWorkspace,
   DashboardSnapshot
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -17,6 +16,7 @@ import { getTranslationScope } from '@/i18n/i18n'
 import type { ActiveDashboardWorkspace } from './dashboard-snapshot-workspaces'
 
 export type DashboardWorkspaceBuild = {
+  start: number
   rows: Map<
     string,
     {
@@ -28,7 +28,6 @@ export type DashboardWorkspaceBuild = {
   >
   cards: DashboardCard[]
   context: DashboardCardContext | undefined
-  workspace: DashboardWorkspace | undefined
 }
 
 export type DashboardSnapshotReuse = {
@@ -40,6 +39,7 @@ export type DashboardSnapshotReuse = {
   workspacesById: Map<string, ActiveDashboardWorkspace[]>
   owners: Map<string, Set<string>>
   filterOptions: DashboardSnapshot['filterOptions']
+  snapshot?: DashboardSnapshot
 }
 
 export function createDashboardSnapshotReuse(): DashboardSnapshotReuse {
@@ -65,6 +65,7 @@ export function dashboardSnapshotReuseInputs(state: DashboardSnapshotInput): unk
     state.unifiedTabsByWorktree,
     state.migrationUnsupportedByPtyId,
     state.runtimeAgentOrchestrationByPaneKey,
+    state.remoteAgentOrchestrationByHost,
     state.terminalLayoutsByTabId,
     state.ptyIdsByTabId,
     state.runtimePaneTitlesByTabId,

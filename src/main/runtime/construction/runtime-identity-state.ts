@@ -59,9 +59,8 @@ import {
   type TerminalSpawnCommit
 } from '../terminal/lifecycle/terminal-run-facts'
 import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
-import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint'
+import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint-record'
 import {
-  TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS
 } from '../terminal/wait/terminal-idle-policy'
@@ -91,7 +90,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     return `${tabId}::${leafId}`
   }
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
-  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
 
@@ -354,7 +352,10 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
-    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
+    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId),
+    hasEmptyInputComposer: (ptyId) =>
+      this.readCaughtUpComposerTypedText(ptyId) === '' && !this.isPtyAwaitingUserInput(ptyId),
+    readScreenClearingBlockedTail: (ptyId) => this.readScreenClearingBlockedTailForPty(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
@@ -377,7 +378,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
   protected readonly terminalWait = new RuntimeTerminalWaitController(
     {
       ...this.tuiIdleEvidenceSource,
-      defaultTimeoutMs: TUI_IDLE_DEFAULT_TIMEOUT_MS,
       getTerminalPty: (handle, condition) =>
         condition === 'exit'
           ? this.getExitWaitPtyForHandle(handle)
@@ -392,6 +392,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     this.terminalIdlePolls
   )
 
+  protected ptyControllerGeneration = 0
   protected ptyController: RuntimePtyController | null = null
 
   protected readonly ptyLivenessVerdictByPtyId = new Map<

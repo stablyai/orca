@@ -6,9 +6,10 @@ import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
 import type { ProjectGroupImportResult } from '../../../shared/project/groups/project-group-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
-import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
+import { inspectGitRepoAccessAsync } from '../../git/repositories/discovery/repo-detection'
 import { getRepoName } from '../../git/repositories/repository-name'
 import {
   createNestedProjectGroupResolver,
@@ -61,7 +62,11 @@ export function registerNestedRepoImportHandler(
         mode: args.mode,
         connectionId: args.connectionId ?? null,
         repoPaths: selection.selectedPaths,
-        createGroup: (input) => store.createProjectGroup(input)
+        existingGroups: store.getProjectGroups(),
+        existingRepos: store.getRepos(),
+        createGroup: (input) => store.createProjectGroup(input),
+        renameGroup: (groupId, name) => store.updateProjectGroup(groupId, { name }),
+        reparentGroups: (moves) => store.setProjectGroupParents(moves)
       })
       const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
         (repoPath) => ({
@@ -75,7 +80,7 @@ export function registerNestedRepoImportHandler(
       const importTargetResolver = createNestedRepoImportTargetResolver()
 
       const acceptedRepos: Repo[] = []
-      for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
+      for (const repoPath of selection.selectedPaths) {
         try {
           // This process cannot validate SSH paths with local Git.
           if (args.connectionId) {
@@ -88,7 +93,12 @@ export function registerNestedRepoImportHandler(
             continue
           }
           await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-          if (!(await isGitRepoAsync(repoPath))) {
+          const gitAccess = await inspectGitRepoAccessAsync(repoPath)
+          if (gitAccess.ownershipError) {
+            results.push({ path: repoPath, status: 'failed', error: gitAccess.ownershipError })
+            continue
+          }
+          if (!gitAccess.isRepo) {
             results.push({
               path: repoPath,
               status: 'failed',
@@ -126,8 +136,9 @@ export function registerNestedRepoImportHandler(
           )
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
-            if (group) {
-              store.moveProjectToGroup(existing, group.id, projectGroupOrder)
+            // A rescan can reuse the group, so keep its members' order and append the rest.
+            if (group && existing.projectGroupId !== group.id) {
+              store.moveProjectToGroup(existing, group.id)
             }
             importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
@@ -151,7 +162,7 @@ export function registerNestedRepoImportHandler(
             ...(group
               ? {
                   projectGroupId: group.id,
-                  projectGroupOrder
+                  projectGroupOrder: getNextProjectGroupOrder(store.getRepos(), group.id)
                 }
               : {})
           }
@@ -179,6 +190,8 @@ export function registerNestedRepoImportHandler(
         for (const group of groupResolver.getCreatedGroups().toReversed()) {
           store.deleteProjectGroup(group.id)
         }
+      } else {
+        groupResolver.applyReusedGroupChanges()
       }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
