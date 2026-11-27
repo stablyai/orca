@@ -27,11 +27,12 @@ const NamedWorkspace = lazyZodSchema(() =>
   })
 )
 
-/** The workspace a call names: `worktree`, or a launch `target`'s (a target that makes a new
- *  workspace names one too); null when it names none and the host's window would pick it. */
-function namedWorktree(params: unknown): string | 'new' | null {
+/** The workspace a call names: `worktree`, or a launch `target`'s. A target that makes a new
+ *  workspace names it too (`new`); `none` leaves the host's window to pick one. */
+function namedWorktree(params: unknown): { worktree: string } | 'new' | 'none' {
   const named = NamedWorkspace.safeParse(params).data
-  return named?.worktree ?? named?.target?.worktree ?? (named?.target ? 'new' : null)
+  const worktree = named?.worktree ?? named?.target?.worktree
+  return worktree !== undefined ? { worktree } : named?.target ? 'new' : 'none'
 }
 
 /** Rule 4: in their own Home a teammate's list holds their chats, so nothing they call opens, moves or
@@ -48,7 +49,8 @@ async function writesHostTabsInOwnHome(
   }
   const named = namedWorktree(params)
   return (
-    named === null || (named !== 'new' && (await context.runtime.namesTeammateHome(named, scope)))
+    named === 'none' ||
+    (named !== 'new' && (await context.runtime.namesTeammateHome(named.worktree, scope)))
   )
 }
 
