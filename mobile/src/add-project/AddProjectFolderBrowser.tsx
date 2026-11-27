@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { ChevronLeft, CornerLeftUp, Folder } from 'lucide-react-native'
 import { joinCreateProjectPath } from '../../../src/shared/create-project-location'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { hostDirectoryBrowse, type AddProjectRpcSender } from './add-project-operations'
 import type { HostDirectoryListing } from './add-project-reply-schema'
-import { addProjectStyles } from './add-project-styles'
+import { addProjectStylesSheet } from './add-project-styles'
 
 type Props = {
   client: AddProjectRpcSender
@@ -18,6 +20,9 @@ type Props = {
 
 export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, onBack }: Props) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(browserStylesSheet)
+  const addProjectStyles = useThemedStyles(addProjectStylesSheet)
   const [listing, setListing] = useState<HostDirectoryListing | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -134,7 +139,7 @@ export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, 
   )
 }
 
-const styles = StyleSheet.create({
+const browserStylesSheet = themedStyleSheet((colors) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -175,4 +180,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     padding: spacing.md
   }
-})
+}))

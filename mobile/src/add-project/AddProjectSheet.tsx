@@ -13,7 +13,8 @@ import {
   type BrowseTarget
 } from './AddProjectForms'
 import type { AddedProject } from './add-project-reply-schema'
-import { addProjectStyles as styles } from './add-project-styles'
+import { useThemedStyles } from '../theme/themed-styles'
+import { addProjectStylesSheet } from './add-project-styles'
 import { useAddProjectFlow } from './use-add-project-flow'
 
 type Props = {
@@ -33,6 +34,7 @@ export function AddProjectSheet({
   onProjectAdded
 }: Props) {
   const t = useMobileTranslation()
+  const styles = useThemedStyles(addProjectStylesSheet)
   const flow = useAddProjectFlow({ client, visible, onProjectAdded })
   const [browsing, setBrowsing] = useState<BrowseTarget | null>(null)
   const afterCloseRef = useRef<(() => void) | null>(null)

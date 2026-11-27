@@ -1,9 +1,10 @@
-import { Platform, StyleSheet } from 'react-native'
+import { Platform } from 'react-native'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input/text-input-font-size'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
 // Field and button treatments follow TextInputModal so Add project reads like the app's other sheets.
-export const addProjectStyles = StyleSheet.create({
+export const addProjectStylesSheet = themedStyleSheet((colors) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -100,4 +101,4 @@ export const addProjectStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

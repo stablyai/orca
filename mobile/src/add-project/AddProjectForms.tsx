@@ -3,8 +3,9 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-nativ
 import { ChevronLeft, FolderOpen } from 'lucide-react-native'
 import { joinCreateProjectPath } from '../../../src/shared/create-project-location'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
-import { addProjectStyles as styles } from './add-project-styles'
+import { useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { addProjectStylesSheet } from './add-project-styles'
 import type { AddProjectFlow } from './use-add-project-flow'
 
 export type BrowseTarget = 'parent' | 'existing'
@@ -17,6 +18,8 @@ type FormProps = {
 
 export function CreateProjectForm({ flow, onBack, onBrowse }: FormProps) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(addProjectStylesSheet)
   const name = flow.name.trim()
   return (
     <FormFrame
@@ -61,6 +64,8 @@ export function CreateProjectForm({ flow, onBack, onBrowse }: FormProps) {
 
 export function CloneProjectForm({ flow, onBack, onBrowse }: FormProps) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(addProjectStylesSheet)
   return (
     <FormFrame
       title={t('addProject.forms.cloneRepository', 'Clone repository')}
@@ -96,6 +101,8 @@ export function CloneProjectForm({ flow, onBack, onBrowse }: FormProps) {
 
 export function ExistingProjectForm({ flow, onBack, onBrowse }: FormProps) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(addProjectStylesSheet)
   const canSubmit = flow.existingPath.trim().length > 0 && !flow.busy
   return (
     <FormFrame
@@ -154,6 +161,8 @@ export function ExistingProjectForm({ flow, onBack, onBrowse }: FormProps) {
 
 function ParentField({ flow, onBrowse }: Pick<FormProps, 'flow' | 'onBrowse'>) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(addProjectStylesSheet)
   return (
     <>
       <Text style={styles.label}>{t('addProject.forms.locationOnHost', 'Location on host')}</Text>
@@ -177,6 +186,8 @@ function ParentField({ flow, onBrowse }: Pick<FormProps, 'flow' | 'onBrowse'>) {
 
 function BrowseButton({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(addProjectStylesSheet)
   return (
     <Pressable
       style={({ pressed }) => [styles.browseButton, pressed && styles.buttonPressed]}
@@ -202,6 +213,8 @@ function FormFrame(props: {
   onSubmit?: () => void
 }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(addProjectStylesSheet)
   const { flow, onSubmit } = props
   const enabled = props.canSubmit === true && !flow?.busy
   return (
