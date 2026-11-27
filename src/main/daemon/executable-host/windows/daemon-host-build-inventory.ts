@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { readdir, stat, writeFile } from 'node:fs/promises'
 import { join, win32 as winPath } from 'node:path'
-import { hashDaemonHostFile } from './daemon-host-file-hash-cache'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { hashDaemonHostFile, hashDaemonHostFileAsync } from './daemon-host-file-hash-cache'
 import {
   buildDaemonHostManifest,
   daemonHostExeName,
@@ -38,13 +40,29 @@ function fingerprintInventory(inventory: Omit<DaemonHostBuildInventory, 'fingerp
   return createHash('sha256').update(JSON.stringify(inventory)).digest('hex')
 }
 
-function collectCodeFiles(sourcePath: string, destRel: string): DaemonHostBuildFile[] {
+// Bound open handles; Defender scans each opened file.
+const HASH_CONCURRENCY = 8
+
+type CodeFileSource = { sourcePath: string; destRel: string }
+
+function listCodeFiles(sourcePath: string, destRel: string): CodeFileSource[] {
   if (statSync(sourcePath).isFile()) {
-    return [{ path: destRel, sha256: hashDaemonHostFile(sourcePath) }]
+    return [{ sourcePath, destRel }]
   }
   return readdirSync(sourcePath)
     .sort()
-    .flatMap((name) => collectCodeFiles(join(sourcePath, name), `${destRel}/${name}`))
+    .flatMap((name) => listCodeFiles(join(sourcePath, name), `${destRel}/${name}`))
+}
+
+async function listCodeFilesAsync(sourcePath: string, destRel: string): Promise<CodeFileSource[]> {
+  if ((await stat(sourcePath)).isFile()) {
+    return [{ sourcePath, destRel }]
+  }
+  const names = (await readdir(sourcePath)).sort()
+  const nested = await mapWithConcurrency(names, HASH_CONCURRENCY, (name) =>
+    listCodeFilesAsync(join(sourcePath, name), `${destRel}/${name}`)
+  )
+  return nested.flat()
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -86,48 +104,90 @@ function processHostExportsExist(packageDir: string): boolean {
   )
 }
 
+/** Code roots the fingerprint covers; null when the install cannot host a relocated daemon. */
+function inventoryRoots(sources: DaemonHostSources): CodeFileSource[] | null {
+  if (buildDaemonHostManifest(sources).some((op) => !op.optional && !existsSync(op.sourcePath))) {
+    return null
+  }
+  const processHostDir = daemonHostProcessPackageDir(sources)
+  if (!processHostExportsExist(processHostDir)) {
+    return null
+  }
+  const roots: CodeFileSource[] = [
+    { sourcePath: sources.entrySourcePath, destRel: sources.entryRelPath }
+  ]
+  const chunksDir = join(winPath.dirname(sources.entrySourcePath), 'chunks')
+  const outManifest = join(sources.resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
+  for (const optional of [chunksDir, outManifest]) {
+    if (existsSync(optional)) {
+      roots.push({ sourcePath: optional, destRel: toPosixRelative(sources.appDir, optional) })
+    }
+  }
+  const packageRel = toPosixRelative(sources.appDir, processHostDir)
+  roots.push(
+    { sourcePath: join(processHostDir, 'package.json'), destRel: `${packageRel}/package.json` },
+    { sourcePath: join(processHostDir, 'dist'), destRel: `${packageRel}/dist` }
+  )
+  const registryDir = daemonHostWindowsRegistryDir(sources)
+  const registryRel = toPosixRelative(sources.appDir, registryDir)
+  for (const relative of WINDOWS_REGISTRY_REQUIRED) {
+    roots.push({
+      sourcePath: destPath(registryDir, relative),
+      destRel: `${registryRel}/${relative}`
+    })
+  }
+  return roots
+}
+
+function inventoryFromFiles(
+  sources: DaemonHostSources,
+  files: DaemonHostBuildFile[]
+): DaemonHostBuildInventory {
+  files.sort((left, right) => left.path.localeCompare(right.path, 'en'))
+  const inventory = {
+    runtimeVersion: runtimeVersion(),
+    executableName: daemonHostExeName(sources.execPath),
+    entryRelPath: sources.entryRelPath,
+    files
+  }
+  return { fingerprint: fingerprintInventory(inventory), ...inventory }
+}
+
 /** Fingerprint code and layout without hashing the large Electron executable. */
 export function collectDaemonHostBuildInventory(
   sources: DaemonHostSources
 ): DaemonHostBuildInventory | null {
   try {
-    if (buildDaemonHostManifest(sources).some((op) => !op.optional && !existsSync(op.sourcePath))) {
+    const roots = inventoryRoots(sources)
+    if (!roots) {
       return null
     }
-    const processHostDir = daemonHostProcessPackageDir(sources)
-    if (!processHostExportsExist(processHostDir)) {
+    const files = roots
+      .flatMap((root) => listCodeFiles(root.sourcePath, root.destRel))
+      .map((file) => ({ path: file.destRel, sha256: hashDaemonHostFile(file.sourcePath) }))
+    return inventoryFromFiles(sources, files)
+  } catch {
+    return null
+  }
+}
+
+/** Same inventory as collectDaemonHostBuildInventory, read and hashed off the event loop. */
+export async function collectDaemonHostBuildInventoryAsync(
+  sources: DaemonHostSources
+): Promise<DaemonHostBuildInventory | null> {
+  try {
+    const roots = inventoryRoots(sources)
+    if (!roots) {
       return null
     }
-    const files = collectCodeFiles(sources.entrySourcePath, sources.entryRelPath)
-    const chunksDir = join(winPath.dirname(sources.entrySourcePath), 'chunks')
-    if (existsSync(chunksDir)) {
-      files.push(...collectCodeFiles(chunksDir, toPosixRelative(sources.appDir, chunksDir)))
-    }
-    const outManifest = join(sources.resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
-    if (existsSync(outManifest)) {
-      files.push(...collectCodeFiles(outManifest, toPosixRelative(sources.appDir, outManifest)))
-    }
-    const packageRel = toPosixRelative(sources.appDir, processHostDir)
-    files.push(
-      ...collectCodeFiles(join(processHostDir, 'package.json'), `${packageRel}/package.json`)
+    const listed = await mapWithConcurrency(roots, HASH_CONCURRENCY, (root) =>
+      listCodeFilesAsync(root.sourcePath, root.destRel)
     )
-    files.push(...collectCodeFiles(join(processHostDir, 'dist'), `${packageRel}/dist`))
-    const registryDir = daemonHostWindowsRegistryDir(sources)
-    const registryRel = toPosixRelative(sources.appDir, registryDir)
-    for (const relative of WINDOWS_REGISTRY_REQUIRED) {
-      files.push({
-        path: `${registryRel}/${relative}`,
-        sha256: hashDaemonHostFile(destPath(registryDir, relative))
-      })
-    }
-    files.sort((left, right) => left.path.localeCompare(right.path, 'en'))
-    const inventory = {
-      runtimeVersion: runtimeVersion(),
-      executableName: daemonHostExeName(sources.execPath),
-      entryRelPath: sources.entryRelPath,
-      files
-    }
-    return { fingerprint: fingerprintInventory(inventory), ...inventory }
+    const files = await mapWithConcurrency(listed.flat(), HASH_CONCURRENCY, async (file) => ({
+      path: file.destRel,
+      sha256: await hashDaemonHostFileAsync(file.sourcePath)
+    }))
+    return inventoryFromFiles(sources, files)
   } catch {
     return null
   }
@@ -192,6 +252,20 @@ export function daemonHostBuildInventoryMatches(
   }
 }
 
+export async function daemonHostBuildInventoryMatchesAsync(
+  root: string,
+  inventory: DaemonHostBuildInventory
+): Promise<boolean> {
+  try {
+    const hashes = await mapWithConcurrency(inventory.files, HASH_CONCURRENCY, (file) =>
+      hashDaemonHostFileAsync(destPath(root, file.path))
+    )
+    return hashes.every((sha256, index) => sha256 === inventory.files[index].sha256)
+  } catch {
+    return false
+  }
+}
+
 export function daemonHostBuildRuntimeMatches(
   inventory: DaemonHostBuildInventory,
   sources: DaemonHostSources
@@ -215,12 +289,12 @@ export function daemonHostBuildRuntimeMatches(
   )
 }
 
-export function writeDaemonHostBuildMarker(
+export async function writeDaemonHostBuildMarker(
   root: string,
   version: string,
   inventory: DaemonHostBuildInventory
-): void {
-  if (!daemonHostBuildInventoryMatches(root, inventory)) {
+): Promise<void> {
+  if (!(await daemonHostBuildInventoryMatchesAsync(root, inventory))) {
     throw new Error('daemon-host relocation: code changed while copying')
   }
   const marker: DaemonHostBuildMarker = {
@@ -228,5 +302,5 @@ export function writeDaemonHostBuildMarker(
     version,
     completedAt: new Date().toISOString()
   }
-  writeFileSync(join(root, DAEMON_HOST_MARKER_NAME), JSON.stringify(marker))
+  await writeFile(join(root, DAEMON_HOST_MARKER_NAME), JSON.stringify(marker))
 }

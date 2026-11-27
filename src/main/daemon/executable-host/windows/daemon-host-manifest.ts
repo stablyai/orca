@@ -1,4 +1,5 @@
-import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
+import { cp, mkdir } from 'node:fs/promises'
 import { dirname, join, win32 as winPath } from 'node:path'
 
 /** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
@@ -185,23 +186,30 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   return ops
 }
 
-export function executeManifest(ops: CopyOp[], stagingRoot: string): void {
-  for (const op of ops) {
-    if (!existsSync(op.sourcePath)) {
-      if (op.optional) {
-        continue
-      }
-      throw new Error(`daemon-host relocation: missing required input ${op.sourcePath}`)
-    }
-    const dest = destPath(stagingRoot, op.destRel)
-    mkdirSync(dirname(dest), { recursive: true })
-    const { filter } = op
-    // Dereference links so the mirror survives removal of the install directory.
-    cpSync(op.sourcePath, dest, {
-      recursive: op.kind === 'dir',
-      dereference: true,
-      force: true,
-      ...(filter ? { filter: (src: string) => filter(src) } : {})
+/** Copy through libuv so the 1.7k-file, ~275 MiB runtime never blocks Electron main. */
+export async function executeManifest(ops: CopyOp[], stagingRoot: string): Promise<void> {
+  const present = ops.filter((op) => existsSync(op.sourcePath))
+  const missing = ops.find((op) => !op.optional && !present.includes(op))
+  if (missing) {
+    throw new Error(`daemon-host relocation: missing required input ${missing.sourcePath}`)
+  }
+  // Settle every copy before failing so staging cleanup cannot race a copy still writing into it.
+  const results = await Promise.allSettled(
+    present.map(async (op) => {
+      const dest = destPath(stagingRoot, op.destRel)
+      await mkdir(dirname(dest), { recursive: true })
+      const { filter } = op
+      // Dereference links so the mirror survives removal of the install directory.
+      await cp(op.sourcePath, dest, {
+        recursive: op.kind === 'dir',
+        dereference: true,
+        force: true,
+        ...(filter ? { filter: (src: string) => filter(src) } : {})
+      })
     })
+  )
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure) {
+    throw failure.reason
   }
 }

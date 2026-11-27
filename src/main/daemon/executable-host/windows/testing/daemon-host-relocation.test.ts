@@ -34,8 +34,8 @@ function installHostApp(): void {
   })
 }
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
+import { collectPinnedDaemonVersions } from '../daemon-host-pinned-versions'
 import {
-  collectPinnedDaemonVersions,
   getDaemonHostRootDir,
   getRelocatedDaemonHost,
   materializeRelocatedDaemonHost,
@@ -110,8 +110,8 @@ afterEach(() => {
 })
 
 describe('materializeRelocatedDaemonHost', () => {
-  it('rematerializes a host whose copied addon went missing', () => {
-    materializeRelocatedDaemonHost()
+  it('rematerializes a host whose copied addon went missing', async () => {
+    await materializeRelocatedDaemonHost()
     const dest = relocatedHostRoot()
     const relocatedAddon = join(dest, PROCESS_TREE_ADDON_REL)
 
@@ -119,7 +119,7 @@ describe('materializeRelocatedDaemonHost', () => {
     const sentinel = join(dest, 'sentinel.txt')
     writeFileSync(sentinel, 'keep')
 
-    const rebuilt = materializeRelocatedDaemonHost()
+    const rebuilt = await materializeRelocatedDaemonHost()
     expect(rebuilt).not.toBeNull()
     expect(dirname(rebuilt!.execPath)).not.toBe(dest)
     expect(readFileSync(join(dirname(rebuilt!.execPath), PROCESS_TREE_ADDON_REL), 'utf8')).toBe(
@@ -128,20 +128,20 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(existsSync(sentinel)).toBe(true)
   })
 
-  it('refuses to copy anything when the install lost the process-tree binary', () => {
+  it('refuses to copy anything when the install lost the process-tree binary', async () => {
     // Validate missing sources before an expensive copy that the mirror check would reject.
     rmSync(join(installDir, PROCESS_TREE_ADDON_REL))
 
-    expect(materializeRelocatedDaemonHost()).toBeNull()
+    expect(await materializeRelocatedDaemonHost()).toBeNull()
     expect(existsSync(getDaemonHostRootDir())).toBe(false)
   })
 
-  it('fails open on a missing required input, leaving no dest or staging dir', () => {
+  it('fails open on a missing required input, leaving no dest or staging dir', async () => {
     rmSync(join(installDir, 'resources', 'node_modules', 'node-pty'), {
       recursive: true,
       force: true
     })
-    const result = materializeRelocatedDaemonHost()
+    const result = await materializeRelocatedDaemonHost()
     expect(result).toBeNull()
     const hostRoot = getDaemonHostRootDir()
     const remaining = existsSync(hostRoot) ? readdirSync(hostRoot) : []

@@ -193,7 +193,7 @@ export function createOutOfProcessLauncher(
         return macHandle
       }
       // Lazily stage the Windows host outside the NSIS updater's kill zone; null falls back to the installed host.
-      const relocatedHost = materializeRelocatedDaemonHost()
+      const relocatedHost = await materializeRelocatedDaemonHost()
       pruneDaemonHostStaging()
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
       if (generation && 'fallback' in generation) {

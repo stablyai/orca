@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
+import { mkdir, rename, rm } from 'node:fs/promises'
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import {
@@ -13,23 +14,20 @@ import {
 } from './daemon-host-manifest'
 import {
   collectDaemonHostBuildInventory,
+  collectDaemonHostBuildInventoryAsync,
   daemonHostBuildInventoryMatches,
+  daemonHostBuildInventoryMatchesAsync,
   daemonHostBuildRuntimeMatches,
   readDaemonHostBuildMarker,
-  writeDaemonHostBuildMarker
+  writeDaemonHostBuildMarker,
+  type DaemonHostBuildMarker
 } from './daemon-host-build-inventory'
-import type { ProcessLivenessVerdict } from '../../endpoint/identity/daemon-incarnation-evidence-types'
 import {
   daemonHostStagingName,
   reclaimAbandonedDaemonHostStaging,
   reclaimUnownedDaemonHostDir
 } from './daemon-host-reclaim'
-import { parseDaemonPidFile } from '../../endpoint/identity/daemon-pid-file-parse'
-import { quarantineCorruptDaemonPidRecord } from '../../endpoint/identity/daemon-pid-record-quarantine'
-import {
-  inspectProcessLiveness,
-  mergeProcessLivenessVerdict
-} from '../../endpoint/identity/daemon-process-inspection'
+import type { PinnedDaemonVersionsEvidence } from './daemon-host-pinned-versions'
 
 // Copy the Electron runtime outside NSIS's install-directory kill zone; failures fall back to the install runtime.
 
@@ -161,12 +159,18 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   )
 }
 
-function findRelocatedDaemonHost(
+type RelocatedBuildCandidate = RelocatedDaemonHost & {
+  dest: string
+  marker: DaemonHostBuildMarker
+}
+
+// Newest-first builds whose marker matches this runtime; callers still verify copied bytes.
+function relocatedBuildCandidates(
   sources: DaemonHostSources,
   fingerprint: string | null
-): RelocatedDaemonHost | null {
+): RelocatedBuildCandidate[] {
   if (fingerprint === null) {
-    return null
+    return []
   }
   const version = getAppEnvironment().getVersion()
   const versionRoot = join(getDaemonHostRootDir(), version)
@@ -174,9 +178,9 @@ function findRelocatedDaemonHost(
   try {
     builds = readdirSync(versionRoot, { withFileTypes: true })
   } catch {
-    return null
+    return []
   }
-  const candidates = builds
+  return builds
     .filter((entry) => entry.isDirectory() && entry.name.startsWith('build-'))
     .map((entry) => ({
       dest: join(versionRoot, entry.name),
@@ -185,39 +189,83 @@ function findRelocatedDaemonHost(
     .sort((left, right) =>
       (right.marker?.completedAt ?? '').localeCompare(left.marker?.completedAt ?? '')
     )
-  for (const { dest, marker } of candidates) {
+    .flatMap(({ dest, marker }) =>
+      marker &&
+      daemonHostFitsPathBudget(sources, dest) &&
+      marker.version === version &&
+      daemonHostBuildRuntimeMatches(marker, sources) &&
+      marker.fingerprint === fingerprint
+        ? [
+            {
+              dest,
+              marker,
+              execPath: join(dest, marker.executableName),
+              entryPath: destPath(dest, marker.entryRelPath)
+            }
+          ]
+        : []
+    )
+}
+
+function candidateFilesPresent(
+  sources: DaemonHostSources,
+  candidate: RelocatedBuildCandidate
+): boolean {
+  return (
+    existsSync(candidate.execPath) &&
+    existsSync(candidate.entryPath) &&
+    !missingProcessTreeFiles(destPath(candidate.dest, processTreeRelDir(sources)))
+  )
+}
+
+function findRelocatedDaemonHost(
+  sources: DaemonHostSources,
+  fingerprint: string | null
+): RelocatedDaemonHost | null {
+  for (const candidate of relocatedBuildCandidates(sources, fingerprint)) {
     if (
-      !marker ||
-      !daemonHostFitsPathBudget(sources, dest) ||
-      marker.version !== version ||
-      !daemonHostBuildRuntimeMatches(marker, sources) ||
-      marker.fingerprint !== fingerprint ||
-      !daemonHostBuildInventoryMatches(dest, marker)
+      daemonHostBuildInventoryMatches(candidate.dest, candidate.marker) &&
+      candidateFilesPresent(sources, candidate)
     ) {
-      continue
+      return { execPath: candidate.execPath, entryPath: candidate.entryPath }
     }
-    const execPath = join(dest, marker.executableName)
-    const entryPath = destPath(dest, marker.entryRelPath)
-    if (
-      !existsSync(execPath) ||
-      !existsSync(entryPath) ||
-      missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))
-    ) {
-      continue
-    }
-    return { execPath, entryPath }
   }
   return null
 }
 
-/** Publish a complete immutable copy by rename; return null so callers can fall back on failure. */
-export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
+async function findRelocatedDaemonHostAsync(
+  sources: DaemonHostSources,
+  fingerprint: string | null
+): Promise<RelocatedDaemonHost | null> {
+  for (const candidate of relocatedBuildCandidates(sources, fingerprint)) {
+    if (
+      (await daemonHostBuildInventoryMatchesAsync(candidate.dest, candidate.marker)) &&
+      candidateFilesPresent(sources, candidate)
+    ) {
+      return { execPath: candidate.execPath, entryPath: candidate.entryPath }
+    }
+  }
+  return null
+}
+
+let inFlightMaterialization: Promise<RelocatedDaemonHost | null> | null = null
+
+/** Publish a complete immutable copy by rename off the event loop; null lets callers fall back. */
+export function materializeRelocatedDaemonHost(): Promise<RelocatedDaemonHost | null> {
+  // Concurrent launches share one copy instead of racing two staging trees.
+  inFlightMaterialization ??= materializeOnce().finally(() => {
+    inFlightMaterialization = null
+  })
+  return inFlightMaterialization
+}
+
+async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
   const sources = collectDaemonHostSources()
   if (!sources) {
     return null
   }
-  const inventory = collectDaemonHostBuildInventory(sources)
-  const existing = findRelocatedDaemonHost(
+  const inventory = await collectDaemonHostBuildInventoryAsync(sources)
+  const existing = await findRelocatedDaemonHostAsync(
     sources,
     currentBuildFingerprint(sources, inventory?.fingerprint ?? null)
   )
@@ -240,68 +288,18 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   }
   const staging = join(versionRoot, daemonHostStagingName(process.pid, nonce))
   try {
-    mkdirSync(versionRoot, { recursive: true })
-    executeManifest(buildDaemonHostManifest(sources), staging)
-    writeDaemonHostBuildMarker(staging, version, inventory)
+    await mkdir(versionRoot, { recursive: true })
+    await executeManifest(buildDaemonHostManifest(sources), staging)
+    await writeDaemonHostBuildMarker(staging, version, inventory)
     // Publish a new immutable build; a same-version daemon may still load files from an older mirror.
-    renameSync(staging, dest)
+    await rename(staging, dest)
   } catch {
-    try {
-      rmSync(staging, { recursive: true, force: true })
-    } catch {
-      // Best-effort staging cleanup.
-    }
+    await rm(staging, { recursive: true, force: true }).catch(() => {
+      // Best-effort staging cleanup; a later launch reclaims it once this pid exits.
+    })
     return null
   }
-  return findRelocatedDaemonHost(sources, inventory.fingerprint)
-}
-
-export type PinnedDaemonVersionsEvidence =
-  | { status: 'complete'; versionLiveness: ReadonlyMap<string, ProcessLivenessVerdict> }
-  | { status: 'unverifiable'; reason: string }
-
-/** Pin versions conservatively by PID liveness; unreadable records veto pruning. */
-export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVersionsEvidence {
-  const versionLiveness = new Map<string, ProcessLivenessVerdict>()
-  let entries
-  try {
-    entries = readdirSync(runtimeDir, { withFileTypes: true })
-  } catch {
-    return { status: 'unverifiable', reason: 'the daemon runtime directory could not be read' }
-  }
-  for (const entry of entries) {
-    if (!entry.isFile() || !/^daemon-v\d+\.pid$/.test(entry.name)) {
-      continue
-    }
-    let contents
-    try {
-      contents = readFileSync(join(runtimeDir, entry.name), 'utf8')
-    } catch {
-      // Read failures veto this prune; retry from the record on the next launch.
-      return {
-        status: 'unverifiable',
-        reason: `the daemon pid file could not be read: ${entry.name}`
-      }
-    }
-    const parsed = parseDaemonPidFile(contents)
-    // Records are empty during publication; a torn record must veto pruning instead of appearing legacy.
-    if (!parsed || !Number.isInteger(parsed.pid) || parsed.pid <= 0) {
-      return {
-        status: 'unverifiable',
-        reason: quarantineCorruptDaemonPidRecord(runtimeDir, entry.name, contents)
-      }
-    }
-    // Pre-relocation daemons run from the install directory and pin no relocated host.
-    if (parsed.appVersion === null) {
-      continue
-    }
-    const verdict = inspectProcessLiveness(parsed.pid)
-    versionLiveness.set(
-      parsed.appVersion,
-      mergeProcessLivenessVerdict(versionLiveness.get(parsed.appVersion), verdict)
-    )
-  }
-  return { status: 'complete', versionLiveness }
+  return findRelocatedDaemonHostAsync(sources, inventory.fingerprint)
 }
 
 export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): void {
