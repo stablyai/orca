@@ -46,11 +46,11 @@ function linuxProcessMb(pid) {
 }
 
 /**
- * Orca's Node children Electron doesn't list (the terminal daemon that hosts chat relays, the plugin host, the
- * session scanner): descendants of main or the copy's daemon running the same Electron binary, so agents,
- * shells and git are left out.
+ * Orca's own processes Electron doesn't list: Node children (the terminal daemon that hosts chat relays, the
+ * plugin host, the session scanner) running the Electron binary, and each chat's native provider supervisor.
+ * Only descendants of main or the copy's daemon count; agents, shells and git are left out.
  */
-function linuxNodeChildren(mainPid, daemonPids, listed) {
+function linuxUnlistedOrcaProcesses(mainPid, daemonPids, listed) {
   const exe = (pid) => {
     try {
       return fs.readlinkSync(`/proc/${String(pid)}/exe`)
@@ -68,24 +68,40 @@ function linuxNodeChildren(mainPid, daemonPids, listed) {
       // The command name can hold spaces and parens, so the parent pid is read after its closing paren.
       const stat = fs.readFileSync(`/proc/${entry}/stat`, 'utf8')
       const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
-      children.set(ppid, [...(children.get(ppid) ?? []), Number(entry)])
+      const siblings = children.get(ppid)
+      if (siblings) {
+        siblings.push(Number(entry))
+      } else {
+        children.set(ppid, [Number(entry)])
+      }
     } catch {}
   }
-  const found = new Set(daemonPids)
+  const kindOf = (pid) => {
+    const path = exe(pid)
+    if (path === null) {
+      return null
+    }
+    if (path === electronExe) {
+      return 'Node'
+    }
+    return path.split('/').pop().startsWith('orca-provider-exec') ? 'ProviderExec' : null
+  }
+  const found = new Map(daemonPids.map((pid) => [pid, 'Node']))
   const queue = [mainPid, ...daemonPids]
   while (queue.length > 0) {
     for (const child of children.get(queue.shift()) ?? []) {
-      if (!found.has(child) && exe(child) === electronExe) {
-        found.add(child)
+      const kind = found.has(child) ? null : kindOf(child)
+      if (kind) {
+        found.set(child, kind)
         queue.push(child)
       }
     }
   }
-  return [...found].filter((pid) => !listed.has(pid))
+  return [...found].filter(([pid]) => !listed.has(pid)).map(([pid, type]) => ({ pid, type }))
 }
 
 /**
- * Every Orca process (main, renderers, GPU, utility, and on Linux its Node children) after a GC and a
+ * Every Orca process (main, renderers, GPU, utility, and on Linux its Node children and provider supervisors) after a GC and a
  * memory-pressure signal, as the lowest total of 12 samples over a minute, with that sample's split by type.
  * A sample with an unreadable process is dropped rather than counted low.
  */
@@ -113,9 +129,7 @@ async function sampleAppMb(electronApp, page, userDataDir) {
     const processes = metrics.map(({ pid, type, workingSetKb }) => ({ pid, type, workingSetKb }))
     if (process.platform === 'linux') {
       const listed = new Set(processes.map(({ pid }) => pid))
-      for (const pid of linuxNodeChildren(mainPid, readDaemonPids(userDataDir), listed)) {
-        processes.push({ pid, type: 'Node' })
-      }
+      processes.push(...linuxUnlistedOrcaProcesses(mainPid, readDaemonPids(userDataDir), listed))
     }
     const byType = {}
     let total = 0
@@ -147,11 +161,15 @@ async function sampleAppMb(electronApp, page, userDataDir) {
   return lowest === null ? null : { ...lowest, droppedSamples: dropped }
 }
 
-/** Shows the chat's workspace and its tab, as a click in the sidebar and tab strip does. */
+/** Shows the chat's workspace and its tab, as a click in the sidebar and tab strip does; true only once it is in front. */
 async function showChat(page, { sessionId, worktreeId }) {
   return page.evaluate(
     ({ session, worktree }) => {
       const state = window.__store.getState()
+      // A seed saved on Tasks or Settings would keep every workspace hidden.
+      if (state.activeView !== 'terminal') {
+        state.setActiveView('terminal')
+      }
       if (state.activeWorktreeId !== worktree) {
         state.setActiveWorktree(worktree)
       }
@@ -164,7 +182,12 @@ async function showChat(page, { sessionId, worktreeId }) {
         return false
       }
       window.__store.getState().activateTab(tab.id, { worktreeId: worktree })
-      return true
+      const shown = window.__store.getState()
+      return (
+        shown.activeView === 'terminal' &&
+        shown.activeWorktreeId === worktree &&
+        shown.getActiveTab(worktree)?.id === tab.id
+      )
     },
     { session: sessionId, worktree: worktreeId }
   )
@@ -232,20 +255,21 @@ export async function appMemorySoakOnce({
   runDir,
   outDir,
   repoRoot,
-  options
+  options,
+  partial = { incomplete: [] }
 }) {
-  const userDataDir = path.join(runDir, 'user-data')
-  copyProfile(seedDir, userDataDir)
-  const stub = writeClaudeStub(path.join(runDir, 'stub'), repoRoot)
-  const label = `soak-${arm}-${sha.slice(0, 11)}`
-  const result = {
+  // Filled in place, so a step that throws still reports the checkpoints read before it.
+  const result = Object.assign(partial, {
     arm,
     sha,
     platform: process.platform,
     soakHours: options.soakHours,
-    checkpoints: [],
-    incomplete: []
-  }
+    checkpoints: []
+  })
+  const userDataDir = path.join(runDir, 'user-data')
+  copyProfile(seedDir, userDataDir)
+  const stub = writeClaudeStub(path.join(runDir, 'stub'), repoRoot)
+  const label = `soak-${arm}-${sha.slice(0, 11)}`
   const copy = await launchCopy({
     buildDir,
     runDir,
@@ -406,12 +430,12 @@ export async function appMemorySoakOnce({
 }
 
 /** One soak; a failed step reports INCOMPLETE instead of losing what the gate measured before it. */
-export function appMemorySoakSafe(args) {
-  return appMemorySoakOnce(args).catch((error) => ({
-    arm: args.arm,
-    soakHours: args.options.soakHours,
-    incomplete: [`soak: ${String(error?.message ?? error)}`]
-  }))
+export async function appMemorySoakSafe(args) {
+  const partial = { arm: args.arm, soakHours: args.options.soakHours, incomplete: [] }
+  return appMemorySoakOnce({ ...args, partial }).catch((error) => {
+    partial.incomplete.push(`soak: ${String(error?.message ?? error)}`)
+    return partial
+  })
 }
 
 export function appMemorySoakRows(results) {
