@@ -37,7 +37,8 @@ function sendBrief(current: QueuedMessageTestRig) {
     dispatchId: 'ctx_slow',
     preamble: 'the brief',
     from: { kind: 'agent', senders: [], orchestration: null },
-    budgetMs: 50
+    // Long enough that a loaded runner registers the held start before the brief's wait ends.
+    budgetMs: 250
   })
 }
 

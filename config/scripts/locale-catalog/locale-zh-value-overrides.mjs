@@ -187,7 +187,7 @@ export const ZH_VALUE_OVERRIDES = {
   'Start an agent for local or hosted-review merge conflicts.':
     '启动用于解决本地或托管评审合并冲突的智能体',
   'changed since you last approved. Re-review before it runs':
-    '自您上次批准以来已发生变化。运行前请重新评审',
+    '自你上次批准以来已发生变化。运行前请重新评审',
   'Run the weekly dependency audit and summarize risky changes.':
     '每周运行依赖项审计并总结有风险的更改',
   'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.':
@@ -203,10 +203,10 @@ export const ZH_VALUE_OVERRIDES = {
   'Proxy Command': '代理命令',
   "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.":
     '让智能体直接访问 Orca 的浏览器，以便测试页面、捕获屏幕截图并根据所见内容执行操作',
-  'X finishes, send it the review task.”': 'X 完成后，把评审任务发给它。”',
+  'X finishes, send it the review task.”': 'X 中的智能体完成后，把评审任务发给它”',
   'Branch naming, base refs, and Git AI Author.': '分支命名、基础引用和 Git AI Author',
   'You have unsaved Git AI Author changes. Leaving will discard them.':
-    '您有未保存的 Git AI Author 更改。离开将丢弃它们',
+    '你有未保存的 Git AI Author 更改。离开将丢弃它们',
   'Discard unsaved Git AI Author changes?': '放弃未保存的 Git AI Author 更改？',
   'Create a Linear project for the selected team.': '为所选团队创建 Linear 项目',
   'Linear task mode': 'Linear 任务模式',
@@ -235,8 +235,8 @@ export const ZH_VALUE_OVERRIDES = {
   'Countdown timer showing time until prompt cache expires (Claude agents).':
     '显示提示词缓存到期倒计时的计时器（Claude 智能体）',
   'Claude caches your conversation to reduce costs. When idle too long the cache expires and the next message resends full context at higher cost. This shows a countdown so you know when to resume.':
-    'Claude 会缓存对话以降低成本。空闲过久后缓存会过期，下一条消息将以更高成本重新发送完整上下文。此倒计时可帮助您了解何时继续',
-  'from Orca. It is still on your disk.': '来自 Orca。它仍保留在您的磁盘上',
+    'Claude 会缓存对话以降低成本。空闲过久后缓存会过期，下一条消息将以更高成本重新发送完整上下文。此倒计时可帮助你了解何时继续',
+  'from Orca. It is still on your disk.': '来自 Orca。它仍保留在你的磁盘上',
   'Pull request reopened': '拉取请求已重新打开',
   'Reopen PR': '重新打开 PR',
   'Reopened MR !{{value0}}': '已重新打开 MR !{{value0}}',

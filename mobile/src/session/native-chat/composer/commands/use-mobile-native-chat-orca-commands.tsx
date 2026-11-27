@@ -79,7 +79,7 @@ export function useMobileNativeChatOrcaCommands(input: {
     const command = name(match[1]!)
     const rest = match[2]?.trim() ?? ''
     if (isMobileDesktopOnlyCommand(command, catalog)) {
-      return notice(mobileDesktopOnlyCommandNotice())
+      return notice(mobileDesktopOnlyCommandNotice(translate))
     }
     if (command === 'usage' && accountUsage && !rest) {
       setUsageOpenFor(accountUsage)
@@ -112,7 +112,8 @@ export function useMobileNativeChatOrcaCommands(input: {
     onPickCommand: (token: string): void => forgetMobileNativeChatSkillOrigin(sendSurfaceId, token),
     /** A picked desktop-only row inserts nothing and says why, as Send does. */
     refusesPick: (token: string): boolean =>
-      isMobileDesktopOnlyCommand(name(token), catalog) && notice(mobileDesktopOnlyCommandNotice()),
+      isMobileDesktopOnlyCommand(name(token), catalog) &&
+      notice(mobileDesktopOnlyCommandNotice(translate)),
     usageSheet: accountUsage ? (
       <MobileNativeChatAccountUsageSheet
         usage={usageOpenFor ?? accountUsage}

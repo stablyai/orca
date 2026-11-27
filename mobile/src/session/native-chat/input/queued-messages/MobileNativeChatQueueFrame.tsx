@@ -4,7 +4,8 @@ import {
   MobileNativeChatComposerPresenceContext,
   MobileNativeChatQueueAbovePromptContext
 } from '../../lower-region/mobile-native-chat-lower-region-context'
-import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
+import { queuedMessageStylesSheet } from './mobile-native-chat-queued-message-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 export function MobileNativeChatQueueFrame({
   box = false,
@@ -15,6 +16,7 @@ export function MobileNativeChatQueueFrame({
   editing: boolean
   children: ReactNode
 }) {
+  const styles = useThemedStyles(queuedMessageStylesSheet)
   const composerPresent = useContext(MobileNativeChatComposerPresenceContext)
   // Native keeps the composer mounted (hidden) under a prompt, so presence alone cannot untuck it.
   const abovePrompt = useContext(MobileNativeChatQueueAbovePromptContext)

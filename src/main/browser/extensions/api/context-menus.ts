@@ -19,7 +19,7 @@ import {
 } from '../profile-storage/browser-extension-profile-state-store'
 
 const idSchema = lazyZodSchema(() => z.union([z.string(), z.number().int()]))
-const menuItemPropertyFields = {
+const createMenuItemPropertyFields = () => ({
   type: z.enum(['normal', 'checkbox', 'radio', 'separator']),
   title: z.string(),
   checked: z.boolean(),
@@ -29,15 +29,15 @@ const menuItemPropertyFields = {
   parentId: idSchema,
   documentUrlPatterns: z.array(z.string()),
   targetUrlPatterns: z.array(z.string())
-}
+})
 const createSchema = lazyZodSchema(() =>
   z
-    .object({ id: idSchema, ...menuItemPropertyFields })
+    .object({ id: idSchema, ...createMenuItemPropertyFields() })
     .partial()
     .required({ id: true })
     .loose()
 )
-const updateSchema = lazyZodSchema(() => z.object(menuItemPropertyFields).partial().loose())
+const updateSchema = lazyZodSchema(() => z.object(createMenuItemPropertyFields()).partial().loose())
 
 function editMenus(
   caller: BrowserExtensionCaller,

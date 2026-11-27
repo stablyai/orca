@@ -19,12 +19,13 @@ import type { PickerOption } from '../components/sheets/PickerModal'
 import { FieldTextInput } from '../components/composer-input/FieldTextInput'
 import { SwitchRow } from '../host-screen/workspace-options/workspace-option-rows'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
 import { MobileConnectorSourceIcon } from '../bots/MobileConnectorSourceIcon'
 import { botAgentLabel } from '../bots/mobile-bot-sheet-copy'
 import type { PhoneBot } from '../bots/host-bots-operations'
-import { automationStyles as styles } from './automation-styles'
+import { automationStylesSheet } from './automation-styles'
 import type { PresentAutomationSheet } from './AutomationSheets'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
 
 const RUNS_IN_SAVED_CHAT = 'saved-chat'
 const SAME_AS_BOT = 'same'
@@ -89,6 +90,8 @@ export function BotAutomationTargetRows(props: {
   present: PresentAutomationSheet
   disabled: boolean
 }) {
+  const styles = useThemedStyles(automationStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { target, bot, onChange } = props
   const name = bot.name

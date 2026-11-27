@@ -32,6 +32,8 @@ export class ProviderTimelineRows {
     private readonly deps: {
       scheme: ProviderTimelineIdentityScheme
       generation: string
+      /** Request rows' scope when it outlives the acquisition; defaults to `generation`. */
+      requestGeneration?: string
       namespace: string
     }
   ) {}
@@ -66,7 +68,11 @@ export class ProviderTimelineRows {
 
   private request(key: string, incarnation: number): ProviderTimelineRowId {
     return this.row(
-      this.deps.scheme.request({ generation: this.deps.generation, key, incarnation })
+      this.deps.scheme.request({
+        generation: this.deps.requestGeneration ?? this.deps.generation,
+        key,
+        incarnation
+      })
     )
   }
 

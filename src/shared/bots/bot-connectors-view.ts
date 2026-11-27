@@ -39,7 +39,12 @@ export type BotConnectorsView = {
   workspacesNote?: string
 }
 
-export const GH_SIGNED_OUT = 'Run `gh auth login` on this computer.'
+/** The GitHub line while gh is signed out: on a headless Orca server, by its name (orcaSignInServer). */
+export function ghSignedOutGap(server: string | null): string {
+  return server
+    ? `gh is signed out on ${server}. Ask your owner to run \`gh auth login\` on ${server}.`
+    : 'gh is signed out on this computer. Ask your owner to run `gh auth login` here.'
+}
 export const GH_MISSING = 'Install the GitHub CLI (gh) on this computer, then run `gh auth login`.'
 export const LINEAR_NO_KEY =
   'Connect Linear to your bot, or add a Linear API key in Settings › Integrations.'
@@ -48,8 +53,10 @@ export const LINEAR_NO_KEY =
 // google: the Google accounts connected on this computer; absent from hosts that report none.
 // googleApp: whether this computer has a Google app (client) to sign in with.
 // googleDefault: this computer's default as the host reads it: an account, none, or unreadable.
+// server: this host's name when it is a headless Orca server; null on a computer with Orca's window.
 export type LocalSignIns = {
   gh: 'signed-in' | 'signed-out' | 'missing'
+  server?: string | null
   linear: boolean
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
@@ -156,7 +163,7 @@ export function botConnectorServices(
       signedIn: local.gh === 'signed-in',
       ...(local.gh === 'signed-in'
         ? {}
-        : { gap: local.gh === 'missing' ? GH_MISSING : GH_SIGNED_OUT }),
+        : { gap: local.gh === 'missing' ? GH_MISSING : ghSignedOutGap(local.server ?? null) }),
       wakes: bot.github !== null
     },
     {
@@ -196,7 +203,10 @@ function serviceLines(service: BotConnectorService, botName: string): string[] {
     ? service.actsAs === 'bot'
       ? 'Connected.'
       : 'Signed in.'
-    : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
+    : // GitHub's signed-out line says so itself.
+      service.source === 'github' && service.gap !== GH_MISSING
+      ? (service.gap ?? '')
+      : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
   const wakes =
     service.source === 'slack' || service.source === 'google'
       ? null

@@ -17,6 +17,7 @@ import { prCommentTarget, prCommentWrite, type PrCommentWrite } from './pr-comme
 import type { PrQueryScope } from '../mobile-pr-queries'
 import { workspaceDraftRowKey } from '../../../../drafts/durable-draft-rows'
 import { useWorkspaceExecutionHost } from '../../../../navigation/workspace-execution-host'
+import type { PrThreadActions } from './PrThreadRow'
 
 export type PrCommentActionsInput = {
   hostId: string
@@ -189,3 +190,28 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
 }
 
 export type MobilePrCommentActions = ReturnType<typeof useMobilePrCommentActions>
+
+/** The row and thread callbacks, stable so a row re-renders only when its own thread changes. */
+export function usePrThreadActions(
+  actions: MobilePrCommentActions | undefined,
+  prRepo: GitHubPrRepoSlug | null | undefined
+): PrThreadActions | undefined {
+  return useMemo<PrThreadActions | undefined>(
+    () =>
+      actions
+        ? {
+            reply: actions.reply,
+            toggleResolve: actions.toggleResolve,
+            editComment: actions.editComment,
+            deleteComment: actions.deleteComment,
+            isReplyBusy: actions.isReplyBusy,
+            isResolveBusy: actions.isResolveBusy,
+            isEditBusy: actions.isEditBusy,
+            isDeleteBusy: actions.isDeleteBusy,
+            draftKey: actions.draftKey,
+            prRepo: prRepo ?? null
+          }
+        : undefined,
+    [actions, prRepo]
+  )
+}

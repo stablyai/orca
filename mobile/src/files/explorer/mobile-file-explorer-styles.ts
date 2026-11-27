@@ -1,8 +1,7 @@
-import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { feedback, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const fileExplorerStyles = themedStyleSheet(() => ({
+export const fileExplorerStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -16,21 +15,42 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
   listContent: {
     paddingVertical: spacing.sm
   },
+  // ListRow's measures: 48 pt, 15 pt names, a 24 pt icon slot, 12 pt before the text.
   row: {
-    minHeight: 44,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingRight: spacing.md
+    paddingRight: spacing.lg
   },
+  resultRow: {
+    minHeight: 60,
+    paddingLeft: spacing.lg
+  },
+  // A translucent wash: bgRaised is the page's own colour in light mode and on sheets.
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   rowDisabled: {
-    opacity: 0.58
+    opacity: feedback.disabledOpacity
   },
   chevronSpacer: {
     width: 16
+  },
+  iconSlot: {
+    width: 24,
+    marginRight: spacing.xs,
+    alignItems: 'center'
+  },
+  name: {
+    flexDirection: 'row',
+    minWidth: 0
+  },
+  nameStart: {
+    flexShrink: 1
+  },
+  nameEnd: {
+    flexShrink: 0
   },
   rowTextBlock: {
     flex: 1,
@@ -38,10 +58,12 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
   },
   rowTitle: {
     color: colors.textPrimary,
-    fontSize: typography.bodySize
+    fontSize: 15
   },
-  rowTitleDisabled: {
-    color: colors.textMuted
+  rowFolder: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: 13
   },
   // Desktop sets ignored names in italics as well as dimming them.
   rowTitleIgnored: {
@@ -53,13 +75,8 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     fontWeight: '700'
   },
-  rowMeta: {
-    marginTop: 1,
-    color: colors.textMuted,
-    fontSize: 11
-  },
   inlineStatusRow: {
-    minHeight: 36,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -77,17 +94,12 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
   },
   showMoreText: {
     color: colors.accentBlue,
-    fontSize: typography.bodySize,
+    fontSize: 15,
     fontWeight: '500'
   },
   entryCount: {
     color: colors.textMuted,
     fontSize: typography.metaSize
-  },
-  searchAllText: {
-    color: colors.accentBlue,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
   },
   inlineErrorText: {
     flex: 1,
@@ -95,46 +107,15 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
+  // A text action on the error's line, 44 pt tall.
   inlineRetryButton: {
-    minHeight: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.control,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md
-  },
-  inlineRetryText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  state: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    padding: spacing.xl
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    textAlign: 'center'
-  },
-  stateTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  clearFilterButton: {
     minHeight: 44,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.control
+    paddingHorizontal: spacing.sm
   },
-  clearFilterText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+  inlineRetryText: {
+    color: colors.accentBlue,
+    fontSize: 15,
+    fontWeight: '500'
   }
 }))

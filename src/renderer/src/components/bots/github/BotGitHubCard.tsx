@@ -2,7 +2,7 @@ import React from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
-import type { IntegrationCardStatusTone } from '@/components/integrations/presentation/integration-card-shell'
+import type { BotConnectorStatus } from '../bot-connector-row-parts'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot } from '@/lib/bot-catalog'
@@ -22,6 +22,7 @@ import { useConnectorSetup } from '../ConnectorSetupDialogs'
 import { addGitHubAccount, openGitHubInstall } from '@/lib/bot-github-install-record'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
+import { GhSignedOutLine, ghSignedOutStatus, useGhSignedOutHost } from './GhSignedOutLine'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
 import { signedOutConnectorFace } from '../orca-cloud-sign-in'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
@@ -30,7 +31,7 @@ type GitHubCardFace = {
   /** The org, or GitHub as a whole until it is linked and installed. */
   place: string
   description: string
-  status: { label: string; tone: IntegrationCardStatusTone } | null
+  status: BotConnectorStatus | null
   /** Linked and installed; otherwise setup can be finished from the card. */
   ready: boolean
 }
@@ -131,11 +132,17 @@ function gitHubStateFace(
   }
 }
 
-/** One GitHub row's state and its people, for the row and for Who can ask. */
+/** One GitHub row's state and its people, for the row and for Who can ask; `ghHost`: where gh is
+ *  signed out, when it is. */
 export function useGitHubCard(
   bot: Bot,
   installation: ConnectorGitHubInstallation | undefined
-): { view: BotGitHubView; face: GitHubCardFace; people: BotWhoCanAskService } {
+): {
+  view: BotGitHubView
+  face: GitHubCardFace
+  people: BotWhoCanAskService
+  ghHost: string | null
+} {
   const view = useBotGitHub(bot.hostId)
   const login =
     view.status === 'ready' && installation
@@ -147,7 +154,8 @@ export function useGitHubCard(
       ? gitHubInstallationFace(installation, login)
       : gitHubCardFace(view, hostName)
   const people = useGitHubWhoCanAsk(bot.hostId, face.ready, installation?.installationId)
-  return { view, face, people }
+  const ghHost = useGhSignedOutHost(bot.hostId, view)
+  return { view, face, people, ghHost }
 }
 
 /**
@@ -168,7 +176,7 @@ export function BotGitHubCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const confirm = useConfirmationDialog()
-  const { view, face, people } = useGitHubCard(bot, installation)
+  const { view, face, people, ghHost } = useGitHubCard(bot, installation)
 
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
@@ -223,7 +231,11 @@ export function BotGitHubCard({
       connector={{ id: 'github', Icon: GitHubIcon }}
       name={title ?? 'GitHub'}
       description={face.description}
-      status={face.status}
+      status={
+        face.status ??
+        (ghHost ? { label: ghSignedOutStatus(ghHost), tone: 'warning', listOnly: true } : null)
+      }
+      lead={ghHost ? <GhSignedOutLine host={ghHost} /> : null}
       checking={view.status === 'loading'}
       fix={
         notReady

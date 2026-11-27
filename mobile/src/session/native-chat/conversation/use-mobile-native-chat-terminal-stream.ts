@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { recomputeOn } from '../../../hooks/recompute-on'
 import { resolveMobileNativeChatTerminalStreamAction } from './mobile-native-chat-terminal-stream'
 
 const MAX_REARM_ATTEMPTS = 3
@@ -93,90 +94,101 @@ export function useMobileNativeChatTerminalStream(args: {
       (rearmAttemptsRef.current.get(handle) ?? 0) >= MAX_REARM_ATTEMPTS
     )
   }, [])
-  const reconcileStream = useCallback(() => {
-    const handle = args.activeHandle
-    reconciledHandleRef.current = handle
-    if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
-      forgetRearmState(coveredHandleRef.current)
-      coveredHandleRef.current = null
-    }
-    const streamActive =
-      handle != null &&
-      (args.subscriptionsRef.current.has(handle) || args.subscribingRef.current.has(handle))
-    const streamIsLeaseOnly =
-      streamActive && handle != null && args.leaseOnlyRef.current.has(handle)
-    const action = resolveMobileNativeChatTerminalStreamAction({
-      showNativeChat: args.showNativeChat,
-      activeHandle: handle,
-      activeTabType: args.activeTabType,
-      streamActive,
-      streamCovered: coveredHandleRef.current === handle,
-      streamIsLeaseOnly,
-      webViewReady: handle != null && args.webReadyRef.current.has(handle)
-    })
-    const streamHolding = action === 'none' && streamActive
-    // Invalidate recovery proof whenever its stream is no longer the live one.
-    if (!streamHolding || healthyStreamProofRef.current?.handle !== handle) {
-      cancelHealthyStreamProof()
-    }
-    if (!handle) {
-      return
-    }
-    if (action === 'none') {
-      // Subscribed can precede immediate end; refill only after sustained stream liveness proves recovery.
-      if (streamHolding && !healthyStreamProofRef.current && rearmAttemptsRef.current.has(handle)) {
-        healthyStreamProofRef.current = {
-          handle,
-          timer: setTimeout(() => {
-            healthyStreamProofRef.current = null
+  const reconcileStream = useMemo(
+    () =>
+      recomputeOn(
+        [args.leaseReady, args.streamRevision, rearmBudgetRevision, webReadyRevision],
+        () => () => {
+          const handle = args.activeHandle
+          reconciledHandleRef.current = handle
+          if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
+            forgetRearmState(coveredHandleRef.current)
+            coveredHandleRef.current = null
+          }
+          const streamActive =
+            handle != null &&
+            (args.subscriptionsRef.current.has(handle) || args.subscribingRef.current.has(handle))
+          const streamIsLeaseOnly =
+            streamActive && handle != null && args.leaseOnlyRef.current.has(handle)
+          const action = resolveMobileNativeChatTerminalStreamAction({
+            showNativeChat: args.showNativeChat,
+            activeHandle: handle,
+            activeTabType: args.activeTabType,
+            streamActive,
+            streamCovered: coveredHandleRef.current === handle,
+            streamIsLeaseOnly,
+            webViewReady: handle != null && args.webReadyRef.current.has(handle)
+          })
+          const streamHolding = action === 'none' && streamActive
+          // Invalidate recovery proof whenever its stream is no longer the live one.
+          if (!streamHolding || healthyStreamProofRef.current?.handle !== handle) {
+            cancelHealthyStreamProof()
+          }
+          if (!handle) {
+            return
+          }
+          if (action === 'none') {
+            // Subscribed can precede immediate end; refill only after sustained stream liveness proves recovery.
+            if (
+              streamHolding &&
+              !healthyStreamProofRef.current &&
+              rearmAttemptsRef.current.has(handle)
+            ) {
+              healthyStreamProofRef.current = {
+                handle,
+                timer: setTimeout(() => {
+                  healthyStreamProofRef.current = null
+                  forgetRearmState(handle)
+                }, HEALTHY_STREAM_PROOF_MS)
+              }
+            }
+            return
+          }
+          if (action === 'rearm') {
+            // Bound subscribed/end rearms on dead PTYs; each otherwise spends host waits and tab-mount requests forever.
+            const attempts = rearmAttemptsRef.current.get(handle) ?? 0
+            if (attempts >= MAX_REARM_ATTEMPTS) {
+              return
+            }
+            // A subscribe its own gates turned away spends no attempt; one the bridge refused at once does.
+            if (args.subscribe(handle)) {
+              rearmAttemptsRef.current.set(handle, attempts + 1)
+            }
+            return
+          }
+          if (action === 'pause') {
+            coveredHandleRef.current = handle
             forgetRearmState(handle)
-          }, HEALTHY_STREAM_PROOF_MS)
+            // Covered chat needs the input lease without duplicate PTY output; replace view streams with lease-only ones.
+            if (streamActive) {
+              args.unsubscribe(handle)
+            }
+            args.subscribe(handle)
+            return
+          }
+          args.unsubscribe(handle)
+          coveredHandleRef.current = null
+          args.subscribe(handle)
         }
-      }
-      return
-    }
-    if (action === 'rearm') {
-      // Bound subscribed/end rearms on dead PTYs; each otherwise spends host waits and tab-mount requests forever.
-      const attempts = rearmAttemptsRef.current.get(handle) ?? 0
-      if (attempts >= MAX_REARM_ATTEMPTS) {
-        return
-      }
-      // A subscribe its own gates turned away spends no attempt; one the bridge refused at once does.
-      if (args.subscribe(handle)) {
-        rearmAttemptsRef.current.set(handle, attempts + 1)
-      }
-      return
-    }
-    if (action === 'pause') {
-      coveredHandleRef.current = handle
-      forgetRearmState(handle)
-      // Covered chat needs the input lease without duplicate PTY output; replace view streams with lease-only ones.
-      if (streamActive) {
-        args.unsubscribe(handle)
-      }
-      args.subscribe(handle)
-      return
-    }
-    args.unsubscribe(handle)
-    coveredHandleRef.current = null
-    args.subscribe(handle)
-  }, [
-    args.activeHandle,
-    args.activeTabType,
-    args.leaseOnlyRef,
-    args.leaseReady,
-    args.showNativeChat,
-    args.streamRevision,
-    args.subscribe,
-    args.subscribingRef,
-    args.subscriptionsRef,
-    args.unsubscribe,
-    args.webReadyRef,
-    cancelHealthyStreamProof,
-    forgetRearmState,
-    rearmBudgetRevision,
-    webReadyRevision
-  ])
+      ),
+    [
+      args.activeHandle,
+      args.activeTabType,
+      args.leaseOnlyRef,
+      args.leaseReady,
+      args.showNativeChat,
+      args.streamRevision,
+      args.subscribe,
+      args.subscribingRef,
+      args.subscriptionsRef,
+      args.unsubscribe,
+      args.webReadyRef,
+      cancelHealthyStreamProof,
+      forgetRearmState,
+      rearmBudgetRevision,
+      webReadyRevision
+    ]
+  )
   useEffect(() => reconcileStream(), [reconcileStream])
   useEffect(() => cancelHealthyStreamProof, [cancelHealthyStreamProof])
   // Memoize the stable callback bundle so route dependencies do not rebuild on every keystroke.

@@ -65,7 +65,7 @@ export function handleMarkdownPreviewLinkAuxClick({
   filePath,
   context
 }: {
-  event: React.MouseEvent<HTMLAnchorElement>
+  event: React.MouseEvent
   href: string | undefined
   filePath: string
   context: Pick<MarkdownPreviewLinkContext, 'sourceOwner' | 'sourceRoutingWorktreeId'>
@@ -92,7 +92,7 @@ export async function handleMarkdownPreviewLinkClick({
   filePath,
   context
 }: {
-  event: React.MouseEvent<HTMLAnchorElement>
+  event: React.MouseEvent
   href: string | undefined
   filePath: string
   context: MarkdownPreviewLinkContext

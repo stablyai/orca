@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { AgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -18,10 +19,12 @@ import { providerRequestTimeoutOf } from '../../../provider-process/provider-req
 
 const ACP_RESOURCE_NOT_FOUND = -32002
 // Without a `cwd`, OpenCode 2.x lists every folder's sessions.
-const sessionListPage = z.object({
-  sessions: z.array(z.looseObject({ sessionId: z.string(), cwd: z.string() })),
-  nextCursor: z.string().nullish()
-})
+const sessionListPage = lazyZodSchema(() =>
+  z.object({
+    sessions: z.array(z.looseObject({ sessionId: z.string(), cwd: z.string() })),
+    nextCursor: z.string().nullish()
+  })
+)
 export const ACP_REOPEN_FAILED = 'ACP agent could not reopen its saved session; starting a new one'
 
 export async function acpReopenTakeover(
@@ -77,11 +80,15 @@ export async function acpListedSessionFolder(
   sessionId: string,
   input: {
     initialized: InitializeResponse
-    connection: Pick<AcpStructuredConnection, 'listSessions'>
+    connection: Pick<AcpStructuredConnection, 'listSessions' | 'kept'>
     assertStarting: () => void
   }
 ): Promise<string | null> {
-  if (input.initialized.agentCapabilities?.sessionCapabilities?.list == null) {
+  // A kept agent still runs the session where it is; nothing moved.
+  if (
+    input.connection.kept ||
+    input.initialized.agentCapabilities?.sessionCapabilities?.list == null
+  ) {
     return null
   }
   let cursor: string | undefined

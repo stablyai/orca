@@ -1,6 +1,9 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
-const jwtPayloadSchema = z.object({ sub: z.unknown(), exp: z.unknown() }).partial()
+const jwtPayloadSchema = lazyZodSchema(() =>
+  z.object({ sub: z.unknown(), exp: z.unknown() }).partial()
+)
 
 export type CursorSessionToken = {
   raw: string

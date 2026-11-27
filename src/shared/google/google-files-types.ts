@@ -64,6 +64,8 @@ export type DocsReadView = {
   comments: DocsComment[]
   /** How many open comments the doc has, shown or not. */
   openComments: number
+  /** Set when Orca stopped paging the comment list (a long one, or on a later page), so openComments is a lower bound. */
+  moreComments?: boolean
 }
 
 export type DocsWriteView = {

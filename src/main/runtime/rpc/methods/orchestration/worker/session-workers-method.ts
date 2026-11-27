@@ -149,7 +149,10 @@ export async function projectDispatchFleet(
     limit: rows.length,
     now,
     completeProjection: true,
-    observeSession: createSessionWorkerLivenessReader(db, statuses, undefined, read.parties)
+    observeSession: createSessionWorkerLivenessReader(db, statuses, undefined, {
+      parties: read.parties,
+      includeResumeGuidance: true
+    })
   })
   // This machine's statuses cover only its own panes; a paired host's worker needs that host's verdict.
   const openIds = new Set(

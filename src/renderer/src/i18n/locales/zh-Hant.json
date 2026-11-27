@@ -4617,19 +4617,13 @@
           "ea3416d646": "負責人",
           "b1d9fdea08": "標籤",
           "24754c44ad": "作者",
-          "764a0b4ce1": "狀態",
-          "f0cf6dd591": "關",
-          "1e9b5244f2": "開",
           "b930de7194": "僅草稿",
-          "e0002f1eba": "已選擇",
-          "2b2f019091": "任意狀態",
           "0fd3249e2e": "已關閉",
           "d78b60b5c2": "開放",
           "bd162b7d5a": "已合併",
           "draft": "草稿",
           "labelCount_other": "{{count}} 個標籤",
           "authorCount_other": "{{count}} 位作者",
-          "allStates": "全部",
           "filterPullRequests": "篩選 PR",
           "filterIssues": "篩選議題",
           "filterOrTypeLogin": "篩選或輸入登入名稱...",
@@ -5254,11 +5248,6 @@
             "waitingTitle": "正在等待 {{server}}",
             "waitingBody": "伺服器再次提供此終端機或連線狀態變更時，Orca 會重新連接此終端機。點選「重新連線」可立即重試。",
             "downFor": "已中斷連線 {{duration}}",
-            "cantReachTitle": "無法連線至 {{server}}",
-            "detailsButton": "詳細資訊",
-            "tailscaleHintTitle": "檢查 Tailscale 連線路徑",
-            "reconnectNowButton": "立即重新連線",
-            "copyPingCommand": "複製指令",
             "tailscaleHint": "檢查 Tailscale 連線路徑：",
             "fallbackServerName": "伺服器",
             "connectionLostTitle": "正在重新連線至 {{server}}",
@@ -6472,7 +6461,6 @@
           "c13b82793c": "管理安裝",
           "aee7b99cc6": "從連結安裝",
           "filterProvider": "按代理程式篩選",
-          "filterSource": "按來源篩選",
           "allSources": "全部",
           "clearFilters": "清除篩選",
           "closeSkills": "關閉技能",
@@ -16759,34 +16747,11 @@
             "0bb39f8fe6": "傳送",
             "69334b4b10": "語音聽寫",
             "29f2d13839": "輸入命令…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab 鍵",
-            "4930eaaae7": "Esc 鍵",
             "fa22927f13": "貼上",
             "985373052e": "切換到手機模式",
-            "58a9ee6003": "工具呼叫格式化。接下來要我新增差異嗎？",
-            "aa64b519c6": "終端機畫面。Tokyonight 配色、Menlo 字型，以及實際的 claude",
-            "e75112c834": "我已將配對掃描投影片替換為高擬真的",
-            "3ce3e8c892": "14 項通過，1 項略過（1.8 秒）",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "通過",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ 用終端機工作階段替換配對掃描投影片",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "編輯",
-            "fc83e0d5ef": "⎿ 讀取 2103 行",
-            "80cc356591": "讀",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "Shell",
             "606aa93192": "檔案",
             "94febb0976": "原始碼控制",
             "8d6516312d": "2 個終端機 · claude 使用中",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "返回"
           },
           "WorktreeListSlide": {
@@ -19212,10 +19177,10 @@
           "failed": "失敗",
           "succeeded": "成功",
           "neverRan": "從未執行",
-          "filters": "篩選條件",
           "all": "全部",
           "clear": "清除篩選",
           "agent": "代理程式",
+          "bot": "機器人",
           "lastRun": "最後一次執行"
         },
         "AutomationListSortHeader": {
@@ -19842,7 +19807,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "移除 {{value0}} 篩選器",
         "teamRequired": "選擇一個團隊以載入此工作區的狀態、負責人和標籤。",
-        "filters": "篩選器",
         "allWorkspacesTitle": "選擇一個工作區",
         "allWorkspacesBody": "狀態、負責人和標籤篩選器使用單一 Linear 工作區的 ID。請選擇一個工作區以依這些屬性進行篩選。",
         "clearAll": "清除所有篩選器",
@@ -20381,12 +20345,7 @@
         "create": "建立"
       },
       "NativeChatResumeToast": {
-        "resumingOn_other": "正在恢復 {{machine}} 上的 {{count}} 個聊天…",
         "resuming_other": "正在恢復 {{count}} 個聊天…",
-        "resumedOn_other": "已恢復 {{machine}} 上的 {{count}} 個聊天。",
-        "resumedUpdate_other": "更新後已恢復 {{count}} 個聊天。",
-        "resumedRestart_other": "重新啟動後已恢復 {{count}} 個聊天。",
-        "partial_other": "已恢復 {{total}} 個聊天中的 {{resumed}} 個。{{count}} 個需要你處理。",
         "stoppedOn_other": "{{machine}} 上有 {{count}} 個聊天已停止。",
         "stoppedUpdate_other": "Orca 更新時有 {{count}} 個聊天已停止。",
         "stoppedRestart_other": "Orca 關閉時有 {{count}} 個聊天已停止。",
@@ -20396,8 +20355,6 @@
         "close": "關閉",
         "listLabel": "聊天",
         "untitled": "無標題聊天",
-        "willAsk": "Orca 會要求聊天繼續。排隊中的訊息可能會被傳送。",
-        "asked": "Orca 已要求聊天繼續。排隊中的訊息可能會被傳送。",
         "resumedAutomatically": "已自動恢復。",
         "changeInSettings": "在設定中變更",
         "dismissAll": "全部忽略",
@@ -20407,7 +20364,13 @@
         "stateResumed": "已恢復",
         "stateNeedsYou": "需要你處理",
         "stateResuming": "正在恢復",
-        "stateStopped": "已停止"
+        "stateStopped": "已停止",
+        "resumingOne": "正在恢復 {{name}}…",
+        "failedOne": "無法恢復 {{name}}",
+        "failedSome_other": "無法恢復：{{total}} 個中的 {{count}} 個",
+        "resumedOne": "已恢復 {{name}}",
+        "resumedMany_other": "已恢復 {{count}} 個聊天",
+        "needYou_other": "{{count}} 個需要你處理"
       },
       "RunTargetCombobox": {
         "noWslDistros": "找不到 WSL 發行版",
@@ -21354,7 +21317,6 @@
         "expand": "展開"
       },
       "question": {
-        "step": "步驟 {{value0}}",
         "otherPlaceholder": "輸入你的回答",
         "cancel": "取消",
         "send": "送出",
@@ -21366,12 +21328,11 @@
         "recommended": "推薦",
         "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
         "answered": "已回答",
-        "title": "問題",
         "previous": "上一個問題",
         "nextQuestion": "下一個問題",
         "back": "返回",
         "skipAndSubmit": "略過並提交",
-        "stepLabel": "{{value0}}，第 {{value1}} 個，共 {{value2}} 個：{{value3}}"
+        "questionStepLabel": "{{value0}}，第 {{value1}} 個，共 {{value2}} 個"
       },
       "ask": {
         "awaiting": "等待使用者輸入：",
@@ -21548,6 +21509,13 @@
           "followedUp": "後續訊息",
           "handedOff": "已交接",
           "task": "任務"
+        },
+        "unnamedRecipient": "一個代理程式",
+        "event": {
+          "followedUp": "已傳送後續訊息",
+          "update": "更新",
+          "message": "訊息",
+          "handedOff": "已交接"
         }
       },
       "goal": {
@@ -21647,6 +21615,7 @@
       "explicitChatWslMoveToHost": "無法在從 Windows 開啟的 WSL 資料夾中使用聊天。請在 WSL 主機上執行此專案以便在那裡聊天，或在終端機中開啟代理程式。",
       "explicitChatWslRunAsHost": "將 {{distro}} 作為主機執行",
       "explicitChatSsh": "無法透過 SSH 使用聊天功能。請改在終端機中開啟代理程式。",
+      "explicitChatWorkspaceAccess": "Orca 沒有開啟此工作區資料夾的權限。請檢查該資料夾的權限，然後再試一次。",
       "explicitChatUnavailable": "此工作區無法執行聊天。請檢查代理程式的安裝狀態，或在終端機中開啟代理程式。",
       "structuredSessionHostDeclined": "已在終端機中開啟 {{value0}}",
       "structuredSessionTerminalNotVisible": "Orca 已在終端機中開啟 {{value0}}，但啟動完成時無法在此處顯示。聊天草稿已保留。",
@@ -22327,7 +22296,16 @@
         "unlisted": "背景工作執行中",
         "unread": "無法載入工作者",
         "unreadDetail": "工作者載入後會顯示在這裡",
-        "chipLabel": "{{label}}，最新：{{title}}"
+        "chipLabel": "{{label}}，最新：{{title}}",
+        "backgroundCommandCount_other": "{{count}} 個背景命令",
+        "commandCount_other": "{{count}} 個命令",
+        "mixedRegion": "工作者和背景命令",
+        "commandsRegion": "背景命令",
+        "stopSubagentsAndCommands": "停止子代理和命令",
+        "workersKeepRunning": "工作者會繼續執行",
+        "clearFailedWorkers": "清除失敗的工作者",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}，{{commands}}"
       },
       "webhookSetup": {
         "heading": "設定 Webhook",
@@ -24903,7 +24881,9 @@
       "chatOtherWindow": "另一個視窗正在進行登入。",
       "chatPageDidntOpen": "頁面沒有開啟？",
       "chatPasteCode": "貼上代碼",
-      "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址"
+      "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址",
+      "launchesUse": "新啟動的 agy 將使用此帳號",
+      "loginNow": "agy 目前的登入"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於你下次啟動的 Claude。",

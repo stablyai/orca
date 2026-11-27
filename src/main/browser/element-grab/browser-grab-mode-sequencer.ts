@@ -7,6 +7,7 @@ import {
   grabModeIntents as intents,
   grabModeOperationByPageId,
   grabModeOwners as owners,
+  resetGrabModeState,
   retireGrabModeAdmission,
   queueGrabModeOperation,
   supersededGrabMode,
@@ -21,16 +22,7 @@ type ModeOptions = {
   onPolicyRetired?: () => void
   afterClean?: (guest: Electron.WebContents, signal: AbortSignal) => Promise<boolean>
 }
-export { disposeGrabModeStateForPage }
-
-export function resetGrabModeState(): void {
-  owners.clear()
-  intents.clear()
-  for (const state of grabModeOperationByPageId.values()) {
-    retireGrabModeAdmission(state)
-  }
-  grabModeOperationByPageId.clear()
-}
+export { disposeGrabModeStateForPage, resetGrabModeState }
 
 /** The same bounded request/document owner for a local renderer or an authorized runtime viewer. */
 export async function setBrowserGrabMode(

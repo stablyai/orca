@@ -11,9 +11,9 @@ import { UsageStatusNote } from '../../../accounts/usage/UsageStatusNote'
 import { useNow } from '../../../hooks/use-now'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import type { MobileStructuredAccountUsage } from './use-mobile-structured-account-usage'
 
 function unavailableMessage(
@@ -58,7 +58,8 @@ function AccountUsageBody({
   usage: MobileStructuredAccountUsage
   onClose: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const now = useNow()
   const [result, setResult] = useState<AgentSessionAccountUsage | null>(null)
@@ -110,7 +111,7 @@ function AccountUsageBody({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   body: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,

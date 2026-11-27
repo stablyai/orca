@@ -19,9 +19,9 @@ import { HostContextPill } from '../worktree/row-presentation/HostContextPill'
 import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerMediumImpact } from '../platform/haptics/haptics'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { agentDotState, formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
@@ -57,7 +57,8 @@ function ChatRowComponent({
   /** Opens the bot's home with this chat's tab in front. */
   onOpen: (home: Worktree, paneKey: string) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { chat, foldable, open, trailing } = facts
   const now = useNow(30_000, trailing?.kind === 'time')
@@ -67,7 +68,7 @@ function ChatRowComponent({
     trailing?.kind === 'summary'
       ? chatFoldSummary(t, trailing.counts)
       : trailing?.kind === 'time'
-        ? formatTimeAgo(trailing.at, now)
+        ? formatTimeAgo(trailing.at, now, t)
         : null
   const toggle = foldable
     ? () => setBotChatFold(facts.hostKey, facts.botId, chat.chatId, open ? 'folded' : 'open')
@@ -141,7 +142,7 @@ function PagingRowComponent({
   facts: MobileBotChatPagingFacts
   dimmed: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { paging, steps, stepsKey } = facts
   return (
@@ -166,6 +167,7 @@ function PagingRowComponent({
 export const MobileBotChatPaging = memo(PagingRowComponent, areStructurallyEqual)
 
 function LineNote({ note }: { note: MobileBotChatLineFacts['note'] }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   if (!note) {
     return null
@@ -194,7 +196,8 @@ function WorkerLineComponent({
   onPress: (item: Worktree) => void
   onLongPress?: (item: Worktree) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const now = useNow(30_000, true)
   // One logo says who works there, as on the desktop's compact line.
   const agent = botWorkspaceLineAgent(
@@ -259,7 +262,7 @@ function WorkerLineComponent({
 
 export const MobileBotWorkerLine = memo(WorkerLineComponent, areStructurallyEqual)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // The bot row's grid: its padding, the avatar's column and its gap.
   chatRow: {
     flexDirection: 'row',

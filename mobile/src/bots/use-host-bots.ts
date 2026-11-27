@@ -21,8 +21,10 @@ import { groupList } from './bot-group-operations'
 import { readHostAccessRequests } from './bot-access-request-operations'
 import { HOST_REFRESH_FALLBACK_MS } from '../worktree/execution-hosts/host-worktree-refresh'
 import { useKeptServerBotListings } from './use-kept-server-bot-listings'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { createHostCountTimers } from './host-bot-count-timers'
 import { createFailedReadRetries } from './host-bot-failed-read-retries'
+import { useKeptByKey } from '../hooks/use-kept-by-key'
 
 const NO_LISTINGS: readonly HostBotListing[] = []
 
@@ -227,6 +229,7 @@ export function useHostBots(args: {
    *  then does it re-read their thread links and side chats. */
   pairedThreadsKey?: number
 }): readonly HostBotListing[] {
+  const t = useMobileTranslation()
   const {
     client,
     pairedHostId,
@@ -253,6 +256,8 @@ export function useHostBots(args: {
   const serversKey = readyServers
     .map((host) => `${host.hostId}\n${host.label}\n${host.installationId ?? ''}`)
     .join('\n')
+  // serversKey stands for the ready servers, whose array changes on every health update.
+  const keptServers = useKeptByKey(serversKey, readyServers)
   const targets = useMemo((): { local: ListingTarget | null; servers: ListingTarget[] } => {
     if (!client || !pairedHostId || connState !== 'connected') {
       return { local: null, servers: [] }
@@ -266,7 +271,7 @@ export function useHostBots(args: {
       relaysCreate: true
     }
     const relaysCreate = hostCapabilities.includes(BOTS_CREATE_RUNTIME_CAPABILITY)
-    const servers = readyServers.flatMap((host) => {
+    const servers = keptServers.flatMap((host) => {
       const scoped = rpcClientForExecutionHost(client, hostCapabilities, host.hostId)
       return scoped
         ? [
@@ -282,8 +287,7 @@ export function useHostBots(args: {
         : []
     })
     return { local, servers }
-    // serversKey stands for the ready servers, whose array changes on every health update.
-  }, [client, pairedHostId, connState, hostCapabilities, hostLabel, serversKey])
+  }, [client, pairedHostId, connState, hostCapabilities, hostLabel, keptServers])
 
   // New targets start their own reads; a late answer from the old ones is dropped.
   useEffect(() => {
@@ -332,5 +336,5 @@ export function useHostBots(args: {
 
   useKeptServerBotListings({ pairedHostId, serverHosts, listings, setListings })
 
-  return useMemo(() => shownHostBotListings(listings, serverHosts), [listings, serverHosts])
+  return useMemo(() => shownHostBotListings(listings, serverHosts, t), [listings, serverHosts, t])
 }

@@ -8,10 +8,11 @@ import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-a
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import type { BotPanelOpen } from './MobileBotPanel'
 import {
   accessDecisionCopy,
@@ -38,6 +39,7 @@ const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], LucideIcon>> = {
 }
 
 function RowIcon({ row }: { row: AccessDecisionRow }) {
+  const colors = useMobileColors()
   if (row.connector) {
     return <MobileConnectorSourceIcon source={row.connector} size={16} />
   }
@@ -61,9 +63,10 @@ export function MobileBotAccessDecisionContent({
   onDecline?: () => void
   onClose: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const copy = accessDecisionCopy(grant, bot, t)
+  const copy = accessDecisionCopy(grant, bot, t, intlLocaleFor(useMobileUiLocale()))
   const tone = copy.tone === 'high' ? colors.statusRed : colors.statusAmber
   return (
     <ConfirmContent
@@ -169,7 +172,7 @@ export function useBotAccessDecisionSheet(
   return { review: setReviewing, sheet }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   tile: {
     width: 48,
     height: 48,

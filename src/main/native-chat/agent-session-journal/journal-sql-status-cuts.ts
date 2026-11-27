@@ -111,14 +111,20 @@ export function readJournalSqlTurnUsageLimit(
   turnItemId: string,
   floor = 0
 ): ReturnType<typeof nativeChatUsageLimitOfRow> | null {
-  for (const { item } of state.select({ kind: 'scoped-statuses', turnItemId, floor })) {
-    const displayed = state.displayed(item.itemId)
-    const limit = displayed && nativeChatUsageLimitOfRow(displayed)
-    if (limit) {
-      return limit
-    }
+  const { scope } = state
+  const row = scope.db
+    .prepare(`SELECT item_id FROM journal_items INDEXED BY journal_items_stop_turn
+    WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND kind='status' AND turn_item_id=?
+      AND json_extract(payload_json,'$.body.failure.kind')='usageLimitReached'
+      ${floor ? 'AND sequence>?' : ''}
+    ORDER BY sequence,sequence_index,ordinal LIMIT 1`)
+    .get(...scope.prefix, turnItemId, ...(floor ? [floor] : []))
+  if (typeof row?.item_id !== 'string') {
+    return null
   }
-  return null
+  scope.examined(row)
+  const displayed = state.displayed(row.item_id)
+  return displayed && nativeChatUsageLimitOfRow(displayed)
 }
 
 /** Follow only the automatic opener joins; unrelated requests end the chain. */

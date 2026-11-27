@@ -16,17 +16,17 @@ export type RemoteOwnedPeerRun = z.infer<typeof RemoteOwnedPeerRun>
 
 export const REMOTE_OWNED_WIRE_VERSION = 1
 
-const Header = {
+const createHeader = () => ({
   v: z.literal(REMOTE_OWNED_WIRE_VERSION),
   id: z.string().min(1),
   homeRunId: z.string().min(1),
   peerRunId: z.string().min(1)
-}
+})
 
 /** A final message filed in the peer Run's mailbox, with the Dispatch and Task its sender worked for. */
 export const RemoteOwnedWorkerMail = lazyZodSchema(() =>
   z.object({
-    ...Header,
+    ...createHeader(),
     message: z.object({
       from: z.string().min(1),
       type: z.enum([
@@ -56,7 +56,7 @@ export type RemoteOwnedWorkerMail = z.infer<typeof RemoteOwnedWorkerMail>
 /** A peer-Run Dispatch, its worker or its Task changed state on the server, or the server's reset removed it. */
 export const RemoteOwnedWorkerState = lazyZodSchema(() =>
   z.object({
-    ...Header,
+    ...createHeader(),
     dispatch: z.object({
       id: z.string().min(1),
       taskId: z.string().min(1),
