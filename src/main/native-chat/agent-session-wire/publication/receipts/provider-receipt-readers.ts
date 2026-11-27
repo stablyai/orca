@@ -33,10 +33,6 @@ export class ProviderReceiptReaders {
 
   constructor(private readonly runtimeId: () => string) {}
 
-  hasPostedReply(transport: AbortSignal): boolean {
-    return this.credits.get(transport)?.unread?.handedOff === true
-  }
-
   canBind(endpoint: ProviderReceiptDestination, identity?: ProviderReceiptReader): boolean {
     return this.credits.hasRoom(endpoint.transport) && this.ownsDocument(endpoint, identity)
   }
@@ -242,6 +238,7 @@ export class ProviderReceiptReaders {
     return promise
   }
 
+  hasPostedReply = this.credits.hasPostedReply.bind(this.credits)
   discard = this.credits.discard.bind(this.credits)
   handoff = this.credits.handoff.bind(this.credits)
   suppress = this.credits.suppress.bind(this.credits)
@@ -266,13 +263,11 @@ export class ProviderReceiptReaders {
     if (!wait || (!wait.failure && this.credits.isBlocked(target))) {
       return
     }
+    const sequence = (this.credits.consumed(wait.document)?.sequence ?? 0) + 1
     const makeReply = (): ProviderReceiptReply => ({
       status: wait.failure ?? 'changed',
       hostIncarnation: wait.source?.incarnation ?? this.absentIncarnation,
-      revision: {
-        sequence: (this.credits.consumed(wait.document)?.sequence ?? 0) + 1,
-        nonce: randomUUID()
-      },
+      revision: { sequence, nonce: randomUUID() },
       streams: []
     })
     const runtimeId = this.runtimeId()

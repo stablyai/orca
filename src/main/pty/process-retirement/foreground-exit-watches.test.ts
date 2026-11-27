@@ -12,7 +12,7 @@ describe('ForegroundExitWatches', () => {
     notices = []
     setProcessExitWatchNativeForTests({
       watchProcessExit: (pid, onExit) => {
-        watched.set(pid, () => onExit(true))
+        watched.set(pid, onExit)
         return pid
       },
       unwatchProcessExit: (id) => watched.delete(id)

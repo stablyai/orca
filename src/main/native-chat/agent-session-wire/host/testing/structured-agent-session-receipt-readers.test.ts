@@ -370,44 +370,43 @@ it('caps 256 destinations and 4,096 handovers and wakes a blocked reader on cred
   }
 })
 
-it('keeps durable Claude echo settlement when the receipt destination or handover is refused', async () => {
-  const { rig, seed, session, source, readers, stamp, renderer, dispose } =
-    await receiptRig('claude')
-  const echo = async (id: string, handover?: 'indexed' | 'refused') => {
-    await eventually(() => expect(rig.dispatch.mock.lastCall?.[0].clientMessageId).toBe(id))
-    expect(await rig.submission(id)).toMatchObject({ dispatchState: 'pending' })
-    const ingress = claudeReceiptIngress(rig)
-    ingress.lifecycle('queued', NOW + 100)
-    if (handover === 'indexed') {
-      expect(source.stampFor(CHAT, id)?.observedAt).toBe(NOW + 100)
-    } else if (handover === 'refused') {
-      expect(source.stampFor(CHAT, id)).toBeUndefined()
+it.each(['destination', 'handover'] as const)(
+  'keeps durable Claude echo settlement when the receipt %s is refused',
+  async (limit) => {
+    const { rig, seed, session, source, readers, stamp, renderer, dispose } =
+      await receiptRig('claude')
+    try {
+      await rig.settleAccepted(seed, 'seed')
+      // Alias the same journal owner for fixture entries while exercising the production index.
+      session.providerReceipts = source
+      if (limit === 'handover') {
+        for (let i = 0; i < 4096; i++) {
+          stamp(`chat-${Math.floor(i / 64)}`, `handover-${i}`, i)
+        }
+      } else {
+        for (let i = 0; i < 256; i++) {
+          expect(renderer().attach(`reader-${i}`)).toBeDefined()
+        }
+        const excess = renderer()
+        expect(excess.attach('overflow')).toBeUndefined()
+        expect(readers.canOpenPort(excess.endpoint, excess.reader)).toBe(false)
+      }
+      const id = await rig.workingSend()
+      await eventually(() => expect(rig.dispatch.mock.lastCall?.[0].clientMessageId).toBe(id))
+      expect(await rig.submission(id)).toMatchObject({ dispatchState: 'pending' })
+      const ingress = claudeReceiptIngress(rig)
+      ingress.lifecycle('queued', NOW + 100)
+      expect(source.stampFor(CHAT, id)?.observedAt).toBe(
+        limit === 'handover' ? undefined : NOW + 100
+      )
+      ingress.echo()
+      expect(await ingress.flush()).toEqual({ ok: true })
+      expect(await rig.submission(id)).toMatchObject({ dispatchState: 'accepted' })
+    } finally {
+      await dispose()
     }
-    ingress.echo(randomUUID())
-    expect(await ingress.flush()).toEqual({ ok: true })
-    expect(await rig.submission(id)).toMatchObject({ dispatchState: 'accepted' })
   }
-  try {
-    // Alias the same journal owner for fixture entries while exercising the production index.
-    session.providerReceipts = source
-    await echo(seed)
-    for (let i = 0; i < 4096; i++) {
-      stamp(`chat-${Math.floor(i / 64)}`, `handover-${i}`, i)
-    }
-    await echo(await rig.workingSend(), 'refused')
-
-    source.retire('chat-0')
-    for (let i = 0; i < 256; i++) {
-      expect(renderer().attach(`reader-${i}`)).toBeDefined()
-    }
-    const excess = renderer()
-    expect(excess.attach('overflow')).toBeUndefined()
-    expect(readers.canOpenPort(excess.endpoint, excess.reader)).toBe(false)
-    await echo(await rig.workingSend(), 'indexed')
-  } finally {
-    await dispose()
-  }
-})
+)
 
 it.each([16, 160])('multiplexes %s streams with one waiting read', async (count) => {
   const rig = await receiptRig()

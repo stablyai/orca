@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 /** node-pty's patched addon (config/patches/node-pty@1.1.0.patch): kqueue NOTE_EXIT, pidfd or a Windows wait. */
 type ProcessExitWatchNative = {
   /** A watch id, 0 when no such process exists, or null when this host cannot watch it. */
-  watchProcessExit: (pid: number, onNotice: (exited: boolean) => void) => number | null
+  watchProcessExit: (pid: number, onNotice: (exited?: boolean) => void) => number | null
   unwatchProcessExit: (id: number) => void
 }
 

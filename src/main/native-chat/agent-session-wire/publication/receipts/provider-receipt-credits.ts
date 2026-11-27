@@ -78,6 +78,10 @@ export class ProviderReceiptCredits {
     return this.destinations.get(transport)
   }
 
+  hasPostedReply(transport: AbortSignal): boolean {
+    return this.get(transport)?.unread?.handedOff === true
+  }
+
   consumed(document: AbortSignal): ProviderReceiptCursor | undefined {
     return this.consumedByDocument.get(document)
   }
