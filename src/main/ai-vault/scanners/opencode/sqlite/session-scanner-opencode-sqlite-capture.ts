@@ -6,6 +6,7 @@ import type { AiVaultSession } from '../../../../../shared/ai-vault/contracts/ai
 import { timestampIso } from '../../../parsing/session-scanner-accumulator'
 import { asRecord } from '../../../parsing/session-record-fields'
 import { extractPartText, readOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { openCodeToolInput, openCodeToolOutcome } from '../session-scanner-opencode-tool-state'
 import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
 import { canReadOpenCodeMessageParts } from './session-scanner-opencode-sqlite-schema'
 import type {
@@ -69,29 +70,10 @@ function toolPartText(partData: string): { text: string; textTruncated: boolean 
     return null
   }
   const state = asRecord(part.state)
-  const call = toolCallContent(part.tool, sharedToolInputSpelling(state?.input))
-  const lines = [call.text, toolOutcome(state)]
+  const call = toolCallContent(part.tool, openCodeToolInput(state?.input))
+  const lines = [call.text, openCodeToolOutcome(state)]
   const text = lines.filter((line) => line !== null).join('\n')
   return text.trim() ? { text, textTruncated: call.textTruncated } : null
-}
-
-// Prefer failure text over output; running calls can still be indexed by their command alone.
-function toolOutcome(state: Record<string, unknown> | null): string | null {
-  const error = state?.error
-  if (typeof error === 'string' && error.trim()) {
-    return error
-  }
-  const output = state?.output
-  return typeof output === 'string' && output.trim() ? output : null
-}
-
-// Normalize OpenCode filePath to the shared file_path spelling before formatting tool input.
-function sharedToolInputSpelling(input: unknown): unknown {
-  const record = asRecord(input)
-  if (!record || typeof record.filePath !== 'string' || typeof record.file_path === 'string') {
-    return input
-  }
-  return { ...record, file_path: record.filePath }
 }
 
 function parseJson(value: string): unknown {

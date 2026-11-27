@@ -97,7 +97,8 @@ async function parseSessionForFullFirstUserPrompt(args: {
         platform: process.platform
       })
     }
-    if (args.sessionId) {
+    // Legacy OpenCode JSON sessions carry a sessionId but are read by the file parser.
+    if (args.sessionId && !(args.agent === 'opencode' && args.filePath.endsWith('.json'))) {
       return parse({
         fullFirstUserPrompt: true,
         dbPath: args.filePath,
