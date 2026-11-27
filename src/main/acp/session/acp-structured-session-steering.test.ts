@@ -260,6 +260,21 @@ describe('ACP orchestration mail steering', () => {
     expect(chat.methods()).toEqual([PROMPT, EXTENSION, PROMPT])
   })
 
+  it('keeps a Steer of waiting mail cancelling the turn when the agent has no steering extension', async () => {
+    const chat = await openChat(undefined)
+    const draft = await chat.mail()
+    expect(await chat.rig.sendNow(draft)).toMatchObject({ ok: true })
+    await chat.request(CANCEL)
+    await chat.finish('cancelled')
+    const next = await chat.request(PROMPT, 1)
+    expect(next.params).toEqual({ sessionId: SESSION, prompt: [{ type: 'text', text: MAIL_TEXT }] })
+    chat.agent.reply(next, { stopReason: 'end_turn' })
+    await eventually(async () => {
+      expect(await chat.submissions(draft)).toMatchObject([{ dispatchState: 'accepted' }])
+    })
+    expect(chat.methods()).toEqual([PROMPT, CANCEL, PROMPT])
+  })
+
   it('admits mail mid-turn only for OMP with initialize support', async () => {
     const supported = await openChat(STEERING)
     await supported.mail()

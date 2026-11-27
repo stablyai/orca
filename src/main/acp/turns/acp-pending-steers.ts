@@ -5,6 +5,7 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { AcpAgentError } from '../transport/acp-errors'
 import type {
   AcpSteerMode,
   AcpStructuredTurnsDeps,
@@ -28,7 +29,8 @@ export class AcpPendingSteers {
       'connection' | 'steeringSessionId' | 'settle' | 'agentName'
     >,
     private readonly turns: {
-      running: () => boolean
+      /** A prompt runs, or a model command owns the prompt slot. */
+      busy: () => boolean
       joinableTurn: () => AgentJournalItemIdentity | null
       start: (send: AcpTurnSend) => void
       cancel: () => void
@@ -41,10 +43,10 @@ export class AcpPendingSteers {
   }
 
   submit(send: AcpTurnSend, steer: AcpSteerMode): void {
-    const mode =
-      this.deps.steeringSessionId === undefined ? (steer === 'mail' ? 'wait' : 'cancel') : steer
+    // Without the extension a mid-turn send keeps the cancel steer the host chose it for.
+    const mode = this.deps.steeringSessionId === undefined ? 'cancel' : steer
     this.queue.push({ send, mode })
-    if (mode === 'cancel' && this.turns.running()) {
+    if (mode === 'cancel' && this.turns.busy()) {
       this.turns.cancel()
     } else {
       this.advance()
@@ -56,7 +58,7 @@ export class AcpPendingSteers {
     if (!next || this.inFlight || this.ended) {
       return
     }
-    if (!this.turns.running()) {
+    if (!this.turns.busy()) {
       this.queue.shift()
       this.turns.start(next.send)
     } else if (next.mode === 'cancel') {
@@ -67,7 +69,7 @@ export class AcpPendingSteers {
       if (turn && sessionId !== undefined) {
         this.queue.shift()
         this.inFlight = next.send
-        void this.inject(next.send, next.mode, sessionId, turn)
+        void this.inject(next.send, sessionId, turn)
       }
     }
   }
@@ -122,7 +124,6 @@ export class AcpPendingSteers {
 
   private async inject(
     send: AcpTurnSend,
-    mode: 'mail' | 'steer',
     sessionId: string,
     turn: AgentJournalItemIdentity
   ): Promise<void> {
@@ -134,8 +135,9 @@ export class AcpPendingSteers {
         await this.deps.connection.requestExtension('_session/steering', { sessionId, prompt })
       )
       outcome = reply.success ? reply.data.outcome : 'failed'
-    } catch {
-      // A missing reply does not prove the send was never injected.
+    } catch (error) {
+      // Only the agent's own refusal proves the send was not injected; a lost reply may have been.
+      outcome = error instanceof AcpAgentError ? 'failed' : 'unknown'
     }
     if (this.inFlight !== send) {
       return
@@ -143,21 +145,17 @@ export class AcpPendingSteers {
     this.inFlight = null
     if (outcome === 'injected') {
       this.accept(clientMessageId, turn)
+    } else if (outcome === 'unknown') {
+      // Resending could deliver it twice.
+      this.unknown(clientMessageId, 'ACP steering reply was lost')
     } else if (stop !== this.stopped) {
-      if (outcome === 'unknown') {
-        this.unknown(clientMessageId, 'ACP steering reply was lost')
-      } else {
-        this.reject(
-          clientMessageId,
-          agentSessionFailureFact('cancelled', { neverReachedAgent: true })
-        )
-      }
+      this.reject(
+        clientMessageId,
+        agentSessionFailureFact('cancelled', { neverReachedAgent: true })
+      )
     } else {
-      // Keep the same submission ahead of newer steers, even if its prompt ended mid-request.
-      this.queue.unshift({
-        send,
-        mode: mode === 'mail' || outcome === 'promptRequired' ? 'wait' : 'cancel'
-      })
+      // Keep the same submission ahead of newer steers; it waits for the turn to end, uncancelled.
+      this.queue.unshift({ send, mode: 'wait' })
     }
     this.advance()
     this.turns.onSettled()

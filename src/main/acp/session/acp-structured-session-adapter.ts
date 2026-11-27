@@ -122,7 +122,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     const { sessionId, fence, signal } = input
     signal?.throwIfAborted()
     input.onInputPreparation?.()
+    const mail = orchestrationMailNotice(input.body.from) !== null
     return withAcpModelFallback(session, this.writeBound(session, signal), async (fallback) => {
+      const { command } = fallback
       const optionsApplied = await applyAcpMessageOptions(
         session,
         input.executionOptions,
@@ -130,7 +132,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         () =>
           this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
         signal,
-        fallback.command
+        // The model command would cancel the turn mail joins; the next prompt applies that pick.
+        command && mail && session.turns.steersMail
+          ? async (value) => {
+              if (!session.turns.running) {
+                await command(value)
+              }
+            }
+          : command
       )
       if (!optionsApplied) {
         return rejectedAcpDispatch(session)
@@ -148,7 +157,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
             prompt,
             requestedAt: input.requestedAt ?? this.now()
           },
-          orchestrationMailNotice(input.body.from) !== null ? 'mail' : 'cancel'
+          mail ? 'mail' : 'cancel'
         )
       )
       await admitStructuredAgentSessionInput(input.admitFreshInput, commit)
@@ -255,7 +264,11 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   steeringMode: SessionAdapter['steeringMode'] = (sessionId) => {
     const session = this.children.sessions.get(sessionId)
-    return childState.isAcpReadySession(session) && session.turns.canInjectSteering
+    // One mail at a time: the host keeps later mail until a held steer settles.
+    return childState.isAcpReadySession(session) &&
+      session.turns.running &&
+      session.turns.steersMail &&
+      !session.turns.holdsSteers
       ? 'inject'
       : 'queue'
   }

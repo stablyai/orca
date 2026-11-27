@@ -21,6 +21,8 @@ export class AcpStructuredTurns {
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
   private readonly steers: AcpPendingSteers
+  /** Mail joins a running prompt through the steering extension instead of cancelling it. */
+  readonly steersMail: boolean
   private readonly idleWaiters = new Set<() => void>()
   private ended = false
   private stopAt: number | null = null
@@ -34,14 +36,16 @@ export class AcpStructuredTurns {
       this.active && this.acceptsRequests
         ? deps.lane.promptTurnIdentity(this.active.clientMessageId)
         : null
+    this.steersMail = deps.steeringSessionId !== undefined
     this.steers = new AcpPendingSteers(deps, {
-      running: () => this.running,
+      // A preparing steer's model command owns the prompt slot, so nothing may start under it.
+      busy: () => this.running || this.preparingSteers > 0,
       joinableTurn,
       start: (send) => this.start(send),
       cancel: () => this.cancelForSteer(),
       onSettled: () => this.notifyIdle()
     })
-    if (deps.steeringSessionId !== undefined) {
+    if (this.steersMail) {
       deps.lane.onTurnOpened(() => {
         if (this.steers.held && joinableTurn()) {
           this.steers.advance()
@@ -57,10 +61,6 @@ export class AcpStructuredTurns {
 
   get running(): boolean {
     return this.active !== null
-  }
-
-  get canInjectSteering(): boolean {
-    return this.active !== null && this.deps.steeringSessionId !== undefined
   }
 
   /** Interactive requests wait for the person, including in turns the agent began itself, unless Stop or a steer cuts them short. */
@@ -151,6 +151,7 @@ export class AcpStructuredTurns {
     this.cancelForSteer()
     return () => {
       this.preparingSteers -= 1
+      this.steers.advance()
       this.notifyIdle()
     }
   }
