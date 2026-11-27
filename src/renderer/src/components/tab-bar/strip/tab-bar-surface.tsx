@@ -33,6 +33,8 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
 import { BotGroupNewThreadMenuItems } from '../../bots/BotGroupNewThreadMenuItems'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
+import { launchDefaultAgentTabFromTabBar } from '../../terminal/keyboard-shortcuts/agent-tab-shortcut-launch'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { PinnedHomeTabSlot } from './PinnedHomeTabSlot'
 import {
   newTabButtonHideClassName,
@@ -109,6 +111,15 @@ export function renderTabBarSurface(
     showStaticCreateMenuItems
   } = createMenu
   const { activeVisibleTabId } = itemProjection
+  const canLaunchDefaultAgent = showAgentLaunchItems && !bot && !botGroup
+  const isMac = getShortcutPlatform() === 'darwin'
+  const isDefaultAgentClick = (event: React.MouseEvent<HTMLButtonElement>): boolean =>
+    canLaunchDefaultAgent &&
+    event.button === 0 &&
+    !event.altKey &&
+    !event.shiftKey &&
+    (isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)
+  const newTabLabel = t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')
   const {
     orderedItems,
     sortableIds,
@@ -256,20 +267,45 @@ export function renderTabBarSurface(
         // Why: modal would disable body pointer events, making the Mobile Emulator "Hide" re-enable toast unclickable.
         modal={false}
       >
-        <DropdownMenuTrigger asChild>
-          {/* Why: "+" hides whole rather than clip, so Tab never lands on it (rendered-tab-strip.ts). */}
-          <button
-            className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${newTabButtonHideClassName(
-              strip
-            )}`}
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-            aria-label={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-            data-contextual-tour-target="tab-create-menu"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <DropdownMenuTrigger asChild>
+            <TooltipTrigger asChild>
+              {/* Why: "+" hides whole rather than clip, so Tab never lands on it (rendered-tab-strip.ts). */}
+              <button
+                className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${newTabButtonHideClassName(
+                  strip
+                )}`}
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                aria-label={newTabLabel}
+                data-contextual-tour-target="tab-create-menu"
+                onPointerDown={(event) => {
+                  // Why: Radix opens the menu on pointer down before the click.
+                  if (isDefaultAgentClick(event)) {
+                    event.preventDefault()
+                  }
+                }}
+                onClick={(event) => {
+                  if (event.detail > 0 && isDefaultAgentClick(event)) {
+                    launchDefaultAgentTabFromTabBar(worktreeId, resolvedGroupId)
+                  }
+                }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </TooltipTrigger>
+          </DropdownMenuTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {canLaunchDefaultAgent
+              ? t(
+                  'components.tabBar.newTabWithDefaultAgentHint',
+                  'New tab ({{modifier}}-click for default agent)',
+                  {
+                    modifier: isMac ? '⌘' : 'Ctrl'
+                  }
+                )
+              : newTabLabel}
+          </TooltipContent>
+        </Tooltip>
         <NewTabMenuContent
           align="start"
           sideOffset={6}

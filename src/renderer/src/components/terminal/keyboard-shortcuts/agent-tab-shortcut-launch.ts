@@ -7,16 +7,22 @@ import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating
 import { useAppStore } from '../../../store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import {
   captureAgentTabLaunchContext,
   type AgentTabLaunchContext
 } from '../../../lib/agent-session/launch/pane/agent-tab-launch-context'
-import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
+import {
+  resolveTerminalAgentTabShortcut,
+  type TerminalAgentTabShortcut
+} from './terminal-agent-tab-shortcut'
+import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 
 function launchAgentTab(
   worktreeId: string,
   agent: TuiAgent,
-  { groupId, focusIntent }: AgentTabLaunchContext
+  { groupId, focusIntent }: AgentTabLaunchContext,
+  launchSource: LaunchSource
 ): void {
   launchAgentInNewTabWithOutcome({
     requestId: createNonSecureContextUuid(),
@@ -24,7 +30,7 @@ function launchAgentTab(
     agent,
     worktreeId,
     groupId,
-    launchSource: 'shortcut'
+    launchSource
   })
 }
 
@@ -32,18 +38,20 @@ function launchAgentTab(
 export function launchAgentTabShortcut(
   worktreeId: string,
   { agent, pendingAgent }: Pick<TerminalAgentTabShortcut, 'agent' | 'pendingAgent'>,
-  isTargetCurrent: () => boolean
+  isTargetCurrent: () => boolean,
+  { groupId, launchSource = 'shortcut' }: { groupId?: string; launchSource?: LaunchSource } = {}
 ): void {
   const context = captureAgentTabLaunchContext(worktreeId)
+  context.groupId = groupId ?? context.groupId
   if (agent) {
-    launchAgentTab(worktreeId, agent, context)
+    launchAgentTab(worktreeId, agent, context, launchSource)
     return
   }
   void pendingAgent?.then((settledAgent) => {
     // Why: a slow host probe must not open a tab in a pane (or on a host) the user has since left.
     const targetCurrent = isTargetCurrent()
     if (settledAgent && targetCurrent) {
-      launchAgentTab(worktreeId, settledAgent, context)
+      launchAgentTab(worktreeId, settledAgent, context, launchSource)
       return
     }
     context.focusIntent.cancel()
@@ -56,6 +64,33 @@ export function launchAgentTabShortcut(
       )
     }
   })
+}
+
+export function launchDefaultAgentTabFromTabBar(worktreeId: string, groupId: string): void {
+  const state = useAppStore.getState()
+  const detectionTarget = getDetectionTargetIdentityForWorktree(state, worktreeId)
+  const shortcut = resolveTerminalAgentTabShortcut({
+    activeWorktreeId: worktreeId,
+    keybindings: state.keybindings,
+    matchShortcut: (actionId) => actionId === 'tab.newAgent'
+  })
+  launchAgentTabShortcut(
+    worktreeId,
+    shortcut,
+    () => {
+      const latest = useAppStore.getState()
+      const workspaceVisible =
+        worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+          ? selectFloatingWorkspacePanelVisible(latest)
+          : latest.activeWorktreeId === worktreeId
+      return (
+        workspaceVisible &&
+        latest.activeGroupIdByWorktree[worktreeId] === state.activeGroupIdByWorktree[worktreeId] &&
+        getDetectionTargetIdentityForWorktree(latest, worktreeId) === detectionTarget
+      )
+    },
+    { groupId, launchSource: 'tab_bar_quick_launch' }
+  )
 }
 
 export function launchFloatingWorkspaceAgentShortcut(
