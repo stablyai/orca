@@ -118,18 +118,25 @@ async function runFormAct(act: PluginShotAct, context: PluginPanelActContext): P
     const code = element.type === 'CodeInput'
     let value = code ? toLf(base) : base
     const text = code ? toLf(act.text) : act.text
-    if (act.replace || (text === '' && value !== base)) {
+    if (act.replace) {
       change(target, value, 'type')
     }
     // A rendered text field drops a keystroke that would pass `maxLength`, as its textarea does;
     // iterating by code point keeps a surrogate pair whole.
     const maxLength =
       typeof element.props.maxLength === 'number' ? element.props.maxLength : Infinity
+    let typed = false
     for (const character of text) {
       if (value.length + character.length > maxLength) {
         continue
       }
       value += character
+      change(target, value, 'type')
+      typed = true
+    }
+    // With nothing typed (empty text, or every keystroke dropped at `maxLength`), still store the
+    // seed as the LF text the field shows, so the target reports and submits that text.
+    if (!typed && value !== base) {
       change(target, value, 'type')
     }
     await settle()

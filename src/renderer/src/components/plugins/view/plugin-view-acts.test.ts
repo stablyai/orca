@@ -29,13 +29,19 @@ function panel(
       return true
     }
   }
+  const sent: [string, unknown[]][] = []
   const deps = {
-    driver: { tree: () => tree, send: () => {} },
+    driver: {
+      tree: () => tree,
+      send: (callback: string, args: unknown[]) => {
+        sent.push([callback, args])
+      }
+    },
     targetOf: (drawn: unknown) => (drawn === props ? target : null),
     expansionOf: () => null,
     settle: async () => {}
   }
-  return { deps, changes }
+  return { deps, changes, sent }
 }
 
 describe('runPluginPanelActs type', () => {
@@ -74,6 +80,20 @@ describe('runPluginPanelActs type', () => {
     const results = await runPluginPanelActs([{ type: { label: 'Field' }, text: 'ab' }], deps)
     expect(results).toEqual([{ ok: true }])
     expect(changes).toEqual(['a'])
+  })
+
+  it('submits a CodeInput value as LF when every keystroke is dropped at maxLength', async () => {
+    const { deps, changes, sent } = panel('CodeInput', 'a\r\nb', {
+      maxLength: 3,
+      onSubmit: { $callback: 'submit' }
+    })
+    const results = await runPluginPanelActs(
+      [{ type: { label: 'Field' }, text: 'c', submit: true }],
+      deps
+    )
+    expect(results).toEqual([{ ok: true }])
+    expect(changes).toEqual(['a\nb'])
+    expect(sent).toEqual([['submit', ['a\nb']]])
   })
 
   it('keeps a surrogate pair whole at the maxLength cut', async () => {

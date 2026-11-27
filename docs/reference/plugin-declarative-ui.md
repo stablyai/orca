@@ -444,7 +444,7 @@ back to `Input` or `Textarea`.
 With `rows` 1 the text is one line that wraps (growing up to `maxRows`) and Enter calls `onSubmit`;
 with more, Enter breaks the line and Cmd+Enter (Ctrl+Enter off macOS) submits. Shift+Enter always
 breaks the line, and a new line starts with the indent of the line it breaks. Typing a word (letters, digits, `_`, `$` and `.`) offers the `completions` whose
-`label` contains it, those starting with it first; Ctrl+Space offers them all. Arrows move, Enter or
+`label` contains it, those starting with it first; Ctrl+Space offers them all. Either way the list shows the first 50. Arrows move, Enter or
 Tab inserts `insert` (or `label`) in place of the word, Escape closes. With `quotes`, the characters that open and close a string (for JavaScript: single quote, double
 quote and backtick), typing inside a string offers nothing; a backslash escapes, and a line break
 ends any string but a backtick one. Orca filters locally, so pass
