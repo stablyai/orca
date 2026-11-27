@@ -17,6 +17,7 @@ import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { getTaskPresetQuery } from '../../../../../shared/work-items/task-preset-query'
+import { resolveGitHubLandingPreset } from '../../../../../shared/work-items/task-github-search'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -79,7 +80,12 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
+  const landingTaskViewPreset = useAppStore((s) =>
+    resolveGitHubLandingPreset(
+      s.taskResumeState?.githubItemsPreset,
+      s.settings?.defaultTaskViewPreset
+    )
+  )
   const preferredVisibleTaskProviders = React.useMemo(
     () => normalizeVisibleTaskProviders(rawVisibleTaskProviders),
     [rawVisibleTaskProviders]
@@ -135,12 +141,12 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
         firstGitRepo.id,
         firstGitRepo.path,
         PER_REPO_FETCH_LIMIT,
-        getTaskPresetQuery(defaultTaskViewPreset)
+        getTaskPresetQuery(landingTaskViewPreset)
       )
     }
   }, [
     activeRepoId,
-    defaultTaskViewPreset,
+    landingTaskViewPreset,
     prefetchWorkItems,
     repoMap,
     repos,

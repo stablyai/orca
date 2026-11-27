@@ -9,6 +9,7 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { getTaskPresetQuery } from '../../../../../shared/work-items/task-preset-query'
+import { resolveGitHubLandingPreset } from '../../../../../shared/work-items/task-github-search'
 
 const LINEAR_TASK_PREFETCH_LIMIT = 36
 
@@ -142,12 +143,16 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
         })()
 
         const resume = state.taskResumeState
-        const defaultPreset = state.settings?.defaultTaskViewPreset ?? 'all'
         // Why: must match the query TaskPage's resume effect mounts with, else the warm cache key misses and prefetch is wasted.
         const query =
           resume?.githubItemsPreset === null
             ? (resume.githubItemsQuery ?? '').trim()
-            : getTaskPresetQuery(resume?.githubItemsPreset ?? defaultPreset)
+            : getTaskPresetQuery(
+                resolveGitHubLandingPreset(
+                  resume?.githubItemsPreset,
+                  state.settings?.defaultTaskViewPreset
+                )
+              )
         for (const repo of selectedRepos) {
           state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query, {
             sourceContext:

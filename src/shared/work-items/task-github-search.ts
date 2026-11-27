@@ -23,8 +23,20 @@ export function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: stri
 export function normalizeGitHubTaskPreset(
   preset: TaskViewPresetId | null | undefined
 ): TaskViewPresetId {
-  // 'all' is the untouched default (and legacy mixed view); users with no saved choice land on PRs.
+  // 'all' is the untouched settings default; with no chosen default the page lands on PRs.
   return !preset || preset === 'all' ? 'prs' : preset
+}
+
+/** The saved last tab wins over the default setting. */
+export function resolveGitHubLandingPreset(
+  savedPreset: TaskViewPresetId | null | undefined,
+  defaultPreset: TaskViewPresetId | null | undefined
+): TaskViewPresetId {
+  if (savedPreset) {
+    // A saved legacy mixed view kept opening Issues.
+    return savedPreset === 'all' ? 'issues' : savedPreset
+  }
+  return normalizeGitHubTaskPreset(defaultPreset)
 }
 
 export function getGitHubTaskKind(preset: TaskViewPresetId | null, query: string): GitHubTaskKind {

@@ -1,23 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { getGitHubTaskKind, normalizeGitHubTaskPreset } from './task-github-search'
-import { getTaskPresetQuery } from './task-preset-query'
+import { resolveGitHubLandingPreset } from './task-github-search'
 
-describe('GitHub Tasks landing tab', () => {
-  it('lands on PRs when no tab choice was saved', () => {
-    for (const unsaved of [undefined, null, 'all'] as const) {
-      const preset = normalizeGitHubTaskPreset(unsaved)
-      expect(preset).toBe('prs')
-      expect(getGitHubTaskKind(preset, getTaskPresetQuery(preset))).toBe('prs')
-      // Prefetch keys off the raw setting; it must match the query the page mounts with.
-      expect(getTaskPresetQuery(unsaved ?? null)).toBe(getTaskPresetQuery(preset))
-    }
+describe('resolveGitHubLandingPreset', () => {
+  it('lands on PRs only when no tab or default was chosen', () => {
+    expect(resolveGitHubLandingPreset(undefined, 'all')).toBe('prs')
+    expect(resolveGitHubLandingPreset(undefined, undefined)).toBe('prs')
+    expect(resolveGitHubLandingPreset(undefined, 'my-issues')).toBe('my-issues')
   })
 
-  it('keeps a saved Issues choice', () => {
-    for (const saved of ['issues', 'my-issues'] as const) {
-      const preset = normalizeGitHubTaskPreset(saved)
-      expect(preset).toBe(saved)
-      expect(getGitHubTaskKind(preset, getTaskPresetQuery(preset))).toBe('issues')
-    }
+  it('keeps the saved last tab, including a legacy saved mixed view', () => {
+    expect(resolveGitHubLandingPreset('issues', 'all')).toBe('issues')
+    expect(resolveGitHubLandingPreset('all', 'all')).toBe('issues')
+    expect(resolveGitHubLandingPreset('my-prs', 'issues')).toBe('my-prs')
   })
 })
