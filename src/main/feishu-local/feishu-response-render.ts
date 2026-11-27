@@ -35,7 +35,11 @@ export function feishuResponseText(data: FeishuCardData): string {
       )
       .map((entry) => entry.text),
     ...(response.native?.messages ?? []).flatMap((entry) => {
-      if (response.final?.trim() === entry.text.trim()) {
+      if (
+        response.final?.trim() === entry.text.trim() ||
+        (entry === response.native?.messages.at(-1) &&
+          response.final?.startsWith(`${entry.text.trim()}\n\n`))
+      ) {
         return []
       }
       const before = previousMessages.findLast((m) => m.id === entry.id)?.text
