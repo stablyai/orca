@@ -101,6 +101,14 @@
       "previewTools": "Read 3 files · Ran pnpm test",
       "previewAnswer": "The test waits on `setTimeout(0)` while the stream is still flushing, so it passes only when the flush wins."
     },
+    "nativeChatImage": {
+      "heading": "IMAGES",
+      "size": "Picture size",
+      "footer": "Pictures in a message stay whole. Column width fills the message. Tap a picture to open it full size.",
+      "compact": "Compact",
+      "medium": "Medium",
+      "column": "Column width"
+    },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Could not load delivery settings. Reopen this screen to retry.",
       "saveFailed": "Could not save delivery settings. Try again.",

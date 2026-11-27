@@ -211,6 +211,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatQueueFollowUps?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
+  /** Picture size in a native chat message. Absent means column width. Comment images and attachment tiles ignore this. */
+  nativeChatMarkdownImageSize?: 'compact' | 'medium' | 'column'
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
   nativeChatLinkPreviews?: boolean
   /** Spellcheck and autocorrect (system text replacement) in the chat composer; absent means on. */

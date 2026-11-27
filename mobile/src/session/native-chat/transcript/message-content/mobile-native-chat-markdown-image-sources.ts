@@ -9,24 +9,27 @@ import { mobileMarkdownImageSources } from '../../../../components/markdown/bloc
 import { mobileNativeChatMarkdownImageBlock } from './mobile-native-chat-markdown-image-block'
 
 function sourceReader(visuals: boolean) {
-  const sources = new WeakMap<NativeChatMessage['blocks'], readonly string[]>()
+  const sources = new WeakMap<
+    NativeChatMessage['blocks'],
+    { drawnMarkdown: string | undefined; images: readonly string[] }
+  >()
   return function imageSources(message: NativeChatMessage): readonly string[] {
     const cached = sources.get(message.blocks)
-    if (cached) {
-      return cached
+    if (cached && cached.drawnMarkdown === message.drawnMarkdown) {
+      return cached.images
     }
     const images = deriveNativeChatRowContent(message.blocks).prose.flatMap((block) => {
       if (!isTextBlock(block)) {
         return []
       }
-      const content = block.text.trim()
+      const content = (message.drawnMarkdown ?? block.text).trim()
       const text = visuals ? protectMobileMarkdownVisualLines(content).text : content
       return mobileMarkdownImageSources(
         parseMobileMarkdownTree(text, false, true),
         (href) => mobileNativeChatMarkdownImageBlock(href, '') !== null
       )
     })
-    sources.set(message.blocks, images)
+    sources.set(message.blocks, { drawnMarkdown: message.drawnMarkdown, images })
     return images
   }
 }

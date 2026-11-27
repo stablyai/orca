@@ -15,6 +15,11 @@ import {
   useNativeChatTextSettingsSnapshot,
   type NativeChatFont
 } from '../session/native-chat/preferences/native-chat-text-settings'
+import {
+  updateNativeChatMarkdownImageSize,
+  useNativeChatMarkdownImageSize
+} from '../session/native-chat/preferences/native-chat-markdown-image-size'
+import type { NativeChatMarkdownImageSize } from '../../../src/shared/native-chat/settings/native-chat-markdown-image-size'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -53,6 +58,12 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
   const t = useMobileTranslation()
   const router = useRouter()
   const { settings, stored } = useNativeChatTextSettingsSnapshot()
+  const imageSize = useNativeChatMarkdownImageSize()
+  const imageSizeSegments: { value: NativeChatMarkdownImageSize; label: string }[] = [
+    { value: 'compact', label: t('settings.nativeChatImage.compact', 'Compact') },
+    { value: 'medium', label: t('settings.nativeChatImage.medium', 'Medium') },
+    { value: 'column', label: t('settings.nativeChatImage.column', 'Column width') }
+  ]
   const [fontPickerOpen, setFontPickerOpen] = useState(false)
   // The preview follows a drag; the size saves once when it ends.
   const [draggedSize, setDraggedSize] = useState<number | null>(null)
@@ -123,6 +134,25 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
               onSelect={(lineSpacing) => void updateNativeChatTextSettings({ lineSpacing })}
               fill
               testIDPrefix="chat-text-spacing-"
+            />
+          </StackedRow>
+        </SettingsSection>
+
+        <SettingsSection
+          title={t('settings.nativeChatImage.heading', 'IMAGES')}
+          footer={t(
+            'settings.nativeChatImage.footer',
+            'Pictures in a message stay whole. Column width fills the message. Tap a picture to open it full size.'
+          )}
+        >
+          <StackedRow key="imageSize" title={t('settings.nativeChatImage.size', 'Picture size')}>
+            <MobileSegmentedControl
+              segments={imageSizeSegments}
+              selected={imageSize}
+              onSelect={(next) => void updateNativeChatMarkdownImageSize(next)}
+              fill
+              scrollWhenCrowded
+              testIDPrefix="chat-image-size-"
             />
           </StackedRow>
         </SettingsSection>

@@ -1,3 +1,4 @@
+import { useNativeChatMarkdownImageSize } from '../../preferences/native-chat-markdown-image-size'
 import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import { mobileNativeChatMarkdownImageBlock } from './mobile-native-chat-markdown-image-block'
 import { useCallback, useContext, useEffect, useState } from 'react'
@@ -12,6 +13,7 @@ import {
   type NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { isAgentSessionHostStatusPresentation } from '../../../../../../src/shared/agent-session/view/agent-session-host-status-rows'
+import { nativeChatMarkdownImageFrame } from '../../../../../../src/shared/native-chat/settings/native-chat-markdown-image-size'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
 import { MobileNativeChatMarkdownRowKeyContext } from '../viewport/mobile-native-chat-disclosure-store'
@@ -148,6 +150,16 @@ function ImageAttachment({
     path: string
     uri: string | null
   } | null>(null)
+  const imageSize = useNativeChatMarkdownImageSize()
+  const sourceKey = block.url ?? block.path ?? ''
+  const [aspectState, setAspectState] = useState<{ key: string; aspect: number | null }>({
+    key: sourceKey,
+    aspect: null
+  })
+  const frame = nativeChatMarkdownImageFrame(
+    imageSize,
+    aspectState.key === sourceKey ? aspectState.aspect : null
+  )
   useEffect(() => {
     if (!imageSource || !hostPath) {
       return
@@ -165,7 +177,7 @@ function ImageAttachment({
   const uri = renderable ?? read?.uri
   const label = block.alt ?? t('chat.nativeChatProse.attachedImage', 'Attached image')
   if (hostPath && !read) {
-    return <View style={styles.imageThumb} accessibilityLabel={label} />
+    return <View style={[styles.imageChrome, frame]} accessibilityLabel={label} />
   }
   if (!uri) {
     return (
@@ -183,7 +195,19 @@ function ImageAttachment({
       accessibilityLabel={label}
       accessibilityHint={t('chat.nativeChatProse.openImageHint', 'Opens the image full size')}
     >
-      <Image source={{ uri }} style={styles.imageThumb} resizeMode="contain" />
+      <Image
+        source={{ uri }}
+        style={[styles.imageChrome, frame]}
+        resizeMode="contain"
+        onLoad={({ nativeEvent }) => {
+          if (nativeEvent.source.width > 0 && nativeEvent.source.height > 0) {
+            setAspectState({
+              key: sourceKey,
+              aspect: nativeEvent.source.width / nativeEvent.source.height
+            })
+          }
+        }}
+      />
     </Pressable>
   )
 }
