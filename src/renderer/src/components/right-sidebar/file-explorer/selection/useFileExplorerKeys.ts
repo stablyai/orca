@@ -149,8 +149,15 @@ export function useFileExplorerKeys(opts: {
       if (inlineInputRef.current) {
         return
       }
+      if (shouldIgnoreFileExplorerKeyTarget(e.target)) {
+        return
+      }
+
+      // Undo and dotfiles toggle own the whole shell, including Radix’s scrollbar sibling outside the viewport.
+      const inExplorer = focusInExplorer()
       const platform = getShortcutPlatform()
       if (
+        inExplorer &&
         tryHandleFileExplorerDotfilesShortcut({
           event: e,
           platform,
@@ -161,12 +168,6 @@ export function useFileExplorerKeys(opts: {
       ) {
         return
       }
-      if (shouldIgnoreFileExplorerKeyTarget(e.target)) {
-        return
-      }
-
-      // Undo owns the whole shell, including Radix’s scrollbar sibling outside the viewport.
-      const inExplorer = focusInExplorer()
       const wantUndo =
         keybindingMatchesAction('fileExplorer.undo', e, platform, keybindings) &&
         fileExplorerHasUndo()

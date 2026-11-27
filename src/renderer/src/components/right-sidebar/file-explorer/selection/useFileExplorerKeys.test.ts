@@ -126,23 +126,37 @@ describe('useFileExplorerKeys dotfiles shortcut', () => {
     vi.restoreAllMocks()
   })
 
-  it('toggles per-worktree dotfiles from explorer, chatbox, and terminal, and swallows repeats', () => {
-    const { shell, rowButton, chatPrompt, terminalTextarea } = buildWorkspaceDom()
+  it('toggles per-worktree dotfiles only when the explorer is focused and swallows repeats', () => {
+    const { shell, viewport, rowButton, chatPrompt, terminalTextarea, editorTextarea } =
+      buildWorkspaceDom()
     const { unmount } = renderExplorerKeys(shell)
 
-    // Works from chatbox without clicking into explorer first.
-    chatPrompt.focus()
-    const fromChat = dispatchKey(chatPrompt, {
+    // Ignores chatbox, terminal, and editor focus outside the explorer.
+    for (const outsideTarget of [chatPrompt, terminalTextarea, editorTextarea]) {
+      outsideTarget.focus()
+      const outsideEvent = dispatchKey(outsideTarget, {
+        key: '.',
+        code: 'Period',
+        metaKey: true,
+        shiftKey: true
+      })
+      expect(outsideEvent.defaultPrevented).toBe(false)
+      expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBeUndefined()
+    }
+
+    // Works when a row inside the explorer is focused.
+    rowButton.focus()
+    const fromRow = dispatchKey(rowButton, {
       key: '.',
       code: 'Period',
       metaKey: true,
       shiftKey: true
     })
-    expect(fromChat.defaultPrevented).toBe(true)
+    expect(fromRow.defaultPrevented).toBe(true)
     expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBe(false)
 
     // Swallows held repeats without toggling again.
-    const repeated = dispatchKey(chatPrompt, {
+    const repeated = dispatchKey(rowButton, {
       key: '.',
       code: 'Period',
       metaKey: true,
@@ -152,87 +166,42 @@ describe('useFileExplorerKeys dotfiles shortcut', () => {
     expect(repeated.defaultPrevented).toBe(true)
     expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBe(false)
 
-    // Works from terminal under default orca-first policy.
-    terminalTextarea.focus()
-    const fromTerminal = dispatchKey(terminalTextarea, {
+    // Works when the explorer viewport background itself is focused.
+    viewport.focus()
+    const fromViewport = dispatchKey(viewport, {
       key: '>',
       code: 'Period',
       metaKey: true,
       shiftKey: true
     })
-    expect(fromTerminal.defaultPrevented).toBe(true)
-    expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBeUndefined()
-
-    // Works when explorer itself is focused.
-    rowButton.focus()
-    const fromExplorer = dispatchKey(rowButton, {
-      key: '.',
-      code: 'Period',
-      metaKey: true,
-      shiftKey: true
-    })
-    expect(fromExplorer.defaultPrevented).toBe(true)
-    expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBe(false)
-    unmount()
-  })
-
-  it('yields in terminal under terminal-first policy', () => {
-    const { shell, terminalTextarea } = buildWorkspaceDom()
-    const { unmount } = renderExplorerKeys(shell)
-    act(() => {
-      useAppStore.setState({
-        settings: {
-          ...(useAppStore.getState().settings ?? getDefaultSettings('/fixture-home')),
-          terminalShortcutPolicy: 'terminal-first'
-        }
-      })
-    })
-
-    terminalTextarea.focus()
-    const event = dispatchKey(terminalTextarea, {
-      key: '.',
-      code: 'Period',
-      metaKey: true,
-      shiftKey: true
-    })
-    expect(event.defaultPrevented).toBe(false)
+    expect(fromViewport.defaultPrevented).toBe(true)
     expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBeUndefined()
     unmount()
   })
 
-  it('uses Ctrl+Shift+. on Linux/Windows and respects custom rebindings', () => {
+  it('uses Ctrl+Shift+. on Linux/Windows and respects custom rebindings when explorer is focused', () => {
     setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
-    const { shell, chatPrompt } = buildWorkspaceDom()
+    const { shell, rowButton } = buildWorkspaceDom()
     const { unmount } = renderExplorerKeys(shell)
-    chatPrompt.focus()
+    rowButton.focus()
 
-    dispatchKey(chatPrompt, { key: '>', code: 'Period', ctrlKey: true, shiftKey: true })
+    dispatchKey(rowButton, { key: '>', code: 'Period', ctrlKey: true, shiftKey: true })
     expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBe(false)
 
     act(() => {
       useAppStore.setState({ keybindings: { 'fileExplorer.toggleDotfiles': ['Mod+H'] } })
     })
-    dispatchKey(chatPrompt, { key: '>', code: 'Period', ctrlKey: true, shiftKey: true })
+    dispatchKey(rowButton, { key: '>', code: 'Period', ctrlKey: true, shiftKey: true })
     expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBe(false)
 
-    dispatchKey(chatPrompt, { key: 'h', code: 'KeyH', ctrlKey: true })
+    dispatchKey(rowButton, { key: 'h', code: 'KeyH', ctrlKey: true })
     expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBeUndefined()
     unmount()
   })
 
-  it('ignores text inputs, code editors, inline input, and hidden explorer states', () => {
-    const { shell, rowButton, filterInput, editorTextarea, chatPrompt } = buildWorkspaceDom()
+  it('ignores filter input, inline input, and hidden explorer states', () => {
+    const { shell, rowButton, filterInput } = buildWorkspaceDom()
     const { rerender, unmount } = renderExplorerKeys(shell)
-
-    editorTextarea.focus()
-    const editorEvent = dispatchKey(editorTextarea, {
-      key: '.',
-      code: 'Period',
-      metaKey: true,
-      shiftKey: true
-    })
-    expect(editorEvent.defaultPrevented).toBe(false)
-    expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBeUndefined()
 
     filterInput.focus()
     const inputEvent = dispatchKey(filterInput, {
@@ -258,11 +227,11 @@ describe('useFileExplorerKeys dotfiles shortcut', () => {
     expect(useAppStore.getState().showDotfilesByWorktree['wt-1']).toBeUndefined()
 
     rerender({ inlineInput: null })
-    chatPrompt.focus()
+    rowButton.focus()
     act(() => {
       useAppStore.setState({ rightSidebarExplorerView: 'search' })
     })
-    const searchViewEvent = dispatchKey(chatPrompt, {
+    const searchViewEvent = dispatchKey(rowButton, {
       key: '.',
       code: 'Period',
       metaKey: true,
@@ -274,7 +243,7 @@ describe('useFileExplorerKeys dotfiles shortcut', () => {
     act(() => {
       useAppStore.setState({ rightSidebarExplorerView: 'files', rightSidebarOpen: false })
     })
-    const closedSidebarEvent = dispatchKey(chatPrompt, {
+    const closedSidebarEvent = dispatchKey(rowButton, {
       key: '.',
       code: 'Period',
       metaKey: true,
