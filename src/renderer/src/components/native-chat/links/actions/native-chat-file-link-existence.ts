@@ -9,6 +9,11 @@ import {
   type FileLinkTarget
 } from '@/components/terminal-pane/links/files/terminal-file-link-target'
 import { getTerminalFileContext } from '@/components/terminal-pane/host-files/terminal-file-path-mapping'
+import {
+  hostFileLinkTargetExists,
+  isHostPathOutsideWorkspace
+} from '@/components/terminal-pane/links/files/terminal-host-file-link-existence'
+import type { TerminalPathExistsCache } from '@/components/terminal-pane/links/files/terminal-path-exists-cache'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   createNativeChatFileLinkChecker,
@@ -31,6 +36,7 @@ export function createNativeChatFileLinkExistence(
   // Why: until an SSH workspace's connection is known, an unrouted check would stat this machine (#6648).
   const hostUnresolved =
     host.connectionId === undefined && !isWorktreeConnectionResolved(host.worktreeId)
+  const outsideWorkspaceExists: TerminalPathExistsCache = new Map()
   const isHostUnresolved = (target: FileLinkTarget): boolean =>
     !target.fileContext.sourceHostResolved ||
     (hostUnresolved && !target.fileContext.connectionId && !target.isRemoteRuntimePath)
@@ -61,6 +67,10 @@ export function createNativeChatFileLinkExistence(
           runtimeTargetEnvironmentId(target.fileContext.target)
       ) {
         throw new Error('The workspace host changed or could not be determined')
+      }
+      // Why: pathExists stats this computer when a paired host's path is outside the workspace (#50825).
+      if (isHostPathOutsideWorkspace(target)) {
+        return hostFileLinkTargetExists(target, outsideWorkspaceExists, null)
       }
       return pathExists(target.fileContext, target.absolutePath, target.isRemoteRuntimePath)
     }
