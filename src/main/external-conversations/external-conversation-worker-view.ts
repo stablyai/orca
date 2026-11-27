@@ -29,6 +29,8 @@ export type ConversationWorkersWatcher = {
     view: ConversationWorkerView,
     reasons: ReadonlySet<ConversationWorkersRead>
   ) => void
+  /** A pane's turn just ended, before its answer or its workers' read: told as the end arrives. */
+  turnEnding?: (paneKey: string) => void
   watched: () => void
   forgotten: (paneKey: string) => void
   cleared: () => void

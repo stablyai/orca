@@ -77,20 +77,21 @@ export function decideThreadStatus({
   if (view.activity === 'none') {
     return DISARM
   }
-  if (
-    !view.open ||
-    now - armed.turnEndAt >= THREAD_STATUS_MAX_MS ||
-    linesToday(fact, now) >= THREAD_STATUS_DAY_CAP - 1
-  ) {
-    // A run that posted no update ends without saying it stops them.
-    return !armed.lines
-      ? DISARM
-      : held
-        ? WAIT
-        : { kind: 'post', text: THREAD_STATUS_STOP_LINE, stop: true }
+  // A run that posted no update ends without saying it stops them.
+  const stop: ThreadStatusDecision = !armed.lines
+    ? DISARM
+    : held
+      ? WAIT
+      : { kind: 'post', text: THREAD_STATUS_STOP_LINE, stop: true }
+  if (!view.open || now - armed.turnEndAt >= THREAD_STATUS_MAX_MS) {
+    return stop
   }
   if (held || now - armed.lastLineAt < THREAD_STATUS_DUE_MS[armed.dueStep]) {
     return WAIT
+  }
+  // The day's last line is the stop line, posted when the next update would be.
+  if (linesToday(fact, now) >= THREAD_STATUS_DAY_CAP - 1) {
+    return stop
   }
   const elapsed = threadStatusElapsed(now - armed.at)
   const working = view.activity !== 'idle' || view.helpersRunning

@@ -19,6 +19,7 @@ import {
   armedFact,
   armedLinks,
   disarmedFact,
+  stalePending,
   statusReplyId,
   withArmed,
   withBotLine,
@@ -29,6 +30,7 @@ import {
 import { threadStatusHeld } from './thread-status-hold'
 import { threadLinesOf } from './thread-status-lines'
 import { sendThreadStatusLine } from './thread-status-send'
+import { ThreadStatusWaits } from './thread-status-waits'
 import { idOf, unrefTimer, type ThreadStatusDeps } from './thread-status-deps'
 
 export type { ThreadStatusCloud, ThreadStatusDeps } from './thread-status-deps'
@@ -41,8 +43,6 @@ type Thread = Pick<ExternalConversationLink, 'source' | 'externalId'>
 
 export class ThreadStatus implements ConversationWorkersWatcher {
   private readonly views = new Map<string, ConversationWorkerView>()
-  // Open prompts each armed conversation showed, by conversation id.
-  private readonly prompts = new Map<string, Set<string>>()
   // Armed threads by id: the clock runs while there are any.
   private readonly armed = new Map<string, Thread>()
   // Threads deciding or sending a line: one at a time each.
@@ -51,11 +51,13 @@ export class ThreadStatus implements ConversationWorkersWatcher {
   private readonly conflicted = new Set<string>()
   // When the cloud said a thread's line may go again, by thread id.
   private readonly notBefore = new Map<string, number>()
+  private readonly waits: ThreadStatusWaits
   private timer: { cancel: () => void } | null = null
   private readonly now: () => number
 
   constructor(private readonly deps: ThreadStatusDeps) {
     this.now = deps.now ?? Date.now
+    this.waits = new ThreadStatusWaits(this.now)
     // Lines a bot posts before the first watch still move an armed thread's clock.
     for (const { link } of armedLinks(deps.store)) {
       this.armed.set(idOf(link), link)
@@ -91,6 +93,12 @@ export class ThreadStatus implements ConversationWorkersWatcher {
 
   forgotten(paneKey: string): void {
     this.views.delete(paneKey)
+    this.waits.forgetPane(paneKey)
+  }
+
+  /** Told as the turn ends, before its answer is read: no line goes until that answer could. */
+  turnEnding(paneKey: string): void {
+    this.waits.turnEnding(paneKey)
   }
 
   cleared(): void {
@@ -112,17 +120,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       return
     }
     const notes = threadLinesOf(path, body, result)
-    for (const conversation of notes.turnEnds) {
-      this.prompts.delete(idOf(conversation))
-    }
-    for (const { conversation, promptId, open } of notes.prompts) {
-      const id = idOf(conversation)
-      if (open && this.armed.has(id)) {
-        this.prompts.set(id, (this.prompts.get(id) ?? new Set()).add(promptId))
-      } else if (!open) {
-        this.prompts.get(id)?.delete(promptId)
-      }
-    }
+    this.waits.noted(notes, (id) => this.armed.has(id))
     const at = this.now()
     for (const { conversation, kind, replyId } of notes.lines) {
       if (!this.armed.has(idOf(conversation))) {
@@ -188,20 +186,16 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     const found = read()
     if (!found) {
-      this.armed.delete(id)
+      this.forget(id)
       return
     }
     this.armed.set(id, thread)
     this.schedule()
-    const { link, fact } = found
     if ((this.notBefore.get(id) ?? 0) > this.now()) {
       return
     }
-    if (fact.pending && this.now() - fact.pending.at <= PENDING_MAX_MS) {
-      return this.eligible(link) ? await this.send(link) : this.disarm(link, fact)
-    }
-    if (fact.pending) {
-      this.write(link, withoutPending(fact))
+    if (stalePending(found.fact, this.now(), PENDING_MAX_MS)) {
+      this.write(found.link, withoutPending(found.fact))
     }
     const decide = (held: boolean) => {
       const current = read()
@@ -210,28 +204,30 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       const input = { now: this.now(), fact: current?.fact, view, held, eligible }
       return { current, decided: decideThreadStatus(input) }
     }
+    // A saved line goes again only as a new one would: unheld, still due and still the same kind.
     const unheld = decide(false)
     if (unheld.decided.kind !== 'post') {
       return unheld.decided.kind === 'disarm' && unheld.current
         ? this.disarm(unheld.current.link, unheld.current.fact)
         : undefined
     }
+    const { link } = found
     const view = this.views.get(link.paneKey)
-    const promptOpen = (this.prompts.get(id)?.size ?? 0) > 0
-    const held = await threadStatusHeld(
-      this.deps,
-      link,
-      view?.lastTurnId ?? null,
-      promptOpen,
-      this.now()
-    )
+    const promptOpen = this.waits.promptOpen(id)
+    const held =
+      this.waits.settlingNow(link.paneKey) ||
+      (await threadStatusHeld(this.deps, link, view?.lastTurnId ?? null, promptOpen, this.now()))
     // Read again after the wait: a line or a settle meanwhile decides afresh.
     const { current, decided } = decide(held)
-    if (!current || current.fact.pending || decided.kind === 'wait') {
+    if (!current || decided.kind === 'wait') {
       return
     }
     if (decided.kind === 'disarm') {
       return this.disarm(current.link, current.fact)
+    }
+    const saved = current.fact.pending
+    if (saved && saved.stop === decided.stop) {
+      return await this.send(current.link)
     }
     const seq = current.fact.seq + 1
     const pending = {
@@ -260,6 +256,10 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     const pending = link?.threadStatus?.pending
     if (!link || !pending || !link.threadStatus?.armed || !this.eligible(link)) {
       return
+    }
+    // The save took long enough that its elapsed time is stale: the next tick decides afresh.
+    if (this.now() - pending.at > PENDING_MAX_MS) {
+      return this.write(link, withoutPending(link.threadStatus))
     }
     const owed = () => {
       const now = findLink(this.deps.store, given)?.link
@@ -294,10 +294,16 @@ export class ThreadStatus implements ConversationWorkersWatcher {
   }
 
   private disarm(link: ExternalConversationLink, fact: ThreadStatusFact): void {
-    this.armed.delete(idOf(link))
-    this.prompts.delete(idOf(link))
-    this.notBefore.delete(idOf(link))
+    this.forget(idOf(link))
     this.write(link, disarmedFact(fact))
+  }
+
+  // What this process kept for one thread's run; a later run starts clean.
+  private forget(id: string): void {
+    this.armed.delete(id)
+    this.waits.forgetThread(id)
+    this.notBefore.delete(id)
+    this.conflicted.delete(id)
   }
 
   private write(link: Thread, threadStatus: ThreadStatusFact): void {

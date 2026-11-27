@@ -61,11 +61,19 @@ describe('threadLinesOf', () => {
       ),
       OK
     )
-    expect(notes.prompts).toEqual([
-      { conversation, promptId: 'p1', open: true },
-      { conversation, promptId: 'p1', open: false }
-    ])
+    // The turn end came last in the batch: no prompt it ended is left to open.
+    expect(notes.prompts).toEqual([])
     expect(notes.turnEnds).toEqual([conversation])
+    const after = threadLinesOf(
+      '/v1/connector/events',
+      events(ended({ stateOnly: true }), {
+        kind: 'prompt',
+        conversation,
+        prompt: { promptId: 'p2' }
+      }),
+      OK
+    )
+    expect(after.prompts).toEqual([{ conversation, promptId: 'p2', open: true }])
   })
 
   it("counts an action only when it posted into the chat's own thread", () => {

@@ -144,12 +144,14 @@ describe('decideThreadStatus', () => {
         fact: { ...posted, armed: { ...posted.armed, lastLineAt: START + 6 * HOUR } }
       })
     ).toEqual(stop)
-    // The 12th line of the day is the stop line.
-    expect(decide({ now: START + 5 * MIN, fact: { ...posted, dayCount: 11 } })).toEqual(stop)
+    // The 12th line of the day is the stop line, when the next update would have been due.
+    const full = { ...posted, dayCount: 11 }
+    expect(decide({ now: START + 30 * MIN - 1, fact: full })).toEqual({ kind: 'wait' })
+    expect(decide({ now: START + 30 * MIN, fact: full })).toEqual(stop)
     // Yesterday's lines don't count today.
     expect(
-      decide({ now: START + 5 * MIN, fact: { ...posted, day: '2026-11-25', dayCount: 11 } })
-    ).toEqual({ kind: 'wait' })
+      decide({ now: START + 30 * MIN, fact: { ...posted, day: '2026-11-25', dayCount: 11 } })
+    ).toMatchObject({ kind: 'post', stop: false })
     expect(decide({ now: START + 6 * HOUR, fact: posted, held: true })).toEqual({ kind: 'wait' })
   })
 

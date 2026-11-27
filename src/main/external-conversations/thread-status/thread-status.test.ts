@@ -124,7 +124,9 @@ function harness(
       await settle()
     }
   }
+  /** A turn ends, as the app tells it: at once, then its workers read once its answer is read. */
   const turnEnded = async (read = view()) => {
+    status.turnEnding(PANE)
     status.applied(PANE, read, new Set(['turn-ended']))
     await settle()
   }
@@ -296,6 +298,9 @@ describe('ThreadStatus', () => {
     after.clock.now = pending!.at + 5 * MIN
     after.status.watched()
     await after.settle()
+    // Nothing goes before the watch's first read says the work still runs.
+    expect(after.sent).toHaveLength(0)
+    await after.polled()
     expect(after.sent).toEqual([
       expect.objectContaining({
         replyId: pending!.replyId,
@@ -314,7 +319,7 @@ describe('ThreadStatus', () => {
     expect(run.fact()?.pending?.replyId).toBe(statusReplyId(THREAD, START, 1))
     run.clock.now += 11 * MIN
     run.status.watched()
-    await run.settle()
+    await run.polled()
     expect(run.sent.map((body) => body.replyId)).toEqual([
       statusReplyId(THREAD, START, 1),
       statusReplyId(THREAD, START, 2)
@@ -428,12 +433,77 @@ describe('ThreadStatus', () => {
     run.clock.running = START + 80 * MIN
     await run.advance(65 * MIN)
     expect(run.sent).toHaveLength(1)
+    // It ends at 3:44; its answer is read and posted, and its workers read, a minute later.
     run.clock.running = null
-    await run.turnEnded()
+    run.status.turnEnding(PANE)
+    await run.advance(MIN)
+    expect(run.sent).toHaveLength(1)
+    run.botSaid()
+    run.status.applied(PANE, view(), new Set(['turn-ended']))
     await run.advance(29 * MIN)
     expect(run.sent).toHaveLength(1)
     await run.advance(MIN)
-    expect(run.lines()[1]).toBe('04:14 Still working on this (2 h 5 min).')
+    expect(run.lines()[1]).toBe('04:15 Still working on this (2 h 6 min).')
+  })
+
+  it('keeps the backoff through turn ends that put nothing in the thread', async () => {
+    const run = harness(botHome())
+    await run.turnEnded()
+    // Worker reports wake the bot every 20 minutes, and it answers each in Orca only.
+    for (let minute = 20; minute <= 6 * 60; minute += 20) {
+      await run.advance(20 * MIN)
+      await run.turnEnded()
+    }
+    expect(run.lines()).toEqual([
+      '02:39 Still working on this (30 min).',
+      '03:39 Still working on this (1 h 30 min).',
+      '05:39 Still working on this (3 h 30 min).',
+      '07:39 Still working on this (5 h 30 min).'
+    ])
+  })
+
+  it('sends a saved line again only while a new one could go', async () => {
+    const busy = { ok: false as const, status: 503, error: null, retryAfterMs: 5 * MIN }
+    const run = harness(botHome(), { answers: [busy] })
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    // A person asks at 0:32; the retry falls inside the turn and waits for it.
+    run.clock.running = START + 32 * MIN
+    await run.advance(20 * MIN)
+    expect(run.sent).toHaveLength(1)
+    // The turn's answer makes the saved line moot: the next one waits 30 minutes from it.
+    run.clock.running = null
+    await run.turnEnded()
+    run.botSaid()
+    await run.advance(29 * MIN)
+    expect(run.sent).toHaveLength(1)
+    await run.advance(MIN)
+    expect(run.sent.map((body) => body.replyId)).toEqual([
+      statusReplyId(THREAD, START, 1),
+      statusReplyId(THREAD, START, 2)
+    ])
+    await closeTestStores()
+
+    const settled = harness(botHome(), { answers: [busy] })
+    await settled.turnEnded()
+    await settled.advance(30 * MIN)
+    await settled.polled(view({ activity: 'none', open: false }))
+    await settled.advance(10 * MIN)
+    expect(settled.sent).toHaveLength(1)
+    expect(settled.fact()?.armed).toBeUndefined()
+  })
+
+  it("starts a run's conflicts over: one 409 in a new run never stops it", async () => {
+    const conflict = { ok: false as const, status: 409, error: 'reply_id_conflict' }
+    const run = harness(botHome(), { answers: [conflict, conflict] })
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    await run.polled(view({ activity: 'none', open: false }))
+    expect(run.fact()?.armed).toBeUndefined()
+    await run.turnEnded()
+    await run.advance(31 * MIN)
+    expect(run.sent).toHaveLength(3)
+    expect(run.fact()?.armed?.lines).toBe(1)
   })
 
   it("waits out the cloud's Retry-After before sending the same line again", async () => {

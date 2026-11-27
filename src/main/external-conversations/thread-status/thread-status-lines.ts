@@ -71,6 +71,10 @@ function eventNotes(events: readonly unknown[]): ThreadLineNotes {
     if (event.kind === 'reply' && event.outcome !== 'quiet') {
       notes.lines.push({ conversation, kind: 'bot' })
     } else if (event.kind === 'turn-ended') {
+      // It ends the prompts shown before it in this batch too; the ones after it stay open.
+      notes.prompts = notes.prompts.filter(
+        (prompt) => !sameConversation(prompt.conversation, conversation)
+      )
       notes.turnEnds.push(conversation)
       const said =
         event.stateOnly !== true &&
@@ -121,6 +125,10 @@ function conversationOf(value: unknown): ThreadConversation | null {
   }
   const source = CONNECTOR_SOURCES.find((known) => known === value.source)
   return source ? { source, externalId: value.externalId } : null
+}
+
+function sameConversation(a: ThreadConversation, b: ThreadConversation): boolean {
+  return a.source === b.source && a.externalId === b.externalId
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -232,6 +232,7 @@ export class ChatTurns {
     }
     if (news.kind !== 'prompt') {
       this.deps.turnEnded?.(paneKey)
+      this.workers.turnEnding(paneKey)
     }
     const linked = this.deps.linkedFor(paneKey)
     const mirrored = news.kind === 'turn-ended' ? this.deps.mirrorTurn?.(news.sessionId) : null

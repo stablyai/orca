@@ -113,6 +113,11 @@ export class ConversationWorkers {
     return tracked && viewOf(tracked)
   }
 
+  /** A pane's turn just ended; its `turn-ended` check follows once its answer is read. */
+  turnEnding(paneKey: string): void {
+    this.tell((watcher) => watcher.turnEnding?.(paneKey))
+  }
+
   /** `turnId`: the ended turn a `turn-ended` check is for. */
   check(paneKey: string, reason: ConversationWorkersRead, turnId?: number | null): Promise<void> {
     if (!this.deps.linkedFor(paneKey)) {

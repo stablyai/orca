@@ -30,9 +30,10 @@ export function withArmed(
   return { ...withoutPending(fact), ...extra, armed }
 }
 
-/** A heard turn end: its answer goes to the thread now, so the wait starts over from it. */
+/** A heard turn end restarts the 6 hour clock. Only a line the thread sees, its answer included,
+ *  restarts the wait for the next one. */
 export function withTurnEnd(fact: ThreadStatusFact & { armed: Armed }, at: number) {
-  return { ...fact, armed: { ...fact.armed, turnEndAt: at, lastLineAt: at, dueStep: 0 as const } }
+  return { ...fact, armed: { ...fact.armed, turnEndAt: at } }
 }
 
 /** A bot line: the backoff starts over. */
@@ -51,6 +52,12 @@ export function withHostLine(fact: ThreadStatusFact & { armed: Armed }, at: numb
 /** The backoff step after a host line: 30 min, then 60, then 120 from there on. */
 export function nextDueStep(step: Armed['dueStep']): Armed['dueStep'] {
   return step === 0 ? 1 : 2
+}
+
+/** A saved line decided too long ago, or before a line the thread saw since: never posted. */
+export function stalePending(fact: ThreadStatusFact, now: number, maxMs: number): boolean {
+  const { pending, armed } = fact
+  return !!pending && (now - pending.at > maxMs || (armed?.lastLineAt ?? 0) > pending.at)
 }
 
 export function withoutPending(fact: ThreadStatusFact): ThreadStatusFact {
