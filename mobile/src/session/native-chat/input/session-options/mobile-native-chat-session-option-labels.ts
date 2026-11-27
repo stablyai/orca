@@ -187,7 +187,8 @@ export function mobileReportedPermissionAccessibleValue(
     : undefined
 }
 
-/** The mode a chat runs in: Own follows what the agent reports; any other choice is its own value. */
+/** The mode a chat runs in: Own follows what still runs until the next message, then what the agent reports;
+ *  any other choice is its own value. */
 export function mobileEffectivePermissionValue(
   descriptor: SessionOptionDescriptor | undefined
 ): string | undefined {
@@ -195,5 +196,12 @@ export function mobileEffectivePermissionValue(
     return undefined
   }
   const { currentValue, reportedValue } = descriptor.kind
-  return currentValue === 'own' && reportedValue !== undefined ? reportedValue : currentValue
+  if (currentValue !== 'own') {
+    return currentValue
+  }
+  // The pending-pick text names the running mode, so the warning follows that mode too.
+  if (descriptor.valueSource === 'dispatched' && typeof descriptor.activeValue === 'string') {
+    return descriptor.activeValue
+  }
+  return reportedValue ?? currentValue
 }
