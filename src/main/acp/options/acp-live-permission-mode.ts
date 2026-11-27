@@ -56,18 +56,6 @@ export function acpKeptModeTakesLive(
     : !session.launchArgsGrantFullAccess
 }
 
-/** Only a fresh agent runs `mode`: no live switch reaches it, or the kept agent lacks this launch's
- *  app-bound tools. */
-export function acpModeRequiresAcquisition(
-  session: LivePermissionSession,
-  mode: AgentChatPermissionChoice
-): boolean {
-  return (
-    session.connection.kept?.freshOwed === true ||
-    (!acpKeptModeTakesLive(session, mode) && acpRunningPermission(session) !== mode)
-  )
-}
-
 /** Settles once every mode write already asked of this chat has been answered or given up. */
 export function acpPermissionWritesSettled(session: LivePermissionSession): Promise<void> {
   return modeWrites.get(session) ?? Promise.resolve()
