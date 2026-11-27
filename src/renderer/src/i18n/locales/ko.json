@@ -22026,7 +22026,18 @@
         "unlistedDetail": "일부 백그라운드 작업은 여기에 표시되지 않습니다",
         "unread": "워커를 불러오지 못했습니다",
         "unreadDetail": "워커를 불러오면 여기에 표시됩니다",
-        "chipLabel": "{{label}}, 최근: {{title}}"
+        "chipLabel": "{{label}}, 최근: {{title}}",
+        "backgroundCommandCount_one": "백그라운드 명령 {{count}}개",
+        "backgroundCommandCount_other": "백그라운드 명령 {{count}}개",
+        "commandCount_one": "명령 {{count}}개",
+        "commandCount_other": "명령 {{count}}개",
+        "mixedRegion": "워커 및 백그라운드 명령",
+        "commandsRegion": "백그라운드 명령",
+        "stopSubagentsAndCommands": "하위 에이전트 및 명령 중지",
+        "workersKeepRunning": "워커는 계속 실행됩니다",
+        "clearFailedWorkers": "실패한 워커 지우기",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "웹훅 설정",

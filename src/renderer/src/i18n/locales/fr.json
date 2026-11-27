@@ -22513,7 +22513,20 @@
         "unlisted": "Tâches en arrière-plan en cours",
         "unread": "Impossible de charger les workers",
         "unreadDetail": "Les workers s’afficheront ici une fois chargés",
-        "chipLabel": "{{label}}, le plus récent : {{title}}"
+        "chipLabel": "{{label}}, le plus récent : {{title}}",
+        "backgroundCommandCount_one": "{{count}} commande en arrière-plan",
+        "backgroundCommandCount_many": "{{count}} commandes en arrière-plan",
+        "backgroundCommandCount_other": "{{count}} commandes en arrière-plan",
+        "commandCount_one": "{{count}} commande",
+        "commandCount_many": "{{count}} commandes",
+        "commandCount_other": "{{count}} commandes",
+        "mixedRegion": "Workers et commandes en arrière-plan",
+        "commandsRegion": "Commandes en arrière-plan",
+        "stopSubagentsAndCommands": "Arrêter les sous-agents et les commandes",
+        "workersKeepRunning": "Les workers continuent de tourner",
+        "clearFailedWorkers": "Effacer les workers en échec",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Configurer un webhook",

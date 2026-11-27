@@ -222,7 +222,11 @@ export function settleAgentChildWork(
   counted(ctx, handleId, result, 'settled')
   if (result.accepted && outcome === 'failed') {
     const child = ctx.store.getChild(result.childWorkId)
-    if (child?.outcome === 'failed') {
+    // A foreground command's failure is its transcript tool row's to show, never a kept failure.
+    if (
+      child?.outcome === 'failed' &&
+      !(child.kind === 'command' && child.residency === 'foreground')
+    ) {
       ;(ctx.outcome.failures ??= []).push({ child, providerId: handleId })
     }
   }

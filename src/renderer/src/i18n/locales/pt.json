@@ -24069,7 +24069,20 @@
         "unlisted": "Trabalho em segundo plano em execução",
         "unread": "Não foi possível carregar os workers",
         "unreadDetail": "Os workers aparecerão aqui quando forem carregados",
-        "chipLabel": "{{label}}, mais recente: {{title}}"
+        "chipLabel": "{{label}}, mais recente: {{title}}",
+        "backgroundCommandCount_one": "{{count}} comando em segundo plano",
+        "backgroundCommandCount_many": "{{count}} comandos em segundo plano",
+        "backgroundCommandCount_other": "{{count}} comandos em segundo plano",
+        "commandCount_one": "{{count}} comando",
+        "commandCount_many": "{{count}} comandos",
+        "commandCount_other": "{{count}} comandos",
+        "mixedRegion": "Workers e comandos em segundo plano",
+        "commandsRegion": "Comandos em segundo plano",
+        "stopSubagentsAndCommands": "Parar subagentes e comandos",
+        "workersKeepRunning": "Os workers continuam em execução",
+        "clearFailedWorkers": "Limpar workers com falha",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Configurar um webhook",

@@ -21543,7 +21543,16 @@
         "unlisted": "后台工作正在运行",
         "unread": "无法加载工作者",
         "unreadDetail": "工作者加载后将显示在此处",
-        "chipLabel": "{{label}}，最新：{{title}}"
+        "chipLabel": "{{label}}，最新：{{title}}",
+        "backgroundCommandCount_other": "{{count}} 个后台命令",
+        "commandCount_other": "{{count}} 个命令",
+        "mixedRegion": "工作者和后台命令",
+        "commandsRegion": "后台命令",
+        "stopSubagentsAndCommands": "停止子代理和命令",
+        "workersKeepRunning": "工作者会继续运行",
+        "clearFailedWorkers": "清除失败的工作者",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}，{{commands}}"
       },
       "webhookSetup": {
         "heading": "设置 Webhook",

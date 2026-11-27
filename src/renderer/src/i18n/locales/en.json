@@ -23135,7 +23135,18 @@
         "unlisted": "Background work running",
         "unread": "Workers couldn’t load",
         "unreadDetail": "Workers will show here once they load",
-        "chipLabel": "{{label}}, latest: {{title}}"
+        "chipLabel": "{{label}}, latest: {{title}}",
+        "backgroundCommandCount_one": "{{count}} background command",
+        "backgroundCommandCount_other": "{{count}} background commands",
+        "commandCount_one": "{{count}} command",
+        "commandCount_other": "{{count}} commands",
+        "mixedRegion": "Workers and background commands",
+        "commandsRegion": "Background commands",
+        "stopSubagentsAndCommands": "Stop subagents and commands",
+        "workersKeepRunning": "Workers keep running",
+        "clearFailedWorkers": "Clear failed workers",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",

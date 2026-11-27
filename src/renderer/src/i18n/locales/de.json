@@ -22614,7 +22614,18 @@
         "unlisted": "Hintergrundarbeit läuft",
         "unread": "Worker konnten nicht geladen werden",
         "unreadDetail": "Worker werden hier angezeigt, sobald sie geladen sind",
-        "chipLabel": "{{label}}, zuletzt: {{title}}"
+        "chipLabel": "{{label}}, zuletzt: {{title}}",
+        "backgroundCommandCount_one": "{{count}} Hintergrundbefehl",
+        "backgroundCommandCount_other": "{{count}} Hintergrundbefehle",
+        "commandCount_one": "{{count}} Befehl",
+        "commandCount_other": "{{count}} Befehle",
+        "mixedRegion": "Worker und Hintergrundbefehle",
+        "commandsRegion": "Hintergrundbefehle",
+        "stopSubagentsAndCommands": "Subagenten und Befehle stoppen",
+        "workersKeepRunning": "Worker laufen weiter",
+        "clearFailedWorkers": "Fehlgeschlagene Worker entfernen",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Webhook einrichten",
