@@ -1,10 +1,10 @@
 import { isMacPlatform } from '../pane/routing/native-chat-shortcut'
-import {
-  clipboardEventPromptText,
-  textOnlyLabelsCopiedFiles
-} from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
+import { clipboardEventPromptText } from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
 import { withPastedLinks } from './native-chat-pasted-links'
-import type { ClipboardPasteImageProbe } from '../../../../../shared/clipboard/clipboard-paste-content'
+import {
+  clipboardCopiesOnlyFiles,
+  type ClipboardPasteImageProbe
+} from '../../../../../shared/clipboard/clipboard-paste-content'
 
 /** Accept native pane clipboard events and React synthetic events. */
 export type ClipboardEventLike = {
@@ -39,7 +39,9 @@ export function clipboardEventCopiedFilePaths(event: ClipboardEventLike): string
     }
     paths.push(path)
   }
-  return copiesOnlyFiles(event.clipboardData?.getData('text/plain') ?? '', paths) ? paths : []
+  return clipboardCopiesOnlyFiles(event.clipboardData?.getData('text/plain') ?? '', paths)
+    ? paths
+    : []
 }
 
 /** The event's prompt text, with any rich-text links kept as Markdown. */
@@ -51,10 +53,6 @@ export function clipboardEventPastedText(
     clipboardEventPromptText(event, attachingFile),
     event.clipboardData?.getData('text/html')
   )
-}
-
-function copiesOnlyFiles(text: string, filePaths: readonly string[]): boolean {
-  return filePaths.length > 0 && (text === '' || textOnlyLabelsCopiedFiles(text, filePaths))
 }
 
 /** Separate copied-file labels from prompt text; reuse eventFilePaths when the event already resolved them. */
@@ -106,7 +104,8 @@ export async function readClipboardPasteText(
   })
   const { text, hasImage, imageProbeError } = read
   const filePaths = eventFilePaths ?? read.filePaths
-  if (!copiesOnlyFiles(text, filePaths)) {
+  const filesOnly = eventFilePaths ? clipboardCopiesOnlyFiles(text, eventFilePaths) : read.filesOnly
+  if (!filesOnly) {
     return {
       text: withPastedLinks(text, read.linkHtml),
       copiedFilePaths: [],

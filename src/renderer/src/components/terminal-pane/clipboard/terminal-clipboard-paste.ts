@@ -61,7 +61,13 @@ export async function pasteTerminalClipboard({
   onLocalImagePasted
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
   // File-manager copies carry the file names as text; one read returns the file list beside it.
-  let content: ClipboardPasteContent = { text: '', filePaths: [], linkHtml: '', hasImage: false }
+  let content: ClipboardPasteContent = {
+    text: '',
+    filePaths: [],
+    filesOnly: false,
+    linkHtml: '',
+    hasImage: false
+  }
   try {
     content = await readClipboardContent({
       maxBytes: TERMINAL_PASTE_MAX_BYTES,
@@ -75,12 +81,17 @@ export async function pasteTerminalClipboard({
     // Image-only clipboards can reject text reads; still try the screenshot path.
   }
   const { text } = content
-  const copiedFilePaths = content.filePaths.length > 0 ? content.filePaths : eventCopiedFilePaths
+  const mainFiles = content.filePaths.length > 0
+  const copiedFilePaths = mainFiles ? content.filePaths : eventCopiedFilePaths
   // Unlabelled files beside a picture (screenshot tools, Windows image files) keep the image path.
   if (
     copiedFiles &&
     copiedFilePaths.length > 0 &&
-    (text ? textOnlyLabelsCopiedFiles(text, copiedFilePaths) : !content.hasImage)
+    (text
+      ? mainFiles
+        ? content.filesOnly
+        : textOnlyLabelsCopiedFiles(text, copiedFilePaths)
+      : !content.hasImage)
   ) {
     await copiedFiles.paste(copiedFilePaths)
     return { status: 'pasted', kind: 'file-paths' }

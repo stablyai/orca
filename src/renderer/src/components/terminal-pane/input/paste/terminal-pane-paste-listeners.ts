@@ -168,6 +168,7 @@ export function registerTerminalPanePasteListeners({
         readClipboardContent: async (options) => ({
           text: await assertClipboardTextWithinLimitWithYield(eventText, options),
           filePaths: [],
+          filesOnly: false,
           linkHtml: '',
           hasImage: false
         }),
