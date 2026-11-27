@@ -1435,7 +1435,10 @@
       "connectHint": "在 Orca 桌面版的「設定 → 整合」中新增 Jira 網站，然後再次檢查。",
       "connectOnDesktop": "在電腦上連線至 Jira",
       "credentialUnreadable": "Jira 憑證已儲存，但無法讀取：{{credentialError}}",
-      "updateDesktop": "更新此主機上的 Orca"
+      "updateDesktop": "更新此主機上的 Orca",
+      "connectTitle": "連接你的 Jira 帳號",
+      "connectMessage": "直接在「任務」中瀏覽指派給你的 Jira 問題並開始工作。",
+      "connect": "連接 Jira"
     },
     "markdownBlocks": {
       "copyCode": "複製程式碼",
@@ -4959,6 +4962,15 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "建立工作區失敗"
+    },
+    "jiraConnect": {
+      "title": "連接 Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian 電子郵件",
+      "apiToken": "API 權杖",
+      "storageHint": "你的權杖儲存在此主機上，並在其系統支援時加密。",
+      "createToken": "建立 API 權杖",
+      "failed": "連線失敗"
     }
   },
   "terminal": {

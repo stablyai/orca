@@ -5,6 +5,7 @@ import {
   readJiraConnection,
   reconcileJiraConnection
 } from '../providers/jira/jira-mobile-connection'
+import { jiraAccountConnect } from '../providers/jira/mobile-jira-operations'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
@@ -39,7 +40,7 @@ import {
   linearWorkspaceTeamListRead
 } from './mobile-task-list-operations'
 import { githubWorkItemSearchRead } from '../providers/mobile-task-source-search-operations'
-import { linearAccountClient } from './linear-account-host'
+import { trackerAccountClient } from './tracker-account-host'
 import { taskSettingsWrite } from '../screen-state/mobile-task-runtime-operations'
 
 export type ProviderLoadActionsInput = Pick<
@@ -52,6 +53,8 @@ export type ProviderLoadActionsInput = Pick<
   | 'githubKind'
   | 'keepSettings'
   | 'linearAccountBindingRef'
+  | 'jiraAccountBindingRef'
+  | 'setError'
   | 'setJiraConnection'
   | 'jiraStatusRequestIdRef'
   | 'setLinearConnected'
@@ -75,6 +78,8 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     githubKind,
     keepSettings,
     linearAccountBindingRef,
+    jiraAccountBindingRef,
+    setError,
     setJiraConnection,
     jiraStatusRequestIdRef,
     setLinearConnected,
@@ -91,18 +96,41 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       return
     }
     const requestId = ++jiraStatusRequestIdRef.current
-    const next = await readJiraConnection(client)
+    const next = await readJiraConnection(
+      await trackerAccountClient(jiraAccountBindingRef.current, client)
+    )
     if (clientRef.current === client && jiraStatusRequestIdRef.current === requestId) {
       setJiraConnection((current) => reconcileJiraConnection(current, next))
     }
   }, [client, clientRef, connState, tasksSupported, setJiraConnection, jiraStatusRequestIdRef])
+
+  // Throws the host's message (bad token, bad site URL) for the setup sheet to show.
+  const connectJiraAccount = useCallback(
+    async (args: { siteUrl: string; email: string; apiToken: string }): Promise<void> => {
+      if (!client || connState !== 'connected') {
+        throw new Error('Not connected to this host')
+      }
+      const target = await trackerAccountClient(jiraAccountBindingRef.current, client)
+      const result = jiraAccountConnect.interpret(
+        await jiraAccountConnect.request(target, { ...args, authType: 'cloud' })
+      )
+      if (result.ok === false) {
+        throw new Error(result.error ?? 'Failed to connect Jira')
+      }
+      // The token is saved; a failed status read is a screen error, not a failed connect.
+      await refreshJiraConnection().catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Failed to read Jira status')
+      })
+    },
+    [client, connState, refreshJiraConnection, setError]
+  )
 
   const loadLinearContext = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
     }
     const statusReply = await linearAccountStatusRead.request(
-      await linearAccountClient(linearAccountBindingRef.current, client)
+      await trackerAccountClient(linearAccountBindingRef.current, client)
     )
     const status = linearAccountStatusRead.interpret(statusReply)
     setLinearConnected(status.connected === true)
@@ -285,6 +313,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
   return {
     ...model,
     refreshJiraConnection,
+    connectJiraAccount,
     loadLinearContext,
     persistLinearTeamSelection,
     fetchGitHubItemsPage,

@@ -1434,7 +1434,10 @@
       "connectHint": "デスクトップの Orca で「設定 → 連携」から Jira サイトを追加し、再確認してください。",
       "connectOnDesktop": "デスクトップで Jira に接続",
       "credentialUnreadable": "Jira の認証情報は保存されていますが、読み取れません：{{credentialError}}",
-      "updateDesktop": "このホストの Orca を更新"
+      "updateDesktop": "このホストの Orca を更新",
+      "connectTitle": "Jira アカウントを接続",
+      "connectMessage": "割り当てられた Jira 課題をタスクから直接閲覧して作業を始められます。",
+      "connect": "Jira を接続"
     },
     "markdownBlocks": {
       "copyCode": "コードをコピーする",
@@ -4956,6 +4959,15 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "ワークスペースの作成に失敗しました"
+    },
+    "jiraConnect": {
+      "title": "Jira を接続",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian のメールアドレス",
+      "apiToken": "API トークン",
+      "storageHint": "トークンはこのホストに保存され、OS が対応していれば暗号化されます。",
+      "createToken": "API トークンを作成",
+      "failed": "接続に失敗しました"
     }
   },
   "terminal": {

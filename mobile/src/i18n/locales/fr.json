@@ -1489,7 +1489,10 @@
       "connectHint": "Ajoutez votre site Jira dans Orca sur votre ordinateur, sous Paramètres → Intégrations, puis revérifiez.",
       "connectOnDesktop": "Connecter Jira sur votre ordinateur",
       "credentialUnreadable": "Les identifiants Jira sont enregistrés mais illisibles : {{credentialError}}",
-      "updateDesktop": "Mettre à jour Orca sur cet hôte"
+      "updateDesktop": "Mettre à jour Orca sur cet hôte",
+      "connectTitle": "Connecter votre compte Jira",
+      "connectMessage": "Parcourez vos tickets Jira assignés et commencez à travailler directement depuis Tâches.",
+      "connect": "Connecter Jira"
     },
     "markdownBlocks": {
       "copyCode": "Copier le code",
@@ -5107,6 +5110,15 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "Échec de la création de l'espace de travail"
+    },
+    "jiraConnect": {
+      "title": "Connecter Jira",
+      "siteUrl": "votre-equipe.atlassian.net",
+      "email": "E-mail Atlassian",
+      "apiToken": "Jeton d’API",
+      "storageHint": "Votre jeton est stocké sur cet hôte, chiffré si son système le permet.",
+      "createToken": "Créer un jeton d’API",
+      "failed": "Échec de la connexion"
     }
   },
   "terminal": {

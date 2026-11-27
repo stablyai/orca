@@ -1489,7 +1489,10 @@
       "connectHint": "Añade tu sitio de Jira en Ajustes → Integraciones de Orca de escritorio y verifica de nuevo.",
       "connectOnDesktop": "Conecta Jira en tu escritorio",
       "credentialUnreadable": "La conexión de Jira está guardada, pero no se puede leer: {{credentialError}}",
-      "updateDesktop": "Actualiza Orca en este host"
+      "updateDesktop": "Actualiza Orca en este host",
+      "connectTitle": "Conecta tu cuenta de Jira",
+      "connectMessage": "Explora y empieza a trabajar en tus incidencias asignadas de Jira directamente desde Tareas.",
+      "connect": "Conectar Jira"
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
@@ -5107,6 +5110,15 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "No se pudo crear el espacio de trabajo"
+    },
+    "jiraConnect": {
+      "title": "Conectar Jira",
+      "siteUrl": "tu-equipo.atlassian.net",
+      "email": "Correo de Atlassian",
+      "apiToken": "Token de API",
+      "storageHint": "Tu token se guarda en este host, cifrado si su sistema operativo lo admite.",
+      "createToken": "Crear un token de API",
+      "failed": "Error de conexión"
     }
   },
   "terminal": {

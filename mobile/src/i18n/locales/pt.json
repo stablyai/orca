@@ -1490,7 +1490,10 @@
       "connectHint": "Adicione seu site do Jira no Orca para desktop em Configurações → Integrações e verifique novamente.",
       "connectOnDesktop": "Conecte o Jira no seu desktop",
       "credentialUnreadable": "Não foi possível ler as credenciais salvas do Jira: {{credentialError}}",
-      "updateDesktop": "Atualize o Orca neste host"
+      "updateDesktop": "Atualize o Orca neste host",
+      "connectTitle": "Conecte sua conta do Jira",
+      "connectMessage": "Navegue e comece a trabalhar nas suas issues atribuídas do Jira direto em Tarefas.",
+      "connect": "Conectar Jira"
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
@@ -5113,7 +5116,16 @@
     "runtimeHydration": {
       "loadFailed": "Falha ao carregar as configurações de Tarefas"
     },
-    "rerunUnsuccessful": "Repetir verificações"
+    "rerunUnsuccessful": "Repetir verificações",
+    "jiraConnect": {
+      "title": "Conectar Jira",
+      "siteUrl": "sua-equipe.atlassian.net",
+      "email": "E-mail da Atlassian",
+      "apiToken": "Token de API",
+      "storageHint": "Seu token fica armazenado neste host, criptografado quando o sistema operacional permite.",
+      "createToken": "Criar um token de API",
+      "failed": "Falha na conexão"
+    }
   },
   "terminal": {
     "keyDefinitions": {

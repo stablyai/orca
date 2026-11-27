@@ -1600,7 +1600,10 @@
       "connectHint": "Добавьте сайт Jira в Orca на компьютере в разделе «Настройки → Интеграции», затем проверьте снова.",
       "connectOnDesktop": "Подключите Jira на компьютере",
       "credentialUnreadable": "Не удалось прочитать сохранённые данные Jira: {{credentialError}}",
-      "updateDesktop": "Обновите Orca на этом сервере"
+      "updateDesktop": "Обновите Orca на этом сервере",
+      "connectTitle": "Подключите аккаунт Jira",
+      "connectMessage": "Просматривайте назначенные вам задачи Jira и начинайте работу прямо из раздела «Задачи».",
+      "connect": "Подключить Jira"
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
@@ -5325,7 +5328,16 @@
     "runtimeHydration": {
       "loadFailed": "Не удалось загрузить настройки задач"
     },
-    "rerunUnsuccessful": "Повторить проверки"
+    "rerunUnsuccessful": "Повторить проверки",
+    "jiraConnect": {
+      "title": "Подключить Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Почта Atlassian",
+      "apiToken": "API-токен",
+      "storageHint": "Токен хранится на этом хосте и шифруется, если ОС это поддерживает.",
+      "createToken": "Создать API-токен",
+      "failed": "Не удалось подключиться"
+    }
   },
   "terminal": {
     "keyDefinitions": {

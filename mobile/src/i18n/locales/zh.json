@@ -1524,7 +1524,10 @@
       "connectHint": "请在 Orca 桌面端的“设置 → 集成”中添加 Jira 站点，然后再次检查",
       "connectOnDesktop": "在桌面端连接 Jira",
       "credentialUnreadable": "Jira 凭据已保存，但无法读取：{{credentialError}}",
-      "updateDesktop": "更新此主机上的 Orca"
+      "updateDesktop": "更新此主机上的 Orca",
+      "connectTitle": "连接你的 Jira 账户",
+      "connectMessage": "直接在“任务”中浏览分配给你的 Jira 问题并开始工作。",
+      "connect": "连接 Jira"
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
@@ -5169,6 +5172,15 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "创建工作区失败"
+    },
+    "jiraConnect": {
+      "title": "连接 Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian 邮箱",
+      "apiToken": "API 令牌",
+      "storageHint": "你的令牌存储在此主机上，并在其系统支持时加密。",
+      "createToken": "创建 API 令牌",
+      "failed": "连接失败"
     }
   },
   "terminal": {

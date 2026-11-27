@@ -1434,7 +1434,10 @@
       "connectHint": "Orca 데스크톱의 설정 → 연동에서 Jira 사이트를 추가한 뒤 다시 확인하세요.",
       "connectOnDesktop": "데스크톱에서 Jira 연결",
       "credentialUnreadable": "Jira 인증 정보가 저장되어 있지만 읽을 수 없습니다: {{credentialError}}",
-      "updateDesktop": "이 호스트의 Orca 업데이트"
+      "updateDesktop": "이 호스트의 Orca 업데이트",
+      "connectTitle": "Jira 계정 연결",
+      "connectMessage": "할당된 Jira 이슈를 작업에서 바로 둘러보고 작업을 시작하세요.",
+      "connect": "Jira 연결"
     },
     "markdownBlocks": {
       "copyCode": "코드 복사",
@@ -4965,6 +4968,15 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "워크스페이스를 생성하지 못했습니다."
+    },
+    "jiraConnect": {
+      "title": "Jira 연결",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian 이메일",
+      "apiToken": "API 토큰",
+      "storageHint": "토큰은 이 호스트에 저장되며 OS가 지원하면 암호화됩니다.",
+      "createToken": "API 토큰 만들기",
+      "failed": "연결 실패"
     }
   },
   "terminal": {

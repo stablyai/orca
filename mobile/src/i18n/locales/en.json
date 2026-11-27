@@ -1236,7 +1236,10 @@
       "connectOnDesktop": "Connect Jira on your desktop",
       "credentialUnreadable": "Jira is saved but unreadable: {{credentialError}}",
       "connectHint": "Add your Jira site in Orca desktop under Settings → Integrations, then check again.",
-      "checkAgain": "Check again"
+      "checkAgain": "Check again",
+      "connectTitle": "Connect your Jira account",
+      "connectMessage": "Browse and start work on your assigned Jira issues directly from Tasks.",
+      "connect": "Connect Jira"
     },
     "dictationSetupSheet": {
       "loadFailed": "Failed to load",
@@ -5417,6 +5420,15 @@
       "checkSkipped": "Skipped",
       "checkPending": "Pending",
       "checkNeutral": "Neutral"
+    },
+    "jiraConnect": {
+      "title": "Connect Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian email",
+      "apiToken": "API token",
+      "storageHint": "Your token is stored on this host, encrypted where its OS supports it.",
+      "createToken": "Create an API token",
+      "failed": "Connection failed"
     }
   },
   "terminal": {
