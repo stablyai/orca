@@ -194,7 +194,7 @@ index 18c275ccbe583f48ccb5c5f66cd26d0bd8621e39..2dc0ef346d3ce07b3d0b5f03fd72c4f5
      if (diff !== 0) {
        this._latestYDisp = newRow;
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279830c8b20 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c19123279d61d 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
 @@ -1,17 +1,64 @@
@@ -280,7 +280,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
  
    /**
     * The position within the input textarea's value of the current composition.
-@@ -36,52 +92,197 @@ export class CompositionHelper {
+@@ -36,52 +92,200 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
  
@@ -344,6 +344,9 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +  private _compositionPreedit?: HTMLElement;
 +
 +  private _compositionSelection?: IPosition;
++
++  /** The IME's insertion point within the preedit, unset while it sits at the end. */
++  private _compositionCaretOffset?: number;
 +
 +  /** The rendered row tail, set only while the cursor sits mid-line. */
 +  private _compositionRemainder?: HTMLElement;
@@ -488,7 +491,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
    }
  
    /**
-@@ -89,22 +290,98 @@ export class CompositionHelper {
+@@ -89,22 +293,98 @@ export class CompositionHelper {
     * @param ev The event.
     */
    public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
@@ -596,7 +599,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
    }
  
    /**
-@@ -113,10 +390,33 @@ export class CompositionHelper {
+@@ -113,10 +393,33 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -631,7 +634,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
          return false;
        }
        if (ev.keyCode === 16 || ev.keyCode === 17 || ev.keyCode === 18) {
-@@ -128,6 +428,10 @@ export class CompositionHelper {
+@@ -128,6 +431,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
@@ -642,7 +645,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +442,95 @@ export class CompositionHelper {
+@@ -138,6 +445,135 @@ export class CompositionHelper {
      return true;
    }
  
@@ -698,21 +701,61 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +    return true;
 +  }
 +
-+  /** The IME's active clause is the textarea selection inside the preedit; a caret marks none. */
++  /**
++   * The IME's active clause is the textarea selection inside the preedit, and its insertion point
++   * (moved with the arrow keys in Zhuyin or kana) a collapsed selection there.
++   */
 +  public observeCompositionSelection(): void {
 +    const preedit = this._compositionPreedit;
 +    const text = preedit?.textContent?.slice(1, -1) ?? '';
 +    const start = this._compositionPosition.start;
 +    const selectionStart = this._textarea.selectionStart - start;
 +    const selectionEnd = this._textarea.selectionEnd - start;
-+    this._compositionSelection =
-+      this._textarea.value.substring(start, start + text.length) === text &&
-+      0 <= selectionStart && selectionStart < selectionEnd && selectionEnd <= text.length
-+        ? { start: selectionStart, end: selectionEnd }
-+        : undefined;
++    const inPreedit = this._textarea.value.substring(start, start + text.length) === text &&
++      0 <= selectionStart && selectionStart <= selectionEnd && selectionEnd <= text.length;
++    this._compositionSelection = inPreedit && selectionStart < selectionEnd
++      ? { start: selectionStart, end: selectionEnd }
++      : undefined;
++    // An oversized preedit keeps the caret at its end: placing it there would re-lay out the whole
++    // preedit, and slide it, on every move.
++    this._compositionCaretOffset = inPreedit && selectionStart === selectionEnd && selectionEnd < text.length &&
++      text.length <= MAX_PREEDIT_LAYOUT_WORK
++      ? selectionStart
++      : undefined;
 +    if (preedit) {
-+      this._preeditRenderer?.render(preedit, this._compositionSelection);
++      const caretParent = this._compositionCaret?.parentNode;
++      this._renderPreedit(preedit, true);
++      if (this._isCaretInPreedit()) {
++        // A caret inside a clipped preedit has to slide into view before the next paint.
++        this.updateCompositionElements(true);
++      } else if (this._compositionCaret?.parentNode !== caretParent) {
++        this._styleCompositionCaret();
++      }
 +    }
++  }
++
++  /**
++   * Renders the preedit's runs and puts the caret at the IME's insertion point, or after the
++   * preedit. The caret is only moved when the insertion point changed or a rebuild dropped it.
++   */
++  private _renderPreedit(preedit: HTMLElement, caretMoved: boolean = false): void {
++    this._preeditRenderer?.render(preedit, this._compositionSelection);
++    const caret = this._compositionCaret;
++    if (!caret || (!caretMoved && (caret.parentNode === this._compositionView || preedit.contains(caret)))) {
++      return;
++    }
++    const offset = this._compositionCaretOffset;
++    this._preeditRenderer?.removeCaret(preedit, caret);
++    if (offset === undefined || !this._preeditRenderer?.placeCaret(preedit, caret, offset)) {
++      if (caret.previousSibling !== preedit) {
++        preedit.after(caret);
++      }
++    }
++  }
++
++  private _isCaretInPreedit(): boolean {
++    const caret = this._compositionCaret;
++    return Boolean(caret && this._compositionPreedit?.contains(caret));
 +  }
 +
 +  /**
@@ -738,7 +781,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
    /**
     * Finalizes the composition, resuming regular input actions. This is called when a composition
     * is ending.
-@@ -146,23 +539,52 @@ export class CompositionHelper {
+@@ -146,23 +582,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -802,7 +845,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,35 +594,313 @@ export class CompositionHelper {
+@@ -172,35 +637,313 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -1143,7 +1186,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
    }
  
    /**
-@@ -222,6 +922,9 @@ export class CompositionHelper {
+@@ -222,6 +965,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -1153,7 +1196,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +939,347 @@ export class CompositionHelper {
+@@ -236,6 +982,352 @@ export class CompositionHelper {
      }, 0);
    }
  
@@ -1169,6 +1212,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +      return;
 +    }
 +    this._compositionSelection = undefined;
++    this._compositionCaretOffset = undefined;
 +    const doc = this._compositionView.ownerDocument;
 +    const preedit = doc.createElement('span');
 +    preedit.className = 'xterm-composition-preedit';
@@ -1480,7 +1524,11 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +    caret.style.display = 'inline-block';
 +    caret.style.flexShrink = '0';
 +    caret.style.height = cellHeight + 'px';
-+    caret.style.marginLeft = -width + 'px';
++    // Zero advance either way: at an insertion point it extends right, as a bar cursor does, and
++    // after the preedit it covers the last cell's edge.
++    const atInsertionPoint = this._isCaretInPreedit();
++    caret.style.marginLeft = atInsertionPoint ? '' : -width + 'px';
++    caret.style.marginRight = atInsertionPoint ? -width + 'px' : '';
 +    caret.style.verticalAlign = 'top';
 +    caret.style.width = width + 'px';
 +  }
@@ -1501,7 +1549,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,10 +1287,27 @@ export class CompositionHelper {
+@@ -243,10 +1335,26 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
@@ -1525,12 +1573,11 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +    // already runs on every render — so keep the rendered tail current with the buffer. Comparing
 +    // cells adds no layout read.
 +    this._syncCompositionCells();
-+    this._styleCompositionCaret();
 +
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
  
-@@ -254,31 +1315,178 @@ export class CompositionHelper {
+@@ -254,31 +1362,244 @@ export class CompositionHelper {
        const cursorTop = this._bufferService.buffer.y * this._renderService.dimensions.css.cell.height;
        const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
  
@@ -1545,8 +1592,10 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +        this._preeditRenderer ??= new CompositionPreeditRenderer(
 +          this._unicodeService, this._compositionView.ownerDocument, () => this.updateCompositionElements(true)
 +        );
-+        this._preeditRenderer.render(this._compositionPreedit, this._compositionSelection);
++        this._renderPreedit(this._compositionPreedit);
 +      }
++      // After the preedit render, which can move the caret into or out of the preedit.
++      this._styleCompositionCaret();
        // Limit the composition view width to the space between the cursor and
        // the terminal's right edge, preventing it from overflowing the terminal.
        const maxWidth = this._bufferService.cols * this._renderService.dimensions.css.cell.width - cursorLeft;
@@ -1560,6 +1609,16 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +      const anchorBounds =
 +        (this._compositionPreedit ?? this._compositionView).getBoundingClientRect();
 +      const anchorLeft = cursorLeft + Math.min(0, maxWidth - anchorBounds.width);
++      // End alignment clips the start of an over-wide preedit. Like a text field scrolling to its
++      // insertion point, slide the preedit right until a caret placed inside it is in view.
++      const clipped = Math.max(0, anchorBounds.width - maxWidth);
++      const caret = this._compositionCaret;
++      const shift = clipped > 0 && caret && this._isCaretInPreedit()
++        ? Math.max(0, clipped - (caret.getBoundingClientRect().left - anchorBounds.left))
++        : 0;
++      if (this._compositionPreedit) {
++        this._compositionPreedit.style.transform = shift ? `translateX(${shift}px)` : '';
++      }
 +      const showsRemainder =
 +        Boolean(this._compositionRemainder) && anchorBounds.width < maxWidth;
 +      if (this._compositionRemainder) {
@@ -1589,6 +1648,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +      this._textarea.style.width = Math.max(anchorBounds.width, 1) + 'px';
 +      this._textarea.style.height = Math.max(anchorBounds.height, 1) + 'px';
 +      this._textarea.style.lineHeight = anchorBounds.height + 'px';
++    } else {
++      this._styleCompositionCaret();
      }
  
      if (!dontRecurse) {
@@ -1712,12 +1773,113 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279
 +        spacing = nextSpacing;
 +        selected = nextSelected;
 +      }
-     }
++    }
 +    emit(data.length);
 +    nodes.push(doc.createTextNode('‎'));
 +    preedit.replaceChildren(...nodes);
++  }
++
++  /**
++   * Inserts the caret into the rendered preedit at the first grapheme boundary at or after
++   * `offset`, splitting the one text node there. Places nothing and returns false when that
++   * boundary is the end of the preedit.
++   */
++  public placeCaret(preedit: HTMLElement, caret: HTMLElement, offset: number): boolean {
++    // Skip the leading LRM. Each child is a text node or a run span holding one.
++    let remaining = offset + 1;
++    for (let child = preedit.firstChild; child; child = child.nextSibling) {
++      const text = isTextNode(child) ? child : child.firstChild;
++      if (!text || !isTextNode(text)) {
++        continue;
++      }
++      // The preedit ends before the trailing LRM, the last code unit of the last child.
++      const end = child === preedit.lastChild ? text.length - 1 : text.length;
++      if (remaining < end) {
++        // Runs start on grapheme boundaries, so the boundary can be searched within this node.
++        const segment = this._segmenter.segment(text.data).containing(remaining);
++        const boundary = !segment || segment.index === remaining ? remaining : segment.index + segment.segment.length;
++        if (boundary === 0) {
++          child.before(caret);
++          return true;
++        }
++        if (boundary < end) {
++          text.splitText(boundary);
++          text.after(caret);
++          return true;
++        }
++      }
++      remaining = Math.max(0, remaining - text.length);
+     }
++    return false;
    }
++
++  /** Takes the caret out of the preedit, rejoining the text node that placing it split. */
++  public removeCaret(preedit: HTMLElement, caret: HTMLElement): void {
++    if (!preedit.contains(caret)) {
++      return;
++    }
++    const before = caret.previousSibling;
++    const after = caret.nextSibling;
++    caret.remove();
++    if (before && after && isTextNode(before) && isTextNode(after)) {
++      before.appendData(after.data);
++      after.remove();
++    }
++  }
++}
++
++function isTextNode(node: Node): node is Text {
++  return node.nodeType === Node.TEXT_NODE;
  }
+diff --git a/src/browser/renderer/dom/DomRenderer.ts b/src/browser/renderer/dom/DomRenderer.ts
+index 70e9c3a6d130d687b7f6c70ca8e8b518a8bee654..7d0ecdbccfb6039475ab1e47b7799da0b97ea78b 100644
+--- a/src/browser/renderer/dom/DomRenderer.ts
++++ b/src/browser/renderer/dom/DomRenderer.ts
+@@ -236,14 +236,10 @@ export class DomRenderer extends Disposable implements IRenderer {
+       `}`;
+     styles +=
+       `@keyframes ${blinkAnimationBlockId} {` +
+-      ` 0% {` +
++      ` 0%, 50% {` +
+       `  background-color: ${colors.cursor.css};` +
+       `  color: ${colors.cursorAccent.css};` +
+       ` }` +
+-      ` 50% {` +
+-      `  background-color: inherit;` +
+-      `  color: ${colors.cursor.css};` +
+-      ` }` +
+       `}`;
+     // Cursor
+     styles +=
+@@ -253,21 +249,19 @@ export class DomRenderer extends Disposable implements IRenderer {
+       `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}.${Constants.FOCUS_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_BLINK_CLASS}.${RowCss.CURSOR_STYLE_BAR_CLASS} {` +
+       ` animation: ${blinkAnimationBarId} 1s step-end infinite;` +
+       `}` +
++      // Orca: step-start makes the off half jump to the implicit 100% keyframe: the cell's own colours.
+       `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}.${Constants.FOCUS_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_BLINK_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS} {` +
+-      ` animation: ${blinkAnimationBlockId} 1s step-end infinite;` +
++      ` animation: ${blinkAnimationBlockId} 1s step-start infinite;` +
+       `}` +
+       // Disable cursor blinking when idle
+       `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}.${Constants.CURSOR_BLINK_IDLE_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_BLINK_CLASS} {` +
+       ` animation: none !important;` +
+       `}` +
+-      // !important helps fix an issue where the cursor will not render on top of the selection,
+-      // however it's very hard to fix this issue and retain the blink animation without the use of
+-      // !important. So this edge case fails when cursor blink is on.
+-      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS} {` +
+-      ` background-color: ${colors.cursor.css};` +
+-      ` color: ${colors.cursorAccent.css};` +
+-      `}` +
+-      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS}:not(.${RowCss.CURSOR_BLINK_CLASS}) {` +
++      // Orca: every block cursor that is not animating; !important beats inline cell colours (RGB
++      // bg, selection). A blinking one can't use it, as it would also beat the animation.
++      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS}:not(.${RowCss.CURSOR_BLINK_CLASS}),` +
++      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}:not(.${Constants.FOCUS_CLASS}) .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS},` +
++      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}.${Constants.CURSOR_BLINK_IDLE_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS} {` +
+       ` background-color: ${colors.cursor.css} !important;` +
+       ` color: ${colors.cursorAccent.css} !important;` +
+       `}` +
 diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
 index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2522b89ae 100644
 --- a/src/browser/renderer/dom/DomRendererRowFactory.ts

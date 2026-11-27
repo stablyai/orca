@@ -14,19 +14,20 @@ import {
 import { spawnWorkerThread } from '../../../main/worker-threads/worker-thread-spawn'
 import { isWslHostsServing } from '../wsl-hosts/wsl-host-internal-gate'
 import { reportSecurePathHardening } from '../../secure-storage/secure-path-hardening-report'
-import {
-  RuntimeEnvironmentStoreError,
-  warnUnreadableEnvironmentState
-} from './runtime-environment-store-records'
-import { RuntimeEnvironmentSidecarInvalidError } from './runtime-environment-sidecar'
-import { WslHostDeploymentStoreInvalidError } from './wsl-host-deployment-store'
+import { warnUnreadableEnvironmentState } from './runtime-environment-store-records'
+import { deserializeEnvironmentStoreError } from './runtime-environment-store-worker-errors'
 import type {
   EnvironmentStoreCommand,
-  EnvironmentStoreError,
   EnvironmentStoreMessage,
   EnvironmentStoreResponse,
   EnvironmentStoreSuccess
 } from './runtime-environment-store-worker-protocol'
+import {
+  ENVIRONMENT_STORE_READ_OPERATIONS as readers,
+  clearEnvironmentListCache,
+  isCacheableEnvironmentStoreRead,
+  runCachedEnvironmentStoreRead
+} from './runtime-environment-store-list-cache'
 
 type Pending = {
   command: EnvironmentStoreCommand
@@ -36,55 +37,68 @@ type Pending = {
   reject: (error: Error) => void
 }
 type Owner = { worker?: Worker; writes: number; active?: { id: number; pending: Pending[] } }
-const readers = new Set<EnvironmentStoreCommand['operation']>([
-  'listEnvironments',
-  'parseRemotePairingCode',
-  'resolveEnvironment',
-  'resolveEnvironmentPairingOffer',
-  'findWslHostDeployment',
-  'readEnvironmentStoreRecords',
-  'readWslHostDeployments'
-])
+const IDLE_TEARDOWN_MS = 30_000
 const queue: Pending[] = []
 let owner: Owner | undefined
 let sequence = 0
 let writes = 0
 let retiring: Promise<void> | undefined
+let idleTimer: ReturnType<typeof setTimeout> | undefined
 let scheduled = false
 let closing: Promise<void> | undefined
 let finishClose: (() => void) | undefined
 let runInline: typeof runEnvironmentStoreBatch | undefined
+
+function clearIdleTimer(): void {
+  if (idleTimer !== undefined) {
+    clearTimeout(idleTimer)
+    idleTimer = undefined
+  }
+}
+
+function retireIdleWorker(): void {
+  idleTimer = undefined
+  const current = owner
+  if (!current?.worker || current.active || queue.length > 0 || finishClose || retiring) {
+    return
+  }
+  owner = undefined
+  retiring = current.worker.terminate().then(
+    () => {},
+    () => {}
+  )
+  void retiring.then(() => {
+    retiring = undefined
+    dispatch()
+  })
+}
+
+function scheduleIdleTeardown(): void {
+  if (
+    idleTimer !== undefined ||
+    !owner?.worker ||
+    owner.active ||
+    queue.length > 0 ||
+    finishClose ||
+    retiring
+  ) {
+    return
+  }
+  idleTimer = setTimeout(retireIdleWorker, IDLE_TEARDOWN_MS)
+  idleTimer.unref?.()
+}
 
 /** Parent generation survives worker restarts and invalidates derived pairing caches on uncertainty. */
 export function environmentStoreWriteCount(): number {
   return writes
 }
 
-function deserializeError(error: EnvironmentStoreError): Error {
-  if (error.name === 'RuntimeEnvironmentStoreError') {
-    return new RuntimeEnvironmentStoreError(
-      error.code === 'invalid_argument' ? 'invalid_argument' : 'runtime_error',
-      error.message,
-      error.pairingFailure
-    )
-  }
-  const result = new Error(error.message)
-  if (error.name === 'RuntimeEnvironmentSidecarInvalidError') {
-    Object.setPrototypeOf(result, RuntimeEnvironmentSidecarInvalidError.prototype)
-  } else if (error.name === 'WslHostDeploymentStoreInvalidError') {
-    Object.setPrototypeOf(result, WslHostDeploymentStoreInvalidError.prototype)
-  }
-  result.name = error.name
-  if (error.code) {
-    Object.assign(result, { code: error.code })
-  }
-  return result
-}
-
 function fail(current: Owner, error: Error): void {
   if (owner !== current) {
     return
   }
+  clearIdleTimer()
+  clearEnvironmentListCache()
   owner = undefined
   writes++
   for (const item of [...(current.active?.pending ?? []), ...queue.splice(0)]) {
@@ -121,6 +135,9 @@ function receive(current: Owner, message: EnvironmentStoreMessage): void {
     fail(current, new Error('Invalid environment store worker response'))
     return
   }
+  if (response.writes !== current.writes) {
+    clearEnvironmentListCache()
+  }
   writes += response.writes - current.writes
   current.writes = response.writes
   current.active = undefined
@@ -132,7 +149,7 @@ function receive(current: Owner, message: EnvironmentStoreMessage): void {
       }
       item.resolve(result.result)
     } else {
-      item.reject(deserializeError(result.error))
+      item.reject(deserializeEnvironmentStoreError(result.error))
     }
   })
   dispatch()
@@ -146,6 +163,7 @@ function dispatch(): void {
   if (queue.length === 0) {
     owner?.worker?.unref()
     if (finishClose) {
+      clearIdleTimer()
       const current = owner
       owner = undefined
       if (current?.worker) {
@@ -156,9 +174,12 @@ function dispatch(): void {
       } else {
         finishClose()
       }
+    } else {
+      scheduleIdleTeardown()
     }
     return
   }
+  clearIdleTimer()
   try {
     if (!owner) {
       const worker = environmentStoreRunsInline()
@@ -223,18 +244,19 @@ function dispatch(): void {
   }
 }
 
-export function submitEnvironmentStoreCommand(
-  command: EnvironmentStoreCommand
+function enqueueEnvironmentStoreCommand(
+  command: EnvironmentStoreCommand,
+  servingWsl: boolean,
+  observe: ((generation: number) => void) | undefined
 ): Promise<EnvironmentStoreSuccess> {
   if (closing) {
     return Promise.reject(new Error('Environment store is closing'))
   }
-  admitEnvironmentStoreOperation(closeEnvironmentStore)
   const result = new Promise<EnvironmentStoreSuccess>((resolve, reject) =>
     queue.push({
       command: structuredClone(command),
-      servingWsl: isWslHostsServing(process.env),
-      observe: captureEnvironmentStoreRead(),
+      servingWsl,
+      observe,
       resolve,
       reject
     })
@@ -244,6 +266,38 @@ export function submitEnvironmentStoreCommand(
     setImmediate(dispatch)
   }
   return result
+}
+
+export function submitEnvironmentStoreCommand(
+  command: EnvironmentStoreCommand
+): Promise<EnvironmentStoreSuccess> {
+  if (closing) {
+    return Promise.reject(new Error('Environment store is closing'))
+  }
+  admitEnvironmentStoreOperation(closeEnvironmentStore)
+  const servingWsl = isWslHostsServing(process.env)
+  const observe = captureEnvironmentStoreRead()
+  if (!readers.has(command.operation)) {
+    clearEnvironmentListCache()
+    return enqueueEnvironmentStoreCommand(command, servingWsl, observe)
+  }
+  if (
+    isCacheableEnvironmentStoreRead(command) &&
+    queue.length === 0 &&
+    !owner?.active &&
+    !retiring
+  ) {
+    return runCachedEnvironmentStoreRead({
+      command,
+      servingWsl,
+      observe,
+      readWrites: () => writes,
+      isClosing: () => Boolean(closing),
+      isIdle: () => queue.length === 0 && !owner?.active && !retiring,
+      enqueue: () => enqueueEnvironmentStoreCommand(command, servingWsl, observe)
+    })
+  }
+  return enqueueEnvironmentStoreCommand(command, servingWsl, observe)
 }
 
 /** Call after RPC and other producers stop, before a normal host exit. */

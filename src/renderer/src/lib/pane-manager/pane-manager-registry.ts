@@ -1,8 +1,8 @@
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { registerRendererMemoryProfileContributor } from '../../diagnostics/memory/renderer-memory-profile'
-import type { PaneRenderingDiagnostics } from './pane-manager-types'
+import type { ManagedPaneInternal, PaneRenderingDiagnostics } from './pane-manager-types'
 
-type RegisteredPaneManager = {
+export type RegisteredPaneManager = {
   resetWebglTextureAtlases(): void
   clearWebglTextureAtlases?: () => void
   presentViewports?: () => void
@@ -13,6 +13,7 @@ type RegisteredPaneManager = {
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
   containsElement?: (element: Element) => boolean
+  forEachInternalPane?: (visit: (pane: ManagedPaneInternal) => boolean | void) => boolean
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -122,10 +123,45 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
   }
 }
 
-/** Whether an element sits inside an on-screen manager; checks only visible managers' roots, never their panes. */
-export function isElementInVisiblePaneManager(element: Element): boolean {
+/** Visits leaves of on-screen managers until `visit` returns true; one manager's teardown never stops the rest. */
+export function forEachVisibleInternalPane(
+  visit: (pane: ManagedPaneInternal, manager: RegisteredPaneManager) => boolean | void
+): void {
   for (const manager of visibleManagers) {
-    if (manager.containsElement?.(element)) {
+    try {
+      if (manager.forEachInternalPane?.((pane) => visit(pane, manager))) {
+        return
+      }
+    } catch {
+      // Continue with the remaining managers.
+    }
+  }
+}
+
+function visibleRootContains(manager: RegisteredPaneManager, element: Element): boolean {
+  try {
+    return (
+      manager.isVisibleForAtlasRecovery?.() !== false && manager.containsElement?.(element) === true
+    )
+  } catch {
+    return false
+  }
+}
+
+/** Prefer the enumerated root, which may have changed during a pane move. */
+export function isElementInVisiblePaneManager(
+  element: Element,
+  associatedManager?: RegisteredPaneManager
+): boolean {
+  if (
+    associatedManager &&
+    visibleManagers.has(associatedManager) &&
+    visibleRootContains(associatedManager, element)
+  ) {
+    return true
+  }
+  for (const manager of visibleManagers) {
+    if (manager !== associatedManager && visibleRootContains(manager, element)) {
       return true
     }
   }

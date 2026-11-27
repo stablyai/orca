@@ -145,6 +145,20 @@ export function offsetSentImagePromptMarkers(
       )
 }
 
+/** Keep references correct when delivered images omit an expired upload. */
+export function remapSentImagePromptMarkers(
+  text: string,
+  positions: readonly (number | null)[]
+): string {
+  return replaceSentImagePromptMarkers(text, (number, marker) => {
+    const position = positions[number - 1]
+    if (position === undefined) {
+      return marker
+    }
+    return position === null ? '[Orca: image expired]' : `[Image #${position}]`
+  })
+}
+
 // Keyed by block array so downstream row-content caches keep hitting across renders.
 const withoutSentMarkers = new WeakMap<readonly NativeChatBlock[], NativeChatBlock[]>()
 

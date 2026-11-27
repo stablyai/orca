@@ -7,7 +7,10 @@ import {
 } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
-import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
+import {
+  withMovedAccountHome,
+  type createAgentSessionOwnerProof
+} from '../ownership/agent-session-owner-proof'
 import { recordAgentSessionAcquisitionExit } from '../ownership/agent-session-acquisition-exit-transition'
 import {
   commitAgentSessionProcessIdentity,
@@ -147,15 +150,19 @@ export function applyAgentSessionRecordCommand(
         }),
         command.args.accountAcquisition
       )
-      next = command.args.launchedAccountHome
-        ? {
-            ...proved,
-            launchedAccount: {
-              fence: command.args.fence,
-              accountHome: command.args.launchedAccountHome
+      next = withMovedAccountHome(
+        command.args.launchedAccountHome
+          ? {
+              ...proved,
+              launchedAccount: {
+                fence: command.args.fence,
+                accountHome: command.args.launchedAccountHome
+              }
             }
-          }
-        : proved
+          : proved,
+        record,
+        command.args.movedAccountHome
+      )
       break
     }
     case 'evict':

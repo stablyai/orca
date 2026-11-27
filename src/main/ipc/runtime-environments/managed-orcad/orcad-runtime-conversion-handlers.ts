@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type {
   OrcadManagedConversionResult,
   OrcadManagedPendingMigrationRow
@@ -8,8 +9,11 @@ import { convertSshTargetToManagedOrcad } from '../../../managed-server/lifecycl
 import { conversionCollaborators } from '../../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
 import { requiredString } from './orcad-runtime-lifecycle-handlers'
 
-export function registerOrcadRuntimeConversionHandlers(getUserDataPath: () => string): void {
-  ipcMain.handle(
+export function registerOrcadRuntimeConversionHandlers(
+  getUserDataPath: () => string,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'runtimeEnvironments:convertSshHostToManagedOrcad',
     (
       _event,
@@ -22,7 +26,7 @@ export function registerOrcadRuntimeConversionHandlers(getUserDataPath: () => st
       })
     }
   )
-  ipcMain.handle(
+  ipc.handle(
     'runtimeEnvironments:listPendingOrcadMigrations',
     (): OrcadManagedPendingMigrationRow[] => listPendingManagedOrcadMigrations(getUserDataPath())
   )

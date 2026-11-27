@@ -210,6 +210,9 @@ export async function activateBackendRuntime(
   registerCleanup(
     installFirstWorkRenameHookSubscription(firstWorkRenameDeps(profileStore, runtime))
   )
+  const { installAgentTurnWorktreeActivity } =
+    await import('../agent-hooks/runtime/agent-turn-worktree-activity')
+  registerCleanup(installAgentTurnWorktreeActivity())
 
   accountLaunch?.attachToRuntime(runtime)
   const { wireGitHubIssueLinkTitleFill } =

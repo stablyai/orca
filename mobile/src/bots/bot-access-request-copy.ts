@@ -96,7 +96,8 @@ export function accessRequestGrant(request: ConnectorAccessRequest): PhoneAccess
 export function accessDecisionCopy(
   grant: PhoneAccessGrant,
   bot: PhoneAccessBot,
-  t: Translate
+  t: Translate,
+  intlLocale: string
 ): {
   title: string
   /** The heading over the rows: what the one person can do, or what they all can. */
@@ -116,7 +117,7 @@ export function accessDecisionCopy(
   // Without a handle, the full name, since the title shows only the first.
   const who = person
     ? identity || (person !== firstName ? person : '')
-    : mobileBotAccessNames(names)
+    : mobileBotAccessNames(names, intlLocale)
   const { tone, rows } = botAccessConfirm({
     permission: botStartingPermission(bot, null),
     connector: grant.connector,

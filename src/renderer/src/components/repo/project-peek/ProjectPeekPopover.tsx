@@ -1,7 +1,30 @@
-import React from 'react'
+import React, { Suspense } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { ProjectPeek } from './ProjectPeek'
+
+const ProjectPeek = lazy(() =>
+  import('./ProjectPeek').then((module) => ({ default: module.ProjectPeek }))
+)
+
+/** On the first-ever open, onOpenAutoFocus fires before the lazy chunk renders a tab to land on;
+ *  once the peek mounts, move focus off the container onto the active style tab it meant to reach. */
+function FocusActiveTabAfterLateMount({
+  contentRef
+}: {
+  contentRef: React.RefObject<HTMLDivElement | null>
+}): null {
+  React.useEffect(() => {
+    const content = contentRef.current
+    if (!content || document.activeElement !== content) {
+      return
+    }
+    content
+      .querySelector<HTMLElement>('[role="tab"][data-state="active"]')
+      ?.focus({ preventScroll: true })
+  }, [contentRef])
+  return null
+}
 
 // Why: the content portals out of the DOM but React still bubbles its events to the card underneath,
 // which would select, drag, or rename the workspace on every edit click.
@@ -88,7 +111,7 @@ export function ProjectPeekPopover({
         className="w-[296px] max-w-[calc(100vw-2rem)]"
         // Why: marks the popover as a row control so a host card's details hover stands down while it's used.
         data-activity-thread-control=""
-        // Why: Radix would focus Done first; landing on the current style tab puts keys where editing starts.
+        // Why: Radix would focus the header action first; landing on the current style tab puts keys where editing starts.
         onOpenAutoFocus={(event) => {
           const tab = contentRef.current?.querySelector<HTMLElement>(
             '[role="tab"][data-state="active"]'
@@ -113,7 +136,12 @@ export function ProjectPeekPopover({
         }}
         onDragStart={stopPropagation}
       >
-        <ProjectPeek repo={repo} onRequestClose={requestClose} />
+        {open ? (
+          <Suspense fallback={null}>
+            <ProjectPeek repo={repo} onRequestClose={requestClose} />
+            <FocusActiveTabAfterLateMount contentRef={contentRef} />
+          </Suspense>
+        ) : null}
       </PopoverContent>
     </Popover>
   )

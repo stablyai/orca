@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { awaitWindowsHostGitEnvironmentReady } from '../../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../../../git/remotes/repo-remote-queries'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
@@ -8,9 +9,12 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
-export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerContext): void {
+export function registerFilesystemGitUrlHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
-  ipcMain.handle(
+  ipc.handle(
     'git:remoteFileUrl',
     async (
       _event,
@@ -35,7 +39,7 @@ export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerConte
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:remoteCommitUrl',
     async (
       _event,

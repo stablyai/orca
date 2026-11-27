@@ -252,6 +252,7 @@ export function renderWorktreeVirtualRow(
           <div
             aria-hidden="true"
             data-worktree-family-segment={familyVariant}
+            data-worktree-family-closed={frame.end === frame.root ? '' : undefined}
             className={cn(
               'pointer-events-none absolute border-x',
               familyHidden && 'opacity-0',

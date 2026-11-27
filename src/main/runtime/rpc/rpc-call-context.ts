@@ -7,6 +7,7 @@ import {
   type RpcDispatchStreamingOptions
 } from './dispatch/dispatcher-stream-options'
 import { assertLookAroundMayCall } from './look-around-rpc-guard'
+import { assertTeamAllowsBrowserRpc } from '../../browser/browser-team-policy'
 
 /** A call's context. Handlers see the scope admission checked, which a pinned dispatcher sets for every call. */
 export function rpcCallContext(
@@ -18,7 +19,9 @@ export function rpcCallContext(
   params: unknown
 ): RpcContext {
   const scoped = pinned ? { ...options, callerScope: pinned } : options
-  return rpcContextFromTransport(runtime, request, scoped, caller, params)
+  const context = rpcContextFromTransport(runtime, request, scoped, caller, params)
+  assertTeamAllowsBrowserRpc(request.method, context.caller)
+  return context
 }
 
 /** A unary call's context, refused before any routing when a bot's look-around or tidy-up run may not make it. */

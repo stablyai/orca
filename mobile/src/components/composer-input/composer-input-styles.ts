@@ -1,4 +1,4 @@
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { feedback, radii, spacing, typography, type MobilePalette } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
 /** Round controls on an action row: attach, mic, Send/Stop. */
@@ -13,10 +13,21 @@ export const COMPOSER_TEXT_SIZE = 16
 export const COMPOSER_LINE_HEIGHT = 22
 const MESSAGE_PADDING_VERTICAL = 2
 export const MESSAGE_MIN_HEIGHT = 30
+/** The message text's height for this many lines, its own padding included. */
+export const linesHeight = (lines: number) =>
+  lines * COMPOSER_LINE_HEIGHT + 2 * MESSAGE_PADDING_VERTICAL
 // A box with no controls is a form field: it opens a few lines tall so it reads as room to write.
-export const FORM_MESSAGE_MIN_HEIGHT = 3 * COMPOSER_LINE_HEIGHT + 2 * MESSAGE_PADDING_VERTICAL
+export const FORM_MESSAGE_MIN_HEIGHT = linesHeight(3)
 export const MESSAGE_MAX_HEIGHT = 7 * COMPOSER_LINE_HEIGHT
 export const FIELD_MIN_HEIGHT = 44
+/** A field is a row of a grouped list: ListRow's height, its text on the row's 16 pt inset. */
+export const FIELD_ROW_HEIGHT = 48
+const FIELD_ROW_INSET = spacing.lg
+// The message text pads itself 6 across and 2 down; its first line sits where a one-line row's does.
+const FIELD_ROWS_PADDING = {
+  paddingHorizontal: FIELD_ROW_INSET - 6,
+  paddingVertical: (FIELD_ROW_HEIGHT - COMPOSER_LINE_HEIGHT) / 2 - MESSAGE_PADDING_VERTICAL
+} as const
 
 const pillControl = {
   borderRadius: radii.pill,
@@ -37,34 +48,35 @@ const labelControl = {
   minHeight: COMPOSER_CONTROL_SIZE
 } as const
 
-// A field with no controls of its own is told apart by its edge alone, so it draws inputBorder (3:1).
-const edge = (borderColor: string) =>
-  ({ borderWidth: 1, borderColor, backgroundColor: colors.composerSurface }) as const
+// A field on its own is a group of one: the group's fill and radius, no edge, so it matches the rows around it.
+// A function, so the fill is read per theme inside the themed sheet.
+const groupOfOne = (colors: MobilePalette) =>
+  ({
+    borderWidth: 0,
+    borderRadius: radii.surface,
+    backgroundColor: colors.sheetGroup
+  }) as const
 
-// The box owns the focus ring, so the browser's own ring on the text inside is dropped.
+// The caret is the only focus sign, so the browser's own ring is dropped.
 const noOwnRing = { outlineWidth: 0 } as const
 
-// The chat composer's look, shared by every text input so they cannot drift apart; plain fields add the edge.
-export const composerInputStyles = themedStyleSheet(() => ({
+// The chat composer's look, shared by every text input so they cannot drift apart; plain fields are grouped rows.
+export const composerInputStylesSheet = themedStyleSheet((colors) => ({
   box: {
-    ...edge(colors.composerBorder),
+    borderWidth: 1,
+    borderColor: colors.composerBorder,
+    backgroundColor: colors.composerSurface,
     padding: spacing.md,
     borderRadius: radii.floating
   },
   formBox: {
-    borderColor: colors.inputBorder,
-    borderRadius: radii.surface
-  },
-  // The edge thickens to a 2pt accent ring, drawn as an outline so nothing moves.
-  focused: {
-    borderColor: colors.accentBlue,
-    outlineColor: colors.accentBlue,
-    outlineStyle: 'solid',
-    outlineWidth: 1
+    ...groupOfOne(colors),
+    ...FIELD_ROWS_PADDING
   },
   fieldInput: {
-    ...edge(colors.inputBorder),
-    borderRadius: radii.control,
+    ...groupOfOne(colors),
+    ...noOwnRing,
+    fontSize: COMPOSER_TEXT_SIZE,
     color: colors.textPrimary
   },
   inlineBox: {
@@ -140,12 +152,22 @@ export const composerInputStyles = themedStyleSheet(() => ({
     opacity: feedback.pressedOpacity
   },
   field: {
-    ...edge(colors.inputBorder),
-    minHeight: FIELD_MIN_HEIGHT,
+    ...groupOfOne(colors),
+    minHeight: FIELD_ROW_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    paddingHorizontal: FIELD_ROW_INSET
+  },
+  // Off a sheet (a page, card, dock or toolbar) the group's fill would vanish in light, so a field there
+  // takes the translucent grey that reads on any surface; search always does, as iOS draws it.
+  filledFill: {
+    backgroundColor: colors.translucentFill
+  },
+  filledField: {
+    minHeight: FIELD_MIN_HEIGHT,
     borderRadius: radii.control,
+    backgroundColor: colors.translucentFill,
     paddingHorizontal: spacing.md
   },
   fieldText: {
@@ -162,17 +184,14 @@ export const composerInputStyles = themedStyleSheet(() => ({
     includeFontPadding: false,
     textAlignVertical: 'center'
   },
-  labelledText: {
-    flex: 1,
-    minWidth: 0,
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    paddingVertical: spacing.xs
+  // A labelled field reads like a ListRow: the label where its title sits, the text after it.
+  labelledField: {
+    gap: spacing.md
   },
   fieldLabel: {
+    minWidth: 72,
     color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    fontSize: 15
   },
   mono: {
     fontFamily: typography.monoFamily
@@ -180,4 +199,18 @@ export const composerInputStyles = themedStyleSheet(() => ({
   disabled: {
     opacity: feedback.disabledOpacity
   }
+}))
+
+// A field inside a ListGroup: the group draws the fill, radius and hairlines, so the field draws none.
+const unframed = {
+  borderWidth: 0,
+  borderRadius: 0,
+  backgroundColor: 'transparent'
+} as const
+
+export const groupFieldStylesSheet = themedStyleSheet(() => ({
+  line: { ...unframed, minHeight: FIELD_ROW_HEIGHT, paddingHorizontal: FIELD_ROW_INSET },
+  lines: { ...unframed, ...FIELD_ROWS_PADDING },
+  // A form's first group under its SheetHeader.
+  underHeader: { marginTop: spacing.sm }
 }))

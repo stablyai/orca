@@ -1,47 +1,14 @@
 import {
   LEGACY_JOURNAL_RETIREMENT_ACK_METHOD,
-  LEGACY_JOURNAL_RETIREMENT_AVAILABLE,
-  LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD,
-  LEGACY_JOURNAL_RETIREMENT_FORWARDING_CAPABILITY
+  LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD
 } from '../../../../../shared/remote-runtime/protocol/legacy-journal-retirement-forwarding'
 import {
   LegacyJournalRetirementAckParams,
   LegacyJournalRetirementClaimParams
 } from '../../../../../shared/rpc-contract/client-ui/client-events-params'
 import { legacyJournalRetirementForwarding } from '../../../../native-chat/agent-session-journal/journal-legacy-retirement-forwarding'
-import { defineMethod, type RpcContext } from '../../core'
-
-function retirementSubscriber(ctx: RpcContext, subscriptionId: string) {
-  if (
-    ctx.signal?.aborted ||
-    !ctx.connectionId ||
-    ctx.clientKind !== 'runtime' ||
-    ctx.caller?.kind !== 'paired-device' ||
-    ctx.caller.agent ||
-    !ctx.clientCapabilities?.includes(LEGACY_JOURNAL_RETIREMENT_FORWARDING_CAPABILITY)
-  ) {
-    return undefined
-  }
-  return { connectionId: ctx.connectionId, deviceId: ctx.caller.deviceId, subscriptionId }
-}
-
-export function subscribeLegacyJournalRetirement(
-  ctx: RpcContext,
-  subscriptionId: string,
-  emit: (event: unknown) => void
-) {
-  const subscriber = retirementSubscriber(ctx, subscriptionId)
-  const forwarding = subscriber && legacyJournalRetirementForwarding(ctx.runtime)
-  if (!subscriber || !forwarding) {
-    return undefined
-  }
-  return {
-    unsubscribe: forwarding.subscribe(subscriber, () =>
-      emit({ type: LEGACY_JOURNAL_RETIREMENT_AVAILABLE })
-    ),
-    available: forwarding.available
-  }
-}
+import { defineMethod } from '../../core'
+import { legacyJournalRetirementSubscriber } from './client-events'
 
 export const LEGACY_JOURNAL_RETIREMENT_METHODS = [
   defineMethod({
@@ -49,7 +16,7 @@ export const LEGACY_JOURNAL_RETIREMENT_METHODS = [
     permission: 'workspace',
     params: LegacyJournalRetirementClaimParams,
     handler: ({ subscriptionId, token, release }, ctx) => {
-      const subscriber = retirementSubscriber(ctx, subscriptionId)
+      const subscriber = legacyJournalRetirementSubscriber(ctx, subscriptionId)
       const forwarding = subscriber && legacyJournalRetirementForwarding(ctx.runtime)
       if (!subscriber || !forwarding) {
         return null
@@ -64,7 +31,7 @@ export const LEGACY_JOURNAL_RETIREMENT_METHODS = [
     params: LegacyJournalRetirementAckParams,
     handler: async (params, ctx) => {
       const { subscriptionId, token } = params
-      const subscriber = retirementSubscriber(ctx, subscriptionId)
+      const subscriber = legacyJournalRetirementSubscriber(ctx, subscriptionId)
       return subscriber
         ? (await legacyJournalRetirementForwarding(ctx.runtime)?.acknowledge(
             { ...subscriber, token },

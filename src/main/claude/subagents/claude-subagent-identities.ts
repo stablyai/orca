@@ -51,7 +51,11 @@ export class ClaudeSubagentIdentities {
   parentOf = (id: string, run?: string): string | undefined =>
     this.taskInvocations.parentOf(id, run)
 
-  observeSystemFrame(message: Record<string, unknown>): boolean {
+  observeFrame(message: Record<string, unknown>): boolean {
+    if (message.type !== 'system') {
+      this.aliasForkedCommandRef(message)
+      return false
+    }
     this.taskInvocations.observe(message)
     const frame = readClaudeSubagentTaskFrame(message)
     if (!frame) {
@@ -78,6 +82,31 @@ export class ClaudeSubagentIdentities {
       this.announce(frame.taskId, frame.toolUseId)
     }
     return true
+  }
+
+  /** A kept subagent launched before this app started: its start isn't replayed, so its launch
+   *  (from its saved roster row) names it, as the start would have. */
+  adoptKept(taskId: string, toolUseId: string): void {
+    this.ids.alias(toolUseId, taskId)
+    if (!this.known.has(taskId)) {
+      const attempt = Math.max(1, this.deps.journaled?.attempt(taskId) ?? 0)
+      this.known.set(taskId, { run: toolUseId, attempt })
+    }
+  }
+
+  /** A forked command's messages name `forked-command-<name>`, which its task frames never
+   *  mention; `agent_id` is that task's id. */
+  private aliasForkedCommandRef(message: Record<string, unknown>): void {
+    const ref = message.parent_tool_use_id
+    const agentId = message.agent_id
+    if (
+      typeof ref === 'string' &&
+      ref.startsWith('forked-command-') &&
+      typeof agentId === 'string' &&
+      this.taskInvocations.get(agentId)?.forkedCommand === true
+    ) {
+      this.ids.alias(ref, agentId)
+    }
   }
 
   dispose(): void {

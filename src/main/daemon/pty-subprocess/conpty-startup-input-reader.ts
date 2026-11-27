@@ -156,12 +156,22 @@ let announcementUntrusted = false
 // Logged with each respawn so a misfiring check shows up as a climbing count in the daemon log.
 let respawnCount = 0
 
-type NodePtyWindowsPane = pty.IPty & { _agent?: { _useConpty?: boolean } }
+type NodePtyWindowsPane = pty.IPty & { _agent?: { _useConpty?: boolean; _useConptyDll?: boolean } }
 
 // node-pty falls back to WinPTY below Windows build 18309, which never announces an input reader.
 export function runsOnWinpty(proc: pty.IPty): boolean {
   const pane: NodePtyWindowsPane = proc
   return pane._agent?._useConpty === false
+}
+
+// The announcement is a bundled-build fact; the system ConPTY fallback (#47506) need not send it.
+export function runsOnSystemConpty(proc: pty.IPty): boolean {
+  const pane: NodePtyWindowsPane = proc
+  return pane._agent?._useConpty === true && pane._agent._useConptyDll === false
+}
+
+function skipsStartupCheck(proc: pty.IPty): boolean {
+  return runsOnWinpty(proc) || runsOnSystemConpty(proc)
 }
 
 function withNotice(claim: () => ConptyStartupEvents): () => ConptyStartupEvents {
@@ -187,7 +197,7 @@ export async function spawnConptyWithInputReader(
 }> {
   const firstSpawn = await spawn()
   const { proc: first, physicalOwner: firstOwner } = firstSpawn
-  if (announcementUntrusted || runsOnWinpty(first)) {
+  if (announcementUntrusted || skipsStartupCheck(first)) {
     return { ...firstSpawn, claimStartupEvents: () => ({ data: [], exit: null }) }
   }
   const firstStartup = await decideConptyStartup(first, opts.signal, firstOwner)
@@ -227,6 +237,10 @@ export async function spawnConptyWithInputReader(
   }
   const retrySpawn = await spawn()
   const { proc: retry, physicalOwner: retryOwner } = retrySpawn
+  // The respawn can land on the system ConPTY if the bundled one failed meanwhile.
+  if (skipsStartupCheck(retry)) {
+    return { ...retrySpawn, claimStartupEvents: () => ({ data: [], exit: null }) }
+  }
   const retryStartup = await decideConptyStartup(retry, opts.signal, retryOwner)
   if (retryStartup.outcome === 'input-reader') {
     announcementObserved = true

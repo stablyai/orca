@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   BOT_AVATAR_FILE,
   isBotAvatarImage,
@@ -18,21 +19,23 @@ type RevisionHomes = { filesystem: BotHomeFilesystem; botsRoot: () => string }
 type Workspaces = () => readonly FolderWorkspace[]
 type HomePicture = { bot: Bot; known: boolean; ownership: 'manifest' | 'workspace' | 'unreadable' }
 
-const homePicture = z.object({
-  id: z.string(),
-  name: z.string(),
-  agent: z.string(),
-  members: z.array(z.unknown()),
-  avatar: z.string().nullable(),
-  avatarColor: BotAvatarColorSchema.nullable().optional(),
-  avatarOutfit: BotStoredOutfitSchema.nullable().optional(),
-  generatedOverMascot: z
-    .string()
-    .regex(/^mascot:[A-Z][0-9]+$/)
-    .optional(),
-  avatarRevision: z.number().int().nonnegative().optional(),
-  avatarRevisionEpoch: z.uuid().optional()
-})
+const homePicture = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    agent: z.string(),
+    members: z.array(z.unknown()),
+    avatar: z.string().nullable(),
+    avatarColor: BotAvatarColorSchema.nullable().optional(),
+    avatarOutfit: BotStoredOutfitSchema.nullable().optional(),
+    generatedOverMascot: z
+      .string()
+      .regex(/^mascot:[A-Z][0-9]+$/)
+      .optional(),
+    avatarRevision: z.number().int().nonnegative().optional(),
+    avatarRevisionEpoch: z.uuid().optional()
+  })
+)
 
 export async function readBotHomePicture(homes: RevisionHomes, bot: Bot): Promise<HomePicture> {
   const path = join(botHomeFolder(bot, homes.botsRoot()), 'bot.json')

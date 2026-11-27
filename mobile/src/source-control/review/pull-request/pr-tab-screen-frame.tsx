@@ -2,9 +2,7 @@ import type { ReactNode } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NavBar } from '../../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
@@ -36,7 +34,7 @@ export function ScreenFrame({
   children: ReactNode
   footer?: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.screen}>
@@ -64,7 +62,6 @@ export function ScreenFrame({
 
 // A pushed screen outlives the read that opened it: show a failed refresh, not an endless spinner.
 export function NotReady({ tab }: { tab: MobilePrTab }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const { state } = tab
   if (state.kind === 'error' || state.kind === 'blocked') {
@@ -87,6 +84,6 @@ export function NotReady({ tab }: { tab: MobilePrTab }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bgBase }
 }))

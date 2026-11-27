@@ -1,5 +1,5 @@
 // The computers New bot can make a bot on, why the others can't yet, and whose Orca account each runs under.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { translateHostDisplayLabel } from '@/runtime/hosts/display/execution-host-label'
@@ -21,6 +21,8 @@ import { buildExecutionHostRegistry } from '../../../../shared/execution-host/ex
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import type { OrcaAccountServerStatus } from '../../../../shared/orca-account-server-sign-in'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { useBotWslSetup, type BotWslSetup } from './use-bot-wsl-setup'
+import { useBotWslWakes } from './use-bot-wsl-wakes'
 
 export type BotCreateHostBlock = 'offline' | 'no-bots' | 'needs-server'
 
@@ -35,9 +37,17 @@ export type BotCreateHost = {
   platform?: NodeJS.Platform | null
   /** The host keeps paths the Windows way; absent for this app's own, which knows its own. */
   windows?: boolean
+  /** A WSL host main reports `idle` (its server exited with nothing using it, which includes Orca's
+   *  idle stop): unreachable now, but picking it wakes it, so it can be picked. */
+  sleeping?: boolean
+  /** A sleeping host this dialog is waking: picked, but no bot can be made until it answers. */
+  waking?: boolean
 }
 
 export type BotCreateHostsInput = Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels'> & {
+  wslHostStatuses?: AppState['wslHostStatuses']
+  /** WSL hosts this dialog started waking (`useBotWslWakes`). */
+  waking?: ReadonlySet<string>
   runtimeStatusByEnvironmentId: RuntimeStatuses
   settings?: Pick<NonNullable<AppState['settings']>, 'hostSettingOverrides'> | null
   t?: Translate
@@ -68,7 +78,13 @@ export function botCreateHosts(input: BotCreateHostsInput): BotCreateHost[] {
         ? lastVerifiedRuntimeStatus(entry)
         : null
     if (!status) {
-      return { ...base, blocked: 'offline' }
+      // Main's `idle` sleeps; a failure or a distro it reports stopped stays Can't reach.
+      if (input.waking?.has(environment.id)) {
+        return { ...base, platform: 'linux', waking: true }
+      }
+      return input.wslHostStatuses?.[environment.id]?.state === 'idle'
+        ? { ...base, platform: 'linux', sleeping: true }
+        : { ...base, blocked: 'offline' }
     }
     const platform = status.hostPlatform ?? null
     const windows = platform === 'win32'
@@ -172,6 +188,10 @@ export type BotCreateHostChoice = {
   otherAccountOf: (hostId: ExecutionHostId) => string | null
   /** The list is shown: read every ready server's account, once. */
   setListing: (listing: boolean) => void
+  /** A distro picked under Add host, being set up as a host in place. */
+  wslSetup: BotWslSetup
+  /** That setup still runs (or failed): no bot can be made until a computer is settled. */
+  busy: boolean
   reset: () => void
 }
 
@@ -198,6 +218,7 @@ export function useBotCreateHost(
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const wslHostStatuses = useAppStore((s) => s.wslHostStatuses)
   const settings = useAppStore((s) => s.settings?.hostSettingOverrides)
   const ownEmail = useAppStore((s) =>
     s.orcaProfileAuthStatus?.state === 'connected'
@@ -206,11 +227,15 @@ export function useBotCreateHost(
   )
   const onlyKey = only?.join('\n')
   const t = useTranslate()
+  const wakes = useBotWslWakes()
+  const { waking, wake } = wakes
   const hosts = useMemo(() => {
     const all = botCreateHosts({
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
       sshTargetLabels,
+      wslHostStatuses,
+      waking,
       settings: { hostSettingOverrides: settings },
       t
     })
@@ -218,8 +243,25 @@ export function useBotCreateHost(
     return allowed
       ? all.filter((host) => host.blocked !== 'needs-server' && allowed.includes(host.hostId))
       : all
-  }, [runtimeEnvironments, runtimeStatusByEnvironmentId, sshTargetLabels, settings, onlyKey, t])
+  }, [
+    runtimeEnvironments,
+    runtimeStatusByEnvironmentId,
+    sshTargetLabels,
+    wslHostStatuses,
+    waking,
+    settings,
+    onlyKey,
+    t
+  ])
   const [hostId, setHostId] = useState<ExecutionHostId>(initialHostId)
+  // The pick a WSL setup started from, given back when that setup is cancelled.
+  const pickedBeforeSetup = useRef<ExecutionHostId>(initialHostId)
+  const pickAddedWslHost = useCallback(
+    (environmentId: string) => setHostId(toRuntimeExecutionHostId(environmentId)),
+    []
+  )
+  const restorePick = useCallback(() => setHostId(pickedBeforeSetup.current), [])
+  const wslSetup = useBotWslSetup(pickAddedWslHost, restorePick)
   const [listing, setListing] = useState(false)
   // A server unpaired while the dialog is open leaves the first listed computer picked.
   const host =
@@ -228,6 +270,17 @@ export function useBotCreateHost(
     .filter((entry) => !entry.blocked && (listing || entry.hostId === host.hostId))
     .flatMap((entry) => (entry.environmentId ? [entry.environmentId] : []))
   const accounts = useServerAccounts(asked, open)
+  // A sleeping host picked (or picked already, or gone idle while open) is the owner using it: wake it,
+  // once; a failed wake waits for a re-pick or a new sleep (`botWslMayAutoWake`).
+  const sleepingPick =
+    open && host.sleeping && host.environmentId && wakes.mayAutoWake(host.environmentId)
+      ? host.environmentId
+      : undefined
+  useEffect(() => {
+    if (sleepingPick) {
+      wake(sleepingPick)
+    }
+  }, [sleepingPick, wake])
   const environmentOf = useMemo(() => serverEnvironmentIndex(hosts), [hosts])
   const otherAccountOf = (id: ExecutionHostId): string | null => {
     const environmentId = environmentOf.get(id)
@@ -237,11 +290,29 @@ export function useBotCreateHost(
   return {
     hosts,
     host,
-    setHostId,
+    setHostId: (next) => {
+      // Another pick leaves a setup to finish on its own; this dialog stops following it.
+      wslSetup.finish()
+      const environmentId = environmentOf.get(next)
+      if (environmentId) {
+        wakes.forget(environmentId)
+      }
+      setHostId(next)
+    },
     otherAccount: host.blocked ? null : otherAccountOf(host.hostId),
     otherAccountOf,
     setListing,
+    wslSetup: {
+      ...wslSetup,
+      start: (distro) => {
+        pickedBeforeSetup.current = host.hostId
+        wslSetup.start(distro)
+      }
+    },
+    busy: wslSetup.state.phase !== 'idle' || Boolean(host.sleeping || host.waking),
     reset: () => {
+      wslSetup.finish()
+      wakes.reset()
       setHostId(initialHostId)
       setListing(false)
     }

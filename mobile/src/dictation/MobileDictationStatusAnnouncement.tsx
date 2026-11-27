@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 import type { MobileDictationLiveText } from './use-mobile-dictation-announcements'
 
 export type MobileDictationStatusFlags = Pick<
@@ -8,13 +8,16 @@ export type MobileDictationStatusFlags = Pick<
   'isStarting' | 'isRecording' | 'isProcessing'
 >
 
-export function mobileDictationStatusTitle(dictation: MobileDictationStatusFlags): string | null {
+export function mobileDictationStatusTitle(
+  dictation: MobileDictationStatusFlags,
+  t: Translate
+): string | null {
   return dictation.isRecording
-    ? translate('session.terminalLiveInputStatus.listening', 'Listening')
+    ? t('session.terminalLiveInputStatus.listening', 'Listening')
     : dictation.isProcessing
-      ? translate('session.terminalLiveInputStatus.processing', 'Processing')
+      ? t('session.terminalLiveInputStatus.processing', 'Processing')
       : dictation.isStarting
-        ? translate('session.terminalLiveInputStatus.startingMic', 'Starting mic')
+        ? t('session.terminalLiveInputStatus.startingMic', 'Starting mic')
         : null
 }
 

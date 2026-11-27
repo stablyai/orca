@@ -244,7 +244,7 @@ export default function AutomationProjectCombobox({
               <RepoBadgeLabel
                 name={selectedRepo.displayName}
                 color={selectedRepo.badgeColor}
-                badgeClassName="size-1.5"
+                repo={selectedRepo}
               />
             </span>
           ) : (
@@ -347,6 +347,7 @@ export default function AutomationProjectCombobox({
                       <RepoBadgeLabel
                         name={group.repo.displayName}
                         color={group.repo.badgeColor}
+                        repo={group.repo}
                         className="max-w-full"
                       />
                       <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{detail}</p>

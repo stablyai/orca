@@ -157,3 +157,50 @@ describe('AutomationRunCompletionWatcher across an Orca quit', () => {
     expect(history.results.map((result) => result.status)).toEqual(['dispatch_failed'])
   })
 })
+
+describe('AutomationRunCompletionWatcher restart with a chat run', () => {
+  function chatRun(id: string): AutomationRun {
+    return {
+      ...dispatchedRun(),
+      id,
+      sessionKind: 'chat',
+      chatSessionId: `chat-${id}`,
+      terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null
+    }
+  }
+
+  it('settles dispatched chat runs from their chat, whether it already finished or finishes later', async () => {
+    const runs = new Map([chatRun('done'), chatRun('running')].map((run) => [run.id, run]))
+    const results: AutomationDispatchResult[] = []
+    let finishRunning = (): void => {}
+    const watcher = new AutomationRunCompletionWatcher({
+      // As the runtime routes chat runs: the run's own chat says when it ends.
+      observer: {
+        resolveRunTerminal: (run) => (run.sessionKind === 'chat' ? `automation:${run.id}` : null),
+        observeCompletion: async (handle) =>
+          handle === 'automation:done'
+            ? { status: 'completed' }
+            : new Promise((resolve) => {
+                finishRunning = () => resolve({ status: 'completed' })
+              })
+      },
+      readRun: (_automationId, runId) => runs.get(runId) ?? null,
+      markDispatchResult: async (result) => {
+        results.push(result)
+        runs.set(result.runId, { ...runs.get(result.runId)!, status: result.status })
+      }
+    })
+
+    watcher.reconcileRetainedRuns([...runs.values()])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(results.map((result) => [result.runId, result.status])).toEqual([['done', 'completed']])
+
+    finishRunning()
+    await vi.waitFor(() => expect(runs.get('running')?.status).toBe('completed'))
+    expect(results.map((result) => result.chatSessionId)).toEqual(['chat-done', 'chat-running'])
+    watcher.dispose()
+  })
+})

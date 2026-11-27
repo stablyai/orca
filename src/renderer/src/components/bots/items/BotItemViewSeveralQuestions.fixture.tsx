@@ -8,6 +8,7 @@ import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 import { BotItemBody } from './BotItemView'
 import { botItemHeldAnswersScope } from './bot-item-held-answers'
+import { imageReferenceToken } from '../../../../../shared/native-chat/attachments/native-chat-image-reference'
 
 const asker = { kind: 'bot' as const, botId: fixtureCos.id, chatId: 'chat-home' }
 
@@ -317,3 +318,75 @@ export const severalQuestionsTypedAnswerRead = defineFixture({
     </div>
   )
 })
+
+const SHOT = '/tmp/agent-session-attachments/0123abcd-0123-4567-89ab-0123456789ab/top-strip.png'
+
+// An answer with a screenshot, Enter in the box: held like typed words, its line folds with the image
+// under it, and the other three lines held too; Send then posts all four, the image with them.
+function heldImageFixture(number: number, uid: string, send: boolean) {
+  const heldImageItem = makeTestBotItem(number, { ...severalItem, uid })
+  const heldImageView = { ...severalView, item: heldImageItem }
+  return defineFixture({
+    width: 900,
+    setup: () => {
+      setupFixtureBot()
+      clearBox(heldImageItem.uid, OTHERS_HELD)
+      // Before the box mounts: its editor takes the draft, image chip and all, as it opens.
+      updateNativeChatComposerDraft(
+        `bot-item-comment:${botRefKey(fixtureCos)}:${heldImageItem.uid}`,
+        {
+          text: `Top strip, like ${imageReferenceToken('shot')} `,
+          images: [{ id: 'shot', path: SHOT }]
+        },
+        'immediate'
+      )
+      const runtime = window.api.runtime
+      Reflect.set(window.api, 'runtime', {
+        ...runtime,
+        call: (request: Parameters<typeof runtime.call>[0]) =>
+          request.method === 'bots.items.owner.comment'
+            ? new Promise(() => {})
+            : runtime.call(request)
+      })
+    },
+    render: () => (
+      <div className="flex h-[640px] flex-col bg-sidebar">
+        <BotItemBody
+          bot={{ ...fixtureCos, name: 'Layouts helper' }}
+          item={heldImageItem}
+          view={heldImageView}
+        />
+      </div>
+    ),
+    interact: async (frame) => {
+      // A draft there when the item opened names no line: Type your answer names the first.
+      const type = await waitForButton(
+        () => frame.querySelector<HTMLButtonElement>('button[aria-label="Type your answer"]'),
+        'Type your answer'
+      )
+      type.click()
+      await pause(100)
+      const comment = await waitForButton(
+        () => frame.querySelector('button[aria-label="Comment"]:not(:disabled)'),
+        'the Comment button'
+      )
+      comment.click()
+      await waitForButton(
+        () => frame.querySelector('button[title^="Where should the chat switcher live? →"]'),
+        'the folded answer'
+      )
+      if (send) {
+        ;(await waitForButton(() => findButton(frame, 'Send'), 'Send')).click()
+        await waitForButton(() => findButton(frame, 'Sending…'), 'Sending…')
+      }
+    }
+  })
+}
+
+export const severalQuestionsHeldImage = heldImageFixture(236, 'fixture-several-held-image', false)
+// Send: the four answers post as one comment, the held image with them.
+export const severalQuestionsHeldImageSent = heldImageFixture(
+  237,
+  'fixture-several-held-image-sent',
+  true
+)

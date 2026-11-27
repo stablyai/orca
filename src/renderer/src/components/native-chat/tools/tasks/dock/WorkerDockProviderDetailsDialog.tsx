@@ -101,7 +101,7 @@ export function WorkerDockProviderDetailsDialog({
         ) : (
           <p className="text-sm text-muted-foreground">
             {row.reason ??
-              (row.kind === 'command'
+              (row.kind !== 'agent' && row.kind !== 'worker'
                 ? t(
                     'components.native-chat.workerDock.commandOutputPending',
                     'Command output is not available yet.'

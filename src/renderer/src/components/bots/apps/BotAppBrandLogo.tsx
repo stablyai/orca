@@ -1,13 +1,18 @@
 // Brand marks for Orca's own connectors, the MCP apps Add to <bot> lists and well-known tools, on the tile each brand
 // is drawn on (LOGO_TILES.brand; white otherwise). GitHub keeps its monochrome mark: the connector's own icon.
 import React, { useContext, type ComponentType } from 'react'
+import airtableLogo from '@/assets/connector-brands/airtable.svg'
 import atlassianLogo from '@/assets/connector-brands/atlassian.svg'
+import clickupLogo from '@/assets/connector-brands/clickup.svg'
 import cloudflareLogo from '@/assets/connector-brands/cloudflare.svg'
 import context7Logo from '@/assets/connector-brands/context7.svg'
 import datadogLogo from '@/assets/connector-brands/datadog.svg'
 import datadogDarkLogo from '@/assets/connector-brands/datadog-dark.svg'
 import gitlabLogo from '@/assets/connector-brands/gitlab.svg'
 import googleLogo from '@/assets/connector-brands/google.svg'
+import granolaLogo from '@/assets/connector-brands/granola.svg'
+import granolaDarkLogo from '@/assets/connector-brands/granola-dark.svg'
+import intercomLogo from '@/assets/connector-brands/intercom.svg'
 import neonLogo from '@/assets/connector-brands/neon.svg'
 import netlifyLogo from '@/assets/connector-brands/netlify.svg'
 import netlifyDarkLogo from '@/assets/connector-brands/netlify-dark.svg'
@@ -19,7 +24,9 @@ import sentryLogo from '@/assets/connector-brands/sentry.svg'
 import slackLogo from '@/assets/connector-brands/slack.svg'
 import stripeLogo from '@/assets/connector-brands/stripe.svg'
 import supabaseLogo from '@/assets/connector-brands/supabase.svg'
+import todoistLogo from '@/assets/connector-brands/todoist.svg'
 import vercelLogo from '@/assets/connector-brands/vercel.svg'
+import zapierLogo from '@/assets/connector-brands/zapier.svg'
 import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
@@ -58,6 +65,12 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   atlassian: { logo: atlassianLogo },
   notion: { logo: notionLogo },
   stripe: { logo: stripeLogo },
+  clickup: { logo: clickupLogo },
+  airtable: { logo: airtableLogo },
+  todoist: { logo: todoistLogo },
+  zapier: { logo: zapierLogo },
+  granola: { logo: granolaLogo, darkLogo: granolaDarkLogo },
+  intercom: { logo: intercomLogo, whiteMark: true },
   playwright: { logo: playwrightLogo }
 }
 

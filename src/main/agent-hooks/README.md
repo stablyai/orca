@@ -52,17 +52,17 @@ terminal answered queries the way Orca does.
 
 ### Agents that don't send OSC 7501 yet
 
-| Agent                                                                            | Checked                             | Orca integration           |
-| -------------------------------------------------------------------------------- | ----------------------------------- | -------------------------- |
-| OpenCode (`opencode`, `opencode2`)                                               | installed binary v2.0.16 and source | plugin                     |
-| Kilocode (`kilo`)                                                                | installed package and source        | —                          |
-| Cursor (`cursor`)                                                                | installed binary 2026.06.02         | hooks                      |
-| Amp, Droid, Hermes, Muse, Devin                                                  | installed binaries                  | hooks                      |
-| Qoder (`qoder`)                                                                  | installed binary 1.1.65             | hooks                      |
-| CodeBuddy (`codebuddy`)                                                          | installed package                   | hooks                      |
-| Jcode (`jcode`)                                                                  | installed binary 0.95.0             | hooks                      |
-| Qwen Code, Freebuff, DeepSeek (`dsh`)                                            | source                              | hooks (qwen-code, dsh)     |
-| Gemini, Antigravity, Copilot, Command Code, ZCode, OpenClaude, Mimo, Prime Agent | not checked                         | hooks / plugin / extension |
+| Agent                                                                    | Checked                             | Orca integration           |
+| ------------------------------------------------------------------------ | ----------------------------------- | -------------------------- |
+| OpenCode (`opencode`, `opencode2`)                                       | installed binary v2.0.16 and source | plugin                     |
+| Kilocode (`kilo`)                                                        | installed package and source        | —                          |
+| Cursor (`cursor`)                                                        | installed binary 2026.06.02         | hooks                      |
+| Amp, Droid, Hermes, Muse, Devin                                          | installed binaries                  | hooks                      |
+| Qoder (`qoder`)                                                          | installed binary 1.1.65             | hooks                      |
+| CodeBuddy (`codebuddy`)                                                  | installed package                   | hooks                      |
+| Jcode (`jcode`)                                                          | installed binary 0.95.0             | hooks                      |
+| Qwen Code, Freebuff, DeepSeek (`dsh`)                                    | source                              | hooks (qwen-code, dsh)     |
+| Antigravity, Copilot, Command Code, ZCode, OpenClaude, Mimo, Prime Agent | not checked                         | hooks / plugin / extension |
 
 ¹ Claude Code stops putting its `⠂`/`✳` status glyph in the window title once Orca answers the
 probe. So everything that read that glyph reads the program's activity instead while it reports:
@@ -100,14 +100,14 @@ without an approval) or `{}`. A timeout, an error or Orca being down prints `{}`
 proceeds as if Orca were not there. Every other script discards the reply, so for those agents
 `agent.tool.before` only observes.
 
-| Agent                                                                                                                         | Tool events Orca receives        | Blocks?                                             |
-| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------- |
-| Claude Code (POSIX)                                                                                                           | PreToolUse, PostToolUse(Failure) | yes                                                 |
-| Claude Code (Windows `.cmd`)                                                                                                  | same                             | no: prints `{}` first; follow-up                    |
-| OpenClaude, Qoder, Qwen Code, CodeBuddy                                                                                       | same, via Claude's script        | no: their honoring of Claude's output is unverified |
-| Codex, Droid, Devin, Kimi, Muse, ZCode, DSH, Command Code, Copilot, Grok, Antigravity                                         | PreToolUse/PostToolUse           | no: reply discarded                                 |
-| Gemini (BeforeTool/AfterTool), Cursor (preToolUse, beforeShellExecution, …), Kiro, Jcode (pre_tool, posted in the background) | their own names                  | no                                                  |
-| Amp, Hermes (plugins)                                                                                                         | tool.call / pre_tool_call        | no: posts are not awaited for a decision            |
+| Agent                                                                                          | Tool events Orca receives        | Blocks?                                             |
+| ---------------------------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------- |
+| Claude Code (POSIX)                                                                            | PreToolUse, PostToolUse(Failure) | yes                                                 |
+| Claude Code (Windows `.cmd`)                                                                   | same                             | no: prints `{}` first; follow-up                    |
+| OpenClaude, Qoder, Qwen Code, CodeBuddy                                                        | same, via Claude's script        | no: their honoring of Claude's output is unverified |
+| Codex, Droid, Devin, Kimi, Muse, ZCode, DSH, Command Code, Copilot, Grok, Antigravity          | PreToolUse/PostToolUse           | no: reply discarded                                 |
+| Cursor (preToolUse, beforeShellExecution, …), Kiro, Jcode (pre_tool, posted in the background) | their own names                  | no                                                  |
+| Amp, Hermes (plugins)                                                                          | tool.call / pre_tool_call        | no: posts are not awaited for a decision            |
 
 SSH and WSL agents post to a relay on their host, which answers locally and forwards status
 only, so their tool calls are not hooked yet.

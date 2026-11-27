@@ -1,3 +1,4 @@
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
@@ -220,14 +221,47 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
     }) satisfies Record<string, SettingsSearchEntry>
 )
 
-export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
-  (): SettingsSearchEntry[] => [
-    ...Object.entries(getExperimentalSearchEntry()).flatMap(([key, entry]) =>
-      key === 'sharedCodexServers' && !sharedCodexServersSettingAvailable() ? [] : [entry]
+/** Experiments new users no longer see. Their rows and search entries stay only for people who
+ *  already turned them on, so nobody loses a feature they use. */
+export type OptInOnlyExperimentKey = 'agentDashboard' | 'terminalAttention'
+
+export type OptInOnlyExperimentVisibility = Record<OptInOnlyExperimentKey, boolean>
+
+export function getOptInOnlyExperimentVisibility(
+  settings:
+    | Partial<
+        Pick<GlobalSettings, 'experimentalAgentDashboardPopout' | 'experimentalTerminalAttention'>
+      >
+    | null
+    | undefined
+): OptInOnlyExperimentVisibility {
+  return {
+    agentDashboard: settings?.experimentalAgentDashboardPopout === true,
+    terminalAttention: settings?.experimentalTerminalAttention === true
+  }
+}
+
+function isOptInOnlyExperimentKey(key: string): key is OptInOnlyExperimentKey {
+  return key === 'agentDashboard' || key === 'terminalAttention'
+}
+
+const getAvailableExperimentalSearchEntries = createLocalizedCatalog(
+  (): [string, SettingsSearchEntry][] =>
+    Object.entries(getExperimentalSearchEntry()).filter(
+      ([key]) => key !== 'sharedCodexServers' || sharedCodexServersSettingAvailable()
+    )
+)
+
+export function getExperimentalPaneSearchEntries(
+  optInOnlyVisibility: OptInOnlyExperimentVisibility
+): SettingsSearchEntry[] {
+  return [
+    ...getAvailableExperimentalSearchEntries().flatMap(([key, entry]) =>
+      isOptInOnlyExperimentKey(key) && !optInOnlyVisibility[key] ? [] : [entry]
     ),
     // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]
       : [])
   ]
-)
+}

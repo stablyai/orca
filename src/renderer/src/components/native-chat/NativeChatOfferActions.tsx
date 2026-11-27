@@ -1,14 +1,18 @@
-// Each card keeps its own answer; Not now still sends Dismiss to the agent.
+// Each card keeps its own answer; Not now still tells the agent Dismiss. Answers go as card answers where the host takes them.
 import { useContext, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot, useCardBot } from '@/lib/bot-catalog'
+import { callBotRpc } from '@/lib/bot-hosts'
+import { BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import {
   answerBotOffer,
   answerBotOfferAgain,
+  BOT_OFFER_DISMISS_ANSWER,
   type BotOfferAnswerUpdate
 } from '../../../../shared/bots/bot-offer-answers'
+import { botHostTakes } from '../bots/bot-host-capability'
 import { botErrorMessage } from '../bots/bot-presentation'
 import { NativeChatCardActions } from './NativeChatCardFrame'
 import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
@@ -18,7 +22,7 @@ export type NativeChatOffer = {
   /** What the card's action was taken on, once it was: workspace ids, or import item indices. */
   sent: readonly string[] | null
   dismiss: () => void
-  /** Tells the bot `text`, as if typed, and keeps `chosen` as this card's answer. */
+  /** Tells the bot `text` as a card answer (typed on an older host), and keeps `chosen` as this card's answer. */
   send: (text: string, chosen: readonly string[]) => void
   /** Like `send`, for a further action on a card already answered: replaces its answer. */
   sendAgain: (text: string, chosen: readonly string[]) => void
@@ -59,18 +63,30 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
     }
   }
   const typed = (text: string) => async (): Promise<boolean> => (await view?.send(text)) === true
+  // Typed follows the follow-up setting and can steer a running turn; a card answer always waits for it.
+  const sessionId = view?.sessionId
+  const asCardAnswer = !!sessionId && botHostTakes(ref, BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY)
+  const told = (text: string) =>
+    asCardAnswer
+      ? async (): Promise<boolean> =>
+          (
+            await callBotRpc<{ sent: boolean }>(ref, 'bots.offer.answer', {
+              botId,
+              sessionId,
+              text
+            })
+          ).sent
+      : typed(text)
+  const dismissed = asCardAnswer
+    ? told(BOT_OFFER_DISMISS_ANSWER)
+    : typed(t('components.native-chat.offerCard.dismiss', 'Dismiss'))
   return {
     dismissed: answer?.dismissed === true,
     sent: answer?.sent?.chosen ?? null,
-    dismiss: () =>
-      void answerOffer(
-        { cardId, dismissed: true },
-        typed(t('components.native-chat.offerCard.dismiss', 'Dismiss'))
-      ),
-    send: (text, chosen) =>
-      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, typed(text)),
+    dismiss: () => void answerOffer({ cardId, dismissed: true }, dismissed),
+    send: (text, chosen) => void answerOffer({ cardId, sent: { chosen: [...chosen] } }, told(text)),
     sendAgain: (text, chosen) =>
-      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, typed(text), true),
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, told(text), true),
     answer: (tell, chosen, again) =>
       void answerOffer({ cardId, sent: { chosen: [...chosen] } }, tell, again)
   }

@@ -1,8 +1,8 @@
 // The lines under the phone's Chats search: nothing matched, the search failed, or more matched than shown.
 import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import {
   botChatMoreMatchesNote,
   type BotChatListView
@@ -16,6 +16,7 @@ export function MobileBotChatSearchNotes({
   view: BotChatListView
   retry: (() => void) | undefined
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <>
@@ -37,7 +38,7 @@ export function MobileBotChatSearchNotes({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   note: {
     fontSize: 12,
     color: colors.textMuted,

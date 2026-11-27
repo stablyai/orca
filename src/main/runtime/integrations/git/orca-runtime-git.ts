@@ -1,5 +1,5 @@
 import { RuntimeGitDiffCommands } from './runtime-git-diff-commands'
-import { RuntimeGitGenerationCommands } from './runtime-git-generation-commands'
+import type { RuntimeGitGenerationCommands } from './runtime-git-generation-commands'
 import { RuntimeGitStagingCommands } from './runtime-git-staging-commands'
 import { RuntimeGitStatusCommands } from './runtime-git-status-commands'
 import { RuntimeGitSyncCommands } from './runtime-git-sync-commands'
@@ -60,8 +60,19 @@ export class RuntimeGitCommands {
     const status = new RuntimeGitStatusCommands(host)
     const diff = new RuntimeGitDiffCommands(host)
     const sync = new RuntimeGitSyncCommands(host)
-    const generation = new RuntimeGitGenerationCommands(host)
     const staging = new RuntimeGitStagingCommands(host)
+    let generationPromise: Promise<RuntimeGitGenerationCommands> | null = null
+    const getGeneration = (): Promise<RuntimeGitGenerationCommands> => {
+      if (!generationPromise) {
+        generationPromise = import('./runtime-git-generation-commands')
+          .then(({ RuntimeGitGenerationCommands }) => new RuntimeGitGenerationCommands(host))
+          .catch((error) => {
+            generationPromise = null
+            throw error
+          })
+      }
+      return generationPromise
+    }
 
     this.getRuntimeGitStatus = status.getRuntimeGitStatus.bind(status)
     this.getRuntimeGitSubmoduleStatus = status.getRuntimeGitSubmoduleStatus.bind(status)
@@ -101,15 +112,16 @@ export class RuntimeGitCommands {
     this.sequencerAbortRuntimeGit = sync.sequencerAbortRuntimeGit.bind(sync)
     this.sequencerContinueRuntimeGit = sync.sequencerContinueRuntimeGit.bind(sync)
     this.completeRuntimeGitMerge = sync.completeRuntimeGitMerge.bind(sync)
-    this.generateRuntimeCommitMessage = generation.generateRuntimeCommitMessage.bind(generation)
-    this.cancelRuntimeGenerateCommitMessage =
-      generation.cancelRuntimeGenerateCommitMessage.bind(generation)
-    this.generateRuntimePullRequestFields =
-      generation.generateRuntimePullRequestFields.bind(generation)
-    this.cancelRuntimeGeneratePullRequestFields =
-      generation.cancelRuntimeGeneratePullRequestFields.bind(generation)
-    this.discoverRuntimeCommitMessageModels =
-      generation.discoverRuntimeCommitMessageModels.bind(generation)
+    this.generateRuntimeCommitMessage = async (...args) =>
+      (await getGeneration()).generateRuntimeCommitMessage(...args)
+    this.cancelRuntimeGenerateCommitMessage = async (...args) =>
+      (await getGeneration()).cancelRuntimeGenerateCommitMessage(...args)
+    this.generateRuntimePullRequestFields = async (...args) =>
+      (await getGeneration()).generateRuntimePullRequestFields(...args)
+    this.cancelRuntimeGeneratePullRequestFields = async (...args) =>
+      (await getGeneration()).cancelRuntimeGeneratePullRequestFields(...args)
+    this.discoverRuntimeCommitMessageModels = async (...args) =>
+      (await getGeneration()).discoverRuntimeCommitMessageModels(...args)
     this.stageRuntimeGitPath = staging.stageRuntimeGitPath.bind(staging)
     this.resolveRuntimeGitConflict = staging.resolveRuntimeGitConflict.bind(staging)
     this.unstageRuntimeGitPath = staging.unstageRuntimeGitPath.bind(staging)

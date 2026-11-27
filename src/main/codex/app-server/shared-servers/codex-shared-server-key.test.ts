@@ -21,6 +21,12 @@ describe('shared Codex server key', () => {
     expect(a.key).toBe(b.key)
   })
 
+  // Codex skips only CODEX_HOME's own .codex, so a server in home would load ~/.codex as a project.
+  it('starts the server in its CODEX_HOME, never home', async () => {
+    const a = await codexSharedServerSpec(launch('/repo/wt-a', []), [], VERSION)
+    expect(a.launch.cwd).toBe('/home/a/.codex')
+  })
+
   it.each([
     'model_instructions_file="./AGENTS.extra.md"',
     'hooks.state={".codex/hooks.json:stop:0:0"={enabled=false}}'

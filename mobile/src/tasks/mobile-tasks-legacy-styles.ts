@@ -1,36 +1,25 @@
 import { themedStyles } from '../theme/themed-styles'
-import { mobileTasksChromeStyles } from './screen/mobile-tasks-chrome-styles'
-import { mobileTasksListStyles } from './task-list/mobile-tasks-list-styles'
-import { mobileTasksProjectPickerStyles } from './project-board/mobile-tasks-project-picker-styles'
-import { mobileTasksDetailStyles } from './item-detail/mobile-tasks-detail-styles'
-import { mobileTasksWorkspaceReviewStyles } from './workspace-creation/mobile-tasks-workspace-review-styles'
-import { mobileTasksDiffCommentStyles } from './item-detail/mobile-tasks-diff-comment-styles'
-import { mobileTasksComposerActionStyles } from './workspace-creation/mobile-tasks-composer-action-styles'
+import { mobileTasksChromeStylesSheet } from './screen/mobile-tasks-chrome-styles'
+import { mobileTasksListStylesSheet } from './task-list/mobile-tasks-list-styles'
+import { mobileTasksProjectPickerStylesSheet } from './project-board/mobile-tasks-project-picker-styles'
+import { mobileTasksDetailStylesSheet } from './item-detail/mobile-tasks-detail-styles'
+import { mobileTasksWorkspaceReviewStylesSheet } from './workspace-creation/mobile-tasks-workspace-review-styles'
+import { mobileTasksDiffCommentStylesSheet } from './item-detail/mobile-tasks-diff-comment-styles'
+import { mobileTasksComposerActionStylesSheet } from './workspace-creation/mobile-tasks-composer-action-styles'
 
-export const styles = themedStyles(() => ({
-  ...mobileTasksChromeStyles,
-  ...mobileTasksListStyles,
-  ...mobileTasksProjectPickerStyles,
-  ...mobileTasksDetailStyles,
-  ...mobileTasksWorkspaceReviewStyles,
-  ...mobileTasksDiffCommentStyles,
-  ...mobileTasksComposerActionStyles
+export const stylesSheet = themedStyles((_colors, scheme) => ({
+  ...mobileTasksChromeStylesSheet.resolve(scheme),
+  ...mobileTasksListStylesSheet.resolve(scheme),
+  ...mobileTasksProjectPickerStylesSheet.resolve(scheme),
+  ...mobileTasksDetailStylesSheet.resolve(scheme),
+  ...mobileTasksWorkspaceReviewStylesSheet.resolve(scheme),
+  ...mobileTasksDiffCommentStylesSheet.resolve(scheme),
+  ...mobileTasksComposerActionStylesSheet.resolve(scheme)
 }))
 
-export function getPrSignalToneStyle(tone: 'neutral' | 'success' | 'warning' | 'danger') {
-  if (tone === 'success') {
-    return styles.prSignalSuccess
-  }
-  if (tone === 'warning') {
-    return styles.prSignalWarning
-  }
-  if (tone === 'danger') {
-    return styles.prSignalDanger
-  }
-  return null
-}
+export type MobileTasksStyles = ReturnType<typeof stylesSheet.resolve>
 
-export function getGitLabPipelineStatusStyle(status: string) {
+export function getGitLabPipelineStatusStyle(styles: MobileTasksStyles, status: string) {
   switch (status) {
     case 'success':
       return styles.pipelineStatusSuccess

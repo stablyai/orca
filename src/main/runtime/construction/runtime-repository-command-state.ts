@@ -2,13 +2,17 @@ import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtim
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
-import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
+import {
+  LazyRuntimeGitLabMutationCommands,
+  LazyRuntimeGitLabQueryCommands
+} from '../integrations/gitlab/lazy-runtime-gitlab-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
-import { RuntimeGitLabMutationCommands } from '../integrations/gitlab/runtime-gitlab-mutation-commands'
-import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
-import { RuntimeGitHubReviewMutationCommands } from '../integrations/github/runtime-github-review-mutation-commands'
-import { RuntimeGitHubIssueCommentCommands } from '../integrations/github/runtime-github-issue-comment-commands'
-import { RuntimeGitHubProjectCommands } from '../integrations/github/runtime-github-project-commands'
+import {
+  LazyRuntimeGitHubIssueCommentCommands,
+  LazyRuntimeGitHubProjectCommands,
+  LazyRuntimeGitHubReviewMutationCommands,
+  LazyRuntimeGitHubReviewQueryCommands
+} from '../integrations/github/lazy-runtime-github-review-commands'
 import { RuntimeRepositoryHooksCommands } from '../repositories/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repository-issue-command'
 import { ClientHostedBrowserRowPublisher } from '../browser/client-pages/client-hosted-browser-row-publication'
@@ -115,7 +119,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitLabQueryCommands = new RuntimeGitLabQueryCommands({
+  protected readonly gitLabQueryCommands = new LazyRuntimeGitLabQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo),
     recordProjectRecent: (projectRef) => {
@@ -134,28 +138,28 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     }
   })
 
-  protected readonly gitLabMutationCommands = new RuntimeGitLabMutationCommands({
+  protected readonly gitLabMutationCommands = new LazyRuntimeGitLabMutationCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubReviewQueries = new RuntimeGitHubReviewQueryCommands({
+  protected readonly gitHubReviewQueries = new LazyRuntimeGitHubReviewQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubReviewMutations = new RuntimeGitHubReviewMutationCommands({
+  protected readonly gitHubReviewMutations = new LazyRuntimeGitHubReviewMutationCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubIssueComments = new RuntimeGitHubIssueCommentCommands({
+  protected readonly gitHubIssueComments = new LazyRuntimeGitHubIssueCommentCommands({
     resolveTarget: (args) => this.resolveHostedReviewTarget(args),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubProjectCommands = new RuntimeGitHubProjectCommands()
+  protected readonly gitHubProjectCommands = new LazyRuntimeGitHubProjectCommands()
 
   protected readonly repositoryHooks = new RuntimeRepositoryHooksCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),

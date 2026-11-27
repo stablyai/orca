@@ -167,14 +167,15 @@ export function RepoIconGlyph({
     const light = softMarkColors(color, 'light')
     const dark = softMarkColors(color, 'dark')
     const markColors: React.CSSProperties & Record<`--mark-${string}`, string> = {
-      '--mark-bg': light.background,
+      '--mark-bg-light': light.background,
+      '--mark-bg-dark': dark.background,
       '--mark-fg-light': light.foreground,
       '--mark-fg-dark': dark.foreground
     }
     return (
       <span
         className={cn(
-          'inline-flex items-center justify-center overflow-hidden rounded-[22%] bg-(--mark-bg) font-semibold leading-none text-(--mark-fg-light) [container-type:size] dark:text-(--mark-fg-dark)',
+          'inline-flex items-center justify-center overflow-hidden rounded-[22%] bg-(--mark-bg-light) font-semibold leading-none text-(--mark-fg-light) [container-type:size] dark:bg-(--mark-bg-dark) dark:text-(--mark-fg-dark)',
           className,
           iconClassName
         )}
