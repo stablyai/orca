@@ -94,6 +94,7 @@ export async function settleAcpPermissionTransition(
   // A kept agent runs the mode it had when the last app let go: it takes the chat's mode live where it can.
   if (session.connection.kept && !session.connection.kept.agentExited) {
     await applyAcpLivePermissionMode(session, input.mode, { timeoutMs: graceMs }).catch(() => {})
+    input.signal?.throwIfAborted()
     if (acpRunningPermission(session) === input.mode) {
       return true
     }

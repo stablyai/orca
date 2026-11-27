@@ -432,6 +432,21 @@ async function run(
   return { expected: agent.text, saved: journal.joined(), crashed }
 }
 
+/** Every token of `text`, in order, with only its own tokens repeated by a replay between them. */
+function replaysInOrder(text: string, got: string): boolean {
+  const want = text.split('|').filter(Boolean)
+  const tokens = got.split('|').filter(Boolean)
+  const own = new Set(want)
+  let next = 0
+  for (const token of tokens) {
+    if (!own.has(token)) {
+      return false
+    }
+    next += token === want[next] ? 1 : 0
+  }
+  return next === want.length
+}
+
 describe('ACP relay orderings', () => {
   // Thousands of seeded runs take a few seconds, past the default on slow runners.
   it('saves every message whole across seeded orderings of output, acks, cuts and restarts', async () => {
@@ -441,8 +456,7 @@ describe('ACP relay orderings', () => {
       const { expected, saved, crashed } = await run(seed, seed % 2 === 1)
       for (const [key, text] of expected) {
         const got = saved.get(key) ?? ''
-        const lost = text.split('|').filter((token) => token && !got.includes(`${token}|`))
-        if (crashed ? lost.length > 0 : got !== text) {
+        if (crashed ? !replaysInOrder(text, got) : got !== text) {
           failures.push(`seed ${seed} ${key}: saved ${got} want ${text}`)
         }
       }
