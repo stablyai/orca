@@ -1,6 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
-import { unzipSync } from 'fflate'
+import { dirname, resolve } from 'node:path'
+import {
+  isParentDirectorySegment,
+  resolveInsideExtensionDirectory
+} from './browser-extension-manifest'
 
 /** Unpacks a verified CRX's zip archive without letting any entry land outside the target folder. */
 
@@ -9,7 +12,8 @@ const MAX_UNPACKED_BYTES = 512 * 1024 * 1024
 
 export type BrowserExtensionArchiveEntry = { path: string; data: Uint8Array }
 
-/** Relative, forward-slash names only: no absolute paths, drive letters, backslashes or `..`. */
+/** Relative, forward-slash names only: no absolute paths, drive letters, backslashes, empty or `.`
+ *  segments, or parent references. */
 export function isSafeArchiveEntryName(name: string): boolean {
   if (!name || name.length > 1024 || name.includes('\0') || name.includes('\\')) {
     return false
@@ -18,11 +22,16 @@ export function isSafeArchiveEntryName(name: string): boolean {
     return false
   }
   const segments = name.replace(/\/$/, '').split('/')
-  return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
+  return segments.every(
+    (segment) => segment !== '' && segment !== '.' && !isParentDirectorySegment(segment)
+  )
 }
 
 /** Files in the archive, after rejecting any unsafe name or an archive too large to unpack. */
-export function readBrowserExtensionArchive(archive: Uint8Array): BrowserExtensionArchiveEntry[] {
+export async function readBrowserExtensionArchive(
+  archive: Uint8Array
+): Promise<BrowserExtensionArchiveEntry[]> {
+  const { unzipSync } = await import('fflate')
   let declaredBytes = 0
   const seen = new Set<string>()
   // Why throw inside the filter: it runs before each entry inflates, so a bomb never expands.
@@ -54,9 +63,10 @@ export async function writeBrowserExtensionArchive(
   const root = resolve(directory)
   await mkdir(root, { recursive: true })
   for (const entry of entries) {
-    const target = resolve(root, entry.path)
-    const rel = relative(root, target)
-    if (!isSafeArchiveEntryName(entry.path) || !rel || rel.startsWith('..') || isAbsolute(rel)) {
+    const target = isSafeArchiveEntryName(entry.path)
+      ? resolveInsideExtensionDirectory(root, entry.path)
+      : null
+    if (!target) {
       throw new Error(`Extension package has an unsafe file name: ${JSON.stringify(entry.path)}`)
     }
     await mkdir(dirname(target), { recursive: true })

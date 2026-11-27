@@ -13,7 +13,6 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import { AutoHeight } from '../motion/AutoHeight'
@@ -22,7 +21,7 @@ import {
   bottomDrawerScrim,
   bottomDrawerTravel
 } from './bottom-drawer-drag-motion'
-import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
+import { bottomDrawerStylesSheet } from './bottom-drawer-styles'
 import {
   useBottomDrawerModalHost,
   useBottomDrawerModalHostBackClaim
@@ -37,6 +36,7 @@ import {
 import { hostOs } from '../../platform/host-os'
 import { hideDrawer, showDrawer, useBottomDrawerDrag } from './use-bottom-drawer-drag'
 import { useDrawerReducedMotion } from './bottom-drawer-constants'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 // The grabber row above the content: its padding plus the 5 pt bar.
 const HANDLE_AREA_HEIGHT = spacing.sm + 5 + spacing.md
@@ -74,7 +74,7 @@ export function MountedBottomDrawer({
   scrollResetKey = null,
   dimsBackground = true
 }: MountedBottomDrawerProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(bottomDrawerStylesSheet)
   const t = useMobileTranslation()
   const progress = useSharedValue(0)
   const fade = useSharedValue(0)

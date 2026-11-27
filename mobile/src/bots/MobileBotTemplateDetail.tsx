@@ -4,9 +4,8 @@ import { LIST_ROW_PADDING, ListGroup, ListRow, SectionHeader } from '../componen
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { BOT_CONNECTOR_NAMES, type BotTemplate } from '../../../src/shared/bots/bot-templates'
 import {
   botTemplateEventWords,
@@ -23,7 +22,7 @@ export function MobileBotTemplateDetail(props: {
   onBack: () => void
   onUse: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const label = useBotTemplateCategoryLabel()
   const { template } = props
@@ -121,7 +120,7 @@ export function MobileBotTemplateDetail(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   scroll: { flex: 1 },
   picture: { alignItems: 'center', paddingBottom: spacing.sm },

@@ -12,7 +12,6 @@ import {
   SuppressedGitHubPRToolbar
 } from './header-review-actions'
 import { SourceControlBranchContextRow } from './branch-context-row'
-import type { BaseRebaseActions } from './base-rebase-control'
 import {
   SourceControlHeaderOverflowMenu,
   type SourceControlPanelActions
@@ -40,9 +39,8 @@ type SourceControlHeaderToolbarProps = SourceControlFileFilterProps & {
   compareBaseRef: string | null
   headControl?: React.ReactNode
   headDisplay?: WorktreeGitIdentityDisplay | null
-  manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
-  rebase?: BaseRebaseActions | null
+  operationRow?: React.ReactNode
   /** Labeled Git Graph button; null where the context has no Git history (folders). */
   graphControl?: React.ReactNode
   /** The file-list header carries filter, Graph and overflow, so the panel header has no tool row. */
@@ -68,9 +66,8 @@ export function SourceControlHeaderToolbar({
   compareBaseRef,
   headDisplay = null,
   headControl,
-  manualReviewUrl,
   branchLineTotal,
-  rebase,
+  operationRow,
   graphControl,
   toolsInFileListHeader
 }: SourceControlHeaderToolbarProps): React.JSX.Element | null {
@@ -103,10 +100,9 @@ export function SourceControlHeaderToolbar({
       compareBaseRef={compareBaseRef}
       headDisplay={headDisplay}
       headControl={headControl}
-      manualReviewUrl={manualReviewUrl}
       branchLineTotal={branchLineTotal}
       reviewControl={reviewControl}
-      rebase={rebase}
+      operationRow={operationRow}
       onRetry={onRefreshBranchCompare}
     />
   )

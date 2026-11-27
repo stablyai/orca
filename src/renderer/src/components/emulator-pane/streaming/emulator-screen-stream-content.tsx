@@ -49,7 +49,8 @@ export function EmulatorScreenStreamContent({
     streamKey,
     showStream && Boolean(videoDeviceId),
     onStreamSize,
-    iosVideo ? 'avcc' : 'annex-b'
+    iosVideo ? 'avcc' : 'annex-b',
+    iosVideo ? previewUrl : undefined
   )
   const iosVideoFailed = iosVideo && Boolean(videoError)
   const jpeg = !androidDeviceId && (!iosVideo || iosVideoFailed)

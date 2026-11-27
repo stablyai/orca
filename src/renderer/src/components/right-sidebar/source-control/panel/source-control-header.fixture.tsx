@@ -15,8 +15,6 @@ import type {
   PrimaryAction,
   PrimaryActionInputs
 } from '../review/source-control-primary-action-types'
-import { GitGraphOpenButton } from '../sync/git-graph-open-button'
-import type { BaseRebaseActions } from './base-rebase-control'
 import { SourceControlChangeScopeBar } from './change-scope-bar'
 import { ALL_CHANGES_SCOPE, type SourceControlChangeScope } from './change-scope'
 import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
@@ -32,7 +30,6 @@ type Scenario = {
   lines?: { added: number; removed: number } | null
   compare?: 'ready' | 'loading' | 'error'
   review?: 'create' | 'creating' | 'disabled' | 'open' | 'unlinked' | null
-  rebasePaused?: boolean
   filterExpanded?: boolean
   filterQuery?: string
   scope?: SourceControlChangeScope
@@ -95,22 +92,6 @@ function summaryFor(scenario: Scenario): GitBranchCompareSummary {
   return { ...base, status: 'ready' }
 }
 
-const PAUSED_REBASE: BaseRebaseActions = {
-  state: {
-    kind: 'rebase_paused',
-    unresolvedCount: 2,
-    continueState: 'ready',
-    inspectFailureMessage: null
-  },
-  isAbortingRebase: false,
-  isContinuingRebase: false,
-  isRetryingRebaseInspect: false,
-  hasGitOwner: true,
-  onAbortRebase: () => {},
-  onContinueRebase: () => {},
-  onRetryRebaseInspect: () => {}
-}
-
 function Composer() {
   const inputs = {
     stagedCount: 0,
@@ -169,6 +150,7 @@ function Panel(scenario: Scenario) {
   const summary = summaryFor(scenario)
   const lines = scenario.lines === undefined ? { added: 1530, removed: 145 } : scenario.lines
   const branchLineTotal: GitBranchLineTotal | null = lines ? { ...lines, mergeBase: 'm1' } : null
+  const graphSupport = { support: scenario.graphSupported ?? true, recheck: () => {} }
   const panelActions = {
     sourceControlViewMode: 'list' as const,
     viewModeToggleDisabled: false,
@@ -177,7 +159,9 @@ function Panel(scenario: Scenario) {
     onRefreshBranchCompare: () => {},
     branchCompareRefreshDisabled: false,
     diffCommentCount: 2,
-    onExpandNotes: () => {}
+    onExpandNotes: () => {},
+    onOpenGitGraph: () => {},
+    gitGraphDisabled: graphSupport.support !== true
   }
   const filter = {
     filterQuery,
@@ -185,7 +169,6 @@ function Panel(scenario: Scenario) {
     onFilterQueryChange: setFilterQuery,
     onFilterExpandedChange: setFilterExpanded
   }
-  const graphSupport = { support: scenario.graphSupported ?? true, recheck: () => {} }
   const review = scenario.review === undefined ? 'create' : scenario.review
   const model = {
     branchEntries: FILES.map((entry) => ({ ...entry, added: 40, removed: 4 })),
@@ -255,7 +238,6 @@ function Panel(scenario: Scenario) {
         branchSummary={summary}
         compareBaseRef="origin/main"
         branchLineTotal={branchLineTotal}
-        rebase={scenario.rebasePaused ? PAUSED_REBASE : null}
         toolsInFileListHeader
       />
       <div className="pt-1">
@@ -265,9 +247,6 @@ function Panel(scenario: Scenario) {
             {...props}
             graphSupported={graphSupport.support === true}
             filter={filter}
-            graphControl={
-              <GitGraphOpenButton worktreeId="fixture-workspace" support={graphSupport} iconOnly />
-            }
             overflowMenu={
               <SourceControlHeaderOverflowMenu
                 panelActions={panelActions}
@@ -377,10 +356,6 @@ export const unlinkedPr = defineFixture({
   width: panelWidth(264),
   render: () => <Panel review="unlinked" />
 })
-export const rebasePaused = defineFixture({
-  width: panelWidth(264),
-  render: () => <Panel rebasePaused detached review={null} />
-})
 const filterOpen = variants({ filterExpanded: true, filterQuery: 'settings', behind: 45 })
 export const filterOpenMinimum = filterOpen.minimum
 export const filterOpenNarrow = filterOpen.narrow
@@ -406,12 +381,18 @@ export const commitScope = defineFixture({
     />
   )
 })
+function openOverflowMenu(frame: HTMLElement): void {
+  frame
+    .querySelector('button[aria-label="More source control actions"]')
+    ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+}
 export const overflowOpen = defineFixture({
   width: panelWidth(264),
   render: () => <Panel behind={45} />,
-  interact: (frame) => {
-    frame
-      .querySelector('button[aria-label="More source control actions"]')
-      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-  }
+  interact: openOverflowMenu
+})
+export const overflowOpenGraphUnsupported = defineFixture({
+  width: panelWidth(264),
+  render: () => <Panel behind={45} graphSupported={false} />,
+  interact: openOverflowMenu
 })

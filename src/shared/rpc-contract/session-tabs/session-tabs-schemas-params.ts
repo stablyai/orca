@@ -54,7 +54,10 @@ export const CloseTab = lazyZodSchema(() =>
     // Send replay only with SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY after reconnect.
     reason: z.enum(['user', 'replay']).optional(),
     // Confirmed pinned-tab close; gate on SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY because old hosts strip and refuse.
-    force: z.literal(true).optional()
+    force: z.literal(true).optional(),
+    // The terminal handle the client saw; a pane now running another terminal refuses. Gate on
+    // SESSION_TABS_CONTINUE_TERMINAL_IN_CHAT_RUNTIME_CAPABILITY because old hosts strip it.
+    terminal: z.string().min(1).max(256).optional()
   })
 )
 

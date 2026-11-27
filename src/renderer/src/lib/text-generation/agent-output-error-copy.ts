@@ -17,6 +17,24 @@ export const AGENT_OUTPUT_ERROR_COPY: Record<
       EN.openCodeInvalidEvents,
       values
     ),
+  antigravityInvalidEvents: (values) =>
+    translate(
+      'sourceControl.textGeneration.errors.antigravityInvalidEvents',
+      EN.antigravityInvalidEvents,
+      values
+    ),
+  antigravityInvalidResult: (values) =>
+    translate(
+      'sourceControl.textGeneration.errors.antigravityInvalidResult',
+      EN.antigravityInvalidResult,
+      values
+    ),
+  antigravityNoFinalResult: (values) =>
+    translate(
+      'sourceControl.textGeneration.errors.antigravityNoFinalResult',
+      EN.antigravityNoFinalResult,
+      values
+    ),
   kimiUnreadableOutput: (values) =>
     translate(
       'sourceControl.textGeneration.errors.kimiUnreadableOutput',

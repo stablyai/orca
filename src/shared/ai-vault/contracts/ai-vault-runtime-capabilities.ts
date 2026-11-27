@@ -10,6 +10,9 @@ export const AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY = 'aiVault.delete-sessio
 /** The host builds History hand-off prompts through aiVault.prepareSessionHandoffPrompt. */
 export const AI_VAULT_SESSION_HANDOFF_RUNTIME_CAPABILITY = 'aiVault.session-handoff.v1' as const
 
+/** Sent by a client that counts `hiddenRowCount` toward History depth, so the host may list each chat once. */
+export const AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY = 'aiVault.chat-rows.v1' as const
+
 export const AI_VAULT_RUNTIME_CAPABILITIES = [
   AI_VAULT_RUNTIME_CAPABILITY,
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,

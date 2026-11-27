@@ -112,9 +112,9 @@ export function useBotToolsPage(
   const runCheck = useCallback(
     (own: readonly PhoneOwnTool[]) => {
       stopCheck()
-      // An app Orca signs in to has its own state, so only the CLI's URL servers are checked.
+      // Only URL servers Orca doesn't sign in to are checked: Orca's own sign-in has its own state.
       const checked =
-        scope === 'all' ? own : own.filter((tool) => isBotAppTool(tool) && tool.remote)
+        scope === 'all' ? own : own.filter((tool) => isBotAppTool(tool) && !tool.signIn)
       if (!client || checked.length === 0) {
         setProblems({})
         shareTools(hostKey, botId, { problems: {} })

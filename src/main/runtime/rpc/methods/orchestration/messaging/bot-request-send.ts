@@ -35,6 +35,7 @@ import {
   receivingBot,
   refuse,
   toOtherChat,
+  type ActingMail,
   type ActingSender,
   type ReceivingBot
 } from './bot-recipient'
@@ -63,11 +64,10 @@ export function mayReachBot(
 /** Mail that reaches a bot, by any address, is held to who the sending turn is for; null for other mail. */
 export async function sendToBot(
   context: Pick<RpcContext, 'runtime' | 'orchestrationCaller' | 'recordMutationReceipt'>,
-  mail: {
+  mail: ActingMail & {
     params: SendParamsInput
     from: string
     to: string
-    sender: OrchestrationCallerIdentity
     routing: { run: RunRow | undefined }
     /** `--chat new`: the request opens a new chat on the receiving bot. */
     newChat?: boolean
@@ -92,7 +92,7 @@ export async function sendToBot(
       'Group bot sessions accept peer requests only from current members of their own group.'
     )
   }
-  const acting = await readActingSender(runtime, db, callerSessionId, mail.sender, receiving)
+  const acting = await readActingSender(runtime, db, callerSessionId, mail, receiving)
   if (!acting) {
     return null
   }

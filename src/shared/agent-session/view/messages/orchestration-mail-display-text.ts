@@ -1,4 +1,5 @@
 import type { OrchestrationMailMessage } from '../../journal/agent-session-message-source'
+import { collapseRepeatedReplyPrefixes } from '../../../orchestration/mailbox/reply-subject'
 
 function fencedPayload(text: string): string {
   let length = 3
@@ -34,7 +35,7 @@ function historicalMailText(text: string, mail: OrchestrationMailMessage): strin
   if (match?.[1] !== mail.messageId || replyStart < headerEnd + 10) {
     return undefined
   }
-  return text.slice(headerEnd + 1 + 'Subject: '.length, replyStart)
+  return collapseRepeatedReplyPrefixes(text.slice(headerEnd + 1 + 'Subject: '.length, replyStart))
 }
 
 export function orchestrationMailDisplayText(
@@ -67,7 +68,8 @@ export function orchestrationMailDisplayText(
     if (start >= limit) {
       continue
     }
-    const value = text.slice(start, Math.min(end, limit))
+    const fieldText = text.slice(start, Math.min(end, limit))
+    const value = field === 'subject' ? collapseRepeatedReplyPrefixes(fieldText) : fieldText
     if (value) {
       parts.push(field === 'payload' ? fencedPayload(value) : value)
     }

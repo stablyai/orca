@@ -24,7 +24,8 @@ const DOT_CLASS: Record<Exclude<AgentSessionMcpServer['status'], 'pending'>, str
   'needs-auth': 'bg-status-warning',
   failed: 'bg-destructive',
   disabled: 'bg-muted-foreground/40',
-  'not-started': 'bg-muted-foreground/40'
+  'not-started': 'bg-muted-foreground/40',
+  unreported: 'bg-muted-foreground/40'
 }
 
 /** The label keeps its width while a spinner stands in for it. */
@@ -50,7 +51,8 @@ export function NativeChatMcpServerRow({
   failure,
   run,
   dismissSignIn,
-  openUrl
+  openUrl,
+  atRest = false
 }: {
   server: AgentSessionMcpServer
   /** Where the agent runs: only an agent on this computer receives the browser's sign-in callback. */
@@ -66,6 +68,8 @@ export function NativeChatMcpServerRow({
   run: (operation: McpServerAction) => void
   dismissSignIn: () => void
   openUrl: (url: string) => void
+  /** The tray already says servers connect on the next message, so rows waiting for it say nothing. */
+  atRest?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const name = server.name
@@ -77,7 +81,9 @@ export function NativeChatMcpServerRow({
       : runtime === 'local'
         ? t('components.native-chat.mcp.signIn.waitingBrowser', 'Waiting for your browser…')
         : t('components.native-chat.mcp.signIn.waiting', 'Waiting for sign-in…')
-    : mcpServerStatusLine(server, t)
+    : atRest && server.status === 'not-started'
+      ? ''
+      : mcpServerStatusLine(server, t)
   const cancel = (
     <Button type="button" variant="ghost" size="xs" onClick={dismissSignIn}>
       {t('components.native-chat.mcp.cancel', 'Cancel')}

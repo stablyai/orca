@@ -45,11 +45,13 @@ const openSignInPage = (url: string): void => {
 export function NativeChatMcpTray({
   sessionId,
   target,
+  agentLabel,
   opens,
   onClose
 }: {
   sessionId: string
   target: RuntimeClientTarget
+  agentLabel: string
   opens: number
   onClose: () => void
 }): React.JSX.Element {
@@ -75,6 +77,7 @@ export function NativeChatMcpTray({
   return (
     <NativeChatMcpTrayView
       state={panel}
+      agentLabel={agentLabel}
       runtime={target.kind === 'local' ? 'local' : 'remote'}
       run={(operation) => void panel.run(operation)}
       retry={retry}
@@ -89,6 +92,7 @@ export function NativeChatMcpTray({
 
 type McpTrayViewProps = {
   state: AgentSessionMcpPanelState
+  agentLabel: string
   runtime: 'local' | 'remote'
   run: (operation: McpServerAction) => void
   retry: () => void
@@ -104,7 +108,8 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
   const t = useTranslate()
   const title = t('components.native-chat.mcp.title', 'MCP servers')
   const closeLabel = t('components.native-chat.mcp.close', 'Close')
-  const listed = props.state.result?.status === 'ok' && props.state.servers.length > 0
+  // An agent at rest lists what its next start gets under the line saying it isn't running.
+  const listed = props.state.result !== null && props.state.servers.length > 0
   return (
     <NativeChatComposerTabStrip layout="stack" data-native-chat-mcp-tray="">
       <section
@@ -151,6 +156,15 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
             </TooltipContent>
           </Tooltip>
         </div>
+        {listed && props.state.servers.some((server) => server.status === 'unreported') ? (
+          <p className="border-t border-border px-3 py-1.5 text-muted-foreground">
+            {t(
+              'components.native-chat.mcp.unreported',
+              '{{agent}} doesn’t report connection status',
+              { agent: props.agentLabel }
+            )}
+          </p>
+        ) : null}
         {listed ? <McpTrayList {...props} /> : null}
         {props.manageServers ? (
           <div className="flex h-8 items-center border-t border-border px-3">
@@ -219,6 +233,7 @@ function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
 
 function McpTrayList({
   state,
+  agentLabel,
   runtime,
   run,
   dismissSignIn,
@@ -237,7 +252,9 @@ function McpTrayList({
       )}
     >
       {groups.map((group) => {
-        const label = group.source === null ? undefined : mcpSourceLabel(group.source, t)
+        // Servers the agent reports no source for are its own; under Orca's, say whose.
+        const label =
+          group.source !== null ? mcpSourceLabel(group.source, t) : tall ? agentLabel : undefined
         return (
           <div key={group.source ?? ''}>
             {label ? (
@@ -258,6 +275,7 @@ function McpTrayList({
                   run={run}
                   dismissSignIn={dismissSignIn}
                   openUrl={openUrl}
+                  atRest={state.result?.status === 'not-running'}
                 />
               ))}
             </ul>

@@ -12,7 +12,10 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
-import { listeningClients } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import {
+  connectedClientRosters,
+  listeningClients
+} from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import {
   allowServer,
   holdPairedServerAsk,
@@ -39,7 +42,14 @@ import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { PAIRED_SERVER_ASKS_METHODS } from '../../paired-server-asks/paired-server-asks-methods'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import type * as RecipientRouting from '../messaging/recipient-routing'
-import { DOCS_CHAT, RANGER_THREAD, withChat } from '../messaging/bot-recipient.test-fixture'
+import {
+  DOCS_CHAT,
+  journals,
+  RANGER_THREAD,
+  withChat
+} from '../messaging/bot-recipient.test-fixture'
+import { DANA_ASKER, DANA_OPENER, runningTurnItems } from './sending-bot-turn.test-fixture'
+import { turnActsForOwner } from '../../../../../bots/bot-request-asker'
 
 vi.mock(
   '../../../../orchestration/federation/relay/federation-relay-scheduler',
@@ -381,6 +391,45 @@ describe('agents on a paired server messaging an agent on this computer', () => 
 
     await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(2))
     expect(await cards()).toEqual([])
+  })
+
+  it("names this computer and only the agents it always lets the server ask, for the server's bot list", async () => {
+    vi.mocked(computer.runtime.bots.list).mockReturnValue([
+      makeTestBot({ id: 'docs', name: 'Docs' }),
+      makeTestBot({ id: 'notes', name: 'Notes' }),
+      makeTestBot({ id: 'quiet', name: 'Quiet', paused: true })
+    ])
+    await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
+    await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'quiet' })
+    await listening()
+
+    // Notes was never allowed, and Quiet is paused: an ask to either would not be taken.
+    const listed = {
+      name: "Alice's Mac",
+      onClient: 'install_a',
+      bots: [{ id: 'docs', name: 'Docs' }]
+    }
+    await vi.waitFor(() => expect(connectedClientRosters(server.runtime)).toEqual([listed]))
+
+    // Removed: the next pull stops naming it.
+    await call('pairedServerAsks.disallow', { botId: 'docs', serverKey: 'fingerprint_s' })
+    await vi.waitFor(() => expect(connectedClientRosters(server.runtime)[0]?.bots).toEqual([]))
+  })
+
+  it("holds a teammate's turn on the server to the teammate on this computer", async () => {
+    journals[RANGER_THREAD] = runningTurnItems(DANA_OPENER)
+    try {
+      await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
+      await listening()
+      const sent = await ask()
+
+      await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+      const record = JSON.parse(computer.db.getBotRequest(sent.message.id)!.record)
+      expect(record.askers).toEqual([{ kind: 'owner' }, DANA_ASKER])
+      expect(turnActsForOwner({ askers: record.askers })).toBe(false)
+    } finally {
+      delete journals[RANGER_THREAD]
+    }
   })
 
   it("names the sender by this computer's name for the server, in the request and its header", async () => {

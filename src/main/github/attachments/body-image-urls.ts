@@ -1,5 +1,17 @@
-import { fromHtmlIsomorphic } from 'hast-util-from-html-isomorphic'
 import type { Root, RootContent } from 'hast'
+
+type FromHtmlIsomorphic = (value: string, options?: { fragment?: boolean }) => Root
+let fromHtmlLoader: Promise<FromHtmlIsomorphic> | null = null
+
+function loadFromHtmlIsomorphic(): Promise<FromHtmlIsomorphic> {
+  fromHtmlLoader ??= import('hast-util-from-html-isomorphic')
+    .then((mod) => mod.fromHtmlIsomorphic)
+    .catch((error: unknown) => {
+      fromHtmlLoader = null
+      throw error
+    })
+  return fromHtmlLoader
+}
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 const githubBodyAssetPath = new RegExp(`/assets/(?:\\d+/)?(${UUID})$`, 'i')
@@ -87,10 +99,10 @@ export function githubBodyMediaHeaders(body: string): string[] {
 }
 
 /** Keep short-lived display URLs separate from editable Markdown and persisted item metadata. */
-export function githubBodyImageUrls(
+export async function githubBodyImageUrls(
   body: unknown,
   html: unknown
-): Record<string, string> | undefined {
+): Promise<Record<string, string> | undefined> {
   if (typeof body !== 'string' || typeof html !== 'string' || !html) {
     return undefined
   }
@@ -100,6 +112,7 @@ export function githubBodyImageUrls(
       return undefined
     }
 
+    const fromHtmlIsomorphic = await loadFromHtmlIsomorphic()
     const signed = new Map<string, URL>()
     const pending: (Root | RootContent)[] = [fromHtmlIsomorphic(html, { fragment: true })]
     while (pending.length) {

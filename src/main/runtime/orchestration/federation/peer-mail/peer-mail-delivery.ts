@@ -12,6 +12,7 @@ import type {
 } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
+import type { BotRequestAsker } from '../../../../../shared/bots/bot-acts-for'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -165,6 +166,7 @@ export async function deliverPeerMail(
     item?: string
     attachments?: readonly string[]
     sender: PeerMailSender
+    askers?: readonly BotRequestAsker[]
   }
 ): Promise<z.infer<typeof PeerMailDeliveryHeld>[]> {
   const result = await runtime.callOrchestrationWorkerServer(
@@ -184,7 +186,8 @@ export async function deliverPeerMail(
       ...(message.chat ? { chat: message.chat } : {}),
       ...(message.item ? { item: message.item } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
-      sender: message.sender
+      sender: message.sender,
+      ...(message.askers ? { askers: message.askers } : {})
     },
     DELIVER_TIMEOUT_MS,
     undefined,

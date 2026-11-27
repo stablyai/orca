@@ -8,13 +8,15 @@ import { TextField } from '../../components/composer-input/TextField'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { BotToolPhoneSignIn } from './use-bot-tool-phone-sign-in'
 
 /** A step's number, or a tick once it's done. */
 export function StepNumber({ n, done = false }: { n: number; done?: boolean }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={[styles.number, done && styles.numberDone]}>
       {done ? (
@@ -35,7 +37,8 @@ export function MobileBotToolSignInPage(props: {
   onClose: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { signIn } = props
   const [address, setAddress] = useState('')
   const attempt = signIn.attempt
@@ -137,7 +140,7 @@ export function MobileBotToolSignInPage(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   number: {
     width: 24,
     height: 24,

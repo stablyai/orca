@@ -40,7 +40,8 @@
 2 src/main/ai-vault/listing/cached-session-list.ts
 9 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 1 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
-14 src/main/ai-vault/parse-cache/session-parse-cache-persistence.ts
+15 src/main/ai-vault/parse-cache/session-parse-cache-persistence.ts # +1: pruneOtherSessionParseCacheVersions once per scanner-child database open
+3 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: probe and prune the few other-version cache files; not Electron main
 1 src/main/ai-vault/parse-cache/session-scanner-sidecar-enrichment.ts
 1 src/main/ai-vault/prompts/session-first-user-prompt-handler.ts
 5 src/main/ai-vault/scan-service/session-scanner-background.ts
@@ -58,7 +59,6 @@
 4 src/main/amp/hook-service.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
-2 src/main/antigravity/native-account-launch.ts
 4 src/main/antigravity/native-credential-backend.ts
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
@@ -161,7 +161,6 @@
 3 src/main/browser/routing/partitions/browser-route-partition-storage-runtime.ts
 1 src/main/browser/routing/sessions/browser-route-session-runtime.ts
 1 src/main/browser/sessions/browser-session-frame-preloads.ts
-1 src/main/browser/sessions/browser-session-startup.ts
 1 src/main/browser/sessions/profiles/browser-session-meta-store.ts
 1 src/main/browser/sessions/profiles/browser-session-profile-retirement.ts
 6 src/main/browser/sessions/profiles/browser-session-registry.ts
@@ -369,7 +368,7 @@
 7 src/main/connector-cloud/connector-token-mint.ts
 1 src/main/connector-cloud/connector-turn-outbox-file.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
 6 src/main/copilot/hook-service.ts
-6 src/main/core-desktop/desktop-core-composition.ts # moved unchanged from main-process-ready-runtime.ts (one-shot startup composition)
+4 src/main/core-desktop/desktop-core-composition.ts # moved unchanged from main-process-ready-runtime.ts (one-shot startup composition)
 1 src/main/core-desktop/desktop-core-shutdown.ts # moved unchanged from main-process-quit.ts (one-shot quit metadata clear)
 2 src/main/core-desktop/renderer-shutdown-checkpoint-service.ts # moved unchanged from ipc/renderer-shutdown-checkpoint.ts (unload staging drift report)
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
@@ -508,7 +507,7 @@
 3 src/main/git/command-runner/git-exec-file.ts
 4 src/main/git/command-runner/host-routing/git-command-resolution.ts
 1 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
-5 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
+4 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
 2 src/main/git/command-runner/host-routing/wsl-drive-checkout-git-routing.ts
 2 src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
 9 src/main/git/command-runner/host-routing/wsl-windows-checkout-git-probe.ts
@@ -558,11 +557,12 @@
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
 1 src/main/host/secret-protection-report.ts
-13 src/main/index.ts
+11 src/main/index.ts
 2 src/main/ipc/accounts/codex-accounts.ts
 1 src/main/ipc/accounts/codex-config-sync.ts
 1 src/main/ipc/accounts/cursor-accounts.ts
 1 src/main/ipc/accounts/grok-accounts.ts
+1 src/main/ipc/accounts/lazy-codex-accounts-handlers.ts # codex account handler charge moved from register-core-handlers; module imports on first invoke, never at boot
 3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
@@ -572,16 +572,18 @@
 1 src/main/ipc/browser/browser-passwords-import-ipc.ts
 1 src/main/ipc/browser/browser-passwords-ipc.ts
 5 src/main/ipc/browser/browser-session-profile-ipc.ts
-1 src/main/ipc/browser/browser.ts
+1 src/main/ipc/browser/lazy-browser-session-profile-ipc.ts # session-profile charge moved from browser.ts; the module imports on first invoke, so readFileSync never runs at boot
 7 src/main/ipc/cli.ts
 1 src/main/ipc/command-path/command-path-directory-worker-client.ts
 2 src/main/ipc/computer-use-permissions.ts
 2 src/main/ipc/custom-app-icon.ts
 22 src/main/ipc/diagnostics.ts
 1 src/main/ipc/emulator/emulator-video-stream.ts
+5 src/main/ipc/ephemeral-vm/ephemeral-vm-provision-handler.ts # split out of ephemeral-vm.ts; runs only on invoked provisions, never at boot
 6 src/main/ipc/ephemeral-vm/ephemeral-vm-recipe-context.ts
 7 src/main/ipc/ephemeral-vm/ephemeral-vm-runtime-handlers.ts
-11 src/main/ipc/ephemeral-vm/ephemeral-vm.ts
+7 src/main/ipc/ephemeral-vm/ephemeral-vm.ts
+2 src/main/ipc/ephemeral-vm/lazy-ephemeral-vm-handlers.ts # one-shot startup reconcile (only when VM state files exist) and first-invoke handler load; nothing blocks an empty boot
 15 src/main/ipc/filesystem/access/filesystem-auth.ts
 20 src/main/ipc/filesystem/access/local-file-access-resolution.ts
 3 src/main/ipc/filesystem/filesystem.ts
@@ -616,13 +618,15 @@
 1 src/main/ipc/notifications/notification-authorization-status.ts
 2 src/main/ipc/notifications/notifications.ts
 5 src/main/ipc/orca-uninstall.ts
-4 src/main/ipc/plugins/plugins.ts
+3 src/main/ipc/plugins/plugin-management-ipc.ts # moved from plugins.ts for lazy IPC loading
+2 src/main/ipc/plugins/plugins.ts # lazy loader references registerPluginManagementHandlers
 3 src/main/ipc/preflight/preflight-command-exec.ts
 1 src/main/ipc/preflight/preflight-local-env.ts
 1 src/main/ipc/preflight/preflight-wsl-agent-detection.ts
 1 src/main/ipc/preflight/preflight-wsl-command.ts
+11 src/main/ipc/profiles/orca-profile-action-handlers.ts # action charges moved from orca-profiles.ts; the module imports on first invoke, so the sync fs helpers never run at boot
 5 src/main/ipc/profiles/orca-profile-org-members-handlers.ts
-12 src/main/ipc/profiles/orca-profiles.ts
+2 src/main/ipc/profiles/orca-profiles.ts # eager list handler reads the profile index once; the action-handler name is only the lazy loader binding
 2 src/main/ipc/pty/delivery/producer-sync.ts
 2 src/main/ipc/pty/delivery/wire-session.ts
 8 src/main/ipc/pty/host-env/assembly.ts
@@ -635,16 +639,17 @@
 2 src/main/ipc/pty/ipc/codex-shared-server.ts
 1 src/main/ipc/pty/ipc/newer-daemon-hold.ts
 2 src/main/ipc/pty/ipc/pty-management.ts
-2 src/main/ipc/pty/ipc/spawn-env.ts
+1 src/main/ipc/pty/ipc/spawn-env.ts
 1 src/main/ipc/pty/ipc/spawn-run.ts
-2 src/main/ipc/pty/provider/local-configure.ts
+1 src/main/ipc/pty/provider/local-configure.ts
 2 src/main/ipc/pty/register-handlers.ts
 1 src/main/ipc/pty/register-headless-runtime.ts
-1 src/main/ipc/pty/runtime/spawn-options.ts
 1 src/main/ipc/pty/spawn/spawn-begin.ts
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
-17 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
-1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
+1 src/main/ipc/register-core-handlers/lazy-account-and-diagnostic-ipc-handlers.ts # diagnostics charge moved from direct registration; the module imports on first invoke, so mkdirSync never runs at boot
+2 src/main/ipc/register-core-handlers/lazy-rare-ipc-handlers.ts # charges moved from register-core-handlers; handlers import on first invoke, so the blocking helpers never run at boot
+2 src/main/ipc/register-core-handlers/lazy-setup-ipc-handlers.ts # cli and shell handler charges moved from register-core-handlers; modules import on first invoke, never at boot
+8 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
@@ -661,7 +666,8 @@
 1 src/main/ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts.ts
 1 src/main/ipc/runtime-environments/runtime-environments.ts
 2 src/main/ipc/session.ts
-3 src/main/ipc/settings/settings.ts
+1 src/main/ipc/settings/lazy-settings-import-and-app-icon-ipc.ts # app-icon charge moved from settings.ts; the module imports on first invoke, so existsSync never runs at boot
+2 src/main/ipc/settings/settings.ts
 3 src/main/ipc/shell/shell.ts
 5 src/main/ipc/source-control/hosted-review.ts
 3 src/main/ipc/ssh/plain-ssh-terminal-handlers.ts
@@ -750,6 +756,7 @@
 3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 10 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does; +2 botOwnTools for a list from one credential store read, and botOwnTool now reading the store in its own file
 1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
+1 src/main/mcp-servers/session-mcp-at-rest.ts # /mcp tray reads for a chat its agent can't list: one credential store read for the host list's sign-ins, as mcpServers.list does
 2 src/main/mcp-servers/session-mcp-launch.ts # per chat launch and turn: the bot launch read of its tools file and its revision check (moved from bot-structured-session-wiring.ts)
 1 src/main/mcp-servers/terminal/terminal-mcp-cli-support.ts # runWslProcess for a WSL CLI's --help/--version probe, once per CLI and distro per 10 minutes
 1 src/main/mcp-servers/terminal/terminal-mcp-launch.ts # the stale-terminal count reads the host list once per count (after an MCP edit or a host start), in place of one read per terminal
@@ -773,7 +780,7 @@
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
-3 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
+2 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
@@ -1031,7 +1038,7 @@
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts
-2 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
+1 src/main/preflight/agent-detection.ts
 1 src/main/preflight/installed-agent-detection.ts
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts
@@ -1152,6 +1159,7 @@
 10 src/main/runtime/orchestration/db/dispatch-context/worker-report-settlement.ts
 2 src/main/runtime/orchestration/db/lifecycle-transition.ts
 3 src/main/runtime/orchestration/db/lifecycle-write-transaction-runner.ts
+1 src/main/runtime/orchestration/db/maintenance/orchestration-db-compaction.ts # readFileState: one cached page-1 statement (data_version + page counts) on the runtime's own connection, which no other thread can read; 0.03-0.06 ms warm, once per maintenance minute
 2 src/main/runtime/orchestration/db/maintenance/orchestration-db-maintenance.ts
 2 src/main/runtime/orchestration/db/maintenance/settled-run-retention.ts
 5 src/main/runtime/orchestration/db/maintenance/settled-run-retirement.ts
@@ -1205,9 +1213,8 @@
 1 src/main/runtime/orchestration/workers/turn-stops/worker-turn-stop-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
 2 src/main/runtime/push/push-unregister-outbox.ts
 1 src/main/runtime/repositories/folder-workspace-deletion.ts
-3 src/main/runtime/repositories/runtime-nested-repo-import.ts
+2 src/main/runtime/repositories/runtime-nested-repo-import.ts
 1 src/main/runtime/repositories/runtime-project-host-setup-controller.ts
-2 src/main/runtime/repositories/runtime-repository-clone-controller.ts
 3 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
 2 src/main/runtime/repositories/runtime-repository-issue-command.ts
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
@@ -1267,7 +1274,6 @@
 1 src/main/runtime/terminal/launch/wsl-host-windows-drive-guard.ts
 1 src/main/runtime/terminal/output/tail/terminal-history-last-output.ts
 2 src/main/runtime/terminal/output/terminal-kitty-file-read.ts
-1 src/main/runtime/workspaces/archive/runtime-workspace-archive.ts
 2 src/main/runtime/workspaces/catalog/repo-worktree-row-resolution.ts
 1 src/main/runtime/workspaces/catalog/resolved-worktree-scan-join.ts
 2 src/main/runtime/workspaces/catalog/scoped-worktree-row-resolution.ts
@@ -1279,11 +1285,9 @@
 2 src/main/runtime/workspaces/creation/runtime-local-worktree-create.ts
 1 src/main/runtime/workspaces/creation/runtime-local-worktree-materialization.ts
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
-2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
-2 src/main/runtime/workspaces/removal/workspace-removal.ts
 1 src/main/runtime/workspaces/workspace-removal-target.ts
 1 src/main/server/serve-pairing-readiness.ts
 2 src/main/skills/cloud/skill-cloud-auth.ts
@@ -1357,7 +1361,7 @@
 1 src/main/startup/main-process-preflight-failure.ts
 25 src/main/startup/main-process-preflight.ts
 15 src/main/startup/main-process-ready-foundation.ts
-3 src/main/startup/main-process-ready-runtime.ts
+2 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
@@ -1373,7 +1377,7 @@
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
 1 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
-4 src/main/startup/runtime-startup/main-process-runtime-service.ts
+3 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
 3 src/main/startup/serve-launch/main-process-serve.ts
 3 src/main/startup/serve-launch/serve-cli-registration.ts

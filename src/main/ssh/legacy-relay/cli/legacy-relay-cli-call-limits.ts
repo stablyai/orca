@@ -7,7 +7,7 @@ import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestrati
 import { isDurableMutation } from '../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { RpcAnyMethodDeclaration } from '../../../runtime/rpc/core'
-import { ALL_RPC_METHODS } from '../../../runtime/rpc/methods/rpc-method-registry'
+import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'
 import {
   hashCanonical,
   readPromptBasePayloadHash,
@@ -78,16 +78,48 @@ export async function runLegacyRelayCliCall<T>(
   }
 }
 
+let orchestrationMethodsPromise: Promise<readonly RpcAnyMethodDeclaration[]> | null = null
+const legacyRelayDispatchers = new WeakMap<OrcaRuntimeService, RpcDispatcher>()
+
+export function loadLegacyRelayOrchestrationMethods(): Promise<readonly RpcAnyMethodDeclaration[]> {
+  return (orchestrationMethodsPromise ??=
+    import('../../../runtime/rpc/methods/orchestration/orchestration')
+      .then((module) => module.ORCHESTRATION_METHODS)
+      .catch((error: unknown) => {
+        orchestrationMethodsPromise = null
+        throw error
+      }))
+}
+
+export function legacyRelayCliDispatcherFor(
+  runtime: OrcaRuntimeService,
+  methods: readonly RpcAnyMethodDeclaration[],
+  allowedMethods: ReadonlySet<string>
+): RpcDispatcher {
+  let dispatcher = legacyRelayDispatchers.get(runtime)
+  if (!dispatcher) {
+    dispatcher = new RpcDispatcher({
+      runtime,
+      // Restrict registration too, so upstream scope bugs cannot invoke unrelated methods.
+      methods: methods.filter((method) => allowedMethods.has(method.name)),
+      callerScope: { kind: 'runtime-paired', grants: [] }
+    })
+    legacyRelayDispatchers.set(runtime, dispatcher)
+  }
+  return dispatcher
+}
+
 /** Exact method/principal/payload receipts may replay. Check while caller identity is registered because hashing reads its pane. */
 export function isExactLegacyRelayCliReplay(
   runtime: OrcaRuntimeService,
   fingerprint: string,
   requestId: string,
-  call: LegacyRelayCliCall
+  call: LegacyRelayCliCall,
+  methods: readonly RpcAnyMethodDeclaration[]
 ): boolean {
   const receipt = runtime.getOrchestrationDb().getMutationReceipt(fingerprint, requestId)
   // Typed as any method, as the dispatcher does: the union of every method's params is too large to infer.
-  const method: RpcAnyMethodDeclaration | undefined = ALL_RPC_METHODS.find(
+  const method: RpcAnyMethodDeclaration | undefined = methods.find(
     (entry) => entry.name === call.method
   )
   if (

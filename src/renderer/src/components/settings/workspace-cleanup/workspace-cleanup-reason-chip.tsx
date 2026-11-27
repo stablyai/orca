@@ -8,7 +8,10 @@ import {
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { getReviewStateTone } from '@/components/github/review-state-presentation'
-import { WorkspaceCleanupMetadataChip } from '@/components/workspace-cleanup/candidate-list/workspace-cleanup-metadata-chip'
+import {
+  WorkspaceCleanupMetadataChip,
+  WorkspaceCleanupMetadataText
+} from '@/components/workspace-cleanup/candidate-list/workspace-cleanup-metadata-chip'
 import type { WorkspaceCleanupRuleReason } from '../../../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import { formatCleanupRuleReasonBadge } from './workspace-cleanup-run-labels'
 
@@ -23,11 +26,13 @@ const REASON_ICONS: Record<WorkspaceCleanupRuleReason, LucideIcon> = {
 /** The rule that removes, or would remove, a workspace. */
 export function WorkspaceCleanupReasonChip({
   reason,
-  prNumber
+  prNumber,
+  wrap
 }: {
   reason: WorkspaceCleanupRuleReason
   /** The merged pull request, when the host read one. */
   prNumber?: number
+  wrap?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const badge = formatCleanupRuleReasonBadge(reason, t)
@@ -38,12 +43,25 @@ export function WorkspaceCleanupReasonChip({
           number: prNumber
         })
       : badge
+  if (wrap && reason !== 'merged') {
+    // Why: a wrapped neutral reason reads as plain text, like a kept reason; a box around several
+    // lines read as a field. Merged keeps its tone chip.
+    return (
+      <WorkspaceCleanupMetadataText
+        icon={REASON_ICONS[reason] ?? Clock}
+        label={label}
+        value={label}
+        wrap
+      />
+    )
+  }
   return (
     <WorkspaceCleanupMetadataChip
       icon={REASON_ICONS[reason] ?? Clock}
       label={label}
       value={label}
       toneClassName={reason === 'merged' ? getReviewStateTone('merged') : undefined}
+      wrap={wrap}
     />
   )
 }

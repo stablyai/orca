@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, type WakeAlertsEnv } from '../src/alerts'
 
-const healthy = { socket_open: 400, refuse_401: 3, refuse_country: 0, keys_unavailable: 0, admin_failures: 0, wakes: 1000, wake_no_socket: 10, wake_error: 0, events: 3000, reconnects: 380, reconnects_late: 5, drops: 60, replaced: 50 }
+const healthy = { socket_open: 400, refuse_401: 3, refuse_country: 0, keys_unavailable: 0, object_unavailable: 0, admin_failures: 0, wakes: 1000, wake_no_socket: 10, wake_error: 0, events: 3000, reconnects: 380, reconnects_late: 5, drops: 60, replaced: 50 }
 type Row = typeof healthy
 const env: WakeAlertsEnv = {
   ACCOUNT_ID: 'acct',
@@ -39,7 +39,7 @@ function memoryKv(): KVNamespace & { puts: number } {
 const at = (hour: number, minute: number) => Date.UTC(2026, 10, 22, hour, minute)
 
 type Run = { fired: string[]; posts: string[]; graphqlScript?: string; graphqlVars?: Record<string, string>; sql?: string }
-type Opts = { at?: number; env?: Partial<WakeAlertsEnv>; minutes?: Minutes; kv?: KVNamespace; sqlStatus?: number; cfErrors?: number | 'fail'; hookStatus?: number }
+type Opts = { at?: number; env?: Partial<WakeAlertsEnv>; minutes?: Minutes; kv?: KVNamespace; sqlStatus?: number; cfErrors?: number | 'fail'; cfBody?: unknown; hookStatus?: number }
 async function run(now: Partial<Row>, before: Partial<Row> = {}, opts: Opts = {}): Promise<Run> {
   const result: Run = { fired: [], posts: [] }
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
@@ -55,6 +55,7 @@ async function run(now: Partial<Row>, before: Partial<Row> = {}, opts: Opts = {}
       result.graphqlScript = body.variables.script
       result.graphqlVars = body.variables
       if (opts.cfErrors === 'fail') { return new Response('no', { status: 500 }) }
+      if (opts.cfBody !== undefined) { return Response.json(opts.cfBody) }
       const w0 = opts.cfErrors ? [{ sum: { requests: 1000 - opts.cfErrors }, dimensions: { status: 'success' } }, { sum: { requests: opts.cfErrors }, dimensions: { status: 'scriptThrewException' } }] : []
       return Response.json({ data: { viewer: { accounts: [{ w0, w1: [] }] } } })
     }
@@ -104,6 +105,12 @@ describe('wake alerts', () => {
   it('fires on failed wakes, which Cloudflare error counts never see', async () => {
     expect((await run({ wake_error: 2 })).fired).toEqual([])
     expect((await run({ wake_error: 3 })).fired).toEqual(['FIRING wake-errors: 3 wakes failed in 15 min, of 1000 wakes'])
+  })
+
+  it('fires on failed object forwards above the cloudflare-errors floor and share', async () => {
+    expect((await run({ object_unavailable: 3 })).fired).toEqual([])
+    expect((await run({ socket_open: 4000, object_unavailable: 30 })).fired).toEqual([])
+    expect((await run({ object_unavailable: 30 })).fired).toEqual(['FIRING object-unavailable: upgrades whose object forward failed 30 = 6.9% of 433 upgrades in 15 min'])
   })
 
   it('fires on a reconnect surge, admin failures, and silence after traffic', async () => {
@@ -252,10 +259,39 @@ describe('wake alerts', () => {
 
   it('keeps cloudflare-errors firing while Cloudflare analytics cannot be read, and resolves on a readable zero', async () => {
     const kv = memoryKv()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     expect((await run({}, {}, { kv, at: at(10, 17), cfErrors: 100 })).fired[0]).toMatch(/^FIRING cloudflare-errors/)
     expect((await run({}, {}, { kv, at: at(10, 22), cfErrors: 'fail' })).fired).toEqual([])
     expect((await run({}, {}, { kv, at: at(11, 2), cfErrors: 'fail' })).fired).toEqual(['alerts cannot read Cloudflare analytics: cloudflare analytics query failed: 500'])
     expect((await run({}, {}, { kv, at: at(11, 7), cfErrors: 0 })).fired).toEqual(['RESOLVED cloudflare-errors'])
+    vi.restoreAllMocks()
+  })
+
+  it('logs every failed Cloudflare read with bounded, scrubbed GraphQL errors, and posts the text hourly', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const echoed = `account acct rejected key token ${'x'.repeat(1000)}`
+    const cfBody = { data: null, errors: [{ message: echoed, path: ['viewer', 'accounts'], extensions: { code: 'authz' } }] }
+    const quiet = await run({}, {}, { at: at(10, 22), cfBody })
+    expect(quiet.posts).toEqual([])
+    expect(log).toHaveBeenCalledTimes(1)
+    const line = String(log.mock.calls[0][0])
+    expect(line).toMatch(/^cloudflare analytics read failed \{/)
+    expect(line).not.toMatch(/acct|token/)
+    const logged = JSON.parse(line.slice(line.indexOf('{')))
+    expect(logged).toMatchObject({ reason: 'cloudflare analytics query returned errors', script: 'orca-connector-wake', status: 200, errors: [{ path: ['viewer', 'accounts'], code: 'authz' }] })
+    expect(logged.errors[0].message).toMatch(/^account \[redacted\] rejected key \[redacted\] x+…$/)
+    expect(logged.errors[0].message).toHaveLength(200)
+
+    const hourly = await run({}, {}, { at: at(11, 2), cfBody })
+    expect(hourly.fired).toHaveLength(1)
+    expect(hourly.fired[0]).toMatch(/^alerts cannot read Cloudflare analytics: cloudflare analytics query returned errors: authz: account \[redacted\] rejected key \[redacted\] x+…$/)
+    expect(hourly.posts[0]).not.toMatch(/acct|token/)
+
+    // Malformed errors still report the original failure.
+    const malformed = { data: { viewer: { accounts: [] } }, errors: [null, 'x', { extensions: { code: 'timeout' } }] }
+    expect((await run({}, {}, { at: at(11, 2), cfBody: malformed })).fired).toEqual(['alerts cannot read Cloudflare analytics: cloudflare analytics query returned errors: timeout'])
+    expect((await run({}, {}, { at: at(11, 2), cfBody: { errors: { message: 'not a list' } } })).fired).toEqual(['alerts cannot read Cloudflare analytics: cloudflare analytics query returned errors'])
+    vi.restoreAllMocks()
   })
 
   it('posts a FIRING or RESOLVED again next run when the webhook rejected it', async () => {

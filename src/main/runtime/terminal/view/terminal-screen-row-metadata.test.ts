@@ -62,4 +62,19 @@ describe('screen row provenance boundaries', () => {
       emulator.dispose()
     }
   })
+
+  it.each(['\x1b[2K', '\x1b[K'])(
+    'clips bottom preview rows to the grid after an alternate screen shrinks (%j)',
+    async (eraseLine) => {
+      const emulator = new HeadlessEmulator({ cols: 20, rows: 3 })
+      try {
+        await emulator.write('\x1b[?1049h\x1b[3;1HABCDEFGHIJhidden')
+        emulator.resize(10, 3)
+        await emulator.write(`\x1b[3;1H${eraseLine}short`)
+        expect(emulator.getBottomVisibleLines(1, 3)).toEqual(['short'])
+      } finally {
+        emulator.dispose()
+      }
+    }
+  )
 })

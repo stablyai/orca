@@ -171,7 +171,8 @@ export function NativeChatComposerField({
     }
     if (imeEnterGesture.isComposing()) {
       // Remember async send clears during composition so sent text cannot leak into the next message; other drafts still yield to IME.
-      droppedDraftClearRef.current ||= draft === '' && textarea.value !== ''
+      droppedDraftClearRef.current =
+        droppedDraftClearRef.current || (draft === '' && textarea.value !== '')
       return
     }
     droppedDraftClearRef.current = false

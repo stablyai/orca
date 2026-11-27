@@ -28,6 +28,9 @@ export class ClaudeTaskInvocations {
     private readonly saved?: {
       background: (id: string, run?: string) => ClaudeBackgroundTaskDescriptor | undefined
       parent: (id: string, run?: string) => string | undefined
+      isSubagent?: (id: string) => boolean
+      isBackgroundSubagent?: (id: string) => boolean
+      launchOf?: (id: string) => string | undefined
     }
   ) {}
 
@@ -94,6 +97,23 @@ export class ClaudeTaskInvocations {
     return invocation
       ? invocation.parentTaskId
       : (this.saved?.background(id, run)?.linkage.parentAgentId ?? this.saved?.parent(id, run))
+  }
+
+  /** The journal has a background-task row for it, or a subagent row saved as told to outlive
+   *  its turn. Foreground commands and subagents have neither. */
+  savedAsBackground(id: string): boolean {
+    return (
+      this.saved?.background(id) !== undefined || this.saved?.isBackgroundSubagent?.(id) === true
+    )
+  }
+
+  savedAsSubagent(id: string): boolean {
+    return this.saved?.isSubagent?.(id) === true
+  }
+
+  /** The saved tool call that launched a subagent, which its start carried. */
+  savedLaunch(id: string): string | undefined {
+    return this.saved?.launchOf?.(id)
   }
 
   excludeMonitor(id: string, run?: string): void {

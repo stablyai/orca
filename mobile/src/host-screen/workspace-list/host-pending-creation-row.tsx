@@ -1,13 +1,14 @@
 import { ActivityIndicator, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { SectionPendingCreation } from '../../worktree/workspace-list/workspace-list-types'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 export function HostPendingCreationRow({ creation }: { creation: SectionPendingCreation }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.row} accessibilityRole="progressbar">
       <View style={styles.indicator}>
@@ -27,7 +28,7 @@ export function HostPendingCreationRow({ creation }: { creation: SectionPendingC
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // Match the workspace row’s padding and indicator column so completion does not shift the row.
   row: {
     flexDirection: 'row',

@@ -3,9 +3,8 @@ import { Animated, Easing, Text, View } from 'react-native'
 import { OrcaLogo } from '../components/icons/OrcaLogo'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 
 function sampleNotifications(t: Translate) {
@@ -35,7 +34,7 @@ type Props = {
 /** Decorative banners; the surrounding copy is the accessible explanation. */
 export function NotificationOnboardingPreview({ active }: Props) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const notifications = sampleNotifications(t)
   const reduceMotion = useReducedMotionEnabled()
   const first = useRef(new Animated.Value(0)).current
@@ -106,7 +105,7 @@ function SampleBanner({
   notification: ReturnType<typeof sampleNotifications>[number]
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.card}>
       <View style={styles.appIcon}>
@@ -142,7 +141,7 @@ function bannerMotion(progress: Animated.Value) {
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   stack: {
     width: '100%',
     maxWidth: 320,

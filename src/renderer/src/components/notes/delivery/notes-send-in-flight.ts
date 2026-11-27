@@ -2,7 +2,6 @@ import {
   diffCommentOwnerKey,
   type DiffCommentOwner
 } from '@/store/slices/diff-comments/diff-comment-owner'
-import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 
 // Hold submitted notes out of later sends until delivery settles; restore on failure and let the owner remove delivered notes.
@@ -63,17 +62,13 @@ export function isNoteInFlight(key: unknown): boolean {
   return holds.has(key)
 }
 
-function subscribe(listener: () => void): () => void {
+export function subscribeToNotesInFlight(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
-function getVersion(): number {
+export function getNotesInFlightVersion(): number {
   return version
-}
-
-export function useNotesInFlightVersion(): number {
-  return useAppViewExternalStore(subscribe, getVersion, getVersion)
 }
 
 /** A note's identity for delivery: an edit makes it a new pending note, as for its removal. */
@@ -89,6 +84,7 @@ export function diffCommentSendKey(
     note.lineNumber,
     note.startLine ?? null,
     note.selectedText ?? null,
-    note.source ?? null
+    note.source ?? null,
+    note.updatedAt ?? null
   ])
 }

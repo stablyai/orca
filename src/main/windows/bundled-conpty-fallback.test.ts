@@ -1,11 +1,35 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { IPty } from 'node-pty'
 import type { spawnWithSystemConptyFallback as spawnWithFallbackType } from './bundled-conpty-fallback'
+import type { conptySpawnStartedAtMs as spawnStartedAtType } from './conpty-spawn-time'
 
 const LAUNCH_FAILURE =
   'Cannot launch conpty: ConptyCreatePseudoConsole failed with HRESULT 0x80070005 using C:\\app\\conpty\\conpty.dll'
 
 let spawnWithSystemConptyFallback: typeof spawnWithFallbackType
+let conptySpawnStartedAtMs: typeof spawnStartedAtType
 const originalPlatform = process.platform
+
+function fakePty(useConptyDll: boolean): IPty & { useConptyDll: boolean } {
+  const noop = (): void => {}
+  const event = (): { dispose: () => void } => ({ dispose: noop })
+  return {
+    useConptyDll,
+    pid: 1,
+    cols: 80,
+    rows: 24,
+    process: 'pwsh.exe',
+    handleFlowControl: false,
+    onData: event,
+    onExit: event,
+    resize: noop,
+    clear: noop,
+    write: noop,
+    kill: noop,
+    pause: noop,
+    resume: noop
+  }
+}
 
 describe('spawnWithSystemConptyFallback', () => {
   beforeEach(async () => {
@@ -13,6 +37,7 @@ describe('spawnWithSystemConptyFallback', () => {
     // Fresh module per test: the per-process memo must not leak between cases.
     vi.resetModules()
     ;({ spawnWithSystemConptyFallback } = await import('./bundled-conpty-fallback'))
+    ;({ conptySpawnStartedAtMs } = await import('./conpty-spawn-time'))
   })
 
   afterEach(() => {
@@ -22,8 +47,8 @@ describe('spawnWithSystemConptyFallback', () => {
   })
 
   it('uses the bundled ConPTY when it starts', () => {
-    const spawn = vi.fn((useConptyDll: boolean) => ({ useConptyDll }))
-    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toEqual({ useConptyDll: true })
+    const spawn = vi.fn((useConptyDll: boolean) => fakePty(useConptyDll))
+    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toMatchObject({ useConptyDll: true })
     expect(spawn).toHaveBeenCalledTimes(1)
   })
 
@@ -33,10 +58,12 @@ describe('spawnWithSystemConptyFallback', () => {
       if (useConptyDll) {
         throw new Error(LAUNCH_FAILURE)
       }
-      return { useConptyDll }
+      return fakePty(useConptyDll)
     })
-    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toEqual({ useConptyDll: false })
-    expect(spawnWithSystemConptyFallback(spawn, 'cmd.exe')).toEqual({ useConptyDll: false })
+    const fallbackPty = spawnWithSystemConptyFallback(spawn, 'pwsh.exe')
+    expect(fallbackPty).toMatchObject({ useConptyDll: false })
+    expect(conptySpawnStartedAtMs(fallbackPty)).toBeTypeOf('number')
+    expect(spawnWithSystemConptyFallback(spawn, 'cmd.exe')).toMatchObject({ useConptyDll: false })
     expect(spawn.mock.calls).toEqual([[true], [false], [false]])
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0]?.[0]).toContain('HRESULT 0x80070005')
@@ -50,15 +77,17 @@ describe('spawnWithSystemConptyFallback', () => {
       if (useConptyDll && bundledBroken) {
         throw new Error(LAUNCH_FAILURE)
       }
-      return { useConptyDll }
+      return fakePty(useConptyDll)
     })
     spawnWithSystemConptyFallback(spawn, 'pwsh.exe')
     for (let i = 0; i < BUNDLED_CONPTY_RETRY_AFTER_SPAWNS; i++) {
-      expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toEqual({ useConptyDll: false })
+      expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toMatchObject({
+        useConptyDll: false
+      })
     }
     bundledBroken = false
-    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toEqual({ useConptyDll: true })
-    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toEqual({ useConptyDll: true })
+    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toMatchObject({ useConptyDll: true })
+    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toMatchObject({ useConptyDll: true })
   })
 
   it('retries the bundled ConPTY once the memo has aged out', async () => {
@@ -69,7 +98,7 @@ describe('spawnWithSystemConptyFallback', () => {
       if (useConptyDll) {
         throw new Error(LAUNCH_FAILURE)
       }
-      return { useConptyDll }
+      return fakePty(useConptyDll)
     })
     spawnWithSystemConptyFallback(spawn, 'pwsh.exe')
     vi.advanceTimersByTime(BUNDLED_CONPTY_RETRY_AFTER_MS)
@@ -103,7 +132,7 @@ describe('spawnWithSystemConptyFallback', () => {
 
   it('spawns without the bundled DLL off Windows', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    const spawn = vi.fn((useConptyDll: boolean) => ({ useConptyDll }))
-    expect(spawnWithSystemConptyFallback(spawn, '/bin/zsh')).toEqual({ useConptyDll: false })
+    const spawn = vi.fn((useConptyDll: boolean) => fakePty(useConptyDll))
+    expect(spawnWithSystemConptyFallback(spawn, '/bin/zsh')).toMatchObject({ useConptyDll: false })
   })
 })
