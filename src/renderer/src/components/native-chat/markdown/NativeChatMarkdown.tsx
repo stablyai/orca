@@ -22,6 +22,7 @@ import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-fi
 import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
 import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDeferredMarkdownImage'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
+import { nativeChatBotHomeId, rehypeNativeChatBotHome } from './native-chat-markdown-bot-home'
 import { remarkNativeChatListItemNumbers } from './native-chat-markdown-list-item-numbers'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import {
@@ -56,6 +57,7 @@ type NativeChatMarkdownProps = Omit<
 > & {
   /** Underline file paths in the text that exist in the chat's workspace, when the chat can open them. */
   linkifyFilePaths?: boolean
+  allowBotHomeLinks?: boolean
   visualMessageId?: string
   /** The text is still arriving: it renders block by block, so an append re-parses only its tail. */
   streaming?: boolean
@@ -136,7 +138,8 @@ function createNativeChatImageExtension(
   mentionNames: readonly string[] | null,
   everyone: boolean,
   slackMentions: boolean,
-  slackPeople: SlackPeople | null
+  slackPeople: SlackPeople | null,
+  allowBotHomeLinks: boolean
 ): CommentMarkdownExtension {
   const Anchor = createDocumentCommentMarkdownComponents(onLinkClick).a
   const base = withFileDestinations(
@@ -149,12 +152,38 @@ function createNativeChatImageExtension(
   return {
     ...base,
     remarkPlugins: [...base.remarkPlugins, remarkNativeChatListItemNumbers],
-    sanitizeAttributes: { ...base.sanitizeAttributes, li: ['value'] },
+    ...(allowBotHomeLinks ? { rehypePluginsBeforeSanitize: [rehypeNativeChatBotHome] } : {}),
+    sanitizeAttributes: {
+      ...base.sanitizeAttributes,
+      li: ['value'],
+      ...(allowBotHomeLinks ? { a: ['dataOrcaBotHome'] } : {})
+    },
     components: {
       ...NATIVE_CHAT_TEXT_BLOCK_COMPONENTS,
       ...base.components,
       img: ({ src, alt }) => <NativeChatDeferredMarkdownImage src={src} alt={alt} />,
       a: (props) => {
+        const hasImage = containsImage(props.children)
+        const botId = allowBotHomeLinks
+          ? nativeChatBotHomeId(props.node?.properties.dataOrcaBotHome)
+          : undefined
+        if (botId && !props.href && !hasImage) {
+          return (
+            <button
+              type="button"
+              data-native-chat-bot-home-link=""
+              className="cursor-pointer text-left underline focus-visible:outline-ring"
+              onClick={(event) => {
+                event.stopPropagation()
+                void import('@/lib/bot-link-open').then(({ openBotLinkHome }) =>
+                  openBotLinkHome(botId, null)
+                )
+              }}
+            >
+              {props.children}
+            </button>
+          )
+        }
         const renderAnchor = (children: ReactNode): ReactNode => (
           <NativeChatLinkPeek href={props.href}>
             {typeof Anchor === 'function' ? (
@@ -177,9 +206,7 @@ function createNativeChatImageExtension(
           }
           return cloneElement(child, {}, Children.map(child.props.children, renderChild))
         }
-        return containsImage(props.children)
-          ? Children.map(props.children, renderChild)
-          : renderAnchor(props.children)
+        return hasImage ? Children.map(props.children, renderChild) : renderAnchor(props.children)
       }
     }
   }
@@ -188,6 +215,7 @@ function createNativeChatImageExtension(
 export function NativeChatMarkdown({
   className,
   linkifyFilePaths = false,
+  allowBotHomeLinks = false,
   fadeFrom,
   visualMessageId,
   streaming = false,
@@ -216,10 +244,20 @@ export function NativeChatMarkdown({
             mentionNames,
             everyone,
             slackMentions,
-            slackPeople
+            slackPeople,
+            allowBotHomeLinks
           )
         : withFileDestinations(visualExtension, mentionNames, everyone, slackMentions, slackPeople),
-    [everyone, mentionNames, onLinkClick, slackMentions, slackPeople, variant, visualExtension]
+    [
+      allowBotHomeLinks,
+      everyone,
+      mentionNames,
+      onLinkClick,
+      slackMentions,
+      slackPeople,
+      variant,
+      visualExtension
+    ]
   )
   const fileLinkExists = useNativeChatFileLinkExists(
     linkifyFilePaths && onLinkClick !== undefined,

@@ -28,7 +28,7 @@
   font-size: 0.9285714286em;
 }
 
-.native-chat-markdown a {
+.native-chat-markdown :is(a, [data-native-chat-bot-home-link]) {
   word-break: normal;
   overflow-wrap: anywhere;
   color: var(--chat-link);
@@ -38,7 +38,7 @@
 }
 
 /* File links wrap inline code, so formatted labels follow the link color. */
-.native-chat-markdown a :is(code, strong) {
+.native-chat-markdown :is(a, [data-native-chat-bot-home-link]) :is(code, strong) {
   color: inherit;
 }
 
@@ -74,7 +74,20 @@
 
 [data-native-chat-message-tone='faint']
   .native-chat-markdown
-  :is(h1, h2, h3, h4, h5, h6, [role='heading'], strong, a, code, pre) {
+  :is(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    [role='heading'],
+    strong,
+    a,
+    [data-native-chat-bot-home-link],
+    code,
+    pre
+  ) {
   color: inherit;
 }
 
@@ -91,7 +104,7 @@
     }
   }
 
-  .native-chat-markdown[data-word-fade] :is(a, :not(pre) > code),
+  .native-chat-markdown[data-word-fade] :is(a, [data-native-chat-bot-home-link], :not(pre) > code),
   .native-chat-markdown[data-block-fade] > :is(pre, div, table, hr) {
     transition: opacity 300ms ease-out;
 

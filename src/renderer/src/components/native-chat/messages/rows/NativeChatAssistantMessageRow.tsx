@@ -1,4 +1,5 @@
 import { useContext } from 'react'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { NativeChatInSubagentSheet } from '../../subagents/native-chat-subagent-sheet-context'
 import { cn } from '@/lib/class-names'
 import { quietBotAnswer } from '../../../../../../shared/bot-quiet-result'
@@ -112,6 +113,9 @@ export function NativeChatAssistantMessageRow({
           variant="document"
           className="text-sm"
           renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
+          allowBotHomeLinks={
+            inBotChat && !inSheet && message.role === 'assistant' && !isWebClientLocation()
+          }
           linkifyFilePaths
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
