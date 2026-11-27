@@ -63,7 +63,6 @@
 2 src/main/ipc/plugins/plugin-frame-entry-ipc.ts
 1 src/main/ipc/plugins/plugin-panel-push-ipc.ts
 3 src/main/ipc/plugins/plugin-settings-ipc.ts
-19 src/main/ipc/repos/repo-ipc-arg-schemas.ts
 4 src/main/ipc/skills/skill-cloud-install-ipc-schemas.ts
 4 src/main/ipc/skills/skill-install-management-ipc-handlers.ts
 1 src/main/ipc/slack-hand-off.ts
