@@ -336,6 +336,7 @@ export function TerminalPaneSurface({
         <AgentSessionContinuationDialog
           open
           request={agentSessionContinuation}
+          interruptOriginal={agentSessionContinuation.interruptOriginal}
           onOpenChange={(open) => {
             if (!open) {
               setAgentSessionContinuation(null)

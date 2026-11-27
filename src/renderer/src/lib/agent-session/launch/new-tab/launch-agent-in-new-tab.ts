@@ -245,6 +245,7 @@ function openAgentInNewTab(
       surface: { kind: 'local-terminal', tabId: launched.tabId },
       startupPlan,
       pasteDraftAfterLaunch: true,
+      terminalPromptTarget: { leafId: launched.leafId, started: launched.started },
       promptDeliveryResult: launched.promptDeliveryResult
     }
   }

@@ -33,6 +33,7 @@ export type LaunchAgentInNewTabResult = {
   startupPlan?: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
+  terminalPromptTarget?: { leafId: string; started: Promise<string | null> }
   /** Structured route only: what the launch did once it settled. The call stays synchronous. */
   terminalCompletion?: StructuredLaunchTerminal['completion']
   structuredSettlement?: Promise<StructuredAgentLaunchSettlement>

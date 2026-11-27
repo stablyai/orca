@@ -11,6 +11,11 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
+import type { TerminalContinuationInterrupt } from './terminal-continuation-interrupt'
+
+export type PreparedTerminalAgentSessionContinuation = AgentSessionContinuationRequest & {
+  interruptOriginal?: TerminalContinuationInterrupt
+}
 
 type PrepareAgentSessionContinuationFromPaneArgs = {
   pane: ManagedPane
