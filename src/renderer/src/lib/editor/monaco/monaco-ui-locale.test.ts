@@ -1,11 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SUPPORTED_UI_LOCALES } from '../../../../../shared/i18n/ui-locale'
-import { MONACO_UI_LOCALE_PACKS } from './monaco-ui-locale'
-
-declare global {
-  var _VSCODE_NLS_LANGUAGE: string | undefined
-  var _VSCODE_NLS_MESSAGES: string[] | undefined
-}
+import { loadMonacoUiLocalePack, MONACO_UI_LOCALE_PACKS } from './monaco-ui-locale'
 
 // Monaco names its Chinese and Portuguese packs after regions; a wrong name leaves the editor in English without an error.
 const MONACO_LANGUAGE_FOR_UI_LOCALE: Record<string, string> = {
@@ -23,6 +18,7 @@ const MONACO_LANGUAGE_FOR_UI_LOCALE: Record<string, string> = {
 
 describe('Monaco UI locale packs', () => {
   afterEach(() => {
+    vi.useRealTimers()
     globalThis._VSCODE_NLS_LANGUAGE = undefined
     globalThis._VSCODE_NLS_MESSAGES = undefined
   })
@@ -35,5 +31,27 @@ describe('Monaco UI locale packs', () => {
       expect(globalThis._VSCODE_NLS_LANGUAGE, locale).toBe(MONACO_LANGUAGE_FOR_UI_LOCALE[locale])
       expect(globalThis._VSCODE_NLS_MESSAGES?.length, locale).toBeGreaterThan(1000)
     }
+  })
+
+  it('opens Monaco in English when the pack misses the bound, and a late pack leaves no trace', async () => {
+    vi.useFakeTimers()
+    let land = (): void => {}
+    const latePack = (): Promise<void> =>
+      new Promise((resolve) => {
+        land = () => {
+          globalThis._VSCODE_NLS_LANGUAGE = 'zh-cn'
+          globalThis._VSCODE_NLS_MESSAGES = ['复制']
+          resolve()
+        }
+      })
+
+    const installation = loadMonacoUiLocalePack(latePack, 5000)
+    await vi.advanceTimersByTimeAsync(5000)
+    await installation
+
+    land()
+    await vi.runAllTimersAsync()
+    expect(globalThis._VSCODE_NLS_LANGUAGE).toBeUndefined()
+    expect(globalThis._VSCODE_NLS_MESSAGES).toBeUndefined()
   })
 })

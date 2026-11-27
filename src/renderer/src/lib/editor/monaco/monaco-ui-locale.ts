@@ -1,5 +1,6 @@
 import { i18n } from '@/i18n/i18n'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
+import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 
 // Monaco ships its own UI strings (editor menus, find widget, peek views) as one pack per language. A pack sets
 // globalThis._VSCODE_NLS_MESSAGES, and Monaco registers its actions with those strings while its modules run, so the
@@ -21,6 +22,8 @@ export const MONACO_UI_LOCALE_PACKS: Record<string, () => Promise<unknown>> = {
 // The language settles asynchronously at boot (a native lookup with its own timeout), so a surface opened right
 // after launch waits for it; past this long the editor opens in English rather than not at all.
 const LANGUAGE_WAIT_MS = 3000
+// A local pack arrives in milliseconds; this leaves room for a web client fetching the largest pack from its server.
+const PACK_WAIT_MS = 5000
 
 function waitForUiLanguage(): Promise<void> {
   if (useLanguageReadiness.getState().ready) {
@@ -41,6 +44,32 @@ function waitForUiLanguage(): Promise<void> {
   })
 }
 
+/** Waits for a pack at most `timeoutMs`; a failed or late pack leaves Monaco on its English strings. */
+export async function loadMonacoUiLocalePack(
+  loadPack: () => Promise<unknown>,
+  timeoutMs: number = PACK_WAIT_MS
+): Promise<void> {
+  const previous = {
+    messages: globalThis._VSCODE_NLS_MESSAGES,
+    language: globalThis._VSCODE_NLS_LANGUAGE
+  }
+  let missedBound = false
+  const loaded = loadPack().then(
+    () => {
+      // Why: Monaco reads the pack on every lookup, so one landing after the editor opened in English would mix languages.
+      if (missedBound) {
+        globalThis._VSCODE_NLS_MESSAGES = previous.messages
+        globalThis._VSCODE_NLS_LANGUAGE = previous.language
+      }
+      return true
+    },
+    () => false
+  )
+  if (!(await withTimeout(loaded, timeoutMs, false))) {
+    missedBound = true
+  }
+}
+
 let installation: Promise<void> | undefined
 
 /** Installs Monaco's pack for the UI language once per page load; a language switch applies to Monaco after a restart. */
@@ -48,13 +77,8 @@ export function installMonacoUiLocale(): Promise<void> {
   installation ??= (async () => {
     await waitForUiLanguage()
     const loadPack = MONACO_UI_LOCALE_PACKS[i18n.language]
-    if (!loadPack) {
-      return
-    }
-    try {
-      await loadPack()
-    } catch {
-      // Monaco falls back to its English strings when the pack cannot load.
+    if (loadPack) {
+      await loadMonacoUiLocalePack(loadPack)
     }
   })()
   return installation

@@ -149,6 +149,9 @@ declare global {
         getWorker(workerId: string, label: string): Worker
       }
     | undefined
+  /** Set by a Monaco locale pack; Monaco reads it on every string lookup. */
+  var _VSCODE_NLS_MESSAGES: (string | null)[] | undefined
+  var _VSCODE_NLS_LANGUAGE: string | undefined
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
     __paneManagers?: Map<string, PaneManager>
