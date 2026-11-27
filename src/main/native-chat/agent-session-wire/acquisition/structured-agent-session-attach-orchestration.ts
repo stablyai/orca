@@ -1,3 +1,4 @@
+import { journalClaudeImport } from '../../agent-session-journal/history-import/journal-claude-import-stage'
 import { readAttachTelemetryCaller } from './structured-agent-session-attach-telemetry'
 import {
   keptProviderRelaySpawnToken,
@@ -172,6 +173,7 @@ async function runAttachUnderAbort(
     const attached = await performAttach({
       models: priorRecord ? undefined : options.catalogModels,
       store: context.deps.store,
+      prepareClaudeImport: journalClaudeImport(context.deps.journalDatabase),
       adapter: context.deps.adapter,
       agents: context.deps.agents,
       logger: context.deps.logger,

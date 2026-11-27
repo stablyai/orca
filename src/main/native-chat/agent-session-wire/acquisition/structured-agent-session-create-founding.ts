@@ -7,7 +7,7 @@ import {
 
 import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
 
-import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
+import { readForkHydration } from './agent-session-fork-founding'
 
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
@@ -36,6 +36,8 @@ import { openStructuredAgentSessionConversationJournal } from '../host/structure
 
 import {
   prepareCreateTranscript,
+  closePreparedAdoptedTranscript,
+  adoptedFoundingReceipt,
   importAdoptedTranscript
 } from './structured-agent-session-adopted-import'
 
@@ -164,16 +166,16 @@ export async function foundConversation(
         : refusal
     }
   }
-  if (!replayed) {
-    await prepareForkFounding(params)
-  }
+  await (replayed ? undefined : params.fork?.revalidate())
   const existing = context.sessions.get(sessionId)
-  const opened = existing
-    ? { session: existing }
-    : await openStructuredAgentSessionConversationJournal(
+  const session =
+    existing ??
+    (
+      await openStructuredAgentSessionConversationJournal(
         deps,
         agentSessionConversationView(candidate.record)
-      ).catch((error: unknown) => {
+      ).catch(async (error: unknown) => {
+        await closePreparedAdoptedTranscript(prepared.items)
         deps.logger.warn('opening the journal of a new chat failed', {
           scope: 'create-journal-open',
           sessionId,
@@ -181,7 +183,7 @@ export async function foundConversation(
         })
         throw journalOpenRefusalError(error)
       })
-  const { session } = opened
+    ).session
   const fence = candidate.record.lease.runtimeFence
   let committed = replayed
   // The caller's last word on the opening message, then the chat joins the host; nothing delivers
@@ -193,13 +195,17 @@ export async function foundConversation(
   let installation: Awaited<ReturnType<typeof importAdoptedTranscript>>
   try {
     if (!replayed) {
+      const receipt = adoptedFoundingReceipt(prepared.items, Boolean(options.firstMessage), () =>
+        store.founding.receipt(request)
+      )
       installation = await importAdoptedTranscript(
         params,
         { journal: session.journal, unconfirmedClientMessageIds: [] },
         candidate.record,
         prepared.items,
-        { uncommittedCreate: true }
+        { uncommittedCreate: true, receipt }
       )
+      committed ||= Boolean(receipt)
       await params.fork?.revalidate()
       const first = options.firstMessage
       if (first) {
@@ -258,7 +264,7 @@ export async function foundConversation(
               forkInstall: preparedFork
             }))
           )
-        } else {
+        } else if (!committed) {
           await store.founding.commit(request)
         }
       }
@@ -306,6 +312,7 @@ export async function foundConversation(
     context.wakeDelivery?.(sessionId)
     return result
   } finally {
+    await closePreparedAdoptedTranscript(prepared.items)
     await params.fork?.prepared.close()
     if (!committed && installation) {
       await session.journal.abortFork(installation)

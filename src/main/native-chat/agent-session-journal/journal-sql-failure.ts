@@ -1,4 +1,8 @@
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
+import {
+  ClaudeImportGrowthError,
+  type ClaudeImportGrowth
+} from './history-import/journal-claude-import-resource-error'
 import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
 import { JournalDamageError, JournalUnreleasedSchemaError } from './replay/journal-open-failure'
@@ -19,6 +23,7 @@ import {
 
 export type JournalSqlFailure = {
   name: string
+  importGrowth?: ClaudeImportGrowth
   message: string
   code?: string
   errcode?: number
@@ -69,6 +74,7 @@ export function journalSqlFailure(error: unknown): JournalSqlFailure {
   return {
     name: error instanceof Error ? error.name : 'Error',
     message: error instanceof Error ? error.message : String(error),
+    importGrowth: error instanceof ClaudeImportGrowthError ? error.growth : undefined,
     // A wrapped SQLITE_FULL or ENOSPC keeps its code, so the host can tell a full disk.
     code:
       error instanceof Error && 'code' in error && typeof error.code === 'string'
@@ -102,6 +108,9 @@ export function restoreJournalSqlFailure(error: JournalSqlFailure): Error {
 }
 
 function restoreFailure(error: JournalSqlFailure): Error {
+  if (error.importGrowth) {
+    return new ClaudeImportGrowthError(error.importGrowth)
+  }
   if (error.expired) {
     return new AgentSessionAttachmentExpiredError(error.expired)
   }

@@ -197,6 +197,8 @@ export function applyJournalSqlMaintenance(
     case 'fork-source-release':
     case 'fork-stage-begin':
     case 'fork-stage-page':
+    case 'import-stage-begin':
+    case 'import-stage-page':
     case 'fork-abort':
       throw new Error('fork staging requires its live writer owner')
     case 'outline-cache':

@@ -34,18 +34,18 @@ export function message(
   }
 }
 
-export function messageFixture(db = new Database(':memory:')) {
+export function messageFixture(db = new Database(':memory:'), destination = target) {
   migrateJournalDomainSchema(db)
   db.prepare(
     `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace',?,?,10,1)`
-  ).run(target.sessionId, target.epoch)
+  ).run(destination.sessionId, destination.epoch)
   const batch = new JournalSqlBatch(db)
   const published: JournalWriterCommit[] = []
   const command = (
     steps: readonly JournalSqlMessage[],
-    destination = target
+    writeTarget = destination
   ): JournalWriterCommand => ({
-    target: destination,
+    target: writeTarget,
     operation: {
       kind: 'steps',
       steps: steps.map((step) => {

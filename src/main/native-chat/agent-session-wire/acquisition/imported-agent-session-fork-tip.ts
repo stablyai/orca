@@ -1,3 +1,4 @@
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { prepareLegacyTranscriptImport } from '../../agent-session-journal/history-import/journal-legacy-import'
@@ -17,7 +18,8 @@ export async function importedAgentSessionForkTipSettled(input: {
   if (
     identity?.provider !== 'legacy' ||
     identity.sessionId !== input.providerSessionId ||
-    !metadata?.transcriptImport
+    !metadata?.transcriptImport ||
+    resolveNativeChatTranscriptAgent(input.record.provider) === 'claude'
   ) {
     return false
   }

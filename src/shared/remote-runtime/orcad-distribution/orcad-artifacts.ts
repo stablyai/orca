@@ -273,6 +273,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'claude-profile-setup-worker-entry.js' },
   // Claude fork and rewind copy a transcript in a worker thread, off the event loop.
   { filename: 'claude-conversation-fork-worker-entry.js' },
+  // Claude history is selected and decoded in a worker thread.
+  { filename: 'journal-claude-import-worker-entry.js' },
   // Stats & Usage scans this host's agent transcripts in a worker thread, off the event loop.
   { filename: 'usage-scan-worker-entry.js' },
   // Dictation loads the recognizer named by orca serve (#31174).

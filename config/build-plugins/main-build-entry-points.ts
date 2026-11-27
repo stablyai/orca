@@ -21,6 +21,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'claude-conversation-fork-worker-entry': resolve(
     'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts'
   ),
+  'journal-claude-import-worker-entry': resolve(
+    'src/main/native-chat/agent-session-journal/history-import/journal-claude-import-worker-entry.ts'
+  ),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
   'session-search-worker-entry': resolve(

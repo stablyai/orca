@@ -3,6 +3,7 @@ export type WorkerThreadRole =
   | 'orca-agent-identity'
   | 'orca-bots-db'
   | 'orca-child-process-spawner'
+  | 'orca-claude-history-import'
   | 'orca-claude-profile-setup'
   | 'orca-claude-rewind-transcript'
   | 'orca-codex-history-disk-usage'

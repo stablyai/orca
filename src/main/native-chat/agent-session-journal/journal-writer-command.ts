@@ -1,3 +1,4 @@
+import type { ClaudeImportInstall } from './history-import/journal-claude-import-stage'
 import type { JournalForkInstall } from './journal-fork-stages'
 import type { JournalSendAdmission } from './journal-send-admission'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -71,9 +72,13 @@ export type JournalWriterOperation =
       dropped?: boolean
     }
 
-/** No callbacks, pre-folded outcomes, assigned revisions or host-chosen durability cross this port. */
-export type JournalWriterCommand = {
+export type JournalInstallations = {
   forkInstall?: JournalForkInstall
+  claudeImport?: ClaudeImportInstall
+}
+
+/** No callbacks, pre-folded outcomes, assigned revisions or host-chosen durability cross this port. */
+export type JournalWriterCommand = JournalInstallations & {
   target: JournalWriterTarget
   operation: JournalWriterOperation
   effects?: readonly JournalWriterEffect[]

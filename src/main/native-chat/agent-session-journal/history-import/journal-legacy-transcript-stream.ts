@@ -9,8 +9,10 @@ import {
   type CodexHistoryRecord
 } from '../../transcript-history/codex/codex-local-history'
 
+export const MAX_LEGACY_IMPORT_RECORD_BYTES = 16 * 1024 * 1024
+
 export async function readLegacyImportTranscript(
-  input: { filePath: string; codex: boolean; roots?: readonly string[] },
+  input: { filePath: string; codex: boolean; roots?: readonly string[]; signal?: AbortSignal },
   visit: (line: string, fallbackId: string, recordId?: string, selected?: boolean) => null,
   visitRecord?: (record: CodexHistoryRecord) => void
 ): Promise<{ consumedBytes: number }> {
@@ -24,12 +26,12 @@ export async function readLegacyImportTranscript(
         })
       }
     : decodeTranscriptStream(
-        createReadStream(input.filePath),
+        createReadStream(input.filePath, { signal: input.signal }),
         input.filePath,
         0,
         visit,
         true,
-        16 * 1024 * 1024
+        MAX_LEGACY_IMPORT_RECORD_BYTES
       )
 }
 

@@ -19,7 +19,7 @@ import { journalWroteBeforeOpen, sameJournalCursor } from './replay/journal-curs
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalWriterCommit } from './journal-writer-changes'
-import type { JournalWriterOperation, JournalWriterTarget } from './journal-writer-command'
+import type { JournalWriterCommand, JournalInstallations } from './journal-writer-command'
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'
 import { journalSqlReads, type JournalSqlReads } from './journal-sql-reads'
 import type {
@@ -41,15 +41,15 @@ import type {
 import type { JournalDomainEditLeaseOutcome } from './journal-domain-edit-leases'
 
 /** Every writer command a live handle sends; the open command belongs to the database. */
-export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
+export type JournalSqlStoreOperation = Exclude<JournalWriterCommand['operation'], { kind: 'open' }>
 
-export type JournalSqlStorePreparation = JournalAutomaticAnswers & {
-  forkInstall?: JournalForkInstall
-  facts?: Omit<JournalWriterHostFacts, 'identity'>
-  receipt?: JournalOperationReceipt
-  /** Adopt host facts staged by prepare only after the writer acknowledges their commit. */
-  settle?: (commit: JournalWriterCommit | undefined) => void
-}
+export type JournalSqlStorePreparation = JournalAutomaticAnswers &
+  JournalInstallations & {
+    facts?: Omit<JournalWriterHostFacts, 'identity'>
+    receipt?: JournalOperationReceipt
+    /** Adopt host facts staged by prepare only after the writer acknowledges their commit. */
+    settle?: (commit: JournalWriterCommit | undefined) => void
+  }
 
 /** Capture host facts once before admission; adopt staged state only after acknowledgement. */
 export type JournalSqlStorePrepare = (
@@ -75,7 +75,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   private constructor(
     private readonly database: JournalSqlDatabase,
     readonly identity: AgentSessionJournalIdentity,
-    private target: JournalWriterTarget,
+    private target: JournalWriterCommand['target'],
     private readonly now: () => number,
     opened: JournalWriterCommit
   ) {
@@ -191,7 +191,8 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           savedAt,
           ...this.database.sending.urgency(this.identity.sessionId, preparation.forkInstall),
           ...(staged ? { effects: staged.effects } : {}),
-          ...(preparation.forkInstall ? { forkInstall: preparation.forkInstall } : {})
+          forkInstall: preparation.forkInstall,
+          claudeImport: preparation.claudeImport
         }
         commit =
           operation.kind === 'automatic-submission' || operation.kind === 'send-admission'

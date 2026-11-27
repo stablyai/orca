@@ -53,6 +53,8 @@ export async function applyJournalSqlWriteRequest(
           command.operation.kind === 'fork-source-release' ||
           command.operation.kind === 'fork-stage-begin' ||
           command.operation.kind === 'fork-stage-page' ||
+          command.operation.kind === 'import-stage-begin' ||
+          command.operation.kind === 'import-stage-page' ||
           command.operation.kind === 'fork-abort'
             ? forks.apply(command.operation, Date.now())
             : applyJournalSqlMaintenance(database, command.operation)

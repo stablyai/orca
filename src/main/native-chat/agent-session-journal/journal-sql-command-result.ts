@@ -45,8 +45,9 @@ export function finishJournalSqlCommand(
         applyJournalWriterEffect(db, stateDirectory, effect, publicCoordinates)
       )
     : []
+  const compact = Boolean(command.claudeImport)
   const publication = {
-    ...result,
+    ...(compact ? { items: [], cards: [] } : result),
     ...(command.operation.kind === 'epoch-replace' ? { resetPrompts: true as const } : {}),
     cursor,
     receipts: result.receipts.map((receipt) => ({
@@ -54,7 +55,7 @@ export function finishJournalSqlCommand(
       cursor: { ...receipt.cursor, epoch: cursor.epoch }
     })),
     invalidatedItemIds,
-    referencedUploads: claims.referencedUploads
+    referencedUploads: compact ? [] : claims.referencedUploads
   }
   const queue = readJournalDomainQueueRevision(db, command.target.sessionId)
   return {
@@ -67,20 +68,22 @@ export function finishJournalSqlCommand(
     queueRevision: `${queue.epoch}:${queue.revision}`,
     keys: [],
     inputKeys: [],
-    items: [
-      ...result.items.map((item) => ({
-        itemId: item.itemId,
-        deleted: false as const,
-        revision: item.revision,
-        sequence: item.sequence,
-        sequenceIndex: item.sequenceIndex ?? 0
-      })),
-      ...(result.removedItemIds ?? []).map((itemId) => ({
-        itemId,
-        deleted: true as const,
-        revision: 0
-      }))
-    ],
+    items: compact
+      ? []
+      : [
+          ...result.items.map((item) => ({
+            itemId: item.itemId,
+            deleted: false as const,
+            revision: item.revision,
+            sequence: item.sequence,
+            sequenceIndex: item.sequenceIndex ?? 0
+          })),
+          ...(result.removedItemIds ?? []).map((itemId) => ({
+            itemId,
+            deleted: true as const,
+            revision: 0
+          }))
+        ],
     publication,
     value: publicJournalSqlValue(command, value, cursor),
     ...('goals' in claims ? { goals: claims.goals } : {}),
