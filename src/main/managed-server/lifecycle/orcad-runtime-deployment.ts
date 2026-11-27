@@ -7,8 +7,7 @@ import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-
 import { RuntimeEnvironmentStoreError } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import {
   getOrcadSshDeployment,
-  redactRuntimeEnvironment,
-  type KnownRuntimeEnvironment
+  redactRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   ORCAD_MANAGED_REMOTE_PORT,
@@ -39,7 +38,7 @@ import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
 import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 import { resolveOrcadMigrationFence } from '../../ssh/migration-source/orcad-migration-source-fence'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
-import { findCollidingEnvironmentName } from '../../../shared/remote-runtime/host-catalog/runtime-environment-name-collision'
+import { findNamesakeBeforeDeploy } from './orcad-deploy-namesake'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
 import { finishManagedOrcadRouteMove } from './orcad-managed-route-move'
 import {
@@ -74,14 +73,11 @@ export async function createManagedOrcadEnvironment(
       }
     }
     const moveSavedServer = !args.migration
-    const mayBeThisMachineUnderAnotherRoute = (entry: KnownRuntimeEnvironment) =>
-      moveSavedServer && getOrcadSshDeployment(entry) !== undefined
-    const namesake = findCollidingEnvironmentName(
-      environments.filter(
-        (entry) => entry.id !== environmentId && !mayBeThisMachineUnderAnotherRoute(entry)
-      ),
-      args.name
-    )
+    const namesake = findNamesakeBeforeDeploy(environments, {
+      name: args.name,
+      environmentId,
+      moveSavedServer
+    })
     if (namesake) {
       throw new Error(`A server named "${namesake.name}" already exists.`)
     }
