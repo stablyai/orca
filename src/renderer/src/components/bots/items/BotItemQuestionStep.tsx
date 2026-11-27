@@ -1,19 +1,17 @@
-// The waiting ask of several questions, every open line at once, a hairline between them. A quick reply
-// picks the line's answer (solid, with a check) and folds it to "✓ Question… → answer", which reopens
-// on click: the box then answers it, and its pick again folds it back. Nothing posts until Send, which
-// posts the picks as one comment. A line answered, or sent and on its way, folds the same and stays.
-// The comment box below is the one place to type: its Enter holds the words, with their images, files
-// and skills, as the answer of the line its "Replying to" names, like a pick.
-import { Check, LoaderCircle, Pencil } from 'lucide-react'
-import { useLayoutEffect, useRef } from 'react'
+// The waiting ask of several questions, as steps: each answered or picked line folds to one muted row
+// ("✓ Label: answer", Change on a pick), and only the first open line shows, bold over its reply rows.
+// Nothing posts until Send, which posts the picks as one comment; lines left open go as no answer. A
+// line answered, or sent and on its way, folds the same and stays. The comment box below still types:
+// its Enter holds the words, with their images, files and skills, as the answer of the line its
+// "Replying to" names, like a pick.
+import { LoaderCircle } from 'lucide-react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   botItemQuestionLine,
-  type BotItemQuestionShape,
-  type BotItemQuickReply
+  type BotItemQuestionShape
 } from '../../../../../shared/bots/bot-item-ask'
 import {
   botItemHeldAnswerIsReply,
@@ -21,60 +19,8 @@ import {
 } from '../../../../../shared/bots/bot-item-held-answers'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import { BotItemFoldedLine, botItemShownAnswer } from './BotItemFoldedAnswer'
+import { BotItemQuickReplyRows } from './BotItemQuickReplyRows'
 import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
-
-// Half the single-line height: one line reads as a pill, a wrapped label as a rounded rectangle. Any
-// label breaks inside the chip, an unbroken one too.
-export const BOT_ITEM_CHIP =
-  'min-h-8 w-fit max-w-full rounded-[16px] border border-question-option-border px-3.5 py-1.5 text-left text-[13px] leading-[18px] [overflow-wrap:anywhere]'
-
-const CHIP_ACTION =
-  'outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
-
-/** The recommended reply of an open line: the same pill as its siblings, filled; the one the owner
- *  most likely means. */
-export const BOT_ITEM_CHIP_RECOMMENDED =
-  'border-foreground bg-foreground text-background hover:bg-foreground/90'
-
-/** An open question's words: a title, 14 px semibold, over the Markdown's own 13 px. */
-export const BOT_ITEM_OPEN_QUESTION =
-  'font-semibold [&_p]:font-semibold [&>*]:text-sm [&>*]:leading-5'
-
-/** A line's pick: solid, with a check. */
-const CHIP_PICKED =
-  'flex items-center gap-1.5 border-foreground bg-foreground text-background hover:bg-foreground/90'
-
-/** Your own words, muted, with a pencil: Type your answer on an open line. */
-const CHIP_OWN_WORDS = 'flex items-center gap-1.5 text-muted-foreground'
-
-/** A chip's tooltip: Recommended on the recommended reply, over the reply's own detail. */
-export function botItemChipTitle(
-  reply: BotItemQuickReply,
-  recommended: string
-): string | undefined {
-  return (
-    [reply.recommended ? recommended : null, reply.detail].filter(Boolean).join('\n') || undefined
-  )
-}
-
-/** A reply's words. The recommended one leads with a star and carries Recommended in its name, filled
- *  or not: reopening an answered line keeps the mark on it. */
-export function BotItemChipWords({ reply }: { reply: BotItemQuickReply }): React.JSX.Element {
-  const t = useTranslate()
-  if (!reply.recommended) {
-    return <>{reply.label}</>
-  }
-  // A text star, not an icon: no line break falls between it and the label's first word.
-  return (
-    <span>
-      <span aria-hidden className="mr-[5px] text-[11px] opacity-80">
-        ★
-      </span>
-      {reply.label}
-      <span className="sr-only">, {t('bots.items.ask.recommended', 'Recommended')}</span>
-    </span>
-  )
-}
 
 /** An answer's Markdown on its line: its first paragraph runs on after the arrow. */
 const ANSWER_MARKDOWN = 'contents text-foreground/72 [&>p:first-child]:inline'
@@ -123,13 +69,6 @@ export function BotItemAnswerLine({
   )
 }
 
-/** Where focus goes once the card shows the change: never a ring after a mouse pick (the ring is
- *  `focus-visible`), and the page scrolls only when the target is out of view. */
-type FocusTarget =
-  | { kind: 'next'; after: number }
-  | { kind: 'chip'; index: number; label: string }
-  | { kind: 'send' }
-
 function focusInView(node: HTMLElement | null | undefined): void {
   if (node) {
     node.focus({ preventScroll: true })
@@ -150,228 +89,175 @@ export function BotItemQuestionStep({
   actions: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
-  const recommended = t('bots.items.ask.recommended', 'Recommended')
-  const typeAnswer = t('bots.items.ask.typeAnswer', 'Type your answer')
-  const targets = useRef(new Map<string, HTMLButtonElement>())
+  const rows = useRef<HTMLDivElement | null>(null)
   const sendButton = useRef<HTMLButtonElement | null>(null)
-  const focusNext = useRef<FocusTarget | null>(null)
-  const { picks, lines, reopened } = steps
-  const target = (key: string) => (node: HTMLButtonElement | null) => {
-    if (node) {
-      targets.current.set(key, node)
-    } else {
-      targets.current.delete(key)
-    }
-  }
-  // A line's first control: its first quick reply, else its Type your answer.
-  const firstOf = (index: number): HTMLButtonElement | undefined =>
-    targets.current.get(`${index}:first`) ?? targets.current.get(`${index}:type`)
+  // After a pick, focus moves on: to the next open line's first control, else to Send.
+  const moveFocus = useRef(false)
+  // Per line, words typed in Other… and not held yet: kept while another line shows.
+  const [drafts, setDrafts] = useState<Readonly<Record<number, string>>>({})
+  // What waits for a hold of Other… words to show in the picks: Send, or an answer into the box.
+  const afterHold = useRef<
+    { kind: 'send' } | { kind: 'restore'; index: number; pick: BotItemHeldAnswer } | null
+  >(null)
+  // A picked line reopened by Change (the steps keep it); its pick, or a new one, folds it again.
+  const { picks, lines, sending, reopened } = steps
+  const shown =
+    reopened !== null && lines.includes(reopened) ? reopened : lines.find((index) => !picks[index])
+  const draft = shown === undefined ? '' : (drafts[shown] ?? '').trim()
   useLayoutEffect(() => {
-    const next = focusNext.current
-    focusNext.current = null
-    if (!next) {
+    if (!moveFocus.current) {
       return
     }
-    if (next.kind === 'chip') {
-      focusInView(targets.current.get(`${next.index}:reply:${next.label}`))
-      return
-    }
-    if (next.kind === 'next') {
-      const ahead = [
-        ...lines.filter((at) => at > next.after),
-        ...lines.filter((at) => at < next.after)
-      ]
-      const open = ahead.find((at) => !picks[at])
-      if (open !== undefined) {
-        focusInView(firstOf(open))
-        return
-      }
-    }
-    focusInView(sendButton.current)
+    moveFocus.current = false
+    focusInView(rows.current?.querySelector('button, input') ?? sendButton.current)
   })
-  // A pick that is no quick reply: words typed, or anything sent with them.
-  const typed = (index: number): boolean =>
-    Boolean(picks[index]) &&
-    !shape.decisions[index]!.replies.some((reply) =>
-      botItemHeldAnswerIsReply(picks[index], reply.label)
-    )
-  // Its pick again keeps it and folds the line; only the pencil clears a pick.
-  const choose = (index: number, label: string): void => {
-    steps.pick(index, label)
-    focusNext.current = { kind: 'next', after: index }
+  const setDraft = (index: number, words: string): void =>
+    setDrafts((previous) => ({ ...previous, [index]: words }))
+  // The line's pick again keeps it and folds the line, as a new pick does.
+  const hold = (index: number, words: string): void => {
+    steps.pick(index, words)
+    setDraft(index, '')
+    moveFocus.current = true
   }
-  const ownWords = (index: number, words: BotItemHeldAnswer | string | null): void => {
+  /** The shown line's Other… words, held as its answer before another line shows or Send posts, so
+   *  only the shown line ever has words not held. True when they were. */
+  const holdDraft = (): boolean => {
+    if (shown === undefined || !draft) {
+      return false
+    }
+    setDraft(shown, '')
+    if (botItemHeldAnswerIsReply(picks[shown], draft)) {
+      return false
+    }
+    steps.pick(shown, draft)
+    return true
+  }
+  const change = (index: number, pick: BotItemHeldAnswer): void => {
+    const shownPick = botItemShownAnswer(pick)
+    const reply = shape.decisions[index]!.replies.some((r) =>
+      botItemHeldAnswerIsReply(pick, r.label)
+    )
+    // Typed words with images, files or skills go back into the box, which keeps them all.
+    // So does any answer to a question without replies, whose answer field is the box.
+    if (
+      shape.decisions[index]!.replies.length === 0 ||
+      (!reply && (pick.images.length > 0 || shownPick.files.length > 0 || pick.skills.length > 0))
+    ) {
+      // The shown Other… words are held first; the box takes the answer once that shows, as two
+      // writes in one click would race.
+      if (holdDraft()) {
+        afterHold.current = { kind: 'restore', index, pick }
+      } else {
+        ownWords(index, pick)
+      }
+      return
+    }
+    holdDraft()
+    if (!reply) {
+      setDraft(index, pick.words)
+    }
+    steps.reopen(index)
+    moveFocus.current = true
+  }
+  const send = (): void => {
+    if (holdDraft()) {
+      // Sent once the hold shows in the picks.
+      afterHold.current = { kind: 'send' }
+      return
+    }
+    steps.send()
+  }
+  const ownWords = (index: number, words: BotItemHeldAnswer | string): void => {
     // Your words for this line, in the box: they take over its pick, and Enter answers it. A held
     // answer stays held until the box's draft is saved, so a reload can't lose it.
-    if (words !== null && typeof words !== 'string') {
+    if (typeof words !== 'string') {
       if (actions.restore(words)) {
         steps.bind(index)
       }
       return
     }
     steps.bind(index)
-    if (words === null) {
-      actions.type()
-    } else {
-      actions.edit(words)
-    }
+    actions.edit(words)
   }
-  const send = (): void => {
-    const outcome = steps.send()
-    if (outcome !== 'empty') {
-      // Sent, or nothing left to send: focus stays on Send.
-      return
+  const runAfterHold = useEffectEvent(() => {
+    const next = afterHold.current
+    afterHold.current = null
+    if (next?.kind === 'send') {
+      steps.send()
+    } else if (next) {
+      ownWords(next.index, next.pick)
     }
-    const first = lines[0]!
-    const control = firstOf(first)
-    if (shape.decisions[first]!.replies.length > 0 && control) {
-      focusInView(control)
-    } else {
-      ownWords(first, null)
+  })
+  useEffect(() => {
+    if (afterHold.current) {
+      runAfterHold()
     }
-  }
-  // Of the lines still open: what Send posts, out of what it could.
-  const count = picks.filter(Boolean).length
-  const partial = count > 0 && count < lines.length
-  // Every line sent and on its way: Send stays, so focus does, and reads as sending until the read.
-  const { sending } = steps
+  }, [steps])
+  const total = shape.decisions.length
+  const count = shape.decisions.filter((_, index) => picks[index] || answered[index]).length
+  const picked = picks.filter(Boolean).length
   return (
     <>
       {shape.decisions.map((decision, index) => {
-        const words = answered[index]
         const open = lines.includes(index)
         const pick = open ? picks[index] : null
-        const divider = index > 0 ? 'mt-3 border-t border-border pt-3' : undefined
-        if (!open || (pick && reopened !== index)) {
-          const shown = pick ?? words
-          return (
-            // A decision's question is unique within its ask.
-            <div key={decision.question} className={divider}>
-              {shown ? (
-                <BotItemFoldedLine
-                  question={decision.question}
-                  answer={shown}
-                  onOpen={
-                    pick
-                      ? () => {
-                          steps.reopen(index)
-                          focusNext.current = { kind: 'chip', index, label: pick.words }
-                        }
-                      : undefined
-                  }
-                />
-              ) : (
-                // Answered by a comment that named no line: the comment shows as itself.
-                <div className="font-medium text-muted-foreground [&_*]:text-muted-foreground [&_p]:font-medium">
-                  <BotItemMarkdown text={decision.question} />
-                </div>
-              )}
-            </div>
-          )
+        const words = pick ?? answered[index]
+        if (index === shown || (open && !pick)) {
+          return null
         }
-        const iconOnly = decision.replies.length > 0
-        const typeControl =
-          pick === null || !typed(index) ? (
-            <button
-              ref={target(`${index}:type`)}
-              type="button"
-              aria-label={iconOnly ? typeAnswer : undefined}
-              className={cn(
-                BOT_ITEM_CHIP,
-                CHIP_ACTION,
-                CHIP_OWN_WORDS,
-                iconOnly && 'size-8 shrink-0 justify-center self-start rounded-full p-0'
-              )}
-              onClick={() => ownWords(index, null)}
-            >
-              <Pencil aria-hidden className="size-3 shrink-0" />
-              {iconOnly ? null : typeAnswer}
-            </button>
-          ) : null
         return (
-          <div key={decision.question} className={divider}>
-            <div className={cn('min-w-0', BOT_ITEM_OPEN_QUESTION)}>
-              <BotItemMarkdown text={decision.question} />
-            </div>
-            <div className="mt-2.5 flex flex-wrap gap-2">
-              {decision.replies.map((reply, at) => {
-                const picked = botItemHeldAnswerIsReply(pick, reply.label)
-                return (
-                  <button
-                    key={reply.label}
-                    ref={(node) => {
-                      target(`${index}:reply:${reply.label}`)(node)
-                      if (at === 0) {
-                        target(`${index}:first`)(node)
-                      }
-                    }}
-                    type="button"
-                    title={botItemChipTitle(reply, recommended)}
-                    aria-pressed={picked}
-                    className={cn(
-                      BOT_ITEM_CHIP,
-                      CHIP_ACTION,
-                      // Recommended reads by its star alone: only a pick is filled.
-                      picked ? CHIP_PICKED : 'text-foreground'
-                    )}
-                    onClick={(event) => {
-                      if (event.altKey || event.shiftKey) {
-                        ownWords(index, reply.label)
-                      } else {
-                        choose(index, reply.label)
-                      }
-                    }}
-                  >
-                    {picked ? <Check className="size-3 shrink-0" /> : null}
-                    <span className="min-w-0 max-w-full">
-                      {/* The star marks the recommended reply until the line has a pick. */}
-                      {pick === null ? <BotItemChipWords reply={reply} /> : reply.label}
-                    </span>
-                  </button>
-                )
-              })}
-              {pick !== null && typed(index) ? (
-                // A typed answer: back into the box, with what rides along, whose Enter holds it again.
-                <button
-                  // Reopening a typed pick focuses it, as a picked reply would be.
-                  ref={target(`${index}:reply:${pick.words}`)}
-                  type="button"
-                  className={cn(BOT_ITEM_CHIP, CHIP_ACTION, CHIP_PICKED)}
-                  onClick={() => ownWords(index, pick)}
-                >
-                  <Pencil className="size-3 shrink-0" />
-                  <span className="min-w-0 [overflow-wrap:anywhere]">
-                    {botItemShownAnswer(pick).words}
-                  </span>
-                </button>
-              ) : null}
-              {typeControl && iconOnly ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>{typeControl}</TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={4}>
-                    {typeAnswer}
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                typeControl
-              )}
-            </div>
+          // A decision's question is unique within its ask.
+          <div key={decision.question}>
+            {words ? (
+              <BotItemFoldedLine
+                question={decision.question}
+                answer={words}
+                onOpen={pick ? () => change(index, pick) : undefined}
+              />
+            ) : (
+              // Answered by a comment that named no line: the comment shows as itself.
+              <p className="py-1 text-[13px] leading-[19px] text-muted-foreground">
+                {botItemQuestionLine(decision.question)}
+              </p>
+            )}
           </div>
         )
       })}
-      <div className="mt-4 flex justify-end">
+      {shown !== undefined ? (
+        <div className="mt-1.5">
+          <div className="font-semibold [&_p]:font-semibold">
+            <BotItemMarkdown text={shape.decisions[shown]!.question} />
+          </div>
+          <BotItemQuickReplyRows
+            key={shown}
+            rowsRef={rows}
+            question={shape.decisions[shown]!.question}
+            quickReplies={shape.decisions[shown]!.replies}
+            onPick={(reply, edit) =>
+              edit ? ownWords(shown, reply.label) : hold(shown, reply.label)
+            }
+            onOther={(words) => hold(shown, words)}
+            onAnswerInBox={(words) => {
+              steps.bind(shown)
+              setDraft(shown, '')
+              actions.type(words)
+            }}
+            current={picks[shown]?.words}
+            other={drafts[shown] ?? ''}
+            onOtherChange={(words) => setDraft(shown, words)}
+          />
+        </div>
+      ) : null}
+      <div className="mt-2 flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {t('bots.items.ask.answeredCount', '{{count}} of {{total}} answered', { count, total })}
+        </span>
         <Button
           ref={sendButton}
           type="button"
           size="sm"
-          aria-label={
-            partial
-              ? t('bots.items.ask.sendSomeLabel', 'Send {{count}} of {{total}} answers', {
-                  count,
-                  total: lines.length
-                })
-              : undefined
-          }
+          className="shrink-0"
+          disabled={!sending && picked === 0 && !draft}
           aria-busy={sending || undefined}
           onClick={send}
         >
@@ -380,11 +266,6 @@ export function BotItemQuestionStep({
               <LoaderCircle aria-hidden className="size-3 animate-spin" />
               {t('bots.items.ask.sending', 'Sending…')}
             </>
-          ) : partial ? (
-            t('bots.items.ask.sendSome', 'Send {{count}}/{{total}}', {
-              count,
-              total: lines.length
-            })
           ) : (
             t('bots.items.ask.send', 'Send')
           )}

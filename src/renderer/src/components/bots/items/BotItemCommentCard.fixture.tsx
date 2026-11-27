@@ -147,6 +147,46 @@ export const longOption = defineFixture({
   )
 })
 
+const LONG_ROWS: BotItemAsk = {
+  context: [
+    "Your words: 'one more terra seat, Neon high instead of Opus, no sol'.",
+    'That conflicts with your earlier rule that review seats must be sol-level or stronger. Nothing changed yet.'
+  ].join(' '),
+  questions: [
+    {
+      prompt:
+        'Does that replace the sol-minimum rule, and for which councils, including the councils that are already running?',
+      options: [
+        { label: 'Replace the sol-minimum rule for all councils, including running ones' },
+        { label: 'Only for a council you name (tell me which PR or item)' }
+      ],
+      recommended: 1
+    }
+  ]
+}
+
+// Long context, question and options at the narrowest pane: cut, clamped and truncated, never wider.
+export const longRowsNarrow = defineFixture({
+  width: 300,
+  render: () => (
+    <Feed>
+      <Card event={ask('q5', LONG_ROWS)} waiting />
+    </Feed>
+  )
+})
+
+// Other… with words typed: its Enter badge shows.
+export const otherTyped = defineFixture({
+  width: 340,
+  interact: async (frame) => {
+    const field = frame.querySelector<HTMLInputElement>('input')
+    field?.focus()
+    document.execCommand('insertText', false, 'Merge after the docs PR lands')
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  },
+  render: () => <Pending />
+})
+
 // Asked in prose, no quick replies: tagged, nothing to rule off.
 function ProseQuestion(): React.JSX.Element {
   return (

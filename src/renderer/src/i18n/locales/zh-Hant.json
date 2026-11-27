@@ -28464,8 +28464,6 @@
         "skipped": "已略過",
         "send": "傳送",
         "sending": "正在傳送…",
-        "sendSome": "傳送 {{count}}/{{total}}",
-        "sendSomeLabel": "傳送 {{total}} 個回答中的 {{count}} 個",
         "changeAnswer": "{{question}}：{{answer}}。變更回答",
         "heldImagesLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 張圖片。請先送出目前保留的回答，或移除一些。",
         "heldSkillsLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 個技能。請先送出目前保留的回答，或移除一些。"

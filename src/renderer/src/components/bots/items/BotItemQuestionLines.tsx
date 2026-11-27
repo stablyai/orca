@@ -1,11 +1,9 @@
 // A Needs you comment's question footer: under the body, each question line (`--ask`) with its quick
-// replies. While the item waits on it, the open line reads as a title and its recommended reply is
-// filled; the card's Needs you tag carries the color.
+// replies. While the item waits on it, the open line reads bold over its reply rows (BotItemQuickReplyRows).
 // One question: a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts them
-// in the comment box to add to first; Type your answer leads to the box. Several: every line at once
+// in the comment box to add to first; Other… sends typed words. Several: every line at once
 // (BotItemQuestionStep), picks held until Send. Answered, a line reads "Question → answer", muted,
 // and the answer's own card is not drawn again.
-import { Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -23,15 +21,8 @@ import {
 } from '../../../../../shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemMarkdown } from './BotItemMarkdown'
-import {
-  BOT_ITEM_CHIP,
-  BotItemAnswerLine,
-  BotItemChipWords,
-  botItemChipTitle,
-  BOT_ITEM_CHIP_RECOMMENDED,
-  BOT_ITEM_OPEN_QUESTION,
-  BotItemQuestionStep
-} from './BotItemQuestionStep'
+import { BotItemAnswerLine, BotItemQuestionStep } from './BotItemQuestionStep'
+import { BotItemQuickReplyRows } from './BotItemQuickReplyRows'
 import { BotItemHeldAnswerAttachments, botItemShownAnswer } from './BotItemFoldedAnswer'
 import { useBotItemHeldAnswers } from './bot-item-held-answers'
 import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
@@ -72,7 +63,6 @@ export function BotItemQuestionLines({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const recommended = t('bots.items.ask.recommended', 'Recommended')
   const steps = actions?.steps?.askId === askId ? actions.steps : null
   const several = shape.decisions.length > 1
   // Answers held for an ask the agent no longer waits on (it asked again): its draft, until sent.
@@ -148,51 +138,27 @@ export function BotItemQuestionLines({
               <div
                 className={cn(
                   open
-                    ? BOT_ITEM_OPEN_QUESTION
+                    ? 'font-semibold [&_p]:font-semibold'
                     : 'font-medium text-muted-foreground [&_*]:text-muted-foreground [&_p]:font-medium'
                 )}
               >
                 <BotItemMarkdown text={decision.question} />
               </div>
-              {open && actions && decision.replies.length > 0 ? (
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {decision.replies.map((reply) => (
-                    <button
-                      key={reply.label}
-                      type="button"
-                      title={botItemChipTitle(reply, recommended)}
-                      className={cn(
-                        BOT_ITEM_CHIP,
-                        'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-                        reply.recommended
-                          ? BOT_ITEM_CHIP_RECOMMENDED
-                          : 'text-foreground hover:bg-foreground/5'
-                      )}
-                      onClick={(event) => {
-                        const text = botItemQuickReplyText(shape, decision, reply)
-                        if (event.altKey || event.shiftKey) {
-                          actions.edit(text)
-                        } else {
-                          actions.send(text)
-                        }
-                      }}
-                    >
-                      <BotItemChipWords reply={reply} />
-                    </button>
-                  ))}
-                  {/* Muted, with a pencil: your own words are the other way to answer. */}
-                  <button
-                    type="button"
-                    className={cn(
-                      BOT_ITEM_CHIP,
-                      'flex items-center gap-1.5 text-muted-foreground outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
-                    )}
-                    onClick={actions.type}
-                  >
-                    <Pencil className="size-3 shrink-0" />
-                    {t('bots.items.ask.typeAnswer', 'Type your answer')}
-                  </button>
-                </div>
+              {open && actions ? (
+                <BotItemQuickReplyRows
+                  question={decision.question}
+                  quickReplies={decision.replies}
+                  onPick={(reply, edit) => {
+                    const text = botItemQuickReplyText(shape, decision, reply)
+                    if (edit) {
+                      actions.edit(text)
+                    } else {
+                      actions.send(text)
+                    }
+                  }}
+                  onOther={actions.send}
+                  onAnswerInBox={(words) => actions.type(words)}
+                />
               ) : null}
             </div>
           )

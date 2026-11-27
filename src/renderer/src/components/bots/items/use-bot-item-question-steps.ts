@@ -84,8 +84,8 @@ export type BotItemQuickReplyActions = {
    *  answers held for an earlier ask, as a comment of its own answering no line. True once the box's
    *  draft is saved, when the held copy may go. */
   restore: (answer: BotItemHeldAnswer, plain?: boolean) => boolean
-  /** Type your answer: the comment box takes focus, glowing once. */
-  type: () => void
+  /** Answer in the comment box: it takes focus, glowing once, with `words` after its own. */
+  type: (words?: string) => void
   /** The waiting ask of several questions, all its lines at once. */
   steps?: BotItemQuestionSteps | null
   /** Per ask, the answers of its sends on their way, by line. */

@@ -15,6 +15,9 @@ type BotItemTypingEvent = KeyboardRedirectEvent & {
   preventDefault: () => void
 }
 
+/** How many digit keys an open ask's reply rows take in Activity. */
+export const BOT_ITEM_CHOICES_ATTRIBUTE = 'data-bot-item-choices'
+
 function picksChoice(key: string, pane: HTMLElement | null): boolean {
   if (!/^[1-9]$/.test(key)) {
     return false
@@ -22,7 +25,13 @@ function picksChoice(key: string, pane: HTMLElement | null): boolean {
   const card = pane?.querySelector<HTMLElement>(
     '[data-native-chat-prompt-card-focus][data-native-chat-question-options]'
   )
-  return Number(key) <= Number(card?.dataset.nativeChatQuestionOptions ?? 0)
+  // The open ask's reply rows in Activity take their own digits too.
+  const rows = pane?.querySelector<HTMLElement>(`[${BOT_ITEM_CHOICES_ATTRIBUTE}]`)
+  const count = Math.max(
+    Number(card?.dataset.nativeChatQuestionOptions ?? 0),
+    Number(rows?.getAttribute(BOT_ITEM_CHOICES_ATTRIBUTE) ?? 0)
+  )
+  return Number(key) <= count
 }
 
 /** The open item's pane key handler: sends a typed character to `comment` when it should go there, and
