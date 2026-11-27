@@ -19731,7 +19731,9 @@
           "clear": "Clear filters",
           "agent": "Agent",
           "bot": "Bot",
-          "lastRun": "Last run"
+          "lastRun": "Last run",
+          "removeBotFilterButton": "Remove Bot filter: {{name}}",
+          "botFilterRowLabel": "Bot: {{name}}, remove filter"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, sorted ascending",
