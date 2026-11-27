@@ -1,51 +1,60 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
-export const LiveActivityRegistrationParams = z
-  .object({
-    activityId: z.string().min(1).max(128),
-    schemaVersion: z.literal(2),
-    overviewId: z.uuid(),
-    scopeKey: z.string().regex(/^[a-f0-9]{64}$/),
-    bootstrap: z
-      .object({
-        revision: z.number().int().positive(),
-        showNames: z.boolean(),
-        discoveryComplete: z.boolean(),
-        controlKey: z.string().regex(/^[a-f0-9]{64}$/),
-        token: z
-          .string()
-          .min(2)
-          .max(4096)
-          .regex(/^(?:[a-f0-9]{2})+$/i),
-        apnsEnvironment: z.enum(['sandbox', 'production']),
-        scopes: z
-          .array(z.string().regex(/^[a-f0-9]{64}$/))
-          .min(1)
-          .max(32)
-      })
-      .strict()
-      .optional(),
-    showNames: z.boolean()
+export const LiveActivityRegistrationParams = lazyZodSchema(() =>
+  z
+    .object({
+      activityId: z.string().min(1).max(128),
+      schemaVersion: z.literal(2),
+      overviewId: z.uuid(),
+      scopeKey: z.string().regex(/^[a-f0-9]{64}$/),
+      bootstrap: z
+        .object({
+          revision: z.number().int().positive(),
+          showNames: z.boolean(),
+          discoveryComplete: z.boolean(),
+          controlKey: z.string().regex(/^[a-f0-9]{64}$/),
+          token: z
+            .string()
+            .min(2)
+            .max(4096)
+            .regex(/^(?:[a-f0-9]{2})+$/i),
+          apnsEnvironment: z.enum(['sandbox', 'production']),
+          scopes: z
+            .array(z.string().regex(/^[a-f0-9]{64}$/))
+            .min(1)
+            .max(32)
+        })
+        .strict()
+        .optional(),
+      showNames: z.boolean()
+    })
+    .strict()
+)
+
+export const LiveActivityRemovalParams = lazyZodSchema(() =>
+  z
+    .object({
+      activityId: z.string().min(1).max(128)
+    })
+    .strict()
+)
+
+export const LiveActivitySessionParams = lazyZodSchema(() =>
+  LiveActivityRemovalParams.extend({
+    sessionId: z.string().regex(/^[a-f0-9]{32}$/)
   })
-  .strict()
-
-export const LiveActivityRemovalParams = z
-  .object({
-    activityId: z.string().min(1).max(128)
-  })
-  .strict()
-
-export const LiveActivitySessionParams = LiveActivityRemovalParams.extend({
-  sessionId: z.string().regex(/^[a-f0-9]{32}$/)
-})
+)
 
 export type LiveActivityRegistration = z.infer<typeof LiveActivityRegistrationParams>
 
-export const SavedLiveActivitySchema = LiveActivityRegistrationParams.extend({
-  expiresAt: z.number().int().positive(),
-  credentialRevision: z.number().int().nonnegative(),
-  sequence: z.number().int().nonnegative().default(0)
-})
+export const SavedLiveActivitySchema = lazyZodSchema(() =>
+  LiveActivityRegistrationParams.extend({
+    expiresAt: z.number().int().positive(),
+    credentialRevision: z.number().int().nonnegative(),
+    sequence: z.number().int().nonnegative().default(0)
+  })
+)
 export type SavedLiveActivity = z.infer<typeof SavedLiveActivitySchema>
 
 export function readSavedLiveActivities(value: unknown): SavedLiveActivity[] {
