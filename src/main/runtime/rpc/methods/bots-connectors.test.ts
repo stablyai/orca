@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatBotConnectors } from '../../../../shared/bots/bot-connectors-view'
 import type { RpcContext } from '../core'
 import { BOT_CONNECTORS_METHOD } from './bots-connectors'
@@ -40,6 +40,10 @@ async function gitHubLine(servesWithoutWindow: boolean): Promise<string | undefi
   return formatBotConnectors(view).split('\n')[0]
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('orca bot connectors', () => {
   it('names the computer gh is signed out on, unless it is the one with Orca open', async () => {
     expect(await gitHubLine(true)).toBe(
@@ -61,6 +65,5 @@ describe('orca bot connectors', () => {
     expect(await gitHubLine(false)).toBe(
       "GitHub: `gh`, as your owner. Orca couldn't read gh's sign-in on this computer; `gh auth status` shows it."
     )
-    vi.useRealTimers()
   })
 })
