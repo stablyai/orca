@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useDictationCapture } from '../platform/audio-capture/dictation-capture'
 import { useOnDeviceSpeech } from '../platform/speech/on-device-speech'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileDictationMeter } from './mobile-dictation-meter'
 import { useMobileDictationEngineShown } from './mobile-dictation-engine-shown'
 import { useMobileDictationInterruptions } from './use-mobile-dictation-interruptions'
@@ -34,7 +33,6 @@ import type {
 export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
-  useMobileTranslation()
   const { client, enabled, onTranscript, onError, removeFillerWords, onAudioLimitReached } = options
   const { dictationTerms, worktreeId } = options
   // Both capture seams hold the screen while the microphone is open; native uses the device directly and page uses shell audio verbs.

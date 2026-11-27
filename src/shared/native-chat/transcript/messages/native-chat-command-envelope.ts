@@ -11,7 +11,8 @@ export type NativeChatCommandEnvelope = { name: string; args: string }
 /** Parse only leading envelope tags so ordinary prompts/XML pastes remain literal. */
 export function parseNativeChatCommandEnvelope(text: string): NativeChatCommandEnvelope | null {
   const trimmed = text.trimStart()
-  if (!trimmed.toLowerCase().startsWith('<command-')) {
+  // Lowercase only the head; tool output and pastes can be megabytes.
+  if (trimmed.slice(0, 9).toLowerCase() !== '<command-') {
     return null
   }
   const name = COMMAND_NAME.exec(trimmed)?.[1]?.trim()

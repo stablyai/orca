@@ -16,8 +16,8 @@ import { botToolSignInActionLabel, botToolSignInLine } from '../../../../bots/to
 import { useBotToolPhoneSignIn } from '../../../../bots/tools/use-bot-tool-phone-sign-in'
 import { TextField } from '../../../../components/composer-input/TextField'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, feedback, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { feedback, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import {
   MobileNativeChatEventName,
   MobileNativeChatEventRow
@@ -27,6 +27,8 @@ import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePil
 import { mobileBotToolAddedSay } from './mobile-bot-card-copy'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
 import { MobileBotCardActions } from './MobileBotCardFrame'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 export function MobileBotToolAddedCard({
   added,
@@ -37,6 +39,9 @@ export function MobileBotToolAddedCard({
   timestamp: number | null
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
   const client = host?.client ?? null
@@ -157,6 +162,7 @@ export function MobileBotToolAddedCard({
             returnKeyType="done"
             editable={!attempt.finishing}
             onSubmitEditing={finish}
+            style={composerInputStyles.filledField}
           />
           <MobileBotCardActions>
             <MobileNativeChatNoticePill
@@ -197,6 +203,7 @@ function RowAction({
   onPress: () => void
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       accessibilityRole="button"
@@ -210,7 +217,7 @@ function RowAction({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   action: { color: colors.textPrimary, fontWeight: '500' },
   disabled: { opacity: feedback.disabledOpacity },

@@ -22,7 +22,6 @@ import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/termi
 import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal/input/terminal-word-separator'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
-import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
@@ -305,6 +304,8 @@ export class RuntimeClientSettingsController {
       if (!settings) {
         return
       }
+      const { applyAgentStatusHooksEnabled } =
+        await import('../../../agent-hooks/installation/managed-agent-hook-controls')
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
         // R42, COMPAT(wsl-bridge): the bridge's panes in this distro share these entries; drop at D4.
         keepSharedEntries: isWslHostOrcadProcess(),

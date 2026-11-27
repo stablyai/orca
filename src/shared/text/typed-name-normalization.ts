@@ -5,7 +5,14 @@ export function stripWrappingQuotes(value: string): string {
     : value
 }
 
-/** How a typed host, server or project name is compared: trimmed, unquoted, case-insensitive. */
+/** How a typed host, server or project name is compared: trimmed, unquoted, case-insensitive, composed (NFC). */
 export function normalizeTypedName(value: string): string {
-  return stripWrappingQuotes(value.trim()).trim().toLowerCase()
+  // Composed after lowercasing, which can leave a sequence decomposed (J + U+030C -> j + U+030C).
+  return stripWrappingQuotes(value.trim()).trim().toLowerCase().normalize('NFC')
+}
+
+/** Case-sensitive match for a typed name; composed and decomposed (macOS NFD) spellings count as equal. */
+export function storedNameMatcher(typed: string): (stored: string) => boolean {
+  const composed = typed.normalize('NFC')
+  return (stored) => stored.normalize('NFC') === composed
 }

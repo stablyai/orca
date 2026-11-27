@@ -22,6 +22,7 @@ import { mobileBotRefusalText } from './mobile-bot-refusal-text'
 import { readAgentSessionErrorRefusal } from '../../../src/shared/agent-session/failures/agent-session-write-failure'
 import type { BotSidebarView } from '../../../src/shared/bots/bot-sidebar-view'
 import type { BotListWaits } from '../../../src/shared/bots/bot-list-waits'
+import { translate } from '../i18n/mobile-i18n'
 
 /** What a link or count needs of a bot; every reader gets the full `PhoneBot`. */
 export type HostBot = Pick<PhoneBot, 'id' | 'name' | 'folderWorkspaceId'>
@@ -151,7 +152,7 @@ export async function ensureBotHomeChat(
   } catch (error) {
     // Opening the workspace without the chat beats not opening it.
     const refusal = readAgentSessionErrorRefusal(error)
-    return refusal ? mobileBotRefusalText(refusal) : null
+    return refusal ? mobileBotRefusalText(refusal, translate) : null
   }
 }
 

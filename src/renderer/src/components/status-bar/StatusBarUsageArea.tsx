@@ -15,13 +15,12 @@ import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices
 import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
-import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import {
   ClippedRowProviderSegment,
   ProviderSegment,
-  UsageOverflowChip,
   isUsageUrgent
 } from './usage/StatusBarProviderSegment'
+import { UsageOverflowChip } from './usage/usage-overflow-chip'
 import {
   USAGE_ROW_LEVELS,
   chooseUsageRowLayout,
@@ -44,7 +43,6 @@ export function StatusBarUsageArea({
   const t = useTranslate()
   const [usageAreaRef, usageWidths] = useUsageRowWidths()
   const {
-    antigravityAccounts,
     anyFetching,
     anyVisible,
     canSignInFromUsageRow,
@@ -132,6 +130,8 @@ export function StatusBarUsageArea({
                       compact={usageCompact}
                       display={usagePercentageDisplay}
                       mode={usageMode}
+                      barMode={statusBarUsageMode}
+                      hostLabel={remoteOwner?.label}
                     />
                   ))}
                   {hiddenProviders.length > 0 ? (
@@ -139,6 +139,7 @@ export function StatusBarUsageArea({
                       hidden={hiddenProviders}
                       providerCount={rosterProviders.length}
                       display={usagePercentageDisplay}
+                      hostLabel={remoteOwner?.label}
                     />
                   ) : null}
                 </button>
@@ -186,16 +187,6 @@ export function StatusBarUsageArea({
                           ownerUsage={ownerUsage}
                           asSubmenu
                           triggerContent={rowNode}
-                        />
-                      )
-                    }
-                    if (p.provider === 'antigravity') {
-                      return (
-                        <AntigravityUsageMenu
-                          antigravity={p}
-                          accounts={antigravityAccounts}
-                          triggerContent={rowNode}
-                          onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
                         />
                       )
                     }
@@ -274,7 +265,9 @@ export function StatusBarUsageArea({
                   compact={level.compact}
                   display={usagePercentageDisplay}
                   mode={levelMode(index)}
+                  barMode={statusBarUsageMode}
                   countdownActive={false}
+                  measuring
                 />
               </span>
             ))

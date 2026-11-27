@@ -32,19 +32,15 @@ export type CodexDispatchEchoes = {
   heldSends: () => ReadonlySet<string>
   /** False at capacity preserves older pending sends. */
   arm: (clientMessageId: string, requestedAt?: number) => boolean
-  expect: (
-    clientMessageId: string,
-    threadId: string,
-    via: AgentJournalTurnJoin,
-    input: readonly Record<string, unknown>[],
-    expectedTurnId?: string
-  ) => void
+  expect: ReturnType<typeof createCodexDispatchReceiptCorrelation>['expect']
   receipt: (
     identity: Extract<AgentJournalItemIdentity, { provider: 'codex' }>,
     content: unknown
   ) => string | null
-  /** How an armed send was written: into a running turn (`steer`) or as a turn start. */
-  sentVia: (clientMessageId: string) => AgentJournalTurnJoin | null
+  /** How an armed send was written: into a running turn (`steer`) or as a turn start. A start
+   *  echoed (`echoTurnId`) into a turn already running when it was written joined it: `steer`. */
+  sentVia: (clientMessageId: string, echoTurnId?: string) => AgentJournalTurnJoin | null
+  echoedVia: ReturnType<typeof createCodexDispatchReceiptCorrelation>['echoedVia']
   /** True once, for a send this session armed and has not yet settled. */
   settle: (clientMessageId: string) => boolean
   /** Drops an armed send whose write never reached the provider. */
@@ -190,6 +186,7 @@ export function createCodexDispatchEchoes(
     expect: receiptCorrelation.expect,
     receipt: receiptCorrelation.receipt,
     sentVia: receiptCorrelation.sentVia,
+    echoedVia: receiptCorrelation.echoedVia,
     settle: (clientMessageId) => reporting(() => armed.delete(clientMessageId)),
     disarm: (clientMessageId) => reporting(() => void armed.delete(clientMessageId)),
     bindTurn: (clientMessageId, threadId, turnId, via, answeredAt) =>

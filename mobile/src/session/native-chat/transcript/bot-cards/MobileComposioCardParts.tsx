@@ -5,8 +5,8 @@ import { Text, View } from 'react-native'
 import type { ComposioSetupCardRef } from '../../../../../../src/shared/composio/composio-setup-card'
 import { errorMessage } from '../../../../../../src/shared/errors/error-message'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import type { MobileComposio } from './mobile-composio-store'
@@ -69,6 +69,7 @@ export function MobileComposioLine({
   text: string
   fontScale: number
 }): React.JSX.Element {
+  const lineStyles = useThemedStyles(lineStylesSheet)
   return (
     <View style={lineStyles.line}>
       {leading}
@@ -77,7 +78,7 @@ export function MobileComposioLine({
   )
 }
 
-const lineStyles = themedStyleSheet(() => ({
+const lineStylesSheet = themedStyleSheet((colors) => ({
   line: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   text: { flex: 1, color: colors.textSecondary }
 }))

@@ -6,7 +6,10 @@ import {
   PULL_REQUEST_EVENT_PRESENTATION
 } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { nativeChatRevisedRowsInDrawOrder } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
-import { noteRevisedInPlace } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
+import {
+  noteRevisedInPlace,
+  positionsRevisedFrom
+} from '../../../../../../shared/agent-session/view/revised-in-place-lists'
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { buildNativeChatTranscript } from './native-chat-transcript-slots'
 import {
@@ -151,6 +154,9 @@ it('patches only the run slot while a thought streams inside a work run', () => 
     { type: 'text', text }
   ])
   expect(last?.estimatedHeight).toBe(run?.estimatedHeight)
+  // The run's reader finds the streamed member by position, not by walking every member.
+  const members = last?.kind === 'message' ? last.workRun! : []
+  expect(positionsRevisedFrom(members, stageBesideStreamedText(members))).toEqual([3])
   // The thought ending regroups the run, so it builds again.
   const ended = withThought(saved, text)
   project(input, saved, [...ended.slice(0, -1), { ...ended.at(-1)!, state: 'completed' }])

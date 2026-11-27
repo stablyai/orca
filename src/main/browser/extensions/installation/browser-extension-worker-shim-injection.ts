@@ -5,6 +5,7 @@ import {
   BROWSER_EXTENSION_ORIGINAL_WORKER_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE
 } from '../../../../shared/browser/extensions/browser-extension-worker-api'
+import { referencesParentDirectory } from './browser-extension-manifest'
 
 type Manifest = Record<string, unknown>
 
@@ -87,7 +88,7 @@ export function buildBrowserExtensionWorkerShimInjection(
     return null
   }
   const workerPath = posix.normalize(worker.trim().replace(/^\/+/, ''))
-  if (workerPath.startsWith('..')) {
+  if (referencesParentDirectory(workerPath)) {
     throw new Error('The background worker must be inside the extension folder')
   }
   const policy = asRecord(manifest.content_security_policy)

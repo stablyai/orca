@@ -1,12 +1,12 @@
 import { Pressable, Text } from 'react-native'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as inputStyles
+  composerInputStylesSheet
 } from '../../../../components/composer-input/composer-input-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 /** Cancel and Save for a queued message being edited, in Send's place. */
 export function MobileNativeChatEditActions({
@@ -21,7 +21,8 @@ export function MobileNativeChatEditActions({
   onCancel: () => void
   onSave: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const inputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   return (
     <>

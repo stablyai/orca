@@ -19,6 +19,7 @@ import {
 import { hasAntigravityChatApiKey } from './antigravity-chat-api-key-store'
 import { envHasGeminiApiKey } from './antigravity-chat-credential'
 import { copyAgyLoginIntoOrcaHome } from './agy-login-copy'
+import { restoreAntigravityAccountForChat } from './native-account-launch'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { writeAntigravityChatSettings } from './antigravity-chat-account'
 import {
@@ -100,6 +101,10 @@ function orcaHomeAccount(folderName: string): AcpAccountBinding {
       // agy reads the user's rules from its home, as from ~/.gemini.
       await copyAntigravityUserRules(home, user)
       await writeAntigravityChatSettings(home, auth, env, assertCurrent)
+      // Google chats here use agy's login too, so they follow the selected account like terminals.
+      if (purpose === 'chat' && isGoogle(auth.method)) {
+        await restoreAntigravityAccountForChat(env)
+      }
       await copyAgyLoginIntoOrcaHome(home, user, isGoogle(auth.method))
     }
   }

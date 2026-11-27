@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
 import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../shared/orca-profiles/orca-cloud-team-policy'
@@ -23,11 +23,11 @@ import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wal
 import { deriveIntegrationConnectionStatus } from '../feature-wall/setup/integrations/use-integration-connection-status'
 import { useSetupGuideBrowserMilestoneProgress } from './setup-guide-browser-milestone-progress'
 import {
-  getComputerUsePermissionSetupState,
   getCurrentSetupScriptProbeState,
   getSetupGuideProgressReady,
   getSetupScriptProbeSignature
 } from './setup-guide-progress-readiness'
+import { useSetupGuideComputerUsePermissions } from './setup-guide-computer-use-permissions'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   readSetupScriptProbeCache,
@@ -71,11 +71,8 @@ export function useSetupGuideProgress(
     readSetupScriptProbeCache,
     readSetupScriptProbeCache
   )
-  const [computerUsePermissionsReady, setComputerUsePermissionsReady] = useState(false)
-  const [computerUsePermissionStatusChecked, setComputerUsePermissionStatusChecked] =
-    useState(false)
-  const [computerUseUnavailable, setComputerUseUnavailable] = useState(false)
   const computerUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.computerUse)
+  const browserUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.browserUse)
   const skillOptions = {
     enabled: shouldRefreshCoreState && activeSkillRuntime.enabled,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -84,7 +81,10 @@ export function useSetupGuideProgress(
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   }
   const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
-    useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, skillOptions)
+    useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+      ...skillOptions,
+      enabled: skillOptions.enabled && !browserUseBlocked
+    })
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
       ...skillOptions,
@@ -190,49 +190,13 @@ export function useSetupGuideProgress(
     }
   }, [orderedGitRepos, settings, setupScriptProbeSignature, shouldRefreshCoreState])
 
-  const readComputerUsePermissions = useCallback(async (isStale: () => boolean): Promise<void> => {
-    const status = await window.api.computerUsePermissions.getStatus().catch(() => null)
-    if (isStale()) {
-      return
-    }
-    const permissionState = getComputerUsePermissionSetupState(status)
-    setComputerUsePermissionStatusChecked(true)
-    setComputerUsePermissionsReady(permissionState.ready)
-    setComputerUseUnavailable(permissionState.unavailable)
-  }, [])
-
   const shouldReadComputerUsePermissions =
     shouldRefreshCoreState && !computerUseBlocked && computerUseSkillInstalled
-  useEffect(() => {
-    if (!shouldReadComputerUsePermissions) {
-      // Unavailable steps must clear stale permission state before readiness is derived.
-      setComputerUsePermissionStatusChecked(false)
-      setComputerUsePermissionsReady(false)
-      setComputerUseUnavailable(false)
-      return
-    }
-    let stale = false
-    const refreshComputerUsePermissions = (): void => {
-      void readComputerUsePermissions(() => stale)
-    }
-    refreshComputerUsePermissions()
-    const handleFocus = (): void => {
-      void refreshComputerUsePermissions()
-    }
-    const handleVisibilityChange = (): void => {
-      if (document.visibilityState === 'visible') {
-        void refreshComputerUsePermissions()
-      }
-    }
-    // Users grant OS permissions elsewhere; refresh on return without remounting.
-    window.addEventListener('focus', handleFocus)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => {
-      stale = true
-      window.removeEventListener('focus', handleFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [readComputerUsePermissions, shouldReadComputerUsePermissions])
+  const {
+    ready: computerUsePermissionsReady,
+    checked: computerUsePermissionStatusChecked,
+    unavailable: computerUseUnavailable
+  } = useSetupGuideComputerUsePermissions(shouldReadComputerUsePermissions)
 
   const taskSourceStatus = deriveIntegrationConnectionStatus({
     preflightStatus,
@@ -262,7 +226,7 @@ export function useSetupGuideProgress(
     preflightStatusChecked: !taskSourceStatus.checking,
     linearStatusChecked: true,
     jiraStatusChecked: true,
-    browserUseSkillDiscoveryLoading: detectedBrowserUseSkillLoading,
+    browserUseSkillDiscoveryLoading: !browserUseBlocked && detectedBrowserUseSkillLoading,
     computerUseSkillDiscoveryLoading: !computerUseBlocked && computerUseSkillLoading,
     orchestrationSkillDiscoveryLoading: detectedOrchestrationSkillLoading,
     setupScriptProbeReady: currentSetupScriptProbe.ready,
@@ -278,6 +242,7 @@ export function useSetupGuideProgress(
         settings,
         featureInteractions,
         hasConnectedTaskSource,
+        browserUseBlocked,
         browserUseSkillInstalled: shouldRefreshCoreState
           ? detectedBrowserUseSkillInstalled
           : browserUseSkillInstalled,
@@ -295,6 +260,7 @@ export function useSetupGuideProgress(
       }),
     [
       shouldRefreshCoreState,
+      browserUseBlocked,
       browserUseSkillInstalled,
       ready,
       computerUseUnavailable,

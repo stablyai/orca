@@ -280,6 +280,21 @@ function renderBlock(node: unknown, options?: AdfToMarkdownOptions): MarkdownBlo
   if (type === 'blockquote') {
     return renderBlockquote(record, options)
   }
+  if (type === 'expand' || type === 'nestedExpand') {
+    const title = asString(asRecord(record.attrs).title).trim()
+    return {
+      kind: 'block',
+      text: joinBlocks([
+        {
+          kind: 'block',
+          text: title
+            ? renderInline([{ type: 'text', text: title, marks: [{ type: 'strong' }] }], options)
+            : ''
+        },
+        ...renderBlocks(record.content, options)
+      ])
+    }
+  }
   if (type === 'table') {
     const table = renderTable(record, options)
     if (table !== null) {

@@ -10,13 +10,13 @@ import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal
 import { ComposerSendButton } from '../../../../components/composer-input/ComposerSendButton'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as inputStyles
+  composerInputStylesSheet
 } from '../../../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useKeyboardPersistingTaps } from '../../../../platform/keyboard/keyboard-persisting-taps'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 
@@ -80,7 +80,8 @@ export function MobileNativeChatSteerPreviewButton({
   preview: NativeChatSteerChordPreview
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const inputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   // A press must leave focus in the field, or its focusout ends the preview before the press lands.
   const keepsField = useKeyboardPersistingTaps('always')

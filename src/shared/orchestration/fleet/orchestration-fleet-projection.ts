@@ -89,7 +89,7 @@ export type FleetLiveness =
 export type FleetSessionObservation =
   /** `activity` is the session's own status row: its turn state and when it last changed. */
   | { status: 'live'; activity?: FleetAgentStatusEvidence }
-  | { status: 'exited' }
+  | { status: 'exited'; canResume?: true }
   | { status: 'unverifiable'; detail: string }
 
 export type FleetResourceProjection =
@@ -103,7 +103,7 @@ export type FleetResourceProjection =
   | { state: 'absent'; reason: 'unsupervised' | 'not_materialized' }
 
 export type FleetNextAction = {
-  /** `recover` = proven exit with no worker outcome; read the transcript, then stop or abandon. */
+  /** `recover` = proven exit with no worker outcome; resume an addressable chat or inspect the transcript. */
   kind: 'inspect' | 'release' | 'recover' | 'none'
   argv: string[]
 }

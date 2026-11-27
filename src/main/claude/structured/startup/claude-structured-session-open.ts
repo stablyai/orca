@@ -1,4 +1,5 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
+import { claudePermissionPickedWhileStarting } from '../permissions/claude-permission-picks'
 import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import type {
   StructuredAgentSessionProviderOpenInput,
@@ -9,6 +10,15 @@ import { readClaudeStructuredSessionSettings } from '../launch/claude-structured
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
+import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
+import { applyKeptClaudeModeOwed, noteKeptClaudeReattach } from '../../relay/claude-kept-permission'
+import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
+import {
+  keptClaudeBackgroundTasks,
+  keptClaudeSubagentLaunches,
+  keptClaudeToolCalls,
+  keptClaudeTurn
+} from '../../relay/claude-kept-turn'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -23,6 +33,7 @@ type ClaudeOpenInput = {
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
   /** Whether a reader shows the session's prompt suggestions right now. */
   promptSuggestionsWanted?: (sessionId: string) => boolean
+  publishChildWork?: (sessionId: string, session: ClaudeSession) => void
 }
 
 export async function openClaudeStructuredSession(
@@ -99,7 +110,50 @@ async function openStartingClaudeSession(
   const origin = usableJournalHistoryOrigin(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )
-  if (resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
+  // A kept agent's output since the last ack is replayed in order instead of transcript catch-up.
+  const kept = keptClaudeAgentRelay(session.connection)
+  if (kept) {
+    // The journal holds the kept agent's output through the last ack and the replay brings the
+    // rest, so its turn ends may move the resume point (or the next cold resume re-imports them).
+    history.covered = true
+    const items = (await events?.journalHistory?.()?.reads.generation())?.items ?? []
+    const keptTurn = keptClaudeTurn(items, session.providerSessionId)
+    const backgroundTasks = keptClaudeBackgroundTasks(items)
+    const subagentLaunches = keptClaudeSubagentLaunches(items)
+    session.translator?.adoptKept({
+      turn: keptTurn?.kind === 'turn' ? keptTurn.turn : null,
+      tools: keptClaudeToolCalls(items),
+      backgroundTasks,
+      subagentLaunches
+    })
+    if (keptTurn?.kind === 'command') {
+      events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })
+    }
+    // After a crash nothing told the daemon what was running, so the saved running rows stay live.
+    const taskIds = kept.workCarried
+      ? kept.taskIds
+      : [...new Set([...kept.taskIds, ...backgroundTasks.map((row) => row.block.taskId)])]
+    restateKeptClaudeBackgroundTasks(session, taskIds, keptTurn !== null, subagentLaunches)
+    // Claude's own last word on its mode (Plan included) outranks what its launch reported.
+    if (kept.confirmedMode !== undefined) {
+      session.reportedOptions.reportedPermissionMode = kept.confirmedMode
+    }
+    noteKeptClaudeReattach(session)
+    // Claude runs another mode than the chat's (a pick made while it last reattached): written now,
+    // not with the next message, which a steer would skip. Plan is left by its own exit.
+    const confirmed = kept.confirmedMode
+    if (
+      confirmed != null &&
+      confirmed !== 'plan' &&
+      confirmed !== session.launchIntent?.permissionMode
+    ) {
+      void applyKeptClaudeModeOwed(session, undefined).catch(() => {})
+    }
+    input.publishChildWork?.(request.sessionId, session)
+  }
+  // With no turn end saved (the first turn never finished here), what came after its prompt.
+  const fromFirstPrompt = !leafUuid && origin?.kind !== 'native_copy'
+  if (!kept && resumesTranscript && events) {
     const catchUp = withStructuredHistoryInvocation(
       session,
       request.signal,
@@ -110,6 +164,7 @@ async function openStartingClaudeSession(
             sessionId: request.sessionId,
             providerSessionId: session.providerSessionId,
             leafUuid: leafUuid ?? '',
+            fromFirstPrompt,
             claudeConfigDir: session.initialization.claudeConfigDir,
             cwd: session.initialization.cwd,
             sink: events,
@@ -130,12 +185,21 @@ async function openStartingClaudeSession(
         }
       }
     )
-    history.covered = await waitForPromiseWithSignal(
+    const caughtUp = await waitForPromiseWithSignal(
       startup.race(catchUp, request.signal),
       request.signal
     )
+    // A first turn's import is display only: the resume point stays the chat's start.
+    history.covered = fromFirstPrompt ? history.covered : caughtUp
     current()
   }
   startup.open()
+  // A pick saved since this agent's launch reaches it at ready; until then nothing but Full access
+  // auto-approves, ahead of the waiting requests the release hands on.
+  const picked = request.permissionMode?.()
+  if (kept && picked != null && picked !== 'full-access') {
+    claudePermissionPickedWhileStarting(session, false)
+  }
+  kept?.releaseOutput()
   return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

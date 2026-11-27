@@ -15,7 +15,7 @@ import {
 } from '../worktree/execution-hosts/server-host-health'
 import { getHostHealthBadgeLabel } from '../worktree/execution-hosts/worktree-host-health'
 import type { ListedBot } from './host-bots-operations'
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 
 /** Why a host takes no new bot from this phone: its Bots switch, its build, or the paired desktop's. */
 export type NewBotRefusal = 'bots-off' | 'update' | 'update-desktop'
@@ -83,18 +83,18 @@ export type HostBotListing =
 
 /** A down server's word, as its workspace pill says it; a computer that's simply away is "Offline",
  *  the one word bots use for it everywhere. */
-export function serverHostDownWord(host: MobileRelayHost): string | undefined {
+export function serverHostDownWord(host: MobileRelayHost, t: Translate): string | undefined {
   const health = serverHostHealth(host)
   const word =
     serverHostHealthLabel(host) ??
     (health === 'disconnected' ? undefined : getHostHealthBadgeLabel(health))
   return (
-    word ?? (host.relay === 'ready' && health !== 'disconnected' ? undefined : botsOfflineWord())
+    word ?? (host.relay === 'ready' && health !== 'disconnected' ? undefined : botsOfflineWord(t))
   )
 }
 
-export function botsOfflineWord(): string {
-  return translate('bots.list.offline', 'Offline')
+export function botsOfflineWord(t: Translate): string {
+  return t('bots.list.offline', 'Offline')
 }
 
 /** What the list shows of each host's last read: this computer first, then each server in the
@@ -102,7 +102,8 @@ export function botsOfflineWord(): string {
  *  same install; one never read says it can't be reached; one too old says so. */
 export function shownHostBotListings(
   stored: readonly HostBotListing[],
-  serverHosts: readonly MobileRelayHost[]
+  serverHosts: readonly MobileRelayHost[],
+  t: Translate
 ): HostBotListing[] {
   const local = stored.find((listing) => listing.hostId === LOCAL_EXECUTION_HOST_ID)
   const servers = serverHosts.flatMap((host): HostBotListing[] => {
@@ -113,7 +114,7 @@ export function shownHostBotListings(
     const last = stored.find((listing) => listing.hostId === host.hostId)
     const kept =
       last?.kind === 'listed' && last.installationId !== host.installationId ? undefined : last
-    const down = serverHostDownWord(host)
+    const down = serverHostDownWord(host, t)
     if (!down) {
       return kept ? [kept.kind === 'listed' ? { ...kept, hostLabel: host.label } : kept] : []
     }

@@ -62,7 +62,12 @@ export function workerAskNotices(
       }
       return 'told'
     }
-    db.insertMessage({ ...notice, to: `dispatch:${question.dispatch_id}`, runId: question.run_id })
+    db.insertMessage({
+      ...notice,
+      replyTo: messageId,
+      to: `dispatch:${question.dispatch_id}`,
+      runId: question.run_id
+    })
     // After the write commits: a waiting `ask` takes it, else it's mail that wakes the worker.
     queueMicrotask(() => deliverQuestionAnswer(runtime, question))
     return 'told'

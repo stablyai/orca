@@ -1,4 +1,4 @@
-import { abortSignalReason } from '../../concurrency/abort-signal-reason'
+import { abortSignalReason, throwIfSignalAborted } from '../../concurrency/abort-signal-reason'
 import { isTimedPRRead, type RuntimeRpcCallQueuePool } from './runtime-rpc-call-queue'
 
 export function enqueueRuntimeSubscription<T>(
@@ -49,7 +49,11 @@ export function enqueueRuntimeSubscription<T>(
       method,
       async () => {
         void Promise.resolve()
-          .then(() => open(complete))
+          .then(() => {
+            // Abort can land between admission and this microtask; never open a canceled transport.
+            throwIfSignalAborted(signal)
+            return open(complete)
+          })
           .then(
             (opened) => {
               handle = opened

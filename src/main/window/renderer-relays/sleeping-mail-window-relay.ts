@@ -3,6 +3,7 @@ import type { SleepingAgentWakeRequest } from '../../../shared/workspace/lifecyc
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
 import { requestRendererReply } from './renderer-reply-request'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export function requestSleepingPaneWake(
   window: BrowserWindow,
@@ -50,14 +51,18 @@ export function registerSleepingMailAvailability(
   const releaseAvailability = addFanoutListener(
     ipcMain,
     'ui:sleepingMailAvailability',
-    (event: Electron.IpcMainEvent, paneKey: unknown) => {
+    (event: Electron.IpcMainEvent, paneKey: unknown, environmentId: unknown) => {
       if (
         event.sender === window.webContents &&
         event.senderFrame === window.webContents.mainFrame &&
         (paneKey === undefined || typeof paneKey === 'string')
       ) {
-        // No pane key: a runtime environment became available, so only failed or tracked wakes retry.
-        runtime.retrySleptMailboxWakes(paneKey, paneKey === undefined)
+        // No pane key: a runtime environment became available, so only its failed or tracked wakes retry.
+        const named = typeof environmentId === 'string' && environmentId
+        runtime.retrySleptMailboxWakes(
+          paneKey,
+          paneKey === undefined && (named ? toRuntimeExecutionHostId(named) : true)
+        )
       }
     }
   )

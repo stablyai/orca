@@ -30,7 +30,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/automations',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    // A run's Copy run ID writes the clipboard; an older shell reports it couldn't copy.
+    optionalGrants: [DEVICE_STORE_GRANT, 'native.clipboard.write']
   },
   // Accounts needs navigate/storage/externalLink for Back/shared layout wall; haptics census requires seam grant.
   {

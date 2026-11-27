@@ -252,7 +252,7 @@ export class FolderWorkspacePersistenceOperations {
     if (updates.lastTerminalUseAt !== undefined && Number.isFinite(updates.lastTerminalUseAt)) {
       workspace.lastTerminalUseAt = updates.lastTerminalUseAt
     }
-    if (updates.diffComments !== undefined) {
+    if (updates.diffComments !== undefined || updates.deliveredDiffCommentSnapshots !== undefined) {
       workspace.diffComments = applyDiffCommentWrite(workspace.diffComments, updates)
     }
     if (updates.externalConversations !== undefined) {

@@ -4,7 +4,10 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { WorkerDispatchRow } from '../../db/orchestration-records'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import { observeWorker } from './worker-presence-report'
-import { settleRestartCutWorkerStart } from '../../db/worker-dispatch/restart-cut-worker-start'
+import {
+  chatStartBeforeBrief,
+  settleRestartCutWorkerStart
+} from '../../db/worker-dispatch/restart-cut-worker-start'
 import { isWorkerAwaitingAgent } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
 import { reportFailedWorkerStart } from './failed-worker-start-report'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
@@ -128,17 +131,21 @@ export function settleRestartCutStart(
   const worker = db.getWorkerDispatch(dispatchId)
   const runtimeId = runtime.getRuntimeId()
   const cut = worker?.state === 'starting' && worker.runtime_epoch !== runtimeId
-  // Cut before it bound a terminal or chat, it never got its brief; a paired server settles its own.
-  if (cut && !worker.agent_terminal_handle && !db.getFederatedDispatch(dispatchId)) {
-    const failed = db.failWorkerStart(
-      dispatchId,
-      worker.stage,
-      'Orca restarted before this worker had a terminal or chat, so its agent never started.'
+  // Older writers could submit while still at authority_attached.
+  const chatBeforeBrief = cut && chatStartBeforeBrief(worker)
+  if (
+    cut &&
+    (!worker.agent_terminal_handle || chatBeforeBrief) &&
+    !db.getFederatedDispatch(dispatchId)
+  ) {
+    return reportFailedWorkerStart(
+      db,
+      worker,
+      (handle, type) => runtime.notifyMessageArrived(handle, type),
+      chatBeforeBrief
+        ? "Orca restarted after attaching the worker's chat and before sending this task's brief."
+        : 'Orca restarted before this worker had a terminal or chat, so its agent never started.'
     )
-    reportFailedWorkerStart(db, failed, (handle, type) =>
-      runtime.notifyMessageArrived(handle, type)
-    )
-    return failed
   }
   if (!worker || !isWorkerAwaitingAgent(worker) || worker.runtime_epoch === runtimeId) {
     return settleRestartCutWorkerStart(db, dispatchId, runtimeId)

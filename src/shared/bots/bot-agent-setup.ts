@@ -3,11 +3,12 @@ import * as z from 'zod'
 import type { AutomationBotTarget } from '../automation-bot-target'
 import { BOT_AGENTS, type Bot } from '../bot-types'
 import { BotLaunchSchema } from './bot-launch'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** An agent with the launch that belongs to it; a launch never rides into another agent. */
-export const BotAgentSetupSchema = z
-  .object({ agent: z.enum(BOT_AGENTS), launch: BotLaunchSchema.optional() })
-  .strict()
+export const BotAgentSetupSchema = lazyZodSchema(() =>
+  z.object({ agent: z.enum(BOT_AGENTS), launch: BotLaunchSchema.optional() }).strict()
+)
 
 export type BotAgentSetup = z.infer<typeof BotAgentSetupSchema>
 

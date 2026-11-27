@@ -23,9 +23,9 @@ import { setBotGoogle } from './set-bot-google'
 import { Button } from '@/components/ui/button'
 import { googleSignInChoices } from './google-account-readiness'
 import {
-  botGoogleAccess,
-  botMayUseGoogleAccount
-} from '../../../../../shared/google/google-bot-accounts'
+  botGoogleConnectState,
+  botGoogleSettingUp
+} from '../../../../../shared/google/google-bot-connect-state'
 import type { GoogleAccountView } from '../../../../../shared/google/google-connect-types'
 import { STATUS_DOT_CLASSES } from '../bot-connector-row-parts'
 import { GoogleAccountsPopover } from './GoogleAccountsChoice'
@@ -53,16 +53,14 @@ export function BotGoogleCard({
   const host = useBotHostLabel(bot.hostId)
   const signIn = useGoogleSignIn(botTarget(bot), bot)
   const setupRun = useGoogleSetupRun(bot)
-  const settingUp = googleSetupRunActive(setupRun)
   const [choosing, setChoosing] = useState(false)
   if (view.status !== 'ready' || bot.google !== true) {
     return null
   }
   // The accounts on this computer the bot may use; a signed-out one stays chosen.
-  const access = botGoogleAccess(bot)
-  const accounts = view.google.accounts.filter((account) =>
-    botMayUseGoogleAccount(access, account.email)
-  )
+  const state = botGoogleConnectState(bot, view.google)
+  const { accounts } = state
+  const settingUp = botGoogleSettingUp(state, setupRun)
   const connected = view.google.accounts.length > 0
   const signedOut = accounts.find((account) => account.status !== 'connected')
   const reconnect = (account: GoogleAccountView): void =>
@@ -155,7 +153,7 @@ export function BotGoogleCard({
               }
             }
           : {}),
-        ...(settingUp
+        ...(googleSetupRunActive(setupRun)
           ? { stop: { label: t('bots.googleSetup.stop', 'Stop setup'), onClick: stop } }
           : {}),
         remove: {

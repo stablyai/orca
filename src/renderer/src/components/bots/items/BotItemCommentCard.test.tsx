@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -14,6 +14,7 @@ import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { writeNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
 import { BotItemActivityList } from './BotItemActivityList'
 import { botItemHeldAnswersScope } from './bot-item-held-answers'
+import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
 // A body's height follows its text: a question's long context overflows its 8-line cut, a reply does not.
 const sizes = ['scrollHeight', 'clientHeight'] as const
@@ -175,4 +176,45 @@ it('a replaced ask leads nowhere once no ask waits, even with a Needs you move i
   )
   expect(screen.getByText('Replaced by a newer question')).toBeTruthy()
   expect(replacedLabel()).toHaveLength(0)
+})
+
+it('words sent from the box with picks on several questions show once, as a comment quoting none', () => {
+  const asked = askOf('q1', ['Build B?', 'Also later?'], 1)
+  const waiting = makeTestBotItem(1, {
+    status: 'needs_you',
+    question: { eventId: 'q1', text: 'q1' }
+  })
+  const posted: BotItemEvent[] = []
+  const { result } = renderHook(() =>
+    useBotItemQuestionSteps(
+      fixtureCos,
+      waiting,
+      [asked],
+      (text, _paths, questionId, plain) =>
+        void posted.push({
+          id: 'r1',
+          kind: 'commented',
+          actor: { kind: 'owner' },
+          data: {
+            text,
+            ...(questionId ? { answers: questionId } : {}),
+            ...(plain ? { plain } : {})
+          },
+          at: 2
+        }),
+      []
+    )
+  )
+  act(() => result.current.steps!.pick(0, 'Yes'))
+  act(() => result.current.steps!.pick(1, 'No'))
+  // Every line picked, so the box names none: the picks go with the words, in one comment.
+  act(() => void result.current.fromBox('what is the later part', [], null))
+  expect(posted).toHaveLength(1)
+  render(<Activity item={makeTestBotItem(1, { status: 'working' })} events={[asked, ...posted]} />)
+  const own = document.querySelector<HTMLElement>('[data-bot-item-comment-id="r1"]')!
+  expect(own.textContent).toContain('what is the later part')
+  // The picks read on the ask's lines alone, and the comment replies to no single question.
+  expect(own.textContent).not.toMatch(/Build B\?|Also later\?/)
+  expect(screen.queryAllByRole('button', { name: /^Replying to/ })).toHaveLength(0)
+  expect(screen.getAllByText(/Build B\?/)).toHaveLength(1)
 })

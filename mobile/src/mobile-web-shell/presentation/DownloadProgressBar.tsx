@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { downloadFraction, type DownloadProgressFeed } from './download-progress-feed'
 
 const FILL_EASE_MS = 100
@@ -11,12 +10,31 @@ const FILL_EASE_MS = 100
 const FILL_RESTART_MS = 50
 const useNativeDriver = Platform.OS !== 'web'
 
-export function downloadedMegabytesCaption(receivedBytes: number, totalBytes: number): string {
-  return `${megabytes(receivedBytes)} of ${megabytes(totalBytes)} MB`
+export function downloadedMegabytesCaption(
+  receivedBytes: number,
+  totalBytes: number,
+  t: Translate,
+  locale: string
+): string {
+  return t('webShell.downloadProgress.megabytes', '{{received}} of {{total}} MB', {
+    received: megabytes(receivedBytes, locale),
+    total: megabytes(totalBytes, locale)
+  })
 }
 
-function megabytes(bytes: number): string {
-  return (bytes / 1_000_000).toFixed(1)
+let megabytesFormat: { locale: string; formatter: Intl.NumberFormat } | null = null
+
+function megabytes(bytes: number, locale: string): string {
+  if (megabytesFormat?.locale !== locale) {
+    megabytesFormat = {
+      locale,
+      formatter: new Intl.NumberFormat(locale, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      })
+    }
+  }
+  return megabytesFormat.formatter.format(bytes / 1_000_000)
 }
 
 // Use the native driver so the bar moves while JS decodes; React still supplies caption and accessibility byte counts.
@@ -33,7 +51,7 @@ export function DownloadProgressBar({
   accessibilityLabel: string
   testID?: string
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const [fill] = useState(() => new Animated.Value(feed.current()))
   // Default unread motion preference to allowed; read via ref so its delayed commit cannot resubscribe mid-download.
   const reducedMotion = useReducedMotionEnabled() === true
@@ -98,7 +116,7 @@ export function DownloadProgressBar({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   track: {
     width: 180,
     height: 4,

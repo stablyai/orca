@@ -1,5 +1,4 @@
-import { Pressable, Text, View } from 'react-native'
-import { Minus, Plus } from 'lucide-react-native'
+import { Text, View } from 'react-native'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { hostOs } from '../../../platform/host-os'
@@ -11,9 +10,8 @@ import {
 } from '../../../components/controls/MobileSegmentedControl'
 import { PickerModal, type PickerOption } from '../../../components/sheets/PickerModal'
 import { SettingsSection } from '../../../settings/settings-screen-frame'
-import { colors, feedback, radii, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import {
   TERMINAL_FONT_WEIGHTS,
   TERMINAL_LINE_HEIGHTS,
@@ -83,18 +81,15 @@ export function TerminalFontSection({
   settings: TerminalFontSettings
   onOpenFontPicker: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { fontStyle, selectFontStyle } = settings
   const px = terminalFontPxForScale(settings.textScale)
   const pointsLabel = terminalPointsLabel(px, t)
   return (
     <SettingsSection
-      title={t('app.terminalSettings.fontHeading', 'FONT')}
-      footer={t(
-        'app.terminalSettings.fontDescription',
-        'Pinch in a terminal to change the size; it saves here. Only changes this device, not the desktop terminal.'
-      )}
+      first
+      footer={t('app.terminalSettings.pinchFooter', 'Pinch in a terminal to change the size.')}
     >
       <ListRow
         key="font"
@@ -138,7 +133,7 @@ export function terminalPointsLabel(px: number, t: Translate): string {
   return t('app.terminalSettings.sizePoints', '{{size}} pt', { size: px })
 }
 
-/** The size row: a slider whose drag previews each step and commits on release, and a −/+ stepper. */
+/** The size row: a slider whose drag previews each step and commits on release. */
 export function TerminalTextSizeRow({
   px,
   value,
@@ -151,13 +146,8 @@ export function TerminalTextSizeRow({
   onPreview: (px: number) => void
   onCommit: (px: number) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const stepTo = (next: number) => {
-    if (next >= TERMINAL_MIN_FONT_PX && next <= TERMINAL_MAX_FONT_PX) {
-      onCommit(next)
-    }
-  }
   return (
     <View style={styles.row}>
       <View style={styles.rowTop}>
@@ -178,54 +168,8 @@ export function TerminalTextSizeRow({
           />
         </View>
         <Text style={[styles.sizeMark, styles.sizeMarkLarge]}>A</Text>
-        <View style={styles.stepper}>
-          <StepButton
-            icon="minus"
-            label={t('app.terminalSettings.smaller', 'Smaller')}
-            disabled={px <= TERMINAL_MIN_FONT_PX}
-            onPress={() => stepTo(px - 1)}
-          />
-          <View style={styles.stepperDivider} />
-          <StepButton
-            icon="plus"
-            label={t('app.terminalSettings.larger', 'Larger')}
-            disabled={px >= TERMINAL_MAX_FONT_PX}
-            onPress={() => stepTo(px + 1)}
-          />
-        </View>
       </View>
     </View>
-  )
-}
-
-function StepButton({
-  icon,
-  label,
-  disabled,
-  onPress
-}: {
-  icon: 'minus' | 'plus'
-  label: string
-  disabled: boolean
-  onPress: () => void
-}) {
-  const Icon = icon === 'minus' ? Minus : Plus
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      hitSlop={{ top: 7, bottom: 7 }}
-      style={({ pressed }) => [
-        styles.stepButton,
-        disabled && styles.stepButtonDisabled,
-        pressed && styles.stepButtonPressed
-      ]}
-    >
-      <Icon size={17} color={colors.textPrimary} strokeWidth={2.2} />
-    </Pressable>
   )
 }
 
@@ -252,7 +196,7 @@ export function TerminalFontPicker({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -265,17 +209,5 @@ const styles = themedStyleSheet(() => ({
   slider: { flex: 1 },
   sizeMark: { color: colors.textSecondary },
   sizeMarkSmall: { fontSize: 12 },
-  sizeMarkLarge: { fontSize: 20 },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: spacing.xs,
-    borderRadius: radii.control,
-    backgroundColor: colors.translucentFill,
-    overflow: 'hidden'
-  },
-  stepperDivider: { width: 1, height: 18, backgroundColor: colors.borderSubtle },
-  stepButton: { width: 40, height: 30, alignItems: 'center', justifyContent: 'center' },
-  stepButtonDisabled: { opacity: feedback.disabledOpacity },
-  stepButtonPressed: { opacity: feedback.pressedOpacity }
+  sizeMarkLarge: { fontSize: 20 }
 }))

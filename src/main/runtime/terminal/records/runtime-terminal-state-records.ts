@@ -189,6 +189,8 @@ export type RuntimeHeadlessTerminal = {
   outputSequence: number
   writeChain: Promise<void>
   ownership: PtyShellOwnershipMirror
+  /** True when the owning daemon holds authoritative scrollback, so main mirrors only the viewport. */
+  providerOwnsScrollback?: boolean
   /** Output seq a renderer hydration seed already painted; queued live chunks at/below it are not rewritten. */
   rendererSeedSeq?: number
   /** Unfinished escape from skipped seed-covered chunks, written before the next uncovered chunk. */

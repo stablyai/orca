@@ -77,6 +77,8 @@ export class AgentStatusProjectionState {
   }
   nextRank = 0
   nextRowRevision = 0
+  /** Workspaces whose rows, arrangement or summary moved in the commit being published. */
+  readonly touchedWorktrees = new Set<string>()
   freshEvidence = 0
   /** Bumped when a source gains or loses its workspace row. */
   rowOwnersRevision = 0
@@ -197,6 +199,7 @@ export class AgentStatusProjectionState {
           summary[flag] = (b.counts.get(flag) ?? 0) > 0
         }
         b.summary = summary
+        this.touchedWorktrees.add(owner)
       }
     }
     if (previous) {
