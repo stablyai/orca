@@ -65,6 +65,19 @@ export type OwnerUsageRateLimits = {
   refreshRemote: (() => Promise<void>) | null
 }
 
+/** Forces one host to re-read usage and publishes the answer to every reader; throws when the request fails. */
+export async function refreshOwnerAccountsUsage(environmentId: string): Promise<void> {
+  const startedOn = currentOwnerAccountsStream(environmentId)
+  const snapshot = await callRuntimeRpc<ProviderAccountsSnapshot>(
+    { kind: 'environment', environmentId },
+    'accounts.list',
+    { refreshUsage: true },
+    { timeoutMs: REMOTE_USAGE_REFRESH_TIMEOUT_MS }
+  )
+  // Keyed by host and stream, so a refresh that outlives an owner switch never becomes current.
+  applyOwnerAccountsSnapshot(environmentId, snapshot, startedOn)
+}
+
 /** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
 export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLimits {
   // Why: route by the focused workspace's owner, never by the Active Server setting.
@@ -114,16 +127,8 @@ export function useAccountOwnerUsage(
     if (!ownerId) {
       return
     }
-    const startedOn = currentOwnerAccountsStream(ownerId)
     try {
-      const snapshot = await callRuntimeRpc<ProviderAccountsSnapshot>(
-        { kind: 'environment', environmentId: ownerId },
-        'accounts.list',
-        { refreshUsage: true },
-        { timeoutMs: REMOTE_USAGE_REFRESH_TIMEOUT_MS }
-      )
-      // Keyed by host and stream, so a refresh that outlives an owner switch never becomes current.
-      applyOwnerAccountsSnapshot(ownerId, snapshot, startedOn)
+      await refreshOwnerAccountsUsage(ownerId)
     } catch {
       // Why: a slow forced refresh is not loss of contact; the stream owns reachability.
     }

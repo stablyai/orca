@@ -354,8 +354,11 @@ export function AccountsPane({
     runCodexAccountAction,
     recordOpenCodeSettingEdit
   }
-  // A desktop reads Grok/Cursor from its own files; the web client gets its server's meter.
-  const readsOwnerGrokCursor = !isRemoteAccountScope || isWebClientLocation()
+  // A desktop's own Grok/Cursor files must not sit under a server header; show only the server's usage there.
+  const remoteCli =
+    isRemoteAccountScope && !isWebClientLocation()
+      ? { owner: accountOwner, label: remoteServerLabel ?? '' }
+      : undefined
   const visibleSections = [
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <div key={accountOwnerKey} className="space-y-8">
@@ -392,11 +395,11 @@ export function AccountsPane({
         recordFeatureInteraction={recordFeatureInteraction}
       />
     ) : null,
-    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
-      <GrokAccountsSection key="grok" />
+    matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
+      <GrokAccountsSection key={`grok:${accountOwnerKey}`} server={remoteCli} />
     ) : null,
-    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
-      <CursorAccountsSection key="cursor" />
+    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+      <CursorAccountsSection key={`cursor:${accountOwnerKey}`} server={remoteCli} />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection

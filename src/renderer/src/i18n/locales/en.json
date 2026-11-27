@@ -13415,6 +13415,22 @@
           "0bb18642b7": "Usage",
           "a8f4139350": "Grok reported no usage percentage for this account."
         },
+        "ServerCliUsageStatus": {
+          "signedInOn": "Signed in on {{host}}",
+          "readsGrok": "Orca reads the Grok CLI sign-in on {{host}}.",
+          "readsCursor": "Orca reads the Cursor sign-in on {{host}}.",
+          "notReportedGrok": "{{host}} has not reported Grok usage",
+          "notReportedCursor": "{{host}} has not reported Cursor usage",
+          "checkingOn": "Checking usage on {{host}}…",
+          "noSignInGrok": "No Grok sign-in on {{host}}",
+          "noSignInCursor": "No Cursor sign-in on {{host}}",
+          "reportedNoGrok": "{{host}} reported no Grok usage",
+          "reportedNoCursor": "{{host}} reported no Cursor usage",
+          "grokHint": "Run grok on {{host}} and wait for it to start, signing in if asked. Then click Refresh usage.",
+          "cursorHint": "Sign in to Cursor on {{host}} (Cursor IDE or cursor-agent login), then click Refresh usage.",
+          "cursorSubtitle": "Shows Cursor plan usage from the sign-in on {{host}}. Orca only reads it — it never changes that Cursor login.",
+          "refreshUsage": "Refresh usage"
+        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
           "usagePercentageDisplayRemaining": "Remaining"

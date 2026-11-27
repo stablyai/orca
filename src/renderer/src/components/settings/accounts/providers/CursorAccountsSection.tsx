@@ -8,11 +8,20 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
-import type { CursorAccountStatus } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type {
+  CursorAccountStatus,
+  ProviderRateLimits
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { getProviderUsageStatusLabel } from '../../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
+import {
+  ServerCliUsageRow,
+  useServerCliUsage,
+  type ServerCliUsage
+} from './server-cli-usage-status'
 
 const CURSOR_USAGE_DASHBOARD_URL = 'https://cursor.com/dashboard/spending'
 const SEARCH_KEYWORDS = ['cursor', 'usage', 'plan', 'spend', 'billing', 'rate limit']
@@ -42,7 +51,164 @@ function credentialSourceLabel(
   return null
 }
 
-export function CursorAccountsSection(): React.JSX.Element {
+function CursorAccountsGroup({
+  statusRow,
+  cursorUsage,
+  usageKnown,
+  serverLabel
+}: {
+  statusRow: React.JSX.Element
+  cursorUsage: ProviderRateLimits | null
+  usageKnown: boolean
+  serverLabel?: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const pools = cursorUsage?.buckets ?? []
+  const monthly = cursorUsage?.monthly ?? null
+  // Explain unknown/failed usage rather than hiding the signed-in account or implying healthy allowance.
+  const unavailableReason =
+    usageKnown && pools.length === 0 && !monthly
+      ? cursorUsage?.status === 'unavailable' || cursorUsage?.status === 'error'
+        ? (cursorUsage.error ?? null)
+        : null
+      : null
+  // Stale snapshots retain numbers; show their refresh failure beside them.
+  const staleUsageError =
+    usageKnown && cursorUsage?.status === 'error' && (pools.length > 0 || monthly)
+      ? // Why: a server's own error text describes "this computer", meaning the server.
+        serverLabel
+        ? getProviderUsageStatusLabel(cursorUsage, t)
+        : (cursorUsage.error ?? null)
+      : null
+
+  return (
+    <div id={ACCOUNTS_SECTION_IDS.cursor} className="scroll-mt-6">
+      <SettingsGroup
+        title={
+          <span className="flex items-center gap-2">
+            <AgentIcon agent="cursor" size={16} />
+            {t('auto.components.settings.CursorAccountsSection.title', 'Cursor')}
+          </span>
+        }
+        description={
+          serverLabel
+            ? t(
+                'auto.components.settings.ServerCliUsageStatus.cursorSubtitle',
+                'Shows Cursor plan usage from the sign-in on {{host}}. Orca only reads it — it never changes that Cursor login.',
+                { host: serverLabel }
+              )
+            : t(
+                'auto.components.settings.CursorAccountsSection.subtitle',
+                'Shows your Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.'
+              )
+        }
+        action={
+          <a
+            href={CURSOR_USAGE_DASHBOARD_URL}
+            target="_blank"
+            onClick={openAppHttpLinkFromAnchor}
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {t('auto.components.settings.CursorAccountsSection.dashboardLink', 'Cursor dashboard')}
+            <ExternalLink className="size-3" />
+          </a>
+        }
+      >
+        {statusRow}
+
+        {pools.length > 0 || monthly ? (
+          <SearchableSetting
+            title={t('auto.components.settings.CursorAccountsSection.usageTitle', 'Plan usage')}
+            description={t(
+              'auto.components.settings.CursorAccountsSection.usageDescription',
+              'Cursor bills two pools that reset with your billing cycle, plus on-demand spend once they run out.'
+            )}
+            keywords={SEARCH_KEYWORDS}
+            className="py-3"
+          >
+            <div className="space-y-1">
+              {pools.map((pool) => (
+                <div key={pool.name} className="flex items-center gap-2 text-xs">
+                  <Badge variant="secondary">
+                    <span className="tabular-nums">{Math.round(pool.usedPercent)}%</span>
+                  </Badge>
+                  <span className="text-muted-foreground">{pool.name}</span>
+                </div>
+              ))}
+              {monthly ? (
+                <div className="flex items-center gap-2 text-xs">
+                  <Badge variant="secondary">
+                    <span className="tabular-nums">{Math.round(monthly.usedPercent)}%</span>
+                  </Badge>
+                  <span className="text-muted-foreground">
+                    {t('auto.components.settings.CursorAccountsSection.planTotal', 'Plan')}
+                  </span>
+                </div>
+              ) : null}
+              {(monthly ?? pools[0])?.resetDescription ? (
+                <p className="text-xs text-muted-foreground">
+                  {t('auto.components.settings.CursorAccountsSection.resets', 'Resets {{when}}', {
+                    when: (monthly ?? pools[0])?.resetDescription ?? ''
+                  })}
+                </p>
+              ) : null}
+              {staleUsageError ? (
+                <p className="text-xs text-destructive">
+                  {t(
+                    'auto.components.settings.CursorAccountsSection.staleUsage',
+                    'Last known usage — the latest refresh failed: {{reason}}',
+                    { reason: staleUsageError }
+                  )}
+                </p>
+              ) : null}
+            </div>
+          </SearchableSetting>
+        ) : unavailableReason ? (
+          <SearchableSetting
+            title={t('auto.components.settings.CursorAccountsSection.usageLabel', 'Usage')}
+            description={t(
+              'auto.components.settings.CursorAccountsSection.noAllowance',
+              'Cursor reported no usage allowance for this account.'
+            )}
+            keywords={SEARCH_KEYWORDS}
+            className="py-3"
+          >
+            <p className="text-xs text-muted-foreground">{unavailableReason}</p>
+          </SearchableSetting>
+        ) : null}
+      </SettingsGroup>
+    </div>
+  )
+}
+
+function ServerCursorAccountsSection({ server }: { server: ServerCliUsage }): React.JSX.Element {
+  const cli = useServerCliUsage(server, 'cursor')
+  return (
+    <CursorAccountsGroup
+      cursorUsage={cli.usage}
+      usageKnown={cli.usageKnown}
+      serverLabel={server.label}
+      statusRow={
+        <ServerCliUsageRow
+          provider="cursor"
+          label={server.label}
+          usage={cli.usage}
+          host={{
+            failure: cli.hostFailure,
+            answered: cli.hostAnswered,
+            authConfigured: cli.authConfigured
+          }}
+          refreshing={cli.refreshing}
+          refreshError={cli.refreshError}
+          onRefresh={cli.refresh}
+        />
+      }
+    />
+  )
+}
+
+function LocalCursorAccountsSection(): React.JSX.Element {
   const t = useTranslate()
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const cursorUsage = useAppStore((s) => s.rateLimits.cursor)
@@ -97,47 +263,12 @@ export function CursorAccountsSection(): React.JSX.Element {
   const signedIn = status?.signedIn === true
   const tokenFresh = status?.tokenFresh === true
   const sourceLabel = credentialSourceLabel(status?.credentialSource ?? null, t)
-  const pools = cursorUsage?.buckets ?? []
-  const monthly = cursorUsage?.monthly ?? null
-  // Explain unknown/failed usage rather than hiding the signed-in account or implying healthy allowance.
-  const unavailableReason =
-    signedIn && pools.length === 0 && !monthly
-      ? cursorUsage?.status === 'unavailable' || cursorUsage?.status === 'error'
-        ? (cursorUsage.error ?? null)
-        : null
-      : null
-  // Stale snapshots retain numbers; show their refresh failure beside them.
-  const staleUsageError =
-    signedIn && cursorUsage?.status === 'error' && (pools.length > 0 || monthly)
-      ? (cursorUsage.error ?? null)
-      : null
 
   return (
-    <div id={ACCOUNTS_SECTION_IDS.cursor} className="scroll-mt-6">
-      <SettingsGroup
-        title={
-          <span className="flex items-center gap-2">
-            <AgentIcon agent="cursor" size={16} />
-            {t('auto.components.settings.CursorAccountsSection.title', 'Cursor')}
-          </span>
-        }
-        description={t(
-          'auto.components.settings.CursorAccountsSection.subtitle',
-          'Shows your Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.'
-        )}
-        action={
-          <a
-            href={CURSOR_USAGE_DASHBOARD_URL}
-            target="_blank"
-            onClick={openAppHttpLinkFromAnchor}
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            {t('auto.components.settings.CursorAccountsSection.dashboardLink', 'Cursor dashboard')}
-            <ExternalLink className="size-3" />
-          </a>
-        }
-      >
+    <CursorAccountsGroup
+      cursorUsage={cursorUsage}
+      usageKnown={signedIn}
+      statusRow={
         <div className="flex items-start gap-3 py-3">
           <ShieldCheck
             className={cn(
@@ -208,68 +339,11 @@ export function CursorAccountsSection(): React.JSX.Element {
             {t('auto.components.settings.CursorAccountsSection.refreshUsage', 'Refresh usage')}
           </Button>
         </div>
-
-        {pools.length > 0 || monthly ? (
-          <SearchableSetting
-            title={t('auto.components.settings.CursorAccountsSection.usageTitle', 'Plan usage')}
-            description={t(
-              'auto.components.settings.CursorAccountsSection.usageDescription',
-              'Cursor bills two pools that reset with your billing cycle, plus on-demand spend once they run out.'
-            )}
-            keywords={SEARCH_KEYWORDS}
-            className="py-3"
-          >
-            <div className="space-y-1">
-              {pools.map((pool) => (
-                <div key={pool.name} className="flex items-center gap-2 text-xs">
-                  <Badge variant="secondary">
-                    <span className="tabular-nums">{Math.round(pool.usedPercent)}%</span>
-                  </Badge>
-                  <span className="text-muted-foreground">{pool.name}</span>
-                </div>
-              ))}
-              {monthly ? (
-                <div className="flex items-center gap-2 text-xs">
-                  <Badge variant="secondary">
-                    <span className="tabular-nums">{Math.round(monthly.usedPercent)}%</span>
-                  </Badge>
-                  <span className="text-muted-foreground">
-                    {t('auto.components.settings.CursorAccountsSection.planTotal', 'Plan')}
-                  </span>
-                </div>
-              ) : null}
-              {(monthly ?? pools[0])?.resetDescription ? (
-                <p className="text-xs text-muted-foreground">
-                  {t('auto.components.settings.CursorAccountsSection.resets', 'Resets {{when}}', {
-                    when: (monthly ?? pools[0])?.resetDescription ?? ''
-                  })}
-                </p>
-              ) : null}
-              {staleUsageError ? (
-                <p className="text-xs text-destructive">
-                  {t(
-                    'auto.components.settings.CursorAccountsSection.staleUsage',
-                    'Last known usage — the latest refresh failed: {{reason}}',
-                    { reason: staleUsageError }
-                  )}
-                </p>
-              ) : null}
-            </div>
-          </SearchableSetting>
-        ) : unavailableReason ? (
-          <SearchableSetting
-            title={t('auto.components.settings.CursorAccountsSection.usageLabel', 'Usage')}
-            description={t(
-              'auto.components.settings.CursorAccountsSection.noAllowance',
-              'Cursor reported no usage allowance for this account.'
-            )}
-            keywords={SEARCH_KEYWORDS}
-            className="py-3"
-          >
-            <p className="text-xs text-muted-foreground">{unavailableReason}</p>
-          </SearchableSetting>
-        ) : null}
-      </SettingsGroup>
-    </div>
+      }
+    />
   )
+}
+
+export function CursorAccountsSection({ server }: { server?: ServerCliUsage }): React.JSX.Element {
+  return server ? <ServerCursorAccountsSection server={server} /> : <LocalCursorAccountsSection />
 }

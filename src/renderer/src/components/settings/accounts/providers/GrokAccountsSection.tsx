@@ -6,14 +6,151 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
-import type { GrokAccountStatus } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type {
+  GrokAccountStatus,
+  ProviderRateLimits
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
+import {
+  ServerCliUsageRow,
+  useServerCliUsage,
+  type ServerCliUsage
+} from './server-cli-usage-status'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
-export function GrokAccountsSection(): React.JSX.Element {
+function GrokAccountsGroup({
+  statusRow,
+  grokUsage,
+  usageKnown
+}: {
+  statusRow: React.JSX.Element
+  grokUsage: ProviderRateLimits | null
+  usageKnown: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  // Unified billing has monthly included usage instead of weekly credits; keep its usage row visible.
+  const usageIsWeekly = Boolean(grokUsage?.weekly)
+  const usageWindow = grokUsage?.weekly ?? grokUsage?.monthly ?? null
+  // Explain unreported usage instead of hiding the row or implying healthy allowance (#15740).
+  const unavailableReason =
+    usageKnown && !usageWindow && grokUsage?.status === 'unavailable'
+      ? (grokUsage.error ?? null)
+      : null
+
+  return (
+    <div id={ACCOUNTS_SECTION_IDS.grok} className="scroll-mt-6">
+      <SettingsGroup
+        title={
+          <span className="flex items-center gap-2">
+            <AgentIcon agent="grok" size={16} />
+            {t('auto.components.settings.GrokAccountsSection.a1b2c3d4e5', 'Grok (xAI)')}
+          </span>
+        }
+        description={t(
+          'auto.components.settings.GrokAccountsSection.f6e5d4c3b2',
+          'Shows weekly credit usage from your Grok CLI sign-in (session file ~/.grok/auth.json).'
+        )}
+        action={
+          <a
+            href={GROK_CLI_DOCS_URL}
+            target="_blank"
+            onClick={openAppHttpLinkFromAnchor}
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {t('auto.components.settings.GrokAccountsSection.0d8e77bc40', 'Grok CLI docs')}
+            <ExternalLink className="size-3" />
+          </a>
+        }
+      >
+        {statusRow}
+
+        {usageWindow ? (
+          <SearchableSetting
+            title={
+              usageIsWeekly
+                ? t('auto.components.settings.GrokAccountsSection.a8f3e2c1b4', 'Weekly credits')
+                : t('auto.components.settings.GrokAccountsSection.e6dadc1e2b', 'Monthly usage')
+            }
+            description={
+              usageIsWeekly
+                ? t(
+                    'auto.components.settings.GrokAccountsSection.b7e2d9f0a3',
+                    'Same weekly credit % as the grok /usage screen in the terminal.'
+                  )
+                : t(
+                    'auto.components.settings.GrokAccountsSection.75e396bf42',
+                    'Included monthly usage for Grok unified-billing accounts.'
+                  )
+            }
+            keywords={['grok', 'xai', 'usage', 'credits', 'oauth']}
+            className="py-3"
+          >
+            <div className="flex items-center gap-2 text-xs">
+              <Badge variant="secondary" className="tabular-nums">
+                {Math.round(usageWindow.usedPercent)}%
+              </Badge>
+              {usageWindow.resetDescription ? (
+                <span className="text-muted-foreground">
+                  {t('auto.components.settings.GrokAccountsSection.c6d1a8f4e2', 'Resets {{when}}', {
+                    when: usageWindow.resetDescription
+                  })}
+                </span>
+              ) : null}
+              {grokUsage?.usageMetadata?.authProvenance ? (
+                <span className="truncate text-muted-foreground">
+                  {grokUsage.usageMetadata.authProvenance}
+                </span>
+              ) : null}
+            </div>
+          </SearchableSetting>
+        ) : unavailableReason ? (
+          <SearchableSetting
+            title={t('auto.components.settings.GrokAccountsSection.0bb18642b7', 'Usage')}
+            description={t(
+              'auto.components.settings.GrokAccountsSection.a8f4139350',
+              'Grok reported no usage percentage for this account.'
+            )}
+            keywords={['grok', 'xai', 'usage', 'credits', 'oauth']}
+            className="py-3"
+          >
+            <p className="text-xs text-muted-foreground">{unavailableReason}</p>
+          </SearchableSetting>
+        ) : null}
+      </SettingsGroup>
+    </div>
+  )
+}
+
+function ServerGrokAccountsSection({ server }: { server: ServerCliUsage }): React.JSX.Element {
+  const cli = useServerCliUsage(server, 'grok')
+  return (
+    <GrokAccountsGroup
+      grokUsage={cli.usage}
+      usageKnown={cli.usageKnown}
+      statusRow={
+        <ServerCliUsageRow
+          provider="grok"
+          label={server.label}
+          usage={cli.usage}
+          host={{
+            failure: cli.hostFailure,
+            answered: cli.hostAnswered,
+            authConfigured: cli.authConfigured
+          }}
+          refreshing={cli.refreshing}
+          refreshError={cli.refreshError}
+          onRefresh={cli.refresh}
+        />
+      }
+    />
+  )
+}
+
+function LocalGrokAccountsSection(): React.JSX.Element {
   const t = useTranslate()
   const refreshGrokRateLimits = useAppStore((s) => s.refreshGrokRateLimits)
   const grokUsage = useAppStore((s) => s.rateLimits.grok)
@@ -56,41 +193,12 @@ export function GrokAccountsSection(): React.JSX.Element {
 
   const signedIn = status?.signedIn === true
   const tokenFresh = status?.tokenFresh === true
-  // Unified billing has monthly included usage instead of weekly credits; keep its usage row visible.
-  const usageIsWeekly = Boolean(grokUsage?.weekly)
-  const usageWindow = grokUsage?.weekly ?? grokUsage?.monthly ?? null
-  // Explain unreported usage instead of hiding the row or implying healthy allowance (#15740).
-  const unavailableReason =
-    signedIn && !usageWindow && grokUsage?.status === 'unavailable'
-      ? (grokUsage.error ?? null)
-      : null
 
   return (
-    <div id={ACCOUNTS_SECTION_IDS.grok} className="scroll-mt-6">
-      <SettingsGroup
-        title={
-          <span className="flex items-center gap-2">
-            <AgentIcon agent="grok" size={16} />
-            {t('auto.components.settings.GrokAccountsSection.a1b2c3d4e5', 'Grok (xAI)')}
-          </span>
-        }
-        description={t(
-          'auto.components.settings.GrokAccountsSection.f6e5d4c3b2',
-          'Shows weekly credit usage from your Grok CLI sign-in (session file ~/.grok/auth.json).'
-        )}
-        action={
-          <a
-            href={GROK_CLI_DOCS_URL}
-            target="_blank"
-            onClick={openAppHttpLinkFromAnchor}
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            {t('auto.components.settings.GrokAccountsSection.0d8e77bc40', 'Grok CLI docs')}
-            <ExternalLink className="size-3" />
-          </a>
-        }
-      >
+    <GrokAccountsGroup
+      grokUsage={grokUsage}
+      usageKnown={signedIn}
+      statusRow={
         <div className="flex items-start gap-3 py-3">
           <ShieldCheck
             className={cn(
@@ -154,60 +262,11 @@ export function GrokAccountsSection(): React.JSX.Element {
             {t('auto.components.settings.GrokAccountsSection.3325d996cb', 'Refresh usage')}
           </Button>
         </div>
-
-        {usageWindow ? (
-          <SearchableSetting
-            title={
-              usageIsWeekly
-                ? t('auto.components.settings.GrokAccountsSection.a8f3e2c1b4', 'Weekly credits')
-                : t('auto.components.settings.GrokAccountsSection.e6dadc1e2b', 'Monthly usage')
-            }
-            description={
-              usageIsWeekly
-                ? t(
-                    'auto.components.settings.GrokAccountsSection.b7e2d9f0a3',
-                    'Same weekly credit % as the grok /usage screen in the terminal.'
-                  )
-                : t(
-                    'auto.components.settings.GrokAccountsSection.75e396bf42',
-                    'Included monthly usage for Grok unified-billing accounts.'
-                  )
-            }
-            keywords={['grok', 'xai', 'usage', 'credits', 'oauth']}
-            className="py-3"
-          >
-            <div className="flex items-center gap-2 text-xs">
-              <Badge variant="secondary" className="tabular-nums">
-                {Math.round(usageWindow.usedPercent)}%
-              </Badge>
-              {usageWindow.resetDescription ? (
-                <span className="text-muted-foreground">
-                  {t('auto.components.settings.GrokAccountsSection.c6d1a8f4e2', 'Resets {{when}}', {
-                    when: usageWindow.resetDescription
-                  })}
-                </span>
-              ) : null}
-              {grokUsage?.usageMetadata?.authProvenance ? (
-                <span className="truncate text-muted-foreground">
-                  {grokUsage.usageMetadata.authProvenance}
-                </span>
-              ) : null}
-            </div>
-          </SearchableSetting>
-        ) : unavailableReason ? (
-          <SearchableSetting
-            title={t('auto.components.settings.GrokAccountsSection.0bb18642b7', 'Usage')}
-            description={t(
-              'auto.components.settings.GrokAccountsSection.a8f4139350',
-              'Grok reported no usage percentage for this account.'
-            )}
-            keywords={['grok', 'xai', 'usage', 'credits', 'oauth']}
-            className="py-3"
-          >
-            <p className="text-xs text-muted-foreground">{unavailableReason}</p>
-          </SearchableSetting>
-        ) : null}
-      </SettingsGroup>
-    </div>
+      }
+    />
   )
+}
+
+export function GrokAccountsSection({ server }: { server?: ServerCliUsage }): React.JSX.Element {
+  return server ? <ServerGrokAccountsSection server={server} /> : <LocalGrokAccountsSection />
 }
