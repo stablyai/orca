@@ -147,26 +147,17 @@
       "runtimeAccessLink": "此連結是給另一個 Orca App 使用的。請在電腦上的「設定」→「行動版」中掃描 QR Code，或在伺服器上執行 orca pair --mobile。"
     },
     "terminalSettings": {
-      "keepPhoneSize": "保持手機尺寸（預設）",
-      "leaveAppDescription": "在手機上使用終端機時，Orca 會將終端機縮小以符合螢幕大小。關閉 App 或切換到其他 App 時，此設定決定終端機要保持手機尺寸（避免互動式 CLI 工具重新排版），還是還原為電腦上的尺寸。你隨時都能使用桌面版橫幅上的「還原」手動調整尺寸。",
       "leaveAppHeading": "離開 App 時",
-      "noPairedDesktops": "尚未配對任何電腦。配對一台電腦後，即可設定終端機行為。",
       "restoreAfterMinutes_one": "{{count}} 分鐘後",
       "restoreAfterMinutes_other": "{{count}} 分鐘後",
       "restoreAfterSeconds_one": "{{count}} 秒後",
       "restoreAfterSeconds_other": "{{count}} 秒後",
-      "restoreHost": "還原 {{name}}",
       "previewColumns_one": "{{count}} 欄",
       "previewColumns_other": "{{count}} 欄",
       "previewLabel": "終端機預覽",
-      "previewHeading": "預覽",
-      "fontHeading": "字型",
-      "fontDescription": "在終端機中用雙指縮放即可調整大小，設定會儲存在這裡。只會變更此裝置，不影響電腦上的終端機。",
       "font": "字型",
       "size": "大小",
       "sizePoints": "{{size}} pt",
-      "smaller": "縮小",
-      "larger": "放大",
       "lineSpacing": "行距",
       "lineSpacingTight": "緊密",
       "lineSpacingNormal": "普通",
@@ -1612,19 +1603,10 @@
       "failed": "失敗"
     },
     "terminalShortcutSettings": {
-      "addDescription": "建立組合鍵或文字巨集",
-      "addShortcut": "新增自訂快速鍵…",
-      "customShortcuts": "自訂快速鍵",
-      "empty": "尚未設定自訂快速鍵。",
       "removeShortcut": "移除 {{label}}",
-      "resetDefaults": "重設為預設值",
-      "resetDescription": "依原始順序顯示所有內建快速鍵",
       "moreKeys": "更多按鍵",
-      "moreKeysDescription": "這些按鍵位於終端機按鍵列的 ⋯ 下。切換按鍵以顯示或隱藏，按住拖曳控制柄即可調整順序。已在按鍵列中的按鍵（例如 Esc 或方向鍵）不會顯示在 ⋯ 下。",
-      "directionPad": "方向鍵盤",
       "showDirectionPad": "顯示方向鍵盤",
-      "showDirectionPadDescription": "將方向鍵盤固定在側邊欄。關閉後，側邊欄會列出各個方向鍵。",
-      "showShortcut": "顯示 {{label}} 快速鍵"
+      "showDirectionPadDescription": "將方向鍵盤固定在側邊欄。關閉後，側邊欄會列出各個方向鍵。"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "要使用速率限制重設額度嗎？",

@@ -147,26 +147,17 @@
       "runtimeAccessLink": "Dieser Link ist für eine andere Orca-App. Den Code auf dem Computer unter Einstellungen → Mobil scannen oder orca pair --mobile auf dem Server ausführen."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "leaveAppDescription": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ im Desktop-Banner lässt sich die Größe jederzeit manuell anpassen.",
       "leaveAppHeading": "Beim Verlassen der App",
-      "noPairedDesktops": "Noch keine Desktops gekoppelt. Einen Desktop koppeln, um das Terminalverhalten festzulegen.",
       "restoreAfterMinutes_one": "Nach {{count}} Minute",
       "restoreAfterMinutes_other": "Nach {{count}} Minuten",
       "restoreAfterSeconds_one": "Nach {{count}} s",
       "restoreAfterSeconds_other": "Nach {{count}} s",
-      "restoreHost": "{{name}} wiederherstellen",
       "previewColumns_one": "{{count}} Spalte",
       "previewColumns_other": "{{count}} Spalten",
       "previewLabel": "Terminal-Vorschau",
-      "previewHeading": "VORSCHAU",
-      "fontHeading": "SCHRIFT",
-      "fontDescription": "Im Terminal mit zwei Fingern auf- oder zuziehen, um die Größe zu ändern; sie wird hier gespeichert. Gilt nur für dieses Gerät, nicht für das Desktop-Terminal.",
       "font": "Schriftart",
       "size": "Größe",
       "sizePoints": "{{size}} pt",
-      "smaller": "Kleiner",
-      "larger": "Größer",
       "lineSpacing": "Zeilenabstand",
       "lineSpacingTight": "Eng",
       "lineSpacingNormal": "Normal",
@@ -1355,19 +1346,10 @@
       "failed": "Fehlgeschlagen"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Tastenkombination oder Textmakro erstellen",
-      "addShortcut": "Eigenes Tastenkürzel hinzufügen…",
-      "customShortcuts": "Eigene Tastenkürzel",
-      "empty": "Noch keine eigenen Tastenkürzel definiert.",
       "removeShortcut": "{{label}} entfernen",
-      "resetDefaults": "Auf Standard zurücksetzen",
-      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
       "moreKeys": "Weitere Tasten",
-      "moreKeysDescription": "Diese Tasten befinden sich unter ⋯ in der Terminal-Tastenleiste. Blende Tasten ein oder aus und halte den Griff gedrückt, um sie in die gewünschte Reihenfolge zu ziehen. Tasten, die bereits in der Leiste sind, etwa Esc oder die Pfeiltasten, erscheinen nicht unter ⋯.",
-      "directionPad": "Steuerkreuz",
       "showDirectionPad": "Steuerkreuz anzeigen",
-      "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",
-      "showShortcut": "Tastenkürzel {{label}} anzeigen"
+      "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Ratenlimit-Zurücksetzung verwenden?",
