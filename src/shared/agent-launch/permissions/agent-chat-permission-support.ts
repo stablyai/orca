@@ -30,6 +30,11 @@ const EDIT_ACCEPTING_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'accept-edits', 'full-access']
 }
 
+// Mistral Vibe has its own ACP permission modes
+const VIBE_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+  modes: ['ask', 'accept-edits', 'auto', 'full-access']
+}
+
 /** Every agent that has a native chat. */
 export const NATIVE_CHAT_AGENTS = [
   'claude',
@@ -90,8 +95,8 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   devin: CLAUDE_CHAT_PERMISSION_MODES,
   // CodeBuddy's own modes, as Claude Code's: Accept Edits, and Auto has a model review each action.
   codebuddy: CLAUDE_CHAT_PERMISSION_MODES,
-  // Mistral Vibe uses its own permission modes via ACP (ask, auto, full).
-  'mistral-vibe': ACP_CHAT_PERMISSION_MODES
+  // Mistral Vibe uses its own permission modes: ask, accept-edits, auto (maps to smart-approve in vibe-acp)
+  'mistral-vibe': VIBE_CHAT_PERMISSION_MODES
 }
 
 export function isNativeChatAgent(agent: string): agent is NativeChatAgent {
