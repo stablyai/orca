@@ -1,5 +1,6 @@
 import { decodeClaudeTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-codex'
+import { decodeCopilotTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-copilot'
 import { decodeGrokTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-grok'
 import { decodeOmpTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-omp'
 import { createReadStream } from 'node:fs'
@@ -37,6 +38,7 @@ export const TRANSCRIPT_DECODERS = {
   claude: decodeClaudeTranscriptLine,
   codex: (line: string, fallbackId: string) =>
     decodeCodexTranscriptLine(line, fallbackId, { historyImport: true }),
+  copilot: decodeCopilotTranscriptLine,
   grok: decodeGrokTranscriptLine,
   omp: decodeOmpTranscriptLine
 } as const

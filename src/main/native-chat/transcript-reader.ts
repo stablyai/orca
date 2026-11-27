@@ -12,6 +12,7 @@ import { openTranscriptReadStream } from './transcript-filesystem/wsl-transcript
 import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
 import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
+import { decodeCopilotTranscriptLine } from './transcript-decoding/transcript-line-decoders-copilot'
 import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
 import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
 import { decodeTranscriptStream } from './transcript-streaming/transcript-stream-lines'
@@ -69,6 +70,11 @@ export async function readNativeChatTranscript(
     if (transcriptAgent === 'codex') {
       return {
         messages: await readTranscript(filePath, decodeCodexTranscriptLine, options.sourceOrder)
+      }
+    }
+    if (transcriptAgent === 'copilot') {
+      return {
+        messages: await readTranscript(filePath, decodeCopilotTranscriptLine, options.sourceOrder)
       }
     }
     if (transcriptAgent === 'grok') {
