@@ -12,7 +12,10 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
-import { listeningClients } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import {
+  connectedClientRosters,
+  listeningClients
+} from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import {
   allowServer,
   holdPairedServerAsk,
@@ -388,6 +391,29 @@ describe('agents on a paired server messaging an agent on this computer', () => 
 
     await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(2))
     expect(await cards()).toEqual([])
+  })
+
+  it("names this computer and only the agents it always lets the server ask, for the server's bot list", async () => {
+    vi.mocked(computer.runtime.bots.list).mockReturnValue([
+      makeTestBot({ id: 'docs', name: 'Docs' }),
+      makeTestBot({ id: 'notes', name: 'Notes' }),
+      makeTestBot({ id: 'quiet', name: 'Quiet', paused: true })
+    ])
+    await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
+    await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'quiet' })
+    await listening()
+
+    // Notes was never allowed, and Quiet is paused: an ask to either would not be taken.
+    const listed = {
+      name: "Alice's Mac",
+      onClient: 'install_a',
+      bots: [{ id: 'docs', name: 'Docs' }]
+    }
+    await vi.waitFor(() => expect(connectedClientRosters(server.runtime)).toEqual([listed]))
+
+    // Removed: the next pull stops naming it.
+    await call('pairedServerAsks.disallow', { botId: 'docs', serverKey: 'fingerprint_s' })
+    await vi.waitFor(() => expect(connectedClientRosters(server.runtime)[0]?.bots).toEqual([]))
   })
 
   it("holds a teammate's turn on the server to the teammate on this computer", async () => {
