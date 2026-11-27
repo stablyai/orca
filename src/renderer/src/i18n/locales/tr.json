@@ -2280,7 +2280,14 @@
         "retryOne": "{{name}} için yeniden dene",
         "updatingCount": "{{value0}} güncelleniyor",
         "failedCount": "{{value0}} başarısız",
-        "failed": "Başarısız"
+        "failed": "Başarısız",
+        "retryAll": "Tümünü yeniden dene",
+        "manualHelp": "{{name}} için manuel güncelleme"
+      },
+      "status": {
+        "browserBlockGuidance": "Tarayıcı işlemini (PID {{pids}}) sonlandırıp yeniden deneyin. Sunucusu çalışmaya devam eder.",
+        "browserBlockGuidanceMany": "Tarayıcı işlemlerini (PID {{pids}}) sonlandırıp yeniden deneyin. Sunucuları çalışmaya devam eder.",
+        "blocked": "Engellendi"
       }
     }
   },

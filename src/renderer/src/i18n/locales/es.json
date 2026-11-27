@@ -1555,7 +1555,14 @@
         "retryOne": "Reintentar {{name}}",
         "updatingCount": "{{value0}} actualizando",
         "failedCount": "{{value0}} con error",
-        "failed": "Error"
+        "failed": "Error",
+        "retryAll": "Reintentar todo",
+        "manualHelp": "Actualización manual de {{name}}"
+      },
+      "status": {
+        "browserBlockGuidance": "Finaliza el proceso del navegador (PID {{pids}}) y vuelve a intentarlo. Su servidor sigue en marcha.",
+        "browserBlockGuidanceMany": "Finaliza los procesos del navegador (PID {{pids}}) y vuelve a intentarlo. Sus servidores siguen en marcha.",
+        "blocked": "Bloqueado"
       }
     }
   },

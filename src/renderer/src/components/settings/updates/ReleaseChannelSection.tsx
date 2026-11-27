@@ -32,6 +32,9 @@ export function ReleaseChannelSection(): React.JSX.Element {
   const setReleaseChannelOverride = useAppStore((s) => s.setReleaseChannelOverride)
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  // Until the running version is known, picking a channel can't tell "clear the override" from
+  // "pin this channel", so the picker waits for it (or for its failure).
+  const [versionSettled, setVersionSettled] = useState(false)
   const [builds, setBuilds] = useState<ReleaseBuild[] | null>(null)
   const [loadError, setLoadError] = useState<UpdaterCodedMessage | null>(null)
   const [loading, setLoading] = useState(false)
@@ -49,11 +52,19 @@ export function ReleaseChannelSection(): React.JSX.Element {
 
   useEffect(() => {
     let cancelled = false
-    void window.api.updater.getVersion().then((version) => {
-      if (!cancelled) {
-        setAppVersion(version)
-      }
-    })
+    void window.api.updater
+      .getVersion()
+      .then((version) => {
+        if (!cancelled) {
+          setAppVersion(version)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setVersionSettled(true)
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -153,6 +164,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
         onOpenChange={setOpen}
         control={
           <Select
+            disabled={!versionSettled}
             // A synced override this platform can't run shows its fallback as a placeholder, so
             // picking that fallback is a real change that clears the override.
             value={activeChannel === requestedChannel ? activeChannel : ''}

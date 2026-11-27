@@ -305,10 +305,18 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               actionHadFocus.current = true
             }}
             onBlur={(event) => {
-              // A removed button blurs with no next target; keep the flag so focus can be restored.
+              // Keep the flag only when the focused button itself was removed, so focus can be
+              // restored; any other blur (to another control or the page) clears it.
+              const blurred = event.target
               if (event.relatedTarget) {
                 actionHadFocus.current = false
+                return
               }
+              requestAnimationFrame(() => {
+                if (blurred.isConnected) {
+                  actionHadFocus.current = false
+                }
+              })
             }}
           >
             {action}

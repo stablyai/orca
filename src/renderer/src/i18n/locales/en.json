@@ -2284,6 +2284,7 @@
         "updateOne": "Update {{name}}",
         "retryOne": "Retry {{name}}",
         "retryAll": "Retry all",
+        "manualHelp": "Manual update for {{name}}",
         "updatingCount": "{{value0}} updating",
         "failedCount": "{{value0}} failed",
         "failed": "Failed"
@@ -2326,7 +2327,8 @@
         "copied": "Copied",
         "copyFailed": "Could not copy details.",
         "downloadingPercent": "Downloading {{percent}}",
-        "browserBlockGuidance": "End the browser process (PID {{pids}}), then retry. Its server keeps running."
+        "browserBlockGuidance": "End the browser process (PID {{pids}}), then retry. Its server keeps running.",
+        "browserBlockGuidanceMany": "End the browser processes (PIDs {{pids}}), then retry. Their servers keep running."
       }
     }
   },

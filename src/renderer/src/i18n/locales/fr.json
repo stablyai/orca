@@ -1926,14 +1926,21 @@
         "confirmOne": "Redémarrer {{name}} ?",
         "confirmMany": "Redémarrer {{count}} serveurs ?",
         "liveMayDrop": "Les sessions actives peuvent être coupées.",
-        "sessionsMayDrop": "Sessions parfois coupées",
+        "sessionsMayDrop": "Coupure de sessions possible",
         "restartCount": "Redémarrer {{count}} ?",
         "restartOne": "Redémarrer ?",
         "updateOne": "Mettre à jour {{name}}",
         "retryOne": "Réessayer {{name}}",
         "updatingCount": "{{value0}} en cours",
         "failedCount": "{{value0}} en échec",
-        "failed": "Échec"
+        "failed": "Échec",
+        "retryAll": "Tout réessayer",
+        "manualHelp": "Mise à jour manuelle de {{name}}"
+      },
+      "status": {
+        "browserBlockGuidance": "Arrêtez le processus du navigateur (PID {{pids}}), puis réessayez. Son serveur continue de tourner.",
+        "browserBlockGuidanceMany": "Arrêtez les processus du navigateur (PID {{pids}}), puis réessayez. Leurs serveurs continuent de tourner.",
+        "blocked": "Bloqué"
       }
     }
   },

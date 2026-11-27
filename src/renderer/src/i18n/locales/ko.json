@@ -1536,7 +1536,14 @@
         "retryOne": "{{name}} 다시 시도",
         "updatingCount": "{{value0}}개 업데이트 중",
         "failedCount": "{{value0}}개 실패",
-        "failed": "실패"
+        "failed": "실패",
+        "retryAll": "모두 다시 시도",
+        "manualHelp": "{{name}} 수동 업데이트"
+      },
+      "status": {
+        "browserBlockGuidance": "브라우저 프로세스(PID {{pids}})를 종료한 뒤 다시 시도하세요. 서버는 계속 실행됩니다.",
+        "browserBlockGuidanceMany": "브라우저 프로세스(PID {{pids}})를 종료한 뒤 다시 시도하세요. 서버는 계속 실행됩니다.",
+        "blocked": "차단됨"
       }
     }
   },

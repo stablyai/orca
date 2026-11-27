@@ -2280,7 +2280,14 @@
         "retryOne": "{{name}} erneut versuchen",
         "updatingCount": "{{value0}} in Aktualisierung",
         "failedCount": "{{value0}} fehlgeschlagen",
-        "failed": "Fehlgeschlagen"
+        "failed": "Fehlgeschlagen",
+        "retryAll": "Alle wiederholen",
+        "manualHelp": "Manuelles Update für {{name}}"
+      },
+      "status": {
+        "browserBlockGuidance": "Beende den Browser-Prozess (PID {{pids}}) und versuche es erneut. Sein Server läuft weiter.",
+        "browserBlockGuidanceMany": "Beende die Browser-Prozesse (PIDs {{pids}}) und versuche es erneut. Ihre Server laufen weiter.",
+        "blocked": "Blockiert"
       }
     }
   },

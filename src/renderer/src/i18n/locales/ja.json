@@ -1527,7 +1527,14 @@
         "retryOne": "{{name}} を再試行",
         "updatingCount": "{{value0}} 件更新中",
         "failedCount": "{{value0}} 件失敗",
-        "failed": "失敗"
+        "failed": "失敗",
+        "retryAll": "すべて再試行",
+        "manualHelp": "{{name}} の手動更新"
+      },
+      "status": {
+        "browserBlockGuidance": "ブラウザープロセス (PID {{pids}}) を終了してから再試行してください。サーバーは動作し続けます。",
+        "browserBlockGuidanceMany": "ブラウザープロセス (PID {{pids}}) を終了してから再試行してください。サーバーは動作し続けます。",
+        "blocked": "ブロック中"
       }
     }
   },

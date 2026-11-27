@@ -3,7 +3,8 @@ import { useId } from 'react'
 import { Check, CircleAlert, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { cn } from '@/lib/class-names'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { getRemoteServerUpdatePhaseLabel } from '../runtime-environments/updates/RemoteServerUpdateStatus'
@@ -54,10 +55,17 @@ function StatusGlyph({ entry }: { entry: RemoteServerUpdateEntry }): React.JSX.E
   return <span className={cn('size-2 rounded-full', statusDotClass(entry))} />
 }
 
+// Intl formatter caches key on option identity, so this must be a module constant.
+const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
+
 /** The right-hand status while a server needs no button; short so it never wraps at 256px. */
-function statusText(entry: RemoteServerUpdateEntry, t: ReturnType<typeof useTranslate>): string {
+function statusText(
+  entry: RemoteServerUpdateEntry,
+  t: ReturnType<typeof useTranslate>,
+  intlLocale: string
+): string {
   if (entry.phase === 'downloading' && entry.progress !== null) {
-    return `${Math.round(entry.progress)}%`
+    return uiNumberFormat(PERCENT_FORMAT, intlLocale).format(Math.round(entry.progress) / 100)
   }
   // Preparing a download is still checking, as far as the row needs to say.
   if (entry.phase === 'checking-update') {
@@ -84,6 +92,7 @@ export function RemoteServerAboutRow({
   onConfirm: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const errorId = useId()
   const failed = entry.phase === 'failed'
   const help = getRemoteServerEntryHelp(entry, t)
@@ -97,12 +106,16 @@ export function RemoteServerAboutRow({
     entry.phase === 'downloading' && entry.progress !== null
       ? Math.max(0, Math.min(100, Math.round(entry.progress)))
       : null
-  const status = statusText(entry, t)
+  const status = statusText(entry, t, intlLocale)
+  const manualHelpTitle = t('settings.about.servers.manualHelp', 'Manual update for {{name}}', {
+    name: entry.name
+  })
 
   let subtitle: React.ReactNode
   if (armed) {
     subtitle = (
-      <div className="truncate text-settings-detail text-status-warning-text">
+      // Wraps rather than truncates, so a longer translation of the warning is never cut.
+      <div className="break-words text-settings-detail text-status-warning-text">
         {getSessionsMayDropLabel(t)}
       </div>
     )
@@ -143,7 +156,11 @@ export function RemoteServerAboutRow({
       </span>
       {/* Shortened in the middle so hosts sharing a long prefix stay distinguishable. */}
       <div title={entry.name} className="col-start-2 row-start-1 flex min-w-0 text-sm">
-        <MiddleEllipsisLabel text={entry.name} />
+        {/* Assistive tech reads the full host; the shortened one is visual only. */}
+        <span className="sr-only">{entry.name}</span>
+        <span aria-hidden className="flex min-w-0 flex-1">
+          <MiddleEllipsisLabel text={entry.name} />
+        </span>
       </div>
       <div className="col-start-2 row-start-2 min-w-0 @max-xs/about-servers:col-end-4">
         {subtitle}
@@ -182,12 +199,22 @@ export function RemoteServerAboutRow({
           <span className="shrink-0 whitespace-nowrap text-settings-detail">
             <Popover>
               <PopoverTrigger asChild>
-                <Button type="button" variant="link-muted" size="inlineInherit">
+                <Button
+                  type="button"
+                  variant="link-muted"
+                  size="inlineInherit"
+                  aria-label={manualHelpTitle}
+                >
                   {status}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent side="top" align="end" className="w-72">
-                <p className="text-settings-detail">{help}</p>
+              <PopoverContent
+                side="top"
+                align="end"
+                aria-label={manualHelpTitle}
+                className="w-72 max-w-[calc(100vw-2rem)]"
+              >
+                <p className="p-3 text-settings-detail">{help}</p>
               </PopoverContent>
             </Popover>
           </span>

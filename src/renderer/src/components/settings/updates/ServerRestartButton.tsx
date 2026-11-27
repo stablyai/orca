@@ -2,6 +2,7 @@ import type React from 'react'
 import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 
 type ServerRestartButtonProps = {
   /** Resting label, e.g. "Update all", "Update" or "Retry". */
@@ -58,20 +59,13 @@ export function ServerRestartButton({
         onDisarm()
       }
     }
+    // Capture Esc to revert before bubbling can close Settings, as the SSH target list does. Esc
+    // that ends an IME composition, or belongs to a menu or dialog on top, is left to that layer.
     const onKeyDown = (event: KeyboardEvent): void => {
-      // Esc that ends an IME composition, or closes a menu or dialog layered on top, belongs to
-      // that layer; it must not also revert this button.
-      if (event.key !== 'Escape' || event.isComposing) {
+      if (event.key !== 'Escape' || event.isComposing || hasVisibleOverlay()) {
         return
       }
-      const target = event.target
-      if (
-        target instanceof Element &&
-        !ref.current?.contains(target) &&
-        target.closest('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]')
-      ) {
-        return
-      }
+      event.preventDefault()
       onDisarm()
     }
     doc.addEventListener('pointerdown', onPointerDown, true)

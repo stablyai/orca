@@ -5,19 +5,18 @@ import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
 import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { cn } from '@/lib/class-names'
-import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import type { UpdateStatusLine, UpdateStatusRowModel } from './update-status-row-model'
 import { UpdateStatusDetails } from './UpdateStatusDetails'
+import { detailsText } from './update-status-details-text'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
@@ -103,54 +102,6 @@ function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): Lin
   }
 }
 
-function detailsText(
-  model: UpdateStatusRowModel,
-  status: UpdateStatus,
-  t: Translate
-): string | null {
-  switch (model.details) {
-    case null:
-      return null
-    case 'message':
-      return status.state === 'error' ? updaterMessageText(status) : null
-    case 'install-block': {
-      if (status.state !== 'error' || !status.installBlock) {
-        return null
-      }
-      const guidance = getUpdateInstallBlockGuidance(status.installBlock, t)
-      const { instances } = status.installBlock
-      // The card's guidance points at a process list that About doesn't show, so name it here.
-      if (instances.length > 0 && instances.every(({ kind }) => kind === 'browser')) {
-        return `${guidance.summary} ${t(
-          'settings.about.status.browserBlockGuidance',
-          'End the browser process (PID {{pids}}), then retry. Its server keeps running.',
-          { pids: instances.map(({ pid }) => pid).join(', ') }
-        )}`
-      }
-      return `${guidance.summary} ${guidance.explainer}`
-    }
-    case 'unsupported-system':
-      return status.state === 'not-available' && status.unsupportedSystemUpdate
-        ? t(
-            'macosUpdateRequirement.settingsStatus',
-            'Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac.',
-            {
-              version: status.unsupportedSystemUpdate.version,
-              macos: status.unsupportedSystemUpdate.minimumMacosVersion
-            }
-          )
-        : null
-    case 'externally-managed':
-      return status.state === 'available'
-        ? t(
-            'auto.components.settings.GeneralUpdateSettingsSection.externallyManagedVersionAvailable',
-            'Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself.',
-            { version: status.version }
-          )
-        : null
-  }
-}
-
 function releaseNotesUrl(status: UpdateStatus, version: string): string {
   const url = 'releaseUrl' in status ? status.releaseUrl : undefined
   return url ?? getReleaseNotesUrlForVersion(version)
@@ -184,7 +135,9 @@ export function UpdateStatusRow({
   const version = splitVersion(appVersion)
   const hasAction =
     model.secondaryCheck || (model.action.kind !== 'none' && model.action.kind !== 'progress')
-  const hasNotes = Boolean(model.notesVersion)
+  // A Notes or Details link makes the status line too long beside the action on the 256px card,
+  // so the line takes the full width under the action there.
+  const wideStatus = Boolean(model.notesVersion) || details !== null
 
   return (
     <div className="@container/about-status">
@@ -212,7 +165,7 @@ export function UpdateStatusRow({
           className={cn(
             'col-start-2 row-start-2 min-w-0 self-start',
             !hasAction && 'col-end-4',
-            hasNotes && '@max-xs/about-status:col-end-4'
+            wideStatus && '@max-xs/about-status:col-end-4'
           )}
         >
           {/* The live region stays mounted, empty when idle, so state changes are announced. */}
@@ -288,7 +241,7 @@ export function UpdateStatusRow({
           <div
             className={cn(
               'col-start-3 row-start-1 row-end-3 flex items-center gap-3',
-              hasNotes && '@max-xs/about-status:row-end-2'
+              wideStatus && '@max-xs/about-status:row-end-2'
             )}
           >
             {model.secondaryCheck ? (
@@ -353,7 +306,8 @@ function UpdateStatusAction({
           variant="outline"
           size="sm"
           disabled={disabled}
-          title={getUpdateCheckHint()}
+          // A disabled Check (a stuck macOS staging) can't take modifier clicks, so it drops the hint.
+          title={disabled ? undefined : getUpdateCheckHint()}
           // Modifier clicks pick a one-off release track, not a saved setting.
           onClick={(event) => void window.api.updater.check(getUpdateCheckClickOptions(event))}
         >

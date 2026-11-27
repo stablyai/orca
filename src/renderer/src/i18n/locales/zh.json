@@ -1529,7 +1529,14 @@
         "retryOne": "重试 {{name}}",
         "updatingCount": "{{value0}} 个更新中",
         "failedCount": "{{value0}} 个失败",
-        "failed": "失败"
+        "failed": "失败",
+        "retryAll": "全部重试",
+        "manualHelp": "手动更新 {{name}}"
+      },
+      "status": {
+        "browserBlockGuidance": "结束浏览器进程（PID {{pids}}）后重试。其服务器会继续运行。",
+        "browserBlockGuidanceMany": "结束浏览器进程（PID {{pids}}）后重试。这些服务器会继续运行。",
+        "blocked": "已阻止"
       }
     }
   },

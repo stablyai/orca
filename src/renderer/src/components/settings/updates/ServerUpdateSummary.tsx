@@ -5,7 +5,7 @@ import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/r
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { UPDATING_PHASES, getSessionsMayDropLabel } from './server-restart-copy'
 
-type SummaryPart = { text: string; count: number; destructive?: boolean }
+type SummaryPart = { id: string; text: string; count: number; destructive?: boolean }
 
 function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): SummaryPart[] {
   const count = (phase: RemoteServerUpdateEntry['phase']): number =>
@@ -21,17 +21,20 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): S
   const parts: SummaryPart[] = [
     // First, so the narrow summary never folds a failure into "N other".
     {
+      id: 'failed',
       count: failed,
       destructive: true,
       text: t('settings.about.servers.failedCount', '{{value0}} failed', { value0: failed })
     },
     {
+      id: 'available',
       count: available,
       text: t('settings.about.servers.readyCount', '{{value0}} ready', {
         value0: available
       })
     },
     {
+      id: 'current',
       count: current,
       text: t(
         'auto.components.settings.GeneralRemoteServerUpdates.currentCount',
@@ -40,6 +43,7 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): S
       )
     },
     {
+      id: 'newer',
       count: newer,
       text: t(
         'auto.components.settings.GeneralRemoteServerUpdates.newerCount',
@@ -48,6 +52,7 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): S
       )
     },
     {
+      id: 'manual',
       count: manual,
       text: t(
         'auto.components.settings.GeneralRemoteServerUpdates.manualCount',
@@ -58,6 +63,7 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): S
       )
     },
     {
+      id: 'offline',
       count: offline,
       text: t(
         'auto.components.settings.GeneralRemoteServerUpdates.offlineCount',
@@ -71,6 +77,7 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): S
   }
   return [
     {
+      id: 'total',
       count: entries.length,
       text:
         entries.length === 1
@@ -100,7 +107,7 @@ function ServerSummary({ parts }: { parts: SummaryPart[] }): React.JSX.Element {
     <>
       <span className={rest.length > 0 ? '@max-xs/about-row:hidden' : undefined}>
         {parts.map((part, index) => (
-          <Fragment key={part.text}>
+          <Fragment key={part.id}>
             {index > 0 ? ' · ' : null}
             <SummaryText part={part} />
           </Fragment>

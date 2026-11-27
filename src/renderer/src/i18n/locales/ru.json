@@ -2370,7 +2370,14 @@
         "retryOne": "Повторить для {{name}}",
         "updatingCount": "Обновляется: {{value0}}",
         "failedCount": "Ошибок: {{value0}}",
-        "failed": "Ошибка"
+        "failed": "Ошибка",
+        "retryAll": "Повторить все",
+        "manualHelp": "Ручное обновление {{name}}"
+      },
+      "status": {
+        "browserBlockGuidance": "Завершите процесс браузера (PID {{pids}}) и повторите попытку. Его сервер продолжит работу.",
+        "browserBlockGuidanceMany": "Завершите процессы браузера (PID {{pids}}) и повторите попытку. Их серверы продолжат работу.",
+        "blocked": "Заблокировано"
       }
     }
   },
