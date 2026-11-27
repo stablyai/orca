@@ -26,7 +26,8 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import {
   historyRowOfDeletedChat,
   historyRowOwners,
-  historyRowOwnershipLookup
+  historyRowOwnershipLookup,
+  oneRowPerChat
 } from './history-row-ownership-lookup'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import {
@@ -58,29 +59,30 @@ export function projectStructuredAiVaultSessions(
   if (!owner) {
     return result
   }
-  const sessions = result.sessions.flatMap((session) => {
-    const local = session.executionHostId === LOCAL_EXECUTION_HOST_ID
-    if (local && deleted?.(session)) {
-      return []
-    }
-    const ownership = local ? owner(session) : null
-    if (!ownership) {
-      // A chat forgotten since the scan: its ACP session no longer opens anywhere.
-      return local && isCursorAcpSessionRow(session) ? [] : [session]
-    }
-    if (!opensChat(ownership.provider)) {
-      return []
-    }
-    return [
-      {
+  const sessions = oneRowPerChat(
+    result.sessions.flatMap((session) => {
+      const local = session.executionHostId === LOCAL_EXECUTION_HOST_ID
+      if (local && deleted?.(session)) {
+        return []
+      }
+      const ownership = local ? owner(session) : null
+      if (!ownership) {
+        // A chat forgotten since the scan: its ACP session no longer opens anywhere.
+        return local && isCursorAcpSessionRow(session) ? [] : [{ row: session, ownership }]
+      }
+      if (!opensChat(ownership.provider)) {
+        return []
+      }
+      const row = {
         ...session,
         ...ownedRow(session.agent, ownership),
         ...(ownership.role === 'head' && isCursorAcpSessionRow(session)
           ? ownedRowLastTurnPreview(session, ownership.sessionId)
           : null)
       }
-    ]
-  })
+      return [{ row, ownership }]
+    })
+  )
   return sessions.length === result.sessions.length &&
     sessions.every((row, index) => row === result.sessions[index])
     ? result
@@ -100,20 +102,23 @@ export function projectStructuredAiVaultSearchResponse(
   }
   return {
     ...response,
-    hits: response.hits.flatMap((hit) => {
-      if (deleted?.(hit)) {
-        return []
-      }
-      const ownership = owner(hit)
-      if (!ownership) {
-        return [hit]
-      }
-      if (!opensChat(ownership.provider)) {
-        return []
-      }
-      const { resumeCommand: _resumeCommand, ...owned } = hit
-      return [redactForTransport({ ...owned, ...ownedRow(hit.agent, ownership) }, transport)]
-    })
+    hits: oneRowPerChat(
+      response.hits.flatMap((hit) => {
+        if (deleted?.(hit)) {
+          return []
+        }
+        const ownership = owner(hit)
+        if (!ownership) {
+          return [{ row: hit, ownership }]
+        }
+        if (!opensChat(ownership.provider)) {
+          return []
+        }
+        const { resumeCommand: _resumeCommand, ...owned } = hit
+        const row = redactForTransport({ ...owned, ...ownedRow(hit.agent, ownership) }, transport)
+        return [{ row, ownership }]
+      })
+    )
   }
 }
 
