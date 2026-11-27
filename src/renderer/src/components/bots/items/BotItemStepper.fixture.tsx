@@ -163,8 +163,8 @@ function typed(text: string, width = 1248, total = 219): ComponentFixture {
   })
 }
 export const wideUnbroken = typed('g'.repeat(400))
-/** One line under the 520px break at 1 / 2: it starts as far below the border as chat's composer text. */
-export const stackedOneLine = typed('Yes, merge it once CI is green', 420, 2)
+/** One line under the 520px break, with arrows: it starts as far below the border as chat's composer text. */
+export const stackedOneLine = typed('Yes, merge it once CI is green', 420, 3)
 export const wideLines = typed(
   'Link expiry should default to 7 days, with a picker for 1 day, 30 days and never; owners can change it after sharing.\nResharing stays with editors.\nShip it behind the existing sharing flag.'
 )
