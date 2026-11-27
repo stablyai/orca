@@ -467,17 +467,18 @@
   opacity: 1;
 }
 
-/* Chromeless headers are transparent overlays: active actions must not cover row-one output.
-   Hover-capable devices still reveal them; touch devices keep them visible. */
-@media (hover: hover) and (pointer: fine) {
-  .pane-title-bar[data-chromeless][data-active-pane] .pane-title-split-trigger,
+/* Chromeless headers are transparent overlays: active split/close actions must not cover row-one output.
+   Only the split button carries data-pane-split-trigger; Show terminal and handoff stay visible.
+   Keep controls visible when any coarse pointer exists so taps never hit an unseen button. */
+@media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)) {
+  .pane-title-bar[data-chromeless][data-active-pane] [data-pane-split-trigger],
   .pane-title-bar[data-chromeless][data-active-pane] .pane-title-close {
     opacity: 0;
   }
 
-  .pane-title-bar[data-chromeless]:hover .pane-title-split-trigger,
+  .pane-title-bar[data-chromeless]:hover [data-pane-split-trigger],
   .pane-title-bar[data-chromeless]:hover .pane-title-close,
-  .pane-title-bar[data-chromeless]:focus-within .pane-title-split-trigger,
+  .pane-title-bar[data-chromeless]:focus-within [data-pane-split-trigger],
   .pane-title-bar[data-chromeless]:focus-within .pane-title-close {
     opacity: 1;
   }
