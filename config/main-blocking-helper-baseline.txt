@@ -160,7 +160,6 @@
 3 src/main/browser/routing/partitions/browser-route-partition-storage-runtime.ts
 1 src/main/browser/routing/sessions/browser-route-session-runtime.ts
 1 src/main/browser/sessions/browser-session-frame-preloads.ts
-1 src/main/browser/sessions/browser-session-startup.ts
 1 src/main/browser/sessions/profiles/browser-session-meta-store.ts
 1 src/main/browser/sessions/profiles/browser-session-profile-retirement.ts
 6 src/main/browser/sessions/profiles/browser-session-registry.ts
