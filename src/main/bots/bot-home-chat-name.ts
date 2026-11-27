@@ -3,6 +3,7 @@
 import type { Bot } from '../../shared/bot-types'
 import {
   BOT_HOME_NAME,
+  botHomeName,
   botHomes,
   legacyTeammateHomeNames,
   type BotHomeOf
@@ -30,7 +31,7 @@ export type BotHomeHost = Pick<
   deps: {
     store: Pick<
       StructuredAgentSessionHost['deps']['store'],
-      'listConversations' | 'lineageRevision'
+      'listConversations' | 'lineageRevision' | 'getConversation'
     >
   }
 }
@@ -44,10 +45,10 @@ export function botHomeRootOf(host: Pick<BotHomeHost, 'deps'>): (sessionId: stri
   return (id) => (isOrcaSessionId(id) ? resolve(id) : id)
 }
 
-/** A new Home Chat is named Home, whoever's it is: a teammate's is titled by their share row's name
- *  wherever it shows (botHomeTitleOf), so no record holds a copy of it. The Home it replaced keeps no
- *  tab, even when its stop won but its tab bookkeeping lost a race, so no restore reopens it; and it
- *  gives up the exact name it was given, so it is named from its content. */
+/** A new Home Chat takes its person's Home name ("Home", or "<name>’s Home" for a teammate's, which
+ *  syncTeammateHomeNames keeps current). The Home it replaced keeps no tab, even when its stop won
+ *  but its tab bookkeeping lost a race, so no restore reopens it; and it gives up the exact name it
+ *  was given, so it is named from its content. */
 export async function nameNewHome(
   host: BotHomeHost,
   bot: Bot,
@@ -55,7 +56,7 @@ export async function nameNewHome(
   sessionId: string,
   replaced: string | null | undefined
 ): Promise<void> {
-  await host.setUserConversationName(sessionId, BOT_HOME_NAME, 'rename')
+  await host.setUserConversationName(sessionId, botHomeName(bot, of), 'rename')
   if (replaced && host.isSessionTabVisible(replaced)) {
     await host.setSessionTabVisibility(replaced, false)
   }
@@ -65,6 +66,37 @@ export async function nameNewHome(
     }
   }
   await releaseReplacedHomes(host, bot)
+}
+
+/** A teammate's Home bears their name as their share row has it now: the one stored copy every reader
+ *  (tabs, lists, Items, notifications) shows the owner. Renamed only while it still bears a name Orca
+ *  gave it (`previous`: the bot before a share changed), so a rename the owner made stays. */
+export async function syncTeammateHomeNames(
+  host: BotHomeHost,
+  bot: Bot,
+  previous?: Pick<Bot, 'shares'>
+): Promise<void> {
+  for (const home of botHomes(bot)) {
+    const of = home.of
+    if (of === 'owner') {
+      continue
+    }
+    const name = botHomeName(bot, of)
+    const given = new Set([
+      ...legacyTeammateHomeNames(bot, of),
+      ...(previous ? [botHomeName(previous, of)] : [])
+    ])
+    const stored = host.deps.store.getConversation(home.sessionId)
+    if (
+      stored?.conversationNameSource === 'user' &&
+      stored.conversationName !== name &&
+      given.has(stored.conversationName ?? '')
+    ) {
+      await host
+        .setUserConversationName(home.sessionId, name, 'rename')
+        .catch((error: unknown) => console.warn('[bots] renaming a teammate’s Home failed:', error))
+    }
+  }
 }
 
 /** Every chat in the agent's home named "Home" but a current Home gives up the name and is named from

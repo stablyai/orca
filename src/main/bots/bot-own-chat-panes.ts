@@ -74,10 +74,7 @@ export async function readBotOwnChatPanes(
     )
     byBot[bot.id] = own.map((chat) => ({
       paneKey: chat.paneKey,
-      // A teammate's Home goes by its share row's name (the base's title), never a tab's.
-      title:
-        (chat.whoseHome && chat.whoseHome !== 'owner' ? null : tabTitles.get(chat.chatId)) ||
-        chat.title
+      title: tabTitles.get(chat.chatId) || chat.title
     }))
   }
   return byBot

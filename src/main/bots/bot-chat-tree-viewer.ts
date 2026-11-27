@@ -58,12 +58,12 @@ function ownerView(
     if (isPlaceholder(chat) && chat.runningTotal === 0) {
       return []
     }
-    // Titled from the share row as it is now, never from the chat's record.
+    // A Home not made yet has no record to be titled by.
     return [
       {
         ...wireChat(chat),
         homeOf: botSharePersonName(viewer.bot, of.accountId),
-        title: botHomeName(viewer.bot, of)
+        ...(isPlaceholder(chat) ? { title: botHomeName(viewer.bot, of) } : {})
       }
     ]
   })

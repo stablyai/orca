@@ -1,3 +1,4 @@
+import { syncSharePersonNames } from '../bots/team-share/share-person-name-sync'
 import { ConnectorBotPurposes } from './connector-bot-purposes'
 import type { ConnectorBotGoogle } from './connector-bot-google'
 import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../shared/connector-cloud-features'
@@ -181,13 +182,9 @@ export function createConnectorCloud({
       webhookNotice: async (delivery) => webhooks.notice(delivery),
       prEvent: (delivery) => prWaker.handle(delivery.deliveryId, delivery.event),
       shareResolved: async (delivery) => {
+        const before = runtime.bots.list().find((bot) => bot.id === delivery.botId)
         const resolved = await resolveBotShareInvite(runtime.bots, delivery)
-        // Older builds read a device row's name: written again once the share carries a new one.
-        await runtime.botShareDevices
-          ?.syncBotShareDeviceNames()
-          .catch((error: unknown) =>
-            console.warn('[bots] share device names not rewritten:', error)
-          )
+        await syncSharePersonNames(runtime, delivery.botId, before)
         return resolved
       },
       shareAccept: (delivery) =>
