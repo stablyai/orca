@@ -18,6 +18,7 @@ import {
 } from '../delivery/pty-pre-handler-buffer'
 import type { createPtyOutputProcessor } from '../output/pty-output-processor'
 import type { IpcPtyTransportOptions, PtyTransport } from '../pty-transport-types'
+import { forgetLocalPtySpawnShell } from './local-pty-spawn-shell'
 
 type PtyCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 
@@ -139,6 +140,7 @@ export function createIpcPtySessionHandlers({
     const hadBufferedExit = hasPreHandlerPtyExit(id, incarnationId)
     const lifetime = getTerminalNoticeLifetime(id)
     const exit = (code: number): void => {
+      forgetLocalPtySpawnShell(id)
       const currentId = getPtyId()
       if (currentId !== null && currentId !== id) {
         unregisterAll(id)

@@ -3,6 +3,7 @@ import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pa
 import { resolveHostAgentStartupShell } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import { paneHasKnownAgentIdentity } from '../../pty-connection/agent-identity/pane-known-agent-identity'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
+import { readLocalPtySpawnShell } from '../../pty-transport/ipc/local-pty-spawn-shell'
 import { readLivePtyTitle } from '../../snapshots/pty-buffer-serializer'
 
 // Only an unquoted local cmd path (or basename), optionally prefixed by English Administrator; unknown forms retain Ctrl+W.
@@ -58,7 +59,8 @@ export function readLocalWindowsCmdPromptPane(args: {
   }
   const state = useAppStore.getState()
   return isLocalWindowsCmdPrompt({
-    tabShellOverride: sessionMetadata.shellOverride,
+    // Why: the shell main started this PTY with outlives later default-shell setting changes.
+    tabShellOverride: readLocalPtySpawnShell(ptyId) ?? sessionMetadata.shellOverride,
     hostTerminalWindowsShell: state.settings?.terminalWindowsShell,
     paneTitle: readLivePtyTitle(ptyId),
     paneHasAgent: () => paneHasKnownAgentIdentity(state, makePaneKey(args.tabId, pane.leafId)),

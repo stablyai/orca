@@ -115,6 +115,10 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),
     ...(startupCwdFallback ? { startupCwdFallback } : {}),
+    // Why: the renderer needs the shell a live PTY started with; the default setting may change later.
+    ...(!ctx.result.isReattach && !args.connectionId && ctx.effectiveShellOverride
+      ? { localSpawnShell: ctx.effectiveShellOverride }
+      : {}),
     ...resumeDisposition(ctx)
   }
 }

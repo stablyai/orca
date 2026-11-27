@@ -10,6 +10,11 @@ import {
   readLocalWindowsCmdPromptPane
 } from './terminal-local-windows-cmd-conpty'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
+import {
+  forgetLocalPtySpawnShell,
+  recordLocalPtySpawnShell,
+  retainLocalPtySpawnShellOnReattach
+} from '../../pty-transport/ipc/local-pty-spawn-shell'
 
 const CTRL_W = '\x17'
 const BS = '\b'
@@ -194,6 +199,78 @@ describe('Ctrl+Backspace bytes', () => {
         unregisterReplacement()
       }
     } finally {
+      unregisterTitle()
+      unregister()
+      terminal.dispose()
+      useAppStore.setState(previousState, true)
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('judges the shell main started the PTY with, not a later default-shell setting', async () => {
+    const previousState = useAppStore.getState()
+    vi.stubGlobal('window', {
+      api: {
+        pty: {
+          onClearBufferRequest: () => () => {},
+          onResetInputModesRequest: () => () => {},
+          onSerializeBufferRequest: () => () => {}
+        }
+      }
+    })
+    const terminal = new Terminal({ allowProposedApi: true })
+    const unregister = registerPtySerializer('spawn-pty', () => null)
+    const unregisterTitle = registerPtyTitleSource('spawn-pty', (handler) =>
+      terminal.onTitleChange(handler)
+    )
+    const read = () =>
+      readLocalWindowsCmdPromptPane({
+        isWindows: true,
+        tabId: 'spawn-tab',
+        pane: { id: 1, leafId: '00000001-0000-4000-8000-000000000000' },
+        transport: {
+          getPtyId: () => 'spawn-pty',
+          getLocalSessionMetadata: () => ({})
+        },
+        isLocalWindowsConpty: () => true
+      })
+    const setShellSetting = (terminalWindowsShell: string) =>
+      useAppStore.setState({
+        settings: {
+          ...previousState.settings,
+          terminalWindowsShell
+        } as typeof previousState.settings
+      })
+    try {
+      useAppStore.setState({
+        agentStatusByPaneKey: {},
+        paneForegroundAgentByPaneKey: {},
+        agentLaunchConfigByPaneKey: {}
+      })
+      await new Promise<void>((resolve) => terminal.write(`\x1b]0;${CMD_IDLE_TITLE}\x07`, resolve))
+
+      // Started as cmd, then the default switched to PowerShell: still cmd.
+      recordLocalPtySpawnShell('spawn-pty', 'inc-1', 'C:\\Windows\\System32\\cmd.exe')
+      setShellSetting('powershell.exe')
+      expect(read()).toBe(true)
+
+      // Started as PowerShell, then the default switched to cmd: not cmd.
+      recordLocalPtySpawnShell('spawn-pty', 'inc-2', 'powershell.exe')
+      setShellSetting('cmd.exe')
+      expect(read()).toBe(false)
+
+      // A reattach to the same incarnation keeps the record; a different one drops it.
+      retainLocalPtySpawnShellOnReattach('spawn-pty', 'inc-2')
+      expect(read()).toBe(false)
+      retainLocalPtySpawnShellOnReattach('spawn-pty', 'inc-other')
+      expect(read()).toBe(true)
+
+      // With no record (older main, or exited), fall back to the setting.
+      recordLocalPtySpawnShell('spawn-pty', 'inc-3', 'powershell.exe')
+      forgetLocalPtySpawnShell('spawn-pty')
+      expect(read()).toBe(true)
+    } finally {
+      forgetLocalPtySpawnShell('spawn-pty')
       unregisterTitle()
       unregister()
       terminal.dispose()

@@ -18,6 +18,10 @@ import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
+import {
+  recordLocalPtySpawnShell,
+  retainLocalPtySpawnShellOnReattach
+} from './local-pty-spawn-shell'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from '../pty-transport-types'
 
@@ -123,6 +127,17 @@ export async function connectIpcPty(
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
     context.bind(spawnResult.id)
+    if (!transportOptions.connectionId) {
+      if (spawnResult.isReattach) {
+        retainLocalPtySpawnShellOnReattach(spawnResult.id, spawnResult.incarnationId)
+      } else {
+        recordLocalPtySpawnShell(
+          spawnResult.id,
+          spawnResult.incarnationId,
+          spawnResult.localSpawnShell
+        )
+      }
+    }
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)
       if (context.isDestroyed()) {
