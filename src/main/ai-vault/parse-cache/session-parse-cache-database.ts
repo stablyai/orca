@@ -62,6 +62,8 @@ INSERT OR REPLACE INTO meta(key, value) VALUES ('${versionKey}', '1');
 const ROWS_REPAIR_SQL =
   // Grok rows (summary.json) cached before the synthetic-turn filter.
   rowsRepairSql('grok_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
+  // Grok rows whose prompt was cut by an İ before <user_query>.
+  rowsRepairSql('grok_query_unicode_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
   // Pi rows cached before session_info names became titles.
   rowsRepairSql('pi_title_rows_version', `instr(rows.session, '"agent":"pi"') > 0`) +
   // Claude rows titled with harness markup (such as /clear's command caveat) before it stopped naming sessions.
