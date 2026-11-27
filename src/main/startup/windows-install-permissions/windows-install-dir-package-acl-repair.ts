@@ -175,10 +175,6 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
 // Latch per process despite window reopen; ordinary install DACL is stable within a session.
 let repairStarted = false
 
-export function resetWindowsInstallDirAclRepairForTest(): void {
-  repairStarted = false
-}
-
 /** Defer Windows desktop writes; never throw into window creation. Return whether dispatched so process-latch refusals cannot leave callers awaiting onDone. */
 export function repairWindowsInstallDirPackageAcl(args: WindowsInstallDirAclRepairArgs): boolean {
   if ((args.platform ?? process.platform) !== 'win32' || args.isServeMode === true) {

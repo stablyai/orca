@@ -89,6 +89,20 @@ export const getGeneralConfirmationSearchEntries = createLocalizedCatalog(() => 
       )
     ]
   },
+  chat: {
+    id: 'general-skip-delete-chat-confirm',
+    title: translate('settings.general.confirmations.chat', 'Deleting a chat'),
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.confirmations', 'confirmations'),
+      ...translateSearchKeyword('auto.components.settings.general.search.84c67d0108', 'delete'),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.chat', 'chat'),
+      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.ca86dd6e27', 'dialog'),
+      ...translateSearchKeyword('auto.components.settings.general.search.7e9b556873', 'skip'),
+      ...translateSearchKeyword('auto.components.settings.general.search.0efc9d96ad', 'prompt'),
+      ...translateSearchKeyword('settings.general.search.keywords.ask_before', 'ask before')
+    ]
+  },
   artifact: {
     id: 'general-skip-delete-artifact-confirm',
     title: translate('settings.general.confirmations.artifact', 'Deleting an artifact'),

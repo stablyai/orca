@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import type { HostInstance } from 'react-native'
 import { ChevronLeft, MoreHorizontal } from 'lucide-react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import { NavBar, NavBarTitleButton } from '../../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
@@ -26,7 +25,6 @@ export function MobileDiffReviewHeader({
   onOpenFiles
 }: Props) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   return (

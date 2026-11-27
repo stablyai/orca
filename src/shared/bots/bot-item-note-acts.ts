@@ -51,7 +51,8 @@ export function botAct(entries: readonly BotItemNoteEntry[]): { added: boolean }
   return link ? { added, act: 'link', link } : { added, act: 'update' }
 }
 
-type LinkedWords = { count: number; name: string | null }
+/** `dispatchId`: the one link's worker, when it is one. */
+type LinkedWords = { count: number; name: string | null; dispatchId?: string }
 
 /** The links a write added: the one link's short name, or how many. */
 function linkedWords(entries: readonly BotItemNoteEntry[]): LinkedWords | null {
@@ -68,5 +69,11 @@ function linkedWords(entries: readonly BotItemNoteEntry[]): LinkedWords | null {
     }
   }
   const [only] = names.values()
-  return only === undefined ? null : { count: names.size, name: names.size === 1 ? only : null }
+  if (only === undefined) {
+    return null
+  }
+  const [ref = ''] = names.keys()
+  return names.size === 1 && ref.startsWith('dispatch:')
+    ? { count: 1, name: only, dispatchId: ref.slice('dispatch:'.length) }
+    : { count: names.size, name: names.size === 1 ? only : null }
 }

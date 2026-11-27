@@ -10,9 +10,9 @@ import {
 } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
-import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useWorkingSweep } from '../motion/use-working-motion'
 import { NAV_BAR_BUTTON_SIZE } from './NavBarButton'
 
@@ -22,6 +22,8 @@ type NavBarProps = {
   /** Usually the back button; a side-panel or close button where a screen has no back. */
   leading?: ReactNode
   title?: string
+  /** Before the title, as a chat's avatar is. */
+  titleLeading?: ReactNode
   /** One short line under the title: host, workspace, or a status. */
   subtitle?: ReactNode
   /** Replaces the title block, e.g. the session title that opens its details card. */
@@ -42,6 +44,7 @@ type NavBarProps = {
 export function NavBar({
   leading,
   title,
+  titleLeading,
   subtitle,
   center,
   trailing,
@@ -51,7 +54,7 @@ export function NavBar({
   dividerOpacity,
   refreshing = false
 }: NavBarProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={[styles.chrome, dividerOpacity && styles.chromeWithoutDivider, style]}>
       <View style={styles.bar}>
@@ -59,7 +62,18 @@ export function NavBar({
         <Animated.View style={[styles.center, titleOpacity && { opacity: titleOpacity }]}>
           {center ?? (
             <>
-              {title !== undefined ? (
+              {title !== undefined && titleLeading ? (
+                <View style={styles.titleRow}>
+                  {titleLeading}
+                  <Text
+                    style={[styles.title, styles.titleButtonText]}
+                    numberOfLines={1}
+                    accessibilityRole="header"
+                  >
+                    {title}
+                  </Text>
+                </View>
+              ) : title !== undefined ? (
                 <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
                   {title}
                 </Text>
@@ -91,6 +105,7 @@ export function NavBar({
 
 // Sits on its parent's bottom edge so the title, subtitle and accessory never move.
 export function NavBarRefreshLine() {
+  const styles = useThemedStyles(stylesSheet)
   const reducedMotion = useReducedMotionEnabled()
   const sweep = useWorkingSweep(reducedMotion === false)
   // Draw nothing until the preference is known, so a reveal never swaps shapes.
@@ -125,7 +140,8 @@ export function NavBarTitleButton({
   onPress: () => void
   accessibilityLabel: string
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       onPress={onPress}
@@ -150,7 +166,7 @@ export function NavBarTitleButton({
 
 /** Subtitle text for a custom subtitle row, e.g. beside a connection dot. */
 export function NavBarSubtitleText({ children }: { children: ReactNode }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Text style={styles.subtitle} numberOfLines={1}>
       {children}
@@ -158,7 +174,7 @@ export function NavBarSubtitleText({ children }: { children: ReactNode }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   chrome: {
     backgroundColor: colors.bgBase,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -225,6 +241,12 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '600'
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    maxWidth: '100%'
   },
   subtitleRow: {
     flexDirection: 'row',

@@ -1,7 +1,7 @@
-import { colors } from '../../theme/mobile-theme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type Props = {
   credentialError: string | null
@@ -19,6 +19,7 @@ export function JiraConnectPrompt({
   onCheckAgain,
   bottomInset
 }: Props) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   return (
     <MobileStateView

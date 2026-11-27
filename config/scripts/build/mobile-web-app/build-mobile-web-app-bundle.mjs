@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import {
   MOBILE_WEB_BUNDLE_ENTRYPOINT,
+  contentAssetName,
   hashedAsset,
   readDesktopVersion,
   readProtocolWindow,
@@ -26,6 +27,15 @@ import {
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { reactNativeSvgWebPlugin } from './react-native-svg-web-plugin.mjs'
 import { packageBuildPlugin } from './one-package-build-plugin.mjs'
+import {
+  reactCompilerShim,
+  mobileReactCompilerPlugin
+} from './mobile-web-react-compiler-plugin.mjs'
+import {
+  MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
+  MOBILE_WEB_APP_ROOT_RESET
+} from './mobile-web-app-page-styles.mjs'
+import { PAGE_GLOBALS_BANNER, bannerOnlyWhereScriptsRunFirst } from './page-globals-banner.mjs'
 import {
   ROUTE_ENTRY_NAMESPACE,
   entryStaticClosure,
@@ -102,6 +112,7 @@ export const MOBILE_WEB_APP_SHIMS = [
     name: 'one-package-build',
     appliesTo: (options) => options.plugins?.includes(packageBuildPlugin) === true
   },
+  reactCompilerShim,
   {
     // esbuild has no require.context, so the route tree is generated and injected.
     name: 'route-manifest',
@@ -109,22 +120,6 @@ export const MOBILE_WEB_APP_SHIMS = [
       options.plugins?.some((plugin) => plugin.name === ROUTE_MANIFEST_PLUGIN_NAME) === true
   }
 ]
-
-// Match Expo root reset/id: definite html/body/root heights prevent silent zero-height lists with accessible but untappable rows.
-// Inline under existing unsafe-inline style CSP to avoid a collapsed first frame; RN-Web owns body margin reset.
-export const MOBILE_WEB_APP_ROOT_RESET =
-  '<style id="expo-reset">html,body{height:100%}body{overflow:hidden}' +
-  '#root{display:flex;height:100%;flex:1}</style>'
-
-// Use zero-specificity native parity: remove text-field focus rings only; keyboard buttons keep browser rings.
-// Disable body text selection/callout to prevent WebKit/Android long-press interference, including portaled modals; fields opt back in.
-// Stop the WebView rubber-banding the whole page (headers included) when an inner list hits its end; inner scrollers keep their bounce.
-export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
-  '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
-  ':where(html){overscroll-behavior:none}' +
-  ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
-  ':where(input,textarea,[contenteditable]){-webkit-user-select:text;user-select:text;' +
-  '-webkit-touch-callout:default}</style>'
 
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
@@ -137,10 +132,6 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
 
 // nodePaths cannot override shared modules’ root Zod resolution. Alias mobile’s package to match tsconfig and salvage/container instances; esbuild picks its ESM module entry.
 const MOBILE_ZOD_PACKAGE = join(mobileDir, 'node_modules', 'zod')
-
-// Set __zod_globalConfig.jitless in banner: module-scope schema construction probes eval before our imports can configure it, generating caught-but-reported CSP violations.
-const ZOD_JITLESS_BANNER =
-  'globalThis.__zod_globalConfig ??= {}; globalThis.__zod_globalConfig.jitless = true;'
 
 const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
 const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
@@ -323,7 +314,8 @@ export function mobileWebAppBuildOptions(
       lucideBarrelPlugin,
       reactNativeSvgWebPlugin,
       hairlineDevicePixelPlugin,
-      packageBuildPlugin
+      packageBuildPlugin,
+      mobileReactCompilerPlugin
     ],
     resolveExtensions: [
       '.web.tsx',
@@ -350,9 +342,7 @@ export function mobileWebAppBuildOptions(
     assetNames: '[hash]',
     // Root-absolute asset URLs remain correct at nested page routes.
     publicPath: '/assets',
-    banner: {
-      js: `globalThis.process ??= { env: { NODE_ENV: 'production', EXPO_OS: 'web' }, platform: 'web', version: '', nextTick: (fn) => setTimeout(fn, 0) };${ZOD_JITLESS_BANNER}`
-    },
+    banner: { js: PAGE_GLOBALS_BANNER },
     define: {
       global: 'globalThis',
       __DEV__: 'false',
@@ -402,7 +392,7 @@ export function renameOutputsByContent(metafile, outputFiles) {
       )
     }
     open.delete(name)
-    const result = { name: `${sha256Hex(bytes)}${extname(name)}`, bytes }
+    const result = { name: contentAssetName(sha256Hex(bytes), extname(name).slice(1)), bytes }
     renamed.set(name, result)
     return result
   }
@@ -564,7 +554,8 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const result = await buildMobileWebAppScripts(routes)
   assertNoZodLocaleTables(result.metafile)
   const entryOutputPath = entryOutput(result.metafile)
-  const renamed = renameOutputsByContent(result.metafile, result.outputFiles)
+  const outputFiles = bannerOnlyWhereScriptsRunFirst(result.metafile, result.outputFiles)
+  const renamed = renameOutputsByContent(result.metafile, outputFiles)
   const entry = renamed.get(basename(entryOutputPath))
   const byName = (left, right) => (left.name < right.name ? -1 : 1)
   const others = [...renamed.entries()]

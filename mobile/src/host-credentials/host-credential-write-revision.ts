@@ -13,8 +13,3 @@ export function markHostCredentialWrite(hostId: string): void {
 export function clearHostCredentialWriteRevision(hostId: string): void {
   revisionByHostId.delete(hostId)
 }
-
-export function resetHostCredentialWriteRevisionsForTests(): void {
-  nextRevision = 1
-  revisionByHostId.clear()
-}

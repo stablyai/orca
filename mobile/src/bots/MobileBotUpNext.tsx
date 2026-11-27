@@ -1,3 +1,4 @@
+import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight } from 'lucide-react-native'
@@ -15,11 +16,12 @@ import {
   ListRow,
   SectionHeader
 } from '../components/list/ListGroup'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { openExternalLink } from '../platform/external-links/external-link'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { lookedText } from './bot-up-next-copy'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
@@ -34,7 +36,8 @@ export type UpNextActions = {
 
 function UpNextRow({ item, actions }: { item: Suggestion; actions: UpNextActions }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const upNextStyles = useThemedStyles(upNextStylesSheet)
   const { link, source } = item
   const start = actions.start
   return (
@@ -93,7 +96,8 @@ export function MobileBotUpNext({
   actions: UpNextActions
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
+  const upNextStyles = useThemedStyles(upNextStylesSheet)
   const [expanded, setExpanded] = useState(false)
   const { state, items } = upNext
   const shown = expanded ? items : items.slice(0, SUGGESTION_LIMITS.shown)
@@ -106,11 +110,13 @@ export function MobileBotUpNext({
           state.running
             ? t('bots.upNext.looking', 'Looking around…')
             : state.lastLookedAt
-              ? lookedText(state.lastLookedAt)
+              ? lookedText(state.lastLookedAt, t, intlLocale)
               : ''
         }
       />
-      {state.error && !state.running ? <Text style={upNextStyles.note}>{state.error}</Text> : null}
+      {state.error && !state.running ? (
+        <Text style={upNextStyles.note}>{botCodedText(state.error, state.failure, t)}</Text>
+      ) : null}
       {shown.length > 0 ? (
         <ListGroup separatorInset={LIST_LEADING_INSET}>
           {[
@@ -142,7 +148,7 @@ export function MobileBotUpNext({
   )
 }
 
-const upNextStyles = themedStyleSheet(() => ({
+const upNextStylesSheet = themedStyleSheet((colors) => ({
   link: {
     flexDirection: 'row',
     alignItems: 'center',

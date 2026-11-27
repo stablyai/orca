@@ -1,9 +1,7 @@
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { readSwapVolumeFreeSpace } from './swap-volume-free-space'
-import {
-  notePreGoneHostMemorySample,
-  resetPreGonePtyTreeMemoryForTest
-} from './pre-gone-pty-tree-memory'
+import { notePreGoneHostMemorySample } from './pre-gone-pty-tree-memory'
+import { sampleMainMemoryFootprint } from '../../memory/main-memory-spike-capture'
 import {
   getSystemMemoryDetails,
   SYSTEM_MEMORY_KEY_PREFIX,
@@ -93,6 +91,7 @@ async function mergeSwapVolumeFreeSpace(issuedOnTick: number): Promise<void> {
 export async function samplePreGoneSystemMemory(nowMs: number = Date.now()): Promise<void> {
   // Commit host memory before statfs, which may stall under paging pressure.
   const tick = ++sampleTick
+  void sampleMainMemoryFootprint()
   if (!commitHostMemorySample(nowMs)) {
     return
   }
@@ -108,18 +107,6 @@ export function startPreGoneSystemMemorySampling(
   void samplePreGoneSystemMemory()
   preGoneTimer = setInterval(() => void samplePreGoneSystemMemory(), intervalMs)
   preGoneTimer.unref?.()
-}
-
-export function resetPreGoneSystemMemorySamplingForTest(): void {
-  if (preGoneTimer) {
-    clearInterval(preGoneTimer)
-  }
-  preGoneTimer = null
-  preGoneSample = null
-  swapVolumeReadInFlight = false
-  resetPreGonePtyTreeMemoryForTest()
-  // Invalidate pending volume reads so they cannot repopulate a reset sample.
-  samplingGeneration += 1
 }
 
 export function preGoneSystemMemoryDetails(nowMs: number): CrashReportDetails {

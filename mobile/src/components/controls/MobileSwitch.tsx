@@ -7,9 +7,9 @@ import Animated, {
   useSharedValue,
   withTiming
 } from 'react-native-reanimated'
-import { colors, feedback, radii } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { triggerSelection } from '../../platform/haptics/haptics'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { BOTTOM_DRAWER_EASING } from '../bottom-drawer/bottom-drawer-constants'
@@ -39,6 +39,8 @@ export function MobileSwitch({
   disabled = false,
   testID
 }: MobileSwitchProps) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const scheme = useMobileColorScheme()
   const reducedMotion = useReducedMotionEnabled()
   const progress = useSharedValue(value ? 1 : 0)
@@ -95,7 +97,7 @@ export function MobileSwitch({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   touch: { justifyContent: 'center', flexShrink: 0 },
   disabled: { opacity: feedback.disabledOpacity },
   pressed: { opacity: feedback.pressedOpacity },

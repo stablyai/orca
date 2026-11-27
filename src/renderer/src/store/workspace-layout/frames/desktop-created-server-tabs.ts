@@ -151,14 +151,3 @@ export const DESKTOP_CREATED_SERVER_TAB_HOLDS: HeldDrawnTabs = {
   isGroupLayoutHeld: () => false,
   keepsInMainGroups: isCreated
 }
-
-export function _reloadDesktopCreatedServerTabsForTests(): void {
-  records = undefined
-}
-
-export function _resetDesktopCreatedServerTabsForTests(): void {
-  records = new Map()
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {}
-}

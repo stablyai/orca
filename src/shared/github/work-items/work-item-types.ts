@@ -25,6 +25,8 @@ export type GitHubWorkItem = {
   url: string
   labels: string[]
   updatedAt: string
+  /** Cross-repo lists merge on it; older hosts omit it. */
+  createdAt?: string
   author: string | null
   // Use API avatars for GHE logins absent on github.com (#8784). gh-pr-view omits them; UI falls back through login URL to initials.
   authorAvatarUrl?: string
@@ -33,6 +35,8 @@ export type GitHubWorkItem = {
   // Head SHA enables cached check-run requests instead of per-row gh pr checks.
   headSha?: string
   prRepo?: GitHubRepositoryIdentity
+  /** GHES API host that read this issue when its web URL may name another host. */
+  apiHost?: string
   additions?: number
   deletions?: number
   changedFiles?: number

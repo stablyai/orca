@@ -69,21 +69,39 @@ export const GOOGLE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'account', 'revoke'],
     notes: [
       'Without --revoke the sign-in is deleted here only; Google still lists the app under your account’s third-party access. --revoke cancels it at Google too.',
-      '--account is needed when more than one account is connected.',
+      '--account is needed when more than one account is connected. Removing the default makes the oldest account left the default.',
       OWNER_ONLY
     ],
     examples: ['orca google disconnect', 'orca google disconnect --account me@example.com --revoke']
   },
   {
+    path: ['google', 'default'],
+    summary: 'Show or set the Google account used when a command or automation names none',
+    usage: 'orca google default [<email>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'account'],
+    positionalArgs: ['account'],
+    notes: [
+      'Without --account, Google commands and automation rules use this account. The first account connected here is the default until you pick another; removing it makes the oldest one left the default.',
+      'With no email, prints the default.',
+      "From a bot's chat, works once Google is on for that bot; a bot with chosen accounts sees and picks only among them."
+    ],
+    examples: ['orca google default', 'orca google default me@example.com']
+  },
+  {
     path: ['google', 'bot'],
-    summary: "Turn a bot's use of Google on or off",
-    usage: 'orca google bot <bot> --on|--off [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'on', 'off'],
+    summary: "Turn a bot's use of Google on or off, or choose its accounts",
+    usage: 'orca google bot <bot> --on|--off|--accounts <emails> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'on', 'off', 'accounts'],
     positionalArgs: ['bot'],
     notes: [
       'Off for every bot until you turn it on. A bot then uses Google as you, like gh and orca linear: for whoever its Who can ask lets ask it, and in its automations. Turning it on says who else can ask that bot.',
+      '--on gives it every Google account on this computer, now and later; --accounts gives it only those (comma-separated). Without --account, its calls use the computer default if it has it, else the first account given.',
       OWNER_ONLY
     ],
-    examples: ['orca google bot Scout --on', 'orca google bot Scout --off']
+    examples: [
+      'orca google bot Scout --on',
+      'orca google bot Scout --accounts me@work.com,me@gmail.com',
+      'orca google bot Scout --off'
+    ]
   }
 ]

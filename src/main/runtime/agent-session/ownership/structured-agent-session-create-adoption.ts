@@ -4,7 +4,6 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../../../native-chat/conversation-adoption/codex-adoption-preparation'
 import { isAiVaultTitleAgent } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
-import { generatedSessionTitle } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import { resolveLocalAiVaultSessionTitles } from '../../../ai-vault/session-titles/session-title-resolver'
 import type { StructuredAgentSessionResumeSource } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentCliSourceEvidence } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
@@ -25,6 +24,7 @@ import {
   structuredAdoptionConflictError
 } from '../../../native-chat/conversation-adoption/structured-agent-session-history-adoption'
 import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
+import { resolveAdoptedTranscriptFolder } from '../../../native-chat/agent-session-journal/history-import/adopted-transcript-source'
 import {
   findStructuredAgentSessionAdoptionTranscript,
   type StructuredAgentSessionAdoptionInput
@@ -119,7 +119,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
   try {
     const { adoption, candidates } = await findStructuredAgentSessionAdoptionTranscript(input)
     // Title from where History found the transcript: Codex preparation may copy it to another home.
-    const [prepared, conversationName] = await Promise.all([
+    const [prepared, conversationName, folder] = await Promise.all([
       input.agent === 'codex'
         ? prepareCodexAdoption(
             adoption,
@@ -133,9 +133,15 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
           agent: input.agent,
           providerSessionId: input.providerSessionId,
           transcriptPath: adoption.transcriptPath
-        })
+        }),
+      // A conversation saved in a sub-folder of the workspace resumes in that folder.
+      resolveAdoptedTranscriptFolder({
+        agent: input.agent,
+        filePath: adoption.transcriptPath,
+        source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
+      })
     ])
-    return { ...prepared, conversationName }
+    return { ...prepared, conversationName, folder }
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
       throw error
@@ -170,11 +176,7 @@ async function resolveAdoptedConversationName(input: {
     ],
     AbortSignal.timeout(ADOPTED_CONVERSATION_NAME_TIMEOUT_MS)
   ).catch(() => ({ titles: [] }))
-  const title = titles[0]?.title
-  // History's "<Agent> <id prefix>" fallback names nothing.
-  return title && title !== generatedSessionTitle(input.agent, input.providerSessionId)
-    ? title
-    : undefined
+  return titles[0]?.title || undefined
 }
 
 /** Only adopt seeds the handle chain; ensure already passes providerHandle without adopting. */

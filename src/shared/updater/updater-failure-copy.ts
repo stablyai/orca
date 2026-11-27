@@ -32,6 +32,7 @@ export const UPDATER_FAILURE_COPY = {
   linuxPackageMetadataUnusable:
     'The downloaded package metadata could not be verified. Quit Orca before downloading and installing the update from the official release page.',
   unknownReleaseChannel: 'Unknown release channel "{{channel}}".',
+  teamUpdatePolicy: 'Your team manages Orca updates.',
   invalidReleaseTag: '"{{tag}}" is not a valid release tag.',
   releaseRepoNotFound: 'No releases repository found at {{repo}}.',
   releaseListFailed: 'Could not list {{channel}} builds (HTTP {{status}}).',

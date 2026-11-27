@@ -7,7 +7,10 @@ import type {
   OrcadManagedRuntimeStatus,
   OrcadManagedStopResult
 } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
-import { ORCAD_RECOVERY_CHANGED_STATE_CODE } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import {
+  ORCAD_RECOVERY_CHANGED_STATE_CODE,
+  isOrcadUncountedTerminalsDeferral
+} from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { MANAGED_SERVER_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
@@ -121,7 +124,14 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
     printResult(response, context.json, formatManagedServerStatus)
   },
   'environment update': async (context) => {
-    const params = { ...selectorOf(context), force: context.flags.get('force') === true }
+    const force = context.flags.get('force') === true
+    // Like the desktop's confirm: force alone never ends terminals orcad runs itself when they cannot be counted.
+    const endInProcessTerminals = force && context.flags.get('yes') === true
+    const params = {
+      ...selectorOf(context),
+      force,
+      ...(endInProcessTerminals ? { endInProcessTerminals } : {})
+    }
     const response = await callExpectingRestart<OrcadManagedDeployResult>(
       context,
       'managedServer.update',
@@ -130,10 +140,21 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
     if (!response) {
       return
     }
-    report(response, context.json, ['created', 'updated', 'already-current'], (result) =>
-      result.outcome === 'already-current'
-        ? `Already on ${result.activeVersion}.`
-        : `Updated ${result.environment.name} to ${result.activeVersion}.`
+    report(
+      response,
+      context.json,
+      ['created', 'updated', 'already-current'],
+      (result) =>
+        result.outcome === 'already-current'
+          ? `Already on ${result.activeVersion}.`
+          : `Updated ${result.environment.name} to ${result.activeVersion}.`,
+      (result) =>
+        !endInProcessTerminals &&
+        result.outcome === 'deferred' &&
+        result.forceable === true &&
+        isOrcadUncountedTerminalsDeferral(result.code)
+          ? 'To update anyway, re-run with --force --yes: it goes ahead only if no terminal daemon is running, and terminals the server runs itself end.'
+          : null
     )
   },
   'environment rollback': async (context) => {

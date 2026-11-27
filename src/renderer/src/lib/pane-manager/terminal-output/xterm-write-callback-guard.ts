@@ -22,7 +22,3 @@ export function runGuardedWriteCompletionStep(context: string, step: () => void)
     })
   }
 }
-
-export function _resetWriteCompletionReportsForTests(): void {
-  reportCountsByContext.clear()
-}

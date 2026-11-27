@@ -18,11 +18,10 @@ import {
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCardSubmission } from '../../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { latestNativeChatOrcaStopCut } from '../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
+import { rowsBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
@@ -54,7 +53,7 @@ export function useNativeChatInterruptedContinuation(input: {
   agent: AgentType
   sessionId: string
   journalItems: readonly AgentJournalRenderItem[]
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly AgentJournalCardSubmission[]
   /** Also true while the host may take no turn: Continue starts one. */
   isWorking: boolean
   /** Stable; a Continue click is the user's newer action, so it clears the composer's error. */
@@ -84,14 +83,16 @@ export function useNativeChatInterruptedContinuation(input: {
   // Suppress continuation during local launch resume; paired servers own their own chats.
   const launchPending = useNativeChatLaunchResumePending() && target.kind === 'local'
   const resuming = useNativeChatTargetRestartResuming(target).includes(sessionId) || launchPending
+  // Both cuts read turn, status and request rows, so a streamed reply's text revision keeps them.
+  const structureRows = rowsBesideStreamedText(input.journalItems)
   const cut = useMemo(
-    () => latestNativeChatOrcaStopCut(input.journalItems, input.submissions),
-    [input.journalItems, input.submissions]
+    () => latestNativeChatOrcaStopCut(structureRows, input.submissions),
+    [structureRows, input.submissions]
   )
   // Any host: Continue past a usage limit is the person's own message, which every host takes.
   const usageLimitCut = useMemo(
-    () => latestNativeChatUsageLimitCut(input.journalItems, input.submissions),
-    [input.journalItems, input.submissions]
+    () => latestNativeChatUsageLimitCut(structureRows, input.submissions),
+    [structureRows, input.submissions]
   )
   const {
     auto: usageLimitAutoContinue,

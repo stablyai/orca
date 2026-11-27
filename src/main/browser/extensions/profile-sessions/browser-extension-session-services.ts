@@ -1,4 +1,5 @@
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
+import { browserExtensionSourceProfileId } from './browser-extension-route-profiles'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
@@ -29,6 +30,8 @@ import {
   installBrowserExtensionIdleResume,
   settleBrowserExtensionResume
 } from './browser-extension-idle-resume'
+import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
+import { noteBrowserExtensionsStarting } from './browser-extension-session-presence'
 import { closeBrowserExtensionSidePanelsForExtension } from '../side-panel/browser-extension-side-panel-host'
 import {
   installBrowserExtensionWebRequestForwarding,
@@ -67,6 +70,11 @@ export function installBrowserExtensionSessionServices(): void {
   browserManager.setUnownedDownloadOwnerResolver(resolveExtensionDownloadOwner)
   setBrowserExtensionSessionHooks({
     attached: (sess, profileId, enabledExtensionIds) => {
+      // An id with no install never loads, so nothing should wait for it.
+      noteBrowserExtensionsStarting(
+        sess,
+        enabledExtensionIds.filter((id) => getBrowserExtensionInstallStore().get(id))
+      )
       observeBrowserExtensionCookieChanges(sess)
       observeBrowserExtensionWebRequests(sess)
       // Why at attach: chrome.action calls create state before any toolbar asks for it.
@@ -93,6 +101,10 @@ export function installBrowserExtensionSessionServices(): void {
       }
     },
     uninstalled: (profileId, extensionIds) => {
+      // A remote page's session doesn't own its local profile's lists, which removal already updated.
+      if (browserExtensionSourceProfileId(profileId) !== profileId) {
+        return new Set()
+      }
       const removeIds = (byProfile: Record<string, string[]>) => ({
         ...byProfile,
         [profileId]: (byProfile[profileId] ?? []).filter((id) => !extensionIds.has(id))
@@ -109,6 +121,7 @@ export function installBrowserExtensionSessionServices(): void {
           throw new Error('Could not remove stale browser extension enablement')
         }
       }
+      return extensionIds
     },
     detached: stopObservingBrowserExtensionWebRequests,
     loaded: async (sess, profileId, extension) => {

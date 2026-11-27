@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react'
 import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
-import { Copy, Plus, Send, Trash2, X } from 'lucide-react-native'
-import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import type { Translate } from '../../../i18n/mobile-i18n'
+import { Copy, Plus, Send } from 'lucide-react-native'
+import { getRuntimePathBasename } from '../../../../../src/shared/file-access/cross-platform-path'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { sendSheetMessage } from './mobile-diff-review-send-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
@@ -14,9 +12,12 @@ import { KeyedBottomDrawer } from '../../../components/bottom-drawer/keyed-botto
 import type { ComposerState, SendSheetState } from '../diff-state/mobile-diff-review-screen-model'
 import { reviewSheetKey, type ReviewSheet } from '../diff-actions/mobile-diff-review-sheets'
 import type { useMobileDiffReviewController } from '../use-mobile-diff-review-controller'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
-import { MessageBox } from '../../../components/composer-input/MessageBox'
-import { composerInputStyles } from '../../../components/composer-input/composer-input-styles'
+import { mobileDiffReviewStylesSheet } from './mobile-diff-review-screen-styles'
+import { TextField } from '../../../components/composer-input/TextField'
+import { ListGroup, ListRow } from '../../../components/list/ListGroup'
+import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
+import { prSheetStylesSheet } from '../pull-request/pr-tab-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 import { hostOs } from '../../../platform/host-os'
 import { MobileDiffReviewFilesSheet } from './MobileDiffReviewFilesSheet'
 import { MobileDiffReviewRangeSheet } from './MobileDiffReviewRangeSheet'
@@ -82,11 +83,14 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
         <MobileDiffReviewFilesSheet
           queue={controller.filteredQueue}
           currentKey={controller.currentItem?.key ?? null}
-          subtitle={mobileDiffReviewFilesSubtitle({
-            scope: controller.currentItem?.scope ?? null,
-            count: controller.filteredQueue.length,
-            viewedCount: controller.reviewedCount
-          })}
+          subtitle={mobileDiffReviewFilesSubtitle(
+            {
+              scope: controller.currentItem?.scope ?? null,
+              count: controller.filteredQueue.length,
+              viewedCount: controller.reviewedCount
+            },
+            t
+          )}
           onSelect={(item) => {
             controller.selectItem(item)
             controller.closeSheet('files')
@@ -176,87 +180,64 @@ function useSendActions(
 }
 
 function NoteComposerContent({ controller, composer }: Props & { composer: ComposerState }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
+  const prSheetStyles = useThemedStyles(prSheetStylesSheet)
   const t = useMobileTranslation()
+  const [busy, setBusy] = useState(false)
+  const run = (action: () => Promise<void>) => {
+    setBusy(true)
+    // A failed save shows in the screen's error line; the sheet stays open with the text.
+    void action()
+      .catch(() => {})
+      .finally(() => setBusy(false))
+  }
   return (
     <KeyboardAvoidingView behavior={hostOs() === 'ios' ? 'padding' : undefined}>
-      <View style={styles.composerHeader}>
-        <View>
-          <Text style={styles.drawerTitle}>
-            {composer.mode === 'edit'
-              ? t('components.diffReviewDrawers.editNote', 'Edit Note')
-              : t('components.diffReviewDrawers.addNote', 'Add Note')}
-          </Text>
-          <Text style={styles.drawerSubtitle}>
-            {composer.mode === 'create' && composer.lineNumber > 0
-              ? t('components.diffReviewDrawers.lineNumber', 'Line {{lineNumber}}', {
-                  lineNumber: composer.lineNumber
-                })
-              : t('components.diffReviewDrawers.fileNote', 'File note')}
-          </Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={controller.closeComposer}
-          accessibilityRole="button"
-          accessibilityLabel={t('components.diffReviewDrawers.cancelNote', 'Cancel note')}
-        >
-          <X size={18} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-      </View>
-      <MessageBox
-        value={controller.composerBody}
-        onChangeText={controller.setComposerBody}
-        autoFocus
-        placeholder={t('components.diffReviewDrawers.reviewNote', 'Review note')}
-        accessibilityLabel={composerLabel(t, composer)}
-        onSend={() => void controller.saveComposer()}
-        sendAccessibilityLabel={saveLabel(t, composer)}
-        leading={
-          composer.mode === 'edit' ? <DeleteNoteButton onPress={controller.deleteComment} /> : null
+      <SheetHeader
+        title={
+          composer.mode === 'edit'
+            ? t('components.diffReviewDrawers.editNote', 'Edit note')
+            : t('components.diffReviewDrawers.fileNote', 'File note')
         }
+        {...(controller.currentItem
+          ? { subtitle: getRuntimePathBasename(controller.currentItem.filePath) }
+          : {})}
+        leading={{ label: t('common.cancel', 'Cancel'), onPress: controller.closeComposer }}
+        trailing={{
+          label: t('common.save', 'Save'),
+          onPress: () => run(controller.saveComposer),
+          busy,
+          disabled: !controller.composerBody.trim()
+        }}
       />
+      <View style={prSheetStyles.body}>
+        <TextField
+          value={controller.composerBody}
+          onChangeText={controller.setComposerBody}
+          autoFocus
+          multiline
+          placeholder={t('components.diffReviewDrawers.reviewNote', 'Review note')}
+          accessibilityLabel={t('components.diffReviewDrawers.reviewNote', 'Review note')}
+          style={styles.rangeField}
+        />
+        {composer.mode === 'edit' ? (
+          <ListGroup>
+            <ListRow
+              title={t('components.diffReviewDrawers.deleteNote', 'Delete note')}
+              destructive
+              disabled={busy}
+              onPress={() => run(controller.deleteComment)}
+            />
+          </ListGroup>
+        ) : null}
+      </View>
     </KeyboardAvoidingView>
   )
 }
 
-function composerLabel(
-  t: Translate,
-  composer: { mode: 'create'; lineNumber: number } | { mode: 'edit'; comment: DiffComment } | null
-): string {
-  return composer?.mode === 'create' && composer.lineNumber > 0
-    ? t('components.diffReviewDrawers.saveLineNote', 'Save note on line {{lineNumber}}', {
-        lineNumber: composer.lineNumber
-      })
-    : t('components.diffReviewDrawers.reviewNote', 'Review note')
-}
-
-function saveLabel(t: Translate, composer: ComposerState): string {
-  return composer.mode === 'create' && composer.lineNumber > 0
-    ? composerLabel(t, composer)
-    : t('session.diffLineRow.saveNote', 'Save note')
-}
-
-function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        composerInputStyles.ghostButton,
-        pressed && composerInputStyles.pressed
-      ]}
-      onPress={() => void onPress()}
-      accessibilityRole="button"
-      accessibilityLabel={t('components.diffReviewDrawers.deleteNote', 'Delete note')}
-    >
-      <Trash2 size={18} color={colors.statusRed} strokeWidth={2} />
-    </Pressable>
-  )
-}
-
 function CompletionContent({ controller }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const fileCount = controller.filteredQueue.length
   const count = controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0
@@ -278,23 +259,25 @@ function CompletionContent({ controller }: Props) {
         {t('components.diffReviewDrawers.allViewedTitle', 'All files viewed')}
       </Text>
       <Text style={styles.drawerSubtitle}>{`${files} · ${notes}`}</Text>
-      <View style={styles.drawerButtonRow}>
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-          disabled={controller.unsentComments.length === 0}
-          onPress={() => void controller.openSendSheet()}
-          accessibilityRole="button"
-          accessibilityLabel={t(
-            'components.diffReviewDrawers.sendNotesLabel',
-            'Send notes to agent'
-          )}
-        >
-          <Send size={14} color={colors.bgBase} strokeWidth={2.2} />
-          <Text style={styles.primaryButtonText}>
-            {t('components.diffReviewDrawers.sendNotes', 'Send Notes')}
-          </Text>
-        </Pressable>
-      </View>
+      {/* With every note sent there is nothing to send, so no button. */}
+      {controller.unsentComments.length > 0 ? (
+        <View style={styles.drawerButtonRow}>
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+            onPress={() => void controller.openSendSheet()}
+            accessibilityRole="button"
+            accessibilityLabel={t(
+              'components.diffReviewDrawers.sendNotesLabel',
+              'Send notes to agent'
+            )}
+          >
+            <Send size={14} color={colors.bgBase} strokeWidth={2.2} />
+            <Text style={styles.primaryButtonText}>
+              {t('components.diffReviewDrawers.sendNotes', 'Send Notes')}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
     </>
   )
 }

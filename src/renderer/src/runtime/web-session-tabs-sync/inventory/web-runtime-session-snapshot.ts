@@ -46,11 +46,6 @@ function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApply
   return sessionTabsApplyModules
 }
 
-/** Lets a test pay this lazy load before a timed wait instead of inside it. */
-export async function loadWebRuntimeSessionTabsApplyModulesForTests(): Promise<void> {
-  await loadSessionTabsApplyModules()
-}
-
 type SnapshotRefreshOptions = {
   expectedEnvironmentPairingRevision?: number
   acceptCurrentSnapshot?: boolean
@@ -210,9 +205,10 @@ async function reconcileWebRuntimeSessionTabs(
               recovered,
               environmentId,
               undefined,
-              options.reconcileBrowserPage
-                ? { reconcileBrowserPage: options.reconcileBrowserPage }
-                : undefined,
+              {
+                requestReceivedFrame: receivedFrame,
+                reconcileBrowserPage: options.reconcileBrowserPage
+              },
               changedAgentPaneKeys
             )
           : state

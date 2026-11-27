@@ -2,7 +2,8 @@ import { z } from 'zod'
 import { EpochMsSchema } from '@orca-cloud/push-contract'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
 import {
-  CONNECTOR_SOURCES,
+  CONNECTOR_PLACE_SOURCES,
+  type ConnectorPlaceSource,
   ConnectorConversationSchema,
   ConnectorPostNoticesSchema,
   ConnectorTurnForSchema
@@ -31,8 +32,8 @@ export const CONNECTOR_ACTION_VERBS = [
 ] as const
 export type ConnectorActionVerb = (typeof CONNECTOR_ACTION_VERBS)[number]
 
-// Sources a bot acts in: any but a hook, which has no place to act on.
-export type ConnectorActionSource = Exclude<(typeof CONNECTOR_SOURCES)[number], 'webhook'>
+// Sources a bot acts in: any with places to act on.
+export type ConnectorActionSource = ConnectorPlaceSource
 
 /**
  * A place or message in a source, by its stable ids only: the existing ThreadPlace plus its source and
@@ -72,7 +73,7 @@ export const isWorkspaceRef = (ref: ConnectorRef): boolean =>
   ref.threadId === undefined &&
   ref.messageId === undefined
 
-const ACTION_SOURCES: readonly string[] = CONNECTOR_SOURCES.filter((source) => source !== 'webhook')
+const ACTION_SOURCES: readonly string[] = CONNECTOR_PLACE_SOURCES
 
 function isActionSource(source: string): source is ConnectorActionSource {
   return ACTION_SOURCES.includes(source)
@@ -150,7 +151,7 @@ export const ConnectorActionCapabilitySchema = z.object({
 export type ConnectorActionCapability = z.infer<typeof ConnectorActionCapabilitySchema>
 
 export const ConnectorSourceCapabilitiesSchema = z.object({
-  source: z.enum(CONNECTOR_SOURCES),
+  source: z.enum(CONNECTOR_PLACE_SOURCES),
   // The bot's place in the source, as a ref, when it has one (Slack: its workspace).
   workspace: ConnectorRefViewSchema.optional(),
   verbs: z.partialRecord(z.enum(CONNECTOR_ACTION_VERBS), ConnectorActionCapabilitySchema),
@@ -183,6 +184,9 @@ export const ConnectorUploadSchema = z
 export type ConnectorUpload = z.infer<typeof ConnectorUploadSchema>
 // The most files one `orca bot reply` posts with its words.
 export const CONNECTOR_REPLY_MAX_FILES = 10
+// The most buttons one `orca bot reply` offers, and the longest label each takes (Slack's own cap).
+export const CONNECTOR_REPLY_MAX_CHOICES = 10
+export const CONNECTOR_REPLY_CHOICE_MAX_CHARS = 75
 
 const SEARCH_NAME = z.string().trim().min(1).max(100)
 // state: a state's name, or `open` for any not done or canceled.
@@ -240,6 +244,13 @@ export const ConnectorActionArgsSchema = z
     // reply and attach: the postIds of files staged for it, posted with its text as one post. attach
     // takes them only from a cloud listing `files.direct`.
     files: z.array(z.string().min(1).max(128)).min(1).max(CONNECTOR_REPLY_MAX_FILES).optional(),
+    // reply: a button for each under its text (Slack). A press comes back to the bot as the presser's
+    // next message in the thread. Sent only to a cloud listing `reply.choices`.
+    choices: z
+      .array(z.string().trim().min(1).max(CONNECTOR_REPLY_CHOICE_MAX_CHARS))
+      .min(1)
+      .max(CONNECTOR_REPLY_MAX_CHOICES)
+      .optional(),
     // read: the id of a file on the message read, to download it.
     download: z.string().min(1).max(64).optional(),
     // read, with download: answer a link the machine streams the bytes from, not the bytes inline.
@@ -299,7 +310,7 @@ export const ConnectorReadMessageSchema = ConnectorRefViewSchema.extend({
 
 // A workspace the bot is in, as a place, with the places in it a rule names (Linear: its teams).
 export const ConnectorWorkspaceViewSchema = ConnectorRefViewSchema.extend({
-  source: z.enum(CONNECTOR_SOURCES),
+  source: z.enum(CONNECTOR_PLACE_SOURCES),
   places: z.array(ConnectorRefViewSchema).optional()
 })
 export type ConnectorWorkspaceView = z.infer<typeof ConnectorWorkspaceViewSchema>

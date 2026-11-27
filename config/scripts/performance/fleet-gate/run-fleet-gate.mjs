@@ -26,6 +26,7 @@ import { hotPathChanges, isHotPath } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
 import { burstRows, compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
+import { chatMemoryOnce, chatMemoryRows } from './fleet-gate-chat-memory.mjs'
 import {
   BURST_CHATS,
   continueAfterRestart,
@@ -463,10 +464,12 @@ async function main() {
   }
   installStopHandlers()
   virtualDisplay = await startVirtualDisplay(recordHelperLaunch(gateRunDir))
+  // Its bound is calibrated on Linux only; elsewhere ask for it with --scenarios and read the number.
+  const chatMemoryDefault = process.platform === 'linux' ? ['chat-memory'] : []
   // Without a private display copies stay hidden and unpainted, so clicks and focus can't be driven.
   options.scenarios ??= virtualDisplay
-    ? [...Object.keys(SCENARIOS), 'burst']
-    : ['idle', 'streaming', 'burst']
+    ? [...Object.keys(SCENARIOS), 'burst', ...chatMemoryDefault]
+    : ['idle', 'streaming', 'burst', ...chatMemoryDefault]
   const seed = options.seed
     ? { seedDir: options.seed, receipt: null }
     : await ensureSeed({ oldSha, oldBuild: builds.old, outDir })
@@ -474,7 +477,9 @@ async function main() {
   const runs = []
   const schedule = buildCounterbalancedSchedule(options.runs, 'old', 'new')
   const runsRoot = gateRunDir
-  const windowScenarios = options.scenarios.filter((name) => name !== 'burst')
+  const windowScenarios = options.scenarios.filter(
+    (name) => name !== 'burst' && name !== 'chat-memory'
+  )
   const bursts = []
   // Each run removes its own copy; the gate's folder (runsRoot) goes when the gate exits.
   for (const pair of windowScenarios.length > 0 ? schedule : []) {
@@ -517,12 +522,37 @@ async function main() {
       })
     )
   }
+  // Absolute like the burst, so it runs on NEW only.
+  const chatMemory = []
+  if (options.scenarios.includes('chat-memory')) {
+    // A failed step reports INCOMPLETE instead of losing the windows and burst measured before it.
+    chatMemory.push(
+      await chatMemoryOnce({
+        launchCopy,
+        arm: 'new',
+        sha: shas.new,
+        buildDir: builds.new,
+        seedDir: seed.seedDir,
+        outDir,
+        repoRoot,
+        options,
+        runDir: path.join(runsRoot, 'chat-memory-new')
+      }).catch((error) => ({
+        arm: 'new',
+        incomplete: [`chat-mem: ${String(error?.message ?? error)}`]
+      }))
+    )
+  }
   const census = runs.find((entry) => entry.census)?.census
-  const rows = [...compareRuns(runs, windowScenarios), ...burstRows(bursts)]
+  const rows = [
+    ...compareRuns(runs, windowScenarios),
+    ...burstRows(bursts),
+    ...chatMemoryRows(chatMemory)
+  ]
   const notes = [...new Set(runs.flatMap((entry) => entry.notes))]
   const incomplete = [
     ...new Set(
-      [...runs, ...bursts].flatMap((entry) =>
+      [...runs, ...bursts, ...chatMemory].flatMap((entry) =>
         entry.incomplete.map((reason) => `${String(entry.arm)} ${String(reason)}`)
       )
     )
@@ -534,7 +564,7 @@ async function main() {
     notes.push(`${name}: ${drivenNotes.join(' / ')}`)
   }
   const header = [
-    `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${windowScenarios.length > 0 ? `${String(options.runs)} runs each (alternating)` : 'launch burst only'}  ${os.hostname()} ${process.platform} ${virtualDisplay ? 'Xvfb' : 'hidden window, no paint'}`,
+    `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${windowScenarios.length > 0 ? `${String(options.runs)} runs each (alternating)` : 'NEW-only checks'}  ${os.hostname()} ${process.platform} ${virtualDisplay ? 'Xvfb' : 'hidden window, no paint'}`,
     `census (read back after settle): ${census ? `${String(census.workspaces)} workspaces, ${String(census.chatTabs)} chat tabs, ${String(census.terminalTabs)} terminal tabs, ${String(census.agentPanes)} agent panes` : 'n/a'}; seed ${seed.receipt ? `synthetic, built by ${String(seed.receipt.builtBy).slice(0, 11)}` : String(options.seed)}`,
     `hot-path files: ${hot.length}${options.force && hot.length === 0 ? ' (forced)' : ''}`
   ].join('\n')
@@ -545,7 +575,7 @@ async function main() {
   )
   fs.writeFileSync(
     `${stem}.json`,
-    `${JSON.stringify({ oldSha, newSha, result, hot, census, incomplete, runs, bursts, rows }, null, 2)}\n`
+    `${JSON.stringify({ oldSha, newSha, result, hot, census, incomplete, runs, bursts, chatMemory, rows }, null, 2)}\n`
   )
   fs.writeFileSync(`${stem}.txt`, `${text}\n`)
   console.log('=== FLEET GATE TABLE ===')

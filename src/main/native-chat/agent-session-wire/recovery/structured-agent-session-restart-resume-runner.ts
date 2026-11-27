@@ -55,7 +55,9 @@ export class StructuredAgentSessionResumeAdmission {
     sessionId: string,
     owner: string,
     task: () => Promise<T>,
-    onPhase?: (phase: 'queued' | 'starting') => void
+    onPhase?: (phase: 'queued' | 'starting') => void,
+    /** A chat whose lead had finished, with only background work cut, waits behind chats cut mid-turn. */
+    leadFinished = false
   ): Promise<T> {
     const live = this.owners.get(sessionId)
     if (live !== undefined) {
@@ -65,7 +67,7 @@ export class StructuredAgentSessionResumeAdmission {
     this.owners.set(sessionId, owner)
     try {
       onPhase?.('queued')
-      const release = await this.starts.acquire(0)
+      const release = await this.starts.acquire(leadFinished ? 1 : 0)
       try {
         onPhase?.('starting')
         return await task()
@@ -92,21 +94,31 @@ export async function resumeStructuredAgentSessionsFromRestart(
   candidates: readonly StructuredAgentSessionResumeCandidate[],
   owner: string
 ): Promise<StructuredAgentSessionResumeOutcome[]> {
-  return Promise.all(
-    candidates.map(async (candidate) => {
-      const outcome = await resumeOne(deps, candidate.sessionId, owner)
-      if (outcome.outcome === 'refused') {
-        deps.onRefused?.(candidate.sessionId)
+  const leadFinished = (candidate: StructuredAgentSessionResumeCandidate) =>
+    candidate.activity?.state === 'done'
+  const runs: Promise<StructuredAgentSessionResumeOutcome>[] = []
+  // Chats cut mid-turn ask for start slots first; outcomes keep the candidates' order.
+  const byStart = candidates
+    .map((candidate, index) => ({ candidate, index }))
+    .sort((a, b) => Number(leadFinished(a.candidate)) - Number(leadFinished(b.candidate)))
+  for (const { candidate, index } of byStart) {
+    runs[index] = resumeOne(deps, candidate.sessionId, owner, leadFinished(candidate)).then(
+      (outcome) => {
+        if (outcome.outcome === 'refused') {
+          deps.onRefused?.(candidate.sessionId)
+        }
+        return outcome
       }
-      return outcome
-    })
-  )
+    )
+  }
+  return Promise.all(runs)
 }
 
 async function resumeOne(
   deps: StructuredAgentSessionResumeRunnerDeps,
   sessionId: string,
-  owner: string
+  owner: string,
+  leadFinished: boolean
 ): Promise<StructuredAgentSessionResumeOutcome> {
   try {
     return await deps.admission.run(
@@ -124,7 +136,8 @@ async function resumeOne(
         await deps.resume(sessionId)
         return { sessionId, outcome: 'resumed' as const }
       },
-      (phase) => deps.onPhase?.(sessionId, phase)
+      (phase) => deps.onPhase?.(sessionId, phase),
+      leadFinished
     )
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)

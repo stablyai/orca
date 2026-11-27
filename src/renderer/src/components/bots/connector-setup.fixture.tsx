@@ -2,6 +2,7 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
+import { stubBots } from '../../component-fixtures/fixture-bots'
 import { cancelConnectorConnect } from '@/lib/connector-connect-state'
 import type { Bot } from '../../../../shared/bot-types'
 import type { ConnectorLinearWorkspace } from '../../../../shared/connector-bot-linear-contract'
@@ -77,7 +78,8 @@ let linearFake: Record<string, unknown> = {}
 
 function stubConnectors(
   linear: ConnectorLinearWorkspace[],
-  installations: ConnectorGitHubInstallation[]
+  installations: ConnectorGitHubInstallation[],
+  login = 'dana'
 ): void {
   publishBots([triage, scout])
   linearFake = {
@@ -97,7 +99,7 @@ function stubConnectors(
       ok: true,
       value: {
         installUrl: 'https://github.com/apps/orca-ide/installations/new',
-        account: { userId: '42', login: 'dana' },
+        account: { userId: '42', login },
         installations,
         defaultBotId: null
       }
@@ -225,7 +227,11 @@ export const gitHubTwoInstalls = defineFixture({
   render: gitHubDialog
 })
 
-const longScout: Bot = { ...scout, name: 'Orchestration builder for the whole engineering team' }
+const longScout: Bot = {
+  ...scout,
+  name: 'Orchestration builder for the whole engineering team',
+  folder: 'orchestration-builder'
+}
 
 // Scout is already on GitHub: setup ends on the done screen.
 export const gitHubDone = defineFixture({
@@ -237,11 +243,12 @@ export const gitHubDone = defineFixture({
   render: () => <GitHubSetup bot={scout} />
 })
 
-// A long bot name: the title ends in an ellipsis on one line, the full name on hover.
+// A long bot name, handle and login: the title ends in an ellipsis on one line, the full name on
+// hover; in the try-it sample the ask gives way before the handle.
 export const gitHubDoneLongName = defineFixture({
   width: 1100,
   setup: () => {
-    stubConnectors([], [orcaBotTest])
+    stubConnectors([], [orcaBotTest], 'dana-lee-from-the-platform-infrastructure-team')
     openGitHubSetup(longScout)
   },
   render: () => <GitHubSetup bot={longScout} />
@@ -388,23 +395,35 @@ const slackState = (): unknown => ({
     teamName: 'Acme',
     appId: 'A1',
     botUserId: 'UB',
-    installerUserId: 'U-dana'
+    installerUserId: 'U-dana',
+    installerName: 'Dana Lee',
+    postAs: 'person',
+    poster: { name: 'Dana Lee' }
   }
 })
 
-// Slack's setup, once installed: who can ask, before Done.
-export const slackSetupInstalled = defineFixture({
-  width: 1100,
-  setup: () => {
-    publishBots([slackBot])
-    Reflect.set(window.api, 'botSlack', { state: async () => slackState(), members: notAnswered })
-  },
-  render: () => (
-    <ConfirmationDialogProvider>
-      <BotSlackSetupDialog bot={slackBot} teamId="T1" open onOpenChange={() => {}} />
-    </ConfirmationDialogProvider>
-  )
-})
+function slackSetupDone(subject: Bot): ReturnType<typeof defineFixture> {
+  return defineFixture({
+    width: 1100,
+    setup: () => {
+      stubBots([subject])
+      Reflect.set(window.api, 'botSlack', { state: async () => slackState(), members: notAnswered })
+      withBotConnectorRuntime(window.api)
+    },
+    render: () => (
+      <ConfirmationDialogProvider>
+        <BotSlackSetupDialog bot={subject} teamId="T1" open onOpenChange={() => {}} />
+      </ConfirmationDialogProvider>
+    )
+  })
+}
+
+const longSlackBot: Bot = { ...slackBot, name: longScout.name }
+
+// Slack's setup, once installed: how to ask it, before Done.
+export const slackSetupInstalled = slackSetupDone(slackBot)
+// A long bot name: the title and the mention end in an ellipsis on one line.
+export const slackSetupInstalledLongName = slackSetupDone(longSlackBot)
 
 // A Full access bot's Slack row: the advice and what Sam reaches.
 export const slackRowOpenSetup = defineFixture({

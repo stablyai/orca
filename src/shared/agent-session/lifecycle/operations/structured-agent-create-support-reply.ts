@@ -5,6 +5,7 @@ export type StructuredAgentCreateSupportReason =
   | 'wsl'
   | 'windows'
   | 'chat-program'
+  | 'workspace-access'
 
 /** The `agentSession.createSupport` reply, read by the desktop and the phone alike. */
 export type StructuredAgentCreateSupportReply = {

@@ -2,16 +2,16 @@ import { Pressable, Text, type GestureResponderEvent } from 'react-native'
 import type { TerminalShortcutModifier } from '../../key-input/terminal-accessory-keys'
 import type { StickyModifiers } from '../../key-input/terminal-sticky-modifiers'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'
+import { TERMINAL_KEY_HIT_SLOP, terminalDockStylesSheet } from './terminal-dock-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
-const LATCHES: readonly { id: TerminalShortcutModifier; label: string }[] = [
-  { id: 'shift', label: 'Shift' },
+// Shift is on the keyboard itself; ⇧Tab and the rest of the Shift combos sit under ⋯.
+const LATCHES: readonly { id: 'ctrl' | 'alt'; label: string }[] = [
   { id: 'ctrl', label: 'Ctrl' },
   { id: 'alt', label: 'Alt' }
 ]
 
-/** Shift, Ctrl and Alt on the key row: a tap holds one for the next key, a double tap locks it. */
+/** Ctrl and Alt on the key row: a tap holds one for the next key, a double tap locks it. */
 export function MobileSessionLatchKeys({
   modifiers,
   disabled,
@@ -23,10 +23,9 @@ export function MobileSessionLatchKeys({
   onPressIn: () => void
   onPress: (modifier: TerminalShortcutModifier, event: GestureResponderEvent) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(terminalDockStylesSheet)
   const t = useMobileTranslation()
-  const names: Record<TerminalShortcutModifier, string> = {
-    shift: t('session.accessoryKeys.shift', 'Shift'),
+  const names: Record<'ctrl' | 'alt', string> = {
     ctrl: t('session.accessoryKeys.control', 'Control'),
     alt: t('session.accessoryKeys.alt', 'Alt')
   }

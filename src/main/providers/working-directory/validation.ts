@@ -48,11 +48,6 @@ export class WorkingDirectoryValidationAbortedError extends Error {
   }
 }
 
-export function _resetWorkingDirectoryValidationStateForTest(): void {
-  pendingWorkingDirectoryValidations.clear()
-  uncRouteLanes.clear()
-}
-
 export function formatLocalPtyEnvironmentDiag(extra: Record<string, string> = {}): string {
   const systemVersion =
     (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||

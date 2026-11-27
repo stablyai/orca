@@ -30,7 +30,6 @@ import {
   snapshotCodexRuntimeHookTrustProvenance
 } from '../../trust/hooks/hook-trust-promotion'
 import {
-  applyMirroredRuntimeUserHookTrustStates,
   getRuntimeHooksWithSystemUserHooks,
   moveMirroredRuntimeUserTrustAfterManagedStatusHook
 } from '../../trust/hooks/codex-hook-user-mirroring'
@@ -107,7 +106,10 @@ export function writeCodexHookInstallEffects(
     hookPlan.trustEntries,
     listedLabels
   )
-  const mirroredTrustEntries: CodexTrustEntry[] = mirroredUserTrustEntries.map(({ entry }) => entry)
+  // The enabled state goes in the first write so an interrupted pass never leaves a disable enabled.
+  const mirroredTrustEntries: CodexTrustEntry[] = mirroredUserTrustEntries.map(
+    ({ entry, enabled }) => ({ ...entry, enabled })
+  )
   const managedTrustEntries: CodexTrustEntry[] = []
   const trustSourcePath = getCodexExplicitHomeHookSourcePath(configPath)
   for (const eventName of CODEX_EVENTS) {
@@ -170,7 +172,6 @@ export function writeCodexHookInstallEffects(
     // Reconcile revoked system approvals too; retaining old runtime trust would leave hooks approved.
     upsertHookTrustEntries(tomlPath, mirroredTrustEntries)
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
-    applyMirroredRuntimeUserHookTrustStates(tomlPath, mirroredUserTrustEntries)
   } catch (error) {
     return { kind: 'status', status: trustWriteError(configPath, true, error) }
   }

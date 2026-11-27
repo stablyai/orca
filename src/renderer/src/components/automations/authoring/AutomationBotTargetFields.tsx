@@ -10,37 +10,17 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useTranslate } from '@/i18n/use-translate'
-import type {
-  AutomationBotResultsTo,
-  AutomationBotTarget
-} from '../../../../../shared/automations/automation-definition'
+import type { AutomationBotTarget } from '../../../../../shared/automations/automation-definition'
 import type { Bot } from '../../../../../shared/bot-types'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from '../automation-page-parts'
 import { botResultsPlace } from '../../../../../shared/automation-bot-target'
-import { withBotResultsPlace } from './automation-bot-results-to'
+import {
+  botResultsToChoice,
+  botResultsToOf,
+  withBotResultsPlace,
+  type BotResultsToChoice
+} from '../../../../../shared/automations/bot-automation-target-edit'
 import { botTargetChatTitle } from './automation-bot-runs-in-chat'
-
-type ResultsToChoice = 'chat' | 'thread' | 'channel' | 'linear' | 'none'
-
-function resultsToChoice(resultsTo: AutomationBotResultsTo): ResultsToChoice {
-  if (typeof resultsTo !== 'object') {
-    return resultsTo
-  }
-  return 'channel' in resultsTo ? 'channel' : 'linear'
-}
-
-function resultsToOf(choice: ResultsToChoice): AutomationBotResultsTo {
-  switch (choice) {
-    case 'channel':
-      return { channel: '' }
-    case 'linear':
-      return { linearIssue: '' }
-    case 'chat':
-    case 'thread':
-    case 'none':
-      return choice
-  }
-}
 
 type AutomationBotTargetFieldsProps = {
   target: AutomationBotTarget
@@ -69,7 +49,7 @@ export function AutomationBotTargetFields({
   const threadReady = threadReplies && hasEventThread && target.runsIn === 'new'
   const botName = bot?.name ?? ''
   const chatLabel = t('automations.botTarget.chat', "{{name}}'s Chat", { name: botName })
-  const choice = resultsToChoice(target.resultsTo)
+  const choice = botResultsToChoice(target.resultsTo)
   const posted = typeof target.resultsTo === 'object' ? target.resultsTo : null
   const reactId = useId()
   return (
@@ -115,8 +95,8 @@ export function AutomationBotTargetFields({
       >
         <Select
           value={choice}
-          onValueChange={(next: ResultsToChoice) =>
-            onChange({ ...target, resultsTo: resultsToOf(next) })
+          onValueChange={(next: BotResultsToChoice) =>
+            onChange({ ...target, resultsTo: botResultsToOf(next) })
           }
         >
           <SelectTrigger className="w-full">

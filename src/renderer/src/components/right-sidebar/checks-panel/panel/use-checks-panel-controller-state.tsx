@@ -32,6 +32,9 @@ import {
 } from '../refresh/checks-panel-git-status-snapshot'
 import type { ChecksAgentComposerState, HostedReviewCreationSnapshot } from './panel-state-types'
 
+const EMPTY_CHECKS: PRCheckDetail[] = []
+const EMPTY_COMMENTS: PRComment[] = []
+
 export function useChecksPanelControllerState() {
   // The sidebar remains mounted while closed; stop hidden checks/comments/cwd polling.
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
@@ -83,7 +86,7 @@ export function useChecksPanelControllerState() {
 
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const fetchPRCheckDetails = useAppStore((s) => s.fetchPRCheckDetails)
-  const fetchPRComments = useAppStore((s) => s.fetchPRComments)
+  const fetchPRComments = useAppStore((s) => s.readPRComments)
   const addPRConversationComment = useAppStore((s) => s.addPRConversationComment)
   const addPRReviewCommentReply = useAppStore((s) => s.addPRReviewCommentReply)
   const setPRCommentReaction = useAppStore((s) => s.setPRCommentReaction)
@@ -92,13 +95,14 @@ export function useChecksPanelControllerState() {
     activeWorktreeId ? readDetectedAgentsForWorktree(s, activeWorktreeId) : s.detectedAgentIds
   )
 
-  const [checks, setChecksState] = useState<PRCheckDetail[]>([])
+  const [checksState, setChecksState] = useState<PRCheckDetail[] | null>(null)
+  const checks = checksState ?? EMPTY_CHECKS
   // The GitLab parent pipeline from the same reply as its jobs; every other checks write clears it.
   const [gitLabPipelineCheck, setGitLabPipelineCheck] = useState<PRCheckDetail | null>(null)
   // Distinguish failed reads from No checks configured.
   const [checksError, setChecksError] = useState<string | null>(null)
   const setChecks = useCallback(
-    (next: SetStateAction<PRCheckDetail[]>, pipelineCheck: PRCheckDetail | null = null) => {
+    (next: PRCheckDetail[] | null, pipelineCheck: PRCheckDetail | null = null) => {
       setChecksError(null)
       setChecksState(next)
       setGitLabPipelineCheck(pipelineCheck)
@@ -106,11 +110,22 @@ export function useChecksPanelControllerState() {
     []
   )
   const [checksLoading, setChecksLoading] = useState(false)
-  const [comments, setCommentsState] = useState<PRComment[]>([])
-  const [commentsError, setCommentsError] = useState<string | null>(null)
-  const setComments = useCallback((next: SetStateAction<PRComment[]>) => {
-    setCommentsError(null)
-    setCommentsState(next)
+  const [{ data: commentsState, error: commentsError }, setCommentsRead] = useState<{
+    data: PRComment[] | null | undefined
+    error: string | null
+  }>({ data: undefined, error: null })
+  const comments = commentsState ?? EMPTY_COMMENTS
+  const setCommentsError = useCallback((error: string | null) => {
+    setCommentsRead((current) => (current.error === error ? current : { ...current, error }))
+  }, [])
+  const setComments = useCallback((next: SetStateAction<PRComment[]> | null | undefined) => {
+    setCommentsRead((current) => {
+      if (typeof next !== 'function') {
+        return { data: next, error: null }
+      }
+      const data = next(current.data ?? EMPTY_COMMENTS)
+      return current.data == null && data.length === 0 ? current : { data, error: null }
+    })
   }, [])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const commentsRef = useRef<PRComment[]>([])
@@ -304,6 +319,7 @@ export function useChecksPanelControllerState() {
     resolveReviewThread,
     detectedAgentIds,
     checks,
+    checksLoaded: checksState !== null,
     gitLabPipelineCheck,
     setChecks,
     checksLoading,
@@ -311,6 +327,8 @@ export function useChecksPanelControllerState() {
     checksError,
     setChecksError,
     comments,
+    commentsLoaded: commentsState != null,
+    commentsUnavailable: commentsState === null,
     setComments,
     commentsError,
     setCommentsError,

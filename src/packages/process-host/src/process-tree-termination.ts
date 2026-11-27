@@ -60,7 +60,9 @@ export async function forceTerminateProcessTree(child: ChildProcess): Promise<bo
 }
 
 /** A stubbed child leaves both undefined; only a real code or signal proves exit. */
-export function childProcessHasExited(child: ChildProcess): boolean {
+export function childProcessHasExited(
+  child: Pick<ChildProcess, 'exitCode' | 'signalCode'>
+): boolean {
   return (child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null
 }
 

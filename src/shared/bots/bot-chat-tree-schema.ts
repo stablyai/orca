@@ -15,6 +15,7 @@ import type {
   BotChatTreeWorker
 } from './bot-chat-tree'
 import type { BotChatSearchResult } from './bot-chat-search'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 const WORKER_STATES = hostUnionArms<BotChatTreeWorker['state']>({
   running: true,
@@ -46,52 +47,59 @@ const LIVE = hostUnionArms<BotChatTreeChat['live']>({
   idle: true
 })
 
-const workerSchema = z.looseObject({
-  key: z.string(),
-  title: z.string(),
-  branch: salvagedOptional('branch', z.string()),
-  state: z.enum(WORKER_STATES),
-  startedAt: z.number(),
-  settledAt: salvagedOptional('settledAt', z.number()),
-  worktreeId: salvagedOptional('worktreeId', z.string()),
-  paneKey: salvagedOptional('paneKey', z.string()),
-  note: salvagedOptional('note', z.enum(WORKER_NOTES)),
-  dispatchId: salvagedOptional('dispatchId', z.string()),
-  hostId: salvagedOptional('hostId', z.string()),
-  agent: salvagedOptional('agent', z.string()),
-  summary: salvagedOptional('summary', z.string())
-})
+const workerSchema = lazyZodSchema(() =>
+  z.looseObject({
+    key: z.string(),
+    title: z.string(),
+    branch: salvagedOptional('branch', z.string()),
+    state: z.enum(WORKER_STATES),
+    startedAt: z.number(),
+    settledAt: salvagedOptional('settledAt', z.number()),
+    settledUndated: salvagedOptional('settledUndated', z.literal(true)),
+    worktreeId: salvagedOptional('worktreeId', z.string()),
+    placedWorktreeId: salvagedOptional('placedWorktreeId', z.string()),
+    paneKey: salvagedOptional('paneKey', z.string()),
+    note: salvagedOptional('note', z.enum(WORKER_NOTES)),
+    waitsOnBackground: salvagedOptional('waitsOnBackground', z.literal(true)),
+    dispatchId: salvagedOptional('dispatchId', z.string()),
+    hostId: salvagedOptional('hostId', z.string()),
+    agent: salvagedOptional('agent', z.string()),
+    summary: salvagedOptional('summary', z.string())
+  })
+)
 
-const chatSchema = z.looseObject({
-  chatId: z.string(),
-  title: z.string(),
-  // A newer origin draws as a side chat.
-  origin: openEnum(ORIGINS, 'side'),
-  originLabel: salvagedOptional('originLabel', z.string()),
-  live: openEnum(LIVE, 'idle'),
-  lastActiveAt: z.number(),
-  unread: z.boolean(),
-  turnDone: salvagedOptional('turnDone', z.looseObject({ paneKey: z.string(), at: z.number() })),
-  closed: z.boolean(),
-  closedAt: salvagedOptional('closedAt', z.number()),
-  tab: salvagedOptional('tab', z.boolean()),
-  unseen: salvagedOptional('unseen', z.boolean()),
-  run: salvagedOptional(
-    'run',
-    z.looseObject({
-      automationId: z.string(),
-      runId: z.string(),
-      worktreeId: z.string().optional(),
-      paneKey: z.string().optional()
-    })
-  ),
-  preview: salvagedOptional('preview', z.string()),
-  running: salvagingArray(workerSchema),
-  runningTotal: z.number(),
-  finished: salvagingArray(workerSchema),
-  finishedTotal: z.number(),
-  failedTotal: z.number()
-})
+const chatSchema = lazyZodSchema(() =>
+  z.looseObject({
+    chatId: z.string(),
+    title: z.string(),
+    // A newer origin draws as a side chat.
+    origin: openEnum(ORIGINS, 'side'),
+    originLabel: salvagedOptional('originLabel', z.string()),
+    live: openEnum(LIVE, 'idle'),
+    lastActiveAt: z.number(),
+    unread: z.boolean(),
+    turnDone: salvagedOptional('turnDone', z.looseObject({ paneKey: z.string(), at: z.number() })),
+    closed: z.boolean(),
+    closedAt: salvagedOptional('closedAt', z.number()),
+    tab: salvagedOptional('tab', z.boolean()),
+    unseen: salvagedOptional('unseen', z.boolean()),
+    run: salvagedOptional(
+      'run',
+      z.looseObject({
+        automationId: z.string(),
+        runId: z.string(),
+        worktreeId: z.string().optional(),
+        paneKey: z.string().optional()
+      })
+    ),
+    preview: salvagedOptional('preview', z.string()),
+    running: salvagingArray(workerSchema),
+    runningTotal: z.number(),
+    finished: salvagingArray(workerSchema),
+    finishedTotal: z.number(),
+    failedTotal: z.number()
+  })
+)
 
 export const BotChatTreeReadSchema: z.ZodType<BotChatTreeRead, unknown> = z.looseObject({
   chats: salvagingArray(chatSchema),

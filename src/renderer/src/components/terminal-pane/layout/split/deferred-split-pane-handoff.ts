@@ -188,18 +188,6 @@ export function discardDeferredSplitPaneHandoffsForTab(tabId: string): void {
   }
 }
 
-export function resetDeferredSplitPaneHandoffsForTests(): void {
-  for (const [key, record] of handoffs) {
-    deleteHandoff(key, record)
-  }
-  keyByHandle = new WeakMap()
-}
-
-export function getDeferredSplitPaneHandoffCountForTests(): number {
-  pruneExpiredHandoffs(Date.now())
-  return handoffs.size
-}
-
 /** Transfer the launch observation even when no input payload was retained. */
 export function deferredSplitPaneConnectionInput(
   handle: DeferredSplitPaneHandoffHandle,

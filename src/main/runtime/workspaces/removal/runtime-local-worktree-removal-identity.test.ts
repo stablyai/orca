@@ -12,6 +12,7 @@ import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { readCheckoutMarkerIdentity } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
 import { assertCheckoutNotReplaced } from '../../../workspaces/removal/worktree-removal-leftover'
+import { cleanupLocalOrphanedWorktreeDirectory } from '../../../workspaces/removal/local-orphaned-worktree-cleanup'
 import { recoverPartialLocalWorktreeRemoval } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { finishRuntimeLocalWorktreeRemoval } from './runtime-registered-local-worktree-removal'
 
@@ -112,7 +113,135 @@ it('rechecks identity right before recovery deletes a leftover', async () => {
       closeWatcher: async () => {},
       beforeLeftoverDelete: () => assertCheckoutNotReplaced(record)
     })
-  ).rejects.toThrow()
+  ).rejects.toThrow('A different checkout is now at')
+
+  expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
+})
+
+it('refuses a checkout restored during watcher teardown even without a pre-recorded marker', async () => {
+  const repoPath = join(scratchDir, 'repo')
+  const otherRepoPath = join(scratchDir, 'other')
+  const worktreePath = join(scratchDir, 'checkout')
+  await initRepo(repoPath)
+  await initRepo(otherRepoPath)
+  await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'], repoPath)
+  await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+
+  await expect(
+    recoverPartialLocalWorktreeRemoval({
+      error: new Error('git worktree remove failed'),
+      force: true,
+      canonicalWorktreePath: worktreePath,
+      repoPath,
+      localWorktreeGitOptions: {},
+      registeredWorktree: { branch: 'refs/heads/feature', head: '' },
+      deleteBranch: false,
+      closeWatcher: async () => {
+        await git(['worktree', 'add', '-q', worktreePath, '-b', 'other'], otherRepoPath)
+        await writeFile(join(worktreePath, 'work.txt'), 'unsaved\n')
+      }
+    })
+  ).rejects.toThrow('A different checkout is now at')
+
+  expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
+  expect(existsSync(join(worktreePath, '.git'))).toBe(true)
+})
+
+it('refuses a foreign checkout even when expectedMarker matched a pre-existing foreign .git', async () => {
+  const { repoPath, worktreePath, record } = await replaceWithOtherRepoCheckout()
+
+  await expect(
+    recoverPartialLocalWorktreeRemoval({
+      error: new Error('git worktree remove failed'),
+      force: true,
+      canonicalWorktreePath: worktreePath,
+      repoPath,
+      localWorktreeGitOptions: {},
+      registeredWorktree: { branch: 'refs/heads/feature', head: '' },
+      deleteBranch: false,
+      closeWatcher: async () => {},
+      expectedMarker: await readCheckoutMarkerIdentity(worktreePath)
+    })
+  ).rejects.toThrow('A different checkout is now at')
+
+  expect(record.gitdir).toBeDefined()
+  expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
+})
+
+it('refuses a checkout restored during orphan-cleanup watcher teardown', async () => {
+  const repoPath = join(scratchDir, 'repo')
+  const otherRepoPath = join(scratchDir, 'other')
+  const worktreePath = join(scratchDir, 'checkout')
+  await initRepo(repoPath)
+  await initRepo(otherRepoPath)
+  await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'], repoPath)
+  const gitFile = join(worktreePath, '.git')
+  const savedGitFile = await import('node:fs/promises').then((fs) => fs.readFile(gitFile, 'utf8'))
+  await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+  await mkdir(worktreePath, { recursive: true })
+  await writeFile(gitFile, savedGitFile)
+
+  await expect(
+    cleanupLocalOrphanedWorktreeDirectory(repoPath, worktreePath, {}, async () => {
+      await removeTree(worktreePath)
+      await git(['worktree', 'add', '-q', worktreePath, '-b', 'other'], otherRepoPath)
+      await writeFile(join(worktreePath, 'work.txt'), 'unsaved\n')
+    })
+  ).rejects.toThrow('A different checkout is now at')
+
+  expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
+  expect(existsSync(join(worktreePath, '.git'))).toBe(true)
+})
+
+it('refuses a markerless directory swapped in during orphan-cleanup watcher teardown', async () => {
+  const repoPath = join(scratchDir, 'repo')
+  const worktreePath = join(scratchDir, 'checkout')
+  await initRepo(repoPath)
+  await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'], repoPath)
+  const gitFile = join(worktreePath, '.git')
+  const savedGitFile = await import('node:fs/promises').then((fs) => fs.readFile(gitFile, 'utf8'))
+  await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+  await mkdir(worktreePath, { recursive: true })
+  await writeFile(gitFile, savedGitFile)
+
+  await expect(
+    cleanupLocalOrphanedWorktreeDirectory(repoPath, worktreePath, {}, async () => {
+      await removeTree(worktreePath)
+      await mkdir(worktreePath, { recursive: true })
+      await writeFile(join(worktreePath, 'work.txt'), 'unsaved\n')
+    })
+  ).rejects.toThrow('A different checkout is now at')
+
+  expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
+})
+
+it('refuses a markerless directory swapped in during recovery watcher teardown', async () => {
+  const repoPath = join(scratchDir, 'repo')
+  const worktreePath = join(scratchDir, 'checkout')
+  await initRepo(repoPath)
+  await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'], repoPath)
+  const gitFile = join(worktreePath, '.git')
+  const savedGitFile = await import('node:fs/promises').then((fs) => fs.readFile(gitFile, 'utf8'))
+  await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+  await mkdir(worktreePath, { recursive: true })
+  await writeFile(gitFile, savedGitFile)
+
+  await expect(
+    recoverPartialLocalWorktreeRemoval({
+      error: new Error('git worktree remove failed'),
+      force: true,
+      canonicalWorktreePath: worktreePath,
+      repoPath,
+      localWorktreeGitOptions: {},
+      registeredWorktree: { branch: 'refs/heads/feature', head: '' },
+      deleteBranch: false,
+      closeWatcher: async () => {
+        await removeTree(worktreePath)
+        await mkdir(worktreePath, { recursive: true })
+        await writeFile(join(worktreePath, 'work.txt'), 'unsaved\n')
+      }
+    })
+  ).rejects.toThrow('A different checkout is now at')
 
   expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
 })

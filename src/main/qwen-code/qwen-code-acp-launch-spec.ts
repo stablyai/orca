@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { QWEN_CODE_ACP_DIALECT } from '../acp/acp-dialects/qwen-code-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
+import { windowsLocalAppDataBinDirectories } from '../acp/launch/acp-windows-install-directories'
 import { deliverQwenCodeInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
@@ -28,8 +29,10 @@ export const QWEN_CODE_LAUNCH_SPEC: AcpLaunchSpec = {
   dialect: QWEN_CODE_ACP_DIALECT,
   loginCommand: agentSessionSetupFor('qwen-code')?.loginCommand ?? [],
   account: directoryAccountBinding('QWEN_HOME', (homePath) => join(homePath, '.qwen')),
-  // The standalone installer's default location.
-  installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
+  installDirectories: ({ env, homePath }) =>
+    process.platform === 'win32'
+      ? windowsLocalAppDataBinDirectories(env, homePath, 'qwen-code')
+      : [join(homePath, '.local', 'bin')],
   // 0.16.0 added the auto mode that Approve for me selects.
   minimumVersions: ['0.16.0'],
   // Qwen enforces its own modes, and a new session may start in its auto mode, so each start sets one.

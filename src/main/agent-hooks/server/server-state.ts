@@ -42,6 +42,8 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
+import { noteRestoredStateEdge } from './status-restored-state'
+import type { TerminalModelWait } from './server-model-wait'
 import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
 import { cliWriterTopology } from './cli-writer-observation'
@@ -54,10 +56,15 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     /** Answers the record that was saved when the agent quit. */
     retireSavedRecord?(paneKey: string, exitedAt: number): SleepingAgentSessionRecord | undefined
     readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
-    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean>
+    /** True where the host proves the shell alone; null where it cannot tell (remote). */
+    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean | null>
     /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
      *  where the host gives none (remote, Windows), so a command mark stands as on main. */
     confirmShellAlone?(paneKey: string, agent?: string): Promise<boolean | null>
+    /** The pane's agent ended, proven: its process gone, its shell alone, or its own end hook. */
+    agentExited?(paneKey: string): void
+    /** Claude waited on its model this long with no hook; true keeps the stopwatch running. */
+    modelWaitElapsed?(paneKey: string, wait: TerminalModelWait): Promise<boolean>
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean
@@ -274,14 +281,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
           this.statusPersistRemovedKeys.add(key)
         }
       }
-      if (before?.launchToken !== after?.launchToken) {
-        this.statusAuthorityRevision++
-      }
+      noteRestoredStateEdge(this.restoredStateEdges, key, before, after)
     }
   })
   protected readonly statusPersistDirtyKeys = new Set<string>()
   protected readonly statusPersistRemovedKeys = new Set<string>()
-  protected statusAuthorityRevision = 0
+  protected readonly restoredStateEdges = { authority: 0, turnKeys: new Set<string>() }
   protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
     return {}
   }

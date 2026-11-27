@@ -30,9 +30,34 @@ export const composioConnectionsRead = bindDeferredRpcOperation(
       'composio-connections',
       z.looseObject({
         connections: z.array(
-          z.looseObject({ app: z.string(), status: z.string(), label: z.string().nullable() })
+          z.looseObject({
+            app: z.string(),
+            // Composio's name for the app; absent from an older host.
+            name: z.string().optional(),
+            status: z.string(),
+            label: z.string().nullable(),
+            // The sign-in's account, which Disconnect names; absent from an older host.
+            id: z.string().optional()
+          })
         ),
         pending: z.array(z.looseObject({ app: z.string(), url: z.string() }))
+      })
+    )
+  })
+)
+
+/** A page of Composio's app catalog, read with the host's key. */
+export const composioAppsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.composio.apps',
+    method: 'bots.composio.apps',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'composio-apps',
+      z.looseObject({
+        apps: z.array(z.looseObject({ slug: z.string(), name: z.string() })),
+        nextCursor: z.string().nullable()
       })
     )
   })
@@ -78,6 +103,27 @@ export const composioConnect = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('composio-connect', z.looseObject({ url: z.string() }))
+  })
+)
+
+/** Gives the bot its Composio tool, for an app with nothing to sign in to. */
+export const composioAdd = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.composio.add',
+    method: 'bots.composio.add',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('composio-added', z.unknown())
+  })
+)
+
+export const composioDisconnect = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.composio.disconnect',
+    method: 'bots.composio.disconnect',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('composio-disconnected', z.unknown())
   })
 )
 

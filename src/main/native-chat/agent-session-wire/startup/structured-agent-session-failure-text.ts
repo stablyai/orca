@@ -48,6 +48,8 @@ const TYPED_START_REFUSALS = [
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
   'fullAccessAsRoot',
+  'botToolsNeedStatusHooks',
+  'botToolsGatewayOutdated',
   'launchPreparationFailed',
   'conversationOpenInTerminal',
   'conversationOpenElsewhere'

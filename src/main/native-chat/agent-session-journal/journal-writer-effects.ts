@@ -61,6 +61,7 @@ export type JournalWriterEffect =
   | {
       kind: 'sweep'
       operation:
+        | { kind: 'unclaimed'; uploadId: string }
         | { kind: 'mark'; uploadId: string; now: number }
         | { kind: 'finish'; uploadId: string }
         | { kind: 'prune'; pairs: readonly { uploadId: string; sessionId: string }[] }
@@ -122,6 +123,13 @@ export function applyJournalWriterEffect(
     }
     case 'sweep': {
       const operation = effect.operation
+      if (operation.kind === 'unclaimed') {
+        return (
+          db
+            .prepare('SELECT 1 FROM agent_session_attachment_claims WHERE upload_id = ?')
+            .get(operation.uploadId) === undefined
+        )
+      }
       if (operation.kind === 'mark') {
         return markUnclaimedUploadForSweep(db, operation.uploadId, operation.now)
       }

@@ -45,7 +45,11 @@ export function applyJournalDispatchRow(
   ) {
     submission.keptAsQueuedMessageId = row.keptAsQueuedMessageId
   }
-  if (row.state === 'rejected' && row.answeredInTurn !== undefined) {
+  // Accepted: the running turn it joined, kept only when named.
+  if (
+    (row.state === 'rejected' && row.answeredInTurn !== undefined) ||
+    (row.state === 'accepted' && row.answeredInTurn)
+  ) {
     submission.answeredInTurn = readAnsweredTurn(row.answeredInTurn)
   } else {
     delete submission.answeredInTurn

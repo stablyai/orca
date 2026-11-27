@@ -8,10 +8,8 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent
 } from 'react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 // Title plus one subtitle line before the first layout reports the real height.
 const FALLBACK_TITLE_HEIGHT = 62
 // Native lists snap the fold themselves; a page only sees scroll events, so this many quiet frames
@@ -28,7 +26,7 @@ type PageTitleProps = {
 
 // A list's title at the top of its content; it scrolls away and the bar's own title fades in.
 export function PageTitle({ title, subtitle, onLayout }: PageTitleProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.block} onLayout={onLayout}>
       <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
@@ -145,7 +143,7 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
   return { onScroll, touchHandlers, onTitleLayout, reset, barTitleOpacity, barDividerOpacity }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   block: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,

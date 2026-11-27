@@ -100,7 +100,7 @@ export function describeWebhookTrigger(trigger: AutomationWebhookTrigger): strin
 export const WEBHOOK_TRIGGER_OPTIONS = [
   'webhook:',
   "  webhook.call  when the automation's webhook URL is called. The automation gets its own URL; anyone with it can start a run.",
-  '  where="<path> <op> <value>"  only when the call matches; repeatable, all must match. Paths start at body or headers (body.action, headers.x-github-event, body.items[0].id); op is =, !=, in (comma-separated values), contains, exists or !exists',
+  '  where="<path> <op> <value>"  only when the call matches; repeatable, all must match. Paths start at body or headers (body.action, headers.x-github-event, body.items[0].id); every header is there but credentials, signatures, cookies and ones a proxy added; op is =, !=, in (comma-separated values), contains, exists or !exists',
   '  contains="<text>"  only when the body contains this (any case)',
   "  pick=<path>,<path>  quote only these fields to the run; the full body is in a file in the bot's folder",
   "  subject-from=<path>  calls with the same value here fold into that subject's unfinished run",

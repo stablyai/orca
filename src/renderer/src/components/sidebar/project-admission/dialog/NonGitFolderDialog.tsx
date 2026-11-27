@@ -18,6 +18,7 @@ import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-p
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { reportNonGitFolderAdd } from './non-git-folder-confirmation'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
@@ -136,13 +137,25 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
         }
       })()
     } else if (folderPath) {
-      void addNonGitFolder(folderPath, {
-        runtimeEnvironmentId: runtimeEnvironmentId || null,
-        ...(displayName ? { displayName } : {})
-      })
+      // Reported before closeModal, whose eviction would otherwise settle the waiting add as none.
+      reportNonGitFolderAdd(
+        modalData,
+        addNonGitFolder(folderPath, {
+          runtimeEnvironmentId: runtimeEnvironmentId || null,
+          ...(displayName ? { displayName } : {})
+        })
+      )
     }
     closeModal()
-  }, [addNonGitFolder, closeModal, displayName, folderPath, connectionId, runtimeEnvironmentId])
+  }, [
+    addNonGitFolder,
+    closeModal,
+    displayName,
+    folderPath,
+    connectionId,
+    runtimeEnvironmentId,
+    modalData
+  ])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

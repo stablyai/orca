@@ -8,8 +8,8 @@ import { automationRunNow, automationSetEnabled } from './bot-automation-operati
 
 type Row = BotAutomationRow<BotAutomationView>
 
-/** The bot's Automations as its host lists them with Activity, plus Run Now and Pause/Resume, and its
- *  waits with Cancel. */
+/** The bot's Automations as its host lists them with Activity, plus Run Now, Pause/Resume and Delete,
+ *  and its waits with Cancel (a delete too). */
 export function useBotAutomations({
   client,
   rows,
@@ -26,13 +26,15 @@ export function useBotAutomations({
   const t = useMobileTranslation()
   const [saved, setSaved] = useState<ReadonlyMap<string, BotAutomationView>>(new Map())
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set())
-  // A cancelled wait is gone on the host; the next Activity read stops listing it too.
-  const [cancelled, setCancelled] = useState<ReadonlySet<string>>(new Set())
+  // A deleted automation or cancelled wait is gone on the host; the next Activity read drops it too.
+  const [deleted, setDeleted] = useState<ReadonlySet<string>>(new Set())
 
-  const shown = rows?.map((row) => {
-    const mine = saved.get(row.automation.id)
-    return mine && mine.updatedAt >= row.automation.updatedAt ? { ...row, automation: mine } : row
-  })
+  const shown = rows
+    ?.filter((row) => !deleted.has(row.automation.id))
+    .map((row) => {
+      const mine = saved.get(row.automation.id)
+      return mine && mine.updatedAt >= row.automation.updatedAt ? { ...row, automation: mine } : row
+    })
 
   const mark = (id: string, busy: boolean) =>
     setSaving((previous) => {
@@ -97,17 +99,19 @@ export function useBotAutomations({
     [client, showToast, t]
   )
 
-  const cancelWait = useCallback(
+  const remove = useCallback(
     async (id: string) => {
       if (!client) {
         return
       }
       mark(id, true)
       try {
-        automationDeleteWrite.interpret(
+        const { removed } = automationDeleteWrite.interpret(
           await automationDeleteWrite.request(client, { id }, { failWhenDisconnected: true })
         )
-        setCancelled((previous) => new Set(previous).add(id))
+        if (removed) {
+          setDeleted((previous) => new Set(previous).add(id))
+        }
       } catch (error) {
         showToast(
           error instanceof Error ? error.message : t('bots.saveFailed', 'Couldn’t save'),
@@ -122,10 +126,10 @@ export function useBotAutomations({
 
   return {
     rows: shown ?? null,
-    waits: waits.filter((row) => !cancelled.has(row.automation.id)),
+    waits: waits.filter((row) => !deleted.has(row.automation.id)),
     saving,
     setAutomationEnabled,
     runNow,
-    cancelWait
+    remove
   }
 }

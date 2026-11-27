@@ -12,6 +12,8 @@ export type AskQuestion = {
   options: AskOption[]
   /** Claude renders its preview selector: digits only move focus, Enter commits, free text is a note. */
   hasPreviews?: true
+  /** The answers cannot be sent while this question is unanswered. */
+  required?: true
 }
 export type AskPrompt = {
   questions: AskQuestion[]

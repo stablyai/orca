@@ -104,9 +104,10 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
   signal?: AbortSignal,
   prepareRequest?: RuntimeRequestPreparation,
   prepareGuard?: RuntimeRequestGuard,
-  responseTimeoutMs?: number
+  responseTimeoutMs?: number,
+  idlePassive?: boolean
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal || prepareRequest || prepareGuard || responseTimeoutMs !== undefined) {
+  if (signal || prepareRequest || prepareGuard || responseTimeoutMs !== undefined || idlePassive) {
     return sendRemoteRuntimeSharedControlRequest(
       environmentId,
       connection,
@@ -117,7 +118,8 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
       signal,
       prepareRequest,
       prepareGuard,
-      responseTimeoutMs
+      responseTimeoutMs,
+      idlePassive
     )
   }
   return envelope

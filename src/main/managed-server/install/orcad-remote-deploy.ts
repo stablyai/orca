@@ -87,6 +87,8 @@ export type OrcadDeployResult =
       startCheckFailed?: true
       /** This deploy uploaded the slot rather than finding it already installed. */
       freshlyInstalled?: true
+      /** Full force may pass this uncounted-census deferral once the candidate proves no daemon. */
+      forceable?: true
     }
 
 export async function deployOrcad(

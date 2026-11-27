@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
@@ -7,13 +8,15 @@ import { redactSecretLike } from '../crash-reporting/crash-report-redaction'
 
 export const BOT_MEMORY_UPDATED_NOTE = 'Memory updated'
 const PRESENTATION = 'bot-memory-updated'
-export const BotMemoryUpdatedNoteSchema = z.object({
-  botId: z.string(),
-  added: z.array(z.string()),
-  removed: z.array(z.string()),
-  topics: z.array(z.string()),
-  otherChanges: z.number().int().nonnegative()
-})
+export const BotMemoryUpdatedNoteSchema = lazyZodSchema(() =>
+  z.object({
+    botId: z.string(),
+    added: z.array(z.string()),
+    removed: z.array(z.string()),
+    topics: z.array(z.string()),
+    otherChanges: z.number().int().nonnegative()
+  })
+)
 export type BotMemoryUpdatedNote = z.infer<typeof BotMemoryUpdatedNoteSchema>
 
 /** Hide the whole value, including redactions retained by the memory history store. */

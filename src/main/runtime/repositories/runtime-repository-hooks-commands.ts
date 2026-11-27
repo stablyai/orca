@@ -8,12 +8,8 @@ import { readFile } from 'node:fs/promises'
 import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { OrcaHooks } from '../../../shared/workspace-setup/orca-yaml-hook-types'
-import {
-  getEffectiveHooks,
-  hasHooksFile,
-  hasUnrecognizedOrcaYamlKeys,
-  loadHooks
-} from '../../workspace-hooks/hooks'
+import { getEffectiveHooks, hasHooksFile, loadHooks } from '../../workspace-hooks/hooks'
+import { inspectWorkspaceHooks } from '../../workspace-hooks/workspace-hook-inspection'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
 import { resolveHookCommandSourcePolicy } from '../../../shared/workspace-setup/hooks/hook-command-source-policy'
 import {
@@ -93,20 +89,6 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
     if (connectionId) {
       return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
-    // As the desktop's hooks:check: a render-driven check must not open a stopped distro's UNC paths.
-    const blocked = options.background ? await blockedWslDistroForPath(repo.path) : null
-    if (blocked) {
-      return {
-        status: 'error' as const,
-        hasHooks: false,
-        hooks: null,
-        mayNeedUpdate: false,
-        unavailable:
-          blocked.state === 'stopped'
-            ? ('wsl-distro-stopped' as const)
-            : ('wsl-distro-unverifiable' as const)
-      }
-    }
     if (options.createSource && !options.background) {
       const created = await this.deps.readCreateSourceHooks(repo, options.createSource)
       if (created) {
@@ -118,14 +100,7 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
         }
       }
     }
-    const has = hasHooksFile(repo.path)
-    const hooks = scopeHooksToRepoKind(repo, has ? loadHooks(repo.path) : null)
-    return {
-      status: 'ok' as const,
-      hasHooks: has,
-      hooks,
-      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
-    }
+    return inspectWorkspaceHooks(repo, options.background)
   }
 
   async inspectRepoSetupScriptImports(repoSelector: string) {

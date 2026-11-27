@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDaemonBashShellReadyRcfileContent } from '../daemon-bash-shell-ready-rcfile'
+import { getBashShellReadyRcfileContent } from '../../../providers/local-pty/local-pty-shell-ready-bash-rcfile'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
@@ -15,6 +16,9 @@ const bashMinor = hasBash
   : 0
 const LEGACY_GATE = 'BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1)'
 const bashPreservesOddTerminalBackslash = bashMajor > 4 || (bashMajor === 4 && bashMinor >= 4)
+const START_BEFORE_PROMPT = new RegExp(
+  `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+)
 
 function runInteractiveBash(
   profile: string,
@@ -219,6 +223,20 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expectLifecycle(output, 0)
   })
 
+  itWithBash.each([
+    ['daemon', getDaemonBashShellReadyRcfileContent],
+    ['local PTY', getBashShellReadyRcfileContent]
+  ])('starts each command once, after its prompt, under functrace (%s)', (_name, getRcfile) => {
+    // Why: functrace runs DEBUG in Orca's trap helpers and in prompt $(...) subshells.
+    const profile = ['set -T', "PS0='$(:)'", "PS1='$(:)ORCA_PS1> '"].join('\n')
+    const input = "trap ':' DEBUG\nfalse\nexit 0\n"
+    const output = runInteractiveBash(profile, tempHome, input, getRcfile())
+
+    expect(output).toContain('ORCA_PS1> ')
+    expect(output).not.toMatch(START_BEFORE_PROMPT)
+    expectLifecycle(output)
+  })
+
   itWithBash('does not treat a DEBUG trap query as a mutation', () => {
     const profile = [
       'trap \'trap -p DEBUG >/dev/null; printf "QUERY:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
@@ -263,6 +281,82 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
 
   // Why: macOS /bin/bash 3.2 also reverts DEBUG traps set inside functions.
   const legacyBashes = process.platform === 'darwin' ? ['bash', '/bin/bash'] : ['bash']
+  // bash-preexec 0.5/0.6 (Atuin's hooks) defer install to a PROMPT_COMMAND string that runs `trap - DEBUG`.
+  const bashPreexecStub = [
+    '__bp_inside_precmd=0 __bp_inside_preexec=0 __bp_preexec_interactive_mode=""',
+    '__bp_precmd_invoke_cmd() { (( __bp_inside_precmd > 0 )) && return; local __bp_inside_precmd=1; printf "BP_PRECMD\\n"; }',
+    '__bp_interactive_mode() { __bp_preexec_interactive_mode=on; }',
+    '__bp_preexec_invoke_exec() {',
+    '  (( __bp_inside_preexec > 0 )) && return',
+    '  local __bp_inside_preexec=1',
+    '  [[ -n "$__bp_preexec_interactive_mode" ]] || return',
+    '  __bp_preexec_interactive_mode=""',
+    '  printf "BP_PREEXEC:<%s>\\n" "$BASH_COMMAND"',
+    '}',
+    '__bp_install() {',
+    '  printf "BP_INSTALL\\n"',
+    '  [[ "${PROMPT_COMMAND[*]:-}" == *__bp_precmd_invoke_cmd* ]] && return 1',
+    "  trap '__bp_preexec_invoke_exec' DEBUG",
+    '  PROMPT_COMMAND="__bp_precmd_invoke_cmd"$\'\\n\'"${PROMPT_COMMAND//"$__bp_install_string"/:}"$\'\\n__bp_interactive_mode\'',
+    '  __bp_precmd_invoke_cmd',
+    '  __bp_interactive_mode',
+    '}',
+    '__bp_install_string=$\'__bp_trap_string="$(trap -p DEBUG)"\\ntrap - DEBUG\\n__bp_install\'',
+    'PROMPT_COMMAND="$__bp_install_string"'
+  ].join('\n')
+  itWithBash.each(
+    [['array', 'bash'], ...legacyBashes.map((bash) => ['legacy', bash])].flatMap(
+      ([dispatch, bash]) => ['', 'set -u'].map((profileOptions) => [dispatch, bash, profileOptions])
+    )
+  )(
+    'finishes a pending bash-preexec install (%s dispatch, %s, profile `%s`)',
+    (dispatch, bash, profileOptions) => {
+      const rcfile = getDaemonBashShellReadyRcfileContent()
+      const output = runInteractiveBash(
+        `${profileOptions}\n${bashPreexecStub}`,
+        tempHome,
+        'true\nfalse\nexit 0\n',
+        dispatch === 'legacy' ? rcfile.replaceAll(LEGACY_GATE, '0') : rcfile,
+        bash
+      )
+      const commands = [...output.matchAll(/BP_PREEXEC:<([^>]+)>/g)].map((match) => match[1])
+
+      expect(commands).toEqual(['true', 'false', 'exit 0'])
+      expect(output.match(/BP_PRECMD/g)).toHaveLength(3)
+      expectLifecycle(output)
+    }
+  )
+
+  // Why: under function tracing Orca's chained DEBUG trap would fire preexec during prompt hooks.
+  itWithBash.each(['__bp_enable_subshells=1', 'set -o functrace', 'shopt -s extdebug'])(
+    'leaves the bash-preexec install to the first prompt after `%s`',
+    (tracing) => {
+      const output = runInteractiveBash(`${tracing}\n${bashPreexecStub}`, tempHome)
+      const promptIndex = output.indexOf('\x1b]133;A\x07')
+
+      expect(promptIndex).toBeGreaterThan(-1)
+      expect(output.indexOf('BP_INSTALL')).toBeGreaterThan(promptIndex)
+    }
+  )
+
+  // Why: an early install before bash 5.1 makes preexec report later PROMPT_COMMAND elements as commands.
+  itWithBash.each(legacyBashes)(
+    'leaves the bash-preexec install to the first prompt for a multi-element legacy PROMPT_COMMAND (%s)',
+    (bash) => {
+      const output = runInteractiveBash(
+        `${bashPreexecStub}\nPROMPT_COMMAND[1]='printf "USER_PROMPT\\n"'`,
+        tempHome,
+        'true\nfalse\nexit 0\n',
+        getDaemonBashShellReadyRcfileContent().replaceAll(LEGACY_GATE, '0'),
+        bash
+      )
+      const promptIndex = output.indexOf('\x1b]133;A\x07')
+
+      expect(promptIndex).toBeGreaterThan(-1)
+      expect(output.indexOf('BP_INSTALL')).toBeGreaterThan(promptIndex)
+    }
+  )
+
   itWithBash.each(
     legacyBashes.flatMap((bash) => [
       ['trap - DEBUG', bash],
@@ -282,12 +376,9 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
         legacyRcfile,
         bash
       )
-      const startBeforePrompt = new RegExp(
-        `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
-      )
 
       expect(output).toContain('ORCA_PS1> ')
-      expect(output).not.toMatch(startBeforePrompt)
+      expect(output).not.toMatch(START_BEFORE_PROMPT)
       expectLifecycle(output, 0)
     }
   )

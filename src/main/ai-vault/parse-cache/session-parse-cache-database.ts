@@ -45,18 +45,44 @@ CREATE TABLE IF NOT EXISTS rows(
 );
 CREATE INDEX IF NOT EXISTS rows_seen_at ON rows(seen_at);
 `
-// Reparse Grok rows (summary.json) cached before the synthetic-turn filter once, without a schema
-// bump. The pending gate is the outer loop, so later opens skip the rows scan.
-const GROK_ROWS_REPAIR_SQL = `
+// Reparse rows cached before a parser fix once, without a schema bump. The pending gate is the
+// outer loop, so later opens skip the rows scan.
+function rowsRepairSql(versionKey: string, rowFilter: string): string {
+  return `
 DELETE FROM rows WHERE rowid IN (
   SELECT rows.rowid
   FROM (SELECT 1 WHERE NOT EXISTS (
-    SELECT 1 FROM meta WHERE key = 'grok_rows_version' AND value = '1'
+    SELECT 1 FROM meta WHERE key = '${versionKey}' AND value = '1'
   )) AS pending CROSS JOIN rows
-  WHERE rows.path GLOB '*[/\\]summary.json'
+  WHERE ${rowFilter}
 );
-INSERT OR REPLACE INTO meta(key, value) VALUES ('grok_rows_version', '1');
+INSERT OR REPLACE INTO meta(key, value) VALUES ('${versionKey}', '1');
 `
+}
+const ROWS_REPAIR_SQL =
+  // Grok rows (summary.json) cached before the synthetic-turn filter.
+  rowsRepairSql('grok_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
+  // Grok rows whose prompt was cut by an İ before <user_query>.
+  rowsRepairSql('grok_query_unicode_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
+  // Pi rows cached before session_info names became titles.
+  rowsRepairSql('pi_title_rows_version', `instr(rows.session, '"agent":"pi"') > 0`) +
+  // CodeBuddy rows cached before first-prompt titles were normalized.
+  rowsRepairSql(
+    'codebuddy_title_rows_version',
+    "rows.path GLOB '*[/\\].codebuddy[/\\]projects[/\\]*'"
+  ) +
+  // Claude rows titled with harness markup (such as /clear's command caveat) before it stopped naming sessions.
+  rowsRepairSql(
+    'claude_harness_title_rows_version',
+    `instr(rows.session, '"agent":"claude"') > 0 AND instr(rows.session, '"title":"<') > 0`
+  ) +
+  // Copilot rows whose totals added currentTokens and cache/reasoning subsets to model usage.
+  rowsRepairSql('copilot_usage_rows_version', `instr(rows.session, '"agent":"copilot"') > 0`) +
+  // Legacy OpenCode JSON metadata omits bodies, which live in separate part files.
+  rowsRepairSql(
+    'opencode_json_parts_rows_version',
+    `instr(rows.session, '"agent":"opencode"') > 0 AND rows.path GLOB '*.json'`
+  )
 // Rows hold transcript-derived preview text; keep the directory user-only.
 const PRIVATE_DIRECTORY_MODE = 0o700
 // A ~2.3 KB row fills most of a 4 KB page; 8 KB pages fit three.
@@ -235,7 +261,7 @@ export class SessionParseCacheDatabase {
 function openDatabase(path: string): SyncDatabase {
   const db = openVersionedCacheDatabase(path, {
     version: SESSION_PARSE_CACHE_SCHEMA_VERSION,
-    sql: `${SCHEMA_SQL}${GROK_ROWS_REPAIR_SQL}`,
+    sql: `${SCHEMA_SQL}${ROWS_REPAIR_SQL}`,
     directoryMode: PRIVATE_DIRECTORY_MODE,
     pageSize: PAGE_SIZE,
     afterSchema: ensureScopeCwdsTable

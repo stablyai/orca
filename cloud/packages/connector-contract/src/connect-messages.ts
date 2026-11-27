@@ -2,6 +2,13 @@ import { z } from 'zod'
 
 // Connecting Linear or GitHub in one browser trip: the owner signs in (and installs Orca there if it
 // is missing), and the browser hands the result back to the Orca that started it.
+// Slack (POST `${slack}/connect` and `…/connect/redeem`) is a sign-in only, with these same schemas:
+// it links the person in the Slack workspace they signed in to (the redeem's workspace is the Slack
+// team) and installs nothing, so install answers 'none'.
+
+// The sources a person connects in one browser trip, each at `${CONNECTOR_PATHS[source]}/connect`.
+export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
+export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]
 
 // 32 random bytes, base64url: the loopback's nonce, and the one-time result code.
 export const CONNECTOR_CONNECT_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -14,18 +21,22 @@ export const CONNECT_LOGIN_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/
 // the browser ends on a page whose "Open Orca" opens orca://<linear|github>/link?t=<result>.
 export const CONNECTOR_CONNECT_LOOPBACK_PATH = '/connector/done'
 
-// POST `${linear|github}/connect`: starts a trip for the signed-in account; a new start voids the
+// POST `${linear|github|slack}/connect`: starts a trip for the signed-in account; a new start voids the
 // account's earlier one. The loopback is given whole or not at all. switchAccount asks the service to
 // offer its account picker again ("Not you?"). loginKey (Linear): the Mac also wants the person's
 // read,write login, sealed to this X25519 key (connect-login-seal.ts); without it the trip only
-// identifies them.
+// identifies them. addAccess (GitHub): the trip adds access, so after the sign-in it goes on to
+// GitHub's install page unless the login reaches `workspace` (an org or user login); with none named
+// it always does. A cloud older than it ignores it.
 export const ConnectorConnectStartRequestSchema = z
   .object({
     v: z.literal(1),
     loopbackPort: z.number().int().min(1024).max(65_535).optional(),
     loopbackNonce: Code.optional(),
     switchAccount: z.literal(true).optional(),
-    loginKey: z.string().regex(CONNECT_LOGIN_KEY_PATTERN).optional()
+    loginKey: z.string().regex(CONNECT_LOGIN_KEY_PATTERN).optional(),
+    // A GitHub login; the cloud checks its shape (GITHUB_LOGIN_PATTERN).
+    addAccess: z.object({ workspace: z.string().min(1).max(39).optional() }).optional()
   })
   .refine((start) => (start.loopbackPort === undefined) === (start.loopbackNonce === undefined), {
     message: 'loopbackPort and loopbackNonce go together'
@@ -42,7 +53,7 @@ export const CONNECTOR_CONNECT_INSTALL_OUTCOMES = [
   'none'
 ] as const
 
-// POST `${linear|github}/connect/redeem` {v:1, result}: links the account to whom the trip proved,
+// POST `${linear|github|slack}/connect/redeem` {v:1, result}: links the account to whom the trip proved,
 // spending the code. Only the account that started the trip may redeem it.
 export const ConnectorConnectRedeemRequestSchema = z.object({ v: z.literal(1), result: Code })
 
@@ -55,17 +66,18 @@ export const ConnectorConnectRedeemSchema = z.object({
     handle: z.string(),
     email: z.string().optional()
   }),
-  // Linear: the workspace the person signed in to; its label always includes linear.app/<urlKey>.
+  // Linear and Slack: the workspace (Slack: the team) the person signed in to; a Linear one's label
+  // always includes linear.app/<urlKey>.
   workspace: z.object({ id: z.string().min(1), name: z.string(), urlKey: z.string() }).optional(),
   install: z.enum(CONNECTOR_CONNECT_INSTALL_OUTCOMES),
   // Linear, for a start that sent loginKey: the person's login sealed to it.
   sealedLogin: z.string().min(1).optional()
 })
 
-// The 409s: expired (unknown, used or past its 10 minutes, or voided by a later start or a
-// take-back), wrong_account (another account started the trip), already_linked (the account is
-// linked to someone else there and unlinks first), not_a_member (a Linear guest, inactive user or
-// app).
+// The 409s: expired (unknown, used or past its 10 minutes, or voided by a later start),
+// wrong_account (another account started the trip), not_a_member (a Linear guest, inactive user or
+// app). An account links several people and a person several accounts, so already_linked is no
+// longer sent; it stays listed for the Orcas that still read it.
 export const CONNECTOR_CONNECT_ERRORS = [
   'expired',
   'wrong_account',

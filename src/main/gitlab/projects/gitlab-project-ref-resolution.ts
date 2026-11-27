@@ -142,7 +142,8 @@ async function resolveProjectRefForRemote(
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
       },
-      remoteName
+      remoteName,
+      configSignature
     )
     if (stdout === null) {
       return null

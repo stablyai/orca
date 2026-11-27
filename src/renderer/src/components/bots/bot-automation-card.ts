@@ -8,7 +8,7 @@ import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-ro
 import { botTidyUp, TIDY_UP_HOURS } from '../../../../shared/bots/bot-tidy-up'
 import { botUpcomingRows, type BotUpcomingRow } from './bot-upcoming-rows'
 
-/** Automations and waits shown before "All N automations"; Look around and Tidy memory always show. */
+/** Automations shown before "All N automations"; Look around, Tidy memory and waits always show. */
 export const AUTOMATION_CARD_CAP = 5
 
 /** What a row says of its newest run; null says nothing. */
@@ -156,19 +156,18 @@ export function rankAutomationCardRows(
     .map(({ row }) => row)
 }
 
-/** Built-ins always show, outside the cap: the Automations page that "All N" opens doesn't list them. */
+/** Five automations show; built-ins and waits always do, since the Automations page that "All N"
+ *  opens lists only automations, so N counts what it shows filtered to this bot. */
 export function botAutomationCardView(ordered: readonly BotAutomationCardRow[]): {
   shown: BotAutomationCardRow[]
-  /** What the Automations page lists: automations and waits. */
+  /** What the Automations page lists for this bot: its automations, not its waits. */
   listed: number
   listedPaused: number
 } {
-  const listed = ordered.filter((row) => row.kind === 'automation' || row.kind === 'wait')
+  const listed = ordered.filter((row) => row.kind === 'automation')
   const kept = new Set(listed.slice(0, AUTOMATION_CARD_CAP).map((row) => row.key))
   return {
-    shown: ordered.filter(
-      (row) => (row.kind !== 'automation' && row.kind !== 'wait') || kept.has(row.key)
-    ),
+    shown: ordered.filter((row) => row.kind !== 'automation' || kept.has(row.key)),
     listed: listed.length,
     listedPaused: listed.filter((row) => !row.on).length
   }
@@ -190,12 +189,16 @@ export function botRunningRow(rows: readonly BotAutomationCardRow[]): BotAutomat
 
 type OrderFacts = { runFacts: string; running: boolean; nextAt: number | null }
 
+const NO_KEYS: ReadonlySet<string> = new Set()
+
 /**
  * The card's order, re-ranked only when rows come or go or their run facts change: a switch flipped
- * here, and the host's refresh after it, leave its row in place until the panel next opens.
+ * here, and the host's refresh after it, leave its row in place until the panel next opens. Rows that
+ * leave only because they were deleted here (`hiddenKeys`) leave the rest where they are.
  */
 export function useAutomationCardOrder(
-  rows: readonly BotAutomationCardRow[]
+  rows: readonly BotAutomationCardRow[],
+  hiddenKeys: ReadonlySet<string> = NO_KEYS
 ): BotAutomationCardRow[] {
   const [order, setOrder] = useState<{
     keys: string[]
@@ -212,20 +215,23 @@ export function useAutomationCardOrder(
       }
     ])
   )
-  const rerank =
-    !order ||
-    order.facts.size !== rows.length ||
-    rows.some((row) => {
-      const before = order.facts.get(row.key)
-      return (
-        !before ||
-        before.running !== row.running ||
-        before.nextAt !== row.nextAt ||
-        before.runFacts !== row.runFacts
-      )
-    })
+  const factsChanged = (row: BotAutomationCardRow): boolean => {
+    const before = order?.facts.get(row.key)
+    return (
+      !before ||
+      before.running !== row.running ||
+      before.nextAt !== row.nextAt ||
+      before.runFacts !== row.runFacts
+    )
+  }
+  const left = order ? [...order.facts.keys()].filter((key) => !facts.has(key)) : []
+  const onlyHiddenLeft =
+    left.length > 0 && left.every((key) => hiddenKeys.has(key)) && !rows.some(factsChanged)
   let keys = order?.keys ?? []
-  if (rerank) {
+  if (order && onlyHiddenLeft) {
+    keys = order.keys.filter((key) => facts.has(key))
+    setOrder({ keys, facts })
+  } else if (!order || order.facts.size !== rows.length || rows.some(factsChanged)) {
     keys = rankAutomationCardRows(rows).map((row) => row.key)
     setOrder({ keys, facts })
   }

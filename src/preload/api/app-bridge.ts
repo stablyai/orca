@@ -55,6 +55,7 @@ export const appApi = {
       () => ipcRenderer.invoke('app:restart'),
       awaitBeforeUnloadCheckpoint
     ),
+  quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
   reload: (): Promise<void> => invokeRendererRequestedReload(),
   stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
     const result: { ok?: unknown; error?: unknown } | null | undefined = ipcRenderer.sendSync(

@@ -5,6 +5,24 @@ import { botHostTarget } from '@/lib/bot-hosts'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { ComposioEventsPlace, ComposioKey } from '../../../../../shared/composio/composio-apps'
+import { botFailureOf } from '../bot-presentation'
+
+/** The key was made without a permission the call needs: the one Composio named, when it did. */
+export type ComposioKeyScope = { permission: string | null }
+
+export function composioKeyScopeOf(error: unknown): ComposioKeyScope | null {
+  const failure = botFailureOf(error)
+  if (failure?.code === 'composioKeyMissingPermission') {
+    return { permission: null }
+  }
+  if (
+    failure?.code === 'composioKeyCantCreateSessions' ||
+    failure?.code === 'composioKeyNeedsPermission'
+  ) {
+    return { permission: String(failure.params?.permission ?? '') || null }
+  }
+  return null
+}
 
 // Each host's last answer on where its key's project sends events, so one host's line can name
 // the other computer that takes them.

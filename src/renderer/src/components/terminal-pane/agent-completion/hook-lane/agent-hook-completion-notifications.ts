@@ -266,7 +266,3 @@ export function resetAgentHookCompletionNotificationCoordinators(): void {
   wasAgentTaskCompleteTrackingEnabled = isAgentTaskCompleteTrackingEnabled()
   requireFreshWorkingForNewTrackingCoordinators = !wasAgentTaskCompleteTrackingEnabled
 }
-
-export function _getAgentHookCompletionNotificationCoordinatorCountForTest(): number {
-  return coordinatorsByPaneKey.size
-}

@@ -4,10 +4,11 @@ import {
   isOrcaSessionId
 } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { StructuredAgentSessionRequestFailure } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import { AgentSessionJournalError } from '../../../../native-chat/agent-session-journal/writing/journal-write-guards'
 import { resolveStructuredWorkerIdentityForSession } from '../../terminal-authority/structured-sessions/structured-worker-authority'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { isSenderOwnRejection } from './chat-worker-error-words'
-import { readChatRequestError } from './chat-request-error-read'
+import { readChatRequestError, unrecordedChatRequestError } from './chat-request-error-read'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { observeWorker } from './worker-presence-report'
@@ -68,7 +69,16 @@ export async function escalateChatWorkerError(
     const seen = new Map(
       targets.map(({ dispatch }) => [dispatch.id, readWorkerPresence(db, dispatch.id)?.generation])
     )
-    const error = await readChatRequestError(request)
+    const error = await readChatRequestError(request).catch((error: unknown) => {
+      if (error instanceof AgentSessionJournalError && error.code === 'journal_closed') {
+        return null
+      }
+      if (!request.death?.rootGone) {
+        throw error
+      }
+      // Committed journal details can be unavailable even though the host proved this exit.
+      return unrecordedChatRequestError(request)
+    })
     if (!error || isSenderOwnRejection(error)) {
       return
     }
@@ -100,6 +110,7 @@ export async function escalateChatWorkerError(
             requestError: {
               text,
               ...(detail ? { detail } : {}),
+              ...(kind ? { kind } : {}),
               facts: {
                 sessionId: request.sessionId,
                 agent: request.agent,

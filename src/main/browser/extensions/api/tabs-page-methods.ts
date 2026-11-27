@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
@@ -18,12 +19,14 @@ import {
   findBrowserExtensionDiscardedTab
 } from '../tabs-and-windows/browser-extension-discarded-tab-model'
 
-const tabIdSchema = z.number().int().nonnegative()
-const optionalTabId = z.tuple([tabIdSchema.nullable().optional()])
-const moveSchema = z
-  .object({ index: z.number().int(), windowId: z.number().int() })
-  .partial({ windowId: true })
-  .loose()
+const tabIdSchema = lazyZodSchema(() => z.number().int().nonnegative())
+const optionalTabId = lazyZodSchema(() => z.tuple([tabIdSchema.nullable().optional()]))
+const moveSchema = lazyZodSchema(() =>
+  z
+    .object({ index: z.number().int(), windowId: z.number().int() })
+    .partial({ windowId: true })
+    .loose()
+)
 
 // Why its own world: the page's main world must never see (or tamper with) Orca's reads.
 const DETECT_LANGUAGE_WORLD_ID = 1_998

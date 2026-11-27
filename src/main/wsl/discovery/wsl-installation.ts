@@ -1,8 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import {
-  _resetWslNotInstalledLatchForTests,
-  latchWslNotInstalled
-} from '@orca/process-host/wsl-not-installed-latch'
+import { latchWslNotInstalled } from '@orca/process-host/wsl-not-installed-latch'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
@@ -155,22 +152,4 @@ export function readWslInstallation(): Promise<WslInstallation> {
   })
   installationProbe = probe
   return probe
-}
-
-export function _resetWslInstallationForTests(): void {
-  serviceRegistered = undefined
-  installation = null
-  installationProbe = null
-  unknownUntilMs = 0
-  _resetWslNotInstalledLatchForTests()
-}
-
-export function _setWslInstallationForTests(value: WslInstallation | null): void {
-  installation = value
-  installationProbe = null
-  unknownUntilMs = 0
-  _resetWslNotInstalledLatchForTests()
-  if (value === 'absent') {
-    latchWslNotInstalled()
-  }
 }

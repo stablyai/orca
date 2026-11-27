@@ -1,10 +1,8 @@
-import { open, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, sep, type posix } from 'node:path'
 import { stablePathId } from './skill-discovery-classification'
 import type { SkillScanRoot } from './skill-discovery-sources'
-import { stripUnsafeDisplayCharacters } from '../../../shared/text/display-text-safety'
-
-const MAX_PLUGIN_METADATA_BYTES = 4 * 1024 * 1024
+import { readPluginMetadataFile, safePluginLabel } from './plugin-skill-metadata'
+import { parseJsonObject } from '../../../shared/workspace-setup/setup-script-import-parsers'
 
 export type SkillDiscoveryPathApi = Pick<
   typeof posix,
@@ -39,20 +37,6 @@ export function getClaudePluginMetadataPaths(
       pathApi.join(cwd, '.claude', 'settings.json'),
       pathApi.join(cwd, '.claude', 'settings.local.json')
     ]
-  }
-}
-
-function parseJsonObject(content: string | null): Record<string, unknown> | null {
-  if (!content) {
-    return null
-  }
-  try {
-    const parsed: unknown = JSON.parse(content)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null
-  } catch {
-    return null
   }
 }
 
@@ -145,11 +129,6 @@ function selectActiveInstall(
   )
 }
 
-function safePluginLabel(packageName: string): string {
-  const safeLabel = stripUnsafeDisplayCharacters(packageName).slice(0, 80)
-  return safeLabel || 'plugin'
-}
-
 type ClaudePluginSkillInstall = { root: SkillScanRoot; installPath: string }
 
 type ClaudePluginResolveArgs = {
@@ -201,30 +180,6 @@ export function resolveClaudePluginSkillSources(args: ClaudePluginResolveArgs): 
   return resolveClaudePluginSkillInstalls(args).map(({ root }) => root)
 }
 
-async function readMetadataFile(pathValue: string, signal?: AbortSignal): Promise<string | null> {
-  try {
-    signal?.throwIfAborted()
-    const fileStat = await stat(pathValue)
-    signal?.throwIfAborted()
-    if (!fileStat.isFile() || fileStat.size > MAX_PLUGIN_METADATA_BYTES) {
-      return null
-    }
-    const file = await open(pathValue, 'r')
-    try {
-      signal?.throwIfAborted()
-      const buffer = Buffer.alloc(fileStat.size)
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-      signal?.throwIfAborted()
-      return buffer.toString('utf8', 0, bytesRead)
-    } finally {
-      await file.close()
-    }
-  } catch {
-    signal?.throwIfAborted()
-    return null
-  }
-}
-
 type ClaudePluginDiscoveryArgs = { homeDir: string; cwd: string; signal?: AbortSignal }
 
 export async function discoverClaudePluginSkillInstalls(
@@ -232,7 +187,9 @@ export async function discoverClaudePluginSkillInstalls(
 ): Promise<ClaudePluginSkillInstall[]> {
   const paths = getClaudePluginMetadataPaths(args.homeDir, args.cwd)
   const [installedPlugins, ...settings] = await Promise.all(
-    [paths.installedPlugins, ...paths.settings].map((path) => readMetadataFile(path, args.signal))
+    [paths.installedPlugins, ...paths.settings].map((path) =>
+      readPluginMetadataFile(path, args.signal)
+    )
   )
   return resolveClaudePluginSkillInstalls({
     metadata: { installedPlugins, settings },
@@ -253,7 +210,7 @@ export async function applyClaudePluginManifestNames(
 ): Promise<SkillScanRoot[]> {
   return Promise.all(
     installs.map(async ({ root, installPath }) => {
-      const manifest = await readMetadataFile(
+      const manifest = await readPluginMetadataFile(
         join(installPath, '.claude-plugin', 'plugin.json'),
         signal
       )

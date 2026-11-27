@@ -1,6 +1,5 @@
 // What one botsChanged costs at 20/40 bots x 500/2,000 chats: main-thread ms and chat-tree reads per
-// notice (main), RPCs and renderer commits per notice (renderer). Usage:
-//   node tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-bench.mjs [--out <dir>] [--only main|renderer]
+// notice. Usage: node tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-bench.mjs [--out <dir>]
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -11,7 +10,6 @@ const flag = (name) => {
   return at === -1 ? undefined : args[at + 1]
 }
 const out = resolve(flag('--out') ?? join('tmp', 'bot-chat-tree-bench'))
-const only = flag('--only')
 // e.g. --sizes 40x500,40x2000
 const sizes = (flag('--sizes') ?? '20x500,20x2000,40x500,40x2000').split(',').map((size) => {
   const [bots, chats] = size.split('x').map(Number)
@@ -45,25 +43,12 @@ const run = (file, env, label) => {
 
 const reports = []
 for (const { bots, chats } of sizes) {
-  {
-    if (only !== 'renderer') {
-      reports.push(
-        run(
-          'tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-notices-benchmark.ts',
-          { BENCH_BOTS: String(bots), BENCH_CHATS: String(chats) },
-          `main-${bots}x${chats}`
-        )
-      )
-    }
-    if (only !== 'main') {
-      reports.push(
-        run(
-          'tests/tools/benchmarks/bot-chat-tree/bots-changed-renders-benchmark.test.tsx',
-          { BENCH_BOTS: String(bots), BENCH_CHATS: String(chats) },
-          `renderer-${bots}x${chats}`
-        )
-      )
-    }
-  }
+  reports.push(
+    run(
+      'tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-notices-benchmark.ts',
+      { BENCH_BOTS: String(bots), BENCH_CHATS: String(chats) },
+      `main-${bots}x${chats}`
+    )
+  )
 }
 console.log(JSON.stringify(reports, null, 2))

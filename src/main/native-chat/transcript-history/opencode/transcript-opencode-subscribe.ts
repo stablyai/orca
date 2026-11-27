@@ -250,8 +250,7 @@ export function subscribeOpenCodeNativeChatTranscript(
     windowLimit = Math.max(windowLimit, fingerprints.size)
   }
 
-  // Widen bounded worker reads until they overlap the emitted frontier, bridging poll-gap bursts.
-  // If even the cap cannot overlap, retain the old signal/frontier and retry without losing rows.
+  // At the cap, publish a pageable tail so an out-of-window frontier cannot stall polling.
   async function replaceWithBridgedWindow(
     db: string,
     page: Awaited<ReturnType<typeof readPage>>,
@@ -283,7 +282,12 @@ export function subscribeOpenCodeNativeChatTranscript(
         agent === 'zcode'
           ? replacement.items.some((item) => fingerprints.has(item.rowid))
           : oldest <= lastEmittedRowId
-      if (shrinking || overlaps || !replacement.hasMore) {
+      if (
+        shrinking ||
+        overlaps ||
+        !replacement.hasMore ||
+        limit >= OPENCODE_TRANSCRIPT_MAX_WINDOW
+      ) {
         fingerprints.clear()
         lastEmittedRowId = 0
         rememberItems(replacement.items)
@@ -292,9 +296,6 @@ export function subscribeOpenCodeNativeChatTranscript(
         const before = replacement.beforeMessageRowId ?? 0
         emitSafely(() => args.onReplace?.(messages, hasMore, before), 'replace')
         return true
-      }
-      if (limit >= OPENCODE_TRANSCRIPT_MAX_WINDOW) {
-        return false
       }
       limit = Math.min(limit * 2, OPENCODE_TRANSCRIPT_MAX_WINDOW)
       page = null

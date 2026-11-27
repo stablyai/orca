@@ -47,10 +47,6 @@ function readElectronSystemMemoryInfo(): SystemMemoryInfoLike | null {
 
 let systemMemoryInfoReader: SystemMemoryInfoReader = readElectronSystemMemoryInfo
 
-export function setSystemMemoryInfoReaderForTest(reader: SystemMemoryInfoReader | null): void {
-  systemMemoryInfoReader = reader ?? readElectronSystemMemoryInfo
-}
-
 function numericDetail(details: CrashReportDetails, suffix: string): number | undefined {
   const value = details[`${SYSTEM_MEMORY_KEY_PREFIX}${suffix}`]
   return typeof value === 'number' ? value : undefined

@@ -1,16 +1,29 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { AgentSessionModelOption } from '../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { labelFromModelId } from '../../shared/agent-session/options/model-catalog/model-id-label'
 
 // Lists the account's models without opening a session; V3's `acp` rejects `--model`/`--effort`.
 export const KIRO_MODEL_LISTING_ARGS = ['chat', '--list-models', '--format', 'json'] as const
 
-const listingSchema = z.looseObject({
-  models: z.array(
-    z.looseObject({ model_id: z.string().min(1), description: z.string().optional() })
-  ),
-  default_model: z.string().optional()
-})
+// Auto picks the model per prompt and reports no effort.
+const KIRO_AUTO_MODEL = 'auto'
+const KIRO_UNCONFIRMED_EFFORTS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra high' },
+  { value: 'max', label: 'Max' }
+]
+
+const listingSchema = lazyZodSchema(() =>
+  z.looseObject({
+    models: z.array(
+      z.looseObject({ model_id: z.string().min(1), description: z.string().optional() })
+    ),
+    default_model: z.string().optional()
+  })
+)
 
 export function parseKiroModelListing(stdout: string): AgentSessionModelOption[] {
   let json: unknown
@@ -30,8 +43,9 @@ export function parseKiroModelListing(stdout: string): AgentSessionModelOption[]
     label: labelFromModelId(model.model_id),
     ...(model.description ? { description: model.description } : {}),
     isDefault: model.model_id === defaultModel,
-    // Kiro offers a model's effort levels only once a session runs that model.
     efforts: [],
+    // Kiro reports a model's efforts only once a chat runs it, so these are chat-only and checked at send.
+    ...(model.model_id === KIRO_AUTO_MODEL ? {} : { chatEfforts: KIRO_UNCONFIRMED_EFFORTS }),
     effortsKnown: false
   }))
 }

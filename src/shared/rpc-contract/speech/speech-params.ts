@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 
 export const AUDIO_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
@@ -29,53 +30,67 @@ export function isValidAudioBase64(value: string): boolean {
   return value.length % 4 !== 1 && AUDIO_BASE64_PATTERN.test(value)
 }
 
-export const DictationStart = z.object({
-  dictationId: requiredString('Missing dictation ID'),
-  modelId: OptionalString,
-  /** Picks the repo's dictionary terms; older hosts strip it. */
-  worktreeId: OptionalString
-})
-
-export const DictationChunk = z.object({
-  dictationId: requiredString('Missing dictation ID'),
-  audioBase64: requiredString('Missing audio chunk')
-    // Bound before Buffer/Float32Array allocation, matching the mobile pending-audio budget.
-    .refine(
-      (value) => value.length <= MAX_DICTATION_AUDIO_CHUNK_BASE64_LENGTH,
-      'Audio chunk is too large'
-    )
-    // Buffer.from silently discards malformed base64; refuse corrupt PCM instead.
-    .refine(isValidAudioBase64, 'Audio chunk must be base64'),
-  sampleRate: z.number().finite().positive(),
-  // Counts up from 0 per dictation, so a chunk resent after a drop is fed once.
-  seq: z.number().int().nonnegative().optional()
-})
-
-export const DictationHandle = z.object({
-  dictationId: requiredString('Missing dictation ID')
-})
-
-// Nullable: older phones and every read without a worktree send null.
-export const SpeechSetupRead = z
-  .object({
+export const DictationStart = lazyZodSchema(() =>
+  z.object({
+    dictationId: requiredString('Missing dictation ID'),
+    modelId: OptionalString,
+    /** Picks the repo's dictionary terms; older hosts strip it. */
     worktreeId: OptionalString
   })
-  .nullable()
+)
 
-export const SpeechModelAction = z.object({
-  modelId: requiredString('Missing model ID')
-})
+export const DictationChunk = lazyZodSchema(() =>
+  z.object({
+    dictationId: requiredString('Missing dictation ID'),
+    audioBase64: requiredString('Missing audio chunk')
+      // Bound before Buffer/Float32Array allocation, matching the mobile pending-audio budget.
+      .refine(
+        (value) => value.length <= MAX_DICTATION_AUDIO_CHUNK_BASE64_LENGTH,
+        'Audio chunk is too large'
+      )
+      // Buffer.from silently discards malformed base64; refuse corrupt PCM instead.
+      .refine(isValidAudioBase64, 'Audio chunk must be base64'),
+    sampleRate: z.number().finite().positive(),
+    // Counts up from 0 per dictation, so a chunk resent after a drop is fed once.
+    seq: z.number().int().nonnegative().optional()
+  })
+)
 
-export const DictationSetup = z.object({
-  enabled: z.boolean().optional(),
-  modelId: OptionalString,
-  dictationMode: z.enum(['toggle', 'hold']).optional(),
-  dictationHoldToRecord: z.boolean().optional()
-})
+export const DictationHandle = lazyZodSchema(() =>
+  z.object({
+    dictationId: requiredString('Missing dictation ID')
+  })
+)
+
+// Nullable: older phones and every read without a worktree send null.
+export const SpeechSetupRead = lazyZodSchema(() =>
+  z
+    .object({
+      worktreeId: OptionalString
+    })
+    .nullable()
+)
+
+export const SpeechModelAction = lazyZodSchema(() =>
+  z.object({
+    modelId: requiredString('Missing model ID')
+  })
+)
+
+export const DictationSetup = lazyZodSchema(() =>
+  z.object({
+    enabled: z.boolean().optional(),
+    modelId: OptionalString,
+    dictationMode: z.enum(['toggle', 'hold']).optional(),
+    dictationHoldToRecord: z.boolean().optional()
+  })
+)
 
 /** Why the cap: an OpenAI key is ~200 characters; anything far longer is a paste mistake. */
 export const OPENAI_SPEECH_KEY_MAX_LENGTH = 1024
 
-export const OpenAiSpeechKeySet = z.object({
-  apiKey: z.string().trim().min(1).max(OPENAI_SPEECH_KEY_MAX_LENGTH)
-})
+export const OpenAiSpeechKeySet = lazyZodSchema(() =>
+  z.object({
+    apiKey: z.string().trim().min(1).max(OPENAI_SPEECH_KEY_MAX_LENGTH)
+  })
+)

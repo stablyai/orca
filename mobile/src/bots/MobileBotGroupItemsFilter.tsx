@@ -1,14 +1,12 @@
 // A group's Items filter, as a page in its drawer: which bots, which room (or all their work), and
 // Needs you only, as the desktop's group filter offers them.
 import { ScrollView, View } from 'react-native'
-import { Layers, MessageSquare, Users } from 'lucide-react-native'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import type { MobileBotGroupItemsRead } from './use-mobile-bot-group-items'
@@ -20,19 +18,9 @@ export function MobileBotGroupItemsFilter({
   read: MobileBotGroupItemsRead
   onDone: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const {
-    members,
-    botIds,
-    setBotIds,
-    scopes,
-    scope,
-    setScopeKey,
-    needsYouOnly,
-    setNeedsYouOnly,
-    clearFilter
-  } = read
+  const { members, botIds, setBotIds, needsYouOnly, setNeedsYouOnly, clearFilter } = read
   return (
     <View style={styles.page}>
       <SheetHeader
@@ -53,9 +41,7 @@ export function MobileBotGroupItemsFilter({
               <ListRow
                 key={bot.id}
                 title={bot.name}
-                leading={
-                  <MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={26} />
-                }
+                leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={26} />}
                 {...(open ? { value: String(open) } : {})}
                 selected={on}
                 accessibilityRole="checkbox"
@@ -65,23 +51,6 @@ export function MobileBotGroupItemsFilter({
                   // Every bot, or none, is the same list: all of them.
                   setBotIds(next.length === 0 || next.length === members.length ? null : next)
                 }}
-              />
-            )
-          })}
-        </ListGroup>
-        <SectionHeader title={t('bots.items.filter.chat', 'Chat')} />
-        <ListGroup>
-          {scopes.map((entry) => {
-            const Icon =
-              entry.kind === 'group' ? Users : entry.kind === 'all' ? Layers : MessageSquare
-            return (
-              <ListRow
-                key={entry.key}
-                title={entry.name}
-                leading={<Icon size={18} color={colors.textSecondary} />}
-                selected={entry.key === scope?.key}
-                accessibilityRole="radio"
-                onPress={() => setScopeKey(entry.key)}
               />
             )
           })}
@@ -104,7 +73,7 @@ export function MobileBotGroupItemsFilter({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: { flex: 1 },
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   scrollContent: { paddingBottom: spacing.lg },

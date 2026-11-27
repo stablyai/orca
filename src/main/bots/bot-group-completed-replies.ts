@@ -28,6 +28,13 @@ export async function completedGroupReplies(
       read.set(operationId, items)
     }
   }
+  // Each message as it stands now: the reads above may have let an answer, error or reply land on it.
+  const current = messages.map(({ id }) => groups.store.message(id))
+  const answers = new Map(
+    current
+      .flatMap((message) => message?.turns ?? [])
+      .map((turn) => [turn.operationId, turn.answer])
+  )
   const replies = new Map<string, string>()
   const completed = new Map<string, string>()
   for (const turn of turns) {
@@ -38,19 +45,14 @@ export async function completedGroupReplies(
     if (reply) {
       replies.set(turn.operationId, reply)
     }
-    // An answer to a member's request went by mail; the room history carries it too. Read as it
-    // stands now: one may have been saved during the reads above.
-    const answer = groups.store
-      .operationMessage(turn.operationId)
-      ?.turns.find((candidate) => candidate.operationId === turn.operationId)?.answer
-    const text = botGroupTurnReplyText(reply, answer ?? turn.answer)
+    // An answer to a member's request went by mail; the room history carries it too.
+    const text = botGroupTurnReplyText(reply, answers.get(turn.operationId) ?? turn.answer)
     if (text) {
       completed.set(turn.operationId, text)
     }
   }
   // What a read settles is saved too, so the next post reads that chat no more: the reply, or null
-  // for a turn that ended without one (stopped, failed). Saved on the message as it stands now: the
-  // reads above may have let a turn's error or reply land on it.
+  // for a turn that ended without one (stopped, failed). Saved on the message as it stands now.
   const settled = new Map<string, string | null>()
   for (const [operationId, items] of read) {
     const ended = items.some((item) => item.body.kind === 'turn' && item.body.state !== 'running')
@@ -59,12 +61,11 @@ export async function completedGroupReplies(
     }
   }
   const found = (turn: BotGroupTurn) => turn.reply === undefined && settled.has(turn.operationId)
-  for (const { id } of messages) {
-    const current = groups.store.message(id)
-    if (current?.turns.some(found)) {
+  for (const message of current) {
+    if (message?.turns.some(found)) {
       groups.store.update({
-        ...current,
-        turns: current.turns.map((turn) =>
+        ...message,
+        turns: message.turns.map((turn) =>
           found(turn) ? { ...turn, reply: settled.get(turn.operationId) } : turn
         )
       })

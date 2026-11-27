@@ -9,8 +9,24 @@ export type ComposerAgentRows = {
   detectionTarget: AgentDetectionTarget | undefined
 }
 
+type ComposerAgentRowsInput = Pick<
+  ComposerModel,
+  | 'isProjectGroupTarget'
+  | 'selectedProjectGroup'
+  | 'folderTargetRuntimeEnvironmentId'
+  | 'folderTargetAgentDetectionTarget'
+  | 'resolvedRepoId'
+  | 'ephemeralVmsEnabled'
+  | 'selectedEphemeralVmRecipeId'
+  | 'selectedRepoRuntimeEnvironmentId'
+  | 'selectedRepoConnectionId'
+  | 'selectedWorkspaceTarget'
+  | 'selectedRepoIsGit'
+  | 'selectedRepoExecutionHostId'
+>
+
 /** Resolve the same launch workspace as submit; unknown pre-create hosts such as ephemeral VMs keep the unfiltered agent list. */
-export function resolveComposerAgentRows(state: ComposerModel): ComposerAgentRows | null {
+export function resolveComposerAgentRows(state: ComposerAgentRowsInput): ComposerAgentRows | null {
   if (state.isProjectGroupTarget) {
     const group = state.selectedProjectGroup
     return group

@@ -7,6 +7,7 @@ import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
 import { useAppStore } from '../../store/index'
+import { showWorkspaceListThen } from '../../components/app-rail/app-rail-navigation'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
 import { canNavigateWorktreeHistory } from '../../app-shell/chrome/titlebar-worktree-history-controls'
@@ -42,8 +43,14 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
           return
         }
         runBuiltInOrReplacement('workspace.openBoard', () => {
+          const toggleBoard = (): void => {
+            window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+          }
+          if (showWorkspaceListThen(useAppStore, toggleBoard)) {
+            return
+          }
           store.setSidebarOpen(true)
-          window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+          toggleBoard()
         })
       })
     )

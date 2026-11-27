@@ -1,6 +1,8 @@
 // The record this host wrote beside a bot request when it admitted it.
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { BotRequestRecord } from '../../../../../bots/bot-request-view'
+import type { Bot } from '../../../../../../shared/bot-types'
+import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import type { BotRequestActsFor } from '../../../../../bots/bot-request-asker'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { runtimeChatHost } from '../../../../../external-conversations/external-conversation-chat'
@@ -21,7 +23,8 @@ export function botRequestRecord(db: OrchestrationDb, messageId: string): BotReq
 }
 
 /** Whom a request acts for, and the event that started its chain, as this host recorded it; null
- *  when there is no readable record. */
+ *  when there is no readable record. Only a handoff passes on its place: a question's answer and
+ *  status mail go back by mail, so no work they start owes that place a result. */
 export function botRequestActsFor(
   db: OrchestrationDb,
   messageId: string
@@ -33,7 +36,11 @@ export function botRequestActsFor(
   return {
     askers: record.askers,
     ...(Array.isArray(record.askedBy) ? { askedBy: record.askedBy } : {}),
-    ...(record.origin ? { origin: record.origin } : {})
+    ...(record.purpose === 'status' ? { wantsNothing: true as const } : {}),
+    ...(record.origin ? { origin: record.origin } : {}),
+    ...(record.originPlace && record.purpose === 'handoff'
+      ? { originPlace: record.originPlace }
+      : {})
   }
 }
 
@@ -49,4 +56,37 @@ export function askedInConversation(
     sessionId &&
     runtime.getExternalConversationSeam()?.conversationTurn(runtimeChatHost(runtime), sessionId)
   return asked ? { askedInConversation: sessionId } : {}
+}
+
+/** The first request from another chat that the sending turn answers, when that request wants an answer
+ *  (not status): what this request brings back is passed on there, not left on this chat's card. A
+ *  worker's send is its own. */
+export function answersRequest(
+  db: OrchestrationDb,
+  acting: Pick<ActingSender, 'worker' | 'turn'>
+): Pick<BotRequestRecord, 'answersRequest'> {
+  if (acting.worker) {
+    return {}
+  }
+  // A turn can take several requests at once; status mail among them wants no answer.
+  const id = acting.turn.requestIds.find((requestId) => {
+    const purpose = botRequestRecord(db, requestId)?.purpose
+    return purpose !== undefined && purpose !== 'status'
+  })
+  return id ? { answersRequest: id } : {}
+}
+
+/** Who sent a request: this Orca's own bot, or a sender on a paired computer (either side of the
+ *  pairing). That bot is no bot of this Orca's, so only its name is kept, beside its computer. */
+export function botRequestSender(
+  bot: Pick<Bot, 'id' | 'name'> | null,
+  paired: PairedSender | undefined
+): Pick<BotRequestRecord, 'fromBotId' | 'fromBotName' | 'fromPairedComputer'> {
+  if (paired) {
+    return { fromBotId: null, fromBotName: paired.botName, fromPairedComputer: paired.computer }
+  }
+  return {
+    fromBotId: bot?.id ?? null,
+    fromBotName: bot?.name ?? null
+  }
 }

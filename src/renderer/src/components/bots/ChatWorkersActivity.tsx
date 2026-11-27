@@ -5,6 +5,7 @@ import { canStopOrchestrationWorker } from '@/lib/stop-orchestration-worker'
 import { sessionWorkerLook } from '@/lib/orchestration-session-worker-status'
 import {
   sessionWorkerIsRunning,
+  sessionWorkerNeverStarted,
   type OrchestrationSessionWorker
 } from '../../../../shared/orchestration-session-workers'
 import { ActivitySection, workersHeading } from './ActivitySection'
@@ -33,7 +34,11 @@ export function ChatWorkersActivity(): React.JSX.Element | null {
       workspaceId={worker.worktreeId}
       worker={worker}
       canStop={canStopOrchestrationWorker(target)}
-      onOpen={() => openOrchestrationWorker(worker, target)}
+      onOpen={
+        sessionWorkerNeverStarted(worker)
+          ? undefined
+          : () => openOrchestrationWorker(worker, target)
+      }
     />
   )
   return (

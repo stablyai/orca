@@ -17,12 +17,17 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { browserExtensionRemovalDescription } from '@/components/browser-pane/assemble-chrome/extensions/browser-extension-removal-description'
-import { useTranslate } from '@/i18n/use-translate'
+import { type Translate, useTranslate } from '@/i18n/use-translate'
+import { browserExtensionFailureMessage } from '@/components/settings/browser/extensions/browser-extension-failure-message'
 import { cn } from '@/lib/class-names'
 import type { BrowserExtensionContextMenuItem } from '../../../../../../shared/browser/extensions/browser-extension-context-menu-types'
 import type { BrowserExtensionActionResult } from '../../../../../../shared/browser/extensions/browser-extension-types'
 import type { BrowserExtensionToolbarAction } from '../../../../../../shared/browser/extensions/browser-extension-toolbar-types'
 import { useBrowserExtensionActionContextMenu } from './browser-extension-action-context-items'
+import {
+  browserExtensionMenuCheck,
+  type BrowserExtensionMenuCheck
+} from './browser-extension-menu-check'
 
 export type BrowserExtensionMenuEntry =
   | {
@@ -30,7 +35,7 @@ export type BrowserExtensionMenuEntry =
       label: string
       icon?: LucideIcon
       /** Set for checkbox and radio items. */
-      checked?: boolean
+      check?: BrowserExtensionMenuCheck
       disabled?: boolean
       destructive?: boolean
       children?: BrowserExtensionMenuEntry[]
@@ -49,7 +54,7 @@ function contextMenuEntry(
   return {
     key,
     label: item.title,
-    checked: item.type === 'checkbox' || item.type === 'radio' ? item.checked : undefined,
+    check: browserExtensionMenuCheck(item),
     disabled: !item.enabled,
     children:
       item.children.length > 0
@@ -59,13 +64,16 @@ function contextMenuEntry(
   }
 }
 
-async function reportFailure(result: Promise<BrowserExtensionActionResult>): Promise<void> {
+async function reportFailure(
+  t: Translate,
+  result: Promise<BrowserExtensionActionResult>
+): Promise<void> {
   const outcome = await result.catch((error: unknown) => ({
     ok: false as const,
     error: error instanceof Error ? error.message : String(error)
   }))
   if (!outcome.ok) {
-    toast.error(outcome.error)
+    toast.error(browserExtensionFailureMessage(t, outcome))
   }
 }
 
@@ -109,7 +117,7 @@ export function useBrowserExtensionActionMenuEntries(
       surface: 'security'
     })
     if (confirmed) {
-      await reportFailure(window.api.browser.extensionsRemove({ profileId, extensionId }))
+      await reportFailure(t, window.api.browser.extensionsRemove({ profileId, extensionId }))
     }
   }
 
@@ -122,6 +130,7 @@ export function useBrowserExtensionActionMenuEntries(
       icon: action.pinned ? PinOff : Pin,
       onSelect: () =>
         void reportFailure(
+          t,
           window.api.browser.extensionsSetPinned({ profileId, extensionId, pinned: !action.pinned })
         )
     },
@@ -133,6 +142,7 @@ export function useBrowserExtensionActionMenuEntries(
             icon: Settings2,
             onSelect: () =>
               void reportFailure(
+                t,
                 window.api.browser.extensionsOpenOptions({ profileId, extensionId })
               )
           }
@@ -189,12 +199,11 @@ function MenuEntries({
         if ('separator' in entry) {
           return <Separator key={entry.key} />
         }
-        const icon =
-          entry.checked !== undefined ? (
-            <Check className={cn('size-3.5', !entry.checked && 'opacity-0')} />
-          ) : entry.icon ? (
-            <entry.icon className="size-3.5" />
-          ) : null
+        const icon = entry.check ? (
+          <Check className={cn('size-3.5', !entry.check.checked && 'opacity-0')} />
+        ) : entry.icon ? (
+          <entry.icon className="size-3.5" />
+        ) : null
         return entry.children ? (
           <Sub key={entry.key}>
             <SubTrigger disabled={entry.disabled}>
@@ -208,6 +217,8 @@ function MenuEntries({
         ) : (
           <Item
             key={entry.key}
+            role={entry.check?.role ?? 'menuitem'}
+            aria-checked={entry.check?.checked}
             disabled={entry.disabled}
             variant={entry.destructive ? 'destructive' : 'default'}
             onSelect={entry.onSelect}

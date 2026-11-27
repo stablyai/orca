@@ -4,9 +4,9 @@ import {
   callComputerSidecarLaunchApp,
   callComputerSidecarListApps,
   callComputerSidecarListWindows,
-  callComputerSidecarSnapshot,
-  resetComputerSidecarForTest
+  callComputerSidecarSnapshot
 } from '../../../../computer/sidecar-transport/sidecar-client'
+import { assertTeamAllowsComputerUse } from '../../../../computer/computer-team-policy'
 import { defineMethod } from '../../core'
 import {
   Click,
@@ -28,10 +28,6 @@ import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
 } from '../../../../../shared/rpc-contract/computer/computer-params'
-
-export function resetComputerSessionsForTest(): void {
-  resetComputerSidecarForTest()
-}
 
 export const COMPUTER_METHODS = [
   defineMethod({
@@ -55,6 +51,7 @@ export const COMPUTER_METHODS = [
     permission: 'desktop-control',
     params: ComputerPermissions,
     handler: async (params) => {
+      assertTeamAllowsComputerUse()
       const { openComputerUsePermissions } =
         await import('../../../../computer/macos-permissions/macos-computer-use-permissions')
       return openComputerUsePermissions(params.id, { skipGranted: params.skipGranted === true })

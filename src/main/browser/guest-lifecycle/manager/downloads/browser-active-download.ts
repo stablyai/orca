@@ -20,6 +20,7 @@ export type ActiveDownload = {
   reservationKey: string | null
   clientRoute: BrowserClientDownloadRoute | null
   remoteDestination: BrowserDownloadFinishedEvent['remoteDestination']
+  claimLabel: string | null
   receivedBytes: number
   transientState: BrowserDownloadProgressEvent['state']
   terminalEvent: BrowserDownloadFinishedEvent | null

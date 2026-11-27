@@ -1,4 +1,5 @@
 import type { AutomationRunMessage } from '../../../../../shared/automations/automation-run-message'
+import type { AgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { automationRunInstructions } from '../../../../../shared/automations/automation-run-message'
 import {
   automationRunFacts,
@@ -26,6 +27,8 @@ export type NativeChatAutomationRunRowProps = {
   timestamp: number | null
   /** A run that couldn't start: the send's own error. */
   error?: string
+  /** Why its chat was refused, worded here in place of `error`. */
+  refusal?: AgentSessionRefusalReference
   /** Whether Send again is offered here, or already went. */
   resend?: AutomationRunResend
   /** Earlier tries of this run that couldn't start, newest first. */
@@ -42,6 +45,7 @@ export function NativeChatAutomationRunRow({
   text,
   timestamp,
   error,
+  refusal,
   resend = 'none',
   earlierFailures,
   onRefolded
@@ -84,6 +88,7 @@ export function NativeChatAutomationRunRow({
         instructions={instructions}
         facts={facts}
         error={error}
+        refusal={refusal}
         earlierFailures={earlierFailures}
         wording={wording}
         findQuery={findQuery}

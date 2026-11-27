@@ -1,4 +1,6 @@
 import { removeRetiredBrowserExtensionProfileStorage } from './profile-storage/browser-extension-retired-profile-storage'
+import { linkBrowserExtensionsToRouteSession } from './profile-sessions/browser-extension-route-sessions'
+import { browserExtensionSourceProfileId } from './profile-sessions/browser-extension-route-profiles'
 import { app, webContents } from 'electron'
 import { isHiddenHelperContents } from '../hidden-helper-window'
 import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser/extensions/browser-extension-types'
@@ -15,6 +17,7 @@ import { detachBrowserExtensionsFromAllProfileSessions } from './profile-session
 import { forgetAllBrowserExtensionSessions } from './profile-sessions/browser-extension-idle-resume'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
+import { setBrowserExtensionProfilePresence } from './profile-sessions/browser-extension-profile-presence'
 import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
@@ -73,9 +76,11 @@ export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
       setBrowserExtensionSupportEnabled(enabled)
       if (enabled) {
         installBrowserExtensionSupport()
-        // Why: pages already open, server pages included, were created before extensions ran.
+        // Why: pages already open, server, SSH and This-device pages included, were created before extensions ran.
         for (const contents of webContents.getAllWebContents()) {
-          const profileId = browserSessionRegistry.profileIdForSession(contents.session)
+          const profileId =
+            browserSessionRegistry.profileIdForSession(contents.session) ??
+            linkBrowserExtensionsToRouteSession(contents.session)
           // A hidden helper, such as a cookie save's CDP target, is not a page.
           if (profileId && !isHiddenHelperContents(contents)) {
             browserSessionRegistry.attachExtensions(profileId)
@@ -105,6 +110,11 @@ function installBrowserExtensionSupport(): void {
   initialized = true
   setSavedBrowserTabsSource(savedBrowserTabs, (profileId) =>
     browserSessionRegistry.resolveKnownPartition(profileId)
+  )
+  // An SSH or This-device page's instance lasts as long as its local profile.
+  setBrowserExtensionProfilePresence(
+    (profileId) =>
+      browserSessionRegistry.getProfile(browserExtensionSourceProfileId(profileId)) !== null
   )
   registerBrowserExtensionNamespaces()
   installBrowserExtensionApiHost()

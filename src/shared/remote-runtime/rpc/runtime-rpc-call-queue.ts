@@ -80,8 +80,14 @@ function isBulkReadRuntimeMethod(method: string): boolean {
   return (
     method === 'files.readChunk' ||
     method === 'files.readDocPreviewChunk' ||
-    method === 'files.readTerminalArtifactChunk'
+    method === 'files.readTerminalArtifactChunk' ||
+    method === 'agentSessionAttachment.readTextChunk'
   )
+}
+
+// A streamed page's frame acks pace its frames: slow calls must not hold them and starve the stream.
+function isStreamControlRuntimeMethod(method: string): boolean {
+  return method === 'browser.screencast.ack'
 }
 
 export class RuntimeRpcCallQueuePool {
@@ -114,11 +120,13 @@ export class RuntimeRpcCallQueuePool {
     const timedKey = `${selector}\u0000timed-pr`
     const queueKey = isLongWaitRuntimeMethod(method)
       ? `${selector}\u0000long-wait`
-      : bulkRead
-        ? `${selector}\u0000bulk-read`
-        : timedPR
-          ? timedKey
-          : selector
+      : isStreamControlRuntimeMethod(method)
+        ? `${selector}\u0000stream-control`
+        : bulkRead
+          ? `${selector}\u0000bulk-read`
+          : timedPR
+            ? timedKey
+            : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }

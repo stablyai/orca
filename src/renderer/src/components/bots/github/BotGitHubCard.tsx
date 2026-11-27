@@ -2,7 +2,7 @@ import React from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
-import type { IntegrationCardStatusTone } from '@/components/integrations/presentation/integration-card-shell'
+import type { BotConnectorStatus } from '../bot-connector-row-parts'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot } from '@/lib/bot-catalog'
@@ -13,11 +13,16 @@ import { useBotHostLabel } from '../use-bot-host-label'
 import { BotConnectorRow } from '../BotConnectorRow'
 import type { BotConnectorTitle } from '../bot-connector-titles'
 import { botGitHubErrorMessage, gitHubHowToAsk, gitHubInstallationLabel } from './bot-github-copy'
-import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
+import {
+  type ConnectorGitHubInstallation,
+  gitHubLoginFor
+} from '../../../../../shared/connector-bot-github-contract'
 import { connectorAddAccessLabel } from '../bot-connectors'
 import { useConnectorSetup } from '../ConnectorSetupDialogs'
-import { openGitHubInstall } from '@/lib/bot-github-install-record'
+import { addGitHubAccount, openGitHubInstall } from '@/lib/bot-github-install-record'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
+import { GhSignedOutLine, ghSignedOutStatus, useGhSignedOutHost } from './GhSignedOutLine'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
 import { signedOutConnectorFace } from '../orca-cloud-sign-in'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
@@ -26,7 +31,7 @@ type GitHubCardFace = {
   /** The org, or GitHub as a whole until it is linked and installed. */
   place: string
   description: string
-  status: { label: string; tone: IntegrationCardStatusTone } | null
+  status: BotConnectorStatus | null
   /** Linked and installed; otherwise setup can be finished from the card. */
   ready: boolean
 }
@@ -127,20 +132,30 @@ function gitHubStateFace(
   }
 }
 
-/** One GitHub row's state and its people, for the row and for Who can ask. */
+/** One GitHub row's state and its people, for the row and for Who can ask; `ghHost`: where gh is
+ *  signed out, when it is. */
 export function useGitHubCard(
   bot: Bot,
   installation: ConnectorGitHubInstallation | undefined
-): { view: BotGitHubView; face: GitHubCardFace; people: BotWhoCanAskService } {
+): {
+  view: BotGitHubView
+  face: GitHubCardFace
+  people: BotWhoCanAskService
+  ghHost: string | null
+} {
   const view = useBotGitHub(bot.hostId)
-  const login = view.status === 'ready' ? view.github.account?.login : undefined
+  const login =
+    view.status === 'ready' && installation
+      ? gitHubLoginFor(view.github, installation.installationId)
+      : null
   const hostName = useBotHostLabel(bot.hostId)
   const face =
     installation && login
       ? gitHubInstallationFace(installation, login)
       : gitHubCardFace(view, hostName)
   const people = useGitHubWhoCanAsk(bot.hostId, face.ready, installation?.installationId)
-  return { view, face, people }
+  const ghHost = useGhSignedOutHost(bot.hostId, view)
+  return { view, face, people, ghHost }
 }
 
 /**
@@ -161,7 +176,7 @@ export function BotGitHubCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const confirm = useConfirmationDialog()
-  const { view, face, people } = useGitHubCard(bot, installation)
+  const { view, face, people, ghHost } = useGitHubCard(bot, installation)
 
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
@@ -208,12 +223,19 @@ export function BotGitHubCard({
   // GitHub's install page, through the same setup as Add connector.
   const addAccess = useConnectorSetup(bot)
   const notReady = view.status === 'ready' && !face.ready
+  // A cloud that links several logins lists them; a paired web client can't start a sign-in.
+  const signsIn =
+    face.ready && view.status === 'ready' && !!view.github.accounts && !isPairedWebClientWindow()
   return (
     <BotConnectorRow
       connector={{ id: 'github', Icon: GitHubIcon }}
       name={title ?? 'GitHub'}
       description={face.description}
-      status={face.status}
+      status={
+        face.status ??
+        (ghHost ? { label: ghSignedOutStatus(ghHost), tone: 'warning', listOnly: true } : null)
+      }
+      lead={ghHost ? <GhSignedOutLine host={ghHost} /> : null}
       checking={view.status === 'loading'}
       fix={
         notReady
@@ -230,6 +252,22 @@ export function BotGitHubCard({
       add={
         face.ready && installUrl
           ? { label: connectorAddAccessLabel('github'), onClick: () => addAccess.start('github') }
+          : null
+      }
+      addAccount={
+        signsIn
+          ? {
+              label: t('bots.github.connection.addAccount', 'Add another GitHub account'),
+              onClick: () => addGitHubAccount(bot)
+            }
+          : null
+      }
+      update={
+        signsIn
+          ? {
+              label: t('bots.github.connection.refresh', 'Refresh'),
+              onClick: () => addGitHubAccount(bot)
+            }
           : null
       }
       remove={{

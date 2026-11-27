@@ -21,30 +21,32 @@ import type {
   OrchestrationEntryCaller,
   OrchestrationSessionCaller
 } from '../../../../orchestration/addressing/orchestration-caller-identity'
-import { checkRunPendingMail } from './check-run-pending-mail'
+import { checkRunPendingMail, type RecoveredRunChecker } from './check-run-pending-mail'
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
 import { withTakenRunCheckNext } from '../receipt-next'
 import { FEDERATION_RELAY_WAIT_REARM_MS } from '../../../../orchestration/federation/relay/federation-relay-scheduler'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 
-export async function checkRunMailbox(args: {
-  params: CheckParamsInput
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  handle: string
-  paneKey: string | undefined
-  callerSession: OrchestrationEntryCaller | undefined
-  reader: OrchestrationSessionCaller | undefined
-  typeFilter: MessageType[] | undefined
-  signal: AbortSignal | undefined
-  legacyCoordinatorRunId: string | undefined
-  revalidateLegacyCoordinator: (() => string) | undefined
-  orchestrationCompatibilityEvidence: RpcContext['orchestrationCompatibilityEvidence']
-  recordMutationReceipt: ((receipt: unknown) => void) | undefined
-  reconciliation: CheckMailReconciliation
-  revalidateCaller: () => void
-}): Promise<unknown> {
+export async function checkRunMailbox(
+  args: {
+    params: CheckParamsInput
+    runtime: OrcaRuntimeService
+    db: OrchestrationDb
+    handle: string
+    paneKey: string | undefined
+    callerSession: OrchestrationEntryCaller | undefined
+    reader: OrchestrationSessionCaller | undefined
+    typeFilter: MessageType[] | undefined
+    signal: AbortSignal | undefined
+    legacyCoordinatorRunId: string | undefined
+    revalidateLegacyCoordinator: (() => string) | undefined
+    orchestrationCompatibilityEvidence: RpcContext['orchestrationCompatibilityEvidence']
+    recordMutationReceipt: ((receipt: unknown) => void) | undefined
+    reconciliation: CheckMailReconciliation
+    revalidateCaller: () => void
+  } & RecoveredRunChecker
+): Promise<unknown> {
   const {
     params,
     runtime,
@@ -136,7 +138,9 @@ export async function checkRunMailbox(args: {
     if (params.format || params.inject) {
       return {
         ...result,
-        formatted: messages.map(formatMessageBanner).join('\n\n'),
+        formatted: messages
+          .map((message) => formatMessageBanner(message, { peerMail: db }))
+          .join('\n\n'),
         runId: run.id
       }
     }
@@ -149,12 +153,17 @@ export async function checkRunMailbox(args: {
     count: messages.length,
     acknowledged: acknowledged ?? null,
     ...(params.format || params.inject
-      ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
+      ? {
+          formatted: messages
+            .map((message) => formatMessageBanner(message, { peerMail: db }))
+            .join('\n\n')
+        }
       : {})
   })
   const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
   const result = (batch: MailboxDeliveryBatch | undefined) => {
     const receipt = deliveryReceipt({
+      db,
       mailbox: { runId: run.id },
       batch,
       acknowledged,

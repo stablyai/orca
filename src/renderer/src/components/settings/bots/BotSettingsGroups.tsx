@@ -216,17 +216,21 @@ function ServerEnableRow({
   host: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const { enabled, set } = useServerBotsEnabled(hostId, host)
+  const { enabled, blocked, set } = useServerBotsEnabled(hostId, host)
   return (
     <SettingsSwitchRow
       label={t('settings.bots.enableOnHost', 'Enable bots on {{host}}', { host })}
-      description={t(
-        'settings.bots.enableOnHostDescription',
-        'Lets {{host}}’s bots take messages and run automations, for every device paired to it. Turning this off hides them everywhere; their folders, memory and chats stay on {{host}}.',
-        { host }
-      )}
+      description={
+        blocked
+          ? t('settings.bots.teamDisabled', 'Bots are turned off by your team.')
+          : t(
+              'settings.bots.enableOnHostDescription',
+              'Lets {{host}}’s bots take messages and run automations, for every device paired to it. Turning this off hides them everywhere; their folders, memory and chats stay on {{host}}.',
+              { host }
+            )
+      }
       checked={enabled ?? false}
-      disabled={enabled === null}
+      disabled={enabled === null || blocked}
       onChange={() => void set(!enabled)}
     />
   )

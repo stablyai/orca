@@ -93,11 +93,7 @@ export function useMobileBotChatIdentity(
       linked?.botId === botId &&
       linked?.folderWorkspaceId === folderWorkspaceId &&
       linked?.sessionId === sessionId)
-  const uploadUri = routeBot?.avatar.kind === 'image' ? routeBot.avatar.uri : undefined
-  const avatar = useMemo(
-    () => (bot ? mobileBotAvatarSource(bot, uploadUri) : null),
-    [bot, uploadUri]
-  )
+  const avatar = useMemo(() => (bot ? mobileBotAvatarSource(bot) : null), [bot])
   return useMemo(
     () =>
       owns && bot && avatar && sessionId

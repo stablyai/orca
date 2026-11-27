@@ -79,10 +79,3 @@ async function runCheck(voice: CheckedVoice): Promise<SpeechModelUpdateTarget | 
     return null
   }
 }
-
-export function resetSpeechModelUpdateCheckForTests(): void {
-  catalogRequest = null
-  readyModelIds.clear()
-  offeredTargets.clear()
-  inFlightChecks.clear()
-}

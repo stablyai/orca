@@ -14,7 +14,10 @@ export function ArtifactsPageErrorBanner({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/10 px-3 py-2 md:px-5">
+    <div
+      role="alert"
+      className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/10 px-(--rail-page-gutter) py-2"
+    >
       <p className="min-w-0 flex-1 text-xs text-destructive">{error}</p>
       <Button type="button" variant="outline" size="xs" disabled={loading} onClick={onRetry}>
         {t('auto.components.artifacts.ArtifactsPage.retry', 'Retry')}
@@ -91,12 +94,14 @@ export function ArtifactsPageEmptyState({
   hasMore,
   loadingMore,
   publishingBlocked,
+  publishingBlockedByTeam,
   onLoadMore,
   onOpenArtifactsSettings
 }: {
   hasMore: boolean
   loadingMore: boolean
   publishingBlocked: boolean
+  publishingBlockedByTeam: boolean
   onLoadMore: () => void
   onOpenArtifactsSettings: () => void
 }): React.JSX.Element {
@@ -110,7 +115,7 @@ export function ArtifactsPageEmptyState({
               'auto.components.artifacts.ArtifactsPage.moreAvailable',
               'More artifacts are available'
             )
-          : publishingBlocked
+          : publishingBlocked || publishingBlockedByTeam
             ? t('auto.components.artifacts.ArtifactsPage.publishingOff', 'Publishing is turned off')
             : t('auto.components.artifacts.ArtifactsPage.empty', 'No shared artifacts')}
       </h2>
@@ -120,17 +125,19 @@ export function ArtifactsPageEmptyState({
               'auto.components.artifacts.ArtifactsPage.moreAvailableCopy',
               'Load the next page to continue.'
             )
-          : publishingBlocked
-            ? t(
-                'auto.components.artifacts.ArtifactsPage.publishingOffCopy',
-                'Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.'
-              )
-            : t(
-                'auto.components.artifacts.ArtifactsPage.emptyCopy',
-                'Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.'
-              )}
+          : publishingBlockedByTeam
+            ? t('settings.artifacts.teamDisabled', 'Artifact sharing is turned off by your team.')
+            : publishingBlocked
+              ? t(
+                  'auto.components.artifacts.ArtifactsPage.publishingOffCopy',
+                  'Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.'
+                )
+              : t(
+                  'auto.components.artifacts.ArtifactsPage.emptyCopy',
+                  'Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.'
+                )}
       </p>
-      {!hasMore && publishingBlocked ? (
+      {!hasMore && publishingBlocked && !publishingBlockedByTeam ? (
         <Button
           type="button"
           variant="outline"

@@ -3,8 +3,9 @@ import {
   type RemoteOwnedWorkerMail,
   type RemoteOwnedWorkerState
 } from '../../../../../shared/orchestration/remote-owned-wire'
+import { dropReaderlessRunQuestions } from '../questions/readerless-run-questions'
 import { OrchestrationError } from '../../orchestration-error'
-import type { MessageType } from '../orchestration-records'
+import type { MessageType, RunRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import {
@@ -24,6 +25,7 @@ import {
   noteRemoteRunLinkPeerRun
 } from './remote-placements'
 import { recordMessageSenderDispatch } from '../messages/message-sender-dispatch'
+import { workerReportSignInMessage } from '../../workers/launch/worker-agent-computer-words'
 import {
   closeRemoteRunLink,
   getRemoteRunLink,
@@ -52,10 +54,13 @@ export function importRemoteOwnedItem(
   db: OrchestrationDb,
   server: RemoteServerPin,
   item: PulledRemoteOwnedItem,
-  /** For a link a re-pair closed: the server's name, and how to wake the Run's coordinator. */
-  onClose: { name: string; notify?: (handle: string, messageType: string) => void } = {
-    name: server.environment_id
-  }
+  options: {
+    /** For a link a re-pair closed: the server's name, and how to wake the Run's coordinator. */
+    name: string
+    notify?: (handle: string, messageType: string) => void
+    /** The Run's coordinating chat when it was deleted, so a new question there is told at once. */
+    deletedChat?: (run: RunRow) => string | undefined
+  } = { name: server.environment_id }
 ): ImportedRemoteOwnedMail | undefined {
   const parsed = parseRemoteOwnedItem(item)
   return runLifecycleWriteTransaction(db.db, 'import_remote_owned_item', () => {
@@ -72,8 +77,8 @@ export function importRemoteOwnedItem(
       closeRemoteRunLink(
         db,
         link.conversation_id,
-        `The pairing with ${onClose.name} was re-made.`,
-        onClose.notify
+        `The pairing with ${options.name} was re-made.`,
+        options.notify
       )
     }
     if (link.state !== 'open' || !remoteRunLinkPinMatches(link, server)) {
@@ -90,7 +95,7 @@ export function importRemoteOwnedItem(
     }
     noteRemoteRunLinkPeerRun(db, link.conversation_id, parsed.value.peerRunId)
     return parsed.kind === 'worker_mail'
-      ? importWorkerMail(db, link, parsed.value)
+      ? importWorkerMail(db, link, parsed.value, options.deletedChat)
       : importWorkerState(db, link, parsed.value)
   })
 }
@@ -158,7 +163,8 @@ function advanceImportPosition(
 function importWorkerMail(
   db: OrchestrationDb,
   link: RemoteRunLinkRow,
-  mail: RemoteOwnedWorkerMail
+  mail: RemoteOwnedWorkerMail,
+  deletedChat: ((run: RunRow) => string | undefined) | undefined
 ): ImportedRemoteOwnedMail | undefined {
   if (mail.dispatchId && mail.taskId) {
     adoptRemoteAttempt(db, link, { taskId: mail.taskId, dispatchId: mail.dispatchId })
@@ -184,21 +190,32 @@ function importWorkerMail(
     from: mail.message.from,
     body: mail.message.body
   })
+  // The server can only say "this computer"; here it has the name this Orca paired it under.
+  const signIn = workerReportSignInMessage(
+    mail.message.payload,
+    link.server_name ?? link.environment_id
+  )
   db.insertMessage({
     id: mail.id,
     from: presented.from,
     to,
     subject: mail.message.subject,
-    body: presented.body,
+    body: signIn ? `${signIn}\n${presented.body}` : presented.body,
     type: mail.message.type,
     priority: mail.message.priority,
     threadId: mail.message.threadId ?? undefined,
+    replyTo: mail.message.replyTo ?? undefined,
     payload: mail.message.payload ?? undefined,
     runId: link.run_id
   })
   if (mail.dispatchId && mail.taskId) {
     // After the insert, so its peer-Run queue trigger never carries a server's Dispatch onward.
     recordMessageSenderDispatch(db, mail.id, mail.dispatchId)
+  }
+  if (mail.message.type === 'question') {
+    // No one coordinates the Run here now, or its chat was deleted: its worker there is told at once.
+    const run = db.getRun(link.run_id)
+    dropReaderlessRunQuestions(db, link.run_id, run && deletedChat?.(run))
   }
   return { to, type: mail.message.type }
 }
@@ -212,7 +229,9 @@ function importWorkerState(
   adoptRemoteAttempt(db, link, {
     taskId: dispatch.taskId,
     dispatchId: dispatch.id,
-    agent: dispatch.agent
+    agent: dispatch.agent,
+    worktreeId: dispatch.worktreeId,
+    earlierDispatchId: dispatch.followUpOf ?? dispatch.creatorDispatchId
   })
   const record = recordRemoteDispatchState(
     db,

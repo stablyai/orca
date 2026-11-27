@@ -90,7 +90,3 @@ export function selectPairedRuntimeParkingEnvironmentIds(
 ): ReadonlySet<string> {
   return selectParkingEnvironmentIds(statuses)
 }
-
-export function resetPairedRuntimeParkingEnvironmentIdsCacheForTest(): void {
-  selectParkingEnvironmentIds = createPairedRuntimeParkingEnvironmentIdsSelector()
-}

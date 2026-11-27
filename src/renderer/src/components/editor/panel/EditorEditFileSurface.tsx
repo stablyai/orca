@@ -194,6 +194,7 @@ export function EditorEditFileSurface({
               mimeType={fileContent.mimeType}
               preferenceKey={pdfPreferenceKey}
               scrollCacheKey={pdfViewStateKey}
+              focusPane={{ file: activeFile, viewStateId: viewStateScopeId }}
               editFileId={isEditorWritableView(activeFile) ? activeFile.id : null}
             />
           </div>
@@ -242,10 +243,11 @@ export function EditorEditFileSurface({
     if (!externalChangeBanner) {
       return changesView
     }
+    // ChangesModeView sizes itself with flex-1, which a block parent ignores.
     return (
       <div className="flex flex-1 min-h-0 flex-col">
         {externalChangeBanner}
-        <div className="min-h-0 flex-1">{changesView}</div>
+        <div className="flex min-h-0 flex-1 flex-col">{changesView}</div>
       </div>
     )
   }

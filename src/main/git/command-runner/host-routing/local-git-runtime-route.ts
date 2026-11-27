@@ -131,8 +131,3 @@ export function runAdmittedWslGit<T>(
     throw error
   })
 }
-
-export function resetWslGitAdmissionForTests(): void {
-  missingUntil.clear()
-  isDistroRunning = null
-}

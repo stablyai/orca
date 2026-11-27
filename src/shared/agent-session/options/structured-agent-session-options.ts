@@ -66,6 +66,8 @@ export type StructuredAgentSessionOptionState = AgentSessionChildPermissionField
   fallbackModel?: string
   /** The host is still listing models; it only keeps a seed from settling to built-in, since controls follow their data. */
   listingInProgress?: boolean
+  /** The latest listing failed because the agent isn't signed in, so no models can show yet. */
+  catalogSignedOut?: boolean
   fastModeRestricted?: boolean
 }
 
@@ -104,6 +106,10 @@ export function applyStructuredAgentSessionModelCatalog(
 ): StructuredAgentSessionOptionState {
   const installed = usesInstalledAgentModelCatalog(state.record.agent, options.coherentCatalog)
   const listingInProgress = catalog.listingInProgress === true
+  const catalogSignedOut = catalog.unavailable?.reason === 'notSignedIn'
+  if (Boolean(state.catalogSignedOut) !== catalogSignedOut) {
+    state = { ...state, catalogSignedOut }
+  }
   const catalogNamesConfiguredModel =
     catalog.origin === 'unknown' || catalog.unavailable
       ? undefined

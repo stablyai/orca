@@ -1,10 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { subscribeMountedTerminalTabChanges } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import {
-  resetDetachedCodexPaneRestartClaimsForTests,
-  sweepUnclaimedCodexPaneRestarts
-} from './codex-detached-pane-restart'
+import { sweepUnclaimedCodexPaneRestarts } from './codex-detached-pane-restart'
 
 let executorInstalled = false
 let executorGeneration = 0
@@ -49,13 +46,6 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       sweepQueued = false
     }
   }
-}
-
-export function resetCodexDetachedPaneRestartExecutorForTests(): void {
-  executorInstalled = false
-  executorGeneration += 1
-  sweepQueued = false
-  resetDetachedCodexPaneRestartClaimsForTests()
 }
 
 function scheduleClaimSweep(): void {

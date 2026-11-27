@@ -32,6 +32,7 @@ export function useSourceControlPanelState() {
   const viewState = useSourceControlPanelViewState({
     activeWorktreeId,
     settings,
+    owner: JSON.stringify([activeRepoTarget, activeConnectionId, activeWorktreeInstanceId]),
     updateSettings: storeActions.updateSettings
   })
   const operationState = useSourceControlWorktreeOperationState({

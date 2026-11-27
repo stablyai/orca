@@ -9,7 +9,6 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { BrowserClientPageAutomationRpc } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { StarNagService } from '../star-nag/service'
-import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import {
   DESKTOP_RPC_CALLER,
@@ -23,8 +22,10 @@ import { getOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
+import { startMcpAgentFileSync } from '../mcp-servers/agent-files/mcp-agent-file-sync'
 import { shouldInstallManagedHooks } from '../startup/configure-process'
 import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
+import { installAgentTurnWorktreeActivity } from '../agent-hooks/runtime/agent-turn-worktree-activity'
 import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
 import { initializeMainProcessAccountServices } from '../startup/agent-accounts/main-process-account-services'
 import {
@@ -34,6 +35,7 @@ import {
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { createRendererShutdownCheckpointService } from './renderer-shutdown-checkpoint-service'
 import { initializeMainProcessPlugins } from '../startup/plugin-startup/main-process-plugins'
+import { scheduleStalePluginGitTempSweep } from '../plugins/installation/plugin-git-temp-sweep'
 import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash
@@ -48,7 +50,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-
 import { reapLeftoverMacOSPermissionStatusHelpers } from '../computer/macos-permissions/macos-permission-status-leftover-reap'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
-import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
+import { DEFAULT_RPC_DISPATCH_CONFIG } from '../runtime/rpc/methods/eager-rpc-method-registry'
 import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-startup'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/hook-status-session-tabs-republish'
@@ -73,6 +75,7 @@ export type DesktopCorePaths = {
 /** What the composing process supplies: native effects and facts the core cannot own. */
 export type DesktopCoreNative = {
   isQuitting(): boolean
+  isNativeUpdateInstallUnderWay(): boolean
   isServeMode(): boolean
   servedOrcaProfileId(): string | undefined
   openExternal(url: string): Promise<void>
@@ -160,7 +163,7 @@ function startBrowserAutomation(
   runtime.setAgentBrowserBridge(agentBrowserBridge)
   // Reclaim browser daemons orphaned by prior crashes/SIGKILL.
   void agentBrowserBridge.sweepOrphanedSessions()
-  const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
+  const dispatcher = new RpcDispatcher({ runtime, ...DEFAULT_RPC_DISPATCH_CONFIG })
   native.configureBrowserAutomation(async (method, params, agent, signal) => {
     const response = await dispatcher.dispatch(
       { id: randomUUID(), authToken: 'local-browser-client-automation', method, params },
@@ -177,8 +180,12 @@ function startBrowserAutomation(
     return response.result
   })
   // Only Orca-managed emulator helpers belong to workspaces; external serve-sim stays independent. macOS capability gates live in CLI/runtime.
-  core.emulatorBridge = new EmulatorBridge()
-  runtime.setEmulatorBridge(core.emulatorBridge)
+  runtime.setEmulatorBridgeLoader(async () => {
+    const { EmulatorBridge } = await import('../emulator/emulator-bridge')
+    const bridge = new EmulatorBridge()
+    core.emulatorBridge = bridge
+    return bridge
+  })
 }
 
 function scheduleDeferredMaintenance(
@@ -261,7 +268,9 @@ export async function composeDesktopCore(
     claudeUsage: core.claudeUsage!,
     codexUsage: core.codexUsage!,
     // Remote clients mirror schedules; only server processes execute remote_host_service ownership.
-    allowRemoteHostScheduling: native.isServeMode()
+    allowRemoteHostScheduling: native.isServeMode(),
+    // A macOS update closes windows long before will-quit.
+    isHostQuitting: () => native.isQuitting() || native.isNativeUpdateInstallUnderWay()
   })
   startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(core, runtime, {
@@ -270,7 +279,9 @@ export async function composeDesktopCore(
     isPackaged: paths.isPackaged
   })
   installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
+  installAgentTurnWorktreeActivity()
   await initializeMainProcessPlugins(core, store)
+  scheduleStalePluginGitTempSweep()
   core.starNag = new StarNagService(store, core.stats!)
   core.starNag.start()
   core.starNag.registerIpcHandlers()
@@ -284,6 +295,8 @@ export async function composeDesktopCore(
   void providerMaintenanceReady.then(() =>
     startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   )
+  // Grok's, Cursor's and Droid's own MCP files follow the host list; off with the MCP servers switch.
+  void providerMaintenanceReady.then(() => deps.registerCleanup(startMcpAgentFileSync()))
   // Register launch reconciliation now; defer background probes and scratch cleanup until first paint.
   startCodexHooks({
     startAfter: providerMaintenanceReady,

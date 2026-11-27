@@ -85,7 +85,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       reason: 'existing_review'
     }
   }
-  if (error instanceof HostedReviewApiRequestError && error.timedOut) {
+  if (error instanceof HostedReviewApiRequestError && error.unconfirmed) {
     return {
       ok: false,
       code: 'unknown_completion',

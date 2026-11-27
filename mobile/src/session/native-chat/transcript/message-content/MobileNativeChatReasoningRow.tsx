@@ -13,10 +13,10 @@ import type { NativeChatMessage } from '../../../../../../src/shared/native-chat
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
-import { styles } from '../messages/mobile-native-chat-message-styles'
+import { stylesSheet } from '../messages/mobile-native-chat-message-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 /** A grouped thought keeps its own source recovery when its original transcript row is hidden. */
 export function MobileNativeChatGroupedThought({
@@ -56,7 +56,8 @@ export function MobileNativeChatReasoningRow({
   onToggle?: (key: string) => void
   onLongPress?: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const [localExpanded, setLocalExpanded] = useState(false)
   const expanded = onToggle ? transcriptExpanded : localExpanded
   const toggle = () =>
@@ -110,7 +111,7 @@ export function MobileNativeChatReasoningBody({
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const prose = useNativeChatProseText(fontScale)
   return (
     <MobileNativeChatOwnedScrollView

@@ -63,8 +63,9 @@ export function nativeChatSignInNoticeView(
     return null
   }
   const entry = agentSessionSetupFor(input.agent)
-  // Antigravity chats keep Orca's own sign-in; chats on the host's agy (`system`) use agy's.
-  if (entry?.agent === 'antigravity' && input.account !== 'system') {
+  // Antigravity signs agy in from here where agy's login serves the chat (setup offers it), else
+  // Settings has the saved method: a key, gcloud or Enterprise's project.
+  if (entry?.agent === 'antigravity' && !input.setup?.signIn) {
     const host = input.setup?.host
     return {
       signedIn: false,
@@ -117,6 +118,12 @@ function signInDescription(
   signIn: NativeChatSignIn,
   t: Translate
 ): string {
+  if (entry?.agent === 'antigravity') {
+    return t(
+      'components.native-chat.signInNotice.signsInAgy',
+      'Signs agy in with Google in your browser'
+    )
+  }
   if (!signIn.loginCommand) {
     return t(
       'components.native-chat.signInNotice.signsInClaudeAccount',

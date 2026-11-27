@@ -54,7 +54,8 @@ export async function connectRuntimeHostForNavigation(args: {
  */
 export async function connectRuntimeHostAndReloadProjects(
   environmentId: string,
-  failureMessage?: string
+  /** Null: the caller tells the failure itself. */
+  failureMessage?: string | null
 ): Promise<boolean> {
   const store = useAppStore.getState()
   const reachable = await connectRuntimeHostForNavigation({
@@ -64,7 +65,7 @@ export async function connectRuntimeHostAndReloadProjects(
     fetchWorktrees: store.fetchWorktrees,
     fetchLineage: store.fetchWorktreeLineage
   })
-  if (!reachable) {
+  if (!reachable && failureMessage !== null) {
     toast.error(
       failureMessage ??
         translate(

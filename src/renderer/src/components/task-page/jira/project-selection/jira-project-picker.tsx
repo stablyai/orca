@@ -19,6 +19,7 @@ export function JiraProjectPicker({
   emptyLabel,
   disabled,
   size,
+  triggerClassName,
   returnFocusRef
 }: {
   projects: readonly JiraProject[]
@@ -27,6 +28,7 @@ export function JiraProjectPicker({
   label: string
   emptyLabel: string
   disabled?: boolean
+  triggerClassName?: string
   size?: 'default' | 'xs'
   returnFocusRef?: React.RefObject<HTMLElement | null>
 }): React.JSX.Element {
@@ -57,6 +59,7 @@ export function JiraProjectPicker({
       emptyLabel={t('components.jiraProjectPicker.empty', 'No projects found.')}
       disabled={disabled}
       size={size}
+      triggerClassName={triggerClassName}
       returnFocusRef={returnFocusRef}
     />
   )

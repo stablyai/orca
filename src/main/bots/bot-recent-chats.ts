@@ -1,14 +1,11 @@
-// What a bot's other chats did lately, for each turn of one of its chats: so a thread's chat knows
-// what its owner already settled elsewhere. Only chats acting for the same people as this turn.
+// What a bot's other chats did lately, for each turn of one of its chats: so a chat knows what was
+// already settled elsewhere, whoever asked there.
 
-import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { actsForOwner, sameActsFor, type BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { BOT_CHAT_ID_PREFIX } from '../../shared/bots/bot-chat-row'
 import { botAddressArgument } from '../../shared/bot-roster'
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readBotChats } from '../runtime/rpc/methods/bots-chats'
-import { readBotTurn } from '../runtime/rpc/methods/orchestration/messaging/bot-recipient'
 import { readSharedBotChatTree } from './bot-chat-tree-host'
 import { BOT_ORCA_CLI } from './bot-preamble'
 
@@ -25,36 +22,19 @@ export type BotRecentChat = {
   title: string | null
   lastActivityAt: number
   lastSaid: string | null
-  /** Whom it acts for as Orca recorded it; null when unrecorded. */
-  actsFor: readonly BotRequestAsker[] | null
   /** Its workers still running. */
   workers: readonly string[]
   /** The chat this turn is in, never listed to itself. */
   self: boolean
 }
 
-/** The other chats a turn acting for `viewer` may hear of: all for the owner; for one teammate, those
- *  acting for that same person; none when anyone it acts for is unknown, or for several people.
- *  Newest first, within the window. */
+/** The other chats a turn hears of, whoever it is for: newest first, within the window. */
 export function visibleBotRecentChats(
-  viewer: readonly BotRequestAsker[],
   chats: readonly BotRecentChat[],
   now: number
 ): BotRecentChat[] {
-  if (viewer.some((asker) => asker.kind === 'unknown')) {
-    return []
-  }
-  const owner = actsForOwner(viewer)
-  // One person, by the identity `sameActsFor` compares (a record and a stamp of them may differ in
-  // workspace), so a viewer acts for the same people as itself only when it is one teammate.
-  const teammate = !owner && sameActsFor(viewer, viewer)
   return chats
-    .filter(
-      (chat) =>
-        !chat.self &&
-        now - chat.lastActivityAt <= BOT_RECENT_CHATS.windowMs &&
-        (owner || (teammate && chat.actsFor !== null && sameActsFor(viewer, chat.actsFor)))
-    )
+    .filter((chat) => !chat.self && now - chat.lastActivityAt <= BOT_RECENT_CHATS.windowMs)
     .toSorted((a, b) => b.lastActivityAt - a.lastActivityAt)
     .slice(0, BOT_RECENT_CHATS.max)
 }
@@ -99,34 +79,27 @@ export function botRecentChatsSection(
   return { text, key }
 }
 
-/** The recent-chats section for a turn of `sessionId`, a chat of `botId`; null when none may be shown. */
+/** The recent-chats section for a turn of `sessionId`, a chat of `botId`; null when there is none. */
 export async function readBotRecentChats(
   runtime: OrcaRuntimeService,
   botId: string,
   sessionId: string,
-  message: AgentJournalMessageItem,
   now = Date.now()
 ): Promise<BotRecentChatsSection | null> {
   const bot = runtime.bots.list().find((entry) => entry.id === botId)
   if (!bot) {
     return null
   }
-  const db = runtime.getOrchestrationDb()
-  // The turn this message opens, read from it and the conversation's record, not the whole journal.
-  const [{ turn }, rows] = await Promise.all([
-    readBotTurn(runtime, db, sessionId, message),
-    readBotChats(runtime, bot, sessionId)
-  ])
+  const rows = await readBotChats(runtime, bot, sessionId)
   const candidates = rows.map((row): BotRecentChat => ({
     id: row.id,
     title: row.title,
     lastActivityAt: row.lastActivityAt,
     lastSaid: row.lastSaid,
-    actsFor: db.getBotConversationActsFor(row.id)?.actsFor ?? null,
     workers: [],
     self: row.self
   }))
-  const shown = visibleBotRecentChats(turn.askers, candidates, now)
+  const shown = visibleBotRecentChats(candidates, now)
   if (shown.length === 0) {
     return null
   }

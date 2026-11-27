@@ -4,12 +4,14 @@ import { Pressable, Text, View } from 'react-native'
 import { Check, ChevronRight, CirclePause } from 'lucide-react-native'
 import type { BotImportDone } from '../../../../../../src/shared/bots/bot-import-cards'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
+import { useBotPanelOpener } from '../../../../bots/bot-item-open'
 import { MobileGoogleSetupOnComputer } from './MobileGoogleSetupCardParts'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 type Created = BotImportDone['created'][number]
 
@@ -20,11 +22,21 @@ export function MobileBotImportDoneCard({
   done: BotImportDone
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
-  // Soul and memory have no page on the phone yet; the desktop's card opens them in the bot's settings.
-  const opener = (entry: Created): (() => void) | null =>
-    entry.kind === 'automations' ? (host?.openAutomations ?? null) : null
+  // As the desktop: soul and memory open in the bot's Settings, where an older host has no panel to open.
+  const panel = useBotPanelOpener(done.botId)
+  const opener = (entry: Created): (() => void) | null => {
+    const kind = entry.kind
+    if (kind === 'automations') {
+      return host?.openAutomations ?? null
+    }
+    return (kind === 'soul' || kind === 'memory') && panel
+      ? () => panel.open({ settings: kind })
+      : null
+  }
   const meta = scaledType(typography.metaSize, fontScale, 4)
   return (
     <MobileBotCardFrame
@@ -86,7 +98,7 @@ export function MobileBotImportDoneCard({
           </Text>
         </View>
       ) : null}
-      {done.created.some((entry) => entry.kind === 'soul' || entry.kind === 'memory') ? (
+      {!panel && done.created.some((entry) => entry.kind === 'soul' || entry.kind === 'memory') ? (
         <MobileGoogleSetupOnComputer
           text={t(
             'chat.botCards.importDone.soulOnComputer',
@@ -99,7 +111,7 @@ export function MobileBotImportDoneCard({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 36 },
   text: { flex: 1, minWidth: 0, gap: 1 },
   what: { color: colors.textPrimary, fontWeight: '600' },

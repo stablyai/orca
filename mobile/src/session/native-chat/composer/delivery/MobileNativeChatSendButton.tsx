@@ -10,23 +10,26 @@ import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal
 import { ComposerSendButton } from '../../../../components/composer-input/ComposerSendButton'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as inputStyles
+  composerInputStylesSheet
 } from '../../../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useKeyboardPersistingTaps } from '../../../../platform/keyboard/keyboard-persisting-taps'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 
 /** Send, the same arrow as desktop at all times; while the agent works on a host that queues, holding it offers the other way when that would differ (desktop's Cmd/Ctrl+Enter). */
 export function MobileNativeChatSendButton({
   canSend,
+  sending,
   sendFollowUp,
   onSend
 }: {
   canSend: boolean
+  /** This composer's send is on its way. */
+  sending: boolean
   sendFollowUp: NativeChatSendFollowUp | null
   onSend: (intent?: MobileNativeChatSendIntent) => void
 }): React.JSX.Element {
@@ -49,6 +52,7 @@ export function MobileNativeChatSendButton({
         onPress={() => onSend()}
         onLongPress={sendFollowUp?.offersChoice && canSend ? () => setOpen(true) : undefined}
         canSend={canSend}
+        sending={sending}
         label={t('chat.composer.sendMessage', 'Send message')}
       />
       <ActionSheetModal
@@ -76,7 +80,8 @@ export function MobileNativeChatSteerPreviewButton({
   preview: NativeChatSteerChordPreview
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const inputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   // A press must leave focus in the field, or its focusout ends the preview before the press lands.
   const keepsField = useKeyboardPersistingTaps('always')

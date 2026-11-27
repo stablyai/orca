@@ -6,6 +6,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { rankWorktreesForSort } from '../../../../shared/sidebar-list/sorting/smart-sort'
 import { ranksFollowPersistedOrder } from '../../../../shared/sidebar-list/sorting/smart-sort-phase'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { botSmartSortSources } from './bot-smart-sort-sources'
 
 /** A bot's workspaces in the project list's Smart order, held still while the pointer is on the bots list. */
 export function useBotWorkspaceOrder(worktrees: readonly Worktree[]): Worktree[] {
@@ -25,7 +26,7 @@ export function useBotWorkspaceOrder(worktrees: readonly Worktree[]): Worktree[]
       latched: latchedRef.current,
       repoMap: getIndexedRepoMap(state.repos),
       now: Date.now(),
-      sources: state
+      sources: botSmartSortSources(state)
     })
     return {
       ids: ranked.sorted.map(getWorktreeHostIdentity),

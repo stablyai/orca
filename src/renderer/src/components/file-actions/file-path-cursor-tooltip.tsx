@@ -16,9 +16,11 @@ export function cursorTooltipOffsets(
   }
 }
 
-/** Keep the directory separator when splitting filename-first display, including Windows paths. */
+/** Keep the directory separator when splitting filename-first display, including Windows paths; a
+ *  folder's trailing separator stays on its name. */
 export function splitTrailingSegment(path: string): { directory: string; filename: string } {
-  const separatorIndex = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  const from = path.length - 2
+  const separatorIndex = Math.max(path.lastIndexOf('/', from), path.lastIndexOf('\\', from))
 
   return separatorIndex === -1
     ? { directory: '', filename: path }

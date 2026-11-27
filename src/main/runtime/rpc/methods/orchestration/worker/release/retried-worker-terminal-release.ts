@@ -1,3 +1,4 @@
+import { closeRetriedFailedSetup } from './worker-bound-terminal-close'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { completeWorkerTerminalRelease } from './worker-release-completion'
@@ -45,5 +46,24 @@ export function releaseRetriedWorkerTerminal(
     )
   } catch (error) {
     console.warn('[orchestration] retried worker terminal release failed', retryOf, error)
+  }
+}
+
+/** A retry that became ready replaces the failed attempt, so the setup terminal it kept open closes. */
+export function closeFailedSetupOnceRetryReady(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  retryOf: string | undefined,
+  outcome: unknown
+): void {
+  const ready =
+    typeof outcome === 'object' &&
+    outcome !== null &&
+    'state' in outcome &&
+    outcome.state === 'ready'
+  if (retryOf && ready) {
+    void closeRetriedFailedSetup(runtime, db, retryOf).catch((error: unknown) => {
+      console.warn('[orchestration] failed setup of a retried worker not closed', retryOf, error)
+    })
   }
 }

@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { getAutomationScheduleInputError } from '../../automations/scheduling/automation-schedule-parsing'
+import { isKnownTimeZone } from '../../automations/scheduling/automation-schedule-calendar'
 import {
   PLUGIN_HOST_ID_MAX_LENGTH,
   PLUGIN_HOST_TEXT_MAX_LENGTH,
@@ -18,124 +20,138 @@ export const PLUGIN_AUTOMATION_PROMPT_MAX = 16_384
 export const PLUGIN_AUTOMATION_SCHEDULE_MAX = 2048
 const ID_MAX = PLUGIN_HOST_ID_MAX_LENGTH
 
-const automationId = z.string().min(1).max(ID_MAX)
-const prompt = z
-  .string()
-  .max(PLUGIN_AUTOMATION_PROMPT_MAX)
-  .refine((text) => text.trim().length > 0, 'prompt must not be blank')
+const automationId = lazyZodSchema(() => z.string().min(1).max(ID_MAX))
+const prompt = lazyZodSchema(() =>
+  z
+    .string()
+    .max(PLUGIN_AUTOMATION_PROMPT_MAX)
+    .refine((text) => text.trim().length > 0, 'prompt must not be blank')
+)
 /** An RRULE such as `FREQ=DAILY;BYHOUR=9;BYMINUTE=0`, or a five-field cron expression. */
-const schedule = z
-  .string()
-  .min(1)
-  .max(PLUGIN_AUTOMATION_SCHEDULE_MAX)
-  .superRefine((value, ctx) => {
-    const message = getAutomationScheduleInputError(
-      value,
-      'schedule must be an RRULE or a cron expression'
-    )
-    if (message) {
-      ctx.addIssue({ code: 'custom', message })
-    }
-  })
+const schedule = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(PLUGIN_AUTOMATION_SCHEDULE_MAX)
+    .superRefine((value, ctx) => {
+      const message = getAutomationScheduleInputError(
+        value,
+        'schedule must be an RRULE or a cron expression.'
+      )
+      if (message) {
+        ctx.addIssue({ code: 'custom', message })
+      }
+    })
+)
 /** An IANA time zone such as `Europe/Berlin`; Orca's own when absent. */
-const timezone = z.string().min(1).max(64).refine(isTimeZone, 'unknown time zone')
+const timezone = lazyZodSchema(() =>
+  z.string().min(1).max(64).refine(isKnownTimeZone, 'unknown time zone')
+)
 
-function isTimeZone(zone: string): boolean {
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone: zone }).resolvedOptions().timeZone !== ''
-  } catch {
-    return false
-  }
-}
-
-const automationListParams = z.strictObject({}).optional()
-const automationRow = z.object({
-  id: automationId,
-  name: z.string().max(512),
-  agent: z.string().max(64),
-  /** Cut to 4096 characters; `promptTruncated` says when. */
-  prompt: z.string().max(PLUGIN_HOST_TEXT_MAX_LENGTH),
-  promptTruncated: z.boolean(),
-  /** Its project, as `project.list` gives its id. */
-  projectId: z.string().max(ID_MAX).nullable(),
-  /** The host its runs use; null for this machine on automations that record none. */
-  hostId: z.string().max(ID_MAX).nullable(),
-  /** The workspace each run uses, as `workspace.list` gives its id; null for `new-per-run`. */
-  workspaceId: z.string().max(ID_MAX).nullable(),
-  /** `new-per-run`: each run creates a workspace in the project. */
-  workspaceMode: z.enum(['existing', 'new-per-run']),
-  /** Whole, as Orca runs it; null for a stored schedule longer than any Orca accepts now. */
-  schedule: z.string().max(PLUGIN_AUTOMATION_SCHEDULE_MAX).nullable(),
-  timezone: z.string().max(64),
-  enabled: z.boolean(),
-  /** Milliseconds since the epoch; null when it will not run (paused). */
-  nextRunAt: z.number().finite().nullable(),
-  lastRunAt: z.number().finite().nullable(),
-  /** This plugin created it, so it may change or delete it without asking. */
-  createdByThisPlugin: z.boolean()
-})
-const automationListResult = z.object({
-  automations: z.array(automationRow).max(PLUGIN_AUTOMATION_LIST_LIMIT),
-  /** More automations exist than the list holds. */
-  truncated: z.boolean()
-})
-
-const automationCreateParams = z
-  .strictObject({
-    name: pluginLabelNameSchema,
-    /** What the agent is asked each run. */
-    prompt,
-    agent: pluginAgentSchema,
-    /** Each run creates a workspace in this project (`project.list` id); give this or `workspaceId`. */
-    projectId: z.string().min(1).max(ID_MAX).optional(),
-    /** With `projectId`: the host, as `project.list` gives it; needed only when two hosts have it. */
-    hostId: z.string().min(1).max(ID_MAX).optional(),
-    /** Each run uses this workspace (`workspace.list` id), which also names its host. */
-    workspaceId: pluginWorkspaceIdSchema.optional(),
-    schedule,
-    timezone: timezone.optional(),
-    /** Default true. */
-    enabled: z.boolean().optional(),
-    /** Makes a retry safe: a second create with the same key from this plugin answers the first
-     *  automation instead of making another. Keys are this plugin's own. */
-    creationKey: z
-      .string()
-      .min(1)
-      .max(128)
-      .refine(isPluginPlainLine, 'creationKey must be plain text')
-      .optional()
+const automationListParams = lazyZodSchema(() => z.strictObject({}).optional())
+const automationRow = lazyZodSchema(() =>
+  z.object({
+    id: automationId,
+    name: z.string().max(512),
+    agent: z.string().max(64),
+    /** Cut to 4096 characters; `promptTruncated` says when. */
+    prompt: z.string().max(PLUGIN_HOST_TEXT_MAX_LENGTH),
+    promptTruncated: z.boolean(),
+    /** Its project, as `project.list` gives its id. */
+    projectId: z.string().max(ID_MAX).nullable(),
+    /** The host its runs use; null for this machine on automations that record none. */
+    hostId: z.string().max(ID_MAX).nullable(),
+    /** The workspace each run uses, as `workspace.list` gives its id; null for `new-per-run`. */
+    workspaceId: z.string().max(ID_MAX).nullable(),
+    /** `new-per-run`: each run creates a workspace in the project. */
+    workspaceMode: z.enum(['existing', 'new-per-run']),
+    /** Whole, as Orca runs it; null for a stored schedule longer than any Orca accepts now. */
+    schedule: z.string().max(PLUGIN_AUTOMATION_SCHEDULE_MAX).nullable(),
+    timezone: z.string().max(64),
+    enabled: z.boolean(),
+    /** Milliseconds since the epoch; null when it will not run (paused). */
+    nextRunAt: z.number().finite().nullable(),
+    lastRunAt: z.number().finite().nullable(),
+    /** This plugin created it, so it may change or delete it without asking. */
+    createdByThisPlugin: z.boolean()
   })
-  .refine(
-    (params) => (params.projectId === undefined) !== (params.workspaceId === undefined),
-    'give exactly one of projectId and workspaceId'
-  )
-  .refine((params) => params.hostId === undefined || params.projectId !== undefined, {
-    message: 'hostId goes with projectId',
-    path: ['hostId']
+)
+const automationListResult = lazyZodSchema(() =>
+  z.object({
+    automations: z.array(automationRow).max(PLUGIN_AUTOMATION_LIST_LIMIT),
+    /** More automations exist than the list holds. */
+    truncated: z.boolean()
   })
-const automationCreateResult = z.object({ automationId })
+)
+
+const automationCreateParams = lazyZodSchema(() =>
+  z
+    .strictObject({
+      name: pluginLabelNameSchema,
+      /** What the agent is asked each run. */
+      prompt,
+      agent: pluginAgentSchema,
+      /** Each run creates a workspace in this project (`project.list` id); give this or `workspaceId`. */
+      projectId: z.string().min(1).max(ID_MAX).optional(),
+      /** With `projectId`: the host, as `project.list` gives it; needed only when two hosts have it. */
+      hostId: z.string().min(1).max(ID_MAX).optional(),
+      /** Each run uses this workspace (`workspace.list` id), which also names its host. */
+      workspaceId: pluginWorkspaceIdSchema.optional(),
+      schedule,
+      timezone: timezone.optional(),
+      /** Default true. */
+      enabled: z.boolean().optional(),
+      /** Makes a retry safe: a second create with the same key from this plugin answers the first
+       *  automation instead of making another. Keys are this plugin's own. */
+      creationKey: z
+        .string()
+        .min(1)
+        .max(128)
+        .refine(isPluginPlainLine, 'creationKey must be plain text')
+        .optional()
+    })
+    .refine(
+      (params) => (params.projectId === undefined) !== (params.workspaceId === undefined),
+      'give exactly one of projectId and workspaceId'
+    )
+    .refine((params) => params.hostId === undefined || params.projectId !== undefined, {
+      message: 'hostId goes with projectId',
+      path: ['hostId']
+    })
+)
+const automationCreateResult = lazyZodSchema(() => z.object({ automationId }))
 
 /** Why nothing changed: `cancelled`, the person said no; `consent-unavailable`, nobody could be
  *  asked (Orca's window is hidden, or headless); `changed`, the automation changed while they
  *  were asked, so their answer was about something else. Absent when it changed. */
-const refusal = z.enum(['cancelled', 'consent-unavailable', 'changed']).optional()
-const automationUpdateParams = z
-  .strictObject({
-    automationId,
-    name: pluginLabelNameSchema.optional(),
-    prompt: prompt.optional(),
-    schedule: schedule.optional(),
-    timezone: timezone.optional(),
-    enabled: z.boolean().optional()
-  })
-  .refine(
-    (params) =>
-      Object.entries(params).some(([key, value]) => key !== 'automationId' && value !== undefined),
-    'nothing to change'
-  )
-const automationUpdateResult = z.object({ updated: z.boolean(), reason: refusal })
-const automationDeleteParams = z.strictObject({ automationId })
-const automationDeleteResult = z.object({ deleted: z.boolean(), reason: refusal })
+const refusal = lazyZodSchema(() =>
+  z.enum(['cancelled', 'consent-unavailable', 'changed']).optional()
+)
+const automationUpdateParams = lazyZodSchema(() =>
+  z
+    .strictObject({
+      automationId,
+      name: pluginLabelNameSchema.optional(),
+      prompt: prompt.optional(),
+      schedule: schedule.optional(),
+      timezone: timezone.optional(),
+      enabled: z.boolean().optional()
+    })
+    .refine(
+      (params) =>
+        Object.entries(params).some(
+          ([key, value]) => key !== 'automationId' && value !== undefined
+        ),
+      'nothing to change'
+    )
+)
+const automationUpdateResult = lazyZodSchema(() =>
+  z.object({ updated: z.boolean(), reason: refusal })
+)
+const automationDeleteParams = lazyZodSchema(() => z.strictObject({ automationId }))
+const automationDeleteResult = lazyZodSchema(() =>
+  z.object({ deleted: z.boolean(), reason: refusal })
+)
 
 const CONFIRMS =
   'Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, or it changes while they are asked, nothing changes and `reason` says why.'
