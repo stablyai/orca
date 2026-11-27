@@ -154,7 +154,7 @@ export async function attachNativeChatNotes(args: {
           if (drawable.width * drawable.height > NATIVE_CHAT_NOTES_MAX_SOURCE_PIXELS) {
             throw new NativeChatNotesTooLargeError()
           }
-          return attach(await drawNativeChatNotesImage(drawable.image, drawable, group))
+          return await attach(await drawNativeChatNotesImage(drawable.image, drawable, group))
         } finally {
           drawable.release?.()
         }
