@@ -6,11 +6,11 @@ import type {
   BrowserCookieImportSelection,
   BrowserSessionProfileSource
 } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { resolveChromiumCookiesPath } from '../chromium/chromium-cookie-path'
+import { chromiumCookiePaths } from '../chromium/chromium-cookie-path'
 import {
   CHROMIUM_BROWSERS,
+  browserCookieFileExists,
   browserRootPath,
   discoverListedChromiumProfiles,
   detectFirefox,
@@ -19,7 +19,7 @@ import {
   type DetectedBrowser
 } from './browser-cookie-source-profiles'
 
-export function detectSafari(): DetectedBrowser | null {
+async function detectSafari(): Promise<DetectedBrowser | null> {
   if (process.platform !== 'darwin') {
     return null
   }
@@ -38,7 +38,7 @@ export function detectSafari(): DetectedBrowser | null {
     )
   ]
   for (const candidate of candidates) {
-    if (existsSync(candidate)) {
+    if (await browserCookieFileExists(candidate)) {
       return {
         family: 'safari',
         label: 'Safari',
@@ -51,7 +51,16 @@ export function detectSafari(): DetectedBrowser | null {
   return null
 }
 
-export function detectInstalledBrowsers(family?: string): DetectedBrowser[] {
+async function resolveChromiumCookiesPath(profileDir: string): Promise<string | null> {
+  for (const path of chromiumCookiePaths(profileDir)) {
+    if (await browserCookieFileExists(path)) {
+      return path
+    }
+  }
+  return null
+}
+
+export async function detectInstalledBrowsers(family?: string): Promise<DetectedBrowser[]> {
   const detected: DetectedBrowser[] = []
   for (const browser of CHROMIUM_BROWSERS) {
     if (family && browser.family !== family) {
@@ -61,11 +70,11 @@ export function detectInstalledBrowsers(family?: string): DetectedBrowser[] {
     if (!root) {
       continue
     }
-    const listed = discoverListedChromiumProfiles(root)
+    const listed = await discoverListedChromiumProfiles(root)
     const profiles = listed.length ? listed : [{ name: 'Default', directory: 'Default' }]
     for (const profile of profiles) {
       const profileDir = join(root, profile.directory)
-      const cookiesPath = resolveChromiumCookiesPath(profileDir)
+      const cookiesPath = await resolveChromiumCookiesPath(profileDir)
       if (cookiesPath) {
         detected.push({
           family: browser.family,
@@ -82,12 +91,12 @@ export function detectInstalledBrowsers(family?: string): DetectedBrowser[] {
     }
   }
 
-  const firefox = !family || family === 'firefox' ? detectFirefox() : null
+  const firefox = !family || family === 'firefox' ? await detectFirefox() : null
   if (firefox) {
     detected.push(firefox)
   }
 
-  const safari = !family || family === 'safari' ? detectSafari() : null
+  const safari = !family || family === 'safari' ? await detectSafari() : null
   if (safari) {
     detected.push(safari)
   }
@@ -125,10 +134,10 @@ export function resolveBrowserImportSelection(
   return selection
 }
 
-export function selectBrowserProfile(
+export async function selectBrowserProfile(
   browser: DetectedBrowser | undefined,
   selection: BrowserImportProfile
-): DetectedBrowser | BrowserCookieImportFailure {
+): Promise<DetectedBrowser | BrowserCookieImportFailure> {
   const directory = selection.browserProfile
   if (directory && !isSafeBrowserProfileDirectory(directory)) {
     return browserCookieImportFailure('invalidBrowserProfile')
@@ -151,14 +160,14 @@ export function selectBrowserProfile(
   if (browser.family === 'firefox') {
     const root = firefoxProfilesRoot()
     const path = root && join(root, directory, 'cookies.sqlite')
-    if (path && existsSync(path)) {
+    if (path && (await browserCookieFileExists(path))) {
       cookiesPath = path
     }
   } else {
     const def = CHROMIUM_BROWSERS.find((candidate) => candidate.family === browser.family)
     const root = def && browserRootPath(def)
     if (root) {
-      cookiesPath = resolveChromiumCookiesPath(join(root, directory))
+      cookiesPath = await resolveChromiumCookiesPath(join(root, directory))
     }
   }
   if (!cookiesPath) {

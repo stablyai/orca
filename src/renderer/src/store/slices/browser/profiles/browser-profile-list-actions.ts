@@ -93,7 +93,9 @@ export function createBrowserProfileListActions(
               ? result.profiles
               : result.profiles.map((profile) => {
                   const previous = clientListingFailed
-                    ? getBrowserProfilesForHost(get(), hostId).find(({ id }) => id === profile.id)
+                    ? get().browserSessionProfilesByHostId[hostId]?.find(
+                        ({ id }) => id === profile.id
+                      )
                     : undefined
                   const fallback = previous?.source ?? profile.source
                   return {

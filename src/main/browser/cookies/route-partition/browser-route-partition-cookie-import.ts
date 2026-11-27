@@ -94,17 +94,17 @@ export async function importIntoRoutePartition(
   })
 }
 
-export function browserCookieImportSource(
+export async function browserCookieImportSource(
   request: BrowserCookieImportSelection,
   previous?: BrowserSessionProfileSource | null,
   options?: CookieImportOptions
-): RouteCookieImportSource | BrowserCookieImportFailure {
+): Promise<RouteCookieImportSource | BrowserCookieImportFailure> {
   const selection = resolveBrowserImportSelection(request, previous)
   if ('reason' in selection) {
     return selection
   }
-  const [detected] = detectInstalledBrowsers(selection.browserFamily)
-  const browser = selectBrowserProfile(detected, selection)
+  const [detected] = await detectInstalledBrowsers(selection.browserFamily)
+  const browser = await selectBrowserProfile(detected, selection)
   if ('reason' in browser) {
     return browser
   }

@@ -12,7 +12,10 @@ export function importCookiesIntoBrowserProfile(
   profile: BrowserSessionProfile,
   resolveSource: (
     source: BrowserSessionProfile['source']
-  ) => RouteCookieImportSource | BrowserCookieImportFailure
+  ) =>
+    | Promise<RouteCookieImportSource | BrowserCookieImportFailure>
+    | RouteCookieImportSource
+    | BrowserCookieImportFailure
 ) {
   const { id, partition } = profile
   return withCookieImportSourceLock(session.fromPartition(partition), async () => {
@@ -20,9 +23,12 @@ export function importCookiesIntoBrowserProfile(
     if (current?.partition !== partition) {
       return browserCookieImportFailure('profileNotFound')
     }
-    const source = resolveSource(current.source)
+    const source = await resolveSource(current.source)
     if ('reason' in source) {
       return source
+    }
+    if (browserSessionRegistry.getProfile(id)?.partition !== partition) {
+      return browserCookieImportFailure('profileNotFound')
     }
     const result = await source.importInto(partition)
     if (browserSessionRegistry.getProfile(id)?.partition !== partition) {

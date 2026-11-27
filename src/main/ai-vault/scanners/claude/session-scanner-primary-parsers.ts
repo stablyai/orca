@@ -27,6 +27,7 @@ import {
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
+import { claudeHarnessTurnTitle } from './claude-harness-turn-title'
 import { asRecord } from '../../parsing/session-record-fields'
 import { claudeUsageTotal } from '../../parsing/session-scanner-token-values'
 import {
@@ -47,6 +48,7 @@ export type ClaudeSessionParseState = {
   metaTitle: string | null
   generatedTitle: string | null
   firstUserTitle: string | null
+  afterLocalCommandCaveat: boolean
 }
 
 export function createClaudeSessionParseState(
@@ -62,7 +64,8 @@ export function createClaudeSessionParseState(
     }),
     metaTitle: null,
     generatedTitle: null,
-    firstUserTitle: null
+    firstUserTitle: null,
+    afterLocalCommandCaveat: false
   }
 }
 
@@ -76,7 +79,8 @@ export function cloneClaudeSessionParseState(
     },
     metaTitle: state.metaTitle,
     generatedTitle: state.generatedTitle,
-    firstUserTitle: state.firstUserTitle
+    firstUserTitle: state.firstUserTitle,
+    afterLocalCommandCaveat: state.afterLocalCommandCaveat
   }
 }
 
@@ -173,17 +177,25 @@ export function consumeClaudeSessionRecord(
     accumulator.messageCount++
     const title = extractMessageText(record.message)
     // Known injected tags may lack isMeta; custom tags must remain real prompts rather than fallback titles.
-    const isMetaUserTurn =
-      record.isMeta === true || (title != null && isKnownHarnessInjectedUserTurnText(title))
-    addSessionContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
+    const isHarnessTurn = title != null && isKnownHarnessInjectedUserTurnText(title)
+    const isMetaUserTurn = record.isMeta === true || isHarnessTurn
+    const content = asRecord(record.message)?.content
+    addSessionContent(accumulator, 'user', content, record.timestamp, {
       seedFirstUserPrompt: !isMetaUserTurn
     })
-    if (title) {
-      if (isMetaUserTurn) {
-        state.metaTitle ??= title
-      } else {
-        state.firstUserTitle ??= title
-      }
+    // A caveat precedes local commands (/clear, /model) and bash-mode input, which name nothing.
+    const followsLocalCommandCaveat = state.afterLocalCommandCaveat
+    state.afterLocalCommandCaveat = isHarnessTurn && title.startsWith('<local-command-caveat')
+    if (!title) {
+      return
+    }
+    if (!isMetaUserTurn) {
+      state.firstUserTitle ??= title
+    } else if (!isHarnessTurn) {
+      state.metaTitle ??= title
+    } else if (!followsLocalCommandCaveat && state.metaTitle === null) {
+      // Raw text keeps command args and envelope bodies that the 96-character title cuts off.
+      state.metaTitle = claudeHarnessTurnTitle(typeof content === 'string' ? content : title)
     }
     return
   }

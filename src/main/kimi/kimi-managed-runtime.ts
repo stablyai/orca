@@ -2,6 +2,7 @@
 
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../network/http-client'
 import type { ManagedAgentCli, ManagedRuntimePin } from '../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../node-runtime/managed-runtime-latest-release'
@@ -13,16 +14,18 @@ import { isValidAppVersion, parseCliVersion } from '../../shared/app-lifecycle/i
 const LABEL = 'Kimi Code'
 const RELEASES = 'https://code.kimi.com/kimi-code'
 
-const manifestSchema = z.object({
-  version: z.string(),
-  platforms: z.record(
-    z.string(),
-    z.object({
-      filename: z.string().regex(/^[\w.-]+$/),
-      checksum: z.string().regex(/^[a-f0-9]{64}$/)
-    })
-  )
-})
+const manifestSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.string(),
+    platforms: z.record(
+      z.string(),
+      z.object({
+        filename: z.string().regex(/^[\w.-]+$/),
+        checksum: z.string().regex(/^[a-f0-9]{64}$/)
+      })
+    )
+  })
+)
 
 /** The manifest's name for this host; Kimi Code ships no musl build. */
 function kimiManagedTarget(

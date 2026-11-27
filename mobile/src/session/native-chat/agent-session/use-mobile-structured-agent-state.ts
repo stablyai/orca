@@ -206,7 +206,7 @@ export function useMobileStructuredAgentState(args: {
         callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
       subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
-      coalesceMs: STREAMED_TEXT_COALESCE_MS,
+      coalesce: { ms: STREAMED_TEXT_COALESCE_MS },
       textAppend: hostTextAppends(client),
       subscribeRetryNow: subscribeConnectionRevival
     })

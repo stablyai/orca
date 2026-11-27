@@ -185,3 +185,22 @@ export const openedWait = defineFixture({
     await new Promise((resolve) => setTimeout(resolve, 300))
   }
 })
+
+// A plain reminder (a time and no event): its Then line says only when it runs.
+export const openedReminder = defineFixture({
+  width: 640,
+  render: () => (
+    <div className="bg-chat-canvas p-4">
+      <NativeChatWaitRow
+        messageId="open-r"
+        automation={REMINDER}
+        once={REMINDER_BY}
+        timestamp={AT}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})

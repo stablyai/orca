@@ -19,6 +19,7 @@ async function refusedReply(uid: string, typedSince: string): Promise<string> {
         Promise.reject(Object.assign(new Error('new question'), { code: 'item_changed' })),
       failed: () => {},
       returnText: (text) => returnBotItemCommentDraft(bot, uid, text),
+      refresh: () => {},
       requestIds: true,
       questionIds: true,
       plain: true

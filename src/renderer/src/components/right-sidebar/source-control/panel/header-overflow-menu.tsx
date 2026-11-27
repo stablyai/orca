@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  GitGraph,
   List,
   ListTree,
   MessageSquare,
@@ -24,7 +25,7 @@ import { useAppStore } from '@/store'
 import { unnestWorktrees } from '../../../sidebar/workspace-actions/parenting/worktree-unnest'
 import { useSourceControlScopeOwner } from './worktree-scope'
 
-type PanelActions = {
+export type SourceControlPanelActions = {
   sourceControlViewMode: SourceControlViewMode
   viewModeToggleDisabled: boolean
   onToggleViewMode: () => void
@@ -33,14 +34,19 @@ type PanelActions = {
   branchCompareRefreshDisabled: boolean
   diffCommentCount: number
   onExpandNotes: () => void
+  /** Absent where the context has no Git history (folders). */
+  onOpenGitGraph?: () => void
+  gitGraphDisabled: boolean
 }
 
 export function SourceControlHeaderOverflowMenu({
   panelActions,
-  worktree
+  worktree,
+  triggerClassName
 }: {
-  panelActions?: PanelActions
+  panelActions?: SourceControlPanelActions
   worktree?: Worktree
+  triggerClassName?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const scopeOwner = useSourceControlScopeOwner()
@@ -59,7 +65,7 @@ export function SourceControlHeaderOverflowMenu({
               type="button"
               variant="ghost"
               size="icon-xs"
-              className={ownerWorktree ? 'size-6' : 'size-7'}
+              className={triggerClassName ?? (ownerWorktree ? 'size-6' : 'size-7')}
               aria-label={t(
                 'auto.components.right.sidebar.SourceControl.f71c4a8d90',
                 'More source control actions'
@@ -90,6 +96,15 @@ export function SourceControlHeaderOverflowMenu({
               )}
               {viewModeLabel}
             </DropdownMenuItem>
+            {panelActions.onOpenGitGraph ? (
+              <DropdownMenuItem
+                disabled={panelActions.gitGraphDisabled}
+                onSelect={panelActions.onOpenGitGraph}
+              >
+                <GitGraph className="size-3.5" />
+                {t('auto.components.right.sidebar.SourceControl.gitGraphButton', 'Graph')}
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onSelect={panelActions.onChangeBaseRef}>
               <Settings2 className="size-3.5" />
               {t('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}…

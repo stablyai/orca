@@ -124,7 +124,9 @@ function isRuntimeClientEvent(
     message.type === 'workspaceViewChanged' ||
     message.type === 'botsChanged' ||
     message.type === 'orchestrationSessionWorkersChanged' ||
+    message.type === 'agentOrchestrationChanged' ||
     message.type === 'peerMailReturned' ||
+    message.type === 'mcpServersChanged' ||
     message.type === 'workspaceCleanupRunFinished' ||
     (message.type === 'agentCliUpdateFinished' && typeof message.agent === 'string')
   )

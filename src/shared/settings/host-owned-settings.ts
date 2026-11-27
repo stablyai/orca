@@ -18,10 +18,8 @@ const HostOwnedSettingsSchema = z.object({
   nativeChatShellEnvironmentVariables: z.array(z.string()),
   // Launches the host starts itself (CLI, orchestration workers); desktop launches send their own.
   agentDefaultSurface: z.enum(['chat', 'terminal']),
-  // Whose sign-in chats on the Google account method use: 'auto' follows what the host has (see
-  // antigravityChatRoute), 'agy' is agy's own login, 'orca' Orca's built-in sign-in on its server.
+  // Retired with Orca's Antigravity server; still accepted so older clients' updates don't fail.
   antigravityGoogleSignIn: z.enum(['auto', 'agy', 'orca']),
-  // Whether this host updates the Antigravity ACP server it installed by itself; no UI yet.
   antigravityServerAutoUpdateEnabled: z.boolean()
 } satisfies { [K in keyof GlobalSettings]?: z.ZodType<NonNullable<GlobalSettings[K]>> })
 

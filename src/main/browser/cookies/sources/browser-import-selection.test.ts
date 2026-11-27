@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { getDarwinUserTempDir } from '../../../window/file-drop/darwin-user-temp-dir'
 import { browserCookieImportSource } from '../route-partition/browser-route-partition-cookie-import'
 
 vi.mock('electron', () => ({}))
@@ -12,11 +12,9 @@ vi.mock('../session-restore/browser-session-cookie-route-restore', () => ({}))
 let home: string
 let root: string
 
-beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'orca-chrome-selection-'))
-  vi.stubEnv('HOME', home)
-  vi.stubEnv('LOCALAPPDATA', home)
-  vi.stubEnv('XDG_CONFIG_HOME', home)
+beforeEach(async () => {
+  // macOS restricts Chrome-shaped paths in the runner's shortened /private/tmp root.
+  home = mkdtempSync(join(await getDarwinUserTempDir(), 'orca-chrome-selection-'))
   root =
     process.platform === 'darwin'
       ? join(home, 'Library', 'Application Support', 'Google', 'Chrome')
@@ -27,6 +25,9 @@ beforeEach(() => {
     mkdirSync(join(root, directory), { recursive: true })
     writeFileSync(join(root, directory, 'Cookies'), '')
   }
+  vi.stubEnv('HOME', home)
+  vi.stubEnv('LOCALAPPDATA', home)
+  vi.stubEnv('XDG_CONFIG_HOME', home)
 })
 
 afterEach(() => {
@@ -38,9 +39,9 @@ function writeProfiles(info_cache: Record<string, { name: string }>): void {
   writeFileSync(join(root, 'Local State'), JSON.stringify({ profile: { info_cache } }))
 }
 
-it('refreshes the saved directory through a rename and refuses it after removal', () => {
+it('refreshes the saved directory through a rename and refuses it after removal', async () => {
   writeProfiles({ Default: { name: 'Work' }, 'Profile 2': { name: 'Work' } })
-  const original = browserCookieImportSource({
+  const original = await browserCookieImportSource({
     browserFamily: 'chrome',
     browserProfile: 'Profile 2'
   })
@@ -50,7 +51,7 @@ it('refreshes the saved directory through a rename and refuses it after removal'
   const saved = original.importedSource()
   const selection = { refreshSourceId: saved.chromeProfile!.id }
   writeProfiles({ Default: { name: 'Work' }, 'Profile 2': { name: 'Renamed' } })
-  const refreshed = browserCookieImportSource(selection, saved)
+  const refreshed = await browserCookieImportSource(selection, saved)
   if ('reason' in refreshed) {
     throw new Error(refreshed.reason)
   }
@@ -60,15 +61,15 @@ it('refreshes the saved directory through a rename and refuses it after removal'
   })
 
   writeProfiles({ Default: { name: 'Work' } })
-  expect(browserCookieImportSource(selection, saved)).toMatchObject({
+  expect(await browserCookieImportSource(selection, saved)).toMatchObject({
     ok: false,
     reasonCode: 'savedChromeProfileUnavailable'
   })
 })
 
-it('keeps the manual import badge for the legacy Default fallback without a refresh token', () => {
+it('keeps the manual import badge for the legacy Default fallback without a refresh token', async () => {
   writeProfiles({})
-  const source = browserCookieImportSource({ browserFamily: 'chrome' })
+  const source = await browserCookieImportSource({ browserFamily: 'chrome' })
   if ('reason' in source) {
     throw new Error(source.reason)
   }

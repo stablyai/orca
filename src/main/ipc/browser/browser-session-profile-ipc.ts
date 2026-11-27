@@ -206,17 +206,23 @@ export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:detectBrowsersForClientHost')
   ipcMain.removeHandler('browser:session:importFromBrowser')
 
-  ipcMain.handle('browser:session:detectBrowsers', (event): DetectedBrowserPickerEntry[] => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return []
+  ipcMain.handle(
+    'browser:session:detectBrowsers',
+    async (event): Promise<DetectedBrowserPickerEntry[]> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return []
+      }
+      return detectedBrowserPickerEntries()
     }
-    return detectedBrowserPickerEntries()
-  })
+  )
 
   // List browsers on the machine whose cookie store import will read.
   ipcMain.handle(
     'browser:session:detectBrowsersForClientHost',
-    (event, args: { environmentId: string }): DetectedBrowserPickerEntry[] | null => {
+    async (
+      event,
+      args: { environmentId: string }
+    ): Promise<DetectedBrowserPickerEntry[] | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return []
       }
@@ -287,8 +293,8 @@ type DetectedBrowserPickerEntry = {
 }
 
 // Return picker metadata only; keep cookie paths and keychain identifiers in main.
-function detectedBrowserPickerEntries(): DetectedBrowserPickerEntry[] {
-  return detectInstalledBrowsers().map((browser) => ({
+async function detectedBrowserPickerEntries(): Promise<DetectedBrowserPickerEntry[]> {
+  return (await detectInstalledBrowsers()).map((browser) => ({
     family: browser.family,
     label: browser.label,
     profiles: browser.profiles,

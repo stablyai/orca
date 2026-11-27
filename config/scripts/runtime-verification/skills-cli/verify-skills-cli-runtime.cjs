@@ -268,4 +268,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { collectRuntimeClosure, runCli, verifySkillsCliRuntime }
+module.exports = { collectRuntimeClosure, runCli, runtimeImportSpecifiers, verifySkillsCliRuntime }

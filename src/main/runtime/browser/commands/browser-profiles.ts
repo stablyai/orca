@@ -13,7 +13,10 @@ import type {
   BrowserProfileImportFromBrowserResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
-import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserCookieImportSelection,
+  BrowserSessionProfile
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
@@ -21,7 +24,6 @@ import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registr
 import { detectInstalledBrowsers } from '../../../browser/cookies/sources/browser-cookie-detection'
 import { importCookiesIntoBrowserProfile } from '../../../browser/cookies/imports/browser-profile-cookie-import'
 import { browserCookieImportSource } from '../../../browser/cookies/route-partition/browser-route-partition-cookie-import'
-import type { BrowserCookieImportSelection } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -260,7 +262,7 @@ export class RuntimeBrowserProfiles {
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {
     return {
       // Expose display metadata only; retain paths/keychain identifiers on the server.
-      browsers: detectInstalledBrowsers().map((browser) => ({
+      browsers: (await detectInstalledBrowsers()).map((browser) => ({
         family: browser.family,
         label: browser.label,
         profiles: browser.profiles,

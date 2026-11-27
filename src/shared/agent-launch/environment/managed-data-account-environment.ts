@@ -1,12 +1,15 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-const originalEnvironment = z.object({
-  XDG_DATA_HOME: z.string().nullable(),
-  XDG_STATE_HOME: z.string().nullable(),
-  OPENCODE_AUTH_CONTENT: z.string().nullable(),
-  OPENCODE_DB: z.string().nullable(),
-  inlineAuthReference: z.uuid().optional()
-})
+const originalEnvironment = lazyZodSchema(() =>
+  z.object({
+    XDG_DATA_HOME: z.string().nullable(),
+    XDG_STATE_HOME: z.string().nullable(),
+    OPENCODE_AUTH_CONTENT: z.string().nullable(),
+    OPENCODE_DB: z.string().nullable(),
+    inlineAuthReference: z.uuid().optional()
+  })
+)
 const ORIGINAL_ENV = 'ORCA_DATA_ACCOUNT_ORIGINAL_ENV'
 export const MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS = [
   'XDG_DATA_HOME',

@@ -1,5 +1,4 @@
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -45,23 +44,6 @@ export function formatSourceControlRefLabel(ref: string): string {
     .replace(/^refs\/remotes\//, '')
     .replace(/^refs\/heads\//, '')
     .replace(/^refs\/tags\//, '')
-}
-
-// Require a displayable base, matching the row component's guard.
-export function shouldShowSourceControlBranchContextRow(
-  summary: GitBranchCompareSummary | null | undefined,
-  compareBaseRef: string | null | undefined
-): boolean {
-  return resolveSourceControlDisplayedBaseRef(summary, compareBaseRef) != null
-}
-
-// Toolbar chrome may show head identity without a compare base.
-export function shouldShowSourceControlBranchContextChrome(
-  summary: GitBranchCompareSummary | null | undefined,
-  compareBaseRef: string | null | undefined,
-  headDisplay: WorktreeGitIdentityDisplay | null | undefined
-): boolean {
-  return shouldShowSourceControlBranchContextRow(summary, compareBaseRef) || headDisplay != null
 }
 
 // Show both directions against the named base so rebased branches also reveal commits behind it.

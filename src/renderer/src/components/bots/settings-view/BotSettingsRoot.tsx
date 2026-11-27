@@ -29,10 +29,11 @@ import {
   chatAsksNoApprovals,
   savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { botMembersFrom, type Bot } from '../../../../../shared/bot-types'
+import { botMembersFrom, tidyUpSupported, type Bot } from '../../../../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
 import { botTidyUp } from '../../../../../shared/bots/bot-tidy-up'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { BotHome } from '../../settings/bots/bot-home-files'
 import { useBotMemoryTopicCount } from '../../settings/bots/use-bot-memory-topics'
 import { useBotNotificationToggles } from '../../settings/bots/use-bot-notification-toggles'
@@ -111,20 +112,22 @@ function ScheduleGroup({
   const tidyUpTitle = t('settings.bots.tidyUp.title', 'Memory upkeep')
   return (
     <SettingsInsetGroup title={t('bots.settingsView.schedule', 'Schedule')}>
-      <SettingsInsetRow
-        icon={<Eye />}
-        title={lookAroundTitle}
-        value={lookAroundValue(lookAround)}
-        page="look-around"
-        onOpen={() => open('look-around')}
-        end={
-          <BotSettingsSwitch
-            checked={lookAround.on}
-            aria-label={lookAroundTitle}
-            onCheckedChange={() => void update({ lookAround: { on: !lookAround.on } })}
-          />
-        }
-      />
+      {lookAroundSupported(bot.agent) ? (
+        <SettingsInsetRow
+          icon={<Eye />}
+          title={lookAroundTitle}
+          value={lookAroundValue(lookAround)}
+          page="look-around"
+          onOpen={() => open('look-around')}
+          end={
+            <BotSettingsSwitch
+              checked={lookAround.on}
+              aria-label={lookAroundTitle}
+              onCheckedChange={() => void update({ lookAround: { on: !lookAround.on } })}
+            />
+          }
+        />
+      ) : null}
       <SettingsInsetRow
         icon={<Moon />}
         title={tidyUpTitle}
@@ -231,8 +234,29 @@ function AccessGroup({
 
 function NotificationsGroup({ bot, update }: { bot: Bot; update: Update }): React.JSX.Element {
   const t = useTranslate()
+  const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
+  const notificationsMuted = useAppStore(
+    (s) => s.notificationsMutedByWorktree?.[workspaceId] === true
+  )
+  const toggleWorktreeNotificationsMuted = useAppStore((s) => s.toggleWorktreeNotificationsMuted)
+  const muteLabel = t('settings.bots.muteNotifications', 'Mute notifications')
   return (
     <SettingsInsetGroup title={t('settings.bots.notifications', 'Notifications')}>
+      <SettingsInsetRow
+        title={muteLabel}
+        detail={t(
+          'settings.bots.muteNotificationsDescription',
+          'Stop sending system notifications. Unread indicators still appear.'
+        )}
+        wrapDetail
+        end={
+          <BotSettingsSwitch
+            checked={notificationsMuted}
+            aria-label={muteLabel}
+            onCheckedChange={() => toggleWorktreeNotificationsMuted(workspaceId)}
+          />
+        }
+      />
       {useBotNotificationToggles(bot).map((toggle) => (
         <SettingsInsetRow
           key={toggle.key}
@@ -356,9 +380,7 @@ export function BotSettingsRoot({
           }
         />
       </SettingsInsetGroup>
-      {lookAroundSupported(bot.agent) ? (
-        <ScheduleGroup bot={bot} update={update} open={open} />
-      ) : null}
+      {tidyUpSupported(bot.agent) ? <ScheduleGroup bot={bot} update={update} open={open} /> : null}
       <BotItemsSettingsGroup bot={bot} update={update} />
       {home ? <SoulAndMemoryGroup home={home} open={open} /> : null}
       <AccessGroup bot={bot} open={open} />

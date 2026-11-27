@@ -1,7 +1,8 @@
 import { app } from 'electron'
-import { mkdir, readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
+import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ClientHostRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 
@@ -56,7 +57,10 @@ function load(): Promise<SourceFile> {
   loaded ??= readFile(storePath(), 'utf-8')
     .then(parseSources)
     .catch((error) => {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) {
+      if (
+        (error instanceof Error && 'code' in error && error.code === 'ENOENT') ||
+        error instanceof SyntaxError
+      ) {
         return { scopedSources: {}, legacySources: {} }
       }
       loaded = null
@@ -73,7 +77,14 @@ function change(apply: (sources: SourceFile) => SourceFile | null): Promise<void
     }
     const path = storePath()
     await mkdir(dirname(path), { recursive: true })
-    writeFileAtomically(path, JSON.stringify(next), { mode: 0o600 })
+    const temporary = `${path}.${randomUUID()}.tmp`
+    try {
+      await writeFile(temporary, JSON.stringify(next), { mode: 0o600, flag: 'wx' })
+      await renameFileWithWindowsRetryAsync(temporary, path)
+    } catch (error) {
+      await rm(temporary, { force: true }).catch(() => {})
+      throw error
+    }
     loaded = Promise.resolve(next)
   })
   changes = run.catch(() => {})

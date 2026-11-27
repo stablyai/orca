@@ -48,6 +48,7 @@ it('rejects a queued refresh after a manual import replaces the same jar’s sou
         jarValue = 'b'
         return {
           ok: true,
+          profileId: 'default',
           summary: { importedCookies: 1, skippedCookies: 0, totalCookies: 1, domains: [] }
         }
       }),
@@ -61,6 +62,7 @@ it('rejects a queued refresh after a manual import replaces the same jar’s sou
             jarValue = 'a'
             return {
               ok: true,
+              profileId: 'default',
               summary: { importedCookies: 1, skippedCookies: 0, totalCookies: 1, domains: [] }
             }
           },
@@ -81,6 +83,7 @@ it('rejects a queued refresh after a manual import replaces the same jar’s sou
     importCookiesIntoBrowserProfile(profile, () => ({
       importInto: async () => ({
         ok: true,
+        profileId: 'default',
         summary: { importedCookies: 0, skippedCookies: 1, totalCookies: 1, domains: [] }
       }),
       importedSource: () => originalSource

@@ -28,7 +28,6 @@ export const work = defineFixture({
           detectedBrowsers={[]}
           importState={null}
           isActive={false}
-          isDefault
           onSelect={() => {}}
         />
         <BrowserProfileRow

@@ -70,7 +70,8 @@ export class BotItemsEdits extends BotItemsReads {
         status: input.status,
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.doneMeans !== undefined ? { doneMeans: input.doneMeans } : {}),
-        ...(input.links.length > 0 ? { links: input.links.map(linkWords) } : {})
+        ...(input.links.length > 0 ? { links: input.links.map(linkWords) } : {}),
+        ...(input.startedIn ? { startedIn: input.startedIn } : {})
       },
       false,
       now
@@ -97,6 +98,7 @@ export class BotItemsEdits extends BotItemsReads {
   ): BotItemWriteOutcome {
     const item = this.requireItem(uid)
     this.requireOwnerWrite(item, actor, changes.status)
+    assertBotItemVersion(item, changes.expectedVersion)
     const waitNote =
       changes.status === 'waiting' ? botItemWaitText(changes.note, WAIT_WORDS) : undefined
     // The owner's open question never hides behind a quieter status.
@@ -185,6 +187,18 @@ export class BotItemsEdits extends BotItemsReads {
     this.db
       .prepare('UPDATE items SET title = ?, description = ?, done_means = ? WHERE uid = ?')
       .run(value('title') ?? item.title, value('description'), value('doneMeans'), item.uid)
+  }
+}
+
+export function assertBotItemVersion(
+  item: BotItemRecord,
+  expectedVersion: number | undefined
+): void {
+  if (expectedVersion !== undefined && item.version !== expectedVersion) {
+    throw new BotItemError(
+      'item_changed',
+      `Item ${item.number} changed since you looked. Read it with \`orca bot item show ${item.number}\` and decide whether your update still applies.`
+    )
   }
 }
 

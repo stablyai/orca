@@ -58,6 +58,8 @@ export type DashboardCardSubagent = {
   id: string
   name: string
   dotState: DashboardCardDotState
+  /** dotState folds a failed child into `blocked`; additive so older windows ignore it and newer ones fall back to dotState. */
+  failed?: true
 }
 
 export type DashboardCardHostKind = 'local' | 'ssh' | 'wsl' | 'remote'

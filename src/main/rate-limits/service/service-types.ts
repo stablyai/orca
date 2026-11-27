@@ -9,7 +9,9 @@ import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
 import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home/runtime-home-service-types'
 
-export type InactiveCodexHome = { kind: 'ready'; managedHomePath: string } | { kind: 'skip' }
+export type InactiveCodexHome =
+  | { kind: 'ready'; managedHomePath: string; backendUsageOnly?: boolean }
+  | { kind: 'skip' }
 
 export type InactiveCodexAccountInfo = {
   id: string
@@ -64,9 +66,6 @@ export type ZcodePlanResolvedConfig = {
   error: string | null
 }
 
-export type GeminiCliOAuthEnabledResolver = () => boolean
-
-export type AntigravityUsageEnabledResolver = () => boolean
 export type ClaudeOAuthUsageEnabledResolver = () => boolean
 export type MuseUsageEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
@@ -108,10 +107,8 @@ export const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 export type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
-  gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
-  antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null

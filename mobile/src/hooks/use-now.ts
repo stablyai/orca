@@ -101,7 +101,14 @@ export function useSharedNow(intervalMs = 30_000): number {
 
 const readNow = (now: number): number => now
 
-export function useSharedNowSnapshot<T>(intervalMs: number, select: (now: number) => T): T {
+// A disabled caller reads the clock's last time without keeping its timer running.
+const subscribeWhileDisabled = (): (() => void) => () => {}
+
+export function useSharedNowSnapshot<T>(
+  intervalMs: number,
+  select: (now: number) => T,
+  enabled = true
+): T {
   const clock = sharedClock(intervalMs)
   const subscribe = useCallback(
     (listener: () => void) => {
@@ -136,5 +143,5 @@ export function useSharedNowSnapshot<T>(intervalMs: number, select: (now: number
     [clock, intervalMs]
   )
   const read = useCallback(() => select(clock.now), [clock, select])
-  return useSyncExternalStore(subscribe, read, read)
+  return useSyncExternalStore(enabled ? subscribe : subscribeWhileDisabled, read, read)
 }
