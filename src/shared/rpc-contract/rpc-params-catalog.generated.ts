@@ -279,14 +279,8 @@ import {
   GrabViewportBridge
 } from './browser/browser-grab-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
-import { Screenshot, Snapshot } from './browser/browser-observation-params'
 import {
   Check,
-  ClipboardWrite,
-  CookieDelete,
-  CookieGet,
-  CookieSet,
-  DialogAccept,
   Drag,
   Element,
   Eval,
@@ -294,31 +288,19 @@ import {
   Fill,
   Find,
   FullScreenshot,
-  Geolocation,
   Get,
   Goto,
   Highlight,
-  InterceptEnable,
   Is,
   KeyboardInsert,
   Keypress,
   LimitParam,
-  MouseButton,
-  MouseWheel,
-  MouseXY,
   ProfileClearCookies,
   ProfileDelete,
   ProfileImportFromBrowser,
   Scroll,
   Select,
   SelectorPath,
-  SetCredentials,
-  SetDevice,
-  SetHeaders,
-  SetMedia,
-  SetOffline,
-  StorageKey,
-  StorageKeyValue,
   TabClose,
   TabCurrent,
   TabList,
@@ -328,8 +310,28 @@ import {
   TabSwitch,
   Type,
   Upload,
-  Viewport,
   Wait
+} from './browser/browser-interaction-params'
+import { Screenshot, Snapshot } from './browser/browser-observation-params'
+import {
+  ClipboardWrite,
+  CookieDelete,
+  CookieGet,
+  CookieSet,
+  DialogAccept,
+  Geolocation,
+  InterceptEnable,
+  MouseButton,
+  MouseWheel,
+  MouseXY,
+  SetCredentials,
+  SetDevice,
+  SetHeaders,
+  SetMedia,
+  SetOffline,
+  StorageKey,
+  StorageKeyValue,
+  Viewport
 } from './browser/browser-params'
 import {
   DownloadCopyStream,
