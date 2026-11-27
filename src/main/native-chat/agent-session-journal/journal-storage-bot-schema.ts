@@ -118,54 +118,60 @@ const resultPlace = { ref: text, label: text }
 
 /** What an automation-saved card keeps of the automation, and where its results go. */
 export const storedAutomationSaved = {
-  automation: z.object({
-    id: z.string(),
-    name: z.string(),
-    enabled: z.boolean(),
-    nextRunAt: z.number(),
-    updatedAt: z.number(),
-    dtstart: z.number(),
-    rrule: z.string(),
-    workspaceId: z.string().nullable(),
-    on: z
-      .array(
-        z.object({
-          id: z.string(),
-          source: z.string(),
-          event: z.string(),
-          in: z.array(z.string()).optional(),
-          subject: text,
-          names: z.record(z.string(), z.string()).optional()
-        })
-      )
-      .optional(),
-    bot: z.object({ botId: z.string() }).optional(),
-    once: z.object({ by: z.number().optional() }).optional()
-  }),
-  resultsTo: z
-    .union([
-      z.string(),
-      z.object({ channel: z.string(), ...resultPlace }),
-      z.object({ linearIssue: z.string(), ...resultPlace })
-    ])
-    .optional(),
-  agentSetup: z
-    .object({
-      agent: z.string(),
-      launch: z
-        .object({
-          model: z.string().optional(),
-          options: z.record(z.string(), z.string()).optional()
-        })
-        .optional()
+  automation: lazyZodSchema(() =>
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      enabled: z.boolean(),
+      nextRunAt: z.number(),
+      updatedAt: z.number(),
+      dtstart: z.number(),
+      rrule: z.string(),
+      workspaceId: z.string().nullable(),
+      on: z
+        .array(
+          z.object({
+            id: z.string(),
+            source: z.string(),
+            event: z.string(),
+            in: z.array(z.string()).optional(),
+            subject: text,
+            names: z.record(z.string(), z.string()).optional()
+          })
+        )
+        .optional(),
+      bot: z.object({ botId: z.string() }).optional(),
+      once: z.object({ by: z.number().optional() }).optional()
     })
-    .optional()
+  ),
+  resultsTo: lazyZodSchema(() =>
+    z
+      .union([
+        z.string(),
+        z.object({ channel: z.string(), ...resultPlace }),
+        z.object({ linearIssue: z.string(), ...resultPlace })
+      ])
+      .optional()
+  ),
+  agentSetup: lazyZodSchema(() =>
+    z
+      .object({
+        agent: z.string(),
+        launch: z
+          .object({
+            model: z.string().optional(),
+            options: z.record(z.string(), z.string()).optional()
+          })
+          .optional()
+      })
+      .optional()
+  )
 }
 
 /** What a wait-ended card keeps: the wait as it was saved, and how it ended. */
 export const storedWaitEnded = {
   automation: storedAutomationSaved.automation,
-  ending: z.object({ kind: z.string(), at: z.number(), actor: text })
+  ending: lazyZodSchema(() => z.object({ kind: z.string(), at: z.number(), actor: text }))
 }
 
 /** What a run's message or its Couldn't start card keeps: the run as delivered. */
@@ -205,82 +211,92 @@ export const storedAutomationRun = lazyZodSchema(() =>
 
 export const storedAutomationRunNotStarted = {
   run: storedAutomationRun,
-  actsFor: z.array(
-    z.object({
-      kind: z.string(),
-      source: text,
-      userId: text,
-      name: text,
-      workspaceId: z.string().nullable().optional(),
-      role: z.string().nullable().optional(),
-      placeKind: text
-    })
+  actsFor: lazyZodSchema(() =>
+    z.array(
+      z.object({
+        kind: z.string(),
+        source: text,
+        userId: text,
+        name: text,
+        workspaceId: z.string().nullable().optional(),
+        role: z.string().nullable().optional(),
+        placeKind: text
+      })
+    )
   ),
-  error: z.string(),
-  refusal: storedRefusalReference.optional(),
-  text: z.string(),
-  at: z.number()
+  error: lazyZodSchema(() => z.string()),
+  refusal: lazyZodSchema(() => storedRefusalReference.optional()),
+  text: lazyZodSchema(() => z.string()),
+  at: lazyZodSchema(() => z.number())
 }
 
 /** An item note's entries beyond what every entry has. */
 export const storedBotItemNote = {
-  entries: z.array(
-    z.object({
-      uid: z.string(),
-      number: z.number(),
-      title: z.string(),
-      status: z.string(),
-      event: z.string(),
-      from: text,
-      to: text,
-      note: text,
-      fields: z.array(z.string()).optional(),
-      doneMeans: z.string().nullable().optional(),
-      text,
-      images: z
-        .array(z.object({ path: z.string(), name: z.string(), bytes: z.number() }))
-        .optional(),
-      refs: z.array(z.string()).optional(),
-      names: z.record(z.string(), z.string()).optional()
-    })
+  entries: lazyZodSchema(() =>
+    z.array(
+      z.object({
+        uid: z.string(),
+        number: z.number(),
+        title: z.string(),
+        status: z.string(),
+        event: z.string(),
+        from: text,
+        to: text,
+        note: text,
+        fields: z.array(z.string()).optional(),
+        doneMeans: z.string().nullable().optional(),
+        text,
+        images: z
+          .array(z.object({ path: z.string(), name: z.string(), bytes: z.number() }))
+          .optional(),
+        refs: z.array(z.string()).optional(),
+        names: z.record(z.string(), z.string()).optional()
+      })
+    )
   )
 }
 
 /** On a status line: a bot's automation result, context note, tidy-up line, Connect card, new-bot offer,
  *  request to another bot, or setup card. */
 export const storedBotStatusNotes = {
-  automationResult: storedAutomationResultNote.optional(),
-  botContext: storedBotContextNote.optional(),
-  botMemoryUpdated: BotMemoryUpdatedNoteSchema.optional(),
-  tidyUp: z.object({ botId: z.string(), changes: z.number() }).optional(),
-  connectorOffer: storedConnectorOffer.optional(),
-  handoffOffer: legacyHandoffOffer.optional(),
-  botCreateOffer: storedBotCreateOffer.optional(),
-  botImportPlan: storedBotImportPlan.optional(),
-  botImportDone: storedBotImportDone.optional(),
-  botRequest: storedBotRequestCard.optional(),
-  googleSetup: z
-    .object({
-      botId: z.string(),
-      runId: z.string(),
-      card: z.string(),
-      step: text,
-      copy: z.number().optional()
-    })
-    .optional(),
-  composioSetup: z
-    .object({
-      botId: z.string(),
-      card: z.string(),
-      app: z.object({ slug: z.string(), name: z.string() }).optional(),
-      hookId: z.string().optional(),
-      trigger: z
-        .object({ slug: z.string(), name: z.string(), config: z.string().optional() })
-        .optional(),
-      reason: z.string().optional(),
-      step: z.object({ index: z.number(), total: z.number() }).optional()
-    })
-    .optional(),
+  automationResult: lazyZodSchema(() => storedAutomationResultNote.optional()),
+  botContext: lazyZodSchema(() => storedBotContextNote.optional()),
+  botMemoryUpdated: lazyZodSchema(() => BotMemoryUpdatedNoteSchema.optional()),
+  tidyUp: lazyZodSchema(() => z.object({ botId: z.string(), changes: z.number() }).optional()),
+  connectorOffer: lazyZodSchema(() => storedConnectorOffer.optional()),
+  handoffOffer: lazyZodSchema(() => legacyHandoffOffer.optional()),
+  botCreateOffer: lazyZodSchema(() => storedBotCreateOffer.optional()),
+  botImportPlan: lazyZodSchema(() => storedBotImportPlan.optional()),
+  botImportDone: lazyZodSchema(() => storedBotImportDone.optional()),
+  botRequest: lazyZodSchema(() => storedBotRequestCard.optional()),
+  googleSetup: lazyZodSchema(() =>
+    z
+      .object({
+        botId: z.string(),
+        runId: z.string(),
+        card: z.string(),
+        step: text,
+        copy: z.number().optional()
+      })
+      .optional()
+  ),
+  composioSetup: lazyZodSchema(() =>
+    z
+      .object({
+        botId: z.string(),
+        card: z.string(),
+        app: z.object({ slug: z.string(), name: z.string() }).optional(),
+        hookId: z.string().optional(),
+        trigger: z
+          .object({ slug: z.string(), name: z.string(), config: z.string().optional() })
+          .optional(),
+        reason: z.string().optional(),
+        step: z.object({ index: z.number(), total: z.number() }).optional()
+      })
+      .optional()
+  ),
   // Saved by builds that had bot take-over; still read so those chats open, as their plain text.
-  workspaceRemoved: z.object({ botId: z.string(), name: z.string() }).optional()
+  workspaceRemoved: lazyZodSchema(() =>
+    z.object({ botId: z.string(), name: z.string() }).optional()
+  )
 }

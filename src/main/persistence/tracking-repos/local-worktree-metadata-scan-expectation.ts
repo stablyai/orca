@@ -12,6 +12,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
+import { fingerprintString } from '../../../shared/text/string-fingerprint'
 
 type CapturedLocalRepoIdentity = Readonly<
   Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> & {
@@ -29,7 +30,7 @@ type CapturedLocalRoutingIdentity = Readonly<{
 type MetadataRowExpectation = Readonly<{
   expectedPresent: boolean
   expectedMeta: WorktreeMeta | undefined
-  expectedSerialized: string | null | undefined
+  expectedFingerprint: string | null | undefined
   expectedInstanceId: string | undefined
   expectedHostId: WorktreeMeta['hostId']
 }>
@@ -55,12 +56,12 @@ export type NativeLocalWorktreeMetadataScanExpectation = Readonly<{
 
 type MetadataAliasEntry = readonly [alias: string, identityKeys: string[]]
 
-function serializeMetadataRow(meta: WorktreeMeta | undefined): string | null | undefined {
+function fingerprintMetadataRow(meta: WorktreeMeta | undefined): string | null | undefined {
   if (!meta) {
     return undefined
   }
   try {
-    return JSON.stringify(meta)
+    return fingerprintString(JSON.stringify(meta))
   } catch {
     return null
   }
@@ -75,7 +76,7 @@ function captureRow(
   return {
     expectedPresent,
     expectedMeta,
-    expectedSerialized: serializeMetadataRow(expectedMeta),
+    expectedFingerprint: fingerprintMetadataRow(expectedMeta),
     expectedInstanceId: expectedMeta?.instanceId,
     expectedHostId: expectedMeta?.hostId
   }
@@ -195,8 +196,8 @@ function rowStillMatches(
   return (
     Object.hasOwn(record ?? {}, key) === expected.expectedPresent &&
     current === expected.expectedMeta &&
-    expected.expectedSerialized !== null &&
-    serializeMetadataRow(current) === expected.expectedSerialized &&
+    expected.expectedFingerprint !== null &&
+    fingerprintMetadataRow(current) === expected.expectedFingerprint &&
     current?.instanceId === expected.expectedInstanceId &&
     current?.hostId === expected.expectedHostId
   )

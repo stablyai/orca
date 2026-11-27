@@ -33,20 +33,21 @@ const SnapshotVerdictSchema = lazyZodSchema(() =>
     state: z.enum(['pending', 'captured', 'empty'])
   })
 )
-const OrcadActivationTransactionCommonFields = {
+const createOrcadActivationTransactionCommonFields = () => ({
   schemaVersion: z.literal(ORCAD_ACTIVATION_TRANSACTION_SCHEMA_VERSION),
   transactionId: z.uuid(),
   startedAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
   recordBefore: z.unknown()
-}
+})
 
 // Unknown operations must keep older clients from releasing recovery fences.
-export const OrcadActivationTransactionSchema = lazyZodSchema(() =>
-  z
+export const OrcadActivationTransactionSchema = lazyZodSchema(() => {
+  const commonFields = createOrcadActivationTransactionCommonFields()
+  return z
     .discriminatedUnion('operation', [
       z.object({
-        ...OrcadActivationTransactionCommonFields,
+        ...commonFields,
         operation: z.literal('activate'),
         phase: z.enum(['prepared', 'incumbent-stopped', 'snapshot-captured', 'candidate-ready']),
         candidateVersion: RemoteVersionSchema,
@@ -56,7 +57,7 @@ export const OrcadActivationTransactionSchema = lazyZodSchema(() =>
         snapshot: SnapshotVerdictSchema
       }),
       z.object({
-        ...OrcadActivationTransactionCommonFields,
+        ...commonFields,
         operation: z.literal('rollback'),
         phase: z.enum([
           'prepared',
@@ -71,7 +72,7 @@ export const OrcadActivationTransactionSchema = lazyZodSchema(() =>
         rescue: SnapshotVerdictSchema
       }),
       z.object({
-        ...OrcadActivationTransactionCommonFields,
+        ...commonFields,
         operation: z.literal('decommission'),
         phase: z.enum(['prepared', 'stop-dispatched', 'process-exited']),
         activeVersion: RemoteVersionSchema,
@@ -132,4 +133,4 @@ export const OrcadActivationTransactionSchema = lazyZodSchema(() =>
         })
       }
     })
-)
+})

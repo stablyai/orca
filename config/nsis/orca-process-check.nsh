@@ -8,13 +8,14 @@
 ; also stop that copy. A daemon that could not be relocated runs from $INSTDIR and is stopped like
 ; any other process: it holds the files being replaced, so sparing it would fail the update.
 ; An update gives the quitting app ORCA_UPDATE_EXIT_GRACE_MS to exit on its own (Orca's exit
-; watchdog fires first: WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS, update-install-exit-watchdog.ts);
+; watchdog fires first: WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS, update-install-exit-watchdog.ts;
+; older releases allowed themselves 20 s, so the grace outlasts that too);
 ; a manual install asks first, then stops it at once. What still runs 2 s after that gets "cannot
 ; be closed", whose silent default quits before any file has been changed.
 ; A process this non-elevated installer cannot open (UAC-elevated, or another user's) is skipped,
 ; as the stock check skipped one whose path it could not read; the uninstaller's rollback still
 ; guards the files it holds.
-!define ORCA_UPDATE_EXIT_GRACE_MS 10000
+!define ORCA_UPDATE_EXIT_GRACE_MS 22000
 
 ; PROCESSENTRY32W below is laid out for the 32-bit installer electron-builder builds.
 !if ${NSIS_PTR_SIZE} != 4

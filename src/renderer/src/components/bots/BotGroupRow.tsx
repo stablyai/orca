@@ -1,10 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
+import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotGroup } from '@/lib/bot-group-catalog'
 import type { Bot } from '../../../../shared/bot-types'
@@ -21,6 +23,11 @@ import { BotSidebarRow } from './BotSidebarRow'
 import { botErrorMessage } from './bot-presentation'
 import { botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
 import { BotGroupFaces } from './BotGroupFaces'
+
+const createBotGroupStatusSelector = () =>
+  createAgentStatusEpochSelector((state: AppState, group: Pick<BotGroup, 'members' | 'threads'>) =>
+    botGroupStatus(group, state.agentStatusByPaneKey, Date.now())
+  )
 
 /** A group in the Bots section: its members' faces, then the room's newest post. */
 export function BotGroupRow({
@@ -46,10 +53,9 @@ export function BotGroupRow({
   const t = useTranslate()
   const workspaceId = folderWorkspaceKey(home.id)
   const now = useNow(60_000)
-  // Rerun on every store change, so a freshness epoch bump re-reads the clock.
-  const status = useAppStore((state) =>
-    botGroupStatus(group, state.agentStatusByPaneKey, Date.now())
-  )
+  // Recompute only when agentStatusEpoch or group changes (turn/state updates and freshness ticks).
+  const [selectGroupStatus] = useState(createBotGroupStatusSelector)
+  const status = useAppStore((state) => selectGroupStatus(state, group))
   const line: BotRowLine = {
     kind: 'activity',
     place: null,

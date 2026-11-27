@@ -59,10 +59,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   }
   actions.push({
     id: 'agentSessionHistory',
-    label: translate(
-      'agentHistory.worktreeNavigationActions.agentSessionHistory',
-      'Agent Session History'
-    ),
+    label: translate('agentHistory.worktreeNavigationActions.agentSessionHistory', 'Agent history'),
     renderIcon: () =>
       MobileAgentSessionHistoryIcon({ size: 16, color: colors.textSecondary, strokeWidth: 2 }),
     onPress: () => openHistory()

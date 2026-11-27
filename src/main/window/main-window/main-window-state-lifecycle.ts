@@ -43,6 +43,8 @@ export function installMainWindowStateLifecycle(args: {
 
   // Electron 41/macOS reemits ready-to-show for webview creation; run initial maximize only once (#591).
   let handledInitialReadyToShow = false
+  // Set while a macOS fullscreen restore waits for a focus that can take it.
+  let pendingFullScreenRestore: (() => void) | null = null
   let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
     process.platform === 'win32' || process.platform === 'linux'
       ? setTimeout(() => {
@@ -89,7 +91,27 @@ export function installMainWindowStateLifecycle(args: {
     }
     // Fullscreen needs a shown window; after maximize so leaving it returns there. Background launches must not take a Space.
     if (savedFullScreen && !isBackgroundLaunch() && !revealInBackground) {
-      mainWindow.setFullScreen(true)
+      // macOS drops the request while the window can't take focus (display asleep or locked at an update relaunch).
+      if (process.platform !== 'darwin' || mainWindow.isFocused()) {
+        mainWindow.setFullScreen(true)
+      } else {
+        // 'focus' can precede key status or land during a cancellable quit; keep waiting until a request can stick.
+        const settleRestore = (): void => {
+          pendingFullScreenRestore = null
+          mainWindow.off('focus', restoreFullScreenOnFocus)
+        }
+        const restoreFullScreenOnFocus = (): void => {
+          if (windowClosing || !mainWindow.isFocused() || mainWindow.isFullScreen()) {
+            return
+          }
+          settleRestore()
+          mainWindow.setFullScreen(true)
+        }
+        pendingFullScreenRestore = restoreFullScreenOnFocus
+        mainWindow.on('focus', restoreFullScreenOnFocus)
+        // Any fullscreen entry, including the user's own, settles the restore so a later exit sticks.
+        mainWindow.once('enter-full-screen', settleRestore)
+      }
     }
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
@@ -190,6 +212,8 @@ export function installMainWindowStateLifecycle(args: {
 
   const resumeBoundsPersistence = (): void => {
     windowClosing = false
+    // A focus skipped during the cancelled quit won't repeat while the window stays key.
+    pendingFullScreenRestore?.()
   }
   return {
     clearInitialRevealFallbackTimer,

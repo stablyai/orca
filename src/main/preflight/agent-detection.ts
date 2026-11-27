@@ -32,8 +32,6 @@ import {
   findRunnableLocalCommand,
   isCommandAvailable
 } from '../ipc/preflight/preflight-command-exec'
-import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
-import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
 import {
   _resetGlabOnlyCache,
   readDefaultDistroGlab,
@@ -175,7 +173,9 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
     await (probe.wslTarget
       ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('gh')} auth status`)
-      : execLocalPreflightCommandOrThrow(probe.binary ?? 'gh', ['auth', 'status']))
+      : execLocalPreflightCommandOrThrow(probe.binary ?? 'gh', ['auth', 'status'], {
+          configuredProxy: true
+        }))
     return true
   } catch (error) {
     // Some nonzero auth results retain success markers; preserve compatibility with partial output.
@@ -194,8 +194,7 @@ async function isGlabAuthenticated(
     await (probe.wslTarget
       ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
       : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status'], {
-          // `auth status` calls the GitLab API, so it needs the Settings proxy too.
-          env: withConfiguredProxyEnv(buildLocalPreflightEnv())
+          configuredProxy: true
         }))
     return true
   } catch (error) {

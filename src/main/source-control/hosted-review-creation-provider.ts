@@ -1,19 +1,10 @@
 import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type { HostedReviewProvider } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { HostedReviewCreationProvider } from '../../shared/source-control/hosted-review/hosted-review-creation-providers'
-import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-request-creation'
-import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-request-creation'
-import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
 import { getEnterpriseGitHubRepoSlug } from '../github/repositories/github-enterprise-repository'
 import { acquire, release } from '../github/execution/github-operation-slots'
 import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
-import { getProjectSlug } from '../gitlab/merge-requests/merge-request-lookup'
-import {
-  acquire as acquireGlab,
-  release as releaseGlab
-} from '../gitlab/requests/glab-request-admission'
 import { glabExecFileAsync } from '../git/command-runner/hosted-cli/glab-exec-file'
-import { glabRepoExecOptions } from '../gitlab/projects/gitlab-project-ref-resolution'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {
   getHostedReviewLocalGitOptions,
@@ -51,6 +42,15 @@ async function isGitLabAuthenticated(
   connectionId: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
+  const [
+    { getProjectSlug },
+    { acquire: acquireGlab, release: releaseGlab },
+    { glabRepoExecOptions }
+  ] = await Promise.all([
+    import('../gitlab/merge-requests/merge-request-lookup'),
+    import('../gitlab/requests/glab-request-admission'),
+    import('../gitlab/projects/gitlab-project-ref-resolution')
+  ])
   const projectRef = await getProjectSlug(repoPath, connectionId, options)
   if (!projectRef) {
     return false
@@ -122,14 +122,18 @@ export async function isProviderAuthenticated(
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
   if (provider === 'azure-devops') {
-    return isAzureDevOpsReviewCreationAuthenticated()
+    return (
+      await import('../azure-devops/pull-request-creation')
+    ).isAzureDevOpsReviewCreationAuthenticated()
   }
   if (provider === 'gitea') {
-    return isGiteaReviewCreationAuthenticated()
+    return (await import('../gitea/pull-request-creation')).isGiteaReviewCreationAuthenticated()
   }
   if (provider === 'bitbucket') {
     // Bitbucket authentication must not fall through to GitHub login requirements.
-    return isBitbucketReviewCreationAuthenticated()
+    return (
+      await import('../bitbucket/pull-request-creation')
+    ).isBitbucketReviewCreationAuthenticated()
   }
   // Only CLI-backed providers need host-routed Git reads; their CLIs run here. Token-backed providers do not touch the repo.
   const connectionId = hostedReviewSshConnectionId(executionHostId)

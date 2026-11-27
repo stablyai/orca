@@ -5,6 +5,7 @@ import { useWslHostServerFilesMissing } from '../../../../runtime/hosts/wsl/use-
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { wslHostAddRefusalMessage, wslHostStatusDetailMessage } from './wsl-host-failure-text'
 import { addWslHostDistro } from './add-wsl-host-distro'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function AddWslHostDialogBody({
   initialDistro,
@@ -58,22 +59,25 @@ export function AddWslHostDialogBody({
     setWait(null)
     setAddingDistro(selected.name)
     onAddingChange(true)
-    try {
-      const result = await addWslHostDistro(wslHostAddRequest(selected))
-      if (!result.ok) {
-        setError(wslHostAddRefusalMessage(result))
-        if (result.kind === 'distro-stopped') {
-          // It stopped after the list was read; the fresh state turns the button into Start and add.
-          list.refresh()
+    await runWithFinally(
+      async () => {
+        try {
+          const result = await addWslHostDistro(wslHostAddRequest(selected))
+          if (!result.ok) {
+            setError(wslHostAddRefusalMessage(result))
+            if (result.kind === 'distro-stopped') {
+              // It stopped after the list was read; the fresh state turns the button into Start and add.
+              list.refresh()
+            }
+            return
+          }
+          onAdded()
+        } catch (cause) {
+          setError(readIpcErrorDetail(cause) ?? String(cause))
         }
-        return
-      }
-      onAdded()
-    } catch (cause) {
-      setError(readIpcErrorDetail(cause) ?? String(cause))
-    } finally {
-      onAddingChange(false)
-    }
+      },
+      () => onAddingChange(false)
+    )
   }
 
   return (

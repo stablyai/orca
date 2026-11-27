@@ -17218,34 +17218,11 @@
             "0bb39f8fe6": "Gönder",
             "69334b4b10": "Sesli yazdırma",
             "29f2d13839": "Bir komut yazın…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Yapıştır",
             "985373052e": "Telefon moduna geç",
-            "58a9ee6003": "tool-call biçimlendirmesi. Sırada diff eklememi ister misiniz?",
-            "aa64b519c6": "terminal ekranı. Tokyonight paleti, Menlo, gerçek claude",
-            "e75112c834": "Eşleştirme tarama slaytını yüksek çözünürlüklü bir",
-            "3ce3e8c892": "14 geçti, 1 atlandı (1.8sn)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Eşleştirme tarama slaytı terminal oturumuyla değiştirildi",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Edit",
-            "fc83e0d5ef": "⎿ 2103 satır okundu",
-            "80cc356591": "Read",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Dosyalar",
             "94febb0976": "Kaynak kontrolü",
             "8d6516312d": "2 terminal · claude etkin",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Geri"
           },
           "WorktreeListSlide": {
@@ -19692,7 +19669,6 @@
           "failed": "Başarısız",
           "succeeded": "Başarılı",
           "neverRan": "Hiç çalıştırılmadı",
-          "filters": "Filtreler",
           "all": "Tümü",
           "clear": "Filtreleri temizle",
           "agent": "Ajan",
@@ -21914,7 +21890,6 @@
         "expand": "Genişlet"
       },
       "question": {
-        "step": "Adım {{value0}}",
         "otherPlaceholder": "Yanıtınızı yazın",
         "cancel": "İptal",
         "send": "Gönder",
@@ -21926,12 +21901,11 @@
         "recommended": "Önerilen",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "Yanıtlandı",
-        "title": "Soru",
         "previous": "Önceki soru",
         "nextQuestion": "Sonraki soru",
         "back": "Geri",
         "skipAndSubmit": "Atla ve gönder",
-        "stepLabel": "{{value0}}, {{value1}} / {{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}} / {{value2}}"
       },
       "ask": {
         "awaiting": "Kullanıcı girdisi bekleniyor:",
@@ -22115,6 +22089,13 @@
           "followedUp": "Takip",
           "handedOff": "Devredildi",
           "task": "Görev"
+        },
+        "unnamedRecipient": "bir ajan",
+        "event": {
+          "followedUp": "Takip mesajı gönderildi",
+          "update": "Güncelleme",
+          "message": "Mesaj",
+          "handedOff": "Devredildi"
         }
       },
       "goal": {
@@ -22212,6 +22193,7 @@
       "thoughtForDuration": "{{duration}} boyunca düşündü",
       "explicitChatWsl": "Sohbet WSL'de kullanılamıyor. Ajanı bir terminalde açın.",
       "explicitChatSsh": "Sohbet SSH üzerinden kullanılamıyor. Ajanı bir terminalde açın.",
+      "explicitChatWorkspaceAccess": "Orca'nın bu çalışma alanı klasörünü açma izni yok. Klasörün izinlerini kontrol edip yeniden deneyin.",
       "explicitChatUnavailable": "Bu çalışma alanı sohbeti çalıştıramıyor. Ajan kurulumunu kontrol edin veya ajanı bir terminalde açın.",
       "structuredSessionHostDeclined": "{{value0}} bir terminalde açıldı",
       "structuredSessionTerminalNotVisible": "Orca, {{value0}} öğesini terminalde açtı ancak başlatma tamamlandığında burada gösteremedi. Sohbet taslağınız korundu.",
@@ -22963,7 +22945,18 @@
         "unlisted": "Arka plan işi çalışıyor",
         "unread": "Çalışanlar yüklenemedi",
         "unreadDetail": "Çalışanlar yüklendiğinde burada görünecek",
-        "chipLabel": "{{label}}, en son: {{title}}"
+        "chipLabel": "{{label}}, en son: {{title}}",
+        "backgroundCommandCount_one": "{{count}} arka plan komutu",
+        "backgroundCommandCount_other": "{{count}} arka plan komutu",
+        "commandCount_one": "{{count}} komut",
+        "commandCount_other": "{{count}} komut",
+        "mixedRegion": "Çalışanlar ve arka plan komutları",
+        "commandsRegion": "Arka plan komutları",
+        "stopSubagentsAndCommands": "Alt ajanları ve komutları durdur",
+        "workersKeepRunning": "Çalışanlar çalışmaya devam eder",
+        "clearFailedWorkers": "Başarısız çalışanları temizle",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Webhook kur",
@@ -25578,7 +25571,9 @@
       "chatOtherWindow": "Başka bir pencerede oturum açma işlemi sürüyor.",
       "chatPageDidntOpen": "Sayfa açılmadı mı?",
       "chatPasteCode": "Kodu yapıştır",
-      "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi"
+      "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi",
+      "launchesUse": "Yeni agy başlatmaları bu hesabı kullanır",
+      "loginNow": "agy'nin şu anki oturumu"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -28177,7 +28172,7 @@
       "reports": "Raporlar",
       "takesOver": "Devralır",
       "agentsKeepRunning": "Ajanları çalışmaya devam eder.",
-      "uploadDropOrPaste": "Bir görseli <upload>yükleyin</upload>, sürükleyip bırakın veya yapıştırın",
+      "uploadOrPaste": "<upload>Yükleyin</upload> veya yapıştırın",
       "purposeLabel": "Kimlik",
       "purposePlaceholder": "Botun kimliği ve görevi",
       "uploadPasteOrDrop": "veya kendi görselinizi yükleyin, yapıştırın ya da sürükleyip bırakın",

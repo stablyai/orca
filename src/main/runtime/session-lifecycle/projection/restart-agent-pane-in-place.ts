@@ -2,17 +2,14 @@ import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from './resume-agent-ses
 import { retireReplacedPaneBinding } from '../../../ipc/pty/pane/pane-owner-replacement'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { replacedPaneBindingState } from '../../../persistence/loading-store/terminal-bindings/replaced-pane-binding'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeSleepResumeRecorder } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentSessionResumeClaim } from './agent-session-resume-claims'
-import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
-import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
-import { getCodexSelectionTargetForPty } from '../../../ipc/pty/host-env/codex-home'
-import {
-  alignManagedAgentLaunchAtSpawn,
-  type PreselectedAgentProgram
-} from '../../../managed-agent-cli/managed-agent-spawn-program'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import { prepareInPlaceAgentRestart } from './prepare-in-place-agent-restart'
 
 export type AgentPaneRestartRefusal =
   /** Not a live terminal of this host's own (an SSH relay or another server's pane). */
@@ -22,6 +19,9 @@ export type AgentPaneRestartRefusal =
   | 'no_resume_command'
   | 'agent_program_blocked'
   | 'busy'
+  /** The saved layout gives the pane to another terminal or lacks its tab: the binding retire after
+   *  the stop would refuse, leaving no replacement. */
+  | 'saved_layout_differs'
   /** The stop was sent but its exit unconfirmed: the terminal may still end, with no replacement. */
   | 'stop_failed'
   /** Stopped, but no new terminal took the pane: it is left as a slept pane, so its next view
@@ -58,8 +58,9 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     ) {
       return { ok: false, reason: 'not_local' }
     }
-    if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(ptyId)) {
-      return { ok: false, reason: 'viewer_cannot_follow' }
+    const initialRefusal = this.restartRefusalBeforeStop(pty)
+    if (initialRefusal) {
+      return { ok: false, reason: initialRefusal }
     }
     const paneKey = `${pty.worktreeId}\0${tabId}\0${pane.leafId}`
     if (this.agentPaneRestartsByPaneKey.has(paneKey) || !this.ptyController?.stopAndWait) {
@@ -82,42 +83,12 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       if (!resume?.launchRuntime) {
         return { ok: false, reason: 'no_resume_command' }
       }
-      const launchRuntime = resume.launchRuntime
-      let restartRuntime = launchRuntime
-      const cwd = workspace.path
-      const { shellOverride } = launchRuntime.pty
-      const expectedWslDistro = resolveWslSessionContext({ cwd, ...launchRuntime.pty })?.distro
-      const codexRuntime = getCodexSelectionTargetForPty(
-        shellOverride,
-        cwd,
-        expectedWslDistro
-      ).runtime
-      let preselectedAgentProgram: PreselectedAgentProgram | undefined
-      // Verify the replacement before stopping, then reuse its selection at spawn.
-      const aligned = await alignManagedAgentLaunchAtSpawn(
-        {
-          launchCommand: resume.command,
-          launchConfig: resume.launchConfig,
-          launchAgent: resume.launchAgent,
-          env: resume.env,
-          cwd,
-          shellPath: launchRuntime.pty.shellOverride,
-          codexRuntime,
-          expectedWslDistro,
-          restoring: true
-        },
-        agentLaunchQuotingShell(launchRuntime),
-        (program) => {
-          preselectedAgentProgram = program
-          if (program.wslDistro) {
-            restartRuntime = {
-              ...launchRuntime,
-              pty: { ...launchRuntime.pty, terminalWindowsWslDistro: program.wslDistro }
-            }
-          }
-        }
+      const replacement = await prepareInPlaceAgentRestart(
+        resume,
+        resume.launchRuntime,
+        workspace.path
       )
-      if (aligned.blocked) {
+      if (!replacement) {
         return { ok: false, reason: 'agent_program_blocked' }
       }
       const ownPaneKey = makePaneKey(tabId, pane.leafId)
@@ -171,8 +142,9 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       ) {
         return refuse('not_local')
       }
-      if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(ptyId)) {
-        return refuse('viewer_cannot_follow')
+      const refusalBeforeStop = this.restartRefusalBeforeStop(current)
+      if (refusalBeforeStop) {
+        return refuse(refusalBeforeStop)
       }
       let stopped = false
       let blockedReplacement: string | undefined
@@ -236,8 +208,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             startupCommandDelivery: resume.startupCommandDelivery,
             launchConfig: resume.launchConfig,
             launchAgent: resume.launchAgent,
-            launchRuntime: restartRuntime,
-            preselectedAgentProgram,
+            ...replacement,
             resumeProviderSession: resume.resumeProviderSession,
             spawnIntent: 'user-resume',
             // A desktop window that didn't hold the pane isn't shown or focused to the new terminal.
@@ -283,6 +254,30 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     } finally {
       this.agentPaneRestartsByPaneKey.delete(paneKey)
     }
+  }
+
+  /** Checked before program selection and again just before stopping. Refuses a viewer that cannot
+   *  follow the restart or a saved layout that would refuse binding retirement. */
+  protected restartRefusalBeforeStop(
+    pty: RuntimePtyWorktreeRecord
+  ): 'viewer_cannot_follow' | 'saved_layout_differs' | null {
+    if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(pty.ptyId)) {
+      return 'viewer_cannot_follow'
+    }
+    const recorded = this.paneOfPty(pty)
+    const leafId = parsePaneKey(recorded.paneKey ?? '')?.leafId
+    const saved = this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
+    const taken =
+      saved !== undefined &&
+      recorded.tabId !== null &&
+      leafId !== undefined &&
+      replacedPaneBindingState(saved, {
+        worktreeId: pty.worktreeId,
+        tabId: recorded.tabId,
+        leafId,
+        ptyId: pty.ptyId
+      }) === 'taken'
+    return taken ? 'saved_layout_differs' : null
   }
 
   /** The terminal service refuses to reattach a terminal it was told to kill, so the pane's row

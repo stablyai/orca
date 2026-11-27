@@ -13,6 +13,7 @@ import type { StructuredAgentListedSelection } from '../../native-chat/agent-ses
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
 import { antigravityExecutorErrorWords } from './antigravity-executor-error'
+import { antigravityQuotaFailure, isAntigravityQuotaNotice } from './antigravity-quota-notice'
 import {
   ANTIGRAVITY_EFFORT_LEVELS,
   ANTIGRAVITY_LEVEL_SUFFIX
@@ -167,9 +168,23 @@ const RETRY_NOTICE = /^\s*\u26a0 (Model produced invalid output\.)\s*$/
 // server error), and the one when it could not rebuild its agent, whose reason may span lines;
 // Orca's server answers a rejected key or missing gcloud credentials the same way.
 const TURN_FAILURE_NOTICE =
-  /^\s*(?:\u26a0 (?:UNAUTHENTICATED \(code 401\)|agent executor error): [^\n]*|API key not valid\. Please pass a valid API key\.|Agent execution error: failed to create Gemini client: [^\n]*|Agent connection was lost and could not be re-established: Failed to rebuild agent: [\s\S]*)\s*$/
+  /^(?:\u26a0 (?:UNAUTHENTICATED \(code 401\)|agent executor error): [^\n]*|API key not valid\. Please pass a valid API key\.|Agent execution error: failed to create Gemini client: [^\n]*|Agent connection was lost and could not be re-established: Failed to rebuild agent: [\s\S]*)$/
 // agy drops a session whose agent it cannot rebuild; later prompts find no session.
 const REBUILD_FAILED = 'Failed to rebuild agent: '
+
+const FAILURE_NOTICE = {
+  // Trimmed, so no trailing `\s*` follows `[^\n]*`: that pair backtracks quadratically on spaces.
+  test: (text: string) => TURN_FAILURE_NOTICE.test(text.trim()) || isAntigravityQuotaNotice(text)
+}
+
+// Google's sentence for an API error; a quota notice is a usage limit, reset read as observed.
+function noticeFailure(notice: string, at: number) {
+  const words = antigravityExecutorErrorWords(notice)
+  const quota = antigravityQuotaFailure(notice, at)
+  return quota
+    ? { ...(words ?? { failureDetail: notice.replace(/^\u26a0\s*/, '') }), ...quota }
+    : words
+}
 
 // Model options list families; availableModels lists each level as "<family>-<level>".
 function familyEfforts(family: string, models: readonly ModelInfo[]) {
@@ -244,8 +259,12 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   sessionLostNotice: (notice) => notice.includes(REBUILD_FAILED),
   // Not marked signed out: agy may already hold a refreshed token for the next prompt. A Google API
   // error leads with Google's sentence, its full line under Details.
-  notification: (method, params) =>
-    acpReplyNoticeFailure(method, params, TURN_FAILURE_NOTICE, {}, antigravityExecutorErrorWords),
+  notification: (method, params, at) =>
+    acpReplyNoticeFailure(method, params, FAILURE_NOTICE, {}, (notice) =>
+      noticeFailure(notice, at)
+    ),
+  promptFailure: (error, at) =>
+    antigravityQuotaFailure([acpErrorDataWords(error.data), error.message].join('\n'), at),
   providerRetry: (update) => {
     const cause =
       update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'

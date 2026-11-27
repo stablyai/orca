@@ -65,12 +65,14 @@ const discoveredQuery = defineHostQuery({
 
 type McpAgentInventory = { agents: TuiAgent[]; incomplete?: boolean; afterPublication?: number }
 
+// Servers apply to agents in the configured Windows runtime. Older hosts use the native runtime.
 const agentsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, McpAgentInventory>({
   family: 'mcpServers.agents',
   fetch: async (client, _target, _input, previous) => {
     const retryAfter = previous?.incomplete ? previous.afterPublication : undefined
     const { agents, incomplete, afterPublication } = preflightDetectAgentsRead.interpret(
       await preflightDetectAgentsRead.request(client, {
+        configuredWindowsRuntime: true,
         withManagedAgentCommands: true,
         ...(retryAfter === undefined ? {} : { afterPublication: retryAfter })
       })
@@ -133,12 +135,18 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
   const { refetch: refetchDiscovered } = discovered
   const { refetch: refetchAgents } = agents
   const canReadAgents = enabled && client !== null
-  const retryIncompleteAgents = useCallback(() => {
-    const key = hostQueryKey(hostId, agentsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
-    if (canReadAgents && queryClient.getQueryData<McpAgentInventory>(key)?.incomplete) {
-      void refetchAgents({ cancelRefetch: false })
-    }
-  }, [canReadAgents, hostId, queryClient, refetchAgents])
+  const retryAgents = useCallback(
+    (onFocus: boolean) => {
+      const key = hostQueryKey(hostId, agentsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+      // Check inside the callback so an error cannot retrigger the focus read.
+      const state = queryClient.getQueryState<McpAgentInventory>(key)
+      if (canReadAgents && (state?.data?.incomplete || (onFocus && state?.status === 'error'))) {
+        void refetchAgents({ cancelRefetch: false })
+      }
+    },
+    [canReadAgents, hostId, queryClient, refetchAgents]
+  )
+  const retryIncompleteAgents = useCallback(() => retryAgents(false), [retryAgents])
 
   // A host without the capability is never asked, even on focus.
   const reread = useCallback(() => {
@@ -151,8 +159,8 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
   useFocusEffect(
     useCallback(() => {
       reread()
-      retryIncompleteAgents()
-    }, [reread, retryIncompleteAgents])
+      retryAgents(true)
+    }, [reread, retryAgents])
   )
 
   /** A change's answer shows at once; the re-read after it catches what else changed. */

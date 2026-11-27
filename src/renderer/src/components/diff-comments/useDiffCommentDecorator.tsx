@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
 import { getCommentBodyLayoutLineCount } from '@/lib/source-control/review/comments/comment-body-line-count'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   installDiffCommentAddButtonOverlay,
@@ -71,10 +71,7 @@ export function useDiffCommentDecorator({
   worktreeId,
   comments,
   commentableLineNumbers,
-  addButtonLabel = translate(
-    'auto.components.diff.comments.DiffCommentPopover.f6c449191e',
-    'Add note for the AI'
-  ),
+  addButtonLabel,
   pendingCommentTarget = null,
   addNoteShortcutEnabled = false,
   onCreateComment,
@@ -89,6 +86,10 @@ export function useDiffCommentDecorator({
   pendingScrollCommentId,
   onPendingScrollConsumed
 }: DecoratorArgs): void {
+  const t = useTranslate()
+  const resolvedAddButtonLabel =
+    addButtonLabel ??
+    t('auto.components.diff.comments.DiffCommentPopover.f6c449191e', 'Add note for the AI')
   const ownerKey = commentOwner ? diffCommentOwnerKey(commentOwner) : null
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const activeGroupId = useAppStore((s) =>
@@ -162,7 +163,7 @@ export function useDiffCommentDecorator({
     const overlay = installDiffCommentAddButtonOverlay({
       editor,
       editorDomNode,
-      addButtonLabel,
+      addButtonLabel: resolvedAddButtonLabel,
       commentableLineSet,
       hoverLineRef,
       onAddCommentClickRef
@@ -173,7 +174,13 @@ export function useDiffCommentDecorator({
       overlayRef.current = null
       overlay.dispose()
     }
-  }, [addButtonLabel, commentableLineSet, editor, monacoModelIdentity, onAddCommentClickRef])
+  }, [
+    resolvedAddButtonLabel,
+    commentableLineSet,
+    editor,
+    monacoModelIdentity,
+    onAddCommentClickRef
+  ])
 
   const pendingLineNumber = pendingCommentTarget?.lineNumber ?? null
   const pendingStartLine = pendingCommentTarget?.startLine ?? null

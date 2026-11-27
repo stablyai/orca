@@ -94,17 +94,18 @@ const rejectionSchema = lazyZodSchema(() =>
     })
 )
 
-const receiptIdentity = {
+const createReceiptIdentity = () => ({
   operationId: z.string().min(1),
   sessionId: z.string().min(1),
   callerKey: z.string().min(1),
   method: z.string().min(1),
   fingerprint: z.string().min(1),
   acceptedAt: z.int().nonnegative()
-}
+})
 
-export const commandReceiptSchema = lazyZodSchema(() =>
-  z.discriminatedUnion('status', [
+export const commandReceiptSchema = lazyZodSchema(() => {
+  const receiptIdentity = createReceiptIdentity()
+  return z.discriminatedUnion('status', [
     z.strictObject({
       ...receiptIdentity,
       status: z.literal('accepted'),
@@ -116,7 +117,7 @@ export const commandReceiptSchema = lazyZodSchema(() =>
       rejection: rejectionSchema
     })
   ])
-)
+})
 
 export type CommandReceipt = z.infer<typeof commandReceiptSchema>
 

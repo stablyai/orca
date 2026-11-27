@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AnnotatePalettePosition } from './annotate-palette-position-store'
 import { usePaletteDrag } from './use-palette-drag'
+import { PALETTE_BOTTOM_INSET_PX, PALETTE_EDGE_INSET_PX } from './palette-placement'
 
 // Where the palette rests and what it saves, through the real pointer and key handlers.
 let notifyResize: (() => void) | null = null
@@ -67,7 +68,8 @@ beforeEach(() => {
   }
   size('clientWidth', () => sizes.bounds)
   size('offsetWidth', () => sizes.palette)
-  size('clientHeight', () => sizes.boundsHeight)
+  // Plus the extra bottom gap, so the layout height is boundsHeight.
+  size('clientHeight', () => sizes.boundsHeight + PALETTE_BOTTOM_INSET_PX - PALETTE_EDGE_INSET_PX)
   size('offsetHeight', () => sizes.paletteHeight)
   Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
     configurable: true,

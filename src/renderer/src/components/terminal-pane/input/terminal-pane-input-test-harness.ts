@@ -33,3 +33,35 @@ export async function openKittyPane(
   terminal.onData((data) => sent.push(data))
   return { sent, textarea }
 }
+
+export function nextEventLoop(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 0))
+}
+
+export function dispatchKey(
+  textarea: HTMLTextAreaElement,
+  type: 'keydown' | 'keyup',
+  key: string,
+  code: string,
+  keyCode: number
+): boolean {
+  const event = new KeyboardEvent(type, { key, code, bubbles: true, cancelable: true })
+  // happy-dom drops keyCode from KeyboardEventInit; xterm and the IME policy read it.
+  Object.defineProperty(event, 'keyCode', { value: keyCode })
+  textarea.dispatchEvent(event)
+  return event.defaultPrevented
+}
+
+export function dispatchImeInput(
+  textarea: HTMLTextAreaElement,
+  type: 'beforeinput' | 'input',
+  inputType: string,
+  data: string | null
+): void {
+  const event = new InputEvent(type, { bubbles: true, cancelable: type === 'beforeinput' })
+  // happy-dom ignores these InputEventInit fields; Chromium reports them on IME edits.
+  Object.defineProperty(event, 'inputType', { value: inputType })
+  Object.defineProperty(event, 'data', { value: data })
+  Object.defineProperty(event, 'composed', { value: true })
+  textarea.dispatchEvent(event)
+}

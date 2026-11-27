@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import {
   pendingAcpResolution,
@@ -50,12 +51,14 @@ export function acpPermissionPresentation(
   }
 }
 
-const requestSessionSchema = z.object({ sessionId: z.string() })
+const requestSessionSchema = lazyZodSchema(() => z.object({ sessionId: z.string() }))
 const UNADVERTISED_CLIENT_METHOD = /^(?:fs|terminal)\//
-const requestToolSchema = z.object({
-  toolCallId: z.string().optional(),
-  toolCall: z.object({ toolCallId: z.string() }).optional()
-})
+const requestToolSchema = lazyZodSchema(() =>
+  z.object({
+    toolCallId: z.string().optional(),
+    toolCall: z.object({ toolCallId: z.string() }).optional()
+  })
+)
 
 export function translateAcpRequest(
   method: string,
