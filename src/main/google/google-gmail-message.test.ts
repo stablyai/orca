@@ -29,7 +29,12 @@ it('keeps mixed body sections while selecting each nested alternative and exclud
           }
         ]
       },
-      { ...textPart('text/plain', 'Attached note'), filename: 'note.txt' }
+      { ...textPart('text/plain', 'Attached note'), filename: 'note.txt' },
+      {
+        ...textPart('text/html', '<p>Attached document</p>'),
+        filename: '',
+        headers: [{ name: 'Content-Disposition', value: 'ATTACHMENT; filename=""' }]
+      }
     ]
   }
   expect(bodyText(message)).toBe('First section\nSecond section')
@@ -56,6 +61,18 @@ it('does not let related CID resources replace the preferred plain body', () => 
       ...related,
       headers: [{ name: 'Content-Type', value: 'multipart/related; start="<body>"' }],
       parts: [resource, root]
+    })
+  ).toBe('HTML body')
+  expect(
+    bodyText({
+      ...related,
+      headers: [
+        {
+          name: 'Content-Type',
+          value: 'multipart/related; name="quoted = value"; start \t= \t"<body>"'
+        }
+      ],
+      parts: [{ mimeType: 'image/png' }, root]
     })
   ).toBe('HTML body')
 })

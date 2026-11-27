@@ -68,7 +68,14 @@ function decode(data: string | undefined): string {
 /** Keep mixed sections in order; prefer plain text within each alternative. */
 export function bodyText(part: Part | undefined): string {
   const select = (node: Part): Part[] => {
-    if (node.filename) {
+    if (
+      node.filename ||
+      node.headers?.some(
+        (entry) =>
+          entry.name.toLowerCase() === 'content-disposition' &&
+          entry.value.split(';', 1)[0].trim().toLowerCase() === 'attachment'
+      )
+    ) {
       return []
     }
     if (node.mimeType === 'text/plain' || node.mimeType === 'text/html') {
@@ -81,7 +88,12 @@ export function bodyText(part: Part | undefined): string {
       )?.value
       let contentId: string | null = null
       try {
-        contentId = new MIMEType(contentType ?? 'multipart/related').params.get('start')
+        // MIME permits whitespace around =; preserve quoted parameter values while trimming it.
+        const normalized = contentType?.replace(
+          /("(?:\\.|[^"\\])*")|[ \t]*=[ \t]*/g,
+          (_token, quoted: string | undefined) => quoted ?? '='
+        )
+        contentId = new MIMEType(normalized ?? 'multipart/related').params.get('start')
       } catch {
         // A missing or malformed header retains the implicit first-part root.
       }
