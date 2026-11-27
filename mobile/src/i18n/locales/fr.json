@@ -4836,7 +4836,10 @@
       "repository": "Dépôt",
       "repositoryNotFound": "Dépôt introuvable.",
       "selectRepository": "Sélectionner un dépôt",
-      "startFrom": "À partir de"
+      "startFrom": "À partir de",
+      "createWorkspace": "Créer un espace de travail",
+      "nameSection": "Nom de l'espace de travail",
+      "connectRepositoryAction": "Connecter le dépôt"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "Un préréglage nommé « {{name}} » existe déjà.",

@@ -4699,7 +4699,10 @@
       "repository": "Repository",
       "repositoryNotFound": "Repository nicht gefunden.",
       "selectRepository": "Repository auswählen",
-      "startFrom": "Ausgangspunkt"
+      "startFrom": "Ausgangspunkt",
+      "createWorkspace": "Arbeitsbereich erstellen",
+      "nameSection": "Arbeitsbereichsname",
+      "connectRepositoryAction": "Repository verbinden"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "„{{name}}“ ist bereits vorhanden.",

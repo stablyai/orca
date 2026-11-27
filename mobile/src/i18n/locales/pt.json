@@ -4798,7 +4798,10 @@
       "repository": "Repositório",
       "repositoryNotFound": "Repositório não encontrado.",
       "selectRepository": "Selecione um repositório",
-      "startFrom": "Iniciar a partir de"
+      "startFrom": "Iniciar a partir de",
+      "createWorkspace": "Criar Espaço de Trabalho",
+      "nameSection": "Nome do Espaço de Trabalho",
+      "connectRepositoryAction": "Conectar Repositório"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "\"{{name}}\" já existe.",

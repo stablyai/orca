@@ -5354,7 +5354,10 @@
       "repository": "Репозиторий",
       "repositoryNotFound": "Репозиторий не найден.",
       "selectRepository": "Выберите репозиторий",
-      "startFrom": "Начать с"
+      "startFrom": "Начать с",
+      "createWorkspace": "Создать рабочее пространство",
+      "nameSection": "Название рабочего пространства",
+      "connectRepositoryAction": "Подключить репозиторий"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "«{{name}}» уже существует.",

@@ -5018,7 +5018,10 @@
       "repository": "存放庫",
       "repositoryNotFound": "找不到存放庫。",
       "selectRepository": "選擇存放庫",
-      "startFrom": "起始來源"
+      "startFrom": "起始來源",
+      "createWorkspace": "建立工作區",
+      "nameSection": "工作區名稱",
+      "connectRepositoryAction": "連線存放庫"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "「{{name}}」已存在。",

@@ -5027,7 +5027,10 @@
       "repository": "저장소",
       "repositoryNotFound": "저장소를 찾을 수 없습니다.",
       "selectRepository": "저장소 선택",
-      "startFrom": "시작 기준"
+      "startFrom": "시작 기준",
+      "createWorkspace": "워크스페이스 생성",
+      "nameSection": "워크스페이스 이름",
+      "connectRepositoryAction": "저장소 연결"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "\"{{name}}\"이(가) 이미 존재합니다.",

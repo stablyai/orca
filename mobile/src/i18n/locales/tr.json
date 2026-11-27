@@ -5070,7 +5070,10 @@
       "repository": "Repository",
       "repositoryNotFound": "Repository bulunamadı.",
       "selectRepository": "Bir repository seçin",
-      "startFrom": "Başlangıç noktası"
+      "startFrom": "Başlangıç noktası",
+      "createWorkspace": "Çalışma Alanı Oluştur",
+      "nameSection": "Çalışma Alanı Adı",
+      "connectRepositoryAction": "Repository'ye Bağlan"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "“{{name}}” zaten var.",

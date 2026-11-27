@@ -5093,7 +5093,10 @@
       "repository": "仓库",
       "repositoryNotFound": "未找到仓库",
       "selectRepository": "选择仓库",
-      "startFrom": "创建起点"
+      "startFrom": "创建起点",
+      "createWorkspace": "创建工作区",
+      "nameSection": "工作区名称",
+      "connectRepositoryAction": "连接仓库"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "“{{name}}”已存在",

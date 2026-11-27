@@ -4694,7 +4694,10 @@
       "repository": "リポジトリ",
       "repositoryNotFound": "リポジトリが見つかりません。",
       "selectRepository": "リポジトリを選択",
-      "startFrom": "作成元"
+      "startFrom": "作成元",
+      "createWorkspace": "ワークスペースを作成",
+      "nameSection": "ワークスペース名",
+      "connectRepositoryAction": "リポジトリに接続"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "「{{name}}」は既に存在します。",
