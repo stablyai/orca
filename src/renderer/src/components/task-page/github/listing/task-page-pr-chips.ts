@@ -21,6 +21,17 @@ const PR_PRESET_BY_WHO: Record<GitHubPRWhoChip, TaskViewPresetId> = {
 /** Patch the query's qualifiers, keeping every other filter and free text. */
 export function patchGitHubTaskQuery(query: string, change: PRFilterChange): string {
   let next = query
+  if (change.selection) {
+    const { qualifier, value, selected } = change.selection
+    const parsed = parseTaskQuery(next)
+    const selectedKey = value.toLowerCase()
+    const values = parsed[qualifier].filter((entry) => entry.toLowerCase() !== selectedKey)
+    if (selected) {
+      values.push(value)
+    }
+    parsed[qualifier] = values
+    next = serializeTaskQuery(parsed)
+  }
   if ('authors' in change) {
     next = withQualifier(next, 'authors', change.authors ?? [])
   }

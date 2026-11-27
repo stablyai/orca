@@ -1,5 +1,5 @@
 import type { TaskPageGitHubListProjectionModel } from './use-task-page-github-list-projection'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { stripRepoQualifiers } from '../../../../../../shared/work-items/task-query'
 import { taskPageToGitHubApiPage } from '../../../../../../shared/work-items/work-item-pagination'
 import {
@@ -13,6 +13,7 @@ import { overlayPendingOnTaskPagePages } from '@/components/task-page/github/mut
 import { scopeGitHubTaskSearch } from '../../../../../../shared/work-items/task-github-search'
 import { useGitHubTaskSearchCommit } from '@/components/task-page/github/listing/use-github-task-search-commit'
 import { getTaskPageGitHubRepoArgs } from '@/components/task-page/task-page-source-context'
+import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProjectionModel) {
   const {
     setTaskResumeState,
@@ -23,6 +24,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     appliedTaskSearch,
     setAppliedTaskSearch,
     activeTaskPreset,
+    setActiveTaskPreset,
     setTasksFiltering,
     paginationGenerationRef,
     githubPerRepoPageLimit,
@@ -42,6 +44,11 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     activeGithubTaskKind,
     unreachableTaskSourceHostIds
   } = model
+  const filteredDraftResumeRef = useRef<{
+    appliedQuery: string
+    githubItemsPreset: TaskViewPresetId | null
+    githubItemsQuery: string
+  } | null>(null)
   // Why: load only the clicked page so a high-page jump doesn't exhaust GitHub's Search API rate bucket.
   const handleLoadNextPage = useCallback(
     async (targetPage?: number) => {
@@ -175,12 +182,23 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
   const commitTaskSearch = useCallback(
     (value: string): void => {
       const scoped = scopeGitHubTaskSearch(value, activeGithubTaskKind)
+      const filteredDraft = filteredDraftResumeRef.current
+      filteredDraftResumeRef.current = null
       if (scoped !== appliedTaskSearch) {
+        setActiveTaskPreset(
+          filteredDraft?.githubItemsQuery === scoped ? filteredDraft.githubItemsPreset : null
+        )
         setTasksFiltering(true)
       }
       setAppliedTaskSearch(scoped)
     },
-    [activeGithubTaskKind, appliedTaskSearch, setTasksFiltering, setAppliedTaskSearch]
+    [
+      activeGithubTaskKind,
+      appliedTaskSearch,
+      setActiveTaskPreset,
+      setTasksFiltering,
+      setAppliedTaskSearch
+    ]
   )
   useGitHubTaskSearchCommit({
     enabled: taskResumeApplied,
@@ -188,12 +206,26 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     value: taskSearchInput
   })
   useEffect(() => {
+    return () => {
+      const resume = filteredDraftResumeRef.current
+      if (resume) {
+        setTaskResumeState({
+          githubItemsPreset: resume.githubItemsPreset,
+          githubItemsQuery: resume.githubItemsQuery
+        })
+      }
+    }
+  }, [setTaskResumeState])
+  useEffect(() => {
     if (!taskResumeApplied) {
       return
     }
     if (!githubSearchPersistReadyRef.current) {
       githubSearchPersistReadyRef.current = true
       return
+    }
+    if (filteredDraftResumeRef.current?.appliedQuery !== appliedTaskSearch) {
+      filteredDraftResumeRef.current = null
     }
     // Why: persist the applied query unconditionally to cover paths that change appliedTaskSearch outside the preset handler.
     setTaskResumeState({
@@ -207,13 +239,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     taskResumeApplied,
     githubSearchPersistReadyRef
   ])
-  const nextModel = model as typeof model & {
-    handleLoadNextPage: typeof handleLoadNextPage
-    commitTaskSearch: typeof commitTaskSearch
-  }
-  nextModel.handleLoadNextPage = handleLoadNextPage
-  nextModel.commitTaskSearch = commitTaskSearch
-  return nextModel
+  return Object.assign(model, { handleLoadNextPage, commitTaskSearch, filteredDraftResumeRef })
 }
 export type TaskPageGitHubSearchPaginationModel = ReturnType<
   typeof useTaskPageGitHubSearchPagination
