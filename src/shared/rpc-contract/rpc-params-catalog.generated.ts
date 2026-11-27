@@ -71,6 +71,7 @@ import { DelegatedMobileDeviceSyncParamsSchema } from '../remote-runtime/pairing
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { DeclareOrcaAccountParamsSchema } from '../remote-runtime/pairing/paired-desktop-account-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
+import { PairingGetDirectEndpointsParamsSchema } from '../remote-runtime/pairing/pairing-direct-endpoints-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
@@ -271,7 +272,9 @@ import { ExtensionList, ExtensionReload } from './browser/browser-extension-para
 import { DropFiles, MouseClick } from './browser/browser-extras-params'
 import {
   GrabAwait,
+  GrabCancel,
   GrabCaptureSelection,
+  GrabPickedPresent,
   GrabSetMode,
   GrabViewportBridge
 } from './browser/browser-grab-params'
@@ -387,7 +390,8 @@ import {
   ConnectorReply,
   ConnectorSlackMirrorPost,
   ConnectorSlackMirrorSet,
-  ConnectorSlackMirrorStatus
+  ConnectorSlackMirrorStatus,
+  ConnectorWakeReplyPlace
 } from './connectors/connector-params'
 import {
   AttachParams as AttachParamsOfEmulatorParams,
@@ -1462,9 +1466,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.get': Get,
   'browser.goto': Goto,
   'browser.grab.await': GrabAwait,
-  'browser.grab.cancel': BrowserTarget,
+  'browser.grab.cancel': GrabCancel,
   'browser.grab.captureSelection': GrabCaptureSelection,
   'browser.grab.extractHover': BrowserTarget,
+  'browser.grab.pickedPresent': GrabPickedPresent,
   'browser.grab.setMode': GrabSetMode,
   'browser.grab.viewportBridge': GrabViewportBridge,
   'browser.grab.watch': BrowserTarget,
@@ -1571,6 +1576,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
   'connector.slackMirror.set': ConnectorSlackMirrorSet,
   'connector.slackMirror.status': ConnectorSlackMirrorStatus,
+  'connector.wakeReplyPlace': ConnectorWakeReplyPlace,
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.downloadAbort': DesktopBrowserBridgeDownloadAbortParams,
@@ -2054,6 +2060,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.createOffer': PairingCreateOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
+  'pairing.getDirectEndpoints': PairingGetDirectEndpointsParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,

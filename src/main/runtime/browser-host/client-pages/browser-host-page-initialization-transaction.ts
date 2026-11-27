@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { BrowserHostPagePlacementRegistry } from '../reconciliation/browser-host-page-placement'
 import type { BrowserClientPageExecutionHostGrant } from './browser-host-client-page-creation'
@@ -83,13 +84,14 @@ export async function runInitializationTransaction(
     if (typeof result.value !== 'string' || !reservation) {
       throw new Error('browser_client_page_initialization_result_invalid')
     }
+    const completedUrl = redactKagiSessionToken(result.value)
     const placement = authority.placements.commitClientPageReservation(reservation)
     const grant = { placement, executionHostKey, release: operation.releaseGrant }
     authority.grants.set(record.browserPageId, grant)
     try {
       record.expected = placement
       operation.phase = 'published'
-      input.publish(placement, result.value, executionHostKey)
+      input.publish(placement, completedUrl, executionHostKey)
       if (
         record.closed ||
         operation.detached ||
@@ -99,7 +101,7 @@ export async function runInitializationTransaction(
         throw new Error('browser_client_page_initialization_stale')
       }
       published = true
-      input.completed?.(result.value)
+      input.completed?.(completedUrl)
       operation.releaseGrant = undefined
       record.target = undefined
     } catch (error) {

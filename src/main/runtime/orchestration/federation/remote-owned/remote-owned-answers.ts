@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import {
   RemoteRuntimeClientError,
   type RemoteRuntimePairingStage
@@ -8,10 +9,14 @@ import { UnsentRequestError } from '../unsent-request-error'
 import { serverAnswered } from './remote-owed-actions'
 import type { RemoteForwardKey } from './remote-forward-caller'
 
-const WorktreeEffects = z.object({
-  effects: z.array(z.unknown())
-})
-const WorktreeEffect = z.object({ kind: z.literal('worktree'), id: z.string().min(1) })
+const WorktreeEffects = lazyZodSchema(() =>
+  z.object({
+    effects: z.array(z.unknown())
+  })
+)
+const WorktreeEffect = lazyZodSchema(() =>
+  z.object({ kind: z.literal('worktree'), id: z.string().min(1) })
+)
 
 /** The workspace a server's start (or follow-up) answer says its worker runs in, created or reused. */
 export function answeredWorktreeId(answer: unknown): string | null {

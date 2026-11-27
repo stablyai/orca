@@ -1,3 +1,4 @@
+import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import type { AppState } from '../../../types'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
@@ -82,6 +83,7 @@ export function collectSurfacePurgeDoomedIds(
   for (const workspaceId of doomedBrowserWorkspaceIds) {
     for (const page of s.browserPagesByWorkspace[workspaceId] ?? []) {
       doomedPageIds.add(page.id)
+      discardKagiPrivateInitialNavigation(page.id)
     }
   }
   return {

@@ -1,5 +1,6 @@
 // The machine's webhook routes in Orca Cloud, as calls; the paths and answers are the shared mirror's.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   WEBHOOK_OPERATIONS,
   WEBHOOK_ROUTES
@@ -35,7 +36,7 @@ type WebhookRequestBody<K extends WebhookOperationWithBody> = Omit<
   'v'
 >
 
-export const CloudWebhookList = z.object({ hooks: z.array(WebhookView) })
+export const CloudWebhookList = lazyZodSchema(() => z.object({ hooks: z.array(WebhookView) }))
 
 type Cloud = Pick<ConnectorCloud, 'call' | 'withConnection'>
 
