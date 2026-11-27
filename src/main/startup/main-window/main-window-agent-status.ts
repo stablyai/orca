@@ -13,6 +13,26 @@ export type MainWindowAgentStatusOptions = {
   onRecordAgentState: (agentType: string, status: string) => void
 }
 
+function retainLiveCustomTitleForProviderSession(args: {
+  providerSessionId?: string
+  tabId?: string
+  paneKey: string
+}): void {
+  const runtime = state.core.runtime
+  const sessionId = args.providerSessionId
+  if (!runtime || !sessionId || runtime.getSessionCustomTitle(sessionId)) {
+    return
+  }
+  const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(args.paneKey)
+  const customTitle = runtime.readLiveTerminalCustomTitle({
+    tabId: args.tabId,
+    ...(terminalHandle ? { terminalHandle } : {})
+  })
+  if (customTitle) {
+    runtime.setSessionCustomTitle(sessionId, customTitle)
+  }
+}
+
 export function installMainWindowAgentStatusListeners(options: MainWindowAgentStatusOptions): void {
   agentHookServer.setListener((row) => {
     const {
@@ -43,6 +63,11 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       identityOnly,
       agentPresence
     } = row
+    retainLiveCustomTitleForProviderSession({
+      providerSessionId: providerSession?.id,
+      tabId,
+      paneKey
+    })
     if (state.mainWindow?.isDestroyed()) {
       return
     }

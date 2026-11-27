@@ -32,6 +32,7 @@ export function useAiVaultSessionDisplayTitle(
       ? tab.customLabel
       : undefined
   })
+  const userCustomTitle = customLabel?.trim() || session.customTitle?.trim() || null
   const terminalTabTitle = useAppStore((state) =>
     // Why: the pane matcher is host-blind, and unknown worktrees must not default to local.
     !owner &&
@@ -57,8 +58,11 @@ export function useAiVaultSessionDisplayTitle(
   }
   return owner
     ? {
-        title: structuredChatDisplayName(customLabel, naming.name, session.title),
+        title: structuredChatDisplayName(userCustomTitle, naming.name, session.title),
         forked: naming.forkSourceId !== null
       }
-    : { title: terminalTabTitle || savedTerminalName || session.title, forked: false }
+    : {
+        title: terminalTabTitle || userCustomTitle || savedTerminalName || session.title,
+        forked: false
+      }
 }

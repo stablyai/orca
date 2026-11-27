@@ -121,6 +121,7 @@ export type AiVaultSession = {
   agent: AiVaultAgent
   sessionId: string
   title: string
+  customTitle?: string | null
   /** Claude and Codex only: whether `title` is the session's own name or a stand-in; absent means unclassified. */
   titleKind?: AiVaultSessionTitleKind
   cwd: string | null

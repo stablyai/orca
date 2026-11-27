@@ -174,6 +174,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = laz
       'closedTerminalTabTombstonesByTabId',
       salvagingRecord(terminalTabIdSchema, closedTerminalTabTombstoneSchema)
     ),
+    sessionCustomTitles: salvagedOptional(
+      'sessionCustomTitles',
+      salvagingRecord(z.string(), z.string().min(1).max(256))
+    ),
     closedTerminalPanesByPaneKey: salvagedOptional(
       'closedTerminalPanesByPaneKey',
       salvagingRecord(z.string().min(1), closedTerminalPaneSchema)

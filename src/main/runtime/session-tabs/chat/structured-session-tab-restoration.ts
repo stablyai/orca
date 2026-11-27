@@ -168,6 +168,10 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
 
   /** The caller owns the store write; this publishes only its current raw surface. */
   projectStructuredAgentSessionTab(input: StructuredSessionRawPublicationInput): void {
+    const customTitle = this.getSessionCustomTitle(input.sessionId)
+    const priorTabIds = new Set(
+      this.mobileSessionTabsByWorktree.get(input.workspaceId)?.tabs.map((tab) => tab.id)
+    )
     // Publication supplies the owner's result, including an explicit absence; direct restores read it.
     const savedOrder =
       'savedOrder' in input
@@ -176,8 +180,29 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
             !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
           ? this.savedStructuredSessionTabOrder(input.workspaceId)
           : undefined
-    projectStructuredSessionTab(this, { ...input, savedOrder }, (snapshot) =>
-      this.emitMobileSessionTabsSnapshot(snapshot)
+    projectStructuredSessionTab(
+      {
+        mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+        storeMobileSessionSnapshot: (workspaceId, snapshot) =>
+          this.storeMobileSessionSnapshot(
+            workspaceId,
+            // Why: the extracted publisher names a new chat with the agent default; resume must keep the terminal's stored name.
+            customTitle
+              ? {
+                  ...snapshot,
+                  tabs: snapshot.tabs.map((tab) =>
+                    tab.type === 'agent-session' &&
+                    tab.sessionId === input.sessionId &&
+                    !priorTabIds.has(tab.id)
+                      ? { ...tab, title: customTitle, customTitle }
+                      : tab
+                  )
+                }
+              : snapshot
+          )
+      },
+      { ...input, savedOrder },
+      (snapshot) => this.emitMobileSessionTabsSnapshot(snapshot)
     )
   }
 

@@ -117,10 +117,10 @@ export function createTerminalTabCreationActions(
           ptyId: options?.initialPtyId ?? null,
           worktreeId,
           // Why: reuse the lowest free ordinal so a fresh terminal stays "Terminal 1" after older tabs close, not a monotonic counter.
-          title: defaultTitle,
+          title: options?.customTitle || defaultTitle,
           defaultTitle,
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
-          customTitle: null,
+          customTitle: options?.customTitle ?? null,
           color: null,
           sortOrder: existing.length,
           createdAt: Date.now(),

@@ -1,3 +1,4 @@
+import { clearMobileAiVaultMemoryCache } from '../agent-history/mobile-ai-vault-session-cache'
 import {
   pendingSelectionHandle,
   pendingSelectionTabId,
@@ -84,6 +85,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     unsubscribeTerminal,
     subscribeToTerminal,
     fetchTerminals,
+    fetchSessionTabs,
     showToast,
     switchSessionTab,
     switchSessionTabRef
@@ -111,7 +113,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       return
     }
     const title = value.trim()
+    clearMobileAiVaultMemoryCache()
     await terminalRenameWrite.mutate({ terminal: target.handle, title }, { onPhase })
+    clearMobileAiVaultMemoryCache()
     setTerminals((prev) => {
       const next = prev.map((terminal) =>
         terminal.handle === target.handle ? { ...terminal, title: title || 'Terminal' } : terminal
@@ -119,7 +123,17 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       terminalsRef.current = next
       return next
     })
-    scheduleDelayedAction(() => void fetchTerminals(), 300)
+    const nextSessionTabs = sessionTabsRef.current.map((tab) =>
+      tab.type === 'terminal' && tab.terminal === target.handle
+        ? { ...tab, title: title || 'Terminal' }
+        : tab
+    )
+    sessionTabsRef.current = nextSessionTabs
+    setSessionTabs(nextSessionTabs)
+    scheduleDelayedAction(() => {
+      void fetchTerminals()
+      void fetchSessionTabs()
+    }, 300)
     // A sheet reopened for another terminal while this one was in flight stays open.
     setRenameTarget((current) => (current === target ? null : current))
   }

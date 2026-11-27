@@ -86,6 +86,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
   >
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
   getSummary: RuntimeWorktreePsSummaryLookup
+  getSessionCustomTitle?: (sessionId: string) => string | null
+  getTabCustomTitle?: (tabId: string) => string | null
   conversationName?: (source: RuntimeWorktreeAgentSource) => string | null
   /** The desktop window's Agents-list verdicts; null when no window has published them. */
   agentList?: AgentListPublication | null
@@ -104,6 +106,12 @@ export function attachRuntimeWorktreeAgentRows(args: {
       continue
     }
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
+    const customTitle =
+      (source.tabId ? args.getTabCustomTitle?.(source.tabId)?.trim() : null) ||
+      (source.providerSession?.id
+        ? args.getSessionCustomTitle?.(source.providerSession.id)?.trim()
+        : null) ||
+      null
     const parentPaneKey = orchestration?.parentPaneKey ?? null
     const { taskTitle, displayName, conversationName } = runtimeWorktreeAgentRowNames(
       source,
@@ -121,8 +129,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),
       agentType: source.agentType,
       prompt: source.prompt,
-      taskTitle,
-      displayName,
+      taskTitle: customTitle ?? taskTitle,
+      displayName: customTitle ?? displayName,
       ...(conversationName ? { conversationName } : {}),
       ...(conversationName && forked(source.tabId) ? { conversationForked: true as const } : {}),
       lastAssistantMessage: source.lastAssistantMessage,

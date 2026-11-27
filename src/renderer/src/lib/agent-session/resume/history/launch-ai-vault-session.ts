@@ -26,6 +26,7 @@ export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
   worktreeId: string
   command: string
+  customTitle?: string | null
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
@@ -89,6 +90,7 @@ export function launchAiVaultSessionInNewTab(args: {
   const tab = store.createTab(args.worktreeId, args.targetGroupId, undefined, {
     ...(split ? { split } : {}),
     ...(args.cwd ? { startupCwd: args.cwd } : {}),
+    ...(args.customTitle ? { customTitle: args.customTitle } : {}),
     pendingStartup: {
       command: args.command,
       ...(args.env ? { env: args.env } : {}),
@@ -102,8 +104,9 @@ export function launchAiVaultSessionInNewTab(args: {
       }
     }
   })
-  if (savedName) {
-    store.setTabCustomTitle(tab.id, savedName, { recordInteraction: false })
+  const title = args.customTitle || savedName
+  if (title) {
+    store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
   }
   store.setActiveTabType('terminal', args.worktreeId)
 
