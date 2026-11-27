@@ -57,7 +57,6 @@ export type ProviderLoadActionsInput = Pick<
   | 'keepSettings'
   | 'linearAccountBindingRef'
   | 'jiraAccountBindingRef'
-  | 'setError'
   | 'setJiraConnection'
   | 'jiraStatusRequestIdRef'
   | 'setLinearConnected'
@@ -82,7 +81,6 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     keepSettings,
     linearAccountBindingRef,
     jiraAccountBindingRef,
-    setError,
     setJiraConnection,
     jiraStatusRequestIdRef,
     setLinearConnected,
@@ -125,12 +123,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       if (result.ok === false) {
         throw new Error(result.error ?? 'Failed to connect Jira')
       }
-      // The token is saved; a failed status read is a screen error, not a failed connect.
-      await refreshJiraConnection(target).catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Failed to read Jira status')
-      })
+      // A failed status read keeps the sheet open with its error; Connect again re-saves the same site.
+      await refreshJiraConnection(target)
     },
-    [client, connState, refreshJiraConnection, setError]
+    [client, connState, refreshJiraConnection]
   )
 
   const loadLinearContext = useCallback(async (): Promise<void> => {
