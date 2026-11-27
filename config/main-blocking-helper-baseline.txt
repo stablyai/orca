@@ -863,7 +863,6 @@
 4 src/main/orcad/account-launch/orcad-host-account-launch-env-store.ts
 2 src/main/orcad/account-launch/orcad-wsl-host-claude-profile-refresh.ts
 3 src/main/orcad/artifact-slots/orcad-artifact-cache-retention.ts
-1 src/main/orcad/artifact-slots/orcad-artifact-identity.ts
 1 src/main/orcad/artifact-slots/orcad-artifact-materializer.ts
 3 src/main/orcad/artifact-slots/orcad-daemon-slot-pins.ts
 2 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
@@ -919,8 +918,7 @@
 2 src/main/orcad/profile-state/orcad-host-identity-reset.ts
 3 src/main/orcad/profile-state/orcad-profile-state-startup.ts
 6 src/main/orcad/runtime-launch/orcad-bundled-runtime.ts
-9 src/main/orcad/runtime-launch/orcad-profile-preflight.ts
-1 src/main/orcad/runtime-launch/orcad-startup-qualification.ts
+7 src/main/orcad/runtime-launch/orcad-profile-preflight.ts
 3 src/main/orcad/runtime-launch/windows-breakaway-launcher.ts
 6 src/main/orcad/serve-startup/orcad-cli-launcher.ts
 3 src/main/orcad/serve-startup/orcad-command-startup.ts

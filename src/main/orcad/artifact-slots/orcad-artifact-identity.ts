@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import {
@@ -17,15 +17,28 @@ import {
 import { orcadAgentBrowserNativeName } from '../../../shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
 
 /** Hash installed bytes in the build's order; a version marker is not proof of delivery. */
-export async function readOrcadArtifactIdentity(directory: string): Promise<string> {
+export async function readOrcadArtifactIdentity(
+  directory: string,
+  recordFile?: (file: OrcadArtifactDigest) => void,
+  signal?: AbortSignal
+): Promise<string> {
   const hash = createHash('sha256')
   for (const filename of await listOrcadArtifactFilenames(directory)) {
-    for await (const chunk of createReadStream(join(directory, filename))) {
+    const own = recordFile && createHash('sha256')
+    let size = 0
+    for await (const chunk of createReadStream(join(directory, filename), { signal })) {
       hash.update(chunk)
+      own?.update(chunk)
+      size += chunk.length
+    }
+    if (own) {
+      recordFile?.({ filename, size, sha256: own.digest('hex') })
     }
   }
   return `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
 }
+
+export type OrcadArtifactDigest = { filename: string; sha256: string; size: number }
 
 /** The installed files the artifact identity covers, in the build's order. */
 export async function listOrcadArtifactFilenames(directory: string): Promise<string[]> {
@@ -46,7 +59,11 @@ export async function listOrcadArtifactFilenames(directory: string): Promise<str
     target,
     orcadMobileWebAssetFilenames(await readFile(join(directory, ORCAD_MOBILE_WEB_MANIFEST), 'utf8'))
   )
-  if (existsSync(join(directory, browser))) {
+  const hasBrowser = await access(join(directory, browser)).then(
+    () => true,
+    () => false
+  )
+  if (hasBrowser) {
     filenames.push(browser)
   }
   return filenames

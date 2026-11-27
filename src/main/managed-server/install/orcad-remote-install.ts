@@ -6,6 +6,7 @@ import {
 import { orcadAgentBrowserNativeName } from '../../../shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
+import { installMacOrcadBundle } from './macos-orcad-bundle-upload'
 import { recordedRemoteNodeRuntimeProbeCommand } from './orcad-remote-node-runtime-recorded-probe'
 import { cachedOrcadSlotInstalled } from './orcad-remote-install-cached-probe'
 import {
@@ -63,7 +64,7 @@ export async function installOrcadBundle(
     return 'reused'
   }
   // Existing slot bytes are unusable without their referenced runtime.
-  await ensureRemoteOrcadNodeRuntime({
+  const runtime = await ensureRemoteOrcadNodeRuntime({
     conn: options.conn,
     host: options.host,
     slotDir: remoteDir,
@@ -133,6 +134,18 @@ export async function installOrcadBundle(
       })
     ) {
       return 'reused'
+    }
+    if (options.host.os === 'darwin') {
+      return await installMacOrcadBundle(
+        conn,
+        options.localOrcadDir,
+        remoteDir,
+        runtime.executable,
+        fullVersion,
+        options.host,
+        token,
+        signal
+      )
     }
     await uploadRemoteInstallDirectory(conn, options.localOrcadDir, remoteDir, options.host, {
       signal

@@ -1,6 +1,5 @@
 // Orcad slots and vault readers share the content-addressed Node store and its GC lock.
 import { randomBytes } from 'node:crypto'
-import { rm } from 'node:fs/promises'
 import { basename } from 'node:path'
 import {
   pinnedNodeRuntimeAsset,
@@ -20,7 +19,6 @@ import {
   execCommand,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
-import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { remoteSha256Command } from './remote-sha256-command'
 import { stageNodeRuntimeArchive } from './remote-node-runtime-host-download'
 import {
@@ -264,7 +262,6 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
   const cleanupStage = windows
     ? windowsNodeRuntimeStageCleanupCommand(stageDir)
     : `rm -rf ${quotePosixShell(stageDir)}`
-  let localStage: string | undefined
   let stageUnconfirmed = false
   let hostRemovedStage = false
   try {
@@ -275,13 +272,11 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
         remoteDirname(runtimeDir, host)
       )
     }
-    const { archive } = await stageNodeRuntimeArchive({
+    const { archive, transfer } = await stageNodeRuntimeArchive({
       ...options,
       exec,
       stageDir,
-      upload: (dir) =>
-        remoteStep(() => uploadRemoteInstallDirectory(conn, dir, stageDir, host, { signal })),
-      onLocalStage: (dir) => (localStage = dir)
+      remoteStep
     })
     let promoteRan = false
     const runLocked = (command: string): Promise<string> =>
@@ -320,14 +315,11 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
     // Windows promotion removes its stage; avoid another powershell.exe spawn.
     hostRemovedStage = windows && promoteRan
     assertRemoteNodeRuntimePromoted(promoted)
-    return { executable, transfer: localStage ? 'uploaded' : 'host-downloaded' }
+    return { executable, transfer }
   } catch (error) {
     stageUnconfirmed = isUnconfirmedSshCommandTermination(error)
     throw error
   } finally {
-    if (localStage) {
-      await rm(localStage, { recursive: true, force: true }).catch(() => {})
-    }
     // A transfer that may still be writing keeps its stage; loss of contact is not an exit.
     if (!stageUnconfirmed && !hostRemovedStage) {
       await exec(cleanupStage).catch(() => {})
