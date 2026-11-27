@@ -31,10 +31,10 @@ export function acpChildRelayOpenWork(
   return droidUnknown ? { ...work, [ACP_UNKNOWN_WORK]: [['subagent']] } : work
 }
 
-/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`; only a ready chat's kept agent answers.
- *  One owing a fresh agent with no turn running waits for its replay's last ack (one request). */
+/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`; only a ready chat's kept agent answers. */
 export async function acpChildKeptLaunchOutgrown(
-  session: AcpStructuredChild | undefined
+  session: AcpStructuredChild | undefined,
+  toolsOutdated: boolean
 ): Promise<boolean | undefined> {
   const kept = isAcpReadySession(session) ? session.connection.kept : null
   // OMP's background work is invisible here (above), so no tools refresh, this one or Orca's
@@ -42,8 +42,9 @@ export async function acpChildKeptLaunchOutgrown(
   if (session?.spec.agent === 'omp') {
     return kept ? false : undefined
   }
-  // Any idle kept agent: a tools change made since its reattach is compared once its replay is in.
-  if (kept && session?.turns?.running === false) {
+  // An idle kept agent waits for its replay only when a tools refresh could follow: one owing a
+  // fresh agent, or the host's tools changed since launch.
+  if (kept && session?.turns?.running === false && (kept.freshOwed || toolsOutdated)) {
     await kept.replaySettled()
   }
   return kept?.launchOutgrown
