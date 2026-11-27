@@ -25,6 +25,25 @@ export type SkillDeleteRootSet = {
   toFilesystemPath: (path: string) => string
 }
 
+// Without a cwd the ordinary roots cover every repo, so each repo's project settings must be read too.
+async function discoverDeletePiPackageRoots(
+  home: string,
+  cwd: string | undefined,
+  repos: readonly Repo[]
+): Promise<SkillScanRoot[]> {
+  const scopes = cwd
+    ? [{ cwd }]
+    : [{}, ...repos.map((repo) => ({ cwd: repo.path, skipUserSettings: true }))]
+  const groups = await Promise.all(
+    scopes.map((scope) =>
+      discoverPiPackageSkillSources({ homeDir: home, ignoreSkillFilters: true, ...scope }).catch(
+        () => []
+      )
+    )
+  )
+  return [...new Map(groups.flat().map((root) => [root.path, root])).values()]
+}
+
 export async function buildSkillDeleteRootSet(input: {
   target: ResolvedSkillDiscoveryTarget
   repos: readonly Repo[]
@@ -56,11 +75,7 @@ export async function buildSkillDeleteRootSet(input: {
   const cwd = input.target.cwd
   const [claudePluginRoots, piPackageRoots] = await Promise.all([
     cwd ? discoverClaudePluginSkillSources({ homeDir: home, cwd }).catch(() => []) : [],
-    discoverPiPackageSkillSources({
-      homeDir: home,
-      ignoreSkillFilters: true,
-      ...(cwd ? { cwd } : {})
-    }).catch(() => [])
+    discoverDeletePiPackageRoots(home, cwd, input.repos)
   ])
   return {
     roots: [
