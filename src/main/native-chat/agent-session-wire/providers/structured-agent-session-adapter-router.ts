@@ -130,13 +130,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   cancelTurn: Adapter['cancelTurn'] = (input) => this.owner(input.sessionId).cancelTurn(input)
 
-  changeThreadGoal: NonNullable<Adapter['changeThreadGoal']> = (input) => {
-    const change = this.owner(input.sessionId).changeThreadGoal
-    if (!change) {
-      return Promise.resolve({ ok: false, rejected: 'Goals are unavailable for this provider.' })
-    }
-    return change(input)
-  }
+  changeThreadGoal: NonNullable<Adapter['changeThreadGoal']> = (input) =>
+    this.owner(input.sessionId).changeThreadGoal?.(input) ??
+    Promise.resolve({ ok: false, rejected: 'Goals are unavailable for this provider.' })
 
   stopBackgroundTasks: NonNullable<Adapter['stopBackgroundTasks']> = (input) => {
     const stop = this.owner(input.sessionId).stopBackgroundTasks
