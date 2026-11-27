@@ -155,7 +155,9 @@ export const SSH_METHODS = [
       if (
         isDuplicateSshTargetAlias({
           existingTargets: listRegisteredSshTargets(),
-          configHost: target.configHost ?? target.host,
+          // Why empty, not host: the rule derives its alias as configHost || label || host,
+          // so substituting the host here would skip the label and let a duplicate label through.
+          configHost: target.configHost ?? '',
           label: target.label,
           host: target.host
         })
