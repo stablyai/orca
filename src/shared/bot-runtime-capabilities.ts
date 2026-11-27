@@ -102,6 +102,10 @@ export const BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY = 'bots.google-phone-s
 // steering its running turn. An older host only takes them typed.
 export const BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY = 'bots.offer-answer.v1' as const
 
+// Host files an item under the request one of its bot's own items was made for (bots.items.add `fromItem`); an
+// older host drops the field and makes the item on its own, so the CLI sends it only where advertised.
+export const BOTS_ITEM_FROM_ITEM_RUNTIME_CAPABILITY = 'bots.item-from-item.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -129,5 +133,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
   BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY,
   BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY,
-  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY
+  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY,
+  BOTS_ITEM_FROM_ITEM_RUNTIME_CAPABILITY
 ] as const

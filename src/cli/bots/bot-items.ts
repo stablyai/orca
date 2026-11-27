@@ -2,10 +2,13 @@
 // host checks.
 import type { BotItemStatus } from '../../shared/bots/bot-items'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { BOTS_ITEM_FROM_ITEM_RUNTIME_CAPABILITY } from '../../shared/bot-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
@@ -77,6 +80,22 @@ function optional(name: string, value: string | undefined): Record<string, strin
   return value === undefined ? {} : { [name]: value }
 }
 
+/** `--from-item`, checked before the write: an older host drops it and makes the item on its own. */
+async function fromItemFlag({ client, flags }: HandlerContext): Promise<string | undefined> {
+  const fromItem = getPresentStringFlag(flags, 'from-item')
+  if (fromItem === undefined) {
+    return undefined
+  }
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!status.result.capabilities?.includes(BOTS_ITEM_FROM_ITEM_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot add items with --from-item. Update Orca on that host.'
+    )
+  }
+  return fromItem
+}
+
 /** `--file`, each resolved against the caller's folder: the host copies them from its own disk. */
 function files(flags: Flags, cwd: string): { files?: string[] } {
   const paths = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
@@ -88,6 +107,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     const { flags, cwd } = ctx
     const status = getOptionalStringFlag(flags, 'status')
     const links = getRepeatedStringFlag(flags, 'link')
+    const fromItem = await fromItemFlag(ctx)
     await write(ctx, 'bots.items.add', {
       title: getRequiredStringFlag(flags, 'title'),
       ...optional('description', await readTextOrFileFlag(flags, cwd, 'description', false)),
@@ -95,7 +115,8 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(status ? { status: statusFlag(status) } : {}),
       ...(links.length > 0 ? { links } : {}),
       ...optional('forBot', getOptionalStringFlag(flags, 'for')),
-      ...optional('chat', getOptionalStringFlag(flags, 'chat'))
+      ...optional('chat', getOptionalStringFlag(flags, 'chat')),
+      ...optional('fromItem', fromItem)
     })
   },
   'bot item set': async (ctx) => {
@@ -150,6 +171,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     const botId = selector ? (await findBot(client, selector)).id : undefined
     const status = getOptionalStringFlag(flags, 'status')
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
+    const rootKey = getPresentStringFlag(flags, 'root-key')
     const result = await callBots<BotItemListView>(client, 'bots.items.list', {
       ...callerChat(),
       ...(botId ? { botId } : {}),
@@ -158,9 +180,17 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('here') ? { here: true } : {}),
       ...optional('chat', getOptionalStringFlag(flags, 'chat')),
       ...optional('link', getOptionalStringFlag(flags, 'link')),
+      ...optional('rootKey', rootKey),
       ...(limit !== undefined ? { limit } : {}),
       ...optional('cursor', getOptionalStringFlag(flags, 'cursor'))
     })
+    // An older runtime drops rootKey and lists every item; only one that filtered echoes it.
+    if (rootKey !== undefined && result.result.rootKey !== rootKey) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca host cannot list items by --root-key. Update Orca on that host.'
+      )
+    }
     print(result, json, (value) => formatBotItemList(value, Date.now()))
   },
   'bot item show': async ({ flags, client, json }) => {

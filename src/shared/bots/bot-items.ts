@@ -227,6 +227,28 @@ export type BotItemEvent = {
   at: number
 }
 
+/** The request an item was made for: display data for grouping items, never instructions.
+ *  `kind`, `at` and `request` describe the request, not the turn that made the item: they travel
+ *  with `rootKey`, so every item and bot request on one key carries the same three, except an item
+ *  made `--from-item` and what it led to, which join the key but keep the three of the request
+ *  their turn acts on. */
+export type BotItemOrigin = {
+  /** The chain key bot requests record (`bot_requests.root_key`), shared by the items one request
+   *  led to, across bots. Opaque: compare it, don't parse it. */
+  rootKey: string
+  /** Who or what started the request: the owner, someone else (a teammate through a connector), a
+   *  group room, an automation, or `bot` for a request whose record was written before Orca kept
+   *  how it started, or an item whose turn Orca couldn't read. A send no bot's turn made (a terminal agent, another computer's agent) counts
+   *  as started by whom it acts for: `owner`, or `person`, with no time or words. */
+  kind: 'owner' | 'person' | 'group' | 'automation' | 'bot'
+  /** When the request started (epoch ms): when the message that started it arrived; null unknown. */
+  at: number | null
+  /** The owner's own words that started the request, cut to 500 UTF-16 code units: only a message
+   *  the owner typed at the host's own window. Null for a paired device's or anyone else's words, an
+   *  automation's prompt or event, Orca's own prompts, or none recorded. */
+  request: string | null
+}
+
 export type BotItem = {
   uid: string
   number: number
@@ -238,6 +260,12 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
+  /** Kept on its `made` event; null for items made before Orca recorded it, absent from older hosts. */
+  origin?: BotItemOrigin | null
+  /** The item its maker named (`add --from-item`, one of the maker's own; for an item made `--for`
+   *  another bot, the sending bot's); null when none was named. Its origin keeps that item's
+   *  `rootKey`, but the kind, time and words of the request its turn acts on. */
+  fromItem?: { uid: string } | null
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null

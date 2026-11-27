@@ -46,6 +46,7 @@ const LIST = defineMethod({
       statuses,
       ...(chatId !== undefined ? { chatIds: [chatId] } : {}),
       ...(link ? { link } : {}),
+      ...(params.rootKey !== undefined ? { rootKey: params.rootKey } : {}),
       limit: limit + 1,
       ...(cursor ? { cursor } : {})
     })
@@ -57,6 +58,8 @@ const LIST = defineMethod({
       botName: bot.name,
       items: botItemsForClient(await runtime.botItems.views(rows), context),
       counts: botItemCountsForClient(page.counts, context),
+      // Tells the CLI this host applied the filter.
+      ...(params.rootKey !== undefined ? { rootKey: params.rootKey } : {}),
       ...(more ? { nextCursor: `${last.lastActivityAt}:${last.number}` } : {})
     }
   }

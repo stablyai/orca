@@ -288,6 +288,8 @@ export class BotItemsHost {
         madeBy: madeBy
           ? { botId: madeBy.botId, name: nameOf(madeBy.botId), chatId: madeBy.chatId }
           : null,
+        origin: rows.origins[item.uid] ?? null,
+        fromItem: rows.fromItems[item.uid] ?? null,
         question: question ? botItemQuestionView(botItemEventId(question.id), question.data) : null,
         ...(rows.waitingAsks[item.uid] ? { waitingAsk: rows.waitingAsks[item.uid] } : {}),
         closeNote: summary ? null : item.closeNote,

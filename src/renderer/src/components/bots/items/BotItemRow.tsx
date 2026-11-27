@@ -82,6 +82,9 @@ const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   status: (a, b) => a.status === b.status,
   chat: (a, b) => structuralValuesEqual(a.chat, b.chat),
   madeBy: (a, b) => structuralValuesEqual(a.madeBy, b.madeBy),
+  // Set once when the item is made; the row never shows them.
+  origin: skipped,
+  fromItem: skipped,
   // A question is one item event, which never changes once written; a host on another release reads it
   // with other fields (ask, or gist and decisions).
   question: (a, b) =>

@@ -9,6 +9,7 @@ import {
   type BotItemActor,
   type BotItemEvent,
   type BotItemChatKind,
+  type BotItemOrigin,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import type {
@@ -137,6 +138,35 @@ export function eventRecordOf(row: SqliteRow): BotItemEventRecord {
     data: record(json(row, 'data')) ?? {},
     createdAt: integer(row, 'created_at')
   }
+}
+
+const ORIGIN_KINDS: readonly BotItemOrigin['kind'][] = [
+  'owner',
+  'person',
+  'group',
+  'automation',
+  'bot'
+]
+
+/** How a request started, as an item's origin and a bot request's record keep it; null unreadable. */
+export function requestStartOf(value: unknown): Omit<BotItemOrigin, 'rootKey'> | null {
+  const start = record(value)
+  const kind = ORIGIN_KINDS.find((entry) => entry === start?.kind)
+  if (!start || !kind) {
+    return null
+  }
+  return {
+    kind,
+    at: typeof start.at === 'number' && Number.isFinite(start.at) ? start.at : null,
+    request: str(start.request) || null
+  }
+}
+
+/** A `made` event's origin; null when it has none (an item made before Orca recorded it). */
+export function originOf(value: unknown): BotItemOrigin | null {
+  const rootKey = str(record(value)?.rootKey)
+  const start = requestStartOf(value)
+  return rootKey && start ? { rootKey, ...start } : null
 }
 
 /** An event as clients read it. */
