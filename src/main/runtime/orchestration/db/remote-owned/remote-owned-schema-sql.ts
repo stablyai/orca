@@ -57,6 +57,11 @@ CREATE TABLE IF NOT EXISTS remote_worker_lineage (
   creator_turn_source TEXT CHECK(creator_turn_source IS NULL OR creator_turn_source = 'connector')
 );
 
+CREATE INDEX IF NOT EXISTS idx_remote_worker_lineage_creator_session
+  ON remote_worker_lineage(creator_orca_session_id);
+CREATE INDEX IF NOT EXISTS idx_remote_placements_request
+  ON remote_placements(request_key);
+
 CREATE TABLE IF NOT EXISTS remote_dispatches (
   dispatch_id        TEXT PRIMARY KEY,
   conversation_id    TEXT NOT NULL,

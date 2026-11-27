@@ -1,3 +1,5 @@
+import { remoteConnectorActivity } from '../../../../orchestration/federation/remote-owned/remote-connector-activity'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 // The bounded read behind a connector conversation's working state: only its workers that may still
 // run, read off the runtime's thread, then projected with the runtime's liveness evidence.
 import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
@@ -36,14 +38,14 @@ export type SessionWorkerActivityFacts = Pick<
  * here, with the runtime's liveness evidence.
  */
 export async function readConnectorWorkerActivity(
-  runtime: SessionWorkersRuntime,
+  runtime: SessionWorkersRuntime & Pick<OrcaRuntimeService, 'getPeerServerAnswerStatus'>,
   sessionIds: readonly string[]
 ): Promise<Map<string, SessionWorkerActivityFacts[]>> {
   const bySession = new Map<string, SessionWorkerActivityFacts[]>(
     sessionIds.map((sessionId) => [sessionId, []])
   )
   const db = runtime.getOrchestrationDb()
-  const { candidates, federated, chatParties } = await orchestrationReader().read(
+  const { candidates, federated, chatParties, remote } = await orchestrationReader().read(
     db,
     'connectorWorkerCandidates',
     {
@@ -51,6 +53,13 @@ export async function readConnectorWorkerActivity(
       now: Date.now()
     }
   )
+  for (const worker of remote) {
+    bySession
+      .get(worker.sessionId)
+      ?.push(
+        remoteConnectorActivity(worker, runtime.getPeerServerAnswerStatus(worker.environmentId))
+      )
+  }
   if (candidates.length === 0) {
     return bySession
   }
