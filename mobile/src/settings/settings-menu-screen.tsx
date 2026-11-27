@@ -1,71 +1,45 @@
 import type { ReactNode } from 'react'
 import { useRouter } from 'expo-router'
-import { Shield, LifeBuoy } from 'lucide-react-native'
 import { MobileSettingsSection } from './mobile-settings-menu'
-import { mobileSettingsMenuItems } from './mobile-settings-menu-items'
+import { mobileSettingsMenuGroups } from './mobile-settings-menu-items'
 import { SettingsScreen } from './settings-screen-frame'
+import { appearanceOptions } from './appearance-settings-screen'
+import { useMobileAppearancePreference } from '../theme/mobile-appearance'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export default function SettingsMenuScreen({
   push,
   onBack,
   openExternal,
+  aboutValue,
   children
 }: {
   push: (route: string) => void
   onBack?: () => void
   openExternal: (url: string) => Promise<unknown>
+  /** About's row value: the installed version, or that an update is out. */
+  aboutValue?: string
+  /** Notices that need the user, between the surfaces and help. */
   children?: ReactNode
 }) {
   const t = useMobileTranslation()
   const router = useRouter()
+  const preference = useMobileAppearancePreference()
+  const [looks, surfaces, help] = mobileSettingsMenuGroups({
+    push,
+    openExternal: (url) => void openExternal(url),
+    appearanceValue: appearanceOptions(t).find((option) => option.value === preference)?.label,
+    aboutValue
+  })
   return (
     <SettingsScreen
       title={t('common.settings', 'Settings')}
       onBack={onBack ?? (() => router.back())}
     >
-      <SettingsMenuSections push={push} openExternal={openExternal}>
-        {children}
-      </SettingsMenuSections>
-    </SettingsScreen>
-  )
-}
-
-/** The menu's groups without a screen around them, so Home's Settings tab can host them. */
-export function SettingsMenuSections({
-  push,
-  openExternal,
-  children
-}: {
-  push: (route: string) => void
-  openExternal: (url: string) => Promise<unknown>
-  children?: ReactNode
-}) {
-  const t = useMobileTranslation()
-  return (
-    <>
-      <MobileSettingsSection first items={mobileSettingsMenuItems(push)} />
-
+      <MobileSettingsSection first items={looks} />
+      <MobileSettingsSection items={surfaces} />
       {children}
-
-      <MobileSettingsSection
-        items={[
-          {
-            id: 'privacyPolicy',
-            label: t('settings.menuScreen.privacyPolicy', 'Privacy Policy'),
-            icon: Shield,
-            external: true,
-            onPress: () => void openExternal('https://orca.dev/privacy')
-          },
-          {
-            id: 'support',
-            label: t('settings.menuScreen.support', 'Support'),
-            icon: LifeBuoy,
-            external: true,
-            onPress: () => void openExternal('https://github.com/stablyai/orca/issues')
-          }
-        ]}
-      />
-    </>
+      <MobileSettingsSection items={help} />
+    </SettingsScreen>
   )
 }

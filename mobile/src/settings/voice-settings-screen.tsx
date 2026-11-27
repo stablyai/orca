@@ -308,7 +308,7 @@ export default function VoiceSettingsScreen({
         <>
           <SettingsSection
             first={!voiceTranscribeOnShown()}
-            title={t('settings.voiceSettingsScreen.dictationHeading', 'DICTATION')}
+            title={t('settings.voiceSettingsScreen.dictationHeading', 'Dictation')}
             // The segmented control leaves the mode row no room for two lines of explanation.
             footer={
               offersAuto
@@ -358,7 +358,7 @@ export default function VoiceSettingsScreen({
           </SettingsSection>
 
           <SettingsSection
-            title={t('settings.voiceSettingsScreen.speechModelHeading', 'SPEECH MODEL')}
+            title={t('settings.voiceSettingsScreen.speechModelHeading', 'Speech model')}
             footer={footerError ? <SettingsNote error>{footerError}</SettingsNote> : undefined}
           >
             <ListRow
