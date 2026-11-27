@@ -67,6 +67,13 @@ import { NOTIFICATION_METHODS } from './notifications/notifications'
 import { FILE_METHODS } from './files/files'
 import { GIT_METHODS } from './source-control/git/git'
 import { CLIPBOARD_METHODS } from './clipboard/clipboard'
+import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
+import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
+import { WORKTREE_AUTO_NAME_METHODS } from './workspaces/worktree-auto-name-methods'
+import { TERMINAL_ORPHAN_METHODS } from './terminal/terminal-orphan'
+import { AGENT_SESSION_METHODS } from './terminal/agent-session'
+import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessions/attachments/structured-agent-session-attachments'
+import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/attachments/structured-agent-session-visual'
 
 const CORE_RPC_METHODS = [
   ...EAGER_CORE_RPC_METHODS,
@@ -82,7 +89,13 @@ const CORE_RPC_METHODS = [
   ...ORCAD_MIGRATION_METHODS,
   ...WORKSPACE_CLEANUP_RUNNER_METHODS,
   ...WORKTREE_ARCHIVE_METHODS,
-  ...AGENT_CONVERSATION_METHODS
+  ...AGENT_CONVERSATION_METHODS,
+  ...ORCAD_TERMINAL_CENSUS_METHODS,
+  ...SESSION_TERMINAL_SCROLLBACK_METHODS,
+  ...WORKTREE_AUTO_NAME_METHODS,
+  ...AGENT_SESSION_METHODS,
+  ...STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS,
+  ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS
 ] as const
 
 const SERVICE_RPC_METHODS = [
@@ -140,7 +153,8 @@ const SERVICE_RPC_METHODS = [
   ...NOTIFICATION_METHODS,
   ...FILE_METHODS,
   ...GIT_METHODS,
-  ...CLIPBOARD_METHODS
+  ...CLIPBOARD_METHODS,
+  ...TERMINAL_ORPHAN_METHODS
 ] as const
 
 type ConcatMethods<A extends readonly unknown[], B extends readonly unknown[]> = readonly [

@@ -1,3 +1,5 @@
+import { ORCAD_TERMINAL_CENSUS_METHOD } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import { AUTO_NAME_RPC_METHODS } from '../../../../shared/worktree/branch-auto-rename-attempt'
 import { prefixRpcMethodGroup, type LazyRpcMethodGroup } from '../lazy-rpc-method-group'
 import { LAZY_INTEGRATION_RPC_METHOD_GROUPS } from './lazy-integration-rpc-method-groups'
 
@@ -223,5 +225,45 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
     ['agent.'],
     async () =>
       (await import('./agent-conversations/agent-conversation-methods')).AGENT_CONVERSATION_METHODS
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () => (await import('./orcad/orcad-terminal-census')).ORCAD_TERMINAL_CENSUS_METHODS,
+    { exactNames: [ORCAD_TERMINAL_CENSUS_METHOD] }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () =>
+      (await import('./terminal/session-terminal-scrollback')).SESSION_TERMINAL_SCROLLBACK_METHODS,
+    { exactNames: ['session.readTerminalScrollback'] }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () =>
+      (await import('./workspaces/worktree-auto-name-methods')).WORKTREE_AUTO_NAME_METHODS,
+    { exactNames: Object.values(AUTO_NAME_RPC_METHODS) }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () => (await import('./terminal/terminal-orphan')).TERMINAL_ORPHAN_METHODS,
+    { exactNames: ['terminal.adoptOrphans'] }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () => (await import('./terminal/agent-session')).AGENT_SESSION_METHODS,
+    { exactNames: ['terminal.ensureAgentSession', 'terminal.createAgentSession'] }
+  ),
+  prefixRpcMethodGroup(
+    ['agentSessionAttachment.'],
+    async () =>
+      (await import('./structured-sessions/attachments/structured-agent-session-attachments'))
+        .STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () =>
+      (await import('./structured-sessions/attachments/structured-agent-session-visual'))
+        .STRUCTURED_AGENT_SESSION_VISUAL_METHODS,
+    { exactNames: ['agentSession.readVisual'] }
   )
 ]
