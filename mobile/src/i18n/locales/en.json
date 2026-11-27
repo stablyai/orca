@@ -2382,6 +2382,7 @@
       "fileTitle": "File",
       "terminalTakingLonger": "Terminal is taking longer than expected",
       "loadingTerminal": "Loading terminal",
+      "retryLoadingTerminal": "Retry loading terminal",
       "noTabs": "No tabs open",
       "noTabsStart": "Start an agent or a terminal."
     },
@@ -3281,6 +3282,7 @@
       "addToMessage": "Add to message",
       "attachImage": "Attach image",
       "askAnything": "Ask anything",
+      "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
       "sendMessage": "Send message",
@@ -6520,7 +6522,8 @@
       "nothingToReport": "Nothing to report",
       "mentionOwnChats": "Your other chats",
       "mentionPaused": "Paused",
-      "mentionChatsLoadFailed": "Couldn't load chats"
+      "mentionChatsLoadFailed": "Couldn't load chats",
+      "mentionPlaceholder": "Ask anything, @ to mention bots or files, / for commands"
     },
     "access": {
       "titleOne": "Give {{person}} access to {{name}}?",

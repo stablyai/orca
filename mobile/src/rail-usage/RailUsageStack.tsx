@@ -6,8 +6,9 @@ import { MobileEdgeFade } from '../components/list/MobileEdgeFade'
 import { useAccountsSnapshot } from '../composer-usage/accounts-snapshot-store'
 import { ComposerUsageSheet } from '../composer-usage/ComposerUsageSheet'
 import { useResetCountdownNow } from '../composer-usage/use-reset-countdown-now'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { spacing } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { DUO_STATUS_RING_DIAMETER, duoStatusGlyphMidX } from '../layout/duo-status-row'
 import { useReservedRegions } from '../layout/reserved-regions'
@@ -76,6 +77,8 @@ export function RailUsageStack({
   /** Centred in its own column rather than on the Duo status glyph's axis. */
   standalone?: boolean
 }): React.JSX.Element | null {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const usages = listRailUsage(snapshot)
   // Ticks at each ring's next label change, like the composer bar, so the two flip together.
   const now = useResetCountdownNow(
@@ -166,7 +169,7 @@ const COLUMN_GAP = spacing.md
 const COLUMN_PADDING_TOP = spacing.md
 const COLUMN_PADDING_BOTTOM = spacing.lg
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   scroll: {
     flex: 1
   },

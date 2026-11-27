@@ -4,14 +4,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react-native'
 import type { AccountsSnapshot } from '../accounts/accounts-snapshot'
 import { useAccountsSnapshot } from '../composer-usage/accounts-snapshot-store'
-import { composerInputStyles } from '../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useReservedRegions } from '../layout/reserved-regions'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useSideRailStrip } from '../layout/side-rail'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { listRailUsage } from './rail-usage-model'
 import { RailUsageStack, STANDALONE_RING_DIAMETER } from './RailUsageStack'
@@ -78,7 +78,9 @@ export function TabletUsageRail({
 }: {
   rail: TabletUsageRailState
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   if (rail.width === 0) {
@@ -121,7 +123,7 @@ export function TabletUsageRail({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   rail: {
     position: 'absolute',
     right: 0,
