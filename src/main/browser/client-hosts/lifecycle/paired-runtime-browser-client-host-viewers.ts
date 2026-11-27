@@ -1,3 +1,6 @@
+import { BROWSER_CLIENT_HOST_VIEWER_CHANGED_CHANNEL } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
+import type { BrowserClientHostViewerChangedEvent } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
+import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import type { BrowserRouteViewer } from '../../routing/sessions/browser-route-session-policy'
 
 // Each environment's live client-host composition, keyed so a replaced one's close can't clear its successor.
@@ -10,9 +13,11 @@ export function recordClientHostViewer(
 ): () => void {
   const entry = { viewer }
   viewers.set(environmentId, entry)
+  publish({ environmentId, viewer })
   return () => {
     if (viewers.get(environmentId) === entry) {
       viewers.delete(environmentId)
+      publish({ environmentId, viewer: null })
     }
   }
 }
@@ -22,4 +27,8 @@ export function pairedRuntimeBrowserClientHostViewer(
   environmentId: string
 ): BrowserRouteViewer | null {
   return viewers.get(environmentId)?.viewer ?? null
+}
+
+function publish(event: BrowserClientHostViewerChangedEvent): void {
+  getRuntimeDesktopSurface().sendToRenderers?.(BROWSER_CLIENT_HOST_VIEWER_CHANGED_CHANNEL, event)
 }

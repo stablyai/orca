@@ -216,12 +216,10 @@ export function remoteRuntimeEgressCopy(
 /** Remote-runtime browser pages: client-hosted (renders here) or streamed from the host. */
 export function RemoteRuntimeEgressIndicator({
   runtimeEnvironmentId,
-  presentation,
-  browserPageId
+  presentation
 }: {
   runtimeEnvironmentId: string
   presentation: 'client-hosted' | 'streamed'
-  browserPageId: string
 }): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
@@ -231,7 +229,7 @@ export function RemoteRuntimeEgressIndicator({
   )
   const hostLabel = runtimeHostLabel(settings, runtimeEnvironmentId, environmentName)
   const clientHosted = presentation === 'client-hosted'
-  const viewer = useClientHostViewer(runtimeEnvironmentId, browserPageId, clientHosted)
+  const viewer = useClientHostViewer(runtimeEnvironmentId, clientHosted)
   const copy = remoteRuntimeEgressCopy(t, { presentation, viewer, hostLabel })
   if (!copy) {
     // Where traffic goes depends on whose host this is; claim nothing until that is known.

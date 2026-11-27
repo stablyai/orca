@@ -145,7 +145,6 @@ export function RemoteBrowserPageToolbar({
             <RemoteRuntimeEgressIndicator
               runtimeEnvironmentId={runtimeEnvironmentId}
               presentation="streamed"
-              browserPageId={browserPageId}
             />
           }
           trailing={
