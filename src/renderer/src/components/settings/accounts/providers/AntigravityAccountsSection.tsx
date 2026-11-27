@@ -11,6 +11,7 @@ import type {
 } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
+import { clearAntigravityChatSignInError } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { AntigravityChatAuthRows } from '../../../provider-accounts/AntigravityChatAuthRows'
 import { useAntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
@@ -22,10 +23,12 @@ import {
   announceAntigravityAccountSwitch,
   announceAntigravityAccountSwitchFailure
 } from '@/lib/provider-accounts/antigravity-account-switch-toasts'
+import { useAgyLoginChange } from './use-agy-login-change'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
   AntigravityAgyAccountRows,
-  type AntigravityAccountAction
+  type AntigravityAccountAction,
+  type AntigravityAccountError
 } from './AntigravityAgyAccountRows'
 import { AntigravityAgyCliRow } from './AntigravityAgyCliRow'
 
@@ -42,7 +45,7 @@ export function AntigravityAccountsSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const [state, setState] = useState<AntigravityAccountState | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<AntigravityAccountError | null>(null)
   const mounted = useRef(true)
   const { busy, run } = useAntigravityAccountRun(perform, mounted)
   const ownerKind = owner.kind
@@ -91,9 +94,11 @@ export function AntigravityAccountsSection({
       },
       (cause: unknown) => {
         if (!cancelled) {
-          setError(
-            cause instanceof Error ? cause.message : 'Antigravity accounts could not be loaded.'
-          )
+          setError({
+            message:
+              cause instanceof Error ? cause.message : 'Antigravity accounts could not be loaded.',
+            accountId: null
+          })
         }
       }
     )
@@ -138,7 +143,10 @@ export function AntigravityAccountsSection({
       }
       // A background re-read fails quietly, and a failed switch says why in its toast.
       if (mounted.current && !keepShown && action !== 'Select') {
-        setError(cause instanceof Error ? cause.message : 'Antigravity account action failed.')
+        setError({
+          message: cause instanceof Error ? cause.message : 'Antigravity account action failed.',
+          accountId: accountId ?? null
+        })
       }
     }
   }
@@ -159,6 +167,10 @@ export function AntigravityAccountsSection({
       ? (signIn.flow.flowId ?? 'another client')
       : 'idle'
   useOnLaterChange(signedInFlow, reread)
+  useAgyLoginChange(state, signIn.loginRevision, reread, () => {
+    setError(null)
+    clearAntigravityChatSignInError(owner)
+  })
   const description = windowsHost
     ? t(
         'accounts.antigravity.descriptionWindows',

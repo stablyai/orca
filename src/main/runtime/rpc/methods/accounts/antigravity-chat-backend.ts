@@ -22,6 +22,7 @@ import {
 } from '../../../../antigravity/antigravity-chat-route'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 import { antigravityUsesFileStoreAsync } from '../../../../antigravity/native-file-credentials'
+import { envSelectsAgyAdcAuth } from '../../../../antigravity/antigravity-chat-credential'
 
 const CHAT_BACKEND_WAIT_MS = 1_500
 const LAUNCH_HOME_WAIT_MS = 1_000
@@ -80,6 +81,14 @@ export function sharedAgyLaunchHome(runtime: OrcaRuntimeService): Promise<string
   )
 }
 
+/** agy in the terminal and on agy's own home starts with the shell's AGY_ADC_AUTH. */
+async function agyLaunchUsesAdc(runtime: OrcaRuntimeService): Promise<boolean> {
+  const settings = runtime.requireStore().getSettings()
+  return envSelectsAgyAdcAuth(
+    await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
+  )
+}
+
 /** Adds whether new chats on this host run on agy, and so on the account these rows switch. */
 export async function withAntigravityChatBackend(
   runtime: OrcaRuntimeService,
@@ -98,21 +107,29 @@ export async function withAntigravityChatBackend(
   )
   const installed = input ? { agyInstalled: isAbsolute(input.command) } : {}
   // A cold agy check takes seconds; the rows don't wait for it, and a later refresh shows it.
-  const route = await withTimeout(
-    hostChatRoute(runtime, input ?? undefined).catch(() => ({
-      agy: 'unknown' as const,
-      orcaHome: false
-    })),
-    CHAT_BACKEND_WAIT_MS,
-    null
-  )
+  const [route, adc] = await Promise.all([
+    withTimeout(
+      hostChatRoute(runtime, input ?? undefined).catch(() => ({
+        agy: 'unknown' as const,
+        orcaHome: false
+      })),
+      CHAT_BACKEND_WAIT_MS,
+      null
+    ),
+    withTimeout(
+      agyLaunchUsesAdc(runtime).catch(() => false),
+      CHAT_BACKEND_WAIT_MS,
+      false
+    )
+  ])
+  const withAdc: AntigravityAccountState = adc ? { ...state, agyAdcAuth: true } : state
   if (route === null) {
-    return { ...state, ...installed }
+    return { ...withAdc, ...installed }
   }
   const agy = route.orcaHome ? false : route.agy
   const version = agy === 'signedIn' ? readyAntigravityHostAcpVersion() : null
   return {
-    ...state,
+    ...withAdc,
     ...installed,
     chatUsesAgy: agy === 'signedIn',
     chatAgySignedOut: agy === 'signedOut',

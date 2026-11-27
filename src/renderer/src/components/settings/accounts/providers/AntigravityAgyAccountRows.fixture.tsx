@@ -1,6 +1,9 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
-import { AntigravityAgyAccountRows } from './AntigravityAgyAccountRows'
+import {
+  AntigravityAgyAccountRows,
+  type AntigravityAccountError
+} from './AntigravityAgyAccountRows'
 
 const saved = {
   id: 'saved',
@@ -13,7 +16,7 @@ const saved = {
 
 function rows(
   state: AntigravityAccountState | null,
-  error: string | null = null
+  error: AntigravityAccountError | null = null
 ): React.JSX.Element {
   return (
     <div className="bg-background px-5">
@@ -95,14 +98,92 @@ export const signedInUnread = defineFixture({
 export const keychainDenied = defineFixture({
   width: 640,
   render: () =>
-    rows(
-      unread,
-      "Orca was denied access to agy's login in the keychain. Allow it when asked to show or switch accounts."
-    )
+    rows(unread, {
+      message:
+        "Orca was denied access to agy's login in the keychain. Allow it when asked to show or switch accounts.",
+      accountId: null
+    })
 })
 
 // Even the attribute read got no answer, so nothing could be listed.
 export const keychainDidNotAnswer = defineFixture({
   width: 640,
-  render: () => rows(null, "The keychain didn't answer. Unlock it and try again.")
+  render: () =>
+    rows(null, { message: "The keychain didn't answer. Unlock it and try again.", accountId: null })
+})
+
+export const expiredLoginWithAdc = defineFixture({
+  width: 640,
+  render: () =>
+    rows({
+      accounts: [],
+      activeAccountId: null,
+      selectedAccountId: null,
+      agyAdcAuth: true,
+      currentAccount: {
+        email: null,
+        subject: null,
+        authMethod: 'consumer',
+        identityKnown: false,
+        expiredAt: Date.UTC(2026, 10, 20, 6)
+      }
+    })
+})
+
+const unsavedLogin = {
+  email: 'personal@gmail.com',
+  subject: 'personal',
+  authMethod: 'consumer',
+  identityKnown: true
+}
+
+export const expiredLogin = defineFixture({
+  width: 640,
+  render: () =>
+    rows({
+      accounts: [],
+      activeAccountId: null,
+      selectedAccountId: null,
+      currentAccount: {
+        email: null,
+        subject: null,
+        authMethod: 'consumer',
+        identityKnown: false,
+        expiredAt: Date.UTC(2026, 10, 20, 6)
+      }
+    })
+})
+
+export const saveFailedOnCurrentLogin = defineFixture({
+  width: 640,
+  render: () =>
+    rows(
+      {
+        accounts: [saved],
+        activeAccountId: null,
+        selectedAccountId: null,
+        currentAccount: unsavedLogin
+      },
+      {
+        message: 'Could not reach Google to identify the Antigravity account; nothing was saved.',
+        accountId: null
+      }
+    )
+})
+
+export const adcWithSavedAccount = defineFixture({
+  width: 640,
+  render: () =>
+    rows({
+      accounts: [saved],
+      activeAccountId: saved.id,
+      selectedAccountId: saved.id,
+      agyAdcAuth: true,
+      currentAccount: {
+        email: saved.email,
+        subject: saved.subject,
+        authMethod: 'consumer',
+        identityKnown: true
+      }
+    })
 })

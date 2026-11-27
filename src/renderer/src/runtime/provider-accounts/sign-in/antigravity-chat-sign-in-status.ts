@@ -31,6 +31,8 @@ export type AntigravityChatSignInView = {
   /** The browser could not open the link this client asked for. */
   openFailed: boolean
   retryIntent: AntigravityChatSignInIntent
+  /** Moves when the host sees agy's stored login change; null before it answers or on older hosts. */
+  loginRevision: number | null
 }
 
 type HostStatus = AntigravityChatSignInStatus & { runtimeId?: string }
@@ -201,6 +203,14 @@ export async function startAntigravityChatSignIn(
   }
 }
 
+/** Drops a start or cancel error that described agy's previous login. */
+export function clearAntigravityChatSignInError(owner: RuntimeClientTarget): void {
+  const local = localFor(owner)
+  if (local.notes.error !== null) {
+    note(local, { error: null })
+  }
+}
+
 /** Only the client that started a flow is told its id, so only it can cancel or complete it. */
 const ownFlowId = (owner: RuntimeClientTarget): string | null => flowOf(owner)?.flowId ?? null
 
@@ -259,7 +269,8 @@ export function readAntigravityChatSignIn(owner: RuntimeClientTarget): Antigravi
     openFailed: notes.openFailed,
     retryIntent: notes.attempt?.receipt
       ? (notes.attempt.receipt.flow?.intent ?? 'signIn')
-      : (notes.attempt?.intent ?? known?.flow?.intent ?? 'signIn')
+      : (notes.attempt?.intent ?? known?.flow?.intent ?? 'signIn'),
+    loginRevision: known?.loginRevision ?? null
   }
   views.set(hostKey(owner), { snapshot, notes, view })
   return view

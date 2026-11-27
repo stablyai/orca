@@ -25,6 +25,9 @@ export type AntigravityAccountState = {
      *  read may ask for keychain access, so only `accounts.antigravityReadCurrent` makes it. The
      *  other fields are empty and no saved account is active. Absent from older hosts. */
     unread?: true
+    /** When agy's stored access token expired; Google rejects it until agy refreshes it. Absent
+     *  while it still works, when agy saved no expiry, and from older hosts. */
+    expiredAt?: number
   } | null
   selectedAccountId: string | null
   /** New agy launches put the selected account back when another saved one took agy's login.
@@ -47,6 +50,9 @@ export type AntigravityAccountState = {
   /** Host only: new Gemini API key chats run on agy (in a home Orca owns) with the
    *  method and credential saved here. Absent from older hosts, which run them on the server. */
   chatKeyOnAgy?: boolean
+  /** Host only: agy launches with AGY_ADC_AUTH, so it signs in with gcloud and leaves its Google
+   *  login unrefreshed. Absent when unset and from older hosts. */
+  agyAdcAuth?: true
 }
 
 export const ANTIGRAVITY_CHAT_SIGN_IN_PHASES = [
@@ -83,6 +89,8 @@ export type AntigravityChatSignInStatus = {
   auth: AntigravityChatAuth
   /** The latest flow; an ended one stays readable until the next starts. */
   flow: AntigravityChatSignInState | null
+  /** Moves each time agy's stored login changes on the host. Absent from older hosts. */
+  loginRevision?: number
 }
 
 export type AntigravityAccountTarget = {

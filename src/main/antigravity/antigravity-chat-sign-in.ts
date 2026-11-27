@@ -9,6 +9,7 @@ import type * as accountTypes from '../../shared/agent-accounts/antigravity/anti
 import { antigravityChatSignIn } from './antigravity-chat-account'
 import { agyLoginFailure } from './antigravity-sign-in-failure'
 import { agyLoginAnswer, agyLoginLink } from './antigravity-sign-in-url'
+import { agyLoginRevision } from './agy-login-change-watch'
 
 // Google's sign-in page stays usable about this long.
 const FLOW_DEADLINE_MS = 300_000
@@ -235,11 +236,12 @@ export function readAntigravityChatSignInStatus(
   owner: string
 ): accountTypes.AntigravityChatSignInStatus {
   const { value, revision } = antigravityChatSignIn.get()
+  const loginRevision = agyLoginRevision()
   if (!value.flow) {
-    return { revision, auth: value.auth, flow: null }
+    return { revision, auth: value.auth, flow: null, loginRevision }
   }
   const { owner: starter, ...state } = value.flow
   const { phase, error } = state
   const flow = starter === owner ? state : { flowId: null, phase, ...(error ? { error } : {}) }
-  return { revision, auth: value.auth, flow }
+  return { revision, auth: value.auth, flow, loginRevision }
 }

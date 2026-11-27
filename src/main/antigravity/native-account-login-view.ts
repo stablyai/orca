@@ -182,7 +182,8 @@ export class AntigravityLoginReader {
       cached.email !== next.email ||
       cached.subject !== next.subject ||
       cached.authMethod !== next.authMethod ||
-      cached.accountId !== next.accountId
+      cached.accountId !== next.accountId ||
+      cached.expiresAt !== next.expiresAt
     ) {
       vault.verifiedLogin = { fingerprint, ...next }
       // Only a cache: losing it costs one read on request.
@@ -210,7 +211,8 @@ export class AntigravityLoginReader {
       email: current.identity ? current.identity.email : (active?.email ?? null),
       subject: current.identity?.subject ?? active?.subject ?? null,
       authMethod: current.authMethod,
-      accountId: active?.id ?? null
+      accountId: active?.id ?? null,
+      ...(current.accessTokenExpiresAt === null ? {} : { expiresAt: current.accessTokenExpiresAt })
     }
   }
 }
@@ -219,7 +221,8 @@ export class AntigravityLoginReader {
 export function antigravityAccountState(
   vault: AntigravityAccountVault,
   login: AntigravityLoginView | 'unread' | null,
-  restoresSelectionAtLaunch: boolean
+  restoresSelectionAtLaunch: boolean,
+  now: number
 ): AntigravityAccountState {
   const known = login === 'unread' ? null : login
   const activeAccountId =
@@ -242,7 +245,10 @@ export function antigravityAccountState(
               email: known.email,
               subject: known.subject,
               authMethod: known.authMethod,
-              identityKnown: known.subject !== null
+              identityKnown: known.subject !== null,
+              ...(known.expiresAt !== undefined && known.expiresAt <= now
+                ? { expiredAt: known.expiresAt }
+                : {})
             }
           : null
   }

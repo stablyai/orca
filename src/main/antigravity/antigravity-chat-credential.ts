@@ -19,3 +19,9 @@ export function envValue(
 export function envHasGeminiApiKey(env: Readonly<Record<string, string>>): boolean {
   return Boolean(envValue(env, 'GEMINI_API_KEY')?.trim())
 }
+
+/** Whether agy started with `env` signs in with gcloud (ADC) rather than its Google login. */
+export function envSelectsAgyAdcAuth(env: Readonly<Record<string, string>>): boolean {
+  const value = envValue(env, 'AGY_ADC_AUTH')?.trim().toLowerCase()
+  return Boolean(value) && value !== '0' && value !== 'false'
+}

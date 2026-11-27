@@ -54,6 +54,7 @@ import { acpHostBackendInput } from '../../../../acp/launch/acp-launch-command'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../../../antigravity/antigravity-acp-launch-spec'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import type { AntigravityChatSignInHost } from '../../../../antigravity/antigravity-chat-sign-in'
+import { watchAgyLoginChanges } from '../../../../antigravity/agy-login-change-watch'
 
 const stopLiveChats = () => stopStructuredAgentChats('antigravity', 'Antigravity')
 
@@ -104,8 +105,11 @@ const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost =
       throw new Error('agy is not installed on this host. Install it, then sign in again.')
     }
     const env = { ...input.env }
-    for (const key of input.envToDelete) {
-      delete env[key]
+    // This flow signs agy in to Google, which gcloud mode (AGY_ADC_AUTH) would bypass.
+    for (const key of Object.keys(env)) {
+      if (input.envToDelete.includes(key) || key.toUpperCase() === 'AGY_ADC_AUTH') {
+        delete env[key]
+      }
     }
     return { command: input.command, env }
   },
@@ -211,12 +215,12 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     params: AntigravityChatSignInStartParams,
     handler: async ({ intent }, ctx) => {
       const owner = signInOwner(ctx)
-      // Adding an account replaces agy's login, so the one it has is saved first; a failed save
-      // refuses the sign-in rather than lose that login.
+      // Adding an account replaces agy's login, so the one it has is saved first, without an email
+      // when Google won't name it; a failed save refuses the sign-in rather than lose that login.
       if (intent === 'changeAccount') {
         const accounts = await getAntigravityAccountService({ runtime: 'host' })
         if ((await accounts.listAccounts()).currentAccount) {
-          await accounts.addCurrentAccount()
+          await accounts.addCurrentAccount({ keepUnidentified: true })
         }
       }
       return startAntigravityChatSignIn(agySignInHost(ctx.runtime), owner, intent)
@@ -236,6 +240,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
       if (stream.isClosed()) {
         return
       }
+      watchAgyLoginChanges()
       dispose = subscribeAntigravityChatSignIn(() => emit(readAntigravityChatSignInStatus(owner)))
       emit(readAntigravityChatSignInStatus(owner))
       readAgySignInInBackground(ctx.runtime)

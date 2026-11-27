@@ -18,6 +18,8 @@ export type VerifiedAntigravityLogin = {
   subject: string | null
   authMethod: string
   accountId: string | null
+  /** When the login's access token expires; absent where agy saved none, and in older vaults. */
+  expiresAt?: number
 }
 export type AntigravityAccountVault = {
   accounts: StoredAntigravityAccount[]
@@ -59,7 +61,8 @@ function isVerifiedLogin(value: unknown): value is VerifiedAntigravityLogin {
     nullableString(value.email) &&
     nullableString(value.subject) &&
     typeof value.authMethod === 'string' &&
-    nullableString(value.accountId)
+    nullableString(value.accountId) &&
+    (value.expiresAt === undefined || Number.isFinite(value.expiresAt))
   )
 }
 
@@ -140,7 +143,10 @@ export function createEncryptedAntigravityAccountStore(
                     email: value.verifiedLogin.email,
                     subject: value.verifiedLogin.subject,
                     authMethod: value.verifiedLogin.authMethod,
-                    accountId: value.verifiedLogin.accountId
+                    accountId: value.verifiedLogin.accountId,
+                    ...(value.verifiedLogin.expiresAt === undefined
+                      ? {}
+                      : { expiresAt: value.verifiedLogin.expiresAt })
                   }
                 }
               : {})
