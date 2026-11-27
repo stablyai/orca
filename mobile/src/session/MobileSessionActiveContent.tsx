@@ -2,11 +2,8 @@ import { MobileSessionBotIdentity } from './native-chat/MobileSessionBotIdentity
 import { MobileBotCardHostProvider } from './native-chat/transcript/bot-cards/MobileBotCardHostProvider'
 import { nativeChatTerminalRunner } from './native-chat/native-chat-terminal-runner'
 import { useCallback, useMemo, useState } from 'react'
-import { computeActiveTerminalKeyboardLift } from '../terminal/keyboard/terminal-keyboard-avoidance-lift'
-import {
-  terminalPaneDirection,
-  terminalPaneKeyboardLayout
-} from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
+import { terminalPaneDirection } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
+import { SessionTerminalPane } from './session-terminal-pane'
 import { useWindowDimensions, View, StyleSheet } from 'react-native'
 import { CircleAlert } from 'lucide-react-native'
 import {
@@ -15,7 +12,6 @@ import {
   useSessionSideStripInset
 } from './session-side-strip-inset'
 import { MobileBrowserTabBody } from '../browser/MobileBrowserTabBody'
-import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { useMobileSessionNativeChatHostOutage } from './native-chat/status/mobile-native-chat-host-outage'
@@ -67,21 +63,15 @@ export function MobileSessionActiveContent({
     worktreeId,
     client,
     terminals,
-    terminalTextScale,
-    commitPinchedTextScale,
-    terminalFontStyle,
     activeHandle,
     terminalSplitActive,
     visibleTerminalHandles,
-    notifyTerminalPaneFrame,
     diffComments,
     diffCommentBusy,
     createError,
     dictationMode,
     dictationEnabled,
     toastMessage,
-    handleTerminalInteraction,
-    handleTerminalTap,
     browserScreencastSupported,
     showToast,
     nativeChatSendError,
@@ -102,22 +92,8 @@ export function MobileSessionActiveContent({
     copyMarkdownText,
     discardMarkdownLocalContent,
     saveMarkdownTab,
-    setTerminalWebViewRef,
-    releaseTerminalDocument,
-    handleTerminalWebReady,
     notifyTerminalFrame,
-    notifyTerminalCellBoxChange,
-    handleFileTap,
     handleNativeChatFileTap,
-    handleTerminalInput,
-    handleTerminalQueryReply,
-    handleSelectionMode,
-    handleSelectionCopy,
-    handleSelectionEvicted,
-    handleClipboardWrite,
-    handleModesChanged,
-    handleKeyboardAvoidanceMetrics,
-    handleHaptic,
     nativeChatImages,
     nativeChatStructuredComposer,
     activeMarkdownTab,
@@ -282,61 +258,17 @@ export function MobileSessionActiveContent({
         <View style={[StyleSheet.absoluteFill, sideStripOffset(stripInset)]}>
           <MountedTerminalPanes terminals={terminals} visibleHandles={visibleTerminalHandles}>
             {(terminal) => (
-              <TerminalPaneView
+              <SessionTerminalPane
                 key={terminal.handle}
-                handle={terminal.handle}
-                active={terminal.handle === activeHandle}
-                visible={visibleTerminalHandles.includes(terminal.handle)}
-                splitIndex={
-                  terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
-                    ? visibleTerminalHandles.indexOf(terminal.handle)
-                    : undefined
-                }
-                splitDirection={paneDirection}
-                splitFrame={paneFrame}
-                keyboardInset={keyboardLift}
-                title={terminal.title}
-                onFrame={notifyTerminalPaneFrame}
-                keyboardLift={
-                  terminal.handle !== activeHandle &&
-                  !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
-                    ? 0
-                    : terminalSplitActive
-                      ? computeActiveTerminalKeyboardLift({
-                          keyboardLift: terminalPaneKeyboardLayout(
-                            paneFrame,
-                            paneDirection,
-                            visibleTerminalHandles.indexOf(terminal.handle),
-                            keyboardLift
-                          ).occlusion,
-                          metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
-                          terminalFrameHeight:
-                            controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef
-                              .current?.height ?? 0
-                        })
-                      : activeTerminalKeyboardLift
-                }
-                terminalTheme={terminal.terminalTheme}
-                hostSettings={controller.terminalHostSettings}
-                textScale={terminalTextScale}
-                fontStyle={terminalFontStyle}
-                onTextScaleChange={commitPinchedTextScale}
-                onRef={setTerminalWebViewRef}
-                onDocumentReleased={releaseTerminalDocument}
-                onWebReady={handleTerminalWebReady}
-                onCellBoxChange={notifyTerminalCellBoxChange}
-                onSelectionMode={handleSelectionMode}
-                onSelectionCopy={handleSelectionCopy}
-                onSelectionEvicted={handleSelectionEvicted}
-                onClipboardWrite={handleClipboardWrite}
-                onModesChanged={handleModesChanged}
-                onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
-                onHaptic={handleHaptic}
-                onTerminalInput={handleTerminalInput}
-                onTerminalQueryReply={handleTerminalQueryReply}
-                onTerminalInteraction={handleTerminalInteraction}
-                onTerminalTap={handleTerminalTap}
-                onFileTap={handleFileTap}
+                terminal={terminal}
+                controller={controller}
+                activeHandle={activeHandle}
+                terminalSplitActive={terminalSplitActive}
+                visibleTerminalHandles={visibleTerminalHandles}
+                paneFrame={paneFrame}
+                paneDirection={paneDirection}
+                keyboardLift={keyboardLift}
+                activeTerminalKeyboardLift={activeTerminalKeyboardLift}
                 onOpenUrl={terminalLinks.handleTerminalOpenUrl}
               />
             )}

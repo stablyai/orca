@@ -3,7 +3,7 @@ import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat
 import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
 import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
-  focusMobileNativeChatTextDestination,
+  composerFieldFocus,
   pruneMobileNativeChatDraftSkills
 } from './drafts/mobile-native-chat-draft-inputs'
 import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
@@ -46,7 +46,7 @@ import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-ch
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
-import { MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
+import { composerCornerStyles, MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useThemedStyles } from '../../../theme/themed-styles'
 
@@ -105,7 +105,7 @@ export function MobileNativeChatComposer({
   steerHead
 }: Props): React.JSX.Element {
   const inputStyles = useThemedStyles(inputStylesSheet)
-  const styles = useThemedStyles(stylesSheet)
+  const styles = composerCornerStyles(useThemedStyles(stylesSheet), fitScreenCorners)
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInputInstance>(null)
@@ -276,18 +276,12 @@ export function MobileNativeChatComposer({
         onOpenBotChats={menu.openBotChats}
         nestedScrollEnabled={editSession ? true : undefined}
       />
-      <View
-        style={fitScreenCorners ? styles.composerInsetCornerFit : styles.composerInset}
-        testID="native-chat-composer-inset"
-      >
+      <View style={styles.composerInset} testID="native-chat-composer-inset">
         {editSession ? null : <MobileNativeChatMcpTray panel={structured?.mcpPanel} />}
         {orca.usageSheet}
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
-        <Animated.View
-          style={[fitScreenCorners ? styles.barCornerFit : styles.bar, collapse.frame]}
-          testID="native-chat-composer"
-        >
+        <Animated.View style={[styles.bar, collapse.frame]} testID="native-chat-composer">
           <View
             style={[styles.barContent, collapsed && styles.barContentPill]}
             onLayout={collapse.onContentLayout}
@@ -316,12 +310,7 @@ export function MobileNativeChatComposer({
                     headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
                   }
                 }}
-                onFocus={() => {
-                  setFocused(true)
-                  if (draftScopeKey) {
-                    focusMobileNativeChatTextDestination(draftScopeKey)
-                  }
-                }}
+                onFocus={composerFieldFocus(setFocused, draftScopeKey)}
                 onBlur={() => setFocused(false)}
                 onWebPaste={onWebPaste}
                 // Controlled only transiently right after an autocomplete insert.

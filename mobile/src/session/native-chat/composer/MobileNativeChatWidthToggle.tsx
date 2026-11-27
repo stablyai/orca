@@ -32,3 +32,18 @@ export function MobileNativeChatWidthToggle({
     </Pressable>
   )
 }
+
+/** Corner-fit chrome swaps the inset and the bar without a second style read at the call site. */
+export function composerCornerStyles<
+  T extends {
+    composerInset: unknown
+    composerInsetCornerFit: unknown
+    bar: unknown
+    barCornerFit: unknown
+  }
+>(styles: T, fitScreenCorners: boolean): T {
+  if (!fitScreenCorners) {
+    return styles
+  }
+  return { ...styles, composerInset: styles.composerInsetCornerFit, bar: styles.barCornerFit }
+}
