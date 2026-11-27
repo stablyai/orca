@@ -81,7 +81,8 @@ export function mobileNativeChatEmptyState(
       const copy = mobileNativeChatEmptyStateCopy('error', agentLabel)
       return error ? { ...copy, subtitle: describeLoadError(error, translate).message } : copy
     }
-    default:
+    case 'idle':
+    case 'loading':
       return null
   }
 }

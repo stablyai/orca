@@ -387,6 +387,9 @@ function renderBlock(
     case 'tableRow':
     case 'yaml':
       return null
+    case 'htmlSpan':
+    case 'mention':
+      return undefined
   }
 }
 

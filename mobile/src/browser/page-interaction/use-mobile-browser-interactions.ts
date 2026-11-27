@@ -33,7 +33,7 @@ type PanGesture = { x: number; y: number; offsetX: number; offsetY: number }
 type SendBrowserRequest = (
   send: BrowserPageCommandSend,
   options?: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number }
-) => Promise<unknown | null>
+) => Promise<unknown>
 
 type MobileBrowserInteractionArgs = {
   clearLongPressTimer: () => void

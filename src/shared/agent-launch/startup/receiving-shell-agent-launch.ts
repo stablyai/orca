@@ -35,6 +35,7 @@ export function receivingShellDialect(
       return name
     case 'dash':
       return 'sh'
+    case undefined:
     default:
       return undefined
   }

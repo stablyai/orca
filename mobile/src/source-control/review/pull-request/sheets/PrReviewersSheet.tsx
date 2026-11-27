@@ -47,6 +47,8 @@ function reviewerStateLabel(
       return { label: t('pullRequest.reviewersSection.dismissed', 'Dismissed'), approved: false }
     case 'PENDING':
       return { label: t('pullRequest.reviewersSection.pending', 'Pending'), approved: false }
+    case null:
+    case undefined:
     default:
       return { label: t('pullRequest.reviewersSection.reviewed', 'Reviewed'), approved: false }
   }
