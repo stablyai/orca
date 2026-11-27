@@ -49,15 +49,15 @@ describe('SharedToolProcessSession', () => {
     expect(Object.values(tools)).not.toContain('bot-a-secret')
     expect(tools.PATH).toBeUndefined()
     const token = tools.ORCA_AGENT_SESSION_TOOL_TOKEN!
-    expect(sharedToolProcessCaller(token)).toEqual({
+    expect(await sharedToolProcessCaller(token)).toEqual({
       ORCA_AGENT_SESSION_ID: 'chat-a',
       ORCA_TERMINAL_HANDLE: 'structworker_a',
       ORCA_BOT_TOOLS_TOKEN: 'bot-a-secret'
     })
-    expect(sharedToolProcessCaller(`${token}x`)).toBeNull()
+    expect(await sharedToolProcessCaller(`${token}x`)).toBeNull()
 
     session.end()
-    expect(sharedToolProcessCaller(token)).toBeNull()
+    expect(await sharedToolProcessCaller(token)).toBeNull()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(withdrawn).toEqual(['hermes-1'])
   })

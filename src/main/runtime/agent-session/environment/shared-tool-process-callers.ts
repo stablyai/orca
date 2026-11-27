@@ -21,14 +21,16 @@ export function restoreKeptSharedToolCallers(kept: readonly KeptSharedToolCaller
 }
 
 /** The caller identity a token was issued for; null for a token this run never issued or ended. */
-export function sharedToolProcessCaller(token: string): Readonly<Record<string, string>> | null {
+export async function sharedToolProcessCaller(
+  token: string
+): Promise<Readonly<Record<string, string>> | null> {
   const key = hashToken(token)
   const known = callers.get(key)
   if (known) {
     return known
   }
   // A kept caller the keychain refused at startup may open now (at most once per 10 s).
-  restoreKeptSharedToolCallers(sharedToolCallerStore.unlock())
+  restoreKeptSharedToolCallers(await sharedToolCallerStore.unlock())
   return callers.get(key) ?? null
 }
 
@@ -77,15 +79,15 @@ export class SharedToolProcessSession {
    * The chat's caller from an earlier run of Orca, for its agent kept running since: the same token
    * its tools already hold. Null when none was kept for the chat's current run.
    */
-  static reattached(
+  static async reattached(
     spec: { sharedToolProcess?: { publishSessionEnv: PublishSharedToolProcessSessionEnv } },
     sealed: Readonly<Record<string, string>>,
     sessionId: string,
     runFence: number,
     outlivesApp: () => boolean,
     agentVersion?: string
-  ): SharedToolProcessSession | null {
-    const restored = sharedToolCallerStore.restored(sessionId)
+  ): Promise<SharedToolProcessSession | null> {
+    const restored = spec.sharedToolProcess ? await sharedToolCallerStore.restored(sessionId) : null
     if (!spec.sharedToolProcess || !restored) {
       return null
     }

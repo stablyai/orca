@@ -1,15 +1,16 @@
 // Kept chats' shared-tool caller tokens, sealed at rest so a chat whose agent outlives the app keeps
 // its caller identity. Only the session id, run fence and grant owner are in the clear; the caller
-// payload carries the bot and MCP tokens, so it is sealed whole. One entry per kept chat run.
+// payload carries the bot and MCP tokens, so it is sealed whole. One entry (and file) per kept chat
+// run, so a launch writes only its own.
 import { jsonObject } from '../../../../shared/json-stream/json-value-property'
 import {
   relaySealingProtected,
-  RelaySealedFile,
   relayUnlockThrottle,
   type RelayUnlockThrottle,
   sealRelaySecret,
   unsealRelaySecret
 } from '../../../bots/tool-relay/relay-sealed-file'
+import { RelaySealedEntries } from '../../../bots/tool-relay/relay-sealed-entries'
 import {
   keptToolCallerRun,
   keptToolCallerRunsInstalled,
@@ -45,9 +46,11 @@ function isStoredCaller(value: unknown): value is StoredSharedToolCaller {
   )
 }
 
-function opened(entry: StoredSharedToolCaller): KeptSharedToolCaller | null {
+const callerKey = (entry: StoredSharedToolCaller): string => `${entry.sessionId}\n${entry.runFence}`
+
+async function opened(entry: StoredSharedToolCaller): Promise<KeptSharedToolCaller | null> {
   try {
-    const payload = jsonObject(JSON.parse(unsealRelaySecret(entry.sealed)))
+    const payload = jsonObject(JSON.parse(await unsealRelaySecret(entry.sealed)))
     const token = payload?.token
     const caller: Record<string, string> = {}
     for (const [name, value] of Object.entries(jsonObject(payload?.caller) ?? {})) {
@@ -77,7 +80,7 @@ type Entry = { stored: StoredSharedToolCaller; kept: KeptSharedToolCaller | null
 const UNLOCK_BATCH = 64
 
 export class SharedToolCallerStore {
-  private file: RelaySealedFile<StoredSharedToolCaller> | null = null
+  private files: RelaySealedEntries<StoredSharedToolCaller> | null = null
   /**
    * Each kept chat's run entries by fence, sealed as written, with what each opened to; null while
    * the keychain won't open it (it stays as written and is retried).
@@ -101,28 +104,28 @@ export class SharedToolCallerStore {
     if (!config || !keptToolCallerRunsInstalled()) {
       return
     }
-    this.file ??= new RelaySealedFile(keptToolCallersPath(config.directory), isStoredCaller)
-    this.loading ??= this.loadOnce(this.file)
+    this.files ??= new RelaySealedEntries(
+      keptToolCallersPath(config.directory),
+      isStoredCaller,
+      callerKey
+    )
+    this.loading ??= this.loadOnce(this.files)
     return this.loading
   }
 
-  private async loadOnce(file: RelaySealedFile<StoredSharedToolCaller>): Promise<void> {
+  private async loadOnce(files: RelaySealedEntries<StoredSharedToolCaller>): Promise<void> {
     // Loaded when used: the relay's revoke reaches this store.
     const { botToolRelay } = await import('../../../bots/tool-relay/bot-tool-relay')
     await botToolRelay.kept.loaded()
-    let dropped = false
-    for (const stored of await file.read()) {
+    for (const stored of await files.read()) {
       if (
         keptToolCallerRun(stored.sessionId) === stored.runFence &&
         botToolRelay.kept.keeps(stored.owner)
       ) {
-        this.put({ stored, kept: opened(stored) })
+        this.put({ stored, kept: await opened(stored) })
       } else {
-        dropped = true
+        void files.delete(stored).catch(() => {})
       }
-    }
-    if (dropped) {
-      await this.persist().catch(() => {})
     }
   }
 
@@ -142,48 +145,60 @@ export class SharedToolCallerStore {
    * Entries the keychain refused at load, retried at most once per 10 s across every kept relay
    * file; returns the callers that opened now.
    */
-  unlock(): KeptSharedToolCaller[] {
+  async unlock(): Promise<KeptSharedToolCaller[]> {
     if (this.locked.size === 0 || !this.throttle.due()) {
       return []
     }
     const opening = [...this.locked].slice(0, UNLOCK_BATCH)
-    return opening.flatMap((entry) => {
-      this.open(entry)
-      return entry.kept ? [entry.kept] : []
-    })
+    const kept: KeptSharedToolCaller[] = []
+    for (const entry of opening) {
+      if (await this.open(entry)) {
+        kept.push(entry.kept!)
+      }
+    }
+    return kept
   }
 
   /**
    * The chat's kept caller from an earlier run of Orca, if its run is still the current one. Its
    * reattach tries a still-locked entry of its own once, apart from the shared retry.
    */
-  restored(sessionId: string): KeptSharedToolCaller | null {
+  async restored(sessionId: string): Promise<KeptSharedToolCaller | null> {
     for (const entry of this.chats.get(sessionId)?.values() ?? []) {
-      if (entry.kept || this.open(entry)) {
+      if (entry.kept || (await this.open(entry))) {
         return entry.kept
       }
     }
     return null
   }
 
-  private open(entry: Entry): boolean {
-    entry.kept ??= opened(entry.stored)
-    if (entry.kept) {
-      this.locked.delete(entry)
+  /** Async: on Linux only the async keychain path recovers once a locked keyring is unlocked. */
+  private async open(entry: Entry): Promise<boolean> {
+    if (!entry.kept) {
+      const kept = await opened(entry.stored)
+      // Retired while the keychain answered: it stays gone.
+      if (!kept || !this.locked.has(entry)) {
+        return entry.kept !== null
+      }
+      entry.kept = kept
     }
-    return entry.kept !== null
+    this.locked.delete(entry)
+    return true
   }
 
   /** Durably keeps a caller; false (memory-only, so its launch is app-bound) when it can't. */
-  async keep(caller: KeptSharedToolCaller): Promise<boolean> {
+  async keep(caller: KeptSharedToolCaller, resealed?: string): Promise<boolean> {
     await this.load()
-    if (!this.file || !relaySealingProtected()) {
+    const files = this.files
+    if (!files || (resealed === undefined && !relaySealingProtected())) {
       return false
     }
     const revocation = this.revocations.get(caller.owner) ?? 0
     let sealed: string
     try {
-      sealed = await sealRelaySecret(JSON.stringify({ caller: caller.caller, token: caller.token }))
+      sealed =
+        resealed ??
+        (await sealRelaySecret(JSON.stringify({ caller: caller.caller, token: caller.token })))
     } catch {
       return false
     }
@@ -195,17 +210,17 @@ export class SharedToolCallerStore {
     const entry: Entry = { stored: { sessionId, runFence, owner, sealed }, kept: caller }
     this.put(entry)
     try {
-      await this.persist()
+      await files.put(entry.stored)
       return true
     } catch {
-      this.remove(entry)
+      void this.retire(entry).catch(() => {})
       return false
     }
   }
 
   /**
    * `current` is the caller the chat's run now uses (null: none kept); every other entry of the
-   * chat retires. A reattached run carries its restored caller over to its new fence.
+   * chat retires. A reattached run whose kept entry is still locked carries that entry instead.
    */
   async settle(
     sessionId: string,
@@ -214,27 +229,30 @@ export class SharedToolCallerStore {
     carryLockedTo?: number
   ): Promise<void> {
     await this.load()
-    const runs = this.chats.get(sessionId)
-    const carried = current
-      ? undefined
-      : [...(runs?.values() ?? [])].find((entry) => entry.kept === null)
-    let changed = false
-    for (const [fence, entry] of runs ?? []) {
-      if (fence !== current?.runFence) {
-        this.remove(entry)
-        changed = true
+    const runs = [...(this.chats.get(sessionId)?.values() ?? [])]
+    const carried =
+      carryLockedTo === undefined ? undefined : runs.find((entry) => entry.kept === null)
+    const writes: Promise<unknown>[] = []
+    if (carried && carryLockedTo !== undefined) {
+      // The reattached agent holds that entry's token, so the run's caller is it, not `current`.
+      const moved: Entry = { stored: { ...carried.stored, runFence: carryLockedTo }, kept: null }
+      this.put(moved)
+      writes.push(this.files?.put(moved.stored) ?? Promise.resolve())
+    } else if (
+      current &&
+      this.chats.get(sessionId)?.get(current.runFence)?.kept?.token !== current.token
+    ) {
+      // A reattached caller is sealed already: its earlier entry's sealing is reused, not redone.
+      const sealed = runs.find((entry) => entry.kept?.token === current.token)?.stored.sealed
+      await this.keep(current, sealed)
+    }
+    const stays = carried ? carryLockedTo : current?.runFence
+    for (const entry of runs) {
+      if (entry.stored.runFence !== stays) {
+        writes.push(this.retire(entry))
       }
     }
-    if (carried && carryLockedTo !== undefined) {
-      this.put({ stored: { ...carried.stored, runFence: carryLockedTo }, kept: null })
-    }
-    if (current && runs?.get(current.runFence)?.kept?.token !== current.token) {
-      await this.keep(current)
-      return
-    }
-    if (changed) {
-      await this.persist().catch(() => {})
-    }
+    await Promise.all(writes.map((write) => write.catch(() => {})))
   }
 
   /** Removes exactly this entry (its launch failed); other runs of the chat stay. */
@@ -242,8 +260,7 @@ export class SharedToolCallerStore {
     await this.load()
     const entry = this.chats.get(caller.sessionId)?.get(caller.runFence)
     if (entry?.kept === caller) {
-      this.remove(entry)
-      await this.persist()
+      await this.retire(entry)
     }
   }
 
@@ -251,18 +268,18 @@ export class SharedToolCallerStore {
   async forgetOwner(owner: string): Promise<void> {
     this.revocations.set(owner, (this.revocations.get(owner) ?? 0) + 1)
     await this.load()
-    let changed = false
-    for (const runs of this.chats.values()) {
-      for (const entry of runs.values()) {
-        if (entry.stored.owner === owner) {
-          this.remove(entry)
-          changed = true
-        }
-      }
+    const going = [...this.chats.values()].flatMap((runs) =>
+      [...runs.values()].filter((entry) => entry.stored.owner === owner)
+    )
+    await Promise.all(going.map((entry) => this.retire(entry)))
+  }
+
+  /** The entry leaves memory, then its file; a replaced entry's file is its replacement's. */
+  private retire(entry: Entry): Promise<void> {
+    if (!this.remove(entry)) {
+      return Promise.resolve()
     }
-    if (changed) {
-      await this.persist()
-    }
+    return this.files?.delete(entry.stored) ?? Promise.resolve()
   }
 
   private put(entry: Entry): void {
@@ -279,23 +296,18 @@ export class SharedToolCallerStore {
     }
   }
 
-  private remove(entry: Entry): void {
+  /** True when the entry was still the chat run's. */
+  private remove(entry: Entry): boolean {
     const runs = this.chats.get(entry.stored.sessionId)
     this.locked.delete(entry)
-    if (runs?.get(entry.stored.runFence) === entry) {
-      runs.delete(entry.stored.runFence)
-      if (runs.size === 0) {
-        this.chats.delete(entry.stored.sessionId)
-      }
+    if (runs?.get(entry.stored.runFence) !== entry) {
+      return false
     }
-  }
-
-  private persist(): Promise<void> {
-    return this.file
-      ? this.file.write(() =>
-          [...this.chats.values()].flatMap((runs) => [...runs.values()].map(({ stored }) => stored))
-        )
-      : Promise.resolve()
+    runs.delete(entry.stored.runFence)
+    if (runs.size === 0) {
+      this.chats.delete(entry.stored.sessionId)
+    }
+    return true
   }
 }
 

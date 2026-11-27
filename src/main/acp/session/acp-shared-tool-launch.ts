@@ -21,7 +21,7 @@ export async function acpSharedToolLaunch<
   /** Relays the launch, app-bound when its caller couldn't be kept; a failure drops the token. */
   relay: <R>(start: (launch: L) => Promise<R>) => Promise<R>
   /** This launch's session, or the kept one when its agent was reattached. */
-  take: (reattached: boolean) => SharedToolProcessSession | null
+  take: (reattached: boolean) => Promise<SharedToolProcessSession | null>
 }> {
   // Until the process exits, only its session's tools can name the chat.
   const launched = SharedToolProcessSession.forLaunch(launch.spec, launch.env, launch.version)
@@ -38,9 +38,9 @@ export async function acpSharedToolLaunch<
         launched?.abandon()
         throw error
       }),
-    take: (reattached) => {
+    take: async (reattached) => {
       const restored = reattached
-        ? SharedToolProcessSession.reattached(
+        ? await SharedToolProcessSession.reattached(
             launch.spec,
             launch.env,
             run.sessionId,

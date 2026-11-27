@@ -34,5 +34,11 @@ export const guardedSafeStorage = {
       throw new SafeStorageWithheldError(withheldReason)
     }
     return safeStorage.decryptString(cipher)
+  },
+  async decryptStringAsync(cipher: Buffer): Promise<string> {
+    if (withheldReason !== null) {
+      throw new SafeStorageWithheldError(withheldReason)
+    }
+    return (await safeStorage.decryptStringAsync(cipher)).result
   }
 }

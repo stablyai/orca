@@ -36,8 +36,6 @@ import {
   type RelayFetch
 } from './bot-tool-relay-upstream'
 
-const MAX_TRACKED_SESSIONS = 1_000
-const MAX_TRACKED_PROBLEMS = 1_000
 /** Why a call was aborted: the agent hung up, or the tool, its sign-in or the bot went. */
 const AGENT_LEFT = Symbol('agent left')
 const CREDENTIAL_ENDED = Symbol('credential ended')
@@ -55,8 +53,8 @@ export class BotToolRelay {
   /** Tokens, kept at rest where they may outlive the app, and the fronts kept agents reach. */
   readonly kept = new KeptRelayGrants(() => this.listen().then(() => this.server))
   /** Which upstream session identity an MCP session was made under, so a changed one starts over. */
-  private readonly sessions = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_SESSIONS })
-  private readonly problems = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_PROBLEMS })
+  private readonly sessions = new BoundedMap<string, string>({ maxEntries: 1_000 })
+  private readonly problems = new BoundedMap<string, string>({ maxEntries: 1_000 })
   private readonly admission = new RelayAdmission()
 
   constructor(
@@ -183,7 +181,9 @@ export class BotToolRelay {
       // session shares the host's token, so only this computer's limits bound its calls.
       const shared = grant.owner === MCP_HOST_LIST_RELAY_OWNER
       const key = credentialKey(folder, entry)
-      call = this.admission.admit(grant.owner, method, key, !shared, match.process !== undefined)
+      call = this.kept.admitThroughFront(req, res, () =>
+        this.admission.admit(grant.owner, method, key, !shared, match.process !== undefined)
+      )
       if (!call) {
         throw new RelayRefusal(429, 'Too many tool calls at once.')
       }

@@ -21,8 +21,9 @@ let restoring: Promise<void> | null = null
 
 export const keptToolGrantsPath = (directory: string): string =>
   join(directory, 'bot-tool-relay-grants.json')
+/** A folder: one file per kept chat run. */
 export const keptToolCallersPath = (directory: string): string =>
-  join(directory, 'shared-tool-callers.json')
+  join(directory, 'shared-tool-callers')
 
 /** Desktop startup on macOS and Linux, where agents can outlive the app; elsewhere nothing is kept. */
 export function configureKeptToolGrants(installed: KeptToolGrantsConfig): void {

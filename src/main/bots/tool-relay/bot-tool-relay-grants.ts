@@ -137,7 +137,7 @@ export class RelayGrants {
         continue
       }
       const entry = { ...stored, folders: resolvedFolders(folders) }
-      if (!this.open(entry)) {
+      if (!(await this.open(entry))) {
         this.locked.set(entry.owner, entry)
       }
     }
@@ -167,13 +167,16 @@ export class RelayGrants {
     await this.load()
     const token = this.tokens.get(owner)
     const grant = token ? this.grants.get(hashToken(token)) : undefined
-    if (!this.file || !token || !grant || this.locked.has(owner) || !relaySealingProtected()) {
+    if (!this.file || !token || !grant || this.locked.has(owner)) {
       return false
     }
     const current = this.kept.get(owner)
     if (current?.token === token) {
-      // A launch racing the first one waits for the same durable write.
+      // Already in the file (or a racing launch's write): no new seal, so no keychain check.
       return current.durable
+    }
+    if (!relaySealingProtected()) {
+      return false
     }
     const record: KeptToken = { token, entry: null, durable: Promise.resolve(false) }
     this.kept.set(owner, record)
@@ -217,7 +220,7 @@ export class RelayGrants {
    * An unknown token while some kept token is still locked: one retry per `RELAY_UNLOCK_RETRY_MS`
    * across all callers. `locked` while any stays locked, so its agents hear to try again.
    */
-  unlock(token: string): RelayGrant | 'locked' | undefined {
+  async unlock(token: string): Promise<RelayGrant | 'locked' | undefined> {
     if (this.locked.size === 0) {
       return undefined
     }
@@ -225,9 +228,7 @@ export class RelayGrants {
       return 'locked'
     }
     for (const entry of this.locked.values()) {
-      if (this.open(entry)) {
-        this.locked.delete(entry.owner)
-      }
+      await this.open(entry)
     }
     return this.of(token) ?? (this.locked.size > 0 ? 'locked' : undefined)
   }
@@ -257,14 +258,23 @@ export class RelayGrants {
     this.tokens.clear()
   }
 
-  /** Opens a stored token: it becomes the owner's current one, as the file holds it. */
-  private open(entry: StoredRelayGrant): boolean {
+  /**
+   * Opens a stored token: it becomes the owner's current one, as the file holds it. Async, since on
+   * Linux only the async keychain path recovers once a keyring locked at startup is unlocked.
+   */
+  private async open(entry: StoredRelayGrant): Promise<boolean> {
     let token: string
     try {
-      token = unsealRelaySecret(entry.sealedToken)
+      token = await unsealRelaySecret(entry.sealedToken)
     } catch {
       return false
     }
+    const retried = this.locked.get(entry.owner)
+    // Revoked, or loaded as another entry, while the keychain answered.
+    if (retried ? retried !== entry : this.kept.has(entry.owner)) {
+      return false
+    }
+    this.locked.delete(entry.owner)
     this.grants.set(hashToken(token), { owner: entry.owner, folders: entry.folders })
     this.tokens.set(entry.owner, token)
     this.kept.set(entry.owner, { entry, token, durable: Promise.resolve(true) })

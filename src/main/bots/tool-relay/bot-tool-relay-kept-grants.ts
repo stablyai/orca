@@ -1,6 +1,8 @@
 // The relay's grants with what keeps them across a restart: tokens sealed at rest, and the
 // daemon-held fronts agents kept from an earlier run of Orca reach the relay by.
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
+import type { Socket } from 'node:net'
+import { TOOL_RELAY_FRONT_MAX_PIPES } from '../../daemon/tool-relay-front/daemon-tool-relay-front'
 import { forgetKeptSharedToolCallers } from '../../runtime/agent-session/environment/shared-tool-caller-store'
 import {
   isStoredRelayGrant,
@@ -13,16 +15,27 @@ import { keptGrantOwnerFolders, keptToolGrantsConfig, keptToolGrantsPath } from 
 import { RelaySealedFile } from './relay-sealed-file'
 import { answerCredentialsLocked } from './bot-tool-relay-sign-in-answer'
 
+/**
+ * Event streams a front carries at once. The daemon pipes at most `TOOL_RELAY_FRONT_MAX_PIPES` per
+ * front and can't tell a stream from a call, so streams stop short of it: calls and cleanup always
+ * get a pipe, since idle keep-alive connections close within seconds.
+ */
+export const FRONT_STREAM_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 64
+
 /** A grant's address and token; `front` names the daemon start whose front the origin is. */
 export type RelayGrantAnswer = { origin: string; token: string; front?: string }
 
 export class KeptRelayGrants {
   private readonly grants = new RelayGrants()
   readonly fronts: ToolRelayFronts
+  /** Each front connection's front, by port. */
+  private readonly frontOf = new WeakMap<Socket, number>()
+  private readonly frontStreams = new Map<number, number>()
 
   /** `server`: the relay's HTTP server, listening; a front's connection is served as one made to it. */
   constructor(server: () => Promise<Server | null>) {
-    this.fronts = new ToolRelayFronts((socket) => {
+    this.fronts = new ToolRelayFronts((socket, port) => {
+      this.cameThroughFront(socket, port)
       server().then(
         (listening) => {
           if (!listening || this.fronts.isClosed) {
@@ -79,10 +92,16 @@ export class KeptRelayGrants {
     await this.fronts.serveAll()
   }
 
-  /** A token's grant; one the keychain refused at startup is retried (at most once per 10 s). */
+  /**
+   * A token's grant. A miss retries the kept ones the keychain refused at startup in the background
+   * (at most once per 10 s), so a later lookup finds them.
+   */
   of(token: string): RelayGrant | undefined {
-    const grant = this.grants.of(token) ?? this.grants.unlock(token)
-    return grant === 'locked' ? undefined : grant
+    const grant = this.grants.of(token)
+    if (!grant) {
+      void this.grants.unlock(token).catch(() => {})
+    }
+    return grant
   }
 
   /**
@@ -92,12 +111,50 @@ export class KeptRelayGrants {
   async bearer(req: IncomingMessage, res: ServerResponse): Promise<RelayGrant | 'answered' | null> {
     await this.loaded()
     const token = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1]
-    const grant = token ? (this.grants.of(token) ?? this.grants.unlock(token)) : undefined
+    const grant = token ? (this.grants.of(token) ?? (await this.grants.unlock(token))) : undefined
     if (grant === 'locked') {
       await answerCredentialsLocked(req, res)
       return 'answered'
     }
     return grant ?? null
+  }
+
+  /**
+   * Admits a call by `admit`; a GET stream through a front also needs a slot of the front's stream
+   * budget until its response ends. Refused, its connection closes, so its daemon pipe frees now.
+   */
+  admitThroughFront<Call>(
+    req: Pick<IncomingMessage, 'method' | 'socket'>,
+    res: Pick<ServerResponse, 'shouldKeepAlive' | 'once'>,
+    admit: () => Call | null
+  ): Call | null {
+    const port = req.method === 'GET' ? this.frontOf.get(req.socket) : undefined
+    if (port === undefined) {
+      return admit()
+    }
+    const streams = this.frontStreams.get(port) ?? 0
+    const call = streams < FRONT_STREAM_BUDGET ? admit() : null
+    if (!call) {
+      res.shouldKeepAlive = false
+      return null
+    }
+    this.frontStreams.set(port, streams + 1)
+    res.once('close', () => {
+      const left = (this.frontStreams.get(port) ?? 1) - 1
+      if (left > 0) {
+        this.frontStreams.set(port, left)
+      } else {
+        this.frontStreams.delete(port)
+      }
+    })
+    return call
+  }
+
+  /** A connection a front handed over: its requests count against that front's budget. */
+  cameThroughFront(socket: Socket, port: number | null): void {
+    if (port !== null) {
+      this.frontOf.set(socket, port)
+    }
   }
 
   /** Whether `owner`'s grant is kept in the file (opened or still locked). */

@@ -17,7 +17,7 @@ export const STRUCTURED_AGENT_SESSION_TOOL_CALLER_METHODS = [
       if (ctx.caller?.kind !== 'local-cli') {
         throw new Error('forbidden')
       }
-      const env = sharedToolProcessCaller(params.token)
+      const env = await sharedToolProcessCaller(params.token)
       // A kept caller the keychain hasn't opened yet may be this one: say so, not that it ended.
       return env || !sharedToolCallerStore.hasLocked() ? { env } : { env, locked: true }
     }

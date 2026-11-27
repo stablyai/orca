@@ -11,7 +11,10 @@ import { isStoredRelayGrant, RelayGrants, type StoredRelayGrant } from './bot-to
 import { RELAY_UNLOCK_RETRY_MS, RelaySealedFile, RelayUnlockThrottle } from './relay-sealed-file'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 
-/** A keychain that seals by reversing the bytes, and can be locked or downgraded. */
+/**
+ * A keychain that seals by reversing the bytes, and can be locked or downgraded. Its sync decrypt is
+ * dead, as Linux's stays once the keyring was locked at startup: only the async path opens entries.
+ */
 const keychain: { locked: boolean; sealing: 'os-keychain' | 'none'; opens: number } = {
   locked: false,
   sealing: 'os-keychain',
@@ -20,7 +23,10 @@ const keychain: { locked: boolean; sealing: 'os-keychain' | 'none'; opens: numbe
 const store: SecretStore = {
   isEncryptionAvailable: () => true,
   encryptString: (plain) => Buffer.from(Buffer.from(plain, 'utf8').toReversed()),
-  decryptString: (cipher) => {
+  decryptString: () => {
+    throw new Error('sync decrypt unavailable')
+  },
+  decryptStringAsync: async (cipher) => {
     keychain.opens += 1
     if (keychain.locked) {
       throw new Error('keychain locked')
@@ -108,16 +114,16 @@ describe('kept relay grants', () => {
     expect(readFileSync(path, 'utf8')).toBe(written)
 
     const opensAfterLoad = keychain.opens
-    expect(next.unlock(token)).toBe('locked')
+    expect(await next.unlock(token)).toBe('locked')
     // A flood of unknown tokens inside the window never reaches the keychain again.
     for (let index = 0; index < 100; index += 1) {
-      expect(next.unlock(`unknown-${index}`)).toBe('locked')
+      expect(await next.unlock(`unknown-${index}`)).toBe('locked')
     }
     expect(keychain.opens).toBe(opensAfterLoad + 1)
 
     keychain.locked = false
     clock += RELAY_UNLOCK_RETRY_MS
-    expect(next.unlock(token)).toMatchObject({ owner: 'scout' })
-    expect(next.unlock('unknown')).toBeUndefined()
+    expect(await next.unlock(token)).toMatchObject({ owner: 'scout' })
+    expect(await next.unlock('unknown')).toBeUndefined()
   })
 })

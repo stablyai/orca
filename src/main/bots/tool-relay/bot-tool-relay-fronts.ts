@@ -39,7 +39,8 @@ export class ToolRelayFronts {
   /** Cancels connection setup still running when this closes. */
   private readonly closing = new AbortController()
 
-  constructor(private readonly accept: (socket: Socket) => void) {}
+  /** `accept` takes a front's connection, with the port of the front it came through. */
+  constructor(private readonly accept: (socket: Socket, port: number | null) => void) {}
 
   /**
    * The front of the daemon start `chatKey`'s agent runs on: the one its kept agent runs under, or
@@ -203,7 +204,7 @@ export class ToolRelayFronts {
         if (opened.remainder.length > 0) {
           opened.socket.unshift(opened.remainder)
         }
-        this.accept(opened.socket)
+        this.accept(opened.socket, watched.port)
         return
       }
       // Unopened, the daemon answers the held connection itself once its hold runs out.

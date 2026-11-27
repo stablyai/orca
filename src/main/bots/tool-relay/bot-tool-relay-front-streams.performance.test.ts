@@ -1,0 +1,46 @@
+// Guards #51086: event streams through one front stop at their budget, so calls and cleanup always
+// get one of the daemon's pipes, and a refused stream's connection closes at once.
+import { EventEmitter } from 'node:events'
+import { Socket } from 'node:net'
+import { describe, expect, it } from 'vitest'
+import { FRONT_STREAM_BUDGET, KeptRelayGrants } from './bot-tool-relay-kept-grants'
+import { TOOL_RELAY_FRONT_MAX_PIPES } from '../../daemon/tool-relay-front/daemon-tool-relay-front'
+
+type Answer = EventEmitter & { shouldKeepAlive: boolean }
+
+function request(
+  kept: KeptRelayGrants,
+  method: string,
+  socket: Socket
+): { admitted: boolean; res: Answer } {
+  const res = Object.assign(new EventEmitter(), { shouldKeepAlive: true })
+  const admitted = kept.admitThroughFront({ method, socket }, res, () => ({}))
+  return { admitted: admitted !== null, res }
+}
+
+describe('front stream budget', () => {
+  it('admits streams up to the budget, refuses the rest with a closing answer, and leaves calls room', () => {
+    const kept = new KeptRelayGrants(async () => null)
+    const connections = Array.from({ length: FRONT_STREAM_BUDGET + 10 }, () => new Socket())
+    for (const socket of connections) {
+      kept.cameThroughFront(socket, 4000)
+    }
+    const streams = connections.map((socket) => request(kept, 'GET', socket))
+    expect(streams.filter((stream) => stream.admitted)).toHaveLength(FRONT_STREAM_BUDGET)
+    const refused = streams.filter((stream) => !stream.admitted)
+    expect(refused.every((stream) => !stream.res.shouldKeepAlive)).toBe(true)
+    expect(TOOL_RELAY_FRONT_MAX_PIPES - FRONT_STREAM_BUDGET).toBeGreaterThanOrEqual(64)
+
+    // Calls, cleanup and another front's streams aren't counted against this front's streams.
+    expect(request(kept, 'POST', connections[0]!).admitted).toBe(true)
+    expect(request(kept, 'DELETE', connections[0]!).admitted).toBe(true)
+    const elsewhere = new Socket()
+    kept.cameThroughFront(elsewhere, 4001)
+    expect(request(kept, 'GET', elsewhere).admitted).toBe(true)
+
+    // A stream ending frees its slot.
+    streams[0]!.res.emit('close')
+    expect(request(kept, 'GET', connections[0]!).admitted).toBe(true)
+    expect(request(kept, 'GET', connections[1]!).admitted).toBe(false)
+  })
+})
