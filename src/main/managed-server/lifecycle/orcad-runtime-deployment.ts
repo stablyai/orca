@@ -4,7 +4,6 @@ import { randomUUID } from 'node:crypto'
 import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
-import { RuntimeEnvironmentStoreError } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import {
   getOrcadSshDeployment,
   redactRuntimeEnvironment
@@ -39,6 +38,7 @@ import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 import { resolveOrcadMigrationFence } from '../../ssh/migration-source/orcad-migration-source-fence'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { findNamesakeBeforeDeploy } from './orcad-deploy-namesake'
+import { releaseClaimIfStoreRefused } from './orcad-deploy-claim-release'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
 import { finishManagedOrcadRouteMove } from './orcad-managed-route-move'
 import {
@@ -163,9 +163,12 @@ export async function createManagedOrcadEnvironment(
         },
         moveSavedServer
       }).catch(async (error: unknown) => {
-        if (moveSavedServer && isStoreRefusal(error)) {
-          claims.release(claimed.id, environmentId)
-          await claims.flush(args.signal)
+        if (moveSavedServer) {
+          await releaseClaimIfStoreRefused(claims, error, {
+            targetId: claimed.id,
+            environmentId,
+            signal: args.signal
+          })
         }
         throw error
       })
@@ -198,10 +201,6 @@ export async function createManagedOrcadEnvironment(
 }
 
 type DeployedOrcad = OrcadRunningAdoption & { created?: true }
-
-function isStoreRefusal(error: unknown): boolean {
-  return error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument'
-}
 
 async function deployOwnOrcad(
   context: OrcadRemoteContext<SshTarget>,
