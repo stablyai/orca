@@ -155,7 +155,9 @@ export function useNativeChatComposerPaste({
           return
         }
         const continueFiles = captureCopiedFiles({ focus: false })
-        void readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, copiedFilePaths).then(
+        void readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, {
+          eventFilePaths: copiedFilePaths
+        }).then(
           (read) => {
             if (read.copiedFilePaths.length > 0) {
               void continueFiles(chips.transfer())
@@ -250,14 +252,15 @@ export function useNativeChatComposerPaste({
       captureExternalPaths?.() ?? ((paths: string[]) => attachCopiedFiles(paths, { focus: false }))
     const owner = resolveAttachmentOwner()
     void (async () => {
-      const read = await readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES).catch(
-        (error) => {
-          if (canPaste()) {
-            setNativeChatPasteFailure(setNotice, error)
-          }
-          return null
+      // In a browser each clipboard read can prompt; probe beside text only when an image can attach.
+      const read = await readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, {
+        probeImage: ownerAcceptsClipboardImage(owner)
+      }).catch((error) => {
+        if (canPaste()) {
+          setNativeChatPasteFailure(setNotice, error)
         }
-      )
+        return null
+      })
       if (read && read.copiedFilePaths.length > 0) {
         if (canComplete()) {
           void attachFiles(read.copiedFilePaths)
@@ -267,12 +270,7 @@ export function useNativeChatComposerPaste({
       // Text belongs to the editor even when the attachment host is unavailable.
       insertText(read?.text ?? '')
       if (!ownerAcceptsClipboardImage(owner)) {
-        // Probe only when no text was typed: in a browser each clipboard read can prompt the user.
-        if (!read || read.text !== '') {
-          return
-        }
-        const hasImage = await window.api.ui.clipboardHasImage().catch(() => null)
-        if (hasImage && canPaste()) {
+        if (read?.hasImage && canPaste()) {
           setNotice(
             owner.kind === 'remote'
               ? nativeChatLocalAttachmentUnsupportedNotice()
@@ -281,12 +279,10 @@ export function useNativeChatComposerPaste({
         }
         return
       }
-      const hasImage = await window.api.ui.clipboardHasImage().catch((error) => {
-        if (canPaste()) {
-          setNativeChatPasteFailure(setNotice, error)
-        }
-        return null
-      })
+      // A failed read (e.g. text too large) can still carry a picture.
+      const hasImage = read
+        ? read.hasImage
+        : await window.api.ui.clipboardHasImage().catch(() => null)
       if (hasImage !== true) {
         return
       }

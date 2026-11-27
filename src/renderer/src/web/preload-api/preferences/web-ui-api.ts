@@ -6,6 +6,7 @@ import { WEB_PENDING_LINK_API } from './web-pending-link-api'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard/clipboard-text'
+import type { ReadClipboardPasteContentOptions } from '../../../../../shared/clipboard/clipboard-paste-content'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { omitPairingLocalUiFields } from '../../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
@@ -29,6 +30,13 @@ import {
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from '../../runtime/client/web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from '../web-storage'
+
+async function readWebClipboardText(options?: ReadClipboardTextOptions): Promise<string> {
+  return assertClipboardTextWithinLimitWithYield(
+    await (navigator.clipboard?.readText?.() ?? ''),
+    options
+  )
+}
 
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
@@ -144,20 +152,22 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return optimistic
       }
     },
-    readClipboardText: async (options?: ReadClipboardTextOptions) =>
-      assertClipboardTextWithinLimitWithYield(
-        await (navigator.clipboard?.readText?.() ?? ''),
-        options
-      ),
-    // Browser paste events carry their own HTML; a programmatic read would prompt.
-    readClipboardLinkHtml: async () => '',
+    readClipboardText: readWebClipboardText,
+    readClipboardPasteContent: async (options?: ReadClipboardPasteContentOptions) => {
+      const text = await readWebClipboardText(options)
+      // Each browser clipboard read can prompt, so probe images only when asked or text is empty.
+      const hasImage =
+        options?.probeImage || text === ''
+          ? (await clipboardHasImage().catch(() => null)) === true
+          : false
+      // Browsers expose copied files and HTML only inside a paste event; a programmatic HTML read would prompt.
+      return { text, filePaths: [], linkHtml: '', hasImage }
+    },
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: saveWebClipboardImageAsTempFile,
     savePastedTextAsFile: savePastedTextAsWebAgentSessionAttachment,
     clipboardHasImage,
-    // Browsers expose copied files only inside a paste event.
-    readClipboardFilePaths: async () => [],
     // Why empty: a browser has no local paste folder, so restored pastes stay to attach again.
     restoreNativeChatPastes: async () => [],
     onAgentSessionUploadRemoved: () => noopUnsubscribe,

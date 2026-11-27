@@ -1,6 +1,5 @@
 import {
   clipboardFormatSnapshot,
-  readClipboardHtml,
   writeClipboardBuffer,
   writeClipboardPng
 } from './clipboard-formats'
@@ -12,14 +11,19 @@ import { PATH_ACCESS_DENIED_MESSAGE } from '../../ipc/filesystem/access/filesyst
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   assertTrustedClipboardSender,
-  assertTrustedClipboardTextSender
+  assertTrustedClipboardTextSender,
+  isTrustedClipboardSender
 } from './clipboard-ipc-sender-trust'
+import { readClipboardPasteContent } from './clipboard-paste-content'
+import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../shared/clipboard/clipboard-paste-content'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
   type ReadClipboardTextOptions
 } from '../../../shared/clipboard/clipboard-text'
-import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard/clipboard-link-html'
 import {
   saveClipboardImageBufferAsTempFile,
   type SaveClipboardImageAsTempFileArgs
@@ -44,7 +48,6 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-attachments/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
-import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
@@ -111,8 +114,8 @@ export function registerClipboardHandlers(
   handlerOptions: ClipboardHandlerOptions = {}
 ): void {
   ipcMain.removeHandler('clipboard:readText')
+  ipcMain.removeHandler('clipboard:readPasteContent')
   ipcMain.removeHandler('clipboard:readSelectionText')
-  ipcMain.removeHandler('clipboard:readLinkHtml')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeTerminalText')
   ipcMain.removeHandler('clipboard:writeSecretText')
@@ -123,7 +126,6 @@ export function registerClipboardHandlers(
   ipcMain.removeHandler('clipboard:savePastedTextAsFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
   ipcMain.removeHandler('clipboard:hasImage')
-  ipcMain.removeHandler('clipboard:readFilePaths')
   ipcMain.removeHandler('clipboard:restoreNativeChatPastes')
 
   void cleanupExpiredRemoteClipboardFiles()
@@ -139,12 +141,13 @@ export function registerClipboardHandlers(
       options
     )
   })
-  // Rich-text copies keep their links only in the HTML flavor; skip shipping HTML that has none.
-  ipcMain.handle('clipboard:readLinkHtml', async (event): Promise<string> => {
-    assertTrustedClipboardSender(event)
-    const html = await readClipboardHtml()
-    return clipboardHtmlMayHaveLinks(html) ? html : ''
-  })
+  ipcMain.handle(
+    'clipboard:readPasteContent',
+    async (event, options?: ReadClipboardPasteContentOptions): Promise<ClipboardPasteContent> => {
+      assertTrustedClipboardTextSender(event)
+      return readClipboardPasteContent(options, !isTrustedClipboardSender(event))
+    }
+  )
   ipcMain.handle(
     'clipboard:readSelectionText',
     async (event, options?: ReadClipboardTextOptions) => {
@@ -177,11 +180,6 @@ export function registerClipboardHandlers(
   ipcMain.handle('clipboard:hasImage', async (event): Promise<boolean> => {
     assertTrustedClipboardSender(event)
     return (await readClipboardImageSource(clipboardFormatSnapshot())) !== null
-  })
-  // File-manager copies include text labels that paste must not type.
-  ipcMain.handle('clipboard:readFilePaths', async (event): Promise<string[]> => {
-    assertTrustedClipboardSender(event)
-    return readClipboardCopiedFilePaths(clipboardFormatSnapshot())
   })
   // Give image-aware terminal tools a saved image path, or null when no image exists.
   ipcMain.handle(

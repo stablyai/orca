@@ -59,19 +59,19 @@ function copiesOnlyFiles(text: string, filePaths: readonly string[]): boolean {
 /** Separate copied-file labels from prompt text; reuse eventFilePaths when the event already resolved them. */
 export async function readClipboardPasteText(
   maxBytes: number,
-  eventFilePaths?: string[]
-): Promise<{ text: string; copiedFilePaths: string[] }> {
-  const [text, filePaths, linkHtml] = await Promise.all([
-    window.api.ui.readClipboardText({ maxBytes }),
-    // Without the file list the text is typed as-is.
-    eventFilePaths ?? window.api.ui.readClipboardFilePaths().catch(() => []),
-    // Links are optional: a failed HTML read still pastes the text.
-    (async () => window.api.ui.readClipboardLinkHtml())().catch(() => '')
-  ])
+  { eventFilePaths, probeImage = false }: { eventFilePaths?: string[]; probeImage?: boolean } = {}
+): Promise<{ text: string; copiedFilePaths: string[]; hasImage: boolean }> {
+  const read = await window.api.ui.readClipboardPasteContent({
+    maxBytes,
+    linkHtml: true,
+    probeImage
+  })
+  const { text, hasImage } = read
+  const filePaths = eventFilePaths ?? read.filePaths
   if (!copiesOnlyFiles(text, filePaths)) {
-    return { text: withPastedLinks(text, linkHtml), copiedFilePaths: [] }
+    return { text: withPastedLinks(text, read.linkHtml), copiedFilePaths: [], hasImage }
   }
   // macOS lists a screenshot tool's saved file beside its picture; only Finder also names files.
-  const picture = text === '' && isMacPlatform() && (await window.api.ui.clipboardHasImage())
-  return { text, copiedFilePaths: picture ? [] : filePaths }
+  const picture = text === '' && isMacPlatform() && hasImage
+  return { text, copiedFilePaths: picture ? [] : filePaths, hasImage }
 }

@@ -30,11 +30,6 @@ async function readItemsBuffer(
   return Buffer.alloc(0)
 }
 
-export async function readClipboardHtml(): Promise<string> {
-  const item = (await clipboard.read()).find((entry) => entry.types.includes('text/html'))
-  return item ? (await item.getType('text/html')).text() : ''
-}
-
 export async function writeClipboardBuffer(format: string, buffer: Buffer): Promise<void> {
   await clipboard.write([
     new ClipboardItem({ [nativeClipboardFormat(format)]: new Blob([new Uint8Array(buffer)]) })
@@ -53,6 +48,7 @@ export type ClipboardFormatReader = {
   availableFormats: () => Promise<string[]>
   readBuffer: (format: string, assertByteLength?: (length: number) => void) => Promise<Buffer>
   has: (format: string) => Promise<boolean>
+  readHtml: () => Promise<string>
 }
 
 /** Reads the clipboard at most once per request: each read() re-enumerates every native format. */
@@ -65,6 +61,10 @@ export function clipboardFormatSnapshot(): ClipboardFormatReader {
       readItemsBuffer(await read(), format, assertByteLength),
     // Electron's has() is membership in this same type list, enumerated again.
     has: async (format) =>
-      (await read()).some((item) => item.types.includes(nativeClipboardFormat(format)))
+      (await read()).some((item) => item.types.includes(nativeClipboardFormat(format))),
+    readHtml: async () => {
+      const item = (await read()).find((entry) => entry.types.includes('text/html'))
+      return item ? (await item.getType('text/html')).text() : ''
+    }
   }
 }
