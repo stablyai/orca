@@ -135,7 +135,11 @@ export const BOT_HANDLERS: Record<string, CommandHandler> = {
       // Computers paired to this Orca: a server's agents reach their bots with --on-client.
       const clients = (value.clients ?? []).map(formatPairedClient)
       return value.bots.length === 0
-        ? ['No bots.', ...unreachable, ...clients].join('\n\n')
+        ? [
+            clients.length > 0 ? 'No bots on this computer.' : 'No bots.',
+            ...unreachable,
+            ...clients
+          ].join('\n\n')
         : [
             ...value.bots.map(formatBotRosterEntry),
             ...unreachable,

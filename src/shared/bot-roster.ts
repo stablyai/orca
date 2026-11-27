@@ -177,13 +177,13 @@ export function formatPairedClient(client: BotRosterClient): string {
   const others =
     'an ask to one is declined, unless its owner @-mentions that bot in your chat from that computer or once allowed this Orca to ask it (then a person there answers your ask on a card), or always allows this Orca in that bot’s Who can ask.'
   const listed = client.bots
-    .map((bot) => `${botAddressArgument(bot.name)} (id address: ${BOT_ADDRESS_PREFIX}${bot.id})`)
+    .map((bot) => `${JSON.stringify(bot.name)} (address: ${BOT_ADDRESS_PREFIX}${bot.id})`)
     .join(', ')
   return [
     `${JSON.stringify(client.name)} (the name that computer gives itself): a computer paired to this Orca, connected now; reach it with ${on}`,
     ...(client.bots.length > 0
       ? [
-          `  Bots it lets this Orca's agents ask${client.moreBots ? ' (it allows more than are named here)' : ''}: ${listed}`,
+          `  Bots it lets this Orca's agents ask (names as that computer gives them; send to the address)${client.moreBots ? ', and it allows more than are named here' : ''}: ${listed}`,
           `  Ask one: ${ask}. For its bots not named here, ${others}`
         ]
       : [

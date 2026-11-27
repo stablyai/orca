@@ -152,9 +152,9 @@ export function endPairedServerAsks(
 }
 
 /** What a pull names this computer with; on each pull, read afresh, the agents here a person always
- *  lets this server ask (none paused or removed), so a change reaches the server by the next pull. */
+ *  lets this server ask (none paused or removed, and none while bots are off here), so a change reaches the server by the next pull. */
 export function pairedServerPullParams(
-  runtime: { bots: { list(): readonly Pick<Bot, 'id' | 'name' | 'paused'>[] } },
+  runtime: { bots: { enabled(): boolean; list(): readonly Pick<Bot, 'id' | 'name' | 'paused'>[] } },
   db: OrchestrationDb,
   asks: PairedServerAsks | null | undefined
 ): {
@@ -165,7 +165,8 @@ export function pairedServerPullParams(
   }
   const allowed = new Set(listAllowedBotsOfServer(db, asks.serverKey))
   const askable =
-    allowed.size === 0
+    // Bots off here: none takes an ask, so none is named.
+    allowed.size === 0 || !runtime.bots.enabled()
       ? []
       : runtime.bots.list().filter((bot) => allowed.has(bot.id) && !bot.paused)
   const bots = askable

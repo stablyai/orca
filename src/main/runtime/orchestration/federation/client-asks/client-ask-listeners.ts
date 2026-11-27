@@ -122,22 +122,23 @@ export function listeningClients(
 
 // The id `--on-client` and a mention token take: a generated UUID, so anything else a computer
 // claims is never printed where a server's agent reads it as text or a command.
-const INSTALLATION_ID = /^[\w-]{1,100}$/
+const PLAIN_ID = /^[\w-]{1,100}$/
 
 /** Every computer listening now, as this Orca's own `orca bot list` names it: by its installation id,
  *  which `--on-client` takes, with the agents there it said this Orca's agents may ask without a card.
- *  One claiming an id of another shape is left out; names came from that computer, so stay one line. */
+ *  Only a computer that id reaches alone is listed, so a listed command never comes back ambiguous;
+ *  ids of another shape are left out, and names, which came from that computer, stay one line. */
 export function connectedClientRosters(owner: ClientAskListenerOwner): BotRosterClient[] {
   return [...listenersOf(owner).values()].flatMap((listener) =>
-    INSTALLATION_ID.test(listener.installationId)
+    PLAIN_ID.test(listener.installationId) &&
+    listeningClients(owner, listener.installationId).length === 1
       ? [
           {
             name: toSafeDisplayLine(listener.name) || listener.installationId,
             onClient: listener.installationId,
-            bots: listener.bots.map((bot) => ({
-              id: bot.id,
-              name: toSafeDisplayLine(bot.name) || bot.id
-            })),
+            bots: listener.bots
+              .filter((bot) => PLAIN_ID.test(bot.id))
+              .map((bot) => ({ id: bot.id, name: toSafeDisplayLine(bot.name) || bot.id })),
             ...(listener.moreBots ? { moreBots: true as const } : {})
           }
         ]
