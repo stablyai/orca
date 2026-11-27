@@ -104,7 +104,6 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
       immediate?: boolean
     }
   ): void
-  protected abstract readonly ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   protected abstract repointPendingMessagesForHandle(handle: string): void
   protected abstract getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform
   protected abstract getPtyAgent(ptyId: string): TerminalAgent | null
@@ -121,6 +120,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
+  abstract getPtyOutputSequence(ptyId: string): number
   protected abstract requestReattachedRepaint(ptyId: string): void
   protected abstract confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean>
   protected abstract headlessTerminals: Map<string, RuntimeHeadlessTerminal>

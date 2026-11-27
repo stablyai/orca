@@ -6,30 +6,19 @@ import type {
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import type { TuiIdleVerdict } from './tui-idle-evidence'
 import { outputClockOf, type TuiIdleEvidenceSource } from './tui-idle-evidence-source'
-import { sampleTerminalIdlePoll, type IdlePollSample } from './terminal-idle-poll-sample'
+import {
+  sampleTerminalIdlePoll,
+  type IdlePollSample,
+  type RuntimeTerminalIdlePollDependencies
+} from './terminal-idle-poll-sample'
 
 import { ReattachedRestTitleReads } from './reattached-rest-title'
 
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWaiter } from './terminal-waiter'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 /** A foreground read that proved nothing is retried after this, while the pane stays quiet. */
 const FAILED_FOREGROUND_RETRY_MS = 10_000
-
-type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
-  intervalMs: number
-  getForegroundProcess(ptyId: string): Promise<string | null> | null
-  /** Whether the pane's running command has painted anything of its own. */
-  hasCommandPainted(ptyId: string): boolean
-  /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
-  readVisibleScreen(ptyId: string): Promise<string | null> | null
-  resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
-  /** Asks a reattached pane's program to repaint, once per reattach and only before it painted. */
-  requestReattachedRepaint?(ptyId: string): void
-  /** True once a fresh read put the rest title's own agent in front and its idle was admitted. */
-  confirmRestTitle?(ptyId: string, agent: TuiAgent): Promise<boolean>
-}
 
 type IdlePollEntry = {
   waiter: TerminalWaiter
@@ -150,7 +139,7 @@ export class RuntimeTerminalIdlePolls {
       if (entry.screenReadInFlight) {
         return
       }
-      const screenOutputClock = outputClockOf(this.deps, entry.pty)
+      const screenOutputSequence = this.deps.getOutputSequence(ptyId)
       const screenRead = this.readScreenBlockedReason(entry, ptyId)
       // Why await only a real read: a pane with no screen model keeps its tick synchronous.
       const screenBlockedReason = screenRead ? await screenRead : null
@@ -159,7 +148,7 @@ export class RuntimeTerminalIdlePolls {
       }
       if (screenRead) {
         // A provider read may outlive the quiet screen it inspected or a new working report.
-        if (outputClockOf(this.deps, entry.pty) !== screenOutputClock) {
+        if (this.deps.getOutputSequence(ptyId) !== screenOutputSequence) {
           return
         }
         sample = this.sample(entry)
@@ -177,6 +166,9 @@ export class RuntimeTerminalIdlePolls {
         this.settle(entry, sample.ready())
         return
       }
+      if (verdict.kind !== 'pending') {
+        return
+      }
       const restTitleRead = this.readRestTitleForeground(entry, sample)
       if (restTitleRead) {
         await restTitleRead
@@ -190,7 +182,7 @@ export class RuntimeTerminalIdlePolls {
       // Why quiet before the read too: a streaming or not-yet-painted pane cannot settle, so it
       // must not pay a process inspection every tick for a whole turn.
       if (!entry.foregroundPollInFlight && sample.isQuiet(lane)) {
-        const foregroundOutputClock = outputClockOf(this.deps, entry.pty)
+        const foregroundOutputSequence = this.deps.getOutputSequence(ptyId)
         const foregroundRead = this.deps.getForegroundProcess(ptyId)
         if (!foregroundRead) {
           return
@@ -200,7 +192,7 @@ export class RuntimeTerminalIdlePolls {
         const foreground = await foregroundRead
         if (
           !this.entries.has(entry) ||
-          outputClockOf(this.deps, entry.pty) !== foregroundOutputClock
+          this.deps.getOutputSequence(ptyId) !== foregroundOutputSequence
         ) {
           return
         }

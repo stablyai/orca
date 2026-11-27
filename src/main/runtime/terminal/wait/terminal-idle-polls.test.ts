@@ -74,7 +74,8 @@ function waitFor(pty: RuntimePtyWorktreeRecord, results: RuntimeTerminalWait[]):
 
 function polls(
   readVisibleScreen: () => Promise<string | null> | null,
-  getForegroundProcess: () => Promise<string | null> | null = () => null
+  getForegroundProcess: () => Promise<string | null> | null = () => null,
+  getOutputSequence: () => number = () => 0
 ): RuntimeTerminalIdlePolls {
   return new RuntimeTerminalIdlePolls({
     intervalMs: 1_000,
@@ -86,6 +87,7 @@ function polls(
     hasCommandPainted: () => true,
     readVisibleScreen,
     getForegroundProcess,
+    getOutputSequence,
     resolve: (waiter, result) => waiter.resolve(result)
   })
 }
@@ -111,6 +113,45 @@ it('keeps input waiting when the agent becomes working during a screen read', as
         satisfied: true,
         status: 'running',
         exitCode: null
+      }
+    ])
+  } finally {
+    waiter.cancelIdlePoll?.()
+  }
+})
+
+it('rechecks the screen when output advances without changing its timestamp', async () => {
+  const pty = terminal()
+  pty.lastOutputAt = Date.now()
+  let outputSequence = 1
+  const results: RuntimeTerminalWait[] = []
+  const oldScreen = Promise.withResolvers<string | null>()
+  let visibleScreen = oldScreen.promise
+  const waiter = waitFor(pty, results)
+  try {
+    polls(
+      () => visibleScreen,
+      () => null,
+      () => outputSequence
+    ).start(waiter, pty, { kind: 'ready-weak' })
+
+    // Two output chunks can share the same millisecond while their ingestion sequence moves on.
+    outputSequence = 2
+    pty.lastOutputAt = Date.now()
+    visibleScreen = Promise.resolve('Do you trust this workspace?')
+    oldScreen.resolve('')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(results).toEqual([])
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(results).toEqual([
+      {
+        handle: 'term-1',
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'running',
+        exitCode: null,
+        blockedReason: 'agent-trust-workspace'
       }
     ])
   } finally {
