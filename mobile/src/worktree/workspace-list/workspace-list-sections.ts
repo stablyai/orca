@@ -40,7 +40,7 @@ import {
   type ProjectSectionModel
 } from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome/ui-chrome-types'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import {
   indexHiddenProjects,
   isRepoHidden,
@@ -100,6 +100,7 @@ export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
 }
 
 export function buildMobileWorkspacePlan(
+  t: Translate,
   worktrees: Worktree[],
   sortMode: WorkspaceSortBy,
   filters: FilterState,
@@ -114,12 +115,12 @@ export function buildMobileWorkspacePlan(
   lineageStores?: Parameters<typeof getMobileWorkspaceLineageChildren>[1]
 ) {
   const groupLabels = {
-    pinned: translate('worktree.workspaceListSections.pinned', 'Pinned'),
-    all: translate('worktree.workspaceListSections.all', 'All'),
-    done: translate('worktree.workspaceListSections.done', 'Done'),
-    'in-review': translate('worktree.workspaceListSections.inReview', 'In review'),
-    'in-progress': translate('worktree.workspaceListSections.inProgress', 'In progress'),
-    closed: translate('worktree.workspaceListSections.closed', 'Closed')
+    pinned: t('worktree.workspaceListSections.pinned', 'Pinned'),
+    all: t('worktree.workspaceListSections.all', 'All'),
+    done: t('worktree.workspaceListSections.done', 'Done'),
+    'in-review': t('worktree.workspaceListSections.inReview', 'In review'),
+    'in-progress': t('worktree.workspaceListSections.inProgress', 'In progress'),
+    closed: t('worktree.workspaceListSections.closed', 'Closed')
   }
   const hiddenProjects = indexHiddenProjects(projectCatalog.repos, LOCAL_EXECUTION_HOST_ID)
   const listedFilterIds = withoutHiddenFilterRepoIds(filters.filterRepoIds, hiddenProjects)
@@ -145,7 +146,7 @@ export function buildMobileWorkspacePlan(
     identityOf: getWorktreeRowIdentity,
     isHidden: isHiddenRow
   })
-  const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
+  const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees, t)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)
   let groupTreePlacements = new Map<string, GroupTreePlacement>()
   const occurrencePlan = buildWorktreeOccurrencePlan({
@@ -295,5 +296,5 @@ export function buildMobileWorkspacePlan(
 }
 
 export function buildSections(...args: Parameters<typeof buildMobileWorkspacePlan>): Section[] {
-  return buildMobileWorkspacePlan(...args).render(args[8] ?? new Set())
+  return buildMobileWorkspacePlan(...args).render(args[9] ?? new Set())
 }

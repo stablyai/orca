@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { TriangleAlert } from 'lucide-react-native'
-import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { AgentHistoryRestartOffer } from './use-agent-history-restart-offer'
 import type { AgentHistoryHandoffLaunchNotice } from './use-agent-history-handoff'
@@ -30,7 +30,7 @@ export function AgentHistoryScanNotices({
   sessions: readonly unknown[]
   issues: readonly AiVaultScanIssue[]
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const scan = { sessions, issues }
   const blocking = blockingAiVaultScanIssue(scan)
   const notices = aiVaultScanNoticeIssues(scan)
@@ -66,7 +66,8 @@ export function AgentHistoryScanNotices({
 
 /** Says how many transcripts the scan skipped, with the paths and reasons one tap away. */
 function AgentHistorySkippedNotice({ issues }: { issues: readonly AiVaultScanIssue[] }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [shown, setShown] = useState(false)
   const count = issues.length
@@ -184,6 +185,7 @@ export function agentHistoryInterruptedShown(offer: AgentHistoryRestartOffer): b
 
 /** Desktop's resume-after-restart offer, as the phone's notice strip: "3 chats were interrupted · Resume all". */
 export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRestartOffer }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { count, failedCount, requestFailed, resuming } = offer
   const shown = agentHistoryInterruptedShown(offer)
@@ -225,7 +227,7 @@ export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRe
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   notice: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.sm,

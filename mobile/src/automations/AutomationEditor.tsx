@@ -7,11 +7,11 @@ import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-
 import { FieldTextInput } from '../components/composer-input/FieldTextInput'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
+import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote } from '../settings/settings-screen-frame'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileNewTabAgentOption } from '../session/agent-launch/mobile-new-tab-agent-options'
 import type { MobileAutomation } from './automation-reply-schema'
@@ -36,7 +36,7 @@ import { BotAutomationWhenRows } from './BotAutomationWhenRows'
 import { AutomationWhereRows } from './AutomationWhereRows'
 import { AutomationAdvancedRows, AutomationTimeZoneRow } from './AutomationAdvancedRows'
 import { automationErrorMessage } from './automation-error'
-import { automationStyles } from './automation-styles'
+import { automationStylesSheet } from './automation-styles'
 
 /** Which part of the editor a detail row opens; none opens all of it. */
 export type AutomationEditorSection = 'prompt' | 'where' | 'when'
@@ -67,7 +67,8 @@ export function AutomationEditor(props: {
   onSave: (draft: AutomationDraft, original: AutomationDraft, targets: AutomationTargets) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const automationStyles = useThemedStyles(automationStylesSheet)
   const { present } = props
   const form = useAutomationEditorDraft(props.draftKey, props.current, props.initialDraft)
   const { draft, setDraft, original } = form
@@ -133,7 +134,7 @@ export function AutomationEditor(props: {
       })
       .catch((failure: unknown) => {
         if (active && generation === props.client.getGeneration?.()) {
-          setError(automationErrorMessage(failure))
+          setError(automationErrorMessage(failure, translate))
         }
       })
     return () => {
@@ -171,7 +172,7 @@ export function AutomationEditor(props: {
       .catch((failure: unknown) => {
         if (active && generation === props.client.getGeneration?.()) {
           setAgents([])
-          setAgentError(automationErrorMessage(failure))
+          setAgentError(automationErrorMessage(failure, translate))
         }
       })
       .finally(() => {
@@ -395,7 +396,7 @@ export function AutomationEditor(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   content: { gap: spacing.sm, paddingBottom: spacing.xl },
   sectionOnly: { paddingTop: spacing.xs },
   advanced: { marginTop: spacing.sm }

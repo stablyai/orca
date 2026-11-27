@@ -1,6 +1,8 @@
 import { automationOrphanIssueText } from './automation-orphan-issue-copy'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { useThemedStyles } from '../theme/themed-styles'
 import { useEffect, useRef, useState } from 'react'
 import { View, type HostInstance } from 'react-native'
 import { Ellipsis, History, Pencil, Play, Trash2 } from 'lucide-react-native'
@@ -27,7 +29,7 @@ import { automationScheduleText } from './automation-schedule-label'
 import { mobileTuiAgentLabel } from '../agents/mobile-tui-agents'
 import type { MobileAutomationRow } from './automation-reply-schema'
 import type { AutomationEditorSection } from './AutomationEditor'
-import { automationStyles as styles } from './automation-styles'
+import { automationStylesSheet } from './automation-styles'
 
 export function AutomationDetail(props: {
   row: MobileAutomationRow
@@ -40,7 +42,7 @@ export function AutomationDetail(props: {
   onEdit: (section: AutomationEditorSection) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { automation, item } = props.row
   // Back returns to the list, as the bar's back button does.
   useBackClaim(() => {
@@ -137,7 +139,7 @@ export function AutomationDetail(props: {
   return (
     <>
       {item.selector.kind === 'orphan' ? (
-        <SettingsNote error>{automationOrphanIssueText(item.selector.issue)}</SettingsNote>
+        <SettingsNote error>{automationOrphanIssueText(item.selector.issue, t)}</SettingsNote>
       ) : null}
       <SettingsSection first>
         <ListRow
@@ -159,7 +161,7 @@ export function AutomationDetail(props: {
       <SettingsSection title={t('automations.mobile.schedule', 'Schedule')}>
         <ListRow
           title={t('automations.mobile.repeats', 'Repeats')}
-          value={automationScheduleText(automation)}
+          value={automationScheduleText(automation, t, intlLocale)}
           {...drill('when')}
         />
         <ListRow
@@ -201,12 +203,14 @@ type DetailMenuActions = {
 export function automationDetailBar(
   row: MobileAutomationRow,
   onBack: () => void,
-  actions: DetailMenuActions
+  actions: DetailMenuActions,
+  t: Translate,
+  intlLocale: string
 ): AutomationHeaderBar {
   return {
     page: {
       title: row.automation.name,
-      subtitle: automationNextRunShortLabel(row.automation),
+      subtitle: automationNextRunShortLabel(row.automation, t, intlLocale),
       onBack
     },
     trailing: <AutomationDetailMenu {...actions} name={row.automation.name} />
@@ -280,7 +284,7 @@ function AutomationDetailMenu(props: DetailMenuActions & { name: string }) {
 /** Run now, the detail's one action, in the bar at the foot of the screen. */
 export function AutomationRunNowBar(props: { disabled: boolean; onRun: () => Promise<boolean> }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(automationStylesSheet)
   const control = useMobilePendingControl<'run'>()
   return (
     <View style={styles.bottomBar}>

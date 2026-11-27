@@ -10,8 +10,7 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated'
 import { feedback, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useDrawerReducedMotion } from '../bottom-drawer/bottom-drawer-constants'
 import { SHEET_CURVE } from '../motion/sheet-motion-values'
 
@@ -54,7 +53,7 @@ export function SwipeRowActions({
     guardDragRelease: (onPress: () => void) => () => void
   ) => ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const reducedMotion = useDrawerReducedMotion()
   const offset = useSharedValue(0)
   const start = useSharedValue(0)
@@ -168,7 +167,7 @@ export function SwipeRowActions({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   action: {
     position: 'absolute',
     top: 0,

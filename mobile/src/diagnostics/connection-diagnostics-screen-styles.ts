@@ -1,8 +1,8 @@
-import { spacing, typography, colors } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 
-export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
+export const connectionDiagnosticsScreenStylesSheet = themedStyleSheet((colors) => ({
   content: { flex: 1 },
   log: { flex: 1, marginTop: spacing.lg },
   emptyText: {

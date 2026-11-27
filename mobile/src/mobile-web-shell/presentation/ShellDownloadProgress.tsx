@@ -1,5 +1,6 @@
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { useHostDisplay, type HostDisplaySource } from '../../host-descriptors/use-host-display'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import { DownloadProgressBar, downloadedMegabytesCaption } from './DownloadProgressBar'
 import type { MobileWebShellSessionState } from '../session/mobile-web-shell-session-contract'
@@ -15,9 +16,10 @@ export function ShellDownloadProgress({
   host: HostDisplaySource | null
 }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const hostTitle = useHostDisplay(host).title
   const label = t('webShell.shellStateScreen.downloadingLatestApp', 'Downloading the latest app')
-  const progress = downloadedMegabytesCaption(state.receivedBytes, state.totalBytes, t)
+  const progress = downloadedMegabytesCaption(state.receivedBytes, state.totalBytes, t, intlLocale)
   const caption =
     host === null
       ? progress

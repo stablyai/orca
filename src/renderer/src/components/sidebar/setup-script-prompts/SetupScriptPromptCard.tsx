@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { track } from '@/diagnostics/telemetry/telemetry'
@@ -14,7 +15,6 @@ import {
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import type { SetupScriptImportCandidate } from '../../../../../shared/workspace-setup/setup-script-imports'
 import { buildSetupScriptPromptActionTelemetry } from '../../../../../shared/workspace-setup/setup-script-telemetry'
-import { SetupScriptPromptCardShell } from './SetupScriptPromptCardShell'
 import { showSavedInProjectSettingsToast } from './SetupScriptPromptToast'
 import { openSetupScriptSettings } from './open-setup-script-settings'
 import { trackSetupScriptPromptExposure } from './setup-script-prompt-exposure-telemetry'
@@ -34,6 +34,12 @@ import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { runWithFinally } from '@/lib/run-with-finally'
+
+const SetupScriptPromptCardShell = lazy(() =>
+  import('./SetupScriptPromptCardShell').then((module) => ({
+    default: module.SetupScriptPromptCardShell
+  }))
+)
 
 function SetupScriptPromptCard(): React.JSX.Element | null {
   const t = useTranslate()
@@ -364,23 +370,25 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     : null
 
   return (
-    <SetupScriptPromptCardShell
-      repoBadgeColor={activeRepo.badgeColor}
-      repoDisplayName={activeRepo.displayName}
-      isInspectionError={isInspectionError}
-      sharedSetupIgnored={sharedSetupIgnored}
-      isPackageManagerSuggestion={Boolean(isPackageManagerSuggestion && candidate)}
-      candidateSource={candidateSource}
-      candidateProvenance={candidateProvenance}
-      detectedSetupPreview={detectedSetupPreview}
-      isImporting={importingRepoHostIdentity === activeRepoHostIdentity}
-      renderedStateOk={renderedPromptState.status === 'ok'}
-      onDismiss={handleDismiss}
-      onRetryInspection={handleRetryInspection}
-      onConfigure={handleConfigure}
-      onImport={() => void handleImport()}
-      onSetupDraftChange={setDetectedSetupDraft}
-    />
+    <Suspense fallback={null}>
+      <SetupScriptPromptCardShell
+        repoBadgeColor={activeRepo.badgeColor}
+        repoDisplayName={activeRepo.displayName}
+        isInspectionError={isInspectionError}
+        sharedSetupIgnored={sharedSetupIgnored}
+        isPackageManagerSuggestion={Boolean(isPackageManagerSuggestion && candidate)}
+        candidateSource={candidateSource}
+        candidateProvenance={candidateProvenance}
+        detectedSetupPreview={detectedSetupPreview}
+        isImporting={importingRepoHostIdentity === activeRepoHostIdentity}
+        renderedStateOk={renderedPromptState.status === 'ok'}
+        onDismiss={handleDismiss}
+        onRetryInspection={handleRetryInspection}
+        onConfigure={handleConfigure}
+        onImport={() => void handleImport()}
+        onSetupDraftChange={setDetectedSetupDraft}
+      />
+    </Suspense>
   )
 }
 

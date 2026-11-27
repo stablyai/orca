@@ -13,6 +13,7 @@ import {
 import { buildWorktreeNavigationActions } from '../../agent-history/worktree-navigation-actions'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { useWorkspaceServer } from '../../worktree/execution-hosts/workspace-server'
 import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
@@ -39,6 +40,7 @@ export function useWorkspaceRowMenuActions(args: {
 }): ActionSheetAction[] {
   const { controller, row, server, onRename, onMoveToStatus, onHandToBot, onChooseHandOff } = args
   const { actions, client, connState, hostCapabilities, hostId, state } = controller
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { mutes, setMuted } = useWorkspaceNotificationMutes({
     client,
@@ -62,7 +64,9 @@ export function useWorkspaceRowMenuActions(args: {
     executionHost: server.routeHost,
     hostCapabilities: server.server?.gates.hostCapabilities ?? hostCapabilities,
     navigate: actions.navigateFromHostList,
-    onDone: close
+    onDone: close,
+    t,
+    colors
   })
   // One Hand off: to an agent (picked from history) or, from a desktop row, to a bot.
   const handOffChoices: ActionSheetAction[] = [

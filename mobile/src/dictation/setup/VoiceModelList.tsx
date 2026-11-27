@@ -1,13 +1,13 @@
 import { ActivityIndicator, View } from 'react-native'
 import { Download, Trash2 } from 'lucide-react-native'
-import { colors, feedback } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { ListGroup, ListRow } from '../../components/list/ListGroup'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import {
   cloudModelNeedsKey,
   dictationModelRowAction,
@@ -26,39 +26,44 @@ type Props = {
   onDelete: (model: MobileSpeechModel) => void
 }
 
-function formatSize(bytes: number | null | undefined, t: Translate): string {
+function formatSize(bytes: number | null | undefined, t: Translate, intlLocale: string): string {
   if (!bytes) {
     return ''
   }
   return t('components.voiceModelList.modelSize', '{{size}} MB', {
-    size: Math.round(bytes / 1_000_000).toLocaleString(getUiIntlLocale())
+    size: Math.round(bytes / 1_000_000).toLocaleString(intlLocale)
   })
 }
 
-function modelMeta(model: MobileSpeechModel, t: Translate): string {
+function modelMeta(model: MobileSpeechModel, t: Translate, intlLocale: string): string {
   if (model.provider === 'openai') {
     return 'OpenAI API'
   }
   const inFlight = isModelInFlight(model)
   if (inFlight && model.progress != null) {
     return t('components.voiceModelList.modelProgress', '{{size}} · {{progress}}%', {
-      size: formatSize(model.sizeBytes, t),
-      progress: Math.round(model.progress * 100).toLocaleString(getUiIntlLocale())
+      size: formatSize(model.sizeBytes, t, intlLocale),
+      progress: Math.round(model.progress * 100).toLocaleString(intlLocale)
     })
   }
   if (model.status === 'extracting') {
     return t('components.voiceModelList.modelExtracting', '{{size}} · extracting…', {
-      size: formatSize(model.sizeBytes, t)
+      size: formatSize(model.sizeBytes, t, intlLocale)
     })
   }
-  return formatSize(model.sizeBytes, t)
+  return formatSize(model.sizeBytes, t, intlLocale)
 }
 
 /** "Recommended · 142 MB", or what the row can't do yet ("Needs an OpenAI key"). */
-function modelSubtitle(model: MobileSpeechModel, needsKey: boolean, t: Translate): string {
+function modelSubtitle(
+  model: MobileSpeechModel,
+  needsKey: boolean,
+  t: Translate,
+  intlLocale: string
+): string {
   const parts = [
     model.recommended ? t('components.voiceModelList.recommended', 'Recommended') : '',
-    needsKey ? cloudModelNeedsKey() : modelMeta(model, t)
+    needsKey ? cloudModelNeedsKey(t) : modelMeta(model, t, intlLocale)
   ]
   return parts.filter(Boolean).join(' · ')
 }
@@ -73,8 +78,10 @@ export function VoiceModelList({
   onDownload,
   onDelete
 }: Props): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const anyBusy = busyAction !== null
   return (
     <View
@@ -91,7 +98,9 @@ export function VoiceModelList({
           const row = (guardPress: (onPress: () => void) => () => void) => (
             <ListRow
               title={label}
-              subtitle={modelSubtitle(model, action === 'needs-api-key', t) || undefined}
+              subtitle={
+                modelSubtitle(model, action === 'needs-api-key', t, intlLocale) || undefined
+              }
               selected={ready ? action === 'in-use' : undefined}
               busy={anyBusy}
               accessory={
@@ -142,6 +151,6 @@ export function VoiceModelList({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   disabled: { opacity: feedback.disabledOpacity }
 }))

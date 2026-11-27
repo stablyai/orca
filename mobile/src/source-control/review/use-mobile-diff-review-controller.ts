@@ -55,7 +55,7 @@ type ControllerInput = {
 }
 
 export function useMobileDiffReviewController(input: ControllerInput) {
-  useMobileTranslation()
+  const t = useMobileTranslation()
   const {
     client,
     connState,
@@ -86,7 +86,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const { composerBody, setComposerBody } = noteDraft
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
-  const worktreeLabel = getWorktreeLabel(name, worktreeId)
+  const worktreeLabel = getWorktreeLabel(name, worktreeId, t)
   const { screenState, setScreenState, statusRevision, target, loadReviewData } =
     useMobileDiffReviewSnapshot({
       client,

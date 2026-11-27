@@ -29,7 +29,8 @@ export default function SettingsMenuScreen({
     push,
     openExternal: (url) => void openExternal(url),
     appearanceValue: appearanceOptions(t).find((option) => option.value === preference)?.label,
-    aboutValue
+    aboutValue,
+    t
   })
   return (
     <SettingsScreen

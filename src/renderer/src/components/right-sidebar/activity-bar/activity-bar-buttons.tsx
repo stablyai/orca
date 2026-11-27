@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { Suspense, useRef, useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import type {
   ActivityBarPosition,
@@ -8,23 +8,21 @@ import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/git
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { ActivityBarPositionMenu } from './activity-bar-position-menu'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from '../layout/right-sidebar-titlebar-drag-regions'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
-import {
-  activityItemAriaLabel,
-  activityItemStatus,
-  activityItemTooltip
-} from './activity-bar-item-names'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
+import { activityItemAriaLabel, activityItemTooltip } from './activity-bar-item-names'
+
+const LazyTopActivityOverflowMenuContent = lazyWithRetry(
+  () =>
+    import('./top-activity-overflow-menu-content').then((module) => ({
+      default: module.TopActivityOverflowMenuContent
+    })),
+  { reloadKey: 'top-activity-overflow-menu-content' }
+)
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
@@ -55,7 +53,7 @@ export type ActivityBarItem = {
   labeledTab?: boolean
 }
 
-const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
+export const ACTIVITY_BAR_STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   success: 'bg-emerald-500',
   failure: 'bg-rose-500',
   pending: 'bg-amber-500',
@@ -63,7 +61,7 @@ const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   cancelled: 'bg-muted-foreground'
 }
 
-function openKeyboardContextMenu(event: React.KeyboardEvent<HTMLElement>): void {
+export function openKeyboardContextMenu(event: React.KeyboardEvent<HTMLElement>): void {
   if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
     return
   }
@@ -103,6 +101,8 @@ export function TopActivityOverflowMenu({
   const t = useTranslate()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const focusBeforeOpenRef = useRef<Element | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const hasOpenedMenu = useLatchedOpen(menuOpen)
   const holdsActiveTab = items.some((item) => item.id === activeTab)
   // A steady green "all checks passed" is not a flag; failing or running checks are.
   const hiddenChecksStatus =
@@ -122,10 +122,12 @@ export function TopActivityOverflowMenu({
 
   return (
     <DropdownMenu
+      open={menuOpen}
       onOpenChange={(open) => {
         if (open) {
           focusBeforeOpenRef.current = document.activeElement
         }
+        setMenuOpen(open)
       }}
     >
       <DropdownMenuTrigger asChild>
@@ -153,76 +155,29 @@ export function TopActivityOverflowMenu({
             <div
               className={cn(
                 'absolute top-[8px] right-[4px] size-[7px] rounded-full ring-1 ring-sidebar',
-                STATUS_DOT_COLOR[hiddenItemStatus]
+                ACTIVITY_BAR_STATUS_DOT_COLOR[hiddenItemStatus]
               )}
             />
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        data-activity-bar-menu=""
-        align="end"
-        side="bottom"
-        sideOffset={6}
-        onCloseAutoFocus={(event) => {
-          const before = focusBeforeOpenRef.current
-          focusBeforeOpenRef.current = null
-          // Keep focus that moved on (e.g. into Agents search); else return it to where the menu opened from.
-          event.preventDefault()
-          const active = document.activeElement
-          if (
-            (!active || active === document.body) &&
-            before instanceof HTMLElement &&
-            before.isConnected
-          ) {
-            before.focus({ preventScroll: true })
-          }
-        }}
-      >
-        {items.map((item) => {
-          const Icon = item.icon
-          const active = item.id === activeTab
-          const status = activityItemStatus(item, checksStatus)
-          return (
-            <ContextMenu key={item.id}>
-              <ContextMenuTrigger asChild>
-                <DropdownMenuItem
-                  // Focus on More when it opened means the keyboard opened it.
-                  onSelect={() =>
-                    onSelect(item.id, focusBeforeOpenRef.current === triggerRef.current)
-                  }
-                  onKeyDown={openKeyboardContextMenu}
-                  data-activity-item-id={item.id}
-                  data-workspace-board-dismiss=""
-                  data-activity-plugin-key={item.pluginKey}
-                  className={cn(active && 'bg-accent text-accent-foreground')}
-                  aria-current={active ? 'page' : undefined}
-                  aria-label={activityItemAriaLabel(item, status, t)}
-                >
-                  <Icon size={14} />
-                  <span>{item.title}</span>
-                  {status && status !== 'neutral' ? (
-                    <span
-                      className={cn('ml-auto size-2 rounded-full', STATUS_DOT_COLOR[status])}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
-                </DropdownMenuItem>
-              </ContextMenuTrigger>
-              <ActivityBarPositionMenu
-                currentPosition={activityBarPosition}
-                onChangePosition={onChangeActivityBarPosition}
-                pluginKey={item.pluginKey}
-                itemId={item.id}
-                items={arrangementItems}
-                isBotPage={isBotPage}
-                stripItemIds={stripItemIds}
-              />
-            </ContextMenu>
-          )
-        })}
-      </DropdownMenuContent>
+      {hasOpenedMenu ? (
+        <Suspense fallback={null}>
+          <LazyTopActivityOverflowMenuContent
+            items={items}
+            activeTab={activeTab}
+            onSelect={onSelect}
+            checksStatus={checksStatus}
+            arrangementItems={arrangementItems}
+            activityBarPosition={activityBarPosition}
+            onChangeActivityBarPosition={onChangeActivityBarPosition}
+            isBotPage={isBotPage}
+            stripItemIds={stripItemIds}
+            triggerRef={triggerRef}
+            focusBeforeOpenRef={focusBeforeOpenRef}
+          />
+        </Suspense>
+      ) : null}
     </DropdownMenu>
   )
 }
@@ -324,7 +279,7 @@ export function ActivityBarButton({
               : isTop
                 ? 'top-[8px] right-[5px]'
                 : 'top-[7px] right-[7px]',
-            STATUS_DOT_COLOR[effectiveStatus]
+            ACTIVITY_BAR_STATUS_DOT_COLOR[effectiveStatus]
           )}
         />
       )}

@@ -21,11 +21,12 @@ export class PluginRuntimeRpcError extends Error {
  */
 export function pluginRuntimeRpc(
   runtime: OrcaRuntimeService,
-  methods: DispatcherOptions['methods']
+  methods: DispatcherOptions['methods'],
+  lazyGroups?: DispatcherOptions['lazyGroups']
 ): PluginRuntimeRpc {
   let dispatcher: RpcDispatcher | null = null
   return async (method, params, options = {}) => {
-    dispatcher ??= new RpcDispatcher({ runtime, methods })
+    dispatcher ??= new RpcDispatcher({ runtime, methods, lazyGroups })
     // The dispatcher maps a throw to an error answer; keep the original so its code reaches the plugin.
     let refusal: unknown = null
     let thrown: unknown

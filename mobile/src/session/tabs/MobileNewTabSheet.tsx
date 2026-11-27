@@ -15,9 +15,9 @@ import {
 import { MobileAgentTileGrid } from '../agent-launch/MobileAgentTileGrid'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { MobileNewTabAgentOption } from '../agent-launch/mobile-new-tab-agent-options'
 import type { NewTabAgentSurfaceChoice } from '../agent-launch/use-mobile-new-tab-agent-options'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
@@ -93,7 +93,8 @@ export function MobileNewTabSheet({
   onChooseBrowserProfile,
   onCreateMarkdownNote
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   // Wait for the iOS sheet window to unmount before presenting another native modal.
   const afterCloseRef = useRef<(() => void) | null>(null)
@@ -218,7 +219,7 @@ export function MobileNewTabSheet({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   surfaceChoice: { marginBottom: spacing.sm },
   actions: { marginTop: spacing.lg }
 }))

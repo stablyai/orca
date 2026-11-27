@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, lstat, mkdir, rename, rm, statfs } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
+import { renameFileWithWindowsRetryAsync } from '../../shared/file-write/windows-retry-file-operations'
 import {
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail,
@@ -36,6 +37,10 @@ const PROGRESS_INTERVAL_MS = 250
 // Unpacked files aren't listed up front; packages unpack to about three times their download.
 const UNPACKED_RATIO = 3
 const EXTRACT_TIMEOUT_MS = 10 * 60_000
+// Endpoint security can hold a release it just watched run for seconds; back off ~15s on Windows.
+async function publishRename(from: string, to: string, signal: AbortSignal): Promise<void> {
+  await renameFileWithWindowsRetryAsync(from, to, undefined, { attempts: 25, signal })
+}
 
 export type RuntimeReleaseInstall = {
   agent: string
@@ -150,11 +155,10 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     await verifyMembers(release, pin, label, signal)
     await validate(input, release)
     await writeRuntimeReleaseReceipt(release, pin)
-    signal.throwIfAborted()
     if (existsSync(folder)) {
-      await rename(folder, join(staging, 'damaged'))
+      await publishRename(folder, join(staging, 'damaged'), signal)
     }
-    await rename(release, folder)
+    await publishRename(release, folder, signal)
     input.commit()
   } finally {
     await rm(staging, { recursive: true, force: true })

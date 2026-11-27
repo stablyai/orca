@@ -4,20 +4,21 @@ import { useMobileScreenReaderOn } from '../../../../platform/accessibility/use-
 import { Image as ImageIcon } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors } from '../../../../theme/mobile-theme'
-import { queuedMessageStyles } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
+import { queuedMessageStylesSheet } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
 import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import {
   MobileWaitingAgentMailContext,
   type MobileWaitingAgentMail
 } from './MobileWaitingAgentMailActions'
-import { styles } from '../messages/mobile-native-chat-message-styles'
+import { stylesSheet } from '../messages/mobile-native-chat-message-styles'
 import type { MobileNativeChatTailViewport } from '../viewport/mobile-native-chat-tail-viewport'
 import {
   useMobileFooterBlock,
   useMobileFooterRowOnScreen,
   type MobileFooterBlock
 } from './use-mobile-footer-row-on-screen'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 /** Other agents' waiting mail, after the conversation's live activity: it is not part of the turn.
  *  Memoized, so a streaming update redraws it only when the mail, its actions or the text scale change. */
@@ -78,6 +79,7 @@ const MobileWaitingAgentMailRow = memo(function MobileWaitingAgentMailRow({
   /** Off while a screen reader runs, so swiping reaches every waiting row. */
   windowed: boolean
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
   const { onScreen, ref, onLayout } = useMobileFooterRowOnScreen(block, message.id)
   const [height, setHeight] = useState<number | null>(null)
   const held = windowed && !onScreen && height !== null
@@ -118,6 +120,8 @@ function MobileQueuedImageCount({
 }: {
   message: NativeChatMessage
 }): React.JSX.Element | null {
+  const colors = useMobileColors()
+  const queuedMessageStyles = useThemedStyles(queuedMessageStylesSheet)
   const t = useMobileTranslation()
   const count = message.blocks.filter((block) => block.type === 'image-ref').length
   if (count === 0) {

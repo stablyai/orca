@@ -160,8 +160,8 @@ export type ManagedPaneInternal = {
   // Complex-output diagnostics must not select renderers; automatic fallback is for platform/WebGL failures.
   hasComplexScriptOutput: boolean
   webglAddon: WebglAddon | null
-  // Ligatures are optional and toggleable; null means disabled.
-  ligaturesAddon: LigaturesAddon | null
+  // Ligatures are optional and lazy-loaded; null means disabled or not yet resolved.
+  ligaturesAddon: (LigaturesAddon & { clearCache?: () => void }) | null
   // Images are optional and lazy-loaded; null means disabled or not yet resolved.
   imageAddon: ImageAddon | null
   // Enabled but waiting for the lazy addon; onLoaded drains these panes.

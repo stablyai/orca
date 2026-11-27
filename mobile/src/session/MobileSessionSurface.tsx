@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { View } from 'react-native'
-import { styles } from './mobile-session-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { stylesSheet } from './mobile-session-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
@@ -18,7 +18,7 @@ import { useMobileSessionTabSummaryChannel } from './tabs/use-mobile-session-tab
 import { useSessionRouteRequest } from './use-session-route-request'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const { setMobileSessionRootRef } = controller
   const layout = useResponsiveLayout()
   const { itemsOnPhone, openBotPanel, openNativeSession, worktreeId, sessionTabs } = controller

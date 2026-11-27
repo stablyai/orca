@@ -32,6 +32,14 @@ function ownTakerKeys(caller: OrchestrationCallerIdentity): string[] {
   ].map(mailTakerKey)
 }
 
+export function unlinkedOnPairedComputer(question: string): WorkerQuestionLink {
+  return {
+    question,
+    linked: false,
+    why: "a worker on a paired computer can't be linked to a question"
+  }
+}
+
 export function linkWorkerToQuestion(
   db: OrchestrationDb,
   question: string,
@@ -43,7 +51,7 @@ export function linkWorkerToQuestion(
     return unlinked("Orca can't tell which agent is starting this worker")
   }
   if (paired) {
-    return unlinked("a worker on a paired computer can't be linked to a question")
+    return unlinkedOnPairedComputer(question)
   }
   const message = db.getMessageById(question)
   const asked =

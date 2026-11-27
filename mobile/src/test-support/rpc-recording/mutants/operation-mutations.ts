@@ -185,7 +185,7 @@ export const OPERATION_MUTATIONS = {
       return { kind: 'loading' }
     }`,
     after: `    if (checksFailed) {
-      return prSidebarFailureState(checksError)
+      return prSidebarFailureState(checksError, t)
     }
     if (!checks) {
       return { kind: 'loading' }

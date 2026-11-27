@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import {
   COMPOSER_INSET_TOP,
   COMPOSER_TUCK
@@ -16,7 +16,7 @@ const ROW_MIN_HEIGHT = 52
 export const QUEUED_ROW_NARROW_WIDTH = 340
 const STEER_PILL_HEIGHT = 32
 
-export const queuedMessageStyles = themedStyleSheet(() => ({
+export const queuedMessageStylesSheet = themedStyleSheet((colors) => ({
   list: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.xs,

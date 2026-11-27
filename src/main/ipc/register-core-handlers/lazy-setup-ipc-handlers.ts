@@ -1,4 +1,5 @@
 import type { CodexAccountService } from '../../codex-accounts/service'
+import type { KeybindingService } from '../../keybindings/keybinding-service'
 import type { Store } from '../../persistence/loading-store/store'
 import { registerLazyIpcHandleGroup } from '../lazy-ipc-handle-group'
 
@@ -30,9 +31,37 @@ export const CODEX_CONFIG_SYNC_IPC_CHANNELS = ['codexConfigSync:status'] as cons
 
 export const LOCALHOST_WORKTREE_LABELS_IPC_CHANNELS = ['localhostWorktreeLabels:register'] as const
 
+export const SHELL_IPC_CHANNELS = [
+  'shell:openPath',
+  'shell:openInFileManager',
+  'shell:openInExternalEditor',
+  'shell:openForwardedUrl',
+  'shell:openUrl',
+  'shell:openFilePath',
+  'shell:openFileUri',
+  'shell:pathsExist',
+  'shell:pathExists',
+  'shell:pickDirectory',
+  'shell:pickAttachment',
+  'shell:pickAttachments',
+  'shell:pickImage',
+  'shell:pickRepoIconImage',
+  'shell:pickAudio'
+] as const
+
+export const DASHBOARD_POPOUT_IPC_CHANNELS = [
+  'dashboardPopout:open',
+  'dashboard:publishSnapshot',
+  'dashboard:requestSnapshot',
+  'dashboard:getPopoutOpen',
+  'dashboardPopout:revealAgent',
+  'dashboardPopout:ackAgent'
+] as const
+
 export function registerLazySetupIpcHandlers(
   store: Store,
-  codexAccounts: CodexAccountService
+  codexAccounts: CodexAccountService,
+  keybindings?: KeybindingService
 ): void {
   registerLazyIpcHandleGroup(CLI_IPC_CHANNELS, async (ipc) => {
     const { registerCliHandlers } = await import('../cli')
@@ -54,5 +83,13 @@ export function registerLazySetupIpcHandlers(
     const { registerLocalhostWorktreeLabelHandlers } =
       await import('../ports/localhost-worktree-labels')
     registerLocalhostWorktreeLabelHandlers(store, ipc)
+  })
+  registerLazyIpcHandleGroup(SHELL_IPC_CHANNELS, async (ipc) => {
+    const { registerShellHandlers } = await import('../shell/shell')
+    registerShellHandlers(store, undefined, ipc)
+  })
+  registerLazyIpcHandleGroup(DASHBOARD_POPOUT_IPC_CHANNELS, async (ipc) => {
+    const { registerDashboardPopoutHandlers } = await import('../dashboard/dashboard-popout')
+    registerDashboardPopoutHandlers(store, keybindings, ipc)
   })
 }

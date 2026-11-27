@@ -1034,6 +1034,7 @@
         "task": "작업"
       },
       "unnamedRecipient": "에이전트",
+      "recipientName": "{{name}}",
       "event": {
         "followedUp": "후속 메시지 보냄",
         "update": "업데이트",
@@ -1149,7 +1150,7 @@
         "finishOnPage": "열린 페이지에서 완료하세요",
         "needsAuth": "로그인 필요",
         "needsAuthAfterSend": "로그인이 필요합니다. 메시지를 보내면 여기서 로그인할 수 있습니다.",
-        "off": "꺼짐",
+        "disabled": "비활성화됨",
         "pending": "연결 중…",
         "tools_other": "도구 {{count}}개",
         "waitingForSignIn": "로그인을 기다리는 중…",
@@ -5905,7 +5906,11 @@
         "signIn": "GitHub에 로그인",
         "pickSubtitle": "작업할 수 있는 저장소를 선택하세요"
       },
-      "allRepositoriesShort": "모든 저장소"
+      "allRepositoriesShort": "모든 저장소",
+      "ghSignedOut": {
+        "line": "{{host}}에서 gh에 로그인되어 있지 않습니다. 해당 컴퓨터에서 gh auth login을 실행하세요.",
+        "copy": "{{text}} 복사"
+      }
     },
     "connect": {
       "finishOnHost": "{{host}}의 Orca에서 {{service}} 연결을 마치세요.",
@@ -6610,6 +6615,7 @@
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
         "replacedByNewer": "새 질문으로 대체됨",
         "skipped": "건너뜀",
+        "notNow": "나중에",
         "heldImagesLimit": "답변은 댓글 하나로 보내지며, 사진은 최대 {{max}}장까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요.",
         "heldSkillsLimit": "답변은 댓글 하나로 보내지며, 스킬은 최대 {{max}}개까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요."
       }
@@ -7653,6 +7659,7 @@
     "agentFilesMessage": "Orca가 각 에이전트의 설정 파일에서 MCP 서버를 관리합니다. 직접 추가한 항목은 그대로 유지됩니다.",
     "allow": "허용",
     "removeTitle": "{{name}}을(를) 제거할까요?",
+    "removeMessageSavedData": "이 서버를 사용하는 세션은 즉시 접근 권한을 잃을 수 있습니다. 이 서버용으로 저장된 헤더, 환경 변수 또는 로그인 정보가 삭제될 수 있습니다. 그런 경우 접근 권한을 되찾으려면 정보를 다시 입력하거나 다시 로그인해야 할 수 있습니다.",
     "remove": "제거",
     "moveTitle": "{{name}}을(를) Orca로 이동할까요?",
     "moveMessage": "Orca가 {{agents}} 설정에서 이 서버를 제거하고 백업을 보관합니다.",

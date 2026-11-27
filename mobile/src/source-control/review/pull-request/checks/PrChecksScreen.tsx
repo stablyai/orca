@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
 import { ChevronDown, CircleCheck, CircleMinus, LoaderCircle, RotateCw } from 'lucide-react-native'
 import { NavBarButton } from '../../../../components/nav-bar/NavBarButton'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
@@ -30,7 +30,8 @@ import { PrCheckFailureRow } from './PrCheckFailureRow'
 const PREFETCHED_FAILURES = 3
 
 export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const data = readyPrData(tab)
   const { checkDetails: cache, ensureCheckDetail: ensure } = tab
@@ -245,7 +246,7 @@ function ChecksSummary({
   live: boolean
   t: Translate
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   if (failing + cancelled + running + passed === 0) {
     return null
   }
@@ -300,7 +301,7 @@ function CheckRow({
   tone: 'running' | 'passed' | 'other'
   subtitle?: string
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const Icon = tone === 'running' ? LoaderCircle : tone === 'passed' ? CircleCheck : CircleMinus
   const color =
@@ -329,7 +330,7 @@ function CheckRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   plain: { backgroundColor: 'transparent', borderRadius: 0 },
   summary: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.sm },
   bar: { flexDirection: 'row', gap: 3, height: 4 },

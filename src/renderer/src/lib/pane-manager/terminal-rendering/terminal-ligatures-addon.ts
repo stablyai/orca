@@ -91,8 +91,21 @@ function createCachedCharacterJoiner(
 
 /** Cache exact rows with bounded retention: TUIs repaint unchanged rows while upstream otherwise retries every ligature at every character. */
 export class TerminalLigaturesAddon extends LigaturesAddon {
+  private cache: LigatureRangeCache | null = null
+
+  clearCache(): void {
+    this.cache?.clear()
+  }
+
+  override dispose(): void {
+    this.cache?.clear()
+    this.cache = null
+    super.dispose()
+  }
+
   override activate(terminal: Terminal): void {
     const cache = new LigatureRangeCache()
+    this.cache = cache
     // Without a font family upstream never reads font files (whole-file parse per terminal OOMed renderers) and joins its common-ligature list, as before 1.4.247.
     const optionsWithoutFontFamily = new Proxy(terminal.options, {
       get(options, key) {

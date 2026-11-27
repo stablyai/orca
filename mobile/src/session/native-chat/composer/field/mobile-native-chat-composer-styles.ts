@@ -3,7 +3,7 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import {
   COMPOSER_CONTROL_SIZE,
   COMPOSER_LINE_HEIGHT,
-  composerInputStyles
+  composerInputStylesSheet
 } from '../../../../components/composer-input/composer-input-styles'
 
 /** Space above the composer box; the queue box above reaches through it. */
@@ -18,14 +18,14 @@ export const COMPOSER_PILL_GAP = spacing.sm
 // The field's 2 pt text inset sits inside this, so its line centres on the 38 pt row.
 const PILL_FIELD_TOP = COMPOSER_PILL_GAP + (COMPOSER_CONTROL_SIZE - COMPOSER_LINE_HEIGHT) / 2 - 2
 
-export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
+export const mobileNativeChatComposerStylesSheet = themedStyleSheet((_colors, scheme) => ({
   composerInset: {
     paddingHorizontal: spacing.md,
     paddingTop: COMPOSER_INSET_TOP,
     paddingBottom: spacing.sm
   },
   // The box draws its look and holds its height; the content inside sets the padding.
-  bar: { ...composerInputStyles.box, padding: 0, justifyContent: 'flex-end' },
+  bar: { ...composerInputStylesSheet.resolve(scheme).box, padding: 0, justifyContent: 'flex-end' },
   barContent: { flexShrink: 0, padding: spacing.md },
   // Idle and empty: one row of +, the field and the send slot.
   barContentPill: { padding: COMPOSER_PILL_GAP },

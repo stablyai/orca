@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
-export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
+export const mobileDiffReviewControlStylesSheet = themedStyleSheet((colors) => ({
   footer: {
     position: 'absolute',
     left: 0,

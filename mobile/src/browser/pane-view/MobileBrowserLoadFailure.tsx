@@ -19,9 +19,7 @@ import {
   isBrowserNetworkLoadFailure
 } from '../../../../src/shared/browser/navigation/browser-load-failure'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 
 type CertificateProceedState =
@@ -127,8 +125,8 @@ export function MobileBrowserLoadFailure({
   onRetry: () => void
   showProceedUnsafe: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   return (
     <View style={styles.page}>
       {failure.connecting ? (
@@ -225,7 +223,7 @@ function certificateProceedFailureText(
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.bgBase

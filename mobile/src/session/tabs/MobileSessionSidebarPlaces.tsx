@@ -4,9 +4,9 @@ import { Folder, GitBranch, ListChecks } from 'lucide-react-native'
 import { NavBarBadge } from '../../components/nav-bar/NavBarButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { prStateIcon } from '../../source-control/review/status/pr-state-token'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
 import { UNCACHED_LINKED_PR_STATE } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { ActivePanel } from '../session-panel-host'
@@ -34,7 +34,8 @@ export function MobileSessionSidebarPlaces({
   controller: MobileSessionController
   sidebar: MobileSessionSidebar
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const {
     hostId,
@@ -90,7 +91,7 @@ export function MobileSessionSidebarPlaces({
                 t('session.header.sourceControl', 'Source control'),
                 pr ? prStateIcon(pr.state) : GitBranch
               ),
-              color: prState ? prStateColor(prState) : undefined
+              color: prState ? prStateColor(prState, colors) : undefined
             }
           ]
         : []),
@@ -141,7 +142,7 @@ export function MobileSessionSidebarPlaces({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   places: { paddingTop: spacing.md },
   icon: { width: SIDEBAR_MARK_SIZE, alignItems: 'center' },
   label: { flex: 1, fontSize: 16, color: colors.textPrimary },
