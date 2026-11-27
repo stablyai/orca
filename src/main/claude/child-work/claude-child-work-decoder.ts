@@ -6,25 +6,23 @@ import { classifyClaudeBackgroundTaskKind } from '../../../shared/agent-hook-lis
 import {
   liveClaudeTaskRunState,
   record,
-  taskAliasId,
   taskDescription,
   taskId,
   taskName,
   taskText,
-  taskUsageTotalTokens,
   terminalClaudeTaskRunState
 } from '../background-tasks/claude-background-task-frames'
 import { claudeStartedTaskKind } from '../subagents/claude-subagent-task-frames'
 import { ClaudeAgentWaitCalls } from './claude-agent-wait-calls'
 import { childWorkEndedEvidence, claudeChildWake } from './claude-child-wake-lease'
 import { ClaudeChildOwnerIndex } from './claude-child-owner-index'
+// tf: the decoder's task-frame rules (roster starts, turn ends, survivors).
+import * as tf from './claude-child-work-roster'
 import {
   claudeChildWorkOutcome,
   claudeChildWorkObservation,
   type DecodedClaudeTask,
   type EndedClaudeTask,
-  claudeRosterAliasId,
-  claudeRosterEntries,
   claudeTaskProgressFacts,
   type ClaudeTaskFacts
 } from './claude-child-work-evidence'
@@ -32,11 +30,6 @@ import {
 type ClaudeToolOwner = (toolUseId: string) => string | null
 
 type PendingEdge = (observedAt: number) => AgentChildWorkEvidence
-
-/** A roster-shaped start for an owner the provider confirms running; no spawn call of its own. */
-function rosterStart(id: string, task: Record<string, unknown>): Record<string, unknown> {
-  return { ...task, type: 'system', subtype: 'task_started', task_id: id, status: 'running' }
-}
 
 export class ClaudeChildWorkDecoder {
   /** Read-only outside the decoder; Steer moves the top-level foreground ones to the background. */
@@ -51,7 +44,7 @@ export class ClaudeChildWorkDecoder {
     endedOwner: (id) => this.ended.get(id),
     showWorking: (id, task) => this.upsert(id, { ...task, running: true }, {}, true),
     restore: (id, owner) => this.settleWake(id, owner),
-    revive: (id, runningFrame) => this.started(id, rosterStart(id, runningFrame), true)
+    revive: (id, runningFrame) => this.started(id, tf.claudeRosterStart(id, runningFrame), true)
   })
   /** `ownerOf` names the subagent that made a child tool call; an ending task wakes it. */
   constructor(readonly taskInvocations = new ClaudeTaskInvocations()) {}
@@ -62,24 +55,23 @@ export class ClaudeChildWorkDecoder {
       this.agentWaits.observe(message)
       return
     }
+    if (tf.claudeLeadTurnEnded(message, this.live)) {
+      this.surfaceForegroundCommands(undefined, ownerOf)
+    }
     if (message.type !== 'system') {
       return
     }
     if (message.subtype === 'background_tasks_changed') {
-      if (Array.isArray(message.tasks)) {
-        for (const entry of claudeRosterEntries(message.tasks)) {
-          // A roster entry that reports the owner running proves the provider resumes it. One that
-          // does not says nothing about the resume, so it must not revive an owner the lease settled.
-          if (entry.live) {
-            this.wake.confirmRunning(entry.id, entry.task)
-          }
-          if (
-            !this.ended.has(entry.id) &&
-            this.taskInvocations.parentOf(entry.id, claudeRosterAliasId(entry.task))
-          ) {
-            this.started(entry.id, entry.task, true)
-          }
-        }
+      for (const { id, task } of tf.claudeRosterConfirmations(message)) {
+        this.wake.confirmRunning(id, task)
+      }
+      const known = {
+        live: this.live,
+        ended: this.ended,
+        parentOf: this.taskInvocations.parentOf
+      }
+      for (const [id, task] of tf.claudeRosterStarts(message, known)) {
+        this.started(id, task, true)
       }
       return
     }
@@ -93,15 +85,9 @@ export class ClaudeChildWorkDecoder {
     }
     // Only a frame the decoder admits proves the provider runs this owner; a historical alias
     // that is ignored above would otherwise clear the lease and leave the row working for good.
-    // A frame that does not report running (a metadata-only update) says nothing about a resume.
-    // task_progress is emitted only while a task runs, and a running update reports it under the patch.
-    const patch = record(message.patch)
-    const running = liveClaudeTaskRunState(patch?.status) ?? liveClaudeTaskRunState(message.status)
-    if (running !== null || message.subtype === 'task_progress') {
-      this.wake.confirmRunning(
-        id,
-        liveClaudeTaskRunState(patch?.status) !== null ? patch! : message
-      )
+    const runningFrame = tf.claudeRunningFrame(message)
+    if (runningFrame) {
+      this.wake.confirmRunning(id, runningFrame)
     }
     switch (message.subtype) {
       case 'task_started':
@@ -117,13 +103,16 @@ export class ClaudeChildWorkDecoder {
         this.end(
           id,
           message.status,
-          {
-            runId: taskAliasId(message.tool_use_id),
-            lastMessage: taskText(message.summary),
-            totalTokens: taskUsageTotalTokens(message)
-          },
+          tf.claudeEndedReport(message, selected?.invocation.forkedCommand === true),
           ownerOf
         )
+    }
+  }
+
+  /** See claudeForegroundCommandSurvivors. */
+  private surfaceForegroundCommands(ownerId: string | undefined, ownerOf?: ClaudeToolOwner): void {
+    for (const [id, task] of tf.claudeForegroundCommandSurvivors(this.live, ownerId, ownerOf)) {
+      this.upsert(id, task, {})
     }
   }
 
@@ -172,7 +161,6 @@ export class ClaudeChildWorkDecoder {
     const awaitsAgents = this.agentWaits.take(toolUseId)
     const existing = this.live.get(id)
     const ended = existing ? undefined : this.ended.get(id)
-    const saved = ended?.task
     const restart = ended !== undefined
     // Only successful runs can wake under the same spawn call; other starts are late frames.
     if (ended?.run !== undefined && ended.run === toolUseId && ended.outcome !== 'succeeded') {
@@ -180,18 +168,26 @@ export class ClaudeChildWorkDecoder {
     }
     this.wake.confirmRunning(id, message)
     const kind = claudeStartedTaskKind(message)
+    // A roster entry carries only id and status, so a start that revives an ended owner must
+    // restore the saved task. Both cases reach it: a spent wake restores the ending before the
+    // sweep sees it, so `existing` holds the task by now; a live wake leaves it in `ended`.
+    const carried = existing ?? ended?.task
     this.upsert(
       id,
       {
-        kind: kind !== 'unknown' ? kind : (saved?.kind ?? 'unknown'),
+        kind: kind !== 'unknown' ? kind : (carried?.kind ?? 'unknown'),
         backgrounded:
-          roster || message.is_backgrounded === true || kind === 'workflow' || kind === 'monitor',
-        running: liveClaudeTaskRunState(message.status) !== null || saved?.running === true,
-        name: taskName(message) ?? saved?.name,
-        description: taskDescription(message.description) ?? saved?.description,
-        toolUseId: toolUseId ?? saved?.toolUseId,
+          roster ||
+          message.is_backgrounded === true ||
+          kind === 'workflow' ||
+          kind === 'monitor' ||
+          carried?.backgrounded === true,
+        running: liveClaudeTaskRunState(message.status) !== null || carried?.running === true,
+        name: taskName(message) ?? carried?.name,
+        description: taskDescription(message.description) ?? carried?.description,
+        toolUseId: toolUseId ?? carried?.toolUseId,
         parentTaskId: invocation.parentTaskId,
-        ...(awaitsAgents || saved?.awaitsAgents ? { awaitsAgents: true as const } : {})
+        ...tf.claudeCarriedMarks(existing, toolUseId, awaitsAgents)
       },
       {},
       restart,
@@ -220,7 +216,7 @@ export class ClaudeChildWorkDecoder {
     }
     // Progress descriptions describe the current activity, not the task.
     const name = task.name ?? taskName(message)
-    this.upsert(id, { ...task, name }, claudeTaskProgressFacts(message))
+    this.upsert(id, { ...tf.claudeTaskSeenAgain(task), name }, claudeTaskProgressFacts(message))
   }
 
   private updated(
@@ -243,7 +239,7 @@ export class ClaudeChildWorkDecoder {
       // An owner whose wake already ran out may still be reported running; any other ended task
       // stays done, and a frame that does not report running proves nothing about the resume.
       if (liveClaudeTaskRunState(patch.status) !== null && this.wake.confirmedRunning(id)) {
-        this.started(id, rosterStart(id, patch), true)
+        this.started(id, tf.claudeRosterStart(id, patch), true)
       }
       return
     }
@@ -265,7 +261,7 @@ export class ClaudeChildWorkDecoder {
         description: description ?? existing?.description,
         toolUseId: existing?.toolUseId,
         parentTaskId: existing?.parentTaskId,
-        ...(existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
+        ...tf.claudeCarriedMarks(existing, existing?.toolUseId)
       },
       {},
       false
@@ -337,5 +333,7 @@ export class ClaudeChildWorkDecoder {
     this.pending.push((observedAt) =>
       childWorkEndedEvidence(id, reported.runId, outcome, observedAt, reported)
     )
+    // Its own foreground commands could not outlive it either.
+    this.surfaceForegroundCommands(id, ownerOf)
   }
 }

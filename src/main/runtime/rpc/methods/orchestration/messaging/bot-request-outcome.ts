@@ -30,6 +30,7 @@ import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
 import { botRequestsTurnAnswered } from '../../../../../bots/bot-turn-answered-requests'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
 import { redactFailure } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-wording'
+import { failureNamingHostCap } from './turn-host-cap-refusal'
 
 const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
 
@@ -155,8 +156,9 @@ export async function settleBotRequestFailure(
   }
   const error = await readChatRequestError(failure)
   const why = (await continuesAfterUsageLimit(failure.sessionId)) ? 'failed-continues' : 'failed'
+  const text = await failureNamingHostCap(runtime.getOrchestrationDb(), failure, error)
   // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
-  const reason = error ? redactFailure(error.text) : undefined
+  const reason = text ? redactFailure(text) : undefined
   noteBotQuestionFailure(failure.sessionId, { requestId: failure.id, why, reason })
   // A refused send settles only itself: other agents' mail refused says nothing of earlier requests.
   await settleBotRequests(runtime, failure.sessionId, failure.id, {

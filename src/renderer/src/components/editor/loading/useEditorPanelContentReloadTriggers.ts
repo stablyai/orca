@@ -36,12 +36,13 @@ export function useEditorPanelContentReloadTriggers({
   loadFileContent
 }: UseEditorPanelContentReloadTriggersParams): void {
   const changesStatusEntries = activeFile?.worktreeId ? gitStatusEntries : undefined
+  const activeFileRelativePath = activeFile?.relativePath
   const activeFileGitStatusEntries = useMemo(() => {
-    if (!activeFile?.relativePath || !changesStatusEntries) {
+    if (!activeFileRelativePath || !changesStatusEntries) {
       return undefined
     }
-    return changesStatusEntries.filter((entry) => entry.path === activeFile.relativePath)
-  }, [activeFile?.relativePath, changesStatusEntries])
+    return changesStatusEntries.filter((entry) => entry.path === activeFileRelativePath)
+  }, [activeFileRelativePath, changesStatusEntries])
   const activeFileGitStatusSignature = useMemo(() => {
     if (!activeFileGitStatusEntries) {
       return ''

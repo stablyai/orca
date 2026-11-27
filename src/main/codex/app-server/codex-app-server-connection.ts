@@ -21,6 +21,13 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from './codex-app-server-connection-types'
+import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
+import {
+  codexConnectionRelay,
+  CODEX_RELAY_WORK_MARKERS,
+  isCodexAnswerAbove,
+  keptInitializeResult
+} from './codex-app-server-relay'
 
 // Structured chat needs a persistent transport for approvals and streamed turns.
 export type CodexAppServerLaunch = ProviderProcessLaunch
@@ -32,20 +39,39 @@ async function connectCodexAppServer(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
   spawnImpl: ProviderProcessSpawner,
-  initialize: boolean
+  initialize: boolean,
+  relayChatKey?: string
 ): Promise<CodexAppServerConnection> {
-  const managed = spawnManagedProviderProcess(launch, {
-    spawnImpl,
-    site: 'codex-app-server-teardown'
-  })
+  // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
+  let requestFloor = Number.POSITIVE_INFINITY
+  const relayed = relayChatKey
+    ? await launchRelayedProviderProcess(launch, {
+        chatKey: relayChatKey,
+        markers: CODEX_RELAY_WORK_MARKERS,
+        passWhileHeld: (line) => isCodexAnswerAbove(line, requestFloor)
+      })
+    : null
+  const managed =
+    relayed?.managed ??
+    spawnManagedProviderProcess(launch, {
+      spawnImpl,
+      site: 'codex-app-server-teardown'
+    })
   const { child } = managed
-  const tree = createClaudeChildTreeReaper(child, {
-    site: 'codex-app-server-child-close',
-    exited: () => managed.rootVerdict === 'exited',
-    supervised: managed.supervised
-  })
+  // The daemon reaps a relayed agent's group itself.
+  const tree = relayed
+    ? undefined
+    : createClaudeChildTreeReaper(child, {
+        site: 'codex-app-server-child-close',
+        exited: () => managed.rootVerdict === 'exited',
+        supervised: managed.supervised
+      })
+  const reattached = relayed?.reattached === true
+  const keptInitialize = reattached ? keptInitializeResult(relayed.child) : null
+  requestFloor = relayed?.child.attachResult?.maxClientRequestId ?? 0
 
-  let nextRequestId = 1
+  // A reattached agent already saw the last app's requests; new ids start above them.
+  let nextRequestId = requestFloor + 1
   let closing = false
   let closesInFlight = 0
   let exitReported = false
@@ -60,6 +86,7 @@ async function connectCodexAppServer(
   const dispatcher = createCodexAppServerRecordDispatcher({
     handlers,
     writeResponse,
+    previousAppRequestsThrough: requestFloor,
     onProtocolFailure: (error) => {
       handleUnexpectedEnd(error, true)
       void managed.close()
@@ -130,6 +157,10 @@ async function connectCodexAppServer(
     if (managed.rootVerdict === 'exited' || terminalError) {
       return
     }
+    // The kept agent was initialized by the app that started it.
+    if (keptInitialize !== null && method === 'initialized') {
+      return
+    }
     try {
       sendLine(params === undefined ? { method } : { method, params })
     } catch {
@@ -150,6 +181,9 @@ async function connectCodexAppServer(
     }
     if (managed.rootVerdict === 'exited') {
       return Promise.reject(buildExitError())
+    }
+    if (keptInitialize !== null && method === 'initialize') {
+      return Promise.resolve(keptInitialize)
     }
     const id = nextRequestId++
     const timeoutMs =
@@ -247,7 +281,8 @@ async function connectCodexAppServer(
     respondWithError: (id, code, message) => writeResponse({ id, error: { code, message } }),
     pauseReading: recordReader.pause,
     resumeReading: recordReader.resume,
-    close
+    close,
+    ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached, relayed.keep) } : {})
   }
 
   let handshaking = false
@@ -282,6 +317,14 @@ export function spawnCodexAppServerConnection(
   spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   return connectCodexAppServer(launch, handlers, spawnImpl, false)
+}
+
+/** One chat's own app-server, run under the terminal daemon where it can, so it outlives a restart. */
+export function spawnRelayedCodexAppServerConnection(
+  chatKey: string
+): typeof spawnCodexAppServerConnection {
+  return (launch, handlers = {}) =>
+    connectCodexAppServer(launch, handlers, spawnProcess, false, chatKey)
 }
 
 export function openCodexAppServerConnection(

@@ -166,7 +166,7 @@ export function TaskPageGitHubRows({
                     <RepoBadgeLabel
                       name={itemRepo.displayName}
                       color={itemRepo.badgeColor}
-                      badgeClassName="size-1.5"
+                      repo={itemRepo}
                       className="shrink-0 text-[11px] text-muted-foreground"
                     />
                   ) : null}

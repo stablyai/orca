@@ -21,7 +21,7 @@ import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { useEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getJiraBoardColumnOrderScopeKey } from './boards/task-page-jira-board-column-order'
 export function TaskPageJiraContent({
   model
@@ -73,9 +73,12 @@ export function TaskPageJiraContent({
   const boardTarget = ipcOrRuntimeTargetForHostId(
     jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
   )
+  const boardTargetContextKey = useEnvironmentRuntimeContextKey(
+    boardTarget ? runtimeTargetEnvironmentId(boardTarget) : null
+  )
   const boardScopeKey = JSON.stringify([
     jiraTaskSourceScopeKey,
-    boardTarget ? getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(boardTarget)) : null
+    boardTarget ? boardTargetContextKey : null
   ])
   return taskSource === 'jira' ? (
     !jiraStatusReady ? (

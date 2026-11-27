@@ -9,7 +9,7 @@ import type {
   GoogleSetupRun
 } from '../../../../../../src/shared/google/google-setup-run'
 import { errorMessage } from '../../../../../../src/shared/errors/error-message'
-import { MobileGoogleMark } from '../../../../bots/MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../../../../bots/MobileConnectorSourceIcon'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -94,7 +94,7 @@ export function MobileGoogleSetupFrame({
 }): React.JSX.Element {
   return (
     <MobileBotCardFrame
-      avatar={avatar ?? <MobileGoogleMark />}
+      avatar={avatar ?? <MobileConnectorLogo source="google" />}
       heading={heading}
       trailing={
         trailing ? (

@@ -1,6 +1,7 @@
 // Item reads beyond one row: a bot's list with exact counts, links by what they point at, and the rows
 // item views need in one round trip.
 import {
+  type BotItemActor,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemLinkKind,
@@ -15,6 +16,7 @@ import {
   statusOf,
   text
 } from './bot-items-rows'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 import { BotItemsTables } from './bot-items-tables'
 
@@ -32,6 +34,8 @@ export type BotItemListQuery = {
   cursor?: { at: number; number: number }
 }
 
+export type BotItemClose = { actor: BotItemActor; actsFor: readonly BotRequestAsker[] | null }
+
 export class BotItemsReads extends BotItemsTables {
   /** Links of a kind to any of these refs, across items. */
   linksTo(kind: BotItemLinkKind, refs: readonly string[]): BotItemLinkRecord[] {
@@ -44,6 +48,36 @@ export class BotItemsReads extends BotItemsTables {
       )
       .all(kind, JSON.stringify(refs))
       .flatMap((row) => linkRecordOf(row) ?? [])
+  }
+
+  /** Up to `limit` distinct items linking any of these refs, by the ref index: enough to tell
+   *  whether any item but one holds them, without reading every link. */
+  itemsLinking(kind: BotItemLinkKind, refs: readonly string[], limit: number): string[] {
+    if (refs.length === 0) {
+      return []
+    }
+    return this.db
+      .prepare(
+        `SELECT DISTINCT item_uid FROM item_links WHERE kind = ? AND ref IN (SELECT value FROM json_each(?)) LIMIT ?`
+      )
+      .all(kind, JSON.stringify(refs), limit)
+      .map((row) => String(row.item_uid))
+  }
+
+  /** An item and where its work started (its `made` event's `startedIn`), in one call: what a
+   *  finished worker's report names. */
+  reportFact(uid: string): { item: BotItemRecord; startedIn: string | null } | null {
+    const item = this.get(uid)
+    if (!item) {
+      return null
+    }
+    const made = this.db
+      .prepare(
+        "SELECT json_extract(data, '$.startedIn') AS started_in FROM item_events WHERE item_uid = ? AND kind = 'made' ORDER BY id LIMIT 1"
+      )
+      .get(uid)
+    const startedIn = made?.started_in
+    return { item, startedIn: typeof startedIn === 'string' && startedIn ? startedIn : null }
   }
 
   /** Every Dispatch any item links. */
@@ -113,6 +147,30 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
+  /** The close each item's `closedAt` names: who made it, and whom its chat acted for when it says.
+   *  Seeks each by item and time on the status-event index, so later events never grow the read. */
+  closes(items: readonly { uid: string; closedAt: number }[]): Record<string, BotItemClose> {
+    const closes: Record<string, BotItemClose> = {}
+    for (const row of this.db
+      .prepare(
+        `SELECT * FROM item_events WHERE id IN (SELECT (SELECT id FROM item_events
+           WHERE item_uid = json_extract(named.value, '$.uid') AND kind = 'status'
+             AND created_at = json_extract(named.value, '$.closedAt')
+             AND json_extract(data, '$.to') IN ('done', 'canceled')
+           ORDER BY id DESC LIMIT 1) FROM json_each(?) AS named)`
+      )
+      .all(JSON.stringify(items))) {
+      const event = eventRecordOf(row)
+      const { actsFor } = event.data
+      closes[event.itemUid] = {
+        actor: event.actor,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the host writes actsFor, from a turn's askers.
+        actsFor: Array.isArray(actsFor) ? (actsFor as BotRequestAsker[]) : null
+      }
+    }
+    return closes
+  }
+
   /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits
    *  and the newest event anyone but the owner made. */
   viewRows(
@@ -172,5 +230,22 @@ export class BotItemsReads extends BotItemsTables {
       }
     }
     return { items, links, questions, waits, othersLast, waitingAsks }
+  }
+
+  showRows(
+    uid: string,
+    afterId: number,
+    limit: number
+  ): {
+    rows: ReturnType<BotItemsReads['viewRows']>
+    events: BotItemEventRecord[]
+  } {
+    // A version must describe the history the caller could have read.
+    this.db.exec('BEGIN')
+    try {
+      return { rows: this.viewRows([uid]), events: this.events(uid, afterId, limit) }
+    } finally {
+      this.db.exec('ROLLBACK')
+    }
   }
 }

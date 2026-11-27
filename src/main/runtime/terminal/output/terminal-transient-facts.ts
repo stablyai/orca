@@ -1,4 +1,8 @@
-import { TerminalCommandPaint } from '../input/terminal-command-paint'
+import { TerminalCommandPaint, type CommandPaintMarks } from '../input/terminal-command-paint'
+import { CommandFinishArbiter, commandMarkAgent } from './command-finish-arbiter'
+import { notifyWorktreeActivity } from '../../../ipc/worktrees/git/worktree-activity-signal'
+import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
 import type { PtyTransientFact } from '../../../providers/pty/events'
 import type {
@@ -23,10 +27,66 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/t
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
+  abstract readCommandMarkForeground(
+    ptyId: string,
+    agent: TuiAgent
+  ): Promise<LaunchedAgentForeground>
+  abstract launchedAgentHostProvesAgent(ptyId: string): boolean
   protected abstract recheckHookAgentPresenceForPty(
     ptyId: string,
     exitedSince?: number
   ): Promise<'live' | 'unverifiable' | 'exited' | null>
+
+  private readonly commandFinishes = new CommandFinishArbiter({
+    agentFor: (ptyId) => {
+      const pty = this.ptysById.get(ptyId)
+      // A host that can never find the agent in front keeps every mark, as before.
+      return pty && this.launchedAgentHostProvesAgent(ptyId) ? commandMarkAgent(pty) : null
+    },
+    incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId,
+    readForeground: (ptyId, agent) => this.readCommandMarkForeground(ptyId, agent),
+    finish: (ptyId, lanes) => {
+      if (lanes.paint) {
+        this.ptysById.get(ptyId)?.commandPaint?.settleHeldFinish(true)
+      }
+      if (lanes.authority) {
+        this.applyShellCommandFinished(ptyId, lanes.authority.exitCode)
+        // The command may have run git worktree add/remove; the repo's metadata backstop re-checks (throttled).
+        notifyWorktreeActivity(this.ptysById.get(ptyId)?.worktreeId)
+      }
+    },
+    dismiss: (ptyId, lanes) => {
+      if (lanes.paint) {
+        this.ptysById.get(ptyId)?.commandPaint?.settleHeldFinish(false)
+      }
+    }
+  })
+
+  /** An OSC 133;D: in a pane with an agent it counts once the foreground read finds the shell. */
+  protected noteCommandFinished(ptyId: string, exitCode: number | null): void {
+    this.commandFinishes.note(ptyId, { authority: { exitCode } })
+  }
+
+  protected noteCommandStarted(ptyId: string): void {
+    this.commandFinishes.noteCommandStarted(ptyId, 'authority')
+  }
+
+  protected noteCommandPaintMarks(ptyId: string, marks: CommandPaintMarks): void {
+    if (marks.heldFinishStarted) {
+      this.commandFinishes.noteCommandStarted(ptyId, 'paint')
+    }
+    if (marks.finishHeld) {
+      this.commandFinishes.note(ptyId, { paint: true })
+    }
+  }
+
+  private applyShellCommandFinished(ptyId: string, exitCode: number | null): void {
+    // A backgrounded pane's mark proves its agent's exit as a foreground pane's does.
+    void this.recheckHookAgentPresenceForPty(ptyId)
+    this.retirePtyAgentLaunchAuthority(ptyId, true)
+    this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
+    this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
+  }
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -37,14 +97,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        // A backgrounded pane's mark proves its agent's exit as a foreground pane's does.
-        void this.recheckHookAgentPresenceForPty(ptyId)
-        this.retirePtyAgentLaunchAuthority(ptyId, true)
-        this.recordTerminalSideEffectFact(ptyId, {
-          kind: 'command-finished',
-          exitCode: fact.exitCode
-        })
-        this.openCodeRunLifetime.onCommandFinished(ptyId, fact.exitCode)
+        this.noteCommandFinished(ptyId, fact.exitCode)
         return
       case 'pr-link':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link: fact.link })

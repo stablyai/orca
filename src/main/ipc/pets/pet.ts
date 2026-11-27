@@ -5,6 +5,7 @@ import {
   type PetImportFailure
 } from '../../../shared/pets/pet-import-failure-copy'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, extname, join, normalize, sep } from 'node:path'
@@ -36,8 +37,8 @@ async function withPetImportFailure(
   }
 }
 
-export function registerPetHandlers(): void {
-  ipcMain.handle('pet:import', (event) =>
+export function registerPetHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('pet:import', (event) =>
     withPetImportFailure(async (): Promise<CustomPet | null> => {
       const senderWindow =
         BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
@@ -104,11 +105,9 @@ export function registerPetHandlers(): void {
     })
   )
 
-  ipcMain.handle('pet:importPetBundle', (event) =>
-    withPetImportFailure(() => importPetBundle(event))
-  )
+  ipc.handle('pet:importPetBundle', (event) => withPetImportFailure(() => importPetBundle(event)))
 
-  ipcMain.handle(
+  ipc.handle(
     'pet:read',
     async (
       _event,
@@ -137,7 +136,7 @@ export function registerPetHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'pet:delete',
     async (_event, id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> => {
       let parsed: z.infer<typeof PetFileRequestSchema>

@@ -79,7 +79,7 @@ function SenderName({
   from: AgentMessageSource
   open: React.ContextType<typeof MobileAgentMessageOpenContext>
 }) {
-  const name = useMobileAgentMessageName(sender, unnamed)
+  const name = useMobileAgentMessageName(sender) ?? unnamed
   const canOpen = open !== undefined && agentMessageSenderCanOpen(sender)
   return (
     <Pressable

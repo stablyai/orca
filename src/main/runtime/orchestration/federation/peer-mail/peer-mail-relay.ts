@@ -183,7 +183,7 @@ export class PeerMailRelay {
         {
           waitMs,
           ...(holdBack.length > 0 ? { holdBack } : {}),
-          ...asksLoop.pairedServerPullParams(loop.asks)
+          ...asksLoop.pairedServerPullParams(this.runtime, loop.db, loop.asks)
         },
         PULL_TIMEOUT_MS
       )

@@ -77,6 +77,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
   const {
     checkSelectListAfterPress,
     readSelectPopupAfterPress,
+    readSelectPopupAfterKey,
     closeSelectPopupForPageInput,
     selectPopupElement
   } = useRemoteBrowserSelectPopup(input)
@@ -275,7 +276,8 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     closeMissingRemotePage,
     scheduleRemoteTabInfoRefresh,
     setPaneNotice,
-    closeSelectPopupForPageInput
+    closeSelectPopupForPageInput,
+    readSelectPopupAfterKey
   })
 
   const handleRemotePointerMove = useRemoteBrowserPageHover({

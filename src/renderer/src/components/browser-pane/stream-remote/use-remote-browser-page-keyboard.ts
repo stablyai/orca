@@ -66,7 +66,8 @@ export function useRemoteBrowserPageKeyboard({
   closeMissingRemotePage,
   scheduleRemoteTabInfoRefresh,
   setPaneNotice,
-  closeSelectPopupForPageInput
+  closeSelectPopupForPageInput,
+  readSelectPopupAfterKey
 }: {
   pickerAvailable: boolean
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
@@ -79,6 +80,12 @@ export function useRemoteBrowserPageKeyboard({
   scheduleRemoteTabInfoRefresh: (token: RemoteBrowserOperationToken, delayMs?: number) => void
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   closeSelectPopupForPageInput: () => void
+  readSelectPopupAfterKey: (press: {
+    target: RemoteBrowserRuntimeTarget
+    pageId: string
+    operationToken: RemoteBrowserOperationToken
+    key: string
+  }) => Promise<void>
 }): {
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void
@@ -169,6 +176,8 @@ export function useRemoteBrowserPageKeyboard({
         ) {
           scheduleRemoteTabInfoRefresh(operationToken, 400)
         }
+        // A focused select opens its list on the host, where the frame cannot show it.
+        await readSelectPopupAfterKey({ target, pageId, operationToken, key })
       } catch (error) {
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {

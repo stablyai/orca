@@ -125,7 +125,7 @@ export function getDefaultRightSidebarActivityItems({
       icon: Plug,
       title: t('auto.components.right.sidebar.index.441733b630', 'Ports'),
       shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
-      sshOnly: true
+      remoteHostOnly: true
     }
   ]
 }

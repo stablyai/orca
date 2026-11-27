@@ -13,7 +13,6 @@ import {
   sweepOrphanedProviderGroup,
   providerGroupAbsent,
   providerOwnershipAbsent,
-  retireProviderWatcher,
   type ProviderGroupIdentity
 } from './provider-group-orphan-guard'
 import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
@@ -41,8 +40,15 @@ const startups = new Map<string, Promise<void>>()
 const MAX_RECORD_BYTES = 16_384
 const availableDirectories = new Map<string, string | null>()
 
+let installedDirectory: string | null = null
+
+/** The terminal daemon owns its relayed agents, so it journals them beside its own runtime state. */
+export function installProviderOwnershipDirectory(directory: string): void {
+  installedDirectory = directory
+}
+
 export function providerOwnershipDirectory(): string {
-  return join(getAppEnvironment().getPath('userData'), 'provider-processes')
+  return installedDirectory ?? join(getAppEnvironment().getPath('userData'), 'provider-processes')
 }
 
 /** This synchronous launch seam checks host capability once, never once per chat. */
@@ -113,9 +119,8 @@ export async function waitForProviderOwnershipReap(
     ) {
       return false
     }
-    if ((await retireProviderWatcher(identity, { signal: proof.signal })) === 'refused') {
-      return false
-    }
+    // The watcher stops the CLI's detached tools after the group and exits by itself; killing it
+    // here could strand them, so an unfinished watcher just keeps the record for a later pass.
     return (
       !proof.signal.aborted &&
       (await waitForProviderGroupReap(

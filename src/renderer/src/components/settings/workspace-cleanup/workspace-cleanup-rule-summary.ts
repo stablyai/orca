@@ -37,6 +37,6 @@ export function formatWorkspaceCleanupRuleSummary(
     )
   }
   return parts.length > 0
-    ? parts.join(', ')
+    ? parts.join(t('components.settings.workspaceCleanup.listSeparator', ', '))
     : t('components.settings.workspaceCleanup.summary.off', 'Off')
 }

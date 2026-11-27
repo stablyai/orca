@@ -5,24 +5,29 @@ import { useId } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BOT_PURPOSE_MAX_LENGTH } from '../../../../shared/bots/bot-proposal'
-const COUNTER_FROM = 160
+import { FIELD_ERROR } from './new-bot-bare-fields'
+// The count shows once the text nears the limit.
+const COUNTER_FROM = Math.floor(BOT_PURPOSE_MAX_LENGTH * 0.8)
 
 export function NewBotPurposeField({
   value,
   prefilled,
   tooLong,
+  sentLength,
   onChange
 }: {
   value: string
   /** A template's text: no counter until it is edited, since it is sent as the template wrote it. */
   prefilled?: string
   tooLong: boolean
+  /** How long the purpose Create sends is; a cleared box sends a proposal's own. */
+  sentLength: number
   onChange: (value: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const counterId = useId()
   return (
-    <div className="space-y-1">
+    <div>
       {/* The field's frame holds the padding, so the scrolling text shows whole lines. */}
       <div className="rounded-md border border-input px-3 py-2 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 has-aria-invalid:border-destructive has-aria-invalid:ring-destructive/20 dark:bg-input/30 dark:has-aria-invalid:ring-destructive/40">
         <ImeTextarea
@@ -42,16 +47,12 @@ export function NewBotPurposeField({
           onChange={(event) => onChange(event.target.value)}
         />
       </div>
-      {value.length >= COUNTER_FROM && value !== prefilled ? (
-        <p
-          id={counterId}
-          role={tooLong ? 'alert' : undefined}
-          className={cn(
-            'text-xs tabular-nums',
-            tooLong ? 'text-destructive' : 'text-right text-muted-foreground'
-          )}
-        >
-          {tooLong ? `${t('bots.new.validation.identityTooLong', 'Too long')} · ` : null}
+      {tooLong ? (
+        <p id={counterId} role="alert" className={FIELD_ERROR}>
+          {`${t('bots.new.validation.identityTooLong', 'Too long')} · ${sentLength}/${BOT_PURPOSE_MAX_LENGTH}`}
+        </p>
+      ) : value.length >= COUNTER_FROM && value !== prefilled ? (
+        <p className="mt-1 text-right text-xs tabular-nums text-muted-foreground">
           {value.length}/{BOT_PURPOSE_MAX_LENGTH}
         </p>
       ) : null}

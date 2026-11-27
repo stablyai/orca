@@ -93,7 +93,12 @@ export function getPiBackgroundWorkBridgeSource(): string {
     '    try {',
     // The child makes its own folder, so a launch that never spawned leaves nothing behind.
     '      fs.mkdirSync(dir, { recursive: true })',
-    '      watcher = fs.watch(dir, answer)',
+    "      const deletedDir = process.platform === 'win32' ? path.win32.toNamespacedPath(dir) : null",
+    '      watcher = fs.watch(dir, (eventType, fileName) => {',
+    // libuv before 1.53 repeats this event in a tight loop until a deleted folder's watcher closes.
+    "        if (deletedDir !== null && eventType === 'rename' && fileName === deletedDir) return close?.()",
+    '        answer()',
+    '      })',
     "      watcher.on('error', () => {})",
     '    } catch {',
     '      return',

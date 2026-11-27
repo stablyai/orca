@@ -3,7 +3,6 @@ import {
   isEquivalentPaneKey,
   parseWorkerTerminalPriorOwnerIds
 } from '../orchestration/db/pane-key-match'
-import { getFollowUpDispatch } from '../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { potentiallyLiveRemoteAttachmentSql } from '../orchestration/db/federation/remote-attachment-liveness'
 import { isStructuredWorkerHandle } from '../../../shared/orchestration/workers/structured-worker-handle'
@@ -163,23 +162,17 @@ export class AgentSenderWorkerHistory {
     work: AgentSenderHistoryWork
   ): void {
     let changed = this.cold
-    // Former-owner keys added below are Dispatch keys, which this loop skips.
     for (const key of dirty) {
       if (!key.startsWith('p:')) {
         continue
       }
       changed = true
       const paneKey = key.slice(2)
-      const previous = this.slices.get(paneKey)
       this.slices.delete(paneKey)
       const pane = live.get(paneKey)
       const next = pane ? this.readPane(db, pane, work) : undefined
       if (next) {
         this.slices.set(paneKey, next)
-      }
-      // A former owner's resource is read from these slices, so its lineage reads change too.
-      for (const [id] of [...(previous?.former ?? []), ...(next?.former ?? [])]) {
-        dirty.add(`d:${id}`)
       }
     }
     const visit = () => {
@@ -204,9 +197,7 @@ export class AgentSenderWorkerHistory {
       [...this.slices.values()].flatMap((slice) => slice.candidates),
       {
         dispatch: read((id) => db.getDispatchContextById(id)),
-        ownedResource: read((id) => db.getWorkerTerminalResourceByOwner(id)),
-        formerResource: (id) => former.get(id),
-        followUp: read((id) => getFollowUpDispatch(db, id))
+        ownedResource: read((id) => db.getWorkerTerminalResourceByOwner(id))
       },
       visit
     )
@@ -230,7 +221,7 @@ export class AgentSenderWorkerHistory {
           continue
         }
         seen.add(id)
-        const entry = this.entry(id, live, executions)
+        const entry = this.entry(id, live, executions, former)
         workers.push(...entry.rows)
         if (entry.parent) {
           pending.push(entry.parent)
@@ -287,10 +278,11 @@ export class AgentSenderWorkerHistory {
   private entry(
     id: string,
     live: Map<string, AgentSenderPane>,
-    executions: Map<string, AgentSenderPane | null>
+    executions: Map<string, AgentSenderPane | null>,
+    former: Map<string, WorkerTerminalResourceRow>
   ): DispatchEntry {
     const row = this.graph.row(id)
-    const resource = this.graph.resource(id)
+    const resource = this.graph.resource(id) ?? former.get(id)
     const rows: AgentSenderWorker[] = []
     const sourceKey = row && executionKey(row.process_incarnation, row.host_scope)
     const exact = sourceKey ? executions.get(sourceKey) : undefined

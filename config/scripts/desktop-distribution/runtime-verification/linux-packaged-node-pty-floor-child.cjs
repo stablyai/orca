@@ -23,8 +23,11 @@ const timeout = setTimeout(() => {
   }
   settled = true
   child.kill()
-  process.stderr.write('packaged node-pty floor smoke timed out\n')
-  process.exitCode = 1
+  process.stderr.write(
+    `packaged node-pty floor smoke timed out: pty never exited, bytes=${Buffer.byteLength(output)}\n`
+  )
+  // Why: a wedged pty handle keeps the loop alive, so exit instead of waiting on it.
+  process.exit(1)
 }, 5_000)
 
 child.onData((data) => {

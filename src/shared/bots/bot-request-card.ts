@@ -39,7 +39,8 @@ export type BotRequestCardReading = {
 
 /** The line a client that can't draw the card shows instead. */
 export function botRequestCardText(card: BotRequestCard): string {
-  const to = card.client ? `${card.toBotName} on ${card.client.computer}` : card.toBotName
+  const computer = card.client ? card.client.computer.trim() || 'a paired computer' : null
+  const to = computer ? `${card.toBotName} on ${computer}` : card.toBotName
   if (!card.messageId) {
     return `Not sent to ${to}: ${card.subject}`
   }

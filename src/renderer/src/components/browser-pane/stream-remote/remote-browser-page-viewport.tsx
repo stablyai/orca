@@ -322,6 +322,7 @@ export function RemoteBrowserPageViewport({
           {/* Client-placed pages refuse server screencasts; only a new server-placed page can render here. */}
           {remotePageHandle?.placement?.kind === 'client' ? (
             <ReopenBrowserPageOnServerButton
+              browserPageId={browserTab.id}
               environmentId={remotePageHandle.environmentId}
               worktreeId={worktreeId}
               reopenUrl={browserTab.url}

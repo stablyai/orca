@@ -128,6 +128,30 @@ it('keeps a newer streamed settlement when an older detail window arrives later'
   expect(hook.result.current.available).toBe(true)
 })
 
+it('asks the host once for a window already being read, and hands the second caller that read', async () => {
+  const target = { kind: 'local' } as const
+  const presence = { revision: 'feed-test:2', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed(target, '33333333-3333-4333-8333-333333333333', true, presence)
+  )
+  await act(async () => {
+    rpc.event({ revision: 1, expired: false, identities: [], rows: [], anchor: null })
+  })
+  const before = rpc.calls
+  let first: Promise<void> | undefined
+  let second: Promise<void> | undefined
+  act(() => {
+    first = hook.result.current.loadWindow?.('tail-worker')
+    second = hook.result.current.loadWindow?.('tail-worker')
+  })
+  expect(rpc.calls).toBe(before + 1)
+  expect(second).toBe(first)
+  await act(async () => {
+    rpc.resolve({ revision: 1, expired: false, identities: [], rows: [], anchor: null })
+    await first
+  })
+})
+
 it('seeds a source again after a failed cold read, and never after one that succeeded', async () => {
   const target = { kind: 'local' } as const
   const session = '22222222-2222-4222-8222-222222222222'
@@ -147,4 +171,24 @@ it('seeds a source again after a failed cold read, and never after one that succ
   hook.unmount()
   mount()
   expect(rpc.calls).toBe(2)
+})
+
+it('counts a feed loss that recovers before React renders, read live', async () => {
+  const presence = { revision: 'feed-losses:1', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed({ kind: 'local' }, '55555555-5555-4555-8555-555555555555', true, presence)
+  )
+  const snapshot = { revision: 1, expired: false, identities: [], rows: [], anchor: null }
+  await act(async () => {
+    rpc.event(snapshot)
+  })
+  const { readLosses } = hook.result.current
+  expect(readLosses()).toBe(0)
+  // A loss and its recovery published back to back, with no render between them.
+  rpc.event({ ...snapshot, revision: 2, unavailable: true })
+  rpc.event({ ...snapshot, revision: 3 })
+  expect(readLosses()).toBe(1)
+  await act(async () => {})
+  expect(hook.result.current.available).toBe(true)
+  expect(hook.result.current.readLosses()).toBe(1)
 })

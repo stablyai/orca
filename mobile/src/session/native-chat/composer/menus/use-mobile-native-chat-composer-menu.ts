@@ -187,6 +187,9 @@ export function useMobileNativeChatComposerMenu(input: {
       onNeedSkills?.()
     }
   }, [onNeedSkills, skillsTriggered, leadingSkillTriggered])
+  const openedBots = input.mentionBots?.opened
+  const botsOpen = mention !== null && !roomMentions
+  useEffect(() => openedBots?.(botsOpen), [openedBots, botsOpen])
   const mentionQuery = mention && !roomMentions ? botMenu.fileQuery(mention) : null
   useEffect(() => {
     if (mentionQuery !== null) {
@@ -278,7 +281,7 @@ export function useMobileNativeChatComposerMenu(input: {
     // A skill at the start becomes the leading chip; mid-prompt it stays plain text like desktop.
     const leadingSkill =
       row.kind === 'skill' && next.insertedToken && next.caret === row.token.length + 1
-    setDraft(leadingSkill ? `${row.token} ${value.slice(cursor).trimStart()}` : next.draft)
+    setDraft(leadingSkill ? `${row.token} ${next.draft.slice(next.caret).trimStart()}` : next.draft)
     if (row.kind === 'skill') {
       input.onPickSkill?.(row)
     }

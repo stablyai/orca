@@ -1,7 +1,7 @@
 import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Download, Loader2, RefreshCw } from 'lucide-react'
+import { Download, Loader2, Power, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
@@ -194,7 +194,27 @@ export function GeneralUpdateSettingsSection({
           ) : null}
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        {showManualRestart && (
+          // The action follows its copy and wraps below it, end-aligned, when narrow.
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="text-xs text-muted-foreground">
+              <span className="block font-medium text-foreground">
+                {t('updates.installOnQuit.title', 'Update ready to install')}
+              </span>
+              {t('updates.installOnQuit.summary', 'Quit Orca. Reopen after installation.')}
+            </p>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void window.api.app.quit().catch(console.error)}
+              className="ms-auto"
+            >
+              <Power className="size-3.5" />
+              {t('updates.installOnQuit.quit', 'Quit Orca')}
+            </Button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground empty:hidden">
           {updateStatus.state === 'idle' &&
             t(
               'auto.components.settings.GeneralUpdateSettingsSection.d69a09b672',
@@ -303,11 +323,6 @@ export function GeneralUpdateSettingsSection({
               )}
             </>
           )}
-          {showManualRestart &&
-            t(
-              'updates.installOnQuit.summary',
-              'Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.'
-            )}
           {updateStatus.state === 'error' &&
             !showManualRestart &&
             (updateStatus.installBlock

@@ -36,7 +36,8 @@ export const SendParams = z
     /** With `to: bot:<name>`, the one of that bot's chats the mail lands in instead of its Home Chat;
      *  `new` starts a new chat for it. */
     chat: OptionalString,
-    /** With `to: bot:<name>`, an item number: the mail lands in the chat that owns it. */
+    /** With `to: bot:<name>`, an item number: the mail lands in the chat that owns it. With
+     *  `to: dispatch:<id>` of a finished worker, its follow-up is for that item, as `worker-start --item`. */
     item: OptionalString,
     /** With `item`: files on this computer, sent with the mail into the item's chat. */
     files: z.array(z.string().min(1).max(4096)).max(30).optional(),

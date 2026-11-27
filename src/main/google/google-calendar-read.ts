@@ -2,6 +2,7 @@
 // in the calendar's own time zone), one event in full, or the calendars there are. Repeating events
 // come back as single occurrences.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type {
   CalendarAttendee,
   CalendarEventSummary,
@@ -16,72 +17,82 @@ import { addDays, windowBound, zonedDate, zonedMidnight } from './google-time-zo
 export const CALENDAR = 'https://www.googleapis.com/calendar/v3'
 const LIST_MAX = 250
 
-const CalendarEntrySchema = z.object({
-  id: z.string(),
-  summary: z.string().optional(),
-  summaryOverride: z.string().optional(),
-  timeZone: z.string().optional(),
-  primary: z.boolean().optional(),
-  accessRole: z.string().optional()
-})
+const CalendarEntrySchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    summary: z.string().optional(),
+    summaryOverride: z.string().optional(),
+    timeZone: z.string().optional(),
+    primary: z.boolean().optional(),
+    accessRole: z.string().optional()
+  })
+)
 export type CalendarEntry = z.infer<typeof CalendarEntrySchema>
-const CalendarListSchema = z.object({ items: z.array(CalendarEntrySchema).default([]) })
+const CalendarListSchema = lazyZodSchema(() =>
+  z.object({ items: z.array(CalendarEntrySchema).default([]) })
+)
 
-const When = z.object({
-  dateTime: z.string().optional(),
-  date: z.string().optional(),
-  timeZone: z.string().optional()
-})
-export const EventSchema = z.object({
-  id: z.string(),
-  status: z.string().optional(),
-  summary: z.string().optional(),
-  description: z.string().optional(),
-  location: z.string().optional(),
-  htmlLink: z.string().optional(),
-  hangoutLink: z.string().optional(),
-  recurringEventId: z.string().optional(),
-  // Set only on a repeating event's series, never on one occurrence.
-  recurrence: z.array(z.string()).optional(),
-  start: When.default({}),
-  end: When.default({}),
-  organizer: z
-    .object({
-      email: z.string().optional(),
-      displayName: z.string().optional(),
-      self: z.boolean().optional()
-    })
-    .optional(),
-  attendees: z
-    .array(
-      z
-        .object({
-          email: z.string().default(''),
-          displayName: z.string().optional(),
-          responseStatus: z
-            .enum(['accepted', 'declined', 'tentative', 'needsAction'])
-            .catch('needsAction')
-            .default('needsAction'),
-          organizer: z.boolean().optional(),
-          self: z.boolean().optional()
-        })
-        // A write sends attendees back whole; fields Orca doesn't show (optional, comment) stay.
-        .passthrough()
-    )
-    .default([]),
-  conferenceData: z
-    .object({
-      entryPoints: z
-        .array(z.object({ entryPointType: z.string().optional(), uri: z.string().optional() }))
-        .default([])
-    })
-    .optional()
-})
+const When = lazyZodSchema(() =>
+  z.object({
+    dateTime: z.string().optional(),
+    date: z.string().optional(),
+    timeZone: z.string().optional()
+  })
+)
+export const EventSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    status: z.string().optional(),
+    summary: z.string().optional(),
+    description: z.string().optional(),
+    location: z.string().optional(),
+    htmlLink: z.string().optional(),
+    hangoutLink: z.string().optional(),
+    recurringEventId: z.string().optional(),
+    // Set only on a repeating event's series, never on one occurrence.
+    recurrence: z.array(z.string()).optional(),
+    start: When.default({}),
+    end: When.default({}),
+    organizer: z
+      .object({
+        email: z.string().optional(),
+        displayName: z.string().optional(),
+        self: z.boolean().optional()
+      })
+      .optional(),
+    attendees: z
+      .array(
+        z
+          .object({
+            email: z.string().default(''),
+            displayName: z.string().optional(),
+            responseStatus: z
+              .enum(['accepted', 'declined', 'tentative', 'needsAction'])
+              .catch('needsAction')
+              .default('needsAction'),
+            organizer: z.boolean().optional(),
+            self: z.boolean().optional()
+          })
+          // A write sends attendees back whole; fields Orca doesn't show (optional, comment) stay.
+          .passthrough()
+      )
+      .default([]),
+    conferenceData: z
+      .object({
+        entryPoints: z
+          .array(z.object({ entryPointType: z.string().optional(), uri: z.string().optional() }))
+          .default([])
+      })
+      .optional()
+  })
+)
 export type CalendarEvent = z.infer<typeof EventSchema>
-const EventsSchema = z.object({
-  items: z.array(EventSchema).default([]),
-  nextPageToken: z.string().optional()
-})
+const EventsSchema = lazyZodSchema(() =>
+  z.object({
+    items: z.array(EventSchema).default([]),
+    nextPageToken: z.string().optional()
+  })
+)
 
 /** `calendar:<calendar id>:event:<event id>`, as list prints it; a bare event id is on --calendar. */
 export function parseCalendarEventRef(

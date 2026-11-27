@@ -8,7 +8,8 @@ import {
 } from '../../../../../../src/shared/google/google-scopes'
 import {
   googleSetupAnsweredServices,
-  googleSetupChoiceChangeable
+  googleSetupChoiceChangeable,
+  googleSetupChoiceLocked
 } from '../../../../../../src/shared/google/google-setup-card-view'
 import { GOOGLE_SETUP_MODES } from '../../../../../../src/shared/google/google-setup-run'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -42,7 +43,7 @@ export function MobileGoogleSetupPathCard({
   const { busy, error, reopened, reopen, answer } = useMobileGoogleSetupAnswer(scope)
   const answered = run.answers.path?.values[0]
   const chosen = GOOGLE_SETUP_MODES.find((mode) => mode === answered)
-  const locked = answered !== undefined && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
   const receipt =
     answered === 'not-now'
       ? t('chat.botCards.google.receipt.dismissed', '✓ Dismissed')
@@ -67,11 +68,13 @@ export function MobileGoogleSetupPathCard({
       fontScale={fontScale}
     >
       {locked ? (
-        <MobileGoogleSetupReceipt
-          text={receipt}
-          fontScale={fontScale}
-          {...(googleSetupChoiceChangeable(run) ? { onChange: reopen } : {})}
-        />
+        answered !== undefined ? (
+          <MobileGoogleSetupReceipt
+            text={receipt}
+            fontScale={fontScale}
+            {...(googleSetupChoiceChangeable(run) ? { onChange: reopen } : {})}
+          />
+        ) : null
       ) : (
         <>
           <View>
@@ -109,7 +112,7 @@ export function MobileGoogleSetupAccountCard({
   const { run, fontScale } = scope
   const { busy, error, reopened, reopen, answer } = useMobileGoogleSetupAnswer(scope)
   const answered = run.answers.account?.values[0]
-  const locked = answered !== undefined && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
   return (
     <MobileGoogleSetupFrame
       heading={t('chat.botCards.google.progress.heading', 'Setting up Google')}
@@ -117,13 +120,15 @@ export function MobileGoogleSetupAccountCard({
       fontScale={fontScale}
     >
       {locked ? (
-        <MobileGoogleSetupReceipt
-          text={t('chat.botCards.google.receipt.chose', '✓ You chose {{what}}', {
-            what: answered
-          })}
-          fontScale={fontScale}
-          {...(googleSetupChoiceChangeable(run) ? { onChange: reopen } : {})}
-        />
+        answered !== undefined ? (
+          <MobileGoogleSetupReceipt
+            text={t('chat.botCards.google.receipt.chose', '✓ You chose {{what}}', {
+              what: answered
+            })}
+            fontScale={fontScale}
+            {...(googleSetupChoiceChangeable(run) ? { onChange: reopen } : {})}
+          />
+        ) : null
       ) : (
         <>
           <View>
@@ -165,7 +170,7 @@ export function MobileGoogleSetupServicesCard({
   const { run, fontScale } = scope
   const { busy, error, reopened, reopen, answer } = useMobileGoogleSetupAnswer(scope)
   const answered = googleSetupAnsweredServices(run)
-  const locked = answered !== null && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== null, reopened)
   const [picked, setPicked] = useState<GoogleServiceChoice[]>(answered ?? ['gmail'])
   const toggle = (choice: GoogleServiceChoice) =>
     setPicked((current) =>
@@ -180,22 +185,24 @@ export function MobileGoogleSetupServicesCard({
       title={t('chat.botCards.google.services.title', 'Which Google services should I use?')}
       fontScale={fontScale}
     >
-      {locked && answered ? (
-        <MobileGoogleSetupReceipt
-          text={t('chat.botCards.google.receipt.chose', '✓ You chose {{what}}', {
-            what: googleServicesList(t, answered)
-          })}
-          fontScale={fontScale}
-          {...(googleSetupChoiceChangeable(run)
-            ? {
-                onChange: () => {
-                  // From the latest answer, which another device may have changed.
-                  setPicked(answered)
-                  reopen()
+      {locked ? (
+        answered ? (
+          <MobileGoogleSetupReceipt
+            text={t('chat.botCards.google.receipt.chose', '✓ You chose {{what}}', {
+              what: googleServicesList(t, answered)
+            })}
+            fontScale={fontScale}
+            {...(googleSetupChoiceChangeable(run)
+              ? {
+                  onChange: () => {
+                    // From the latest answer, which another device may have changed.
+                    setPicked(answered)
+                    reopen()
+                  }
                 }
-              }
-            : {})}
-        />
+              : {})}
+          />
+        ) : null
       ) : (
         <>
           <View>

@@ -31,6 +31,7 @@ import {
   loadBrowserExtensionIntoSession,
   loadInstalledBrowserExtensionIntoSession
 } from './browser-extension-session-load'
+import { noteBrowserExtensionLoadEnded } from './browser-extension-session-presence'
 
 type ProfileSessionState = {
   profile: BrowserSessionProfile
@@ -132,6 +133,7 @@ export function attachBrowserExtensionsToProfileSession(
       .catch((error: unknown) => {
         console.warn(`[browser-extensions] Failed to load ${extensionId}:`, error)
       })
+      .finally(() => noteBrowserExtensionLoadEnded(sess, extensionId))
   )
   const loading = Promise.all([swept, ...startupLoads])
     .then(() => undefined)
@@ -253,13 +255,15 @@ export function whenBrowserExtensionProfileLoaded(profileId: string): Promise<vo
   return stateByProfileId.get(profileId)?.loading.catch(() => {}) ?? Promise.resolve()
 }
 
-/** Whether the profile's enabled extensions are still loading after its attach. */
-export function isBrowserExtensionProfileLoading(profileId: string): boolean {
-  return (
-    unloadingByProfileId.has(profileId) ||
-    (stateByProfileId.get(profileId)?.loadingExtensions ?? false)
-  )
+// The attach or unload its extensions are still loading or unloading for; null when idle.
+export function getBrowserExtensionProfileLoadingPhase(profileId: string): object | null {
+  const state = stateByProfileId.get(profileId)
+  return unloadingByProfileId.get(profileId) ?? (state?.loadingExtensions ? state.loading : null)
 }
+
+/** The profile already attached in this partition, without scanning every saved profile. */
+export const getAttachedBrowserExtensionProfileId = (partition: string): string | null =>
+  profileIdByPartition.get(partition) ?? null
 
 export function getBrowserExtensionSessionForProfile(profileId: string): Electron.Session | null {
   return stateByProfileId.get(profileId)?.session ?? null

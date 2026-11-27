@@ -73,6 +73,11 @@ function HistoryRow(props: {
     minute: '2-digit'
   }).format(row.at)
   const Chevron = props.open ? ChevronUp : ChevronDown
+  // The desktop's tidy-up line explains Undo; on a phone row the name is enough.
+  const author =
+    row.by.kind === 'tidy-up' && row.undoable
+      ? t('bots.memoryHistory.tidyUp', 'Tidy-up')
+      : botMemoryHistoryAuthor(t, row)
   return (
     <View>
       <ListRow
@@ -83,8 +88,8 @@ function HistoryRow(props: {
         }
         title={botMemoryHistorySummary(t, row)}
         wrapTitle
-        subtitle={`${botMemoryHistoryAuthor(t, row)} · ${time}`}
-        subtitleLines={3}
+        subtitle={`${author} · ${time}`}
+        subtitleLines={2}
         accessory={<Chevron size={16} color={colors.textMuted} strokeWidth={2.2} />}
         onPress={props.onToggle}
       />
@@ -106,6 +111,7 @@ function HistoryRow(props: {
             <View style={styles.undo}>
               <MobileBotTextButton
                 label={t('settings.bots.memoryHistory.undoAction', 'Undo')}
+                accent
                 disabled={props.disabled}
                 onPress={props.onUndo}
               />
@@ -236,5 +242,6 @@ const styles = themedStyleSheet(() => ({
   },
   removed: { backgroundColor: colors.diffDeletedBg },
   added: { backgroundColor: colors.diffAddedBg },
-  undo: { flexDirection: 'row' }
+  // The text button's own inset, so Undo lines up with the lines above it.
+  undo: { flexDirection: 'row', marginLeft: -spacing.xs }
 }))

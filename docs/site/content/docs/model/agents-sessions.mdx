@@ -22,7 +22,7 @@ State is detected from the terminal's OSC title sequence and agent hooks, which 
 
 ## Agent dashboard
 
-Turn on **Settings → Experimental → Agent Dashboard**. Orca adds an **Agent Dashboard** entry in the left sidebar: a kanban of agents across worktrees.
+The Agent Dashboard is an experiment that is no longer offered to new users. If you already turned it on, Orca shows an **Agent Dashboard** entry in the left sidebar: a kanban of agents across worktrees. Its switch stays under **Settings → Experimental → Agent Dashboard** while it is on. If you turn it off, the switch is gone the next time you open Settings.
 
 You can assign a keyboard shortcut to **Toggle Agent Dashboard** under [Settings → Shortcuts](/docs/settings#shortcuts). It has no default binding, and works while a terminal, editor, or browser tab has focus.
 
@@ -60,7 +60,7 @@ Worktree cards still inline agent rows with the same glyphs when the experimenta
 
 ## Launch defaults
 
-Orca launches every supported agent with its full-autonomy permission flag pre-applied — Claude with `--dangerously-skip-permissions`, Codex with `--dangerously-bypass-approvals-and-sandbox`, Gemini with `--yolo`, and the equivalent for each other agent in the picker. The intent is that the worktree itself is the sandbox: agents can do their thing without per-tool approval prompts breaking the flow.
+Orca launches every supported agent with its full-autonomy permission flag pre-applied — Claude with `--dangerously-skip-permissions`, Codex with `--dangerously-bypass-approvals-and-sandbox`, and the equivalent for each other agent in the picker. The intent is that the worktree itself is the sandbox: agents can do their thing without per-tool approval prompts breaking the flow.
 
 If you want different defaults for an agent, open **Settings → Agents**, expand the agent's row, and edit its **launch arguments** — Orca remembers the override and applies it on every subsequent launch. A **Reset** button next to the field puts the shipped flag back if you want to revert.
 

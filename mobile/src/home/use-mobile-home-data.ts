@@ -44,6 +44,7 @@ import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/catalog/hom
 import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { useHomeBots } from './bots/use-home-bots'
+import { useHomeServerAgents } from './use-home-server-agents'
 import {
   homeUnreachableHostIds,
   projectHomeHostConnections
@@ -223,6 +224,13 @@ export function useMobileHomeData() {
   )
 
   const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])
+  const agentWorktreeInfo = useHomeServerAgents(
+    homeHosts,
+    isLive,
+    homeFocused,
+    sortedHosts,
+    worktreeInfo
+  )
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   // One clock for every agent count, so Feed, the Agents badge and each desktop agree.
   const now = useNow(30_000, homeFocused)
@@ -251,11 +259,11 @@ export function useMobileHomeData() {
     () => ({
       hosts: sortedHosts,
       hostStates,
-      worktreeInfo,
+      worktreeInfo: agentWorktreeInfo,
       now,
       pendingActivity
     }),
-    [sortedHosts, hostStates, worktreeInfo, now, pendingActivity]
+    [sortedHosts, hostStates, agentWorktreeInfo, now, pendingActivity]
   )
   const agentsNeedingYou = useMemo(() => selectAgentsNeedingYou(agentList), [agentList])
   const activeAgents = useMemo(() => selectActiveAgents(agentList), [agentList])

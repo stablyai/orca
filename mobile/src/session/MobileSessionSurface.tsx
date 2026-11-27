@@ -117,7 +117,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
         footer={
           hostName ? (
             <>
-              <StatusDot state={controller.connState} />
+              <StatusDot state={controller.connState} verdict={controller.connectionVerdict} />
               <Text style={styles.sessionMetaText}>{hostName}</Text>
             </>
           ) : null

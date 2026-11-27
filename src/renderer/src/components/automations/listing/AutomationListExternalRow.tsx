@@ -44,6 +44,7 @@ import {
 import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { AutomationListNextRunCell } from './AutomationListNextRunCell'
+import { formatAutomationNextRun } from '../automation-page-parts'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export type AutomationListExternalRowProps = {
@@ -100,7 +101,7 @@ export function AutomationListExternalRow({
   const hostLabel = externalAutomationHostLabel(entry, t)
   const projectLabel = entry.job.workdir ?? providerLabel
   const nextRunLabel = entry.job.enabled
-    ? formatExternalDate(entry.job.nextRunAt, relativeNow, t, intlLocale)
+    ? formatExternalDate(entry.job.nextRunAt, relativeNow, t, intlLocale, formatAutomationNextRun)
     : t('auto.components.automations.AutomationsPage.paused', 'Paused')
   const lastRunSnapshot = getExternalAutomationLastRunSnapshot(entry.job, t)
 
@@ -161,7 +162,15 @@ export function AutomationListExternalRow({
               {hostLabel}
             </span>
           ) : null}
-          <AutomationListNextRunCell enabled={entry.job.enabled} nextRunLabel={nextRunLabel} />
+          <AutomationListNextRunCell
+            enabled={entry.job.enabled}
+            nextRunLabel={nextRunLabel}
+            nextRunTitle={
+              entry.job.enabled
+                ? formatExternalDate(entry.job.nextRunAt, relativeNow, t, intlLocale)
+                : undefined
+            }
+          />
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

@@ -1,17 +1,10 @@
 import type {
   ProviderRateLimits,
-  RateLimitBucket,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import {
-  ClaudeIcon,
-  GeminiIcon,
-  MiniMaxIcon,
-  OpenAIIcon,
-  OpenCodeGoIcon
-} from '../accounts/provider-icons'
+import { ClaudeIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -21,7 +14,6 @@ import {
   type UsageWindowSection
 } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
-import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
@@ -31,7 +23,6 @@ import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCo
 import { recomputeOn } from '@/lib/recompute-on'
 import { ProviderExtraUsageSection } from './provider-extra-usage-section'
 import { formatWindowLabel } from './rate-limit-window-localized-label'
-import { formatPoolCardLabel } from './usage-pool-label'
 import { formatResetsInCaption } from './usage-reset-caption'
 import { UsageBar, UsageValue } from './usage-meter'
 
@@ -77,17 +68,11 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }
-  if (provider === 'gemini') {
-    return <GeminiIcon size={13} />
-  }
   if (provider === 'opencode-go') {
     return <OpenCodeGoIcon size={13} />
   }
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />
-  }
-  if (provider === 'antigravity') {
-    return <AgentIcon agent="antigravity" size={13} />
   }
   if (provider === 'minimax') {
     return <MiniMaxIcon size={13} />
@@ -147,23 +132,16 @@ export function getWindowSections(
   p: ProviderRateLimits,
   t?: Translate
 ): { label: string; window: RateLimitWindow | null }[] {
-  const buckets = p.buckets ?? []
   return getUsageWindowSections(p).map((section) => ({
-    label: getWindowSectionLabel(section, buckets, t),
+    label: getWindowSectionLabel(section, t),
     window: section.window
   }))
 }
 
-function getWindowSectionLabel(
-  section: UsageWindowSection,
-  buckets: readonly RateLimitBucket[],
-  t: Translate = translate
-): string {
+function getWindowSectionLabel(section: UsageWindowSection, t: Translate = translate): string {
   switch (section.kind) {
     case 'bucket':
-      return isGroupedUsagePool(section.window)
-        ? formatPoolCardLabel(section.window, buckets, t)
-        : section.name
+      return section.name
     case 'session':
       // Why: name the window by its length ("5h") when known, matching the roster and status bar.
       return section.window && section.window.windowMinutes > 0

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorkspaceEmojiPickerButton } from '@/components/workspace-emoji/WorkspaceEmojiPickerButton'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { isCommandInputCaretKey } from '@/lib/keyboard/command-input-caret-keys'
 import { isBlockingJiraUrlIntent } from '../../../../../shared/new-workspace/smart-workspace-source-results'
 import { isBlockingLinearUrlIntent } from '../../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
@@ -234,6 +235,10 @@ export function renderSmartWorkspaceNameInput(
           tryOpenSourcePopover()
         }}
         onKeyDown={(event) => {
+          // Why: the enclosing cmdk root would otherwise take Home/End for list jumps.
+          if (isCommandInputCaretKey(event)) {
+            event.stopPropagation()
+          }
           if (event.key === 'Tab' && event.shiftKey) {
             const activeTrigger = tabsListRef.current?.querySelector<HTMLElement>(
               `[data-smart-name-mode="${mode}"]`

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 const workerSubject = {
   paneKey: z.string().min(1).optional(),
@@ -11,10 +12,12 @@ function namesWorker(value: { paneKey?: string; sessionId?: string; terminal?: s
 }
 
 /** A worker terminal or chat, named by pane, structured session or terminal handle. */
-export const OrchestrationWorkerSubjectParams = z
-  .object(workerSubject)
-  .refine(namesWorker, 'Missing paneKey, sessionId or terminal')
+export const OrchestrationWorkerSubjectParams = lazyZodSchema(() =>
+  z.object(workerSubject).refine(namesWorker, 'Missing paneKey, sessionId or terminal')
+)
 
-export const OrchestrationWorkerKeepOpenParams = z
-  .object({ ...workerSubject, keep: z.boolean() })
-  .refine(namesWorker, 'Missing paneKey, sessionId or terminal')
+export const OrchestrationWorkerKeepOpenParams = lazyZodSchema(() =>
+  z
+    .object({ ...workerSubject, keep: z.boolean() })
+    .refine(namesWorker, 'Missing paneKey, sessionId or terminal')
+)

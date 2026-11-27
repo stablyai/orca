@@ -9,7 +9,12 @@ import type {
   OrchestrationWorkerServer
 } from '../environment-transport'
 import { peerMailPairing } from '../peer-mail/peer-mail-delivery'
-import { pairedServerAsksWanted } from '../../db/federation/paired-server-asks-store'
+import {
+  listAllowedBotsOfServer,
+  pairedServerAsksWanted
+} from '../../db/federation/paired-server-asks-store'
+import { PAIRED_CLIENT_BOTS_MAX } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import type { Bot } from '../../../../../shared/bot-types'
 import { onPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import {
   followServerRoute,
@@ -146,10 +151,30 @@ export function endPairedServerAsks(
   }
 }
 
-export function pairedServerPullParams(asks: PairedServerAsks | null | undefined): {
+/** What a pull names this computer with; on each pull, read afresh, the agents here a person always
+ *  lets this server ask (none paused or removed, and none while bots are off here), so a change reaches the server by the next pull. */
+export function pairedServerPullParams(
+  runtime: { bots: { enabled(): boolean; list(): readonly Pick<Bot, 'id' | 'name' | 'paused'>[] } },
+  db: OrchestrationDb,
+  asks: PairedServerAsks | null | undefined
+): {
   clientAsks?: PairedServerAsks['wire']
 } {
-  return asks ? { clientAsks: asks.wire } : {}
+  if (!asks) {
+    return {}
+  }
+  const allowed = new Set(listAllowedBotsOfServer(db, asks.serverKey))
+  const askable =
+    // Bots off here: none takes an ask, so none is named.
+    allowed.size === 0 || !runtime.bots.enabled()
+      ? []
+      : runtime.bots.list().filter((bot) => allowed.has(bot.id) && !bot.paused)
+  const bots = askable
+    .slice(0, PAIRED_CLIENT_BOTS_MAX)
+    .map((bot) => ({ id: bot.id, name: bot.name }))
+  // Past the cap the server is told some go unnamed, so it never reads the list as all of them.
+  const more = askable.length > bots.length ? { moreBots: true } : {}
+  return { clientAsks: { ...asks.wire, bots, ...more } }
 }
 
 /** The server answered: a pairing not announced yet is announced now. */

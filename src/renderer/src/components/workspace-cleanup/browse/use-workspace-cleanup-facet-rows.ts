@@ -15,7 +15,6 @@ import {
 } from '../query/workspace-cleanup-facets'
 import {
   countWorkspaceCleanupFacetMatches,
-  filterWorkspaceCleanupFacets,
   runWorkspaceCleanupQuery
 } from '../query/workspace-cleanup-query'
 import {
@@ -45,7 +44,6 @@ export type WorkspaceCleanupFacetRows = {
   /** Every candidate's live facets, unfiltered; lets a held row keep updating after it stops matching. */
   allRows: readonly WorkspaceCleanupFacets[]
   selectableIdentities: string[]
-  facetMatchedIdentities: ReadonlySet<string>
   matchedCount: number
   totalCount: number
   facetCounts: WorkspaceCleanupFacetCounts
@@ -232,12 +230,6 @@ export function useWorkspaceCleanupFacetRows({
         : EMPTY_FACET_COUNTS,
     [facetFilters, facetPanelOpen, facets, now]
   )
-  // Only useEffectEvent reads this set; no effect depends on its identity.
-  const facetMatchedIdentities = useMemo<ReadonlySet<string>>(
-    () =>
-      new Set(filterWorkspaceCleanupFacets(facets, facetFilters, now).map((row) => row.identity)),
-    [facetFilters, facets, now]
-  )
   const measuredSizeCount = useMemo(() => countWorkspaceCleanupMeasuredRows(facets), [facets])
   const unmeasuredSizeCount = facets.length - measuredSizeCount
 
@@ -272,7 +264,6 @@ export function useWorkspaceCleanupFacetRows({
     rows: result.rows,
     allRows: facets,
     selectableIdentities: result.selectableIdentities,
-    facetMatchedIdentities,
     matchedCount: result.matchedCount,
     totalCount: result.totalCount,
     facetCounts,

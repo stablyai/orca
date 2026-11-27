@@ -52,7 +52,8 @@ function useInstalledPluginContributionSource(
       customEditors: plugin.customEditors ?? [],
       vmRecipes: plugin.vmRecipes?.map((recipe) => recipe.name) ?? [],
       newFiles: plugin.newFiles ?? [],
-      statusBarItems: statusBarItemTitles(plugin.statusBarItems)
+      statusBarItems: statusBarItemTitles(plugin.statusBarItems),
+      mcpServers: plugin.mcpServers ?? []
     }
   }, [plugin, appThemes, terminalThemes, iconThemes, syntaxes, languagePacks, failures])
 }

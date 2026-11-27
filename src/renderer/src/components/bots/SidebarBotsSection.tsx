@@ -37,15 +37,18 @@ import { getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
 import { BotSidebarDragFrame, BotSidebarEntry, type BotSidebarEntryDrag } from './BotSidebarEntry'
 import { BotGroupRow } from './BotGroupRow'
-import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { useBotGroupDelete } from './use-bot-group-delete'
 import { findBotGroupRoom, type BotGroup } from '../../../../shared/bots/bot-group'
-import { NewBotDialog } from './NewBotDialog'
 import { openBotShareLink } from './sharing/bot-share-receive-open'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
 import { useBotSidebarArrangement } from './use-bot-sidebar-arrangement'
-import { ImportBotDialog } from './ImportBotDialog'
 import { botErrorMessage } from './bot-presentation'
+
+import {
+  LazyBotGroupMembersDialog,
+  LazyImportBotDialog,
+  LazyNewBotDialog
+} from './lazy-bot-dialogs'
 import { BotCollapsedPreview, useBotPreviewFacts } from './BotCollapsedPreview'
 import { summarizeBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
 import { openBotTemplates } from './templates/bot-templates-open'
@@ -324,7 +327,7 @@ export function SidebarBotsSection({
             data-bot-sidebar-list=""
             className={cn(
               'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain [overflow-anchor:none]',
-              entries.length > 0 && 'pb-1 pl-1',
+              entries.length > 0 && 'pb-1 px-1',
               collapsed && 'hidden'
             )}
           >
@@ -388,15 +391,19 @@ export function SidebarBotsSection({
           </div>
         </BotsRevealProvider>
       </BotSidebarSearchHost>
-      <NewBotDialog
-        open={newBotOpen}
-        onOpenChange={setNewBotOpen}
-        onCreated={onOpenBot}
-        onImport={() => setImportOpen(true)}
-      />
-      <ImportBotDialog open={importOpen} onOpenChange={setImportOpen} onCreated={onOpenBot} />
+      {newBotOpen ? (
+        <LazyNewBotDialog
+          open={newBotOpen}
+          onOpenChange={setNewBotOpen}
+          onCreated={onOpenBot}
+          onImport={() => setImportOpen(true)}
+        />
+      ) : null}
+      {importOpen ? (
+        <LazyImportBotDialog open={importOpen} onOpenChange={setImportOpen} onCreated={onOpenBot} />
+      ) : null}
       {editingGroup ? (
-        <BotGroupMembersDialog
+        <LazyBotGroupMembersDialog
           group={editingGroup === 'new' ? undefined : editingGroup}
           onClose={() => setEditingGroup(null)}
         />

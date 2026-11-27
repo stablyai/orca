@@ -7,7 +7,6 @@ import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
 import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
-import { MobileBotItemsStrip } from '../bots/items/MobileBotItemsStrip'
 import { MobileSourceControlButton } from './MobileSourceControlButton'
 import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
@@ -51,10 +50,9 @@ export function MobileSessionHeader({
     itemsOnPhone,
     botPanel,
     openBotPanel,
-    sessionTabs,
-    activeSessionTabId,
     terminalResume,
-    connState
+    connState,
+    statusDot
   } = controller
   // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
   const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
@@ -74,12 +72,6 @@ export function MobileSessionHeader({
   // A bot's screen has no source control (its home isn't a repository): Items takes its place.
   const itemsInBar = itemsOnPhone && routeBot !== null
   const homeChatId = routeBot?.bot.chatSessionId
-  const activeTab = sessionTabs.find((tab) => tab.id === activeSessionTabId)
-  const onHomeChat =
-    homeChatId !== undefined &&
-    homeChatId !== null &&
-    activeTab?.type === 'agent-session' &&
-    activeTab.sessionId === homeChatId
   const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
   const tabStrip = hasTabs ? (
     <MobileSessionTabBar
@@ -119,9 +111,14 @@ export function MobileSessionHeader({
             : worktreeName || t('session.header.terminalTitle', 'Terminal')
         }
         leading={routeBot ? <MobileBotAvatar avatar={routeBot.avatar} size={18} /> : undefined}
-        connState={presentedConnState}
+        connState={statusDot.state}
+        verdict={statusDot.verdict}
         details={details}
-        meta={botStatus && presentedConnState === 'connected' ? botStatus.line : terminalSummary}
+        meta={
+          botStatus && presentedConnState === 'connected' && !connectionEscalated
+            ? botStatus.line
+            : terminalSummary
+        }
         centered={!tabsInTopBar}
         showConnectionRetry={showConnectionRetry}
         onRetry={() => {
@@ -206,12 +203,6 @@ export function MobileSessionHeader({
             />
           )}
         </View>
-        {itemsInBar && onHomeChat ? (
-          <MobileBotItemsStrip
-            count={routeBot.needsYou}
-            onView={() => openBotPanel({ tab: 'items' })}
-          />
-        ) : null}
         {tabsInTopBar ? null : tabStrip}
         {showRefreshLine ? <NavBarRefreshLine /> : null}
       </SafeAreaView>

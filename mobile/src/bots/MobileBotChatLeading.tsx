@@ -1,11 +1,12 @@
 // A bot chat row's leading glyphs on the phone: its state lane, then where it came from.
 import { useId } from 'react'
-import { View } from 'react-native'
+import { View, type ViewStyle } from 'react-native'
 import { Circle, Defs, Mask, Rect } from 'react-native-svg'
 import { CalendarClock, House, MessageSquare } from 'lucide-react-native'
 import {
-  AGENT_ATTENTION_COLOR,
+  AGENT_STATE_DOT_SIZE,
   AGENT_WORKING_COLOR,
+  AgentQuestionIcon,
   AgentStateDot,
   WorkingRing
 } from '../agents/presentation/AgentStateDot'
@@ -35,21 +36,23 @@ function ChatStateDot({ chat }: { chat: LeadingChat }) {
   return chat.live === 'replying' ? (
     <AgentStateDot state="working" />
   ) : chat.live === 'needs-you' ? (
-    <AgentStateDot state="permission" />
+    <AgentStateDot state="permission" decorative />
   ) : null
 }
 
 /** The chat's icon always, its state on the icon's corner (as the desktop sidebar's badge). */
 export function ChatBadgedIcon({ chat }: { chat: LeadingChat }) {
-  const live = chat.live !== 'idle'
+  const badgeSize = chat.live === 'needs-you' ? AGENT_STATE_DOT_SIZE : WORKING_BADGE_SIZE
   const size = isSource(chat.origin) ? SOURCE_SIZE : LUCIDE_SIZE
   return (
     <View style={{ width: size, height: size }}>
-      <ChatIcon chat={chat} cutout={live} />
+      <ChatIcon chat={chat} badgeSize={chat.live === 'idle' ? undefined : badgeSize} />
       {chat.live === 'replying' ? (
         <WorkingRing color={AGENT_WORKING_COLOR} style={styles.badgeRing} />
       ) : chat.live === 'needs-you' ? (
-        <View style={styles.badgeDot} />
+        <View style={badgePosition}>
+          <AgentQuestionIcon size={badgeSize} />
+        </View>
       ) : null}
     </View>
   )
@@ -61,18 +64,22 @@ const LUCIDE_SIZE = 15
 function isSource(origin: BotChatTreeChat['origin']): origin is SuggestionSource {
   return origin === 'slack' || origin === 'linear' || origin === 'github'
 }
-// The 7 pt badge sits 2 pt past the icon's corner; a 1 pt gap is cut around it.
-const BADGE_SIZE = 7
+// The badge sits 2 pt past the icon's corner, with a 1 pt gap cut around it.
+const WORKING_BADGE_SIZE = 7
 const BADGE_OVERHANG = 2
-const BADGE_CENTER_INSET = BADGE_SIZE / 2 - BADGE_OVERHANG
-const CUTOUT_RADIUS = BADGE_SIZE / 2 + 1
+const badgePosition: ViewStyle = {
+  position: 'absolute',
+  right: -BADGE_OVERHANG,
+  bottom: -BADGE_OVERHANG
+}
 
-function useCutout(enabled: boolean, size: number, viewBox: number) {
+function useCutout(badgeSize: number | undefined, size: number, viewBox: number) {
   const id = `chat-badge-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
-  if (!enabled) {
+  if (badgeSize === undefined) {
     return { mask: undefined, defs: null }
   }
   const unit = viewBox / size
+  const center = size - (badgeSize / 2 - BADGE_OVERHANG)
   return {
     mask: `url(#${id})`,
     defs: (
@@ -80,9 +87,9 @@ function useCutout(enabled: boolean, size: number, viewBox: number) {
         <Mask id={id} maskUnits="userSpaceOnUse" x={0} y={0} width={viewBox} height={viewBox}>
           <Rect x={0} y={0} width={viewBox} height={viewBox} fill="white" />
           <Circle
-            cx={(size - BADGE_CENTER_INSET) * unit}
-            cy={(size - BADGE_CENTER_INSET) * unit}
-            r={CUTOUT_RADIUS * unit}
+            cx={center * unit}
+            cy={center * unit}
+            r={(badgeSize / 2 + 1) * unit}
             fill="black"
           />
         </Mask>
@@ -91,10 +98,10 @@ function useCutout(enabled: boolean, size: number, viewBox: number) {
   }
 }
 
-function ChatIcon({ chat, cutout = false }: { chat: LeadingChat; cutout?: boolean }) {
+function ChatIcon({ chat, badgeSize }: { chat: LeadingChat; badgeSize?: number }) {
   useMobileColorScheme()
   const { mask, defs } = useCutout(
-    cutout,
+    badgeSize,
     isSource(chat.origin) ? SOURCE_SIZE : LUCIDE_SIZE,
     isSource(chat.origin) ? SOURCE_ICON_VIEW_BOX[chat.origin] : 24
   )
@@ -157,21 +164,10 @@ const styles = themedStyleSheet(() => ({
   leading: { flexDirection: 'row', alignItems: 'center', gap: 6, width: 10 + 6 + LUCIDE_SIZE },
   lane: { width: 10, alignItems: 'center' },
   badgeRing: {
-    position: 'absolute',
-    right: -BADGE_OVERHANG,
-    bottom: -BADGE_OVERHANG,
-    width: BADGE_SIZE,
-    height: BADGE_SIZE,
+    ...badgePosition,
+    width: WORKING_BADGE_SIZE,
+    height: WORKING_BADGE_SIZE,
     borderRadius: radii.pill,
     borderWidth: 2
-  },
-  badgeDot: {
-    position: 'absolute',
-    right: -BADGE_OVERHANG,
-    bottom: -BADGE_OVERHANG,
-    width: BADGE_SIZE,
-    height: BADGE_SIZE,
-    borderRadius: radii.pill,
-    backgroundColor: AGENT_ATTENTION_COLOR
   }
 }))

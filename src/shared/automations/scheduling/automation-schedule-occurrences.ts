@@ -1,9 +1,15 @@
 import type { AutomationSchedulePreset } from '../automation-definition'
-import { parseSchedule, type ParsedRrule } from './automation-schedule-parsing'
-import { cronMatches, floorToMinute } from './automation-cron-occurrence'
+import {
+  parseSchedule,
+  type ParsedCron,
+  type ParsedRrule,
+  type ParsedSchedule
+} from './automation-schedule-parsing'
+import { cronDateMatches, cronMatches, floorToMinute } from './automation-cron-occurrence'
 import { automationScheduleCalendar, type ScheduleCalendar } from './automation-schedule-calendar'
 
 const MINUTE_MS = 60 * 1000
+const DAY_MS = 24 * 60 * MINUTE_MS
 // Why: valid cron expressions like Feb 29 can have an 8-year gap across non-leap centuries.
 const CRON_SCAN_DAYS = 9 * 366
 const CRON_SCAN_MINUTES = CRON_SCAN_DAYS * 24 * 60
@@ -17,26 +23,55 @@ function dayMatches(rule: ParsedRrule, calendar: ScheduleCalendar, timestamp: nu
   return rule.byDay.includes(code)
 }
 
+/** The nearest time after `anchor` (direction 1) or at or before it (-1) that `timesOn` names. */
 function scanDayCandidates(
-  rule: ParsedRrule,
   calendar: ScheduleCalendar,
   anchor: number,
-  direction: 1 | -1
+  direction: 1 | -1,
+  days: number,
+  timesOn: (day: number) => number[]
 ): number | null {
   let day = calendar.startOfDay(anchor)
-  for (let i = 0; i < 370; i += 1) {
-    const candidate = calendar.atTime(day, rule.byHour, rule.byMinute)
-    if (dayMatches(rule, calendar, candidate)) {
-      if (direction === 1 && candidate > anchor) {
-        return candidate
+  for (let i = 0; i < days; i += 1) {
+    let nearest: number | null = null
+    for (const candidate of timesOn(day)) {
+      const inRange = direction === 1 ? candidate > anchor : candidate <= anchor
+      if (inRange && (nearest === null || (candidate - nearest) * direction < 0)) {
+        nearest = candidate
       }
-      if (direction === -1 && candidate <= anchor) {
-        return candidate
-      }
+    }
+    if (nearest !== null) {
+      return nearest
     }
     day = calendar.addDays(day, direction)
   }
   return null
+}
+
+function rruleTimesOn(rule: ParsedRrule, calendar: ScheduleCalendar, day: number): number[] {
+  const candidate = calendar.atTime(day, rule.byHour, rule.byMinute)
+  return dayMatches(rule, calendar, candidate) ? [candidate] : []
+}
+
+// Why: a fixed time resolves as an RRULE time does (RFC 5545): a fall-back repeat fires once, on
+// its first pass, and a time spring-forward skips fires the gap's length later.
+function fixedCronTimesOn(rule: ParsedCron, calendar: ScheduleCalendar, day: number): number[] {
+  if (!cronDateMatches(rule, day, calendar)) {
+    return []
+  }
+  const times: number[] = []
+  for (const hour of rule.hours) {
+    for (const minute of rule.minutes) {
+      times.push(calendar.atTime(day, hour, minute))
+    }
+  }
+  return times
+}
+
+function timesOnDay(rule: ParsedSchedule, calendar: ScheduleCalendar): (day: number) => number[] {
+  return rule.kind === 'cron'
+    ? (day) => fixedCronTimesOn(rule, calendar, day)
+    : (day) => rruleTimesOn(rule, calendar, day)
 }
 
 function hourlyMatches(rule: ParsedRrule, calendar: ScheduleCalendar, timestamp: number): boolean {
@@ -128,15 +163,21 @@ export function nextAutomationOccurrenceAfter(
 ): number {
   const rule = parseSchedule(rrule)
   const calendar = automationScheduleCalendar(timezone)
-  if (rule.kind === 'cron') {
+  if (rule.kind === 'cron' && !rule.fixedTime) {
     return nextMatchingMinute(dtstart, after, (candidate) => cronMatches(rule, candidate, calendar))
   }
-  if (rule.freq === 'HOURLY') {
+  if (rule.kind === 'rrule' && rule.freq === 'HOURLY') {
     return nextMatchingMinute(dtstart, after, (candidate) =>
       hourlyMatches(rule, calendar, candidate)
     )
   }
-  const candidate = scanDayCandidates(rule, calendar, Math.max(dtstart - 1, after), 1)
+  const candidate = scanDayCandidates(
+    calendar,
+    Math.max(dtstart - 1, after),
+    1,
+    CRON_SCAN_DAYS,
+    timesOnDay(rule, calendar)
+  )
   if (candidate === null) {
     throw new Error('Unable to compute next automation run.')
   }
@@ -154,14 +195,16 @@ export function latestAutomationOccurrenceAtOrBefore(
   }
   const rule = parseSchedule(rrule)
   const calendar = automationScheduleCalendar(timezone)
-  if (rule.kind === 'cron') {
+  if (rule.kind === 'cron' && !rule.fixedTime) {
     return latestMatchingMinute(dtstart, now, (candidate) => cronMatches(rule, candidate, calendar))
   }
-  if (rule.freq === 'HOURLY') {
+  if (rule.kind === 'rrule' && rule.freq === 'HOURLY') {
     return latestMatchingMinute(dtstart, now, (candidate) =>
       hourlyMatches(rule, calendar, candidate)
     )
   }
-  const candidate = scanDayCandidates(rule, calendar, now, -1)
+  // Back to dtstart and no further; the two spare days cover partial ends and short DST days.
+  const days = Math.min(CRON_SCAN_DAYS, Math.ceil((now - dtstart) / DAY_MS) + 2)
+  const candidate = scanDayCandidates(calendar, now, -1, days, timesOnDay(rule, calendar))
   return candidate !== null && candidate >= dtstart ? candidate : null
 }

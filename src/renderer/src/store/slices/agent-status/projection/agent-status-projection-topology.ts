@@ -1,4 +1,8 @@
 import type { AppState } from '../../../types'
+import {
+  orchestrationForStatusRows,
+  remoteRowContextsFor
+} from '@/runtime/agent-orchestration/remote-row-orchestration'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
@@ -20,6 +24,23 @@ const SEAM_AGENT_PRESENTATION_FIELDS = [
   'ptyIdsByTabId',
   'terminalLayoutsByTabId'
 ] as const
+
+/** Row keys whose applied remote context changed, including re-keyed chats and a first or last host. */
+function changedRemoteRowKeys(
+  before: AgentStatusProjectionState['remoteRows'],
+  after: AgentStatusProjectionState['remoteRows']
+): Set<string> {
+  const keys = new Set<string>()
+  if (before === after) {
+    return keys
+  }
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (before[key] !== after[key]) {
+      keys.add(key)
+    }
+  }
+  return keys
+}
 
 export function stageProjectionTopology(
   data: AgentStatusProjectionState,
@@ -142,6 +163,15 @@ export function stageProjectionTopology(
       }
     }
   }
+  // Rows whose remote context changed re-place, as the local map's keys do.
+  const remoteRows = remoteRowContextsFor(state)
+  for (const key of changedRemoteRowKeys(data.remoteRows, remoteRows)) {
+    changedKeys.add(key)
+    const identity = parseAgentStatusPaneIdentity(key, represented.get(key))
+    if (identity) {
+      changedTabs.add(identity.tabId)
+    }
+  }
   const nextUnsupported = new Map<string, AgentStatusEntry | null>()
   if (state.migrationUnsupportedByPtyId !== previous?.migrationUnsupportedByPtyId) {
     const diff = previous
@@ -189,7 +219,7 @@ export function stageProjectionTopology(
       ptyIdsByTabId: state.ptyIdsByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,
       paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
+      runtimeAgentOrchestrationByPaneKey: orchestrationForStatusRows(state),
       now,
       seenPaneKeys: new Set()
     })) {
@@ -212,6 +242,7 @@ export function stageProjectionTopology(
     (nextUnsupported.has(key) ? nextUnsupported.get(key) : data.unsupportedRows.get(key))
   return {
     previous,
+    remoteRows,
     moved,
     changedTabs,
     bindingTabs,

@@ -67,7 +67,7 @@ export function MobileHomeScreen() {
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(() => new Set(['feed']))
   const [automationsHostId, setAutomationsHostId] = useState<string | null>(null)
   const [newBotOpen, setNewBotOpen] = useState(false)
-  const openBotHome = useOpenBotHome()
+  const openBotHome = useOpenBotHome({ standalone: true })
   const [tabBarHeight, setTabBarHeight] = useState(0)
   const agentActions = useAgentListRowActions(
     tabBarHeight,

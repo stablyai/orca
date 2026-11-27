@@ -8,7 +8,7 @@ import { onBotToolCredentialEnded } from './bot-tool-credential-ended'
 export function watchBotSettingsChangeSources(changed: () => void): (() => void)[] {
   return [
     googleSetupRuns().onChange(changed),
-    onBotToolSignInChanged(changed),
+    onBotToolSignInChanged(() => changed()),
     onBotToolCredentialEnded(changed)
   ]
 }

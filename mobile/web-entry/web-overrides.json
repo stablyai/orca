@@ -83,7 +83,7 @@
     },
     {
       "file": "src/platform/external-links/external-link.web.ts",
-      "reason": "The page runs inside the shell's WebView, where react-native-web's Linking.openURL calls window.open(url, '_blank', 'noopener') and resolves whether or not anything opened; only a tel: URL assigns window.location, and none of the three allowed schemes is one. Both shells refuse window.open outright: iOS sets javaScriptCanOpenWindowsAutomatically = false and returns nil from WKUIDelegate's createWebViewWith, and Android sets javaScriptCanOpenWindowsAutomatically = false, setSupportMultipleWindows(false) and returns false from onCreateWindow. So the native path reports success into a tap that did nothing. This one posts the externalLink notify instead, after the same scheme check the frame enforces, and names its refusal rather than throwing inside a tap handler."
+      "reason": "The page runs inside the shell's WebView, where react-native-web's Linking.openURL calls window.open(url, '_blank', 'noopener') and resolves whether or not anything opened; only a tel: URL assigns window.location, and none of the three allowed schemes is one. Both shells refuse window.open outright: iOS sets javaScriptCanOpenWindowsAutomatically = false and returns nil from WKUIDelegate's createWebViewWith, and Android sets javaScriptCanOpenWindowsAutomatically = false, setSupportMultipleWindows(false) and returns false from onCreateWindow. So the native path reports success into a tap that did nothing. This one asks the shell through native.link.open where the route has it, which reports whether an app on the phone took the link, or posts the externalLink notify on older shells, after the same scheme check the frame enforces, and names its refusal rather than throwing inside a tap handler."
     },
     {
       "file": "src/platform/keyboard/keyboard-occlusion.web.ts",
@@ -100,6 +100,10 @@
     {
       "file": "app/h/[hostId]/accounts.web.tsx",
       "reason": "The shell renders this page for the accounts screen, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
+    },
+    {
+      "file": "app/h/[hostId]/mcp.web.tsx",
+      "reason": "The shell renders this page for the MCP servers screen, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
     },
     {
       "file": "app/h/[hostId]/automations.web.tsx",

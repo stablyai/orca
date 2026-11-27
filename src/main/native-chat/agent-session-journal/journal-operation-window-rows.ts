@@ -3,6 +3,7 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalOperationWindowAnchors } from './journal-domain-operation-window'
 import { JOURNAL_READER_REPLY_BYTE_LIMIT } from './journal-sql-reader-reply-limit'
 import { shortenedJsonSql } from './journal-stored-json-bounds'
+import { JournalWindowNotIndexed } from './journal-operation-window-sends'
 
 // A Diff call's patch, and so the files it edited, is its output: that one is kept. The stored
 // marker goes too, or decoding would read the saved output back in.
@@ -19,6 +20,8 @@ const WINDOW_BYTES = JOURNAL_READER_REPLY_BYTE_LIMIT / 2
 const CUT_ROW_BYTES = 64 * 1024
 // Only these carry a tool output or patch to cut; any other row comes back as stored.
 const CUTTABLE = `kind IN ('tool-call','diff')`
+/** The most rows an indexed-only window, or its look back for the turn ahead, may cover. */
+export const INDEXED_ONLY_ROW_CAP = 4096
 
 /**
  * The window's rows from `start`, sized in SQL before any is decoded, as the read projects them:
@@ -28,15 +31,29 @@ const CUTTABLE = `kind IN ('tool-call','diff')`
 export function readOperationWindowItems(
   scope: JournalSqlScope,
   start: number,
-  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape'>
+  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape' | 'indexedOnly'>,
+  /** Rows before this sequence only; null runs to the head. */
+  end: number | null = null
 ): AgentJournalRenderItem[] {
   const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
-    WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}`
+    WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<? ${anchors.turnShape ? TURN_SHAPE : ''}`
+  const range = [start, end ?? Number.MAX_SAFE_INTEGER] as const
+  // The turn shape is no index's column, so each visible row in range is read to drop it: an
+  // indexed-only reader past this many takes no answer, counted on the index alone.
+  if (
+    anchors.indexedOnly &&
+    scope.db
+      .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_visible_position
+        WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<? LIMIT 1 OFFSET ?`)
+      .get(...scope.prefix, ...range, INDEXED_ONLY_ROW_CAP)
+  ) {
+    throw new JournalWindowNotIndexed()
+  }
   // Plain sizes cost no parse; only a window past the budget sizes rows as projected.
   const sizes = scope.db
     .prepare(`SELECT item_id, octet_length(payload_json) AS bytes, ${CUTTABLE} AS cuttable ${rows}`)
-    .all(...scope.prefix, start)
+    .all(...scope.prefix, ...range)
     .map((row) => ({
       itemId: String(row.item_id),
       bytes: Number(row.bytes),
@@ -70,7 +87,7 @@ export function readOperationWindowItems(
         scope.db
           .prepare(`SELECT SUM(CASE WHEN octet_length(payload_json)<=${CUT_ROW_BYTES}
           OR NOT ${CUTTABLE} THEN octet_length(${projected}) END) AS bytes ${rows}`)
-          .get(...scope.prefix, start)?.bytes ?? 0
+          .get(...scope.prefix, ...range)?.bytes ?? 0
       ) + large.reduce((sum, row) => sum + row.bytes, 0)
   }
   // A cut row may keep a large input; the window total, not a per-row bound, admits it.
@@ -104,6 +121,6 @@ export function readOperationWindowItems(
     : projected
   return scope.db
     .prepare(`SELECT ${value} AS payload_json ${rows} ORDER BY sequence,sequence_index,ordinal`)
-    .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, start)
+    .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, ...range)
     .map((row) => scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json))
 }

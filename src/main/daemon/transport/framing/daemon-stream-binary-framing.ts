@@ -2,7 +2,9 @@
  * Negotiated binary framing carries raw UTF-8 data; older peers retain NDJSON.
  * Frame: [kind u8][body length u32 BE][body].
  * EVENT body: UTF-8 JSON; DATA body: [meta length u16 BE][meta JSON][data bytes].
- * DATA metadata omits payload.data, which the reader restores from the bytes.
+ * DATA metadata omits payload.data, which the reader restores from the bytes. Relay line events
+ * (`relayData`, `relayPending`, `relayInitialize`) use the same DATA frame, with the raw line as the
+ * bytes and `payload.line` restored instead, so an agent line is never JSON-escaped on the wire.
  */
 import { NDJSON_MAX_LINE_BYTES } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import type { DaemonEvent } from '../../protocol/daemon-stream-events'
@@ -102,6 +104,36 @@ export function encodeBinaryStreamDataFrame(
   return frame
 }
 
+/** Relay events whose line travels as the DATA frame's raw bytes. */
+const RELAY_LINE_EVENTS = new Set(['relayData', 'relayPending', 'relayInitialize'])
+
+/** A relay line piece as a DATA frame; null for a line UTF-8 can't carry, which goes as JSON instead. */
+export function encodeBinaryRelayLineFrame(
+  relayId: string,
+  event: 'relayData' | 'relayPending' | 'relayInitialize',
+  payload: { seq: number; more?: true },
+  line: string
+): Buffer | null {
+  if (!line.isWellFormed()) {
+    return null
+  }
+  const meta = JSON.stringify({ type: 'event', event, sessionId: relayId, payload })
+  const metaBytes = Buffer.byteLength(meta, 'utf8')
+  const lineBytes = Buffer.byteLength(line, 'utf8')
+  const bodyBytes = DATA_META_LENGTH_BYTES + metaBytes + lineBytes
+  if (metaBytes > MAX_DATA_META_BYTES || bodyBytes > BINARY_STREAM_MAX_FRAME_BYTES) {
+    return null
+  }
+  const frame = Buffer.allocUnsafe(FRAME_HEADER_BYTES + bodyBytes)
+  frame[0] = DATA_FRAME
+  frame.writeUInt32BE(bodyBytes, 1)
+  frame.writeUInt16BE(metaBytes, FRAME_HEADER_BYTES)
+  const metaOffset = FRAME_HEADER_BYTES + DATA_META_LENGTH_BYTES
+  frame.write(meta, metaOffset, 'utf8')
+  frame.write(line, metaOffset + metaBytes, 'utf8')
+  return frame
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -115,10 +147,16 @@ function decodeDataFrame(body: Buffer): DaemonEvent | null {
     return null
   }
   const meta: unknown = JSON.parse(body.toString('utf8', DATA_META_LENGTH_BYTES, metaEnd))
-  if (!isRecord(meta) || meta.event !== 'data' || !isRecord(meta.payload)) {
+  if (!isRecord(meta) || !isRecord(meta.payload)) {
     return null
   }
-  meta.payload.data = body.toString('utf8', metaEnd)
+  if (meta.event === 'data') {
+    meta.payload.data = body.toString('utf8', metaEnd)
+  } else if (typeof meta.event === 'string' && RELAY_LINE_EVENTS.has(meta.event)) {
+    meta.payload.line = body.toString('utf8', metaEnd)
+  } else {
+    return null
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same trust boundary as the NDJSON reader, which casts parsed stream records to DaemonEvent; the data shape is checked above.
   return meta as DaemonEvent
 }

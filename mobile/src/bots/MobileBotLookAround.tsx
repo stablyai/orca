@@ -44,11 +44,7 @@ export function MobileLookAroundSection(props: {
   return (
     <SettingsSection
       first
-      footer={t(
-        'bots.lookAround.detail',
-        'Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.',
-        { name: props.bot.name }
-      )}
+      footer={t('bots.lookAround.footer', 'Read-only. Each look uses your agent plan.')}
     >
       <SwitchRow
         label={t('bots.lookAround.on', 'Suggest next steps')}
@@ -97,6 +93,7 @@ export function MobileLookAroundSection(props: {
                   ? t('bots.lookAround.looking', 'Looking…')
                   : t('bots.lookAround.lookNow', 'Look now')
               }
+              accent
               disabled={props.disabled || state?.running === true || props.bot.paused}
               onPress={props.onLookNow}
               accessibilityRole="button"

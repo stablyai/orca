@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { AlertCircle, Check, Copy } from 'lucide-react'
 import {
   Dialog,
@@ -34,6 +34,8 @@ type AgentCommandFailedDialogProps = {
   announcementPaused?: boolean
   /** Lets an action that moves elsewhere (Settings) keep focus from returning to the trigger. */
   onCloseAutoFocus?: (event: Event) => void
+  /** The dialog's own content element, so a caller can tell its focus apart from another modal's. */
+  contentRef?: Ref<HTMLDivElement>
 }
 
 /** A failed agent command: what ran, its output with Copy, and the caller's next step. */
@@ -50,7 +52,8 @@ export function AgentCommandFailedDialog({
   tone = 'error',
   detailsFinishedAt = null,
   announcementPaused = false,
-  onCloseAutoFocus
+  onCloseAutoFocus,
+  contentRef
 }: AgentCommandFailedDialogProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -126,7 +129,7 @@ export function AgentCommandFailedDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl" onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent ref={contentRef} className="sm:max-w-xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>
             <span className={cn('flex items-center gap-2', tone === 'error' && 'text-destructive')}>

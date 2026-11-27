@@ -33,7 +33,7 @@ export function MobileNativeChatBackgroundTaskRun({
           size={ICON_SIZE * fontScale}
           color={colors.textMuted}
         />
-        <AgentStateDot state={row.state} />
+        <AgentStateDot state={row.dotState} />
         <Text
           selectable={INLINE_TEXT_SELECTION}
           style={[styles.label, scaledType(typography.bodySize, fontScale)]}
@@ -48,7 +48,7 @@ export function MobileNativeChatBackgroundTaskRun({
       {row.sentence === null ? null : (
         <Text
           selectable={INLINE_TEXT_SELECTION}
-          style={[styles.detail, meta, indent, row.state === 'blocked' && styles.failed]}
+          style={[styles.detail, meta, indent, row.dotState === 'failed' && styles.failed]}
         >
           {row.sentence}
         </Text>

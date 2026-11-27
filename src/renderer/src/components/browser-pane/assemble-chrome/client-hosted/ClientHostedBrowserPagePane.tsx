@@ -47,6 +47,7 @@ import type { ClientHostedBrowserPagePaneProps as Props } from '../../describe-p
 import { BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME } from '../../host-guest/viewport/browser-page-viewport'
 import { BrowserDevToolsDock } from '../../devtools-dock/BrowserDevToolsDock'
 import { useBrowserDevToolsDockPageFlex } from '../../devtools-dock/browser-devtools-docked-pages'
+import { useClientHostedPageSidePanelRoom } from './use-client-hosted-page-side-panel-room'
 
 export function ClientHostedBrowserPagePane(props: Props) {
   const {
@@ -63,6 +64,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const viewportPresetId = browserTab.viewportPresetId ?? null
   const pageBox = useClientHostedBrowserPageViewport(browserTab.id, viewportPresetId)
   const devToolsPageFlex = useBrowserDevToolsDockPageFlex(browserTab.id)
+  const sidePanelRoom = useClientHostedPageSidePanelRoom(browserTab.id)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const viewportContainerRef = useRef<HTMLDivElement | null>(null)
@@ -359,7 +361,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
         />
       </div>
       {annotate.banner}
-      <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
+      <div {...sidePanelRoom} className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
         <div
           ref={viewportContainerRef}
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"

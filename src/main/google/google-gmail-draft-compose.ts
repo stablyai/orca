@@ -11,7 +11,8 @@ import {
   ThreadSchema,
   type Message
 } from './google-gmail-message'
-import { downloadGmailAttachment, GMAIL, parseGmailRef } from './google-gmail-read'
+import { downloadGmailAttachment, GMAIL } from './google-gmail-read'
+import { parseGmailRef } from './google-gmail-ref'
 import { addressOf, type MimeAttachment, type MimeDraft } from './gmail-mime-message'
 import { splitAddresses } from '../../shared/google/email-address-list'
 

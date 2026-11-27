@@ -113,6 +113,32 @@ async function resolveAgyCollection(): Promise<string | null> {
   return path
 }
 
+function readFailed(): Error {
+  return new Error('The Antigravity Linux keyring could not be read.')
+}
+
+// `search` prints the raw secret, which may span lines, between these two line prefixes.
+const SEARCH_SECRET_START = '\nsecret = '
+const SEARCH_SECRET_END = '\ncreated = '
+
+async function search(): Promise<AntigravityNativeCredential> {
+  const result = await run('secret-tool', ['search', ...ITEM_ATTRIBUTES])
+  const start = result.stdout.indexOf(SEARCH_SECRET_START)
+  const end = result.stdout.lastIndexOf(SEARCH_SECRET_END)
+  if (
+    result.code !== 0 ||
+    result.timedOut ||
+    result.signal ||
+    result.outputTruncated ||
+    start === -1 ||
+    end < start + SEARCH_SECRET_START.length
+  ) {
+    throw readFailed()
+  }
+  const secret = result.stdout.slice(start + SEARCH_SECRET_START.length, end)
+  return parseAntigravityNativeCredential(decodeAntigravityKeychainValue(secret))
+}
+
 async function lookup(): Promise<AntigravityNativeCredential | null> {
   const result = await run('secret-tool', ['lookup', ...ITEM_ATTRIBUTES])
   if (!result.timedOut && !result.signal && !result.outputTruncated) {
@@ -123,8 +149,13 @@ async function lookup(): Promise<AntigravityNativeCredential | null> {
     if (result.code === 1 && !result.stdout && !result.stderr.trim()) {
       return null
     }
+    // libsecret before 0.21.8 looks up only exactly text/plain secrets, but go-keyring labels agy's
+    // with a charset, which KDE's ksecretd keeps; search prints any content type.
+    if (result.code === 1 && result.stderr.includes('secret does not contain a textual password')) {
+      return search()
+    }
   }
-  throw new Error('The Antigravity Linux keyring could not be read.')
+  throw readFailed()
 }
 
 export async function readAntigravityLinuxCredential(): Promise<AntigravityNativeCredential | null> {

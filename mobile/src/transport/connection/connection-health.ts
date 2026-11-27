@@ -49,8 +49,8 @@ function relayHostCopy(): Record<
       kind: 'unreachable',
       label: (host) =>
         translate(
-          'connection.connectionHealth.relayAccessExpired',
-          'Relay access expired for {{host}}',
+          'connection.connectionHealth.relayAccessRefused',
+          'Relay refused access for {{host}}',
           {
             host
           }
@@ -66,9 +66,12 @@ function relayHostCopy(): Record<
   }
 }
 
+/** The Relay evidence a verdict came from, so callers can tell a desktop that is off from one Relay cannot vouch for. */
+export type RelayHostVerdict = Exclude<RelayHostReachability, 'connecting'>
+
 export type ConnectionVerdict =
   | { kind: 'normal'; label: string; dialing?: boolean }
-  | { kind: 'warning'; label: string; hint?: string; detail?: string }
+  | { kind: 'warning'; label: string; hint?: string; detail?: string; relay?: RelayHostVerdict }
   | {
       kind: 'unreachable'
       label: string
@@ -76,6 +79,7 @@ export type ConnectionVerdict =
       hint?: string
       // A second line the row renders under the label; the label alone must still stand.
       detail?: string
+      relay?: RelayHostVerdict
     }
   | { kind: 'auth-failed'; label: string }
 
@@ -127,8 +131,14 @@ export function classifyConnection(args: {
   if (reachability !== 'connecting') {
     const copy = relayHostCopy()[reachability]
     return copy.kind === 'warning'
-      ? { kind: 'warning', label: copy.label(host), detail: copy.detail }
-      : { kind: 'unreachable', label: copy.label(host), reason: staleReason, detail: copy.detail }
+      ? { kind: 'warning', label: copy.label(host), detail: copy.detail, relay: reachability }
+      : {
+          kind: 'unreachable',
+          label: copy.label(host),
+          reason: staleReason,
+          detail: copy.detail,
+          relay: reachability
+        }
   }
 
   // A stale pending path can outlive its retry timer; narrate relay only during dialing or recorded retry progress.

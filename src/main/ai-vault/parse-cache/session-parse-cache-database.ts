@@ -62,8 +62,20 @@ INSERT OR REPLACE INTO meta(key, value) VALUES ('${versionKey}', '1');
 const ROWS_REPAIR_SQL =
   // Grok rows (summary.json) cached before the synthetic-turn filter.
   rowsRepairSql('grok_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
+  // Grok rows whose prompt was cut by an İ before <user_query>.
+  rowsRepairSql('grok_query_unicode_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
   // Pi rows cached before session_info names became titles.
-  rowsRepairSql('pi_title_rows_version', `instr(rows.session, '"agent":"pi"') > 0`)
+  rowsRepairSql('pi_title_rows_version', `instr(rows.session, '"agent":"pi"') > 0`) +
+  // CodeBuddy rows cached before first-prompt titles were normalized.
+  rowsRepairSql(
+    'codebuddy_title_rows_version',
+    "rows.path GLOB '*[/\\].codebuddy[/\\]projects[/\\]*'"
+  ) +
+  // Claude rows titled with harness markup (such as /clear's command caveat) before it stopped naming sessions.
+  rowsRepairSql(
+    'claude_harness_title_rows_version',
+    `instr(rows.session, '"agent":"claude"') > 0 AND instr(rows.session, '"title":"<') > 0`
+  )
 // Rows hold transcript-derived preview text; keep the directory user-only.
 const PRIVATE_DIRECTORY_MODE = 0o700
 // A ~2.3 KB row fills most of a 4 KB page; 8 KB pages fit three.

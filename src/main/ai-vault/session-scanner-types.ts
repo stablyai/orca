@@ -26,7 +26,6 @@ export type AiVaultScanOptions = {
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
   wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
-  geminiSessionsDir?: string
   antigravityBrainDir?: string
   antigravityAppHome?: string
   /** Orca's managed Antigravity chat transcripts; resolved by the host process. */

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
+import { BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { botItemStatusFields } from '../../../../../shared/bots/bot-item-status-fields'
+import { botHostTakes } from '../bot-host-capability'
 import type { Bot } from '../../../../../shared/bot-types'
 import type {
   BotItem,
@@ -246,7 +249,8 @@ export function commentOnBotItem(
   requestId?: string,
   questionId?: string,
   plain = false,
-  skills: readonly BotItemCommentSkill[] = []
+  skills: readonly BotItemCommentSkill[] = [],
+  skipped: readonly number[] = []
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.comment', {
     item: uid,
@@ -256,7 +260,8 @@ export function commentOnBotItem(
     ...(requestId ? { requestId } : {}),
     ...(questionId ? { questionId } : {}),
     ...(plain ? { plain } : {}),
-    ...(skills.length > 0 ? { skills } : {})
+    ...(skills.length > 0 ? { skills } : {}),
+    ...(skipped.length > 0 ? { skipped } : {})
   })
 }
 
@@ -287,8 +292,7 @@ export function setBotItemsStatus(
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.status', {
     items: uids,
-    status,
-    ...(note ? (status === 'waiting' ? { note } : { reason: note }) : {})
+    ...botItemStatusFields(status, note, botHostTakes(bot, BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY))
   })
 }
 

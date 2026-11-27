@@ -5,7 +5,9 @@ export const BUNDLED_SKILL_OLD_MARKER = '.orca-old-'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 
+import type { BundledSkillBackupRefusal } from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
+import { filesystemErrorCode } from './bundled-skill-filesystem-error'
 
 export type BundledSkillFile = { path: string; text: string }
 
@@ -13,6 +15,21 @@ export type BundledSkillFile = { path: string; text: string }
 export class BundledSkillChangedError extends Error {
   constructor(path: string) {
     super(`bundled-skill-changed: ${path}`)
+  }
+}
+
+export class BundledSkillBackupRefusedError extends Error {
+  constructor(readonly refusal: BundledSkillBackupRefusal) {
+    super(`Cross-drive skill backup refused: ${refusal.path}`)
+  }
+}
+
+export class BundledSkillReplaceRestoreError extends Error {
+  constructor(
+    readonly backupPath: string,
+    cause: unknown
+  ) {
+    super(`Skill replacement failed; original preserved at ${backupPath}`, { cause })
   }
 }
 
@@ -50,16 +67,49 @@ export async function retireBundledSkillPlacement(
     throw error
   }
   if (!(await verify(old))) {
-    return backUpBundledSkillPath(filesystem, old, backupPath)
+    try {
+      return await backUpBundledSkillPath(filesystem, old, backupPath, 'moved-aside')
+    } catch (error) {
+      if (!forwardTo && error instanceof BundledSkillBackupRefusedError) {
+        await putBackRefusedCopy(filesystem, old, path)
+      }
+      throw error
+    }
   }
   await removeBundledSkillSibling(filesystem, old)
   return undefined
 }
 
+/**
+ * A refused retirement with no forwarding link puts the edited copy back where the user left it.
+ * Best effort, like Replace's rollback: a check, then a rename. Throws the in-place refusal on
+ * success; returns when the copy must stay at `old`. Later plans may not list a retired place
+ * (a former root is never planned), so this result is the copy's only notice.
+ */
+async function putBackRefusedCopy(
+  filesystem: BundledSkillFilesystem,
+  old: string,
+  path: string
+): Promise<void> {
+  try {
+    if ((await filesystem.stat(path))?.kind !== 'missing') {
+      return
+    }
+    await filesystem.rename(old, path)
+  } catch {
+    return
+  }
+  throw new BundledSkillBackupRefusedError({ path, source: 'in-place', onlyNotice: true })
+}
+
 /** Backups stay outside skill roots (agents would load them) and projects (they would pollute repos). */
+export function bundledSkillBackupDirectory(homeDirectory: string): string {
+  return join(homeDirectory, '.agents', '.orca-skill-backups')
+}
+
 export function bundledSkillBackupPath(homeDirectory: string, name: string): string {
   const utc = new Date().toISOString().replace(/[:.]/gu, '-')
-  return join(homeDirectory, '.agents', '.orca-skill-backups', `${name}-${utc}-${randomUUID()}`)
+  return join(bundledSkillBackupDirectory(homeDirectory), `${name}-${utc}-${randomUUID()}`)
 }
 
 /** The installer's only delete: it refuses anything but its own stage and old siblings. */
@@ -158,7 +208,7 @@ export async function replaceBundledSkillPath(
   try {
     await filesystem.ensureDirectory(dirname(backupPath))
     await requireUnchanged(verify, target)
-    await filesystem.moveToBackup(target, backupPath)
+    await renameToBackup(filesystem, target, backupPath, 'in-place')
   } catch (error) {
     await dropStaged()
     throw error
@@ -166,18 +216,50 @@ export async function replaceBundledSkillPath(
   try {
     await placeNew()
   } catch (error) {
-    await filesystem.moveToBackup(backupPath, target).catch(() => undefined)
     await dropStaged()
+    try {
+      if ((await filesystem.stat(target))?.kind !== 'missing') {
+        throw new BundledSkillChangedError(target)
+      }
+      await filesystem.rename(backupPath, target)
+    } catch {
+      throw new BundledSkillReplaceRestoreError(backupPath, error)
+    }
     throw error
   }
+  // Only after placement, so a rolled-back original keeps its own mode.
+  await privatizeQuietly(filesystem, backupPath)
+}
+
+async function renameToBackup(
+  filesystem: BundledSkillFilesystem,
+  path: string,
+  backupPath: string,
+  source: BundledSkillBackupRefusal['source']
+): Promise<void> {
+  try {
+    await filesystem.rename(path, backupPath)
+  } catch (error) {
+    if (filesystemErrorCode(error) === 'EXDEV') {
+      throw new BundledSkillBackupRefusedError({ path, source })
+    }
+    throw error
+  }
+}
+
+/** The backups folder is already private, so a failed tightening must not strand a copy that moved. */
+async function privatizeQuietly(filesystem: BundledSkillFilesystem, backupPath: string) {
+  await filesystem.privatizeBackup(backupPath).catch(() => undefined)
 }
 
 export async function backUpBundledSkillPath(
   filesystem: BundledSkillFilesystem,
   path: string,
-  backupPath: string
+  backupPath: string,
+  source: 'leftover' | 'moved-aside'
 ): Promise<string> {
   await filesystem.ensureDirectory(dirname(backupPath))
-  await filesystem.moveToBackup(path, backupPath)
+  await renameToBackup(filesystem, path, backupPath, source)
+  await privatizeQuietly(filesystem, backupPath)
   return backupPath
 }

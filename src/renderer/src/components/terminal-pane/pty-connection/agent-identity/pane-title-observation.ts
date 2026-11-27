@@ -13,17 +13,13 @@ export function installPaneTitleObservation(session: ConnectPanePtySession): voi
     if (!meta?.staleWorkingTitleClear && resolveExplicitTerminalTitleAgentType(rawTitle)) {
       session.paneForegroundAgentTracker.onAgentStartupObserved()
     }
-    // Share owner-aware display/title/completion/GPU decisions so raw title text cannot override stronger pane identity (#7428/#7447).
+    // Share owner-aware display/title/completion decisions so raw title text cannot override stronger pane identity (#7428/#7447).
     const decision = resolvePaneTitleDecision({
       normalizedTitle: title,
-      isGeminiTerminalTitle: session.deps.isGeminiTerminalTitle,
       rawTitle,
-      displayOwnerAgentType: session.getAuthoritativePaneAgent(),
-      rendererOwnerAgentType: session.getPaneScopedRendererOwner(),
-      userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
+      displayOwnerAgentType: session.getAuthoritativePaneAgent()
     })
     const paneTitle = decision.displayTitle
-    session.manager.setPaneGpuRendering(session.pane.id, decision.rendererPolicy.gpuEnabled)
     // Only active split titles drive the tab to avoid flicker; focus changes copy the newly active pane’s stored title.
     session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle, {
       alsoTabTitle: session.manager.getActivePane()?.id === session.pane.id

@@ -44,6 +44,11 @@ export type DecodedClaudeTask = {
   parentTaskId?: string
   /** Runs `orca orchestration check --wait`: waiting on worker agents, so agent work. */
   awaitsAgents?: true
+  /** A foreground command still live after the call that waited on it ended: maybe running, maybe
+   *  its ending was lost. A later live frame from the provider clears it. */
+  uncertain?: true
+  /** The tool call that started it has had its result: a foreground command must have ended by then. */
+  answered?: true
 }
 
 /** One roster entry the decoder settles against: its run id, whether it reads live, and its raw record. */
@@ -89,7 +94,13 @@ export function claudeChildWorkObservation(
     ...(task.parentTaskId ? { ownerId: task.parentTaskId } : {}),
     kind: task.kind,
     residency: task.backgrounded ? 'background' : 'foreground',
-    state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
+    state: waiting
+      ? 'waiting'
+      : task.uncertain
+        ? 'unverifiable'
+        : task.running || task.kind !== 'monitor'
+          ? 'working'
+          : 'monitoring',
     ...(task.name ? { name: task.name, agentType: task.name } : {}),
     ...(task.description ? { description: task.description } : {}),
     ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),

@@ -33,6 +33,8 @@ export type HostBotSections = {
   sections: Section[]
   /** Host identities the Bots section lists, which the project list leaves out before it plans. */
   listedIdentities: ReadonlySet<string>
+  /** A search's paused bots the options hide, when they are its only bot matches. */
+  pausedMatches?: number
 }
 
 const NO_BOTS: HostBotSections = { sections: [], listedIdentities: new Set() }
@@ -54,13 +56,45 @@ export function defaultNewBotHostId(listings: readonly HostBotListing[]): Execut
  *  which the project list leaves out as the desktop's does. */
 export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSections {
   const { listings } = inputs
-  const local = listings.find((listing) => listing.hostId === LOCAL_EXECUTION_HOST_ID)
-  // The paired computer's Bots switch, off, hides every bot, as its sidebar does; a failed read never does.
-  if (listings.length === 0 || (local?.kind === 'listed' && local.createRefusal === 'bots-off')) {
+  if (listings.length === 0) {
     return NO_BOTS
   }
+  const local = listings.find((listing) => listing.hostId === LOCAL_EXECUTION_HOST_ID)
+  // The paired computer's Bots switch, off, hides every bot, as its sidebar does; a failed read never does.
+  const botsOff = local?.kind === 'listed' && local.createRefusal === 'bots-off'
   const hostOf = (row: Worktree) => resolveWorktreeHostId(row, inputs.repoHostIdByRepoId)
   const listedIdentities = new Set<string>()
+  const endLines: BotsListEndLine[] = []
+  /** A host whose bots don't list keeps the homes it marks out of its folders, and says why in one
+   *  line. A host too old to mark them can't be told apart from real folders. */
+  const unlisted = (hostId: ExecutionHostId, text: string, always: boolean): void => {
+    let hid = false
+    for (const row of inputs.rows) {
+      if (row.botHome === true && hostOf(row) === hostId) {
+        listedIdentities.add(composeWorktreeHostIdentity(hostId, row.worktreeId))
+        hid = true
+      }
+    }
+    if (hid || always) {
+      endLines.push({ key: `unlisted:${hostId}`, text })
+    }
+  }
+  const searching = inputs.search.trim().length > 0
+  if (botsOff) {
+    groupHomes(
+      local,
+      inputs.rows.filter((row) => hostOf(row) === LOCAL_EXECUTION_HOST_ID)
+    ).forEach((identity) => listedIdentities.add(identity))
+    unlisted(
+      LOCAL_EXECUTION_HOST_ID,
+      translate('bots.list.offEnd', 'Bots are off on {{host}}.', { host: local.hostLabel }),
+      false
+    )
+    // A search shows only what matches, so its line waits.
+    return endLines.length > 0 && !searching
+      ? { sections: [botsSection({ count: 0, lines: endLines, data: [] })], listedIdentities }
+      : { sections: [], listedIdentities }
+  }
   const lineageOf = lazyHostBotLineage(
     inputs.rows,
     inputs.lineageStores,
@@ -81,79 +115,67 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     ])
   )
   const drawn: DrawnBotEntry[] = []
-  const endLines: BotsListEndLine[] = []
   let total = 0
   let shownTotal = 0
   for (const listing of listings) {
-    const hostRows = inputs.rows.filter((row) => hostOf(row) === listing.hostId)
-    // New bot's computer list says this host needs an update; the list itself stays quiet.
+    const host = listing.hostLabel
     if (listing.kind === 'update-needed') {
+      unlisted(
+        listing.hostId,
+        translate('bots.list.updateToSee', 'Update Orca on {{host}} to see its bots.', { host }),
+        true
+      )
+      continue
+    }
+    if (listing.kind === 'read-failed') {
+      unlisted(
+        listing.hostId,
+        translate('bots.list.readFailed', 'Couldn’t load the bots on {{host}}.', { host }),
+        false
+      )
       continue
     }
     if (listing.kind === 'unreachable') {
-      endLines.push({
-        key: `unreachable:${listing.hostId}`,
-        text: translate(
-          'bots.list.cantReach',
-          'Can’t reach {{host}}. Its bots show when it’s back.',
-          { host: listing.hostLabel }
-        )
-      })
       // Its bots aren't listed until it connects, and their homes don't show as folders meanwhile.
-      for (const row of hostRows) {
-        // The host marks its own bot homes, wherever its profile keeps them.
-        if (row.botHome === true) {
-          listedIdentities.add(composeWorktreeHostIdentity(listing.hostId, row.worktreeId))
-        }
-      }
+      unlisted(
+        listing.hostId,
+        translate('bots.list.cantReach', 'Can’t reach {{host}}. Its bots show when it’s back.', {
+          host
+        }),
+        true
+      )
       continue
     }
-    const host = drawHostBotEntries(listing, hostRows, inputs, lineageOf, hosts)
-    drawn.push(...host.drawn)
-    host.listed.forEach((identity) => listedIdentities.add(identity))
-    total += host.total
-    shownTotal += host.shownTotal
-    for (const row of hostRows) {
-      const scope = parseWorkspaceKey(row.worktreeId)
-      const home = scope?.type === 'folder' && {
-        id: scope.folderWorkspaceId,
-        executionHostId: listing.hostId
-      }
-      if (
-        home &&
-        isHome(
-          home,
-          (listing.groups ?? []).map((group) => ({
-            folderWorkspaceId: group.folderWorkspaceId,
-            hostId: listing.hostId
-          }))
-        )
-      ) {
-        listedIdentities.add(composeWorktreeHostIdentity(listing.hostId, row.worktreeId))
-      }
-    }
+    const hostRows = inputs.rows.filter((row) => hostOf(row) === listing.hostId)
+    const drawnHost = drawHostBotEntries(listing, hostRows, inputs, lineageOf, hosts)
+    drawn.push(...drawnHost.drawn)
+    drawnHost.listed.forEach((identity) => listedIdentities.add(identity))
+    total += drawnHost.total
+    shownTotal += drawnHost.shownTotal
+    groupHomes(listing, hostRows).forEach((identity) => listedIdentities.add(identity))
   }
   const newBotHostId = defaultNewBotHostId(listings)
   if (total === 0 && !newBotHostId && endLines.length === 0) {
     return { sections: [], listedIdentities }
   }
   // The paired computer's Bot options order and filter every computer's bots: Manual keeps this
-  // computer's, then each server's, in their saved orders.
-  const view = local?.kind === 'listed' ? local.view : DEFAULT_BOT_SIDEBAR_VIEW
+  // computer's, then each server's, in their saved orders. Show paused lifts its filter for a search.
+  const saved = local?.kind === 'listed' ? local.view : DEFAULT_BOT_SIDEBAR_VIEW
+  const view = searching && inputs.showPaused ? { ...saved, hidePausedBots: false } : saved
   const arranged = arrangeBotSidebarEntries(
     drawn.map((entry) => ({ ...entry.entry, drawn: entry })),
     view,
     ({ drawn: entry }) => entry.activity
   ).map(({ drawn: entry }) => entry)
-  const searching = inputs.search.trim().length > 0
   // Matching paused bots the options hide are counted, as the desktop's search does.
   const pausedMatches =
     searching && view.hidePausedBots
       ? drawn.filter(({ entry }) => entry.kind === 'bot' && entry.bot.paused).length
       : 0
-  // Nothing matches: the section goes, so the list's no-match view shows when no workspace matches either.
-  if (searching && arranged.length === 0 && pausedMatches === 0) {
-    return { sections: [], listedIdentities }
+  // Nothing shown matches: the section goes, so the list's no-match view shows (with Show paused
+  // when paused bots matched) unless a workspace matches.
+  if (searching && arranged.length === 0) {
+    return { sections: [], listedIdentities, pausedMatches }
   }
   const lines = searching
     ? pausedMatches > 0
@@ -167,15 +189,13 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       ]
   return {
     sections: [
-      {
-        key: BOTS_GROUP_KEY,
-        title: translate('bots.section.title', 'Bots'),
+      botsSection({
         // Paused bots the options hide leave the count too, as on the desktop; a search counts its matches.
         count: searching ? arranged.length : view.hidePausedBots ? shownTotal : total,
+        lines,
         ...(newBotHostId ? { newBotHostId } : {}),
         // Groups are this computer's: New group counts its bots alone, whatever the search hides.
         botCount: local?.kind === 'listed' ? local.bots.length : 0,
-        ...(lines.length > 0 ? { endLines: lines } : {}),
         botPreview: arranged.flatMap(({ preview }) => preview ?? []),
         data: inputs.collapsedGroups.has(BOTS_GROUP_KEY)
           ? []
@@ -187,10 +207,43 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
                   : item
               )
             )
-      }
+      })
     ],
     listedIdentities
   }
+}
+
+function botsSection(parts: {
+  count: number
+  lines: BotsListEndLine[]
+  newBotHostId?: ExecutionHostId
+  botCount?: number
+  botPreview?: NonNullable<Section['botPreview']>
+  data: Section['data']
+}): Section {
+  const { lines, botPreview = [], ...rest } = parts
+  return {
+    key: BOTS_GROUP_KEY,
+    title: translate('bots.section.title', 'Bots'),
+    ...rest,
+    ...(lines.length > 0 ? { endLines: lines } : {}),
+    botPreview
+  }
+}
+
+/** The host rows that are its groups' homes, which list as rooms, never as folders. */
+function groupHomes(listing: ListedHostBots, hostRows: readonly Worktree[]): string[] {
+  const homes = (listing.groups ?? []).map((group) => ({
+    folderWorkspaceId: group.folderWorkspaceId,
+    hostId: listing.hostId
+  }))
+  return hostRows.flatMap((row) => {
+    const scope = parseWorkspaceKey(row.worktreeId)
+    return scope?.type === 'folder' &&
+      isHome({ id: scope.folderWorkspaceId, executionHostId: listing.hostId }, homes)
+      ? [composeWorktreeHostIdentity(listing.hostId, row.worktreeId)]
+      : []
+  })
 }
 
 function pausedMatchesLine(count: number): string {

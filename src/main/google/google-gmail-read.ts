@@ -8,6 +8,7 @@ import type {
   GmailReadView,
   GmailSearchView
 } from '../../shared/google/google-read-types'
+import { sliceAtCodeUnitLimit } from '../../shared/text/surrogate-safe-text-slice'
 import {
   formatMegabytes,
   TOOL_DOWNLOAD_MAX_BYTES,
@@ -25,36 +26,13 @@ import {
   ThreadListSchema,
   ThreadSchema
 } from './google-gmail-message'
+import { parseGmailRef } from './google-gmail-ref'
 import { htmlToText } from './google-html-text'
 
 export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me'
 // Gmail's per-user concurrency limit answers 429 well before 50 parallel reads.
 export const GMAIL_CALLS_AT_ONCE = 10
 const AttachmentSchema = z.object({ data: z.string(), size: z.number().optional() })
-
-/** A Gmail id as Orca prints it, a bare id, or a Gmail web link to a thread. */
-export function parseGmailRef(ref: string): { kind: 'thread' | 'msg'; id: string } {
-  const trimmed = ref.trim()
-  const typed = /^gmail:(thread|msg):([A-Za-z0-9]+)$/.exec(trimmed)
-  if (typed?.[1] && typed[2]) {
-    return { kind: typed[1] === 'thread' ? 'thread' : 'msg', id: typed[2] }
-  }
-  if (trimmed.startsWith('https://mail.google.com/')) {
-    const id = /#[^/]+\/(?:[^/]+\/)?([0-9a-f]{16})$/i.exec(trimmed)?.[1]
-    if (id) {
-      return { kind: 'thread', id }
-    }
-    throw new GoogleToolError(
-      'That Gmail link has no thread id Orca can use. Use the id `orca gmail search` prints.'
-    )
-  }
-  if (/^[0-9a-f]{16}$/i.test(trimmed)) {
-    return { kind: 'thread', id: trimmed }
-  }
-  throw new GoogleToolError(
-    `"${trimmed.slice(0, 80)}" isn't a Gmail id. Use gmail:thread:… or gmail:msg:… from \`orca gmail search\`.`
-  )
-}
 
 /** `work` over `items`, at most `limit` at a time, in order. */
 export async function inBatches<T, R>(
@@ -180,7 +158,7 @@ export async function readGmail(
       continue
     }
     // The first message on a page always shows some text, so --offset always moves on.
-    const text = body.slice(from, from + Math.max(room, MIN_FIRST_TEXT_CHARS))
+    const text = sliceAtCodeUnitLimit(body.slice(from), Math.max(room, MIN_FIRST_TEXT_CHARS))
     shown += text.length + framing
     if (from + text.length < body.length) {
       nextOffset = before + from + text.length

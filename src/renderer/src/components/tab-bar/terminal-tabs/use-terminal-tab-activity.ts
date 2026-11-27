@@ -27,6 +27,7 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
     paneTitles: Record<number, string> | undefined
     ptyIds: string[] | undefined
     layoutRoot: NonNullable<ActivityStatusInput['terminalLayout']>['root'] | undefined
+    foreground: ActivityStatusInput['paneForegroundAgentByPaneKey']
     status: TerminalTabActivityStatus
   } | null = null
   return (input) => {
@@ -43,7 +44,8 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
       last.flags === flags &&
       last.paneTitles === input.runtimePaneTitlesByTabId?.[id] &&
       last.ptyIds === input.ptyIdsByTabId?.[id] &&
-      last.layoutRoot === input.terminalLayout?.root
+      last.layoutRoot === input.terminalLayout?.root &&
+      last.foreground === input.paneForegroundAgentByPaneKey
     ) {
       return last.status
     }
@@ -56,6 +58,7 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
       paneTitles: input.runtimePaneTitlesByTabId?.[id],
       ptyIds: input.ptyIdsByTabId?.[id],
       layoutRoot: input.terminalLayout?.root,
+      foreground: input.paneForegroundAgentByPaneKey,
       status
     }
     return status
@@ -75,7 +78,8 @@ export function useTerminalTabActivity(
       agentStatusEpoch: s.agentStatusEpoch,
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
       ptyIdsByTabId: s.ptyIdsByTabId,
-      terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
+      terminalLayout: s.terminalLayoutsByTabId?.[tab.id],
+      paneForegroundAgentByPaneKey: s.paneForegroundAgentByPaneKey
     })
   )
   const programProgress = useAppStore((s) =>

@@ -4,6 +4,7 @@ import {
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE
 } from '../manifest/plugin-schema-field-docs'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const PLUGIN_CHANGELOG_MAX_LENGTH = 2_000
 
@@ -24,7 +25,9 @@ const httpsUrlSchema = z
   .regex(/^https:\/\/\S+$/, 'must be an https URL')
   .refine((value) => URL.canParse(value), 'must be an https URL')
 
-const releaseDateSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })])
+const releaseDateSchema = lazyZodSchema(() =>
+  z.union([z.iso.date(), z.iso.datetime({ offset: true })])
+)
 
 // Why plain text: the detail page renders it as text, so markup would show literally.
 const changelogSchema = z.string().min(1).max(PLUGIN_CHANGELOG_MAX_LENGTH)

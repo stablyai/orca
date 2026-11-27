@@ -21,8 +21,8 @@ const HISTORY_TRIGGERS = [
     columns:
       'owner_dispatch_id, origin_dispatch_id, pane_key, terminal_handle, prior_owner_dispatch_ids, ownership_state, release_state, retained_reason, process_incarnation, host_scope',
     panes: ['pane_key'],
-    dispatches: ['owner_dispatch_id', 'origin_dispatch_id'],
-    priors: true
+    // Former owners enter the graph through pane slices, which invalidate both sets of aliases.
+    dispatches: ['owner_dispatch_id', 'origin_dispatch_id']
   },
   {
     table: 'worker_dispatches',
@@ -41,12 +41,7 @@ const HISTORY_TRIGGERS = [
 function markDirty(row: 'NEW' | 'OLD', trigger: (typeof HISTORY_TRIGGERS)[number]): string {
   const keys = [
     ...trigger.panes.map((column) => `SELECT 'pane' AS kind, ${row}.${column} AS key`),
-    ...trigger.dispatches.map((column) => `SELECT 'dispatch' AS kind, ${row}.${column} AS key`),
-    ...('priors' in trigger
-      ? [
-          `SELECT 'dispatch', value FROM json_each(CASE WHEN json_valid(${row}.prior_owner_dispatch_ids) THEN ${row}.prior_owner_dispatch_ids ELSE '[]' END)`
-        ]
-      : [])
+    ...trigger.dispatches.map((column) => `SELECT 'dispatch' AS kind, ${row}.${column} AS key`)
   ]
   return `INSERT OR IGNORE INTO temp.agent_sender_dirty (kind, key)
   SELECT kind, key FROM (${keys.join(' UNION ALL ')}) AS changed WHERE key IS NOT NULL AND EXISTS (

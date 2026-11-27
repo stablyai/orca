@@ -1,4 +1,5 @@
 import type { AgentWorkingMode } from '../../../../src/shared/agent-status/contracts/agent-status-types'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { WorkspaceLineage } from '../../../../src/shared/worktree/lineage-types'
 import type { Worktree } from '../workspace-list/workspace-list-types'
@@ -30,6 +31,8 @@ export type HomeAgentEntry = Readonly<{
   agent: RuntimeWorktreeAgentRow
   /** Set when the agent is a bot's chat in its home: the row names and pictures the bot. */
   bot?: HomeAgentBot
+  /** Set when the agent runs on a server the desktop relays to, not on the desktop itself. */
+  executionHost?: Readonly<{ id: ExecutionHostId; label: string }>
 }>
 
 export type HomeAgentBot = Readonly<{ id: string; name: string; avatar: string | null }>
@@ -55,7 +58,10 @@ export type HostWorktreeInfo = {
 }
 
 export function homeAgentEntries(
-  worktrees: readonly HomeWorktreeSummary[],
+  worktrees: readonly Pick<
+    HomeWorktreeSummary,
+    'worktreeId' | 'displayName' | 'repo' | 'branch' | 'agents'
+  >[],
   botByHomeId: ReadonlyMap<string, HomeAgentBot> = new Map()
 ): HomeAgentEntry[] {
   return worktrees.flatMap((worktree) => {
