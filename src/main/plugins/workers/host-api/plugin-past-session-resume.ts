@@ -1,5 +1,6 @@
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   aiVaultHistoryAgents,
   isAiVaultAgent
@@ -21,10 +22,12 @@ import { findPluginPastSession } from './plugin-host-agent-history-bindings'
 import type { PluginHistorySession } from './plugin-agent-history'
 
 // The parts of the host's answer a terminal resume applies; anything else refuses it.
-const preparedAnswer = z.object({
-  useRealCodexHome: z.boolean(),
-  substituteCodexHome: z.string().optional()
-})
+const preparedAnswer = lazyZodSchema(() =>
+  z.object({
+    useRealCodexHome: z.boolean(),
+    substituteCodexHome: z.string().optional()
+  })
+)
 
 /** A transcript the resume launch accepts, else none. */
 export function resumableTranscript(path: string | undefined): string | undefined {

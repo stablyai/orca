@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { MessageRow } from '../../db/orchestration-records'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 import {
@@ -21,12 +22,14 @@ import {
 
 // The fields of this host's own bot-request record that name a paired sender, in every shape it
 // has saved them.
-const RecordedPairedSender = z.object({
-  fromBotName: z.string().nullish(),
-  fromPairedComputer: z.string().optional(),
-  fromPairedServer: z.string().optional(),
-  fromComputer: z.string().nullish()
-})
+const RecordedPairedSender = lazyZodSchema(() =>
+  z.object({
+    fromBotName: z.string().nullish(),
+    fromPairedComputer: z.string().optional(),
+    fromPairedServer: z.string().optional(),
+    fromComputer: z.string().nullish()
+  })
+)
 
 /** A bot request from a paired computer is named as its record names it, so the header says what
  *  the request does: a server it was pulled from by this computer's name for it, never the name the

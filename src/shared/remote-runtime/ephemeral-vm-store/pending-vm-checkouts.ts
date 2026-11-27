@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 
 /** A VM's primary checkout, registered on its host before the create that owns it finishes. */
@@ -54,7 +55,9 @@ export function isPendingVmCheckout(
   )
 }
 
-const PendingVmCheckoutSchema = z.object({ repoId: z.string(), path: z.string() })
+const PendingVmCheckoutSchema = lazyZodSchema(() =>
+  z.object({ repoId: z.string(), path: z.string() })
+)
 
 /** Untrusted IPC input: keep only well-formed entries, bounded. */
 export function parsePendingVmCheckouts(value: unknown): PendingVmCheckout[] {
