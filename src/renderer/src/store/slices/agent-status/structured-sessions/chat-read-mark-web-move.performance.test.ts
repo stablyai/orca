@@ -186,10 +186,9 @@ it.each([
     ]
   ])
   useAppStore.setState({ agentStatusByPaneKey })
-  useAppStore.getState().hydratePersistedUI(
-    makePersistedUI({ manuallyUnreadTurnsByPaneKey: protections }),
-    'startup'
-  )
+  useAppStore
+    .getState()
+    .hydratePersistedUI(makePersistedUI({ manuallyUnreadTurnsByPaneKey: protections }), 'startup')
   expect(marks.localStorage.setItem).toHaveBeenCalledTimes(1)
   expect(useAppStore.getState().manuallyUnreadTurnsByPaneKey).toEqual({ ...terminals, ...legacy })
 
