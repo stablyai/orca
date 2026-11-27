@@ -113,17 +113,11 @@ export function NewBotPictureButton({
           align="start"
           collisionPadding={DIALOG_PADDING_PX}
           style={widthStyle}
-          // A window too short for the open picker scrolls the card; any other fits it whole.
-          wheelScroll
           className="flex w-[min(20rem,var(--new-bot-picture-width),var(--radix-popover-content-available-width))] flex-col"
         >
           {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
-          <div
-            className={cn(
-              BOT_PICTURE_DROP_OUTLINE,
-              'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-3'
-            )}
-          >
+          {/* 12 px to what shows: the carousel adds 4 px above the picture, the caption 6 px below its text. */}
+          <div className={cn(BOT_PICTURE_DROP_OUTLINE, 'px-3 pt-2 pb-1.5')}>
             <BotPicturePicker
               value={picture.value}
               custom={picture.custom}
