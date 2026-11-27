@@ -28,10 +28,10 @@ export function parseGlabPaginationHeader(
   value: string | undefined,
   minimum: number
 ): number | undefined {
-  if (!value) {
+  if (!value || !/^\d+$/.test(value.trim())) {
     return undefined
   }
-  const parsed = Number.parseInt(value, 10)
+  const parsed = Number(value)
   return Number.isSafeInteger(parsed) && parsed >= minimum ? parsed : undefined
 }
 
