@@ -44,8 +44,8 @@ export type RuntimeReviewCommandSurface = {} & Pick<RuntimeGitLabQueryCommands, 
   Pick<RuntimeGitHubProjectCommands, GitHubProjectName>
 
 type RuntimeReviewCommandOwners = {
-  gitLabQueries: RuntimeGitLabQueryCommands
-  gitLabMutations: RuntimeGitLabMutationCommands
+  gitLabQueries: Pick<RuntimeGitLabQueryCommands, GitLabQueryName>
+  gitLabMutations: Pick<RuntimeGitLabMutationCommands, GitLabMutationName>
   gitHubReviewQueries: RuntimeGitHubReviewQueryCommands
   gitHubReviewMutations: RuntimeGitHubReviewMutationCommands
   gitHubIssueComments: RuntimeGitHubIssueCommentCommands

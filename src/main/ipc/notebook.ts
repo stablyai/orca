@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { ipcMain, type WebContents } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import type { Store } from '../persistence/loading-store/store'
 import {
   resolveDesktopAuthorizedPath,
@@ -62,8 +63,8 @@ function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
 }
 
 // Open notebook paths select cwd/venv; project paths canonicalize to their real file.
-export function registerNotebookHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerNotebookHandlers(store: Store, ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'notebook:listPythonEnvironments',
     async (
       _event,
@@ -77,12 +78,12 @@ export function registerNotebookHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'notebook:describePython',
     (_event, args: { path: string }): Promise<PythonEnvironment | null> => describePython(args.path)
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'notebook:startKernel',
     async (event, args: { filePath: string; python: string }): Promise<KernelStartResult> => {
       const owner = event.sender
@@ -136,13 +137,13 @@ export function registerNotebookHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'notebook:installIpykernel',
     (_event, args: { python: string }): Promise<{ ok: boolean; detail: string }> =>
       installIpykernel(args.python)
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'notebook:createVenv',
     async (
       _event,
@@ -156,15 +157,15 @@ export function registerNotebookHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('notebook:execute', (event, args: { filePath: string; code: string }): void => {
+  ipc.handle('notebook:execute', (event, args: { filePath: string; code: string }): void => {
     kernelsOf(event.sender).get(args.filePath)?.execute(args.code)
   })
 
-  ipcMain.handle('notebook:interrupt', (event, args: { filePath: string }): void => {
+  ipc.handle('notebook:interrupt', (event, args: { filePath: string }): void => {
     kernelsOf(event.sender).get(args.filePath)?.interrupt()
   })
 
-  ipcMain.handle('notebook:shutdownKernel', (event, args: { filePath: string }): void => {
+  ipc.handle('notebook:shutdownKernel', (event, args: { filePath: string }): void => {
     cancelPendingStarts(event.sender, args.filePath)
     const kernels = kernelsOf(event.sender)
     kernels.get(args.filePath)?.shutdown()

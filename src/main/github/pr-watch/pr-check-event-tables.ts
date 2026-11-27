@@ -3,6 +3,7 @@ import type { CheckOutcome } from '../../../shared/source-control/checks/provide
 import type { PRCheckContextState } from './pr-check-occurrence'
 import { numberColumn, textColumn, textColumnValues } from './pr-watch-sqlite-columns'
 import { PR_KEY_SQL } from './pr-watch-tables'
+import { parsePRKey } from './pr-watch-types'
 
 // Per-head check memory, pending heads, events and their delivery outbox (tables in pr-watch-tables).
 
@@ -35,8 +36,13 @@ export function replacePRCheckContexts(
   db: Database.Database,
   prKey: string,
   headSha: string,
-  contexts: readonly PRCheckContextState[]
+  contexts: readonly PRCheckContextState[],
+  /** The stored rows; a poll that changed none of them rewrites nothing. */
+  prior?: ReadonlyMap<string, PRCheckContextState>
 ): void {
+  if (prior && sameCheckContexts(prior, contexts)) {
+    return
+  }
   db.prepare('DELETE FROM pr_check_contexts WHERE pr_key = ? AND head_sha = ?').run(prKey, headSha)
   const insert = db.prepare(
     `INSERT INTO pr_check_contexts (pr_key, head_sha, context, last_state, last_run_id, pending_seen)
@@ -45,6 +51,24 @@ export function replacePRCheckContexts(
   for (const row of contexts) {
     insert.run(prKey, headSha, row.context, row.lastState, row.lastRunId, row.pendingSeen ? 1 : 0)
   }
+}
+
+function sameCheckContexts(
+  prior: ReadonlyMap<string, PRCheckContextState>,
+  contexts: readonly PRCheckContextState[]
+): boolean {
+  return (
+    contexts.length === prior.size &&
+    contexts.every((row) => {
+      const stored = prior.get(row.context)
+      return (
+        stored !== undefined &&
+        stored.lastState === row.lastState &&
+        stored.lastRunId === row.lastRunId &&
+        stored.pendingSeen === row.pendingSeen
+      )
+    })
+  )
 }
 
 export type PRPendingHead = {
@@ -210,12 +234,18 @@ export function insertPRCheckEvent(
         event.isCurrentHead ? 1 : 0
       ).lastInsertRowid
   )
+  const pr = parsePRKey(event.prKey)
+  // Keys parsePRKey can't split (e.g. GitLab subgroup owners) compare the joined key unindexed.
+  const { match, params } = pr
+    ? {
+        match: 'forge_host = ? AND owner = ? AND repo = ? AND number = ?',
+        params: [pr.host, pr.owner, pr.repo, pr.number]
+      }
+    : { match: `${PR_KEY_SQL} = ?`, params: [event.prKey] }
   const chatIds = textColumnValues(
     db
-      .prepare(
-        `SELECT DISTINCT chat_id FROM pr_chat_actions WHERE ${PR_KEY_SQL} = ? AND observed_at <= ?`
-      )
-      .all(event.prKey, event.observedAt),
+      .prepare(`SELECT DISTINCT chat_id FROM pr_chat_actions WHERE ${match} AND observed_at <= ?`)
+      .all(...params, event.observedAt),
     'chat_id'
   )
   const deliver = db.prepare(

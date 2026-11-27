@@ -1,13 +1,16 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { OptionalString } from '../rpc-param-primitives'
 
 // Why: repo-selector and slug-addressed issue updates must accept the identical field set.
-export const IssueUpdate = z.object({
-  state: z.enum(['open', 'closed']).optional(),
-  title: OptionalString,
-  body: OptionalString,
-  addLabels: z.array(z.string()).optional(),
-  removeLabels: z.array(z.string()).optional(),
-  addAssignees: z.array(z.string()).optional(),
-  removeAssignees: z.array(z.string()).optional()
-})
+export const IssueUpdate = lazyZodSchema(() =>
+  z.object({
+    state: z.enum(['open', 'closed']).optional(),
+    title: OptionalString,
+    body: OptionalString,
+    addLabels: z.array(z.string()).optional(),
+    removeLabels: z.array(z.string()).optional(),
+    addAssignees: z.array(z.string()).optional(),
+    removeAssignees: z.array(z.string()).optional()
+  })
+)

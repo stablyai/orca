@@ -50,7 +50,7 @@ export class StructuredAgentSessionHost {
     (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false,
     this.sessions,
     (sessionId, cut) => this.usageLimitContinue?.readState(sessionId, cut),
-    (sessionId) => this.runtimeState?.currentEventSink(sessionId)?.liveText() ?? []
+    (sessionId, readers) => this.runtimeState?.currentEventSink(sessionId)?.liveText(readers) ?? []
   )
   private readonly tasks = new StructuredAgentSessionTaskQueue()
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
@@ -96,9 +96,7 @@ export class StructuredAgentSessionHost {
       deliveryOrder: this.runtimeState.deliveryOrder,
       startFlights: this.runtimeState.startFlights,
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),
-      // Retire at rest; the next start refreshes login and permission mode.
-      stopOutgrownAgent: (id) => this.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
-      stopPermissionTransitionChild: (id) => this.lifetime.stopAgent(id, { cause: 'evict' }),
+      stopAgent: (id, ending) => this.lifetime.stopAgent(id, ending),
       clientDelivery: this.clientDelivery
     })
     this.startup = createStartupRecovery(deps, this.runtimeState.reconcileLeases, this.runtimeState)
@@ -155,7 +153,7 @@ export class StructuredAgentSessionHost {
   attentionReads = this.reads.attentionReads
   readModelCatalog = this.reads.readModelCatalog
   childAccountHome = this.reads.childAccountHome
-  prospectiveAccountHome = this.reads.prospectiveAccountHome
+  releaseOffAccount = (...a: [string, () => boolean]) => this.conversationDelivery.offAccount(...a)
 
   handleAdapterEvent = (e: Parameters<EventRecovery['handle']>[0]) => this.eventRecovery.handle(e)
 
@@ -224,8 +222,8 @@ export class StructuredAgentSessionHost {
   attach = this.entry.attach
   create = this.entry.create
 
-  /** Test-only barrier for streamed event writes. */
-  flushStreamedEvents = (id: string) => this.runtimeState.flushEventSink(id)
+  /** Barrier for streamed event writes; `landed` waits for admitted writes only (relay acks). */
+  flushStreamedEvents = (id: string, landed?: true) => this.runtimeState.flushEventSink(id, landed)
 
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {
@@ -272,7 +270,7 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  private mutations = mutationWiring.structuredAgentSessionMutationDelegates(
+  readonly mutations = mutationWiring.structuredAgentSessionMutationDelegates(
     () => this.mutationContext(),
     () => this.attachContext()
   )

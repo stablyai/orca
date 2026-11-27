@@ -21,6 +21,7 @@ import type { SourceControlCreatePrIntentProbes } from './use-create-pr-intent-p
 import type { SourceControlCreatePrIntentReview } from './use-create-pr-intent-review'
 import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
 import type { SourceControlHostedReviewProviderHint } from './use-hosted-review-provider-hint'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useSourceControlCreatePrIntentRun({
   activeRepo,
@@ -123,50 +124,55 @@ export function useSourceControlCreatePrIntentRun({
       )
     })
 
-    try {
-      const prepared = await runCreatePrIntentBranchPrep({
-        generateCommitMessageForCreatePrIntent,
-        handleCommit,
-        operationStore,
-        operationTarget,
-        runRemoteAction,
-        setCreatePrIntentNotice: setNotice,
-        snapshot,
-        token,
-        updateCommitDraft
-      })
-      if (!prepared) {
-        return
+    await runWithFinally(
+      async () => {
+        try {
+          const prepared = await runCreatePrIntentBranchPrep({
+            generateCommitMessageForCreatePrIntent,
+            handleCommit,
+            operationStore,
+            operationTarget,
+            runRemoteAction,
+            setCreatePrIntentNotice: setNotice,
+            snapshot,
+            token,
+            updateCommitDraft
+          })
+          if (!prepared) {
+            return
+          }
+          await runCreatePrIntentReviewStep({
+            createHostedReviewForCreatePrIntent,
+            operationTarget,
+            readHostedReviewCreationEligibilityForIntent,
+            refreshBranchCompareForCreatePrIntent,
+            runRemoteAction,
+            setCreatePrIntentNotice: setNotice,
+            snapshot,
+            token
+          })
+        } catch (error) {
+          console.warn('[SourceControl] Create PR intent failed', error)
+          if (!snapshot.abortIfStale()) {
+            setNotice({
+              tone: 'destructive',
+              message: translate(
+                'auto.components.right.sidebar.SourceControl.d7492cafce',
+                'Could not refresh Source Control. Retry Create PR.'
+              )
+            })
+          }
+        }
+      },
+      () => {
+        if (operationStore.getState().createPrIntentRun === token) {
+          operationStore.setState({
+            createPrIntentRun: null,
+            ...(snapshot.wasAbortedByStaleTarget() ? { createPrIntentNotice: null } : {})
+          })
+        }
       }
-      await runCreatePrIntentReviewStep({
-        createHostedReviewForCreatePrIntent,
-        operationTarget,
-        readHostedReviewCreationEligibilityForIntent,
-        refreshBranchCompareForCreatePrIntent,
-        runRemoteAction,
-        setCreatePrIntentNotice: setNotice,
-        snapshot,
-        token
-      })
-    } catch (error) {
-      console.warn('[SourceControl] Create PR intent failed', error)
-      if (!snapshot.abortIfStale()) {
-        setNotice({
-          tone: 'destructive',
-          message: translate(
-            'auto.components.right.sidebar.SourceControl.d7492cafce',
-            'Could not refresh Source Control. Retry Create PR.'
-          )
-        })
-      }
-    } finally {
-      if (operationStore.getState().createPrIntentRun === token) {
-        operationStore.setState({
-          createPrIntentRun: null,
-          ...(snapshot.wasAbortedByStaleTarget() ? { createPrIntentNotice: null } : {})
-        })
-      }
-    }
+    )
   }, [
     activeRepo,
     activeWorktreeId,

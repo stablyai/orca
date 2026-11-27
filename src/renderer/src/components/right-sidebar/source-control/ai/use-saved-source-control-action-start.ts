@@ -23,6 +23,7 @@ import {
   runSourceControlAgentActionStart,
   type RunSourceControlAgentActionStartArgs
 } from './runSourceControlAgentActionStart'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 /** Primary events own saved starts; opening an editor never authorizes execution. */
 type SavedStartArgs = Omit<
@@ -44,112 +45,117 @@ export function useSavedSourceControlActionStart() {
     }
     inFlight.current = true
     setIsStarting(true)
-    let onFallback = (): void => {}
-    let signal: AbortSignal | undefined
-    try {
-      const args = typeof input === 'function' ? input() : input
-      signal = args.signal
-      onFallback = () => {
-        if (!signal?.aborted) {
-          args.onFallback()
-        }
-      }
-      signal?.throwIfAborted()
-      const store = useAppStore.getState()
-      const { worktreeId } = args
-      const recipe = structuredClone(selectSourceControlActionRecipe(args.selection))
-      const agent = recipe.agentId
-      if (!isTuiAgent(agent) || !worktreeId) {
-        onFallback()
-        return
-      }
-      const workspace = { worktreeId, kind: workspaceKindForWorktreeId(worktreeId) }
-      const [choices, agentLaunchPreferences] = await Promise.all([
-        acquireAgentLaunchChoices(
-          workspace,
-          () => ensureDetectedAgentsForWorktree(store, worktreeId),
-          signal
-        ),
-        ensureAgentLaunchPreferences(store, workspace, signal)
-      ])
-      signal?.throwIfAborted()
-      const settings = useAppStore.getState().settings
-      const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
-        basePrompt: args.basePrompt,
-        settings: settings
-      })
-      const route = isTuiAgent(agent)
-        ? buildAgentLaunchRouteInput(store, {
-            agent,
-            workspace: {
-              worktreeId: worktreeId ?? undefined,
-              kind: workspaceKindForWorktreeId(worktreeId ?? '')
+    await runWithFinally(
+      async () => {
+        let onFallback = (): void => {}
+        let signal: AbortSignal | undefined
+        try {
+          const args = typeof input === 'function' ? input() : input
+          signal = args.signal
+          onFallback = () => {
+            if (!signal?.aborted) {
+              args.onFallback()
             }
+          }
+          signal?.throwIfAborted()
+          const store = useAppStore.getState()
+          const { worktreeId } = args
+          const recipe = structuredClone(selectSourceControlActionRecipe(args.selection))
+          const agent = recipe.agentId
+          if (!isTuiAgent(agent) || !worktreeId) {
+            onFallback()
+            return
+          }
+          const workspace = { worktreeId, kind: workspaceKindForWorktreeId(worktreeId) }
+          const [choices, agentLaunchPreferences] = await Promise.all([
+            acquireAgentLaunchChoices(
+              workspace,
+              () => ensureDetectedAgentsForWorktree(store, worktreeId),
+              signal
+            ),
+            ensureAgentLaunchPreferences(store, workspace, signal)
+          ])
+          signal?.throwIfAborted()
+          const settings = useAppStore.getState().settings
+          const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
+            basePrompt: args.basePrompt,
+            settings: settings
           })
-        : null
-      const appliesArgs =
-        recipe.surface === 'terminal' ||
-        sourceControlLaunchAppliesAgentArgs({
-          agent: isTuiAgent(agent) ? agent : null,
-          worktreeId,
-          repoId: args.repoId,
-          preferredSurface: projection.preferredSurface
-        })
-      const detectedAgents = appliesArgs
-        ? [...(choices.detected ?? [])]
-        : agentsOfferedForLaunch(
-            useAppStore.getState(),
-            workspace,
-            choices.detected,
-            projection.preferredSurface ? agent : undefined
-          )
-      const plan = buildSourceControlAgentDeliveryPlan({
-        settings,
-        agentLaunchPreferences,
-        selectedAgent: agent,
-        commandInput: projection.commandInput,
-        agentArgs: appliesArgs ? projection.agentArgs : undefined,
-        detectedAgents,
-        connectionUnavailable: args.connectionId === undefined,
-        launchPlatform: args.launchPlatform,
-        isRemote: typeof args.connectionId === 'string'
-      })
-      if (plan.status === 'error') {
-        toast.error(plan.error)
-        onFallback()
-        return
+          const route = isTuiAgent(agent)
+            ? buildAgentLaunchRouteInput(store, {
+                agent,
+                workspace: {
+                  worktreeId: worktreeId ?? undefined,
+                  kind: workspaceKindForWorktreeId(worktreeId ?? '')
+                }
+              })
+            : null
+          const appliesArgs =
+            recipe.surface === 'terminal' ||
+            sourceControlLaunchAppliesAgentArgs({
+              agent: isTuiAgent(agent) ? agent : null,
+              worktreeId,
+              repoId: args.repoId,
+              preferredSurface: projection.preferredSurface
+            })
+          const detectedAgents = appliesArgs
+            ? [...(choices.detected ?? [])]
+            : agentsOfferedForLaunch(
+                useAppStore.getState(),
+                workspace,
+                choices.detected,
+                projection.preferredSurface ? agent : undefined
+              )
+          const plan = buildSourceControlAgentDeliveryPlan({
+            settings,
+            agentLaunchPreferences,
+            selectedAgent: agent,
+            commandInput: projection.commandInput,
+            agentArgs: appliesArgs ? projection.agentArgs : undefined,
+            detectedAgents,
+            connectionUnavailable: args.connectionId === undefined,
+            launchPlatform: args.launchPlatform,
+            isRemote: typeof args.connectionId === 'string'
+          })
+          if (plan.status === 'error') {
+            toast.error(plan.error)
+            onFallback()
+            return
+          }
+          const launched = await runSourceControlAgentActionStart({
+            ...args,
+            recipe,
+            agentLaunchPreferences,
+            selectedAgent: agent,
+            trimmedCommandInput: projection.commandInput,
+            launchChoice: {
+              agent,
+              route: appliesArgs ? 'terminal-tui' : 'structured-native-chat',
+              requestedSurface: projection.requestedSurface,
+              executionHostId: route ? parseExecutionHostId(route.executionHostId)?.id : undefined
+            },
+            saveTargetValue: 'none'
+          })
+          if (!launched) {
+            onFallback()
+          }
+        } catch (error) {
+          if (
+            signal?.aborted ||
+            error instanceof AgentLaunchChoiceCancelled ||
+            (error instanceof DOMException && error.name === 'AbortError')
+          ) {
+            return
+          }
+          console.error('Saved Source Control action failed', error)
+          onFallback()
+        }
+      },
+      () => {
+        inFlight.current = false
+        setIsStarting(false)
       }
-      const launched = await runSourceControlAgentActionStart({
-        ...args,
-        recipe,
-        agentLaunchPreferences,
-        selectedAgent: agent,
-        trimmedCommandInput: projection.commandInput,
-        launchChoice: {
-          agent,
-          route: appliesArgs ? 'terminal-tui' : 'structured-native-chat',
-          requestedSurface: projection.requestedSurface,
-          executionHostId: route ? parseExecutionHostId(route.executionHostId)?.id : undefined
-        },
-        saveTargetValue: 'none'
-      })
-      if (!launched) {
-        onFallback()
-      }
-    } catch (error) {
-      if (
-        signal?.aborted ||
-        error instanceof AgentLaunchChoiceCancelled ||
-        (error instanceof DOMException && error.name === 'AbortError')
-      ) {
-        return
-      }
-      console.error('Saved Source Control action failed', error)
-      onFallback()
-    } finally {
-      inFlight.current = false
-      setIsStarting(false)
-    }
+    )
   }
   return { start, isStarting }
 }

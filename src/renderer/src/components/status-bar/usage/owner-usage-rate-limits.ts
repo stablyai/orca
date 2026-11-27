@@ -45,7 +45,6 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
   codex: 'codex',
   opencodeGo: 'opencode-go',
   kimi: 'kimi',
-  antigravity: 'antigravity',
   minimax: 'minimax',
   grok: 'grok',
   cursor: 'cursor',
@@ -56,7 +55,7 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the keys of a Record<UsageProviderKey, …>.
 const USAGE_PROVIDER_KEYS = Object.keys(USAGE_PROVIDER_IDS) as UsageProviderKey[]
 
-function mapProviders(
+export function mapProviders(
   build: (key: UsageProviderKey) => ProviderRateLimits | null
 ): Pick<RateLimitState, UsageProviderKey> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one entry per UsageProviderKey.
@@ -66,7 +65,7 @@ function mapProviders(
   >
 }
 
-function describeUnverifiableOwner(
+export function describeUnverifiableOwner(
   ownerLabel: string,
   reason: OwnerUsageFailureReason,
   t: Translate = translate
@@ -106,8 +105,7 @@ function adoptRemoteRateLimits(remote: RateLimitState): RateLimitState {
     claudeTarget: partial.claudeTarget ?? { runtime: 'host', wslDistro: null },
     codexTarget: partial.codexTarget ?? { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: partial.inactiveClaudeAccounts ?? [],
-    inactiveCodexAccounts: partial.inactiveCodexAccounts ?? [],
-    antigravityAccounts: partial.antigravityAccounts ?? []
+    inactiveCodexAccounts: partial.inactiveCodexAccounts ?? []
   }
 }
 
@@ -152,7 +150,6 @@ const NOT_SET_UP_NEEDS_REASON: ReadonlySet<UsageProviderKey> = new Set([
   'minimax',
   'zcode',
   'cursor',
-  'antigravity',
   'muse'
 ])
 
@@ -199,7 +196,7 @@ function describePlaceholder(
     : null
 }
 
-function ownerPlaceholderSnapshot(
+export function ownerPlaceholderSnapshot(
   key: UsageProviderKey,
   error: string,
   usageMetadata: UsageRateLimitMetadata

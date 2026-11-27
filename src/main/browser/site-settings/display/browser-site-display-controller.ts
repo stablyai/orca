@@ -57,6 +57,7 @@ export class BrowserSiteDisplayController {
   }
 
   onGuestRegistered(guest: Electron.WebContents, profileId: string | null): void {
+    guest.setZoomMode('isolated')
     const previous = this.guests.get(guest.id)
     previous?.stopWatchingDomReady()
     // dom-ready follows Electron's post-commit copy of the embedder zoom.

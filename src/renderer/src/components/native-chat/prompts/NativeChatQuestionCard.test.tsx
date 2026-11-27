@@ -64,6 +64,51 @@ const tabsOrSpaces: AskPrompt = {
 }
 
 describe('NativeChatQuestionCard', () => {
+  it('shows the question once in the band and omits its header, count, and arrows for one step', () => {
+    renderCard({ prompt: tabsOrSpaces })
+
+    expect(
+      container.querySelectorAll('[data-testid="native-chat-question-card-title"]')
+    ).toHaveLength(1)
+    expect(
+      container.querySelector('[data-testid="native-chat-question-card-title"]')?.textContent
+    ).toBe('Do you prefer tabs or spaces?')
+    expect(container.textContent).not.toContain('Indent')
+    expect(container.textContent?.match(/Do you prefer tabs or spaces\?/g)).toHaveLength(1)
+    expect(container.textContent).not.toContain('1 of 1')
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(0)
+  })
+
+  it('shows the count and step arrows only for multi-step questions', () => {
+    renderCard({
+      prompt: { questions: [{ ...question('One'), header: 'Hidden header' }, question('Two')] }
+    })
+
+    expect(container.textContent).toContain('1 of 2')
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
+    expect(card().getAttribute('aria-label')).toBe('One?, 1 of 2')
+  })
+
+  it('shows a multi-step question once even when its header repeats it', () => {
+    const repeatedQuestion = 'Which slice should I open first?'
+    renderCard({
+      prompt: {
+        questions: [
+          {
+            question: repeatedQuestion,
+            header: repeatedQuestion,
+            multiSelect: false,
+            options: [{ label: 'One' }]
+          },
+          question('Two')
+        ]
+      }
+    })
+
+    expect(container.textContent?.match(/Which slice should I open first\?/g)).toHaveLength(1)
+    expect(card().getAttribute('aria-label')).toBe('Which slice should I open first?, 1 of 2')
+  })
+
   it('arrows past a title checkbox into the multiline answer and leaves only at its text edges', () => {
     container.setAttribute('data-native-chat-root', 'true')
     act(() => {
@@ -227,7 +272,7 @@ describe('NativeChatQuestionCard', () => {
     const onAnswer = vi.fn()
     renderCard({ prompt: { questions: [question('One'), question('Two')] }, onAnswer })
     expect(document.activeElement).toBe(card())
-    expect(card().getAttribute('aria-label')).toBe('One, 1 of 2: One?')
+    expect(card().getAttribute('aria-label')).toBe('One?, 1 of 2')
     expect(optionRows().map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
     // Enter on the card with nothing answered neither picks option 1 nor moves on.
     pressKey({ key: 'Enter' }, card())

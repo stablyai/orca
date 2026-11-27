@@ -92,9 +92,9 @@ function PullRequestPageItem({
     tab,
     setTab,
     details,
-    loading,
     error,
     detailsLoaded,
+    detailsPending,
     detailsCacheKey,
     appendOptimisticComment,
     canUseDetailsRepoContext,
@@ -327,7 +327,8 @@ function PullRequestPageItem({
             files={files}
             filesUnavailable={filesUnavailable}
             checks={checks}
-            loading={loading}
+            // Why: includes the first commit before the read is marked pending, so tabs never paint empty copy early.
+            loading={detailsPending}
             detailsLoaded={detailsLoaded}
             details={details}
             localState={localState}

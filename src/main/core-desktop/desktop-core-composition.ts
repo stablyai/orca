@@ -9,7 +9,6 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { BrowserClientPageAutomationRpc } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { StarNagService } from '../star-nag/service'
-import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import {
   DESKTOP_RPC_CALLER,
@@ -26,6 +25,7 @@ import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/m
 import { startMcpAgentFileSync } from '../mcp-servers/agent-files/mcp-agent-file-sync'
 import { shouldInstallManagedHooks } from '../startup/configure-process'
 import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
+import { installAgentTurnWorktreeActivity } from '../agent-hooks/runtime/agent-turn-worktree-activity'
 import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
 import { initializeMainProcessAccountServices } from '../startup/agent-accounts/main-process-account-services'
 import {
@@ -180,8 +180,12 @@ function startBrowserAutomation(
     return response.result
   })
   // Only Orca-managed emulator helpers belong to workspaces; external serve-sim stays independent. macOS capability gates live in CLI/runtime.
-  core.emulatorBridge = new EmulatorBridge()
-  runtime.setEmulatorBridge(core.emulatorBridge)
+  runtime.setEmulatorBridgeLoader(async () => {
+    const { EmulatorBridge } = await import('../emulator/emulator-bridge')
+    const bridge = new EmulatorBridge()
+    core.emulatorBridge = bridge
+    return bridge
+  })
 }
 
 function scheduleDeferredMaintenance(
@@ -275,6 +279,7 @@ export async function composeDesktopCore(
     isPackaged: paths.isPackaged
   })
   installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
+  installAgentTurnWorktreeActivity()
   await initializeMainProcessPlugins(core, store)
   scheduleStalePluginGitTempSweep()
   core.starNag = new StarNagService(store, core.stats!)

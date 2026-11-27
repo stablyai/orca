@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../../../shared/browser/browser-metadata-redaction'
 import type { BrowserHistoryEntry } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserSlice,
@@ -9,6 +10,7 @@ import type {
 import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'
 import {
   MAX_BROWSER_HISTORY_ENTRIES,
+  normalizeBrowserHistoryEntries,
   normalizeBrowserHistoryUrl
 } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
 import {
@@ -84,6 +86,7 @@ export function createBrowserHistoryActions(
 
     addBrowserHistoryEntry: (url, title, faviconUrl) => {
       const safeUrl = redactKagiSessionToken(url)
+      const safeMetadata = redactBrowserMetadata({ title, faviconUrl })
       if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
         return
       }
@@ -95,8 +98,8 @@ export function createBrowserHistoryActions(
               entry === existing
                 ? {
                     ...entry,
-                    title,
-                    ...(faviconUrl !== undefined ? { faviconUrl } : {}),
+                    title: safeMetadata.title,
+                    ...(faviconUrl !== undefined ? { faviconUrl: safeMetadata.faviconUrl } : {}),
                     lastVisitedAt: Date.now(),
                     visitCount: entry.visitCount + 1
                   }
@@ -106,8 +109,8 @@ export function createBrowserHistoryActions(
               {
                 url: safeUrl,
                 normalizedUrl: normalized,
-                title,
-                ...(faviconUrl !== undefined ? { faviconUrl } : {}),
+                title: safeMetadata.title,
+                ...(faviconUrl !== undefined ? { faviconUrl: safeMetadata.faviconUrl } : {}),
                 lastVisitedAt: Date.now(),
                 visitCount: 1
               },
@@ -149,7 +152,7 @@ export function createBrowserHistoryActions(
           return s
         }
         return {
-          browserUrlHistory: [...urls, ...s.browserUrlHistory],
+          browserUrlHistory: normalizeBrowserHistoryEntries([...urls, ...s.browserUrlHistory]),
           workspaceDocHistory: [...docs, ...s.workspaceDocHistory]
         }
       })

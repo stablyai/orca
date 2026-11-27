@@ -5,6 +5,7 @@ import {
   isAiVaultSessionRecoverableEmpty,
   type AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import { useTranslate } from '@/i18n/use-translate'
 
 // Zero-turn transcripts may still have recoverable queued prompts or subagent history.
@@ -31,26 +32,28 @@ export function SessionUnsavedConversationNotice({
         </span>
       </div>
       <div className="rounded-md border border-dashed border-border/70 bg-foreground/[0.04] px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
-        {recoverable
-          ? t(
-              'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetailCount',
-              'This session has no saved conversation, but {{count}} recoverable items survive.',
-              {
-                count: aiVaultSessionRecoverableSignalCount(session),
-                defaultValue_one:
-                  'This session has no saved conversation, but {{count}} recoverable item survives.'
-              }
-            )
-          : t(
-              'auto.components.right.sidebar.AiVaultSessionDetails.emptyConversationDetail',
-              'This session has no saved conversation and cannot be resumed.'
-            )}
-        {recoverable && logAvailable
-          ? ` ${t(
-              'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyOpenLogHint',
-              'Open the log to recover them.'
-            )}`
-          : null}
+        {joinSentences([
+          recoverable
+            ? t(
+                'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetailCount',
+                'This session has no saved conversation, but {{count}} recoverable items survive.',
+                {
+                  count: aiVaultSessionRecoverableSignalCount(session),
+                  defaultValue_one:
+                    'This session has no saved conversation, but {{count}} recoverable item survives.'
+                }
+              )
+            : t(
+                'auto.components.right.sidebar.AiVaultSessionDetails.emptyConversationDetail',
+                'This session has no saved conversation and cannot be resumed.'
+              ),
+          recoverable && logAvailable
+            ? t(
+                'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyOpenLogHint',
+                'Open the log to recover them.'
+              )
+            : ''
+        ])}
         {recoverable ? (
           <SessionRecoverableSignalLines
             queuedMessageCount={session.queuedMessageCount}

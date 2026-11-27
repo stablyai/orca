@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
+import {
+  botItemHeldAnswer,
+  botItemHeldAnswerIsReply,
+  type BotItemHeldAnswer
+} from '../../../../../shared/bots/bot-item-held-answers'
 import { BotItemQuestionStep } from './BotItemQuestionStep'
 import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
@@ -84,11 +89,11 @@ const ownWords: BotItemQuestionShape = {
 const actions: BotItemQuickReplyActions = {
   send: () => {},
   edit: () => {},
-  recover: () => {},
+  restore: () => true,
   type: () => {}
 }
 
-/** The card with its picks kept here, so a fixture's clicks pick, swap and clear as in the app.
+/** The card with its picks kept here, so a fixture's clicks pick, swap and reopen as in the app.
  *  `answered`: lines a posted comment, or a send on its way, answered. */
 function Card({
   shape,
@@ -96,21 +101,30 @@ function Card({
   answered = shape.decisions.map(() => null)
 }: {
   shape: BotItemQuestionShape
-  picked: readonly (string | null)[]
+  picked: readonly (string | BotItemHeldAnswer | null)[]
   answered?: readonly (string | null)[]
 }): React.JSX.Element {
-  const [picks, setPicks] = useState(picked)
+  const [picks, setPicks] = useState(() =>
+    picked.map((pick) => (typeof pick === 'string' ? botItemHeldAnswer(pick) : pick))
+  )
+  const [reopened, setReopened] = useState<number | null>(null)
   const lines = shape.decisions.flatMap((_, index) => (answered[index] ? [] : [index]))
   const steps: BotItemQuestionSteps = {
     askId: 'q1',
     shape,
-    picks: picks.map((words, index) => (lines.includes(index) ? words : null)),
+    picks: picks.map((pick, index) => (lines.includes(index) ? pick : null)),
     lines,
-    pick: (index, words) =>
+    pick: (index, words) => {
+      setReopened((at) => (at === index ? null : at))
       setPicks((previous) =>
-        previous.map((held, at) => (at === index ? (held === words ? null : words) : held))
-      ),
+        previous.map((held, at) =>
+          at === index && !botItemHeldAnswerIsReply(held, words) ? botItemHeldAnswer(words) : held
+        )
+      )
+    },
     bind: () => {},
+    reopened,
+    reopen: setReopened,
     send: () => (picks.some(Boolean) ? 'sent' : lines.length > 0 ? 'empty' : 'none'),
     sending: false
   }
@@ -206,6 +220,22 @@ export const longAnswerFolded = defineFixture({
     <Card
       shape={longAnswer}
       picked={['Beta first, then everyone after two weeks of feedback from the testers', null]}
+    />
+  )
+})
+// A typed answer held with a screenshot and a file: they show under its folded line.
+const STORE = '/tmp/agent-session-attachments/0123abcd-0123-4567-89ab-0123456789ab'
+export const heldWithFiles = defineFixture({
+  width: 300,
+  render: () => (
+    <Card
+      shape={ownWords}
+      picked={[
+        botItemHeldAnswer(`Beta first, see [Image #1] and @${STORE}/notes.txt`, [
+          `${STORE}/screenshot.png`
+        ]),
+        null
+      ]}
     />
   )
 })

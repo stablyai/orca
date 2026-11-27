@@ -20,12 +20,20 @@ export type HostProfile = {
   lastKnownHostPlatform?: NodeJS.Platform
   lastKnownHostMachine?: HostMachine
   endpoint: string
+  /**
+   * Who chose `endpoint`: 'host' once the desktop lists it as one of its own addresses, so it may follow
+   * the desktop when that address goes away; 'manual' after Edit Host, never rewritten. Absent means not
+   * yet seen in the desktop's list (pairing, or a row from before origins), so a tunnel is never followed.
+   */
+  directEndpointOrigin?: HostDirectEndpointOrigin
   deviceToken: string
   publicKeyB64: string
   lastConnected: number
   /** Relay routing, joined from the overlay; only `setRelayRouting` and pairing write it. */
   relay?: MobileRelayEndpoint
 }
+
+export type HostDirectEndpointOrigin = 'host' | 'manual'
 
 export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
 
@@ -45,12 +53,17 @@ const hostNameIdentityFields = {
   ).optional(),
   lastKnownHostMachine: salvagedOptional('lastKnownHostMachine', HostMachineSchema).optional()
 }
+const directEndpointOriginField = salvagedOptional(
+  'directEndpointOrigin',
+  z.enum(['host', 'manual'])
+).optional()
 
 export const HostProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   ...hostNameIdentityFields,
   endpoint: z.string().min(1),
+  directEndpointOrigin: directEndpointOriginField,
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
@@ -63,6 +76,7 @@ export const StoredHostProfileSchema = z.object({
   name: z.string().min(1),
   ...hostNameIdentityFields,
   endpoint: z.string().min(1),
+  directEndpointOrigin: directEndpointOriginField,
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite()
 })

@@ -16,6 +16,8 @@ import {
 } from '../background-tasks/claude-background-task-frames'
 import { claudeStartedTaskKind } from '../subagents/claude-subagent-task-frames'
 import { ClaudeAgentWaitCalls } from './claude-agent-wait-calls'
+// tf: the decoder's task-frame rules (roster starts, turn ends, survivors).
+import * as tf from './claude-child-work-roster'
 import {
   claudeChildWorkOutcome,
   claudeChildWorkObservation,
@@ -47,23 +49,16 @@ export class ClaudeChildWorkDecoder {
       this.agentWaits.observe(message)
       return
     }
+    if (tf.claudeLeadTurnEnded(message, this.live)) {
+      this.surfaceForegroundCommands(undefined, ownerOf)
+    }
     if (message.type !== 'system') {
       return
     }
     if (message.subtype === 'background_tasks_changed') {
-      if (Array.isArray(message.tasks)) {
-        for (const entry of message.tasks) {
-          const task = record(entry)
-          const id = task && taskId(task)
-          if (
-            task &&
-            id &&
-            !this.ended.has(id) &&
-            this.taskInvocations.parentOf(id, taskAliasId(task.tool_use_id))
-          ) {
-            this.started(id, task, true)
-          }
-        }
+      const known = { live: this.live, ended: this.ended, parentOf: this.taskInvocations.parentOf }
+      for (const [id, task] of tf.claudeRosterStarts(message, known)) {
+        this.started(id, task, true)
       }
       return
     }
@@ -91,11 +86,19 @@ export class ClaudeChildWorkDecoder {
           message.status,
           {
             runId: taskAliasId(message.tool_use_id),
-            lastMessage: taskText(message.summary),
+            // A forked command's summary only repeats its name.
+            lastMessage: selected?.invocation.forkedCommand ? undefined : taskText(message.summary),
             totalTokens: taskUsageTotalTokens(message)
           },
           ownerOf
         )
+    }
+  }
+
+  /** See claudeForegroundCommandSurvivors. */
+  private surfaceForegroundCommands(ownerId: string | undefined, ownerOf?: ClaudeToolOwner): void {
+    for (const [id, task] of tf.claudeForegroundCommandSurvivors(this.live, ownerId, ownerOf)) {
+      this.upsert(id, task, {})
     }
   }
 
@@ -157,7 +160,7 @@ export class ClaudeChildWorkDecoder {
         description: taskDescription(message.description) ?? existing?.description,
         toolUseId: toolUseId ?? existing?.toolUseId,
         parentTaskId: invocation.parentTaskId,
-        ...(awaitsAgents || existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
+        ...tf.claudeCarriedMarks(existing, toolUseId, awaitsAgents)
       },
       {},
       restart,
@@ -185,7 +188,7 @@ export class ClaudeChildWorkDecoder {
     }
     // Progress descriptions describe the current activity, not the task.
     const name = task.name ?? taskName(message)
-    this.upsert(id, { ...task, name }, claudeTaskProgressFacts(message))
+    this.upsert(id, { ...tf.claudeTaskSeenAgain(task), name }, claudeTaskProgressFacts(message))
   }
 
   private updated(
@@ -225,7 +228,7 @@ export class ClaudeChildWorkDecoder {
         description: description ?? existing?.description,
         toolUseId: existing?.toolUseId,
         parentTaskId: existing?.parentTaskId,
-        ...(existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
+        ...tf.claudeCarriedMarks(existing, existing?.toolUseId)
       },
       {},
       false
@@ -323,5 +326,7 @@ export class ClaudeChildWorkDecoder {
       ...(reported.lastMessage ? { lastMessage: reported.lastMessage } : {}),
       ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {})
     }))
+    // Its own foreground commands could not outlive it either.
+    this.surfaceForegroundCommands(id, ownerOf)
   }
 }

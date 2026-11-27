@@ -1,6 +1,21 @@
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RetiredTerminalSurface } from '../../../runtime/terminal/surface/mobile-session-terminal-retirement'
 
+/** `taken`: the saved leaf names another terminal, or the session lacks its tab, so retirement refuses. */
+export function replacedPaneBindingState(
+  session: WorkspaceSessionState,
+  binding: { worktreeId: string; tabId: string; leafId: string; ptyId: string }
+): 'unbound' | 'own' | 'taken' {
+  const bound = session.terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
+  if (!bound) {
+    return 'unbound'
+  }
+  return bound === binding.ptyId &&
+    session.tabsByWorktree?.[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)
+    ? 'own'
+    : 'taken'
+}
+
 /** Caller proves old ownership; restart removes the binding while retaining the pane. */
 export function clearReplacedPaneBinding(
   session: WorkspaceSessionState,

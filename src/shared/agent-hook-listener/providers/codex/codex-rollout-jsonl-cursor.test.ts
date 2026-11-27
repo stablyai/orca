@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { readJsonlCursorBytes, RolloutReadBatch } from './codex-rollout-async-reads'
-import { applyJsonlCursorBytes, type JsonlCursor } from './codex-rollout-jsonl-format'
+import {
+  applyJsonlCursorBytes,
+  planJsonlRead,
+  TRANSCRIPT_LINE_MAX_BYTES,
+  type JsonlCursor
+} from './codex-rollout-jsonl-format'
 
 const directories: string[] = []
 
@@ -71,5 +76,24 @@ describe('readJsonlCursorBytes', () => {
     expect(applyJsonlCursorBytes(cursor, late)).toEqual([{ a: 2 }])
     // Bytes the cursor has fully consumed yield nothing, never a replay.
     expect(applyJsonlCursorBytes(cursor, early)).toEqual([])
+  })
+})
+
+describe('applyJsonlCursorBytes', () => {
+  it('drops an unfinished line once it outgrows the line limit and resumes after its newline', () => {
+    const cursor = { filePath: 'rollout.jsonl', offset: 0, carry: '' }
+    const append = (text: string) => {
+      const bytes = Buffer.from(text)
+      return applyJsonlCursorBytes(cursor, {
+        ...planJsonlRead(cursor, cursor.offset + bytes.length),
+        bytes
+      })
+    }
+    for (let i = 0; i < 3; i++) {
+      expect(append('x'.repeat(128 * 1024))).toEqual([])
+      expect(Buffer.byteLength(cursor.carry)).toBeLessThanOrEqual(TRANSCRIPT_LINE_MAX_BYTES)
+    }
+    expect(append('{"partial":true}\n{"a":1}\n')).toEqual([{ a: 1 }])
+    expect(append('{"a":2}\n')).toEqual([{ a: 2 }])
   })
 })

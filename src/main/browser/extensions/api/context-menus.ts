@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
@@ -17,8 +18,8 @@ import {
   type StoredContextMenuItem
 } from '../profile-storage/browser-extension-profile-state-store'
 
-const idSchema = z.union([z.string(), z.number().int()])
-const menuItemPropertyFields = {
+const idSchema = lazyZodSchema(() => z.union([z.string(), z.number().int()]))
+const createMenuItemPropertyFields = () => ({
   type: z.enum(['normal', 'checkbox', 'radio', 'separator']),
   title: z.string(),
   checked: z.boolean(),
@@ -28,13 +29,15 @@ const menuItemPropertyFields = {
   parentId: idSchema,
   documentUrlPatterns: z.array(z.string()),
   targetUrlPatterns: z.array(z.string())
-}
-const createSchema = z
-  .object({ id: idSchema, ...menuItemPropertyFields })
-  .partial()
-  .required({ id: true })
-  .loose()
-const updateSchema = z.object(menuItemPropertyFields).partial().loose()
+})
+const createSchema = lazyZodSchema(() =>
+  z
+    .object({ id: idSchema, ...createMenuItemPropertyFields() })
+    .partial()
+    .required({ id: true })
+    .loose()
+)
+const updateSchema = lazyZodSchema(() => z.object(createMenuItemPropertyFields()).partial().loose())
 
 function editMenus(
   caller: BrowserExtensionCaller,

@@ -13,6 +13,7 @@ import type {
   GitHistoryRefs
 } from '../../../../../shared/git/history/git-history-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type GitGraphFilterProps = {
   worktreeId: string
@@ -92,15 +93,18 @@ function GitGraphFilterForOwner({
         return
       }
       queue.running = true
-      try {
-        while (queue.pending) {
-          const next = queue.pending
-          queue.pending = undefined
-          await next()
+      await runWithFinally(
+        async () => {
+          while (queue.pending) {
+            const next = queue.pending
+            queue.pending = undefined
+            await next()
+          }
+        },
+        () => {
+          queue.running = false
         }
-      } finally {
-        queue.running = false
-      }
+      )
     }
     const timeout = setTimeout(() => {
       queue.pending = async () => {

@@ -1,5 +1,6 @@
 import { useSupportedGroupHookSettings } from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
 import type { GeneralSubPage } from '../general/general-sub-pages'
+import type { McpServerSubPage } from '../mcp-servers/mcp-server-sub-page'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
@@ -32,6 +33,7 @@ import {
 import { useTerminalConfigImport } from '../terminal/configuration/useTerminalConfigImport'
 import { useWarpThemeImport } from '../terminal/themes/useWarpThemeImport'
 import { getInitialMountedSectionIds } from './settings-load-performance'
+import { useOptInOnlyExperimentRows } from '../advanced/use-opt-in-only-experiment-rows'
 import {
   buildRepoIdToHostSelection,
   buildRepoIdToRepresentative,
@@ -159,6 +161,7 @@ export function useSettingsStoreModel() {
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
   const [generalSubPage, setGeneralSubPage] = useState<GeneralSubPage | null>(null)
+  const [mcpServerSubPage, setMcpServerSubPage] = useState<McpServerSubPage | null>(null)
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
   )
@@ -176,6 +179,7 @@ export function useSettingsStoreModel() {
   const confirm = useConfirmationDialog()
   // Option-click unlocks hidden experiments for this session only.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
+  const optInOnlyExperimentRows = useOptInOnlyExperimentRows(settings, hiddenExperimentalUnlocked)
   const {
     settingsHostChoice,
     setSettingsHostChoice,
@@ -210,6 +214,8 @@ export function useSettingsStoreModel() {
     hookSettingsGroups,
     generalSubPage,
     setGeneralSubPage,
+    mcpServerSubPage,
+    setMcpServerSubPage,
     settings,
     keybindings,
     updateSettings,
@@ -285,6 +291,7 @@ export function useSettingsStoreModel() {
     confirm,
     hiddenExperimentalUnlocked,
     setHiddenExperimentalUnlocked,
+    optInOnlyExperimentRows,
     runtimeEnvironments,
     settingsHostScope,
     nativeAccounts,

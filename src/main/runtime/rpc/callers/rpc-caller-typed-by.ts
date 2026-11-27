@@ -17,7 +17,7 @@ export function typedByOf(context: {
   }
 }): AgentJournalTypedBy | undefined {
   const { caller } = context
-  if (isAgentRpcCaller(caller)) {
+  if (caller?.kind === 'local-cli') {
     return { by: 'agent' }
   }
   if (caller?.kind === 'desktop') {
@@ -29,11 +29,21 @@ export function typedByOf(context: {
   const connectionClaim =
     context.clientKind === 'mobile' ? undefined : (context.deviceSelf?.orcaAccount() ?? null)
   const claim = context.runtime.pairedDeviceAccount?.(caller.deviceId, connectionClaim)
+  // Null when signed out, and in `orca serve`: nothing to compare with, so no message is another's.
+  const hostAccountId = claim
+    ? (context.runtime.getConnectorCloud?.()?.signedInAccount() ?? null)
+    : null
+  // An agent's CLI over a device's pairing is still that device's: whom it acts for reads it.
+  if (isAgentRpcCaller(caller)) {
+    return {
+      by: 'agent',
+      deviceId: caller.deviceId,
+      ...(claim && hostAccountId ? { own: claim.id === hostAccountId } : {})
+    }
+  }
   if (!claim) {
     return { by: 'device', deviceId: caller.deviceId }
   }
-  // Null when signed out, and in `orca serve`: nothing to compare with, so no message is another's.
-  const hostAccountId = context.runtime.getConnectorCloud?.()?.signedInAccount() ?? null
   return {
     by: 'device',
     deviceId: caller.deviceId,

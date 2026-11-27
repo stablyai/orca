@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import {
   useCallback,
   type Dispatch,
@@ -18,7 +19,11 @@ import type {
 } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
-import { useSshWorkspaceBrowserLoadFailureRoute } from './profile-routing/use-ssh-workspace-browser-route'
+import {
+  useSshRoutedPagePortForwards,
+  useSshWorkspaceBrowserLoadFailureRoute
+} from './profile-routing/use-ssh-workspace-browser-route'
+import { openSshRoutedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
 import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failure-auto-retry'
 import BrowserFind from './find/BrowserFind'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
@@ -31,6 +36,7 @@ import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 import type { useBrowserPageAnnotationSend } from '../annotate/delivery/use-browser-page-annotation-send'
 import type { useBrowserPageGrabAnnotations } from '../annotate/grab/use-browser-page-grab-annotations'
+import type { BrowserAnnotateToolSwitch } from '../annotate/palette/use-browser-annotate-tool-switch'
 
 export function BrowserPageViewportOverlays({
   markup,
@@ -57,7 +63,9 @@ export function BrowserPageViewportOverlays({
   importProfileId,
   grab,
   annotationSend,
-  grabAnnotations
+  grabAnnotations,
+  toolSwitch,
+  canPickElements
 }: {
   markup: MarkupModeController
   isActive: boolean
@@ -84,7 +92,10 @@ export function BrowserPageViewportOverlays({
   grab: GrabModeHook
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
+  toolSwitch: BrowserAnnotateToolSwitch
+  canPickElements: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const getAgentCursorHost = useCallback(() => containerRef.current, [containerRef])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
   return (
@@ -101,6 +112,14 @@ export function BrowserPageViewportOverlays({
         browserOverlayViewport={browserOverlayViewport}
         worktreeId={worktreeId}
         currentUrl={browserTab.url}
+        toolSwitch={toolSwitch}
+        canPickElements={canPickElements}
+        toolsUnavailableReason={
+          browserTab.loadError
+            ? t('browser.annotatePalette.pageDidNotLoad', "Page didn't load")
+            : undefined
+        }
+        showPaletteKeyHints
       />
       <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
       <BrowserPasswordFillDropdown
@@ -171,12 +190,17 @@ function BrowserPageLoadFailure({
   onRetry: () => void
 }): React.JSX.Element {
   const ssh = useSshWorkspaceBrowserLoadFailureRoute(worktreeId)
+  const sshPortForwards = useSshRoutedPagePortForwards(worktreeId, sshRouted)
   return (
     <BrowserLoadFailureOverlay
       loadError={loadError}
       externalUrl={failureExternalUrl}
       onRetry={onRetry}
-      onOpenExternal={(url) => void window.api.shell.openUrl(url)}
+      onOpenExternal={(url) =>
+        sshRouted
+          ? openSshRoutedUrlInSystemBrowser(url, sshPortForwards)
+          : void window.api.shell.openUrl(url)
+      }
       certificateFailure={certificateFailure}
       sshRoutedHint={sshRouted}
       onRecheckSshRoute={sshRouted ? ssh.recheck : null}

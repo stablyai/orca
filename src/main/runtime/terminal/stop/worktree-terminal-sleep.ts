@@ -152,6 +152,8 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       const stopAndWait = ptyController.stopAndWait.bind(ptyController)
 
       const orderedLivePtyIds = [...livePtyIds].sort()
+      // Before the stop: an exit wait settling on it must not take the pane for an Agent-slept one.
+      this.noteWorkspaceSleepStops(orderedLivePtyIds)
       for (const ptyId of orderedLivePtyIds) {
         settleReversibleStops.set(
           ptyId,

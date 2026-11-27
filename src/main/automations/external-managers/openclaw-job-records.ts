@@ -122,13 +122,12 @@ function openClawRawSchedule(job: ExternalJobRecord): string | null {
   return asString(schedule.expr) ?? asString(schedule.cron) ?? null
 }
 
-function openClawPromptPreview(job: ExternalJobRecord): string {
+function openClawPrompt(job: ExternalJobRecord): string {
   const payload = job.payload
   if (!isRecord(payload)) {
     return ''
   }
-  const text = asString(payload.message) ?? asString(payload.text) ?? ''
-  return text.length > 120 ? `${text.slice(0, 117)}...` : text
+  return asString(payload.message) ?? asString(payload.text) ?? ''
 }
 
 export function mapOpenClawJobs(managerId: string, rawJobs: unknown): ExternalAutomationJob[] {
@@ -141,7 +140,8 @@ export function mapOpenClawJobs(managerId: string, rawJobs: unknown): ExternalAu
     const id = asString(job.id) ?? 'unknown'
     const enabled = job.enabled !== false
     const state = isRecord(job.state) ? job.state : {}
-    const preview = openClawPromptPreview(job)
+    const prompt = openClawPrompt(job)
+    const preview = prompt.length > 120 ? `${prompt.slice(0, 117)}...` : prompt
     const lastStatus = asString(state.lastRunStatus) ?? asString(state.lastStatus)
     return {
       id,
@@ -156,7 +156,7 @@ export function mapOpenClawJobs(managerId: string, rawJobs: unknown): ExternalAu
         : asNumber(state.runningAtMs)
           ? 'running'
           : (lastStatus ?? 'idle'),
-      prompt: openClawPromptPreview(job) || null,
+      prompt: prompt || null,
       promptPreview: preview,
       nextRunAt: isoFromMs(state.nextRunAtMs),
       lastRunAt: isoFromMs(state.lastRunAtMs),

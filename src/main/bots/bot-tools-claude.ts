@@ -68,14 +68,14 @@ export async function claudeOwnServerNames(
   configDir: string | null,
   cwd: string
 ): Promise<string[]> {
-  const [user, local, project] = await Promise.all([
-    readClaudeInheritedTools(configDir),
-    readClaudeMirror(configDir, cwd),
+  // The account file holds both the user servers and the folder's local ones: one read serves both.
+  const [config, project] = await Promise.all([
+    readJson(claudeAccountConfigFile(configDir)),
     readJson(join(cwd, '.mcp.json'))
   ])
   return [
-    ...user.filter((tool) => !tool.plugin).map((tool) => tool.name),
-    ...Object.keys(local),
+    ...Object.keys(record(config.mcpServers)),
+    ...Object.keys(claudeMirrorIn(config, cwd)),
     ...Object.keys(record(project.mcpServers))
   ]
 }
@@ -93,6 +93,17 @@ export function cmdShimArgument(arg: string): string {
   return arg === '' || /[\s"]/.test(arg) ? arg : arg.replace(CMD_SPECIAL, '^^^$&')
 }
 
+/** A command server's program and args as a CLI that starts it with Node's spawn can run it. */
+export function cmdShimmedCommand(
+  server: { command: string; args: readonly string[] },
+  platform: NodeJS.Platform = process.platform
+): { command: string; args: string[] } {
+  const shim = platform === 'win32' && WINDOWS_CMD_SHIMS.has(server.command.toLowerCase())
+  return shim
+    ? { command: 'cmd', args: ['/c', server.command, ...server.args.map(cmdShimArgument)] }
+    : { command: server.command, args: [...server.args] }
+}
+
 /** The servers as Claude's own config writes them. */
 export function claudeServerConfig(
   server: BotToolServer,
@@ -101,11 +112,9 @@ export function claudeServerConfig(
   if ('url' in server) {
     return { type: 'http', url: server.url, ...(server.headers ? { headers: server.headers } : {}) }
   }
-  const shim = platform === 'win32' && WINDOWS_CMD_SHIMS.has(server.command.toLowerCase())
   return {
     type: 'stdio',
-    command: shim ? 'cmd' : server.command,
-    args: shim ? ['/c', server.command, ...server.args.map(cmdShimArgument)] : server.args,
+    ...cmdShimmedCommand(server, platform),
     ...(server.env ? { env: server.env } : {})
   }
 }
@@ -124,7 +133,10 @@ export async function readClaudeMirror(
   configDir: string | null,
   folder: string
 ): Promise<Record<string, unknown>> {
-  const config = await readJson(claudeAccountConfigFile(configDir))
+  return claudeMirrorIn(await readJson(claudeAccountConfigFile(configDir)), folder)
+}
+
+function claudeMirrorIn(config: Record<string, unknown>, folder: string): Record<string, unknown> {
   return record(record(record(config.projects)[toClaudeTrustKey(folder, style)]).mcpServers)
 }
 

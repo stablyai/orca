@@ -95,21 +95,12 @@ export function useBotTranscriptFollow({
     { markProgrammaticScroll: marks.mark },
     scroll
   )
-  const { record: recordAnchor, clear: clearAnchor } = useBotTranscriptReaderAnchor({
+  const recordAnchor = useBotTranscriptReaderAnchor({
     scrollRef,
     contentRef,
     readerAtEnd: scroll.readerAtEnd,
     scrollTo
   })
-  const leaveEnd = scroll.readerLeavesEnd
-  const revealRow = useCallback(
-    (row: HTMLElement, behavior: ScrollBehavior): void => {
-      leaveEnd()
-      clearAnchor()
-      row.scrollIntoView({ block: 'start', behavior })
-    },
-    [clearAnchor, leaveEnd]
-  )
   const followScroll = scroll.onScroll
   const onScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
@@ -139,8 +130,7 @@ export function useBotTranscriptFollow({
     toolRunScroll,
     showJump: scroll.showJump,
     jumpToLatest: scroll.scrollToBottom,
-    revealRow,
-    leaveEnd,
+    leaveEnd: scroll.readerLeavesEnd,
     forwardedGesture: reader.forwardedGesture,
     transcriptRef,
     scrollMessageToTop: scroll.scrollMessageToTop
