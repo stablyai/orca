@@ -47,7 +47,8 @@ export function copilotModelMetricsTotal(value: unknown): number {
     if (!usage) {
       continue
     }
-    total += tokenTotal(usage)
+    // Copilot's input includes cached tokens; reasoning is already part of its output.
+    total += numberValue(usage.inputTokens) + numberValue(usage.outputTokens)
   }
   return total
 }

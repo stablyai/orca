@@ -86,8 +86,12 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
   }
   if (record.type === 'session.shutdown' && data) {
     accumulator.model = extractString(data.currentModel) ?? accumulator.model
-    accumulator.totalTokens += numberValue(data.currentTokens)
-    accumulator.totalTokens += copilotModelMetricsTotal(data.modelMetrics)
+    // currentTokens measures the current context, not additional consumed tokens.
+    // Keep the historical fallback only for logs without aggregate model usage.
+    const metrics = asRecord(data.modelMetrics)
+    accumulator.totalTokens += metrics
+      ? copilotModelMetricsTotal(metrics)
+      : numberValue(data.currentTokens)
   }
 }
 
