@@ -25,7 +25,7 @@ import {
   readOwedJournalConnectorReplies
 } from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies-read'
 import { readJournalDomainDispatchItem } from '../native-chat/agent-session-journal/journal-domain-dispatch-placement'
-import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/journal-domain-schema'
+import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/database/journal-domain-migrations'
 import { applyJournalDomainSubmission } from '../native-chat/agent-session-journal/journal-domain-submission-admission'
 import Database from '../sqlite/sync-database'
 import type { ConnectorReplyCutJournal } from '../connector-cloud/connector-reply-outbox'

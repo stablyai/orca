@@ -12,7 +12,7 @@ import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import { applyJournalDomainControlCommand } from '../journal-domain-control-command'
 import { applyJournalDomainDispatch } from '../journal-domain-dispatch'
 import { applyJournalDomainQueueCommand } from '../journal-domain-queue-command'
-import { migrateJournalDomainSchema } from '../journal-domain-schema'
+import { migrateJournalDomainSchema } from '../database/journal-domain-migrations'
 import { applyJournalDomainSubmission } from '../journal-domain-submission-admission'
 import { readJournalConnectorReplies } from './journal-connector-replies-read'
 

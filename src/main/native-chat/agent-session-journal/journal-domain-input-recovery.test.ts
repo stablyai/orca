@@ -8,7 +8,7 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/pro
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { migrateJournalDomainSchema } from './database/journal-domain-migrations'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import {

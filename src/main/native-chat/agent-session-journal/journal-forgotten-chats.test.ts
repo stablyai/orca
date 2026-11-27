@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { migrateJournalDomainSchema } from './database/journal-domain-migrations'
 import { applyJournalWriterEffect } from './journal-writer-effects'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { readJournalSqlDatabase } from './journal-sql-database-read'
