@@ -26,7 +26,7 @@ export type CatalogLoadState = {
 
 /** A regular file's size and, when it fit the largest requested limit, its bytes; null when absent. */
 type CatalogFile = { size: number; bytes: Buffer | null } | null
-type ListedBlob = { object: string; size: number } | null
+export type ListedBlob = { object: string; size: number } | null
 
 // Keep each ls-tree argv well under the Windows command-line limit.
 const LS_TREE_PATH_CHUNK_CHARS = 16 * 1024
@@ -71,7 +71,13 @@ export async function loadCatalogFiles(
       }
       roundBytes += found.size
       retainedBytes += found.size
-      reads.push({ kind: 'blob', path, object: found.object, size: found.size, executable: false })
+      reads.push({
+        kind: 'blob',
+        path,
+        object: found.object,
+        size: found.size,
+        executable: false
+      })
     }
   }
   return readCatalogRound(repository, reads, files, failed, readOptions)
@@ -144,7 +150,10 @@ async function readCatalogRound(
     )
     const contents = readPluginGitBatchBlobs(batch.stdout, objects)
     for (const read of reads) {
-      files.set(read.path, { size: read.size, bytes: contents.get(read.object) ?? null })
+      files.set(read.path, {
+        size: read.size,
+        bytes: contents.get(read.object) ?? null
+      })
     }
   } catch {
     for (const read of reads) {
@@ -174,12 +183,49 @@ function gitTreePath(path: string): string {
   return process.platform === 'win32' ? path.replaceAll('\\', '/') : path
 }
 
-/** Shares the catalog's bounded Git batch reader, with transport disabled on cache misses. */
+function imageReadOptions(signal?: AbortSignal): NonNullable<CatalogLoadState['readOptions']> {
+  return {
+    timeout: 10_000,
+    env: offlineGitEnv(),
+    signal,
+    terminationBarrier: true
+  }
+}
+
+/** Regular-file blob ids and sizes at the catalog commit, from one `ls-tree` per path chunk;
+ *  null when any listing failed, so a caller never mistakes a failure for absence. */
+export async function listCatalogImageBlobs(
+  repository: string,
+  commit: string,
+  paths: Iterable<string>,
+  signal?: AbortSignal
+): Promise<Map<string, ListedBlob> | null> {
+  if (!/^[0-9a-f]{40}$/.test(commit)) {
+    return null
+  }
+  const valid = [...new Set(paths)].filter(
+    (path) => pluginRelativePathSchema.safeParse(path).success
+  )
+  const listed = new Map<string, ListedBlob>()
+  const failed = new Set<string>()
+  // Why parallel: a large catalog's chunks should cost one listing's latency, not one per chunk.
+  await Promise.all(
+    chunkByLength(valid, LS_TREE_PATH_CHUNK_CHARS).map((chunk) =>
+      listCatalogPaths(repository, commit, chunk, listed, failed, imageReadOptions(signal))
+    )
+  )
+  return failed.size > 0 || signal?.aborted ? null : listed
+}
+
+/** Shares the catalog's bounded Git batch reader, with transport disabled on cache misses.
+ *  `listed` is a prior `listCatalogImageBlobs` result for the same commit; it saves the listing
+ *  spawn for every path it covers. */
 export async function readCatalogImageBlobs(
   repository: string,
   commit: string,
   paths: ReadonlyMap<string, number>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  listed?: ReadonlyMap<string, ListedBlob>
 ): Promise<Map<string, Buffer>> {
   if (!/^[0-9a-f]{40}$/.test(commit)) {
     return new Map()
@@ -194,15 +240,14 @@ export async function readCatalogImageBlobs(
   )
   const state: CatalogLoadState = {
     files: new Map(),
-    listed: new Map(),
+    listed: new Map(
+      [...requests.keys()].flatMap((path) =>
+        listed?.has(path) ? [[path, listed.get(path)!] as const] : []
+      )
+    ),
     failed: new Set(),
     memo: createCatalogBufferMemo(),
-    readOptions: {
-      timeout: 10_000,
-      env: offlineGitEnv(),
-      signal,
-      terminationBarrier: true
-    }
+    readOptions: imageReadOptions(signal)
   }
   await loadCatalogFiles(repository, commit, requests, state)
   return new Map(

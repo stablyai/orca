@@ -12,13 +12,25 @@ import {
   type PluginMarketplaceCachedSnapshot,
   type PluginMarketplaceRegisteredSource
 } from './plugin-marketplace-store'
-import { readCatalogImageBlobs } from './plugin-catalog-blob-reader'
+import {
+  listCatalogImageBlobs,
+  readCatalogImageBlobs,
+  type ListedBlob
+} from './plugin-catalog-blob-reader'
 
 const CATALOG_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024
 
 export type CatalogImageRead = {
   commit: string
   paths: ReadonlyMap<string, number>
+  slot: CatalogRepositorySlot
+  /** A `listImages` result for this commit, so the read skips listing the paths it covers. */
+  listed?: ReadonlyMap<string, ListedBlob>
+}
+
+export type CatalogImageListing = {
+  commit: string
+  paths: Iterable<string>
   slot: CatalogRepositorySlot
 }
 
@@ -92,7 +104,10 @@ export class PluginCatalogRepositoryStore {
           maxDownloadBytes: this.maxDownloadBytes,
           publishedCommit: reusable ? publishedCommit : undefined
         },
-        async (commit) => ({ commit, value: await save(repository, commit, slot) })
+        async (commit) => ({
+          commit,
+          value: await save(repository, commit, slot)
+        })
       )
       try {
         await this.withoutReaders(source.id, async () => {
@@ -109,26 +124,47 @@ export class PluginCatalogRepositoryStore {
     })
   }
 
-  async readImages(
+  readImages(
     sourceId: string,
     select: () => CatalogImageRead | null,
     signal?: AbortSignal
   ): Promise<Map<string, Buffer>> {
+    return this.read(sourceId, select, signal, new Map(), (repository, request) =>
+      readCatalogImageBlobs(repository, request.commit, request.paths, signal, request.listed)
+    )
+  }
+
+  /** Blob ids of image paths at a retained commit, admitted like `readImages`; null on failure. */
+  listImages(
+    sourceId: string,
+    select: () => CatalogImageListing | null,
+    signal?: AbortSignal
+  ): Promise<Map<string, ListedBlob> | null> {
+    return this.read(sourceId, select, signal, null, (repository, request) =>
+      listCatalogImageBlobs(repository, request.commit, request.paths, signal)
+    )
+  }
+
+  private async read<R extends { slot: CatalogRepositorySlot }, T>(
+    sourceId: string,
+    select: () => R | null,
+    signal: AbortSignal | undefined,
+    empty: T,
+    run: (repository: string, request: R) => Promise<T>
+  ): Promise<T> {
     let barrier = this.readBarriers.get(sourceId)
     while (barrier) {
       await barrier.catch(() => undefined)
       barrier = this.readBarriers.get(sourceId)
     }
     if (signal?.aborted) {
-      return new Map()
+      return empty
     }
     const request = select()
     if (!request) {
-      return new Map()
+      return empty
     }
-    const { commit, paths, slot } = request
-    const repository = join(this.directory(sourceId), slot)
-    const read = readCatalogImageBlobs(repository, commit, paths, signal)
+    const read = run(join(this.directory(sourceId), request.slot), request)
     const active = this.readers.get(sourceId) ?? new Set()
     this.readers.set(sourceId, active)
     active.add(read)
