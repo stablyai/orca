@@ -23694,10 +23694,9 @@
     },
     "clientHosted": {
       "preparationFailed": "이 데스크톱에서 원격 브라우저를 시작할 수 없습니다. 페어링된 연결을 확인하고 다시 시도하세요.",
-      "unavailableTitle": "클라이언트 호스팅 브라우저를 사용할 수 없음",
-      "unavailableDescription": "이 페이지는 현재 이 데스크톱에서 사용할 수 없습니다.",
-      "unavailableOtherDesktopDescription": "이 페이지는 다른 데스크톱에서 열려 있습니다.",
-      "unavailableHostOfflineDescription": "{{host}}이(가) 오프라인입니다. 다시 연결되면 이 페이지가 여기에서 다시 로드됩니다.",
+      "runsOnServerTitle": "이 탭은 서버에서 실행됩니다",
+      "runsOnServerBody": "계속하려면 서버에서 여세요.",
+      "details": "세부 정보",
       "download": {
         "started": "{{filename}} 다운로드 중…",
         "completed": "{{filename}}을(를) 다운로드했습니다.",
@@ -23722,9 +23721,9 @@
       "reload": "새로고침"
     },
     "reopenOnServer": {
-      "action": "서버에서 다시 열기",
-      "pending": "다시 여는 중…",
-      "caveat": "그러면 이 페이지의 마지막 주소에 있는 원격 호스트에 새 페이지가 열립니다. 로그인된 상태와 기타 임시 페이지 상태는 다를 수 있으며 양식 제출 시 제공된 페이지가 공백으로 열립니다.",
+      "action": "서버에서 열기",
+      "pending": "여는 중…",
+      "caveat": "이 페이지의 마지막 주소로 서버에서 열립니다. 로그인 상태는 다를 수 있습니다.",
       "failed": "원격 호스트에서 이 페이지를 열 수 없습니다. 연결을 확인하고 다시 시도해 보세요."
     },
     "deviceMove": {

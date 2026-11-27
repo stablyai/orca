@@ -379,10 +379,9 @@
     },
     "clientHosted": {
       "preparationFailed": "無法在此桌面上啟動遠端瀏覽器。檢查配對連線並重試。",
-      "unavailableTitle": "用戶端代管的瀏覽器無法使用",
-      "unavailableDescription": "此頁面目前無法在此桌面上使用。",
-      "unavailableOtherDesktopDescription": "此頁面已在另一台電腦上開啟。",
-      "unavailableHostOfflineDescription": "{{host}} 已離線。重新連線後，此頁面將在此處重新載入。",
+      "runsOnServerTitle": "此分頁在你的伺服器上執行",
+      "runsOnServerBody": "請在那裡開啟以繼續。",
+      "details": "詳細資料",
       "download": {
         "started": "正在下載 {{filename}}…",
         "completed": "已下載 {{filename}}",
@@ -407,9 +406,9 @@
       "reload": "重新載入"
     },
     "reopenOnServer": {
-      "action": "在伺服器上重新開啟",
-      "pending": "正在重新開啟…",
-      "caveat": "這會在遠端主機上，以此頁面上次的網址開啟新頁面。登入狀態及其他暫存狀態可能不同；透過表單提交開啟的頁面則會顯示空白。",
+      "action": "在伺服器上開啟",
+      "pending": "正在開啟…",
+      "caveat": "將在伺服器上以此頁面的最後位址開啟。登入狀態可能不同。",
       "failed": "無法在遠端主機上開啟此頁面。檢查連線並重試。"
     },
     "deviceMove": {

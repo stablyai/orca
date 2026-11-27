@@ -408,10 +408,9 @@
     },
     "clientHosted": {
       "preparationFailed": "Bu masaüstünde uzak tarayıcı başlatılamadı. Eşlenen bağlantıyı kontrol edip tekrar deneyin.",
-      "unavailableTitle": "İstemci taraflı tarayıcı kullanılamıyor",
-      "unavailableDescription": "Bu sayfa şu anda bu masaüstünde kullanılamıyor.",
-      "unavailableOtherDesktopDescription": "Bu sayfa başka bir masaüstünde açık.",
-      "unavailableHostOfflineDescription": "{{host}} çevrimdışı. Yeniden bağlandığında bu sayfa burada yeniden yüklenecek.",
+      "runsOnServerTitle": "Bu sekme sunucunuzda çalışıyor",
+      "runsOnServerBody": "Devam etmek için orada açın.",
+      "details": "Ayrıntılar",
       "download": {
         "started": "{{filename}} indiriliyor…",
         "completed": "{{filename}} indirildi",
@@ -436,9 +435,9 @@
       "reload": "Yenile"
     },
     "reopenOnServer": {
-      "action": "Sunucuda yeniden aç",
-      "pending": "Yeniden açılıyor…",
-      "caveat": "Bu işlem, uzak sunucuda bu sayfanın son adresinde yeni bir sayfa açar. Oturum açma durumu ve diğer geçici sayfa verileri farklı olabilir, form gönderiminden gelen bir sayfa boş açılır.",
+      "action": "Sunucuda aç",
+      "pending": "Açılıyor…",
+      "caveat": "Bu sayfanın son adresinde sunucuda açılır. Oturum durumu farklı olabilir.",
       "failed": "Bu sayfa uzak sunucuda açılamadı. Bağlantıyı kontrol edip tekrar deneyin."
     },
     "deviceMove": {

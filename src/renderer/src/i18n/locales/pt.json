@@ -1354,8 +1354,9 @@
     },
     "clientHosted": {
       "preparationFailed": "Não foi possível iniciar o navegador remoto neste desktop. Verifique a conexão pareada e tente novamente.",
-      "unavailableTitle": "Navegador hospedado no cliente indisponível",
-      "unavailableDescription": "Esta página está vinculada a outro desktop ou já não está disponível.",
+      "runsOnServerTitle": "Esta aba é executada no seu servidor",
+      "runsOnServerBody": "Abra-a lá para continuar.",
+      "details": "Detalhes",
       "download": {
         "started": "Baixando {{filename}}…",
         "completed": "{{filename}} baixado",
@@ -1372,9 +1373,7 @@
       "hostRowOfflineNamed": "Off-line — estava hospedada em {{device}}",
       "hostRowOffline": "Off-line — o dispositivo que a hospedava foi encerrado",
       "hostRowNamed": "Hospedada em {{device}}",
-      "hostRow": "Hospedada em outro dispositivo",
-      "unavailableOtherDesktopDescription": "Esta página está aberta em outro computador.",
-      "unavailableHostOfflineDescription": "{{host}} está offline. Esta página será recarregada aqui quando ele se reconectar."
+      "hostRow": "Hospedada em outro dispositivo"
     },
     "navigation": {
       "back": "Voltar",
@@ -1382,9 +1381,9 @@
       "reload": "Recarregar"
     },
     "reopenOnServer": {
-      "action": "Reabrir no servidor",
-      "pending": "Reabrindo…",
-      "caveat": "Isso abre uma nova página no host remoto no último endereço desta página. O login e outros estados temporários da página podem ser diferentes, e uma página originada de um envio de formulário abre em branco.",
+      "action": "Abrir no servidor",
+      "pending": "Abrindo…",
+      "caveat": "Abre no servidor no último endereço desta página. O estado de login pode ser diferente.",
       "failed": "Não foi possível abrir esta página no host remoto. Verifique a conexão e tente novamente."
     },
     "deviceMove": {
