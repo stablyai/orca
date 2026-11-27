@@ -30,3 +30,15 @@ export const deferredTools = defineFixture({
     frame.querySelector<HTMLButtonElement>('button[data-native-chat-context-usage]')?.click()
   }
 })
+
+export const withCompact = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-96 items-end justify-end bg-background p-4">
+      <NativeChatContextUsageRing usage={usage} onCompact={() => {}} />
+    </div>
+  ),
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[data-native-chat-context-usage]')?.click()
+  }
+})

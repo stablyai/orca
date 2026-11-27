@@ -83,6 +83,8 @@ export type NativeChatComposerFieldProps = {
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   contextUsage?: NativeChatContextUsageSummary | null
+  /** Present only where the session can compact; the context card offers it. */
+  onCompactContext?: () => void
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
   goalMode?: NativeChatComposerGoalMode
   agent?: string
