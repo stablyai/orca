@@ -9,6 +9,15 @@ test.use({ viewport: { width: 600, height: 420 }, reducedMotion: 'no-preference'
 type Rect = { top: number; bottom: number; height: number }
 type Frame = { report: Rect; other: Rect | null; expanded: boolean }
 
+declare global {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Window needs declaration merging.
+  interface Window {
+    /** Frames recorded by startSampling in the fixture page. */
+    __hoverFrames?: Frame[]
+    __hoverSampling?: boolean
+  }
+}
+
 const REPORT = '[data-sonner-toast] section'
 const TOLERANCE = 0.5
 
@@ -47,21 +56,21 @@ async function startSampling(page: Page): Promise<void> {
       const { top, bottom, height } = element.getBoundingClientRect()
       return { top, bottom, height }
     }
-    const state = window as unknown as { __frames: Frame[]; __sampling: boolean }
-    state.__frames = []
-    state.__sampling = true
+    const frames: Frame[] = []
+    window.__hoverFrames = frames
+    window.__hoverSampling = true
     const tick = (): void => {
       const report = document.querySelector(selector)
       const toasts = [...document.querySelectorAll('[data-sonner-toast]')]
       const other = toasts.find((toast) => !toast.contains(report))
       if (report) {
-        state.__frames.push({
+        frames.push({
           report: box(report),
           other: other ? box(other) : null,
           expanded: toasts.every((toast) => toast.getAttribute('data-expanded') === 'true')
         })
       }
-      if (state.__sampling) {
+      if (window.__hoverSampling) {
         requestAnimationFrame(tick)
       }
     }
@@ -71,9 +80,8 @@ async function startSampling(page: Page): Promise<void> {
 
 function stopSampling(page: Page): Promise<Frame[]> {
   return page.evaluate(() => {
-    const state = window as unknown as { __frames: Frame[]; __sampling: boolean }
-    state.__sampling = false
-    return state.__frames
+    window.__hoverSampling = false
+    return window.__hoverFrames ?? []
   })
 }
 
