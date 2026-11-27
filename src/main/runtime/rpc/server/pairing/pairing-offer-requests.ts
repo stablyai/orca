@@ -25,12 +25,13 @@ import { getWindowsDefaultRouteInterfaceNames } from './network/windows-default-
 
 export type PairingOfferServer = Pick<
   RuntimeRpcPairing,
-  'getNetworkExposureBindHost' | 'ensureNetworkExposure' | 'createPairingOffer'
+  'getNetworkExposureBindHost' | 'ensureNetworkExposure' | 'createPairingOffer' | 'isBindPinnedNarrow'
 > & {
   createMobilePairingOffer(args: {
     address?: string | null
     connectionMode?: MobilePairingConnectionMode
     name?: string
+    explicitAddress?: boolean
     rotate?: boolean
     offerTtlMs?: number
     createdByDeviceId?: string
@@ -85,6 +86,7 @@ export async function requestMobilePairingOffer(
     rotate: args.rotate,
     name: `Mobile ${new Date().toLocaleDateString()}`,
     offerTtlMs: args.offerTtlMs,
+    explicitAddress: args.address !== undefined,
     createdByDeviceId: args.createdByDeviceId
   })
   if (!offer.available) {
@@ -112,7 +114,9 @@ export async function requestRuntimePairingOffer(
   }
   // Widen before advertising remote reach; this-computer intent must not trigger the irreversible widening (STA-2370).
   const thisComputerOnly = servesThisComputerOnly(args.reach, ip)
-  if (!thisComputerOnly) {
+  // A narrow pinned bind with an explicit address is fronted by a proxy the client dials, so nothing needs widening.
+  const fronted = args.address !== undefined && server.isBindPinnedNarrow()
+  if (!thisComputerOnly && !fronted) {
     try {
       await server.ensureNetworkExposure()
     } catch (error) {

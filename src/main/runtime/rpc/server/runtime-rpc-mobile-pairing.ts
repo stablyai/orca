@@ -38,13 +38,19 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     address?: string | null
     connectionMode?: MobilePairingConnectionMode
     name?: string
+    explicitAddress?: boolean
     rotate?: boolean
     offerTtlMs?: number
     createdByDeviceId?: string
   }): Promise<MobilePairingOffer> {
     // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
+    // A narrow pinned bind with an explicit address is fronted by a proxy the phone dials, so nothing needs widening.
+    const fronted =
+      args.explicitAddress === true && args.connectionMode === 'local-only' && this.isBindPinnedNarrow()
     try {
-      await this.ensureNetworkExposure()
+      if (!fronted) {
+        await this.ensureNetworkExposure()
+      }
     } catch (error) {
       console.error(
         '[runtime] Network exposure failed while creating a mobile pairing offer:',

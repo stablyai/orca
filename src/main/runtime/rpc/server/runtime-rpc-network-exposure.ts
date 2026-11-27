@@ -9,6 +9,11 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     return this.pinnedBindHost ?? WS_BIND_HOST_ALL_INTERFACES
   }
 
+  // A narrow pinned bind cannot widen; an explicit pairing address then names a front (reverse proxy, tunnel) clients dial instead.
+  isBindPinnedNarrow(): boolean {
+    return this.pinnedBindHost !== null && this.pinnedBindHost !== WS_BIND_HOST_ALL_INTERFACES
+  }
+
   // LAN opt-in rebinds loopback and disconnects local clients; reuse their already-issued port so all endpoints can reconnect (STA-2370).
   async ensureNetworkExposure(): Promise<void> {
     if (this.pinnedBindHost && this.pinnedBindHost !== WS_BIND_HOST_ALL_INTERFACES) {
