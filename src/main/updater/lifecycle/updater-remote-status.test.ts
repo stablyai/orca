@@ -87,15 +87,6 @@ it('reports manual update for an extracted AppImage tree the native updater cann
   expect(updater.getUpdateStatus().state).not.toBe('not-available')
 })
 
-it('reports manual update when $APPIMAGE names a file that is not there', async () => {
-  const updater = await createLinuxAppImageUpdater(join(root, 'missing.AppImage'))
-
-  expect(updater.getRemoteServerUpdateSupport()).toMatchObject({
-    automatic: false,
-    reason: 'manual-service-update-required'
-  })
-})
-
 it('keeps automatic remote updates for a mounted AppImage', async () => {
   const appImagePath = join(root, 'orca-linux.AppImage')
   writeFileSync(appImagePath, '')

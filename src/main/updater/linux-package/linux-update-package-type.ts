@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { hasTrustedPackageManagerFor } from './linux-package-install-command'
@@ -110,23 +110,18 @@ export function getLinuxRootPackageType(): LinuxRootPackageType | null {
 const DPKG_FILE_LIST = '/var/lib/dpkg/info/orca-ide.list'
 
 /**
- * electron-updater's AppImage updater stays inactive without $APPIMAGE, the file it replaces;
- * its checks then resolve with no result, which used to settle as "not available".
- * Repackagers that ship the extracted tree (e.g. an AUR package) keep the AppImage marker.
+ * electron-updater's AppImage updater is inactive without $APPIMAGE, the file it replaces: its
+ * checks resolve with no result and no events, which settled as "not available". Repackagers that
+ * ship the extracted tree (e.g. an AUR package) keep the AppImage marker but never set it.
+ * Mirrors AppImageUpdater.isUpdaterActive exactly, so local update flows cannot change.
  */
 function isAppImageWithoutUpdateTarget(): boolean {
-  if (process.platform !== 'linux' || !app.isPackaged || getLinuxPackageType() !== 'non-root') {
-    return false
-  }
-  const appImagePath = process.env.APPIMAGE
-  if (!isAbsolutePathString(appImagePath)) {
-    return true
-  }
-  try {
-    return statSync(appImagePath, { throwIfNoEntry: false })?.isFile() !== true
-  } catch {
-    return true
-  }
+  return (
+    process.platform === 'linux' &&
+    app.isPackaged &&
+    getLinuxPackageType() === 'non-root' &&
+    process.env.APPIMAGE == null
+  )
 }
 
 /** Repackagers can inherit deb/rpm markers; require the same manager discovery used for installation. */
