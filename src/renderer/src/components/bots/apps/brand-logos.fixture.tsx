@@ -7,6 +7,7 @@ import { BotAppLogo, BotLogoBare } from './BotAppRow'
 
 const BRAND_IDS = [
   'slack',
+  'discord',
   'google',
   'linear',
   'github',

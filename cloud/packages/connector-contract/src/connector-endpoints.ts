@@ -20,6 +20,9 @@ export const CONNECTOR_PATHS = {
   // the installed app's workspace's full members whose names match, for the bot's Who can ask.
   // POST `…/posts` posts as the bot. PUT `…/avatar` sets the bot's picture, which its app's icon follows.
   // POST `…/linear/comments` comments on a Linear issue as the bot.
+  // Discord (discord-messages.ts): POST `…/discord/app` takes the bot's Discord bot token; DELETE
+  // `…/discord` forgets it; DELETE `…/discord/guilds/<guild id>` leaves a server, GET reads its roles
+  // and channels; GET `…/discord/members?guild=&q=` finds its people.
   bots: '/v1/connector/bots',
   // PUT one page of a machine's bots (hello-messages.ts), from a cloud listing `bots.pages`.
   botPages: '/v1/connector/bot-pages',
@@ -46,7 +49,9 @@ export const CONNECTOR_PATHS = {
   // `…/<share id>/accept` (202 queued) and `…/<share id>/decline` (200 declined); POST and GET
   // `…/<share id>/messages` hold a message and read held states.
   // The messages routes also take a phone's `Bearer <share credential>` in place of a connector token.
-  shares: '/v1/shares'
+  shares: '/v1/shares',
+  // GET `${discord}/bots`: the account's bots that have their own Discord bot (discord-messages.ts).
+  discord: '/v1/connector/discord'
 } as const
 
 export const CONNECTOR_ERROR_CODES = [
@@ -69,7 +74,14 @@ export const CONNECTOR_ERROR_CODES = [
   // The bot has no Slack install to read its workspace through.
   'not_installed',
   // A links DELETE named no link of the caller's.
-  'not_linked'
+  'not_linked',
+  // Discord refused the bot token: paste a new one from the Developer Portal.
+  'discord_token_invalid',
+  // The token's application already answers for another bot of this account.
+  'discord_token_in_use',
+  'discord_unavailable',
+  // Discord refused a call for the bot (e.g. it is not in that server); the message says why.
+  'discord_refused'
 ] as const
 export type ConnectorErrorCode = (typeof CONNECTOR_ERROR_CODES)[number]
 

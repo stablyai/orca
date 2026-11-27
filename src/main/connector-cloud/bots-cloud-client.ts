@@ -40,6 +40,8 @@ import {
   ConnectorConnectStartSchema
 } from '../../../cloud/packages/connector-contract/src/connect-messages'
 import type { ConnectorCloud } from './connector-cloud'
+import { answer } from './connector-cloud-answer'
+import { discordCloudClient } from './discord-cloud-client'
 import type { ConnectorResult } from './connector-cloud-request'
 
 // Creating an app makes several Slack calls in a row.
@@ -51,18 +53,6 @@ const SLACK_HAND_OFF_REDEEM = '/v1/connector/slack/handoffs/redeem'
 // A Slack call's workspace; an older cloud ignores it and means its only one.
 const teamQuery = (teamId: string | undefined, separator: '?' | '&'): string =>
   teamId === undefined ? '' : `${separator}team=${encodeURIComponent(teamId)}`
-
-function answer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
-  if (result.ok) {
-    return result
-  }
-  const error =
-    result.error ??
-    (result.status === null
-      ? BOT_SLACK_DESKTOP_ERRORS.unreachable
-      : BOT_SLACK_DESKTOP_ERRORS.failed)
-  return { ok: false, error }
-}
 
 /** A bare 404 is a cloud without that source's routes; a 404 with a code is that code. */
 const offAnswer =
@@ -101,6 +91,7 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
   const botSlack = (botId: string): string =>
     `${CONNECTOR_PATHS.bots}/${encodeURIComponent(botId)}/slack`
   return {
+    ...discordCloudClient(cloud),
     /** Hands the cloud a config refresh token; it keeps only its rotation, encrypted, for this workspace. */
     saveSlackGrant: async (refreshToken: string) =>
       answer(

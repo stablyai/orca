@@ -38,15 +38,25 @@ const CapabilityList = z.array(z.string().min(1))
 // Display strings are capped so a hello's size is predictable; the machine shortens longer ones.
 const DisplayText = z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
 
+const WorkspaceIds = z
+  .array(z.string().min(1).max(CONNECTOR_LIMITS.maxBotWorkspaceMemberIdLength))
+  .max(CONNECTOR_LIMITS.maxBotWorkspaceMembers)
+
 // A workspace of a source with one shared app for every bot (Linear, GitHub) where the owner turned
 // the bot on, and the people there (that source's user ids) the owner lets ask it.
+// A Discord row is a server (guild) the bot's own Discord bot is in. Anyone in `members` or holding
+// one of `roles` may ask it there; `channels`, when given, are the only channels it answers in (a
+// thread counts as its parent channel). A DM is taken from someone listed, or holding a listed role,
+// in one of the bot's servers. The cloud checks these before it starts a turn.
 export const ConnectorBotWorkspaceSchema = z
   .object({
     source: z.enum(CONNECTOR_PLACE_SOURCES),
     workspaceId: z.string().min(1).max(CONNECTOR_LIMITS.maxBotIdLength),
     members: z
       .array(z.string().min(1).max(CONNECTOR_LIMITS.maxBotWorkspaceMemberIdLength))
-      .max(CONNECTOR_LIMITS.maxBotMembers)
+      .max(CONNECTOR_LIMITS.maxBotMembers),
+    roles: WorkspaceIds.optional(),
+    channels: WorkspaceIds.optional()
   })
   // A Slack row splits the bot's Slack list by workspace, so it takes as many as that list.
   .refine(
@@ -198,6 +208,10 @@ export const CONNECTOR_CLOUD_WEBHOOKS_FEATURE = 'webhooks'
 // its conversation didn't ask for may be sent. Kept out of CONNECTOR_CLOUD_FEATURES: only the code
 // that honours raisedBy lists it, so a contract bump alone never advertises it.
 export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
+// Discord rows in a bot's sharedAppWorkspaces (with their roles and channels), Discord conversations
+// and the discord routes (discord-messages.ts). Kept out of CONNECTOR_CLOUD_FEATURES: only the cloud
+// code that honours them lists it.
+export const CONNECTOR_CLOUD_DISCORD_FEATURE = 'discord'
 // The cloud takes a turn's answer up to maxLongAnswerBytes; a machine sends one over
 // maxLastAssistantMessageBytes only to a cloud that lists it.
 export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'

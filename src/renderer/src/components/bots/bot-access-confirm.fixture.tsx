@@ -25,7 +25,8 @@ const longName: Person = {
 const PLACES: Record<BotAccessConnector, { connector: string; workspace: string | null }> = {
   slack: { connector: 'Slack', workspace: 'Acme' },
   github: { connector: 'GitHub', workspace: null },
-  linear: { connector: 'Linear', workspace: 'Acme' }
+  linear: { connector: 'Linear', workspace: 'Acme' },
+  discord: { connector: 'Discord', workspace: 'Acme' }
 }
 
 function Open({ grant }: { grant: BotAccessConfirm }): null {

@@ -1,5 +1,5 @@
-// A host's Slack, Linear and GitHub setup (`bots.slack/linear/github/connect.*`), run on that host as
-// its own Orca account: this app's runtime for its own bots, a paired server's for the server's.
+// A host's Slack, Linear, GitHub and Discord setup (`bots.slack/linear/github/discord/connect.*`), run
+// on that host as its own Orca account: this app's runtime for its own bots, a paired server's for the server's.
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
@@ -20,6 +20,12 @@ import type {
   ConnectorGitHubState,
   ConnectorGitHubUsersResponse
 } from '../../../shared/connector-bot-github-contract'
+import type {
+  ConnectorBotDiscordGuildResponse,
+  ConnectorBotDiscordMembersResponse,
+  ConnectorBotDiscordState,
+  ConnectorDiscordBots
+} from '../../../shared/connector-bot-discord-contract'
 import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
 import type { ConnectorConnectRedeem } from '../../../../cloud/packages/connector-contract/src/connect-messages'
 import { botHostTarget } from './bot-hosts'
@@ -96,6 +102,25 @@ export function botGitHubCalls(hostId: ExecutionHostId) {
     unlink: (args: { userId?: string } = {}) => call<undefined>(hostId, 'bots.github.unlink', args),
     setDefaultBot: (args: { botId: string | null; userId?: string }) =>
       call<undefined>(hostId, 'bots.github.setDefaultBot', args)
+  }
+}
+
+export function botDiscordCalls(hostId: ExecutionHostId) {
+  return {
+    /** The host account's bots that have their own Discord bot; the host records their servers. */
+    bots: () => call<ConnectorDiscordBots>(hostId, 'bots.discord.bots'),
+    /** The token is handed to the host's cloud and nowhere else. */
+    setUp: (args: { botId: string; token: string }) =>
+      call<ConnectorBotDiscordState>(hostId, 'bots.discord.setUp', args),
+    /** Forgets the token; the host takes Discord off the bot with its people. */
+    remove: (args: { botId: string }) => call<undefined>(hostId, 'bots.discord.remove', args),
+    leaveGuild: (args: { botId: string; guildId: string }) =>
+      call<undefined>(hostId, 'bots.discord.leaveGuild', args),
+    /** The server's roles and channels. */
+    guild: (args: { botId: string; guildId: string }) =>
+      call<ConnectorBotDiscordGuildResponse>(hostId, 'bots.discord.guild', args),
+    members: (args: { botId: string; guildId: string; query: string }) =>
+      call<ConnectorBotDiscordMembersResponse>(hostId, 'bots.discord.members', args)
   }
 }
 

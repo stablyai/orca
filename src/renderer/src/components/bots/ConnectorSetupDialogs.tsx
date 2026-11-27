@@ -22,6 +22,11 @@ const BotLinearSetupDialog = lazy(() =>
     default: module.BotLinearSetupDialog
   }))
 )
+const BotDiscordSetupDialog = lazy(() =>
+  import('./discord/BotDiscordSetupDialog').then((module) => ({
+    default: module.BotDiscordSetupDialog
+  }))
+)
 const BotSlackSetupDialog = lazy(() =>
   import('./slack/BotSlackSetupDialog').then((module) => ({
     default: module.BotSlackSetupDialog
@@ -112,6 +117,13 @@ export function useConnectorSetup(bot: Bot): {
           bot={bot}
           open
           onOpenChange={(next) => setSetupOpen(next ? 'google-accounts' : null)}
+        />
+      ) : null}
+      {setupOpen === 'discord' ? (
+        <BotDiscordSetupDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'discord' : null)}
         />
       ) : null}
       {setupOpen === 'google' ? (

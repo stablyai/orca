@@ -109,6 +109,11 @@ function connectorRow(
         text: t('bots.access.reachSlack', BOT_ACCESS_COPY.reachSlack, { name }),
         Icon: MessageSquare
       }
+    case 'discord':
+      return {
+        text: t('bots.access.reachDiscord', BOT_ACCESS_COPY.reachDiscord, { name }),
+        Icon: MessageSquare
+      }
     case 'github':
       return {
         text: t('bots.access.confirmGitHub', BOT_ACCESS_COPY.confirmGitHub),

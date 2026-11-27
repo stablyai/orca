@@ -42,7 +42,7 @@ export type BotDirectApp = { category: BotAppCategory; composio?: readonly strin
   | {
       /** One of Orca's own connectors, set up by its own dialogs. */
       route: 'connector'
-      connector: Exclude<BotConnector['id'], 'webhooks' | 'discord'>
+      connector: Exclude<BotConnector['id'], 'webhooks'>
     }
   | {
       /** An MCP server: added to the bot's tools by URL under `id`, then signed in to in a browser. */
@@ -59,6 +59,7 @@ export type BotDirectApp = { category: BotAppCategory; composio?: readonly strin
 export const DIRECT_APPS: readonly BotDirectApp[] = [
   { route: 'connector', connector: 'github', category: 'coding', composio: ['github'] },
   { route: 'connector', connector: 'slack', category: 'chat', composio: ['slack'] },
+  { route: 'connector', connector: 'discord', category: 'chat', composio: ['discord'] },
   { route: 'connector', connector: 'linear', category: 'docs', composio: ['linear'] },
   { route: 'connector', connector: 'google', category: 'mail', composio: ['gmail'] },
   ...BOT_MCP_APPS.map(
@@ -86,6 +87,8 @@ export function directAppLine(app: BotDirectApp): string {
       return translate('bots.apps.line.github', 'Mentions and events on issues and PRs')
     case 'slack':
       return translate('bots.apps.line.slack', 'Messages and mentions')
+    case 'discord':
+      return translate('bots.apps.line.discord', 'Mentions, threads and direct messages')
     case 'linear':
       return translate('bots.apps.line.linear', 'Assigned issues and mentions')
     case 'google':

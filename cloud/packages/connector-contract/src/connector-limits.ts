@@ -69,7 +69,10 @@ export const CONNECTOR_LIMITS = {
   maxReviewComments: 30,
   maxReviewPathLength: 256,
   maxReviewCommentChars: 1_000,
-  // One per Linear workspace or GitHub installation, each with its own maxBotWorkspaceMembers.
+  // One per Linear workspace, Discord server or GitHub installation, each with its own
+  // maxBotWorkspaceMembers; a Discord row also names up to that many roles and channels. Discord
+  // rows at every cap outgrow a bot's share of a hello, so a machine drops GitHub rows, then
+  // Discord rows, from the end until the bot fits (an absent server is its owner's alone).
   maxBotWorkspaces: 8,
   // Slack's rows, beside those: one per workspace the bot's app is in, together holding at most
   // maxBotMembers people (the bot's one Slack list, split by workspace).

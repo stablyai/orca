@@ -1,6 +1,12 @@
 // The bots on this computer as another bot sees them: what each is for, where it is linked, and the
 // address that mails it.
-import { botLinearWorkspaces, botSlackApps, type Bot, type BotAgent } from './bot-types'
+import {
+  botDiscordGuilds,
+  botLinearWorkspaces,
+  botSlackApps,
+  type Bot,
+  type BotAgent
+} from './bot-types'
 import { soulDescription } from './bot-soul'
 
 /** `--to bot:<name>` or `--to bot:<id>` mails that bot. */
@@ -92,6 +98,7 @@ export function botRosterFields(
     | 'linear'
     | 'linearWorkspaces'
     | 'github'
+    | 'discord'
   >
 ): Omit<BotRosterEntry, 'specialty'> {
   return {
@@ -105,14 +112,15 @@ export function botRosterFields(
 
 /** Where a bot's connectors are linked, by the names Orca keeps for them. */
 export function botLinkedPlaces(
-  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github'>
+  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'discord'>
 ): string[] {
   return [
     ...botSlackApps(bot).map((app) => `Slack workspace ${app.teamId}`),
     ...botLinearWorkspaces(bot).map(
       (linear) => `Linear ${linear.workspaceName || linear.workspaceId}`
     ),
-    ...(bot.github ? ['GitHub'] : [])
+    ...(bot.github ? ['GitHub'] : []),
+    ...botDiscordGuilds(bot).map((guild) => `Discord ${guild.guildName || guild.guildId}`)
   ]
 }
 

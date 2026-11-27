@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { BotGitHubCard } from '@/components/bots/github/BotGitHubCard'
 import { BotGoogleCard } from '@/components/bots/google/BotGoogleCard'
 import { BotLinearCard } from '@/components/bots/linear/BotLinearCard'
+import { BotDiscordCard } from '@/components/bots/discord/BotDiscordCard'
 import { BotSlackCard } from '@/components/bots/slack/BotSlackCard'
 import { BotWebhooksCard } from '@/components/bots/webhooks/BotWebhooksCard'
 import { BotCloudSignInNotice } from '@/components/bots/BotCloudSignInNotice'
@@ -60,6 +61,8 @@ function BotConnectorEntryCard({
       return <BotSlackCard bot={bot} teamId={entry.teamId} title={title} />
     case 'linear':
       return <BotLinearCard bot={bot} linear={entry.linear} title={title} />
+    case 'discord':
+      return <BotDiscordCard bot={bot} guild={entry.guild} title={title} />
     case 'github':
       return <BotGitHubCard bot={bot} installation={entry.installation} title={title} />
     case 'google':

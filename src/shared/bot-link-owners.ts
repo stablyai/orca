@@ -32,7 +32,8 @@ export function stampBotLinkOwners(
     slack: slackApps[0] ?? null,
     ...(next.linearWorkspaces ? { linearWorkspaces } : {}),
     linear: linearWorkspaces[0] ?? null,
-    github: next.github ? stamp(next.github, previous.github ?? undefined) : null
+    github: next.github ? stamp(next.github, previous.github ?? undefined) : null,
+    ...(next.discord ? { discord: stamp(next.discord, previous.discord ?? undefined) } : {})
   }
 }
 
@@ -41,6 +42,7 @@ export function botLinkOwners(bot: Bot): (string | null)[] {
   return [
     ...botSlackApps(bot),
     ...botLinearWorkspaces(bot),
-    ...(bot.github ? [bot.github] : [])
+    ...(bot.github ? [bot.github] : []),
+    ...(bot.discord ? [bot.discord] : [])
   ].map((link) => link.ownerUserId ?? null)
 }

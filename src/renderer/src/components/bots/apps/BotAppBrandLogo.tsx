@@ -5,6 +5,7 @@ import airtableLogo from '@/assets/connector-brands/airtable.svg'
 import atlassianLogo from '@/assets/connector-brands/atlassian.svg'
 import clickupLogo from '@/assets/connector-brands/clickup.svg'
 import cloudflareLogo from '@/assets/connector-brands/cloudflare.svg'
+import discordLogo from '@/assets/connector-brands/discord.svg'
 import context7Logo from '@/assets/connector-brands/context7.svg'
 import datadogLogo from '@/assets/connector-brands/datadog.svg'
 import datadogDarkLogo from '@/assets/connector-brands/datadog-dark.svg'
@@ -30,6 +31,7 @@ import zapierLogo from '@/assets/connector-brands/zapier.svg'
 import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
+import { DiscordIcon } from '../../icons/DiscordIcon'
 import { LinearIcon } from '../../icons/LinearIcon'
 import { BARE_LOGO_BOX, BotAppLogo, BotLogoBare } from './BotAppRow'
 import { cn } from '@/lib/class-names'
@@ -49,6 +51,7 @@ type BotAppBrand = {
 /** By connector id or BOT_MCP_APPS id; a new MCP app adds its logo here, and its tile to LOGO_TILES.brand. */
 const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   slack: { logo: slackLogo, Icon: SlackIcon },
+  discord: { logo: discordLogo, Icon: DiscordIcon },
   google: { logo: googleLogo, Icon: GoogleIcon },
   linear: { Icon: LinearIcon },
   github: { Icon: GitHubIcon },

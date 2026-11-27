@@ -74,7 +74,7 @@ export function OrcaCloudSignInButton({
 }
 
 /** "<what> connects through Orca Cloud. Sign in to Orca to continue." */
-export function orcaCloudSignInReason(what: 'slack' | 'github' | 'linear'): string {
+export function orcaCloudSignInReason(what: 'slack' | 'github' | 'linear' | 'discord'): string {
   switch (what) {
     case 'slack':
       return translate(
@@ -90,6 +90,11 @@ export function orcaCloudSignInReason(what: 'slack' | 'github' | 'linear'): stri
       return translate(
         'bots.cloudSignIn.linear',
         'Linear connects through Orca Cloud. Sign in to Orca to continue.'
+      )
+    case 'discord':
+      return translate(
+        'bots.cloudSignIn.discord',
+        'Discord connects through Orca Cloud. Sign in to Orca to continue.'
       )
   }
 }

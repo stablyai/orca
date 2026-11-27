@@ -6,8 +6,11 @@ import {
   type ConnectorCloudFeature,
   type ConnectorBotWorkspace
 } from '../../shared/connectors/connector-cloud-contract'
+import { CONNECTOR_CLOUD_DISCORD_FEATURE } from '../../shared/connector-cloud-features'
 import {
+  botDiscordGuilds,
   botLinearWorkspaces,
+  discordMembersOf,
   botMembersFrom,
   botSlackApps,
   gitHubMembersOf,
@@ -55,11 +58,15 @@ export const BOT_HELLO_BUDGET_BYTES = Math.floor(
     CONNECTOR_CLIENT_LIMITS.maxHelloBots
 )
 
-/** A bot's GitHub people go on each installation, so a bot over its share drops installations from the end. */
+// Rows a bot over its share drops from the end: GitHub's (each carries the GitHub people), then
+// Discord's (each server's people, roles and channels). A dropped server reads as its owner's alone.
+const TRIMMABLE_SOURCES: ReadonlySet<string> = new Set(['github', 'discord'])
+
+/** A bot over its share drops GitHub installations, then Discord servers, from the end. */
 function withinBotBudget(bot: ConnectorBot): ConnectorBot {
   const workspaces = [...(bot.sharedAppWorkspaces ?? [])]
   while (
-    workspaces.at(-1)?.source === 'github' &&
+    TRIMMABLE_SOURCES.has(workspaces.at(-1)?.source ?? '') &&
     Buffer.byteLength(JSON.stringify({ ...bot, sharedAppWorkspaces: workspaces })) >
       BOT_HELLO_BUDGET_BYTES
   ) {
@@ -97,6 +104,8 @@ export function connectorBots(
   // that answered without it never reads them, so it gets none.
   const slackTeams = cloudFeatures?.has('slack.teams' satisfies ConnectorCloudFeature) === true
   const sendSlack = cloudFeatures === null || slackTeams
+  // A cloud without Discord would drop its rows; they also count against an older cloud's caps.
+  const sendDiscord = cloudFeatures?.has(CONNECTOR_CLOUD_DISCORD_FEATURE) === true
   const plain = (id: string, max: number): boolean => id.length <= max && PLAIN_ID.test(id)
   const memberIds = (members: BotMember[], maxLength: number, maxCount: number): string[] =>
     members
@@ -121,6 +130,30 @@ export function connectorBots(
         members: people(workspaceId)
       }))
   }
+  // A server's people, and its roles and channels by id; empty limits are left out.
+  const discordWorkspaces = (bot: Bot): ConnectorBotWorkspace[] =>
+    botDiscordGuilds(bot)
+      .filter((guild) => plain(guild.guildId, maxBotIdLength))
+      .map((guild) => {
+        const ids = (named: readonly { id: string }[] | undefined): string[] =>
+          (named ?? [])
+            .map((entry) => entry.id)
+            .filter((id) => plain(id, maxBotWorkspaceMemberIdLength))
+            .slice(0, maxBotWorkspaceMembers)
+        const roles = ids(guild.roles)
+        const channels = ids(guild.channels)
+        return {
+          source: 'discord' as const,
+          workspaceId: guild.guildId,
+          members: memberIds(
+            discordMembersOf(bot.members, guild.guildId),
+            maxBotWorkspaceMemberIdLength,
+            maxBotWorkspaceMembers
+          ),
+          ...(roles.length > 0 ? { roles } : {}),
+          ...(channels.length > 0 ? { channels } : {})
+        }
+      })
   // First and never dropped: a cloud with rows reads a workspace without one as the owner's alone.
   const slackWorkspaces = (bot: Bot): ConnectorBotWorkspace[] => {
     if (!sendSlack) {
@@ -177,6 +210,8 @@ export function connectorBots(
               maxBotWorkspaceMembers
             )
           })),
+        // Before GitHub's, which a full hello drops first.
+        ...(sendDiscord ? discordWorkspaces(bot) : []),
         ...(bot.github
           ? gitHubWorkspaces(
               bot.members,

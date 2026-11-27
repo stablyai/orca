@@ -44,12 +44,14 @@ export function storedConnectorAsker(
 const LINK_HOSTS: Partial<Record<ConnectorSource, readonly string[]>> = {
   slack: ['app.slack.com'],
   github: ['github.com'],
-  linear: ['linear.app']
+  linear: ['linear.app'],
+  discord: ['discord.com']
 }
 const AVATAR_HOSTS = [
   '.slack-edge.com',
   'avatars.githubusercontent.com',
-  'public.linear.app'
+  'public.linear.app',
+  'cdn.discordapp.com'
 ] as const
 
 function httpsHostIn(value: string, hosts: readonly string[]): boolean {

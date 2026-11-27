@@ -5,6 +5,7 @@ import {
   type Bot,
   type BotAgent,
   type BotLinearLink,
+  type BotDiscordGuild,
   type BotMember,
   type BotSlackLink
 } from './bots/bot-record-schemas'
@@ -25,6 +26,7 @@ export {
   BotGitHubSchema,
   BOT_MAX_CONNECTOR_WORKSPACES,
   BOT_MAX_SKILL_PROJECTS,
+  BotDiscordSchema,
   BotItemsStaleSchema,
   BOT_ITEMS_STALE_CHOICES,
   BotSchema,
@@ -37,33 +39,11 @@ export {
   type BotGitHub,
   type Bot,
   type BotSlackLink,
-  type BotLinearLink
+  type BotLinearLink,
+  type BotDiscord,
+  type BotDiscordGuild,
+  type BotDiscordLink
 } from './bots/bot-record-schemas'
-
-/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
-const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
-  'claude',
-  'codex',
-  'grok',
-  'opencode',
-  'omp',
-  'pi',
-  'antigravity'
-])
-
-/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
-export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
-  readable: Bot[]
-  newer: Bot[]
-} {
-  const readable: Bot[] = []
-  const newer: Bot[] = []
-  for (const bot of bots) {
-    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
-    side.push(bot)
-  }
-  return { readable, newer }
-}
 
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
@@ -101,11 +81,21 @@ export function botLinearWorkspaces(
   return bot.linearWorkspaces ?? (bot.linear ? [bot.linear] : [])
 }
 
-/** Whether the cloud can bring the bot work: a Slack app, a Linear workspace or a GitHub link. */
+/** Whether the cloud can bring the bot work: a Slack app, a Linear workspace, a GitHub link or a Discord bot. */
 export function botHasConnector(
-  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github'>
+  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'discord'>
 ): boolean {
-  return botSlackApps(bot).length > 0 || botLinearWorkspaces(bot).length > 0 || bot.github !== null
+  return (
+    botSlackApps(bot).length > 0 ||
+    botLinearWorkspaces(bot).length > 0 ||
+    bot.github !== null ||
+    Boolean(bot.discord)
+  )
+}
+
+/** The Discord servers the bot's own Discord bot is in, first one first. */
+export function botDiscordGuilds(bot: Pick<Bot, 'discord'>): BotDiscordGuild[] {
+  return bot.discord?.guilds ?? []
 }
 
 /**
@@ -160,6 +150,11 @@ export function withoutBotMember(members: readonly BotMember[], key: BotMemberKe
       botMemberSource(member) !== key.source ||
       (key.workspaceId !== undefined && member.workspaceId !== key.workspaceId)
   )
+}
+
+/** The Discord people (user ids) allowed to ask the bot in one server. */
+export function discordMembersOf(members: readonly BotMember[], guildId: string): BotMember[] {
+  return botMembersFrom(members, 'discord').filter((member) => member.workspaceId === guildId)
 }
 
 /** The Linear people allowed to ask the bot in one Linear workspace. */

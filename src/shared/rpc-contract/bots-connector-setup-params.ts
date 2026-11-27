@@ -1,5 +1,5 @@
-// `bots.slack.*`, `bots.linear.*`, `bots.github.*` and `bots.connect.*`: a host's Slack, Linear and
-// GitHub setup, run as that host's own Orca account for whichever client asks.
+// `bots.slack.*`, `bots.linear.*`, `bots.github.*`, `bots.discord.*` and `bots.connect.*`: a host's
+// Slack, Linear, GitHub and Discord setup, run as that host's own Orca account for whichever client asks.
 import * as z from 'zod'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import {
@@ -7,6 +7,7 @@ import {
   SLACK_CONFIG_REFRESH_TOKEN_PREFIX
 } from '../connector-bot-slack-contract'
 import { GITHUB_ID_PATTERN, GITHUB_LOGIN_PATTERN } from '../connector-bot-github-contract'
+import { discordBotToken } from '../connector-bot-discord-contract'
 import { CONNECTOR_CONNECT_SOURCES } from '../connectors/connector-cloud-contract'
 
 const Id = lazyZodSchema(() => z.string().min(1).max(256))
@@ -54,6 +55,22 @@ export const BotGitHubDefaultBot = lazyZodSchema(() =>
   z.object({ botId: Id.nullable(), userId: GitHubUserId })
 )
 export const BotGitHubUnlink = lazyZodSchema(() => z.object({ userId: GitHubUserId }))
+
+export const BotDiscordBot = lazyZodSchema(() => z.object({ botId: Id }))
+/** The bot's Discord bot token, as pasted; the host sends only a well-formed one, once. */
+export const BotDiscordSetUp = lazyZodSchema(() =>
+  z.object({
+    botId: Id,
+    token: z
+      .string()
+      .max(512)
+      .refine((text) => discordBotToken(text) !== null, 'Not a Discord bot token')
+  })
+)
+export const BotDiscordGuild = lazyZodSchema(() => z.object({ botId: Id, guildId: Id }))
+export const BotDiscordMembers = lazyZodSchema(() =>
+  z.object({ botId: Id, guildId: Id, query: Query })
+)
 
 const Source = lazyZodSchema(() => z.enum(CONNECTOR_CONNECT_SOURCES))
 /** `switchAccount` is "Not you?", which lets the person pick another account. `addAccess` (GitHub):
