@@ -4195,12 +4195,7 @@
     },
     "commitFailurePanel": {
       "fix": "修復",
-      "fixWithAi": "使用 AI 解決提交失敗的問題",
       "hideDetails": "隱藏詳情",
-      "hideFailureDetails": "隱藏提交失敗詳情",
-      "showDetails": "顯示詳情",
-      "showFailureDetails": "顯示提交失敗詳情",
-      "summary": "提交失敗。",
       "title": "提交失敗"
     },
     "commitMessageAi": {
@@ -4220,10 +4215,7 @@
       "cancelGeneration": "取消產生提交訊息",
       "commitMessageDisabled": "提交訊息已停用。沒有已暫存的檔案。",
       "commitMessagePlaceholder": "提交訊息",
-      "emptyMessage": "工作樹沒有變更。",
-      "emptyTitle": "沒有本機變更",
       "generateMessage": "使用 AI 產生提交訊息",
-      "reconnecting": "正在重新連線至電腦…",
       "regenerateHint": "清除訊息以重新產生。"
     },
     "createPrAction": {
@@ -4365,7 +4357,6 @@
       "updateDesktop": "請更新此主機上的 Orca，才能在行動裝置上使用原始碼控制。"
     },
     "modals": {
-      "currentBranch": "目前分支",
       "discardButton": "放棄",
       "discardConfirmMessage": "要放棄「{{path}}」的變更嗎？此操作無法復原。",
       "discardTitle": "放棄變更",
@@ -4662,13 +4653,6 @@
       "behind": "落後 {{count}} 筆",
       "upToDate": "已是最新",
       "switchBranch": "切換分支（目前為 {{branch}}）",
-      "mergeInProgress": "合併正在進行中",
-      "rebaseInProgress": "變基正在進行中",
-      "cherryPickInProgress": "揀選正在進行中",
-      "filesNeedDecision_one": "{{count}} 個檔案需要你決定如何處理，才能完成。",
-      "filesNeedDecision_other": "{{count}} 個檔案需要你決定如何處理，才能完成。",
-      "conflictsResolved": "所有衝突皆已解決。請從下方列完成。",
-      "continueOnComputer": "所有衝突皆已解決。請在電腦上繼續以完成。",
       "commits_one": "{{count}} 筆提交",
       "commits_other": "{{count}} 筆提交",
       "conflictsMayRemain": "未列出所有檔案，因此可能仍有衝突。請在電腦上檢查。"

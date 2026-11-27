@@ -3876,12 +3876,7 @@
     },
     "commitFailurePanel": {
       "fix": "Beheben",
-      "fixWithAi": "Commit-Fehler mit KI beheben",
       "hideDetails": "Details ausblenden",
-      "hideFailureDetails": "Details zum Commit-Fehler ausblenden",
-      "showDetails": "Details anzeigen",
-      "showFailureDetails": "Details zum Commit-Fehler anzeigen",
-      "summary": "Commit fehlgeschlagen.",
       "title": "Commit fehlgeschlagen"
     },
     "commitMessageAi": {
@@ -3901,10 +3896,7 @@
       "cancelGeneration": "Generierung der Commit-Nachricht abbrechen",
       "commitMessageDisabled": "Commit-Nachricht deaktiviert. Keine vorgemerkten Dateien.",
       "commitMessagePlaceholder": "Commit-Nachricht",
-      "emptyMessage": "Der Worktree ist sauber.",
-      "emptyTitle": "Keine lokalen Änderungen",
       "generateMessage": "Commit-Nachricht mit KI generieren",
-      "reconnecting": "Verbindung zum Desktop wird wiederhergestellt…",
       "regenerateHint": "Nachricht leeren, um sie neu zu generieren."
     },
     "createPrAction": {
@@ -4046,7 +4038,6 @@
       "updateDesktop": "Orca auf diesem Host aktualisieren, um die Quellcodeverwaltung mobil zu nutzen."
     },
     "modals": {
-      "currentBranch": "aktuell",
       "discardButton": "Verwerfen",
       "discardConfirmMessage": "Änderungen an „{{path}}“ verwerfen? Dies kann nicht rückgängig gemacht werden.",
       "discardTitle": "Änderung verwerfen?",
@@ -4343,13 +4334,6 @@
       "behind": "{{count}} zurück",
       "upToDate": "Aktuell",
       "switchBranch": "Von {{branch}} auf anderen Branch wechseln",
-      "mergeInProgress": "Merge läuft",
-      "rebaseInProgress": "Rebase läuft",
-      "cherryPickInProgress": "Cherry-Pick läuft",
-      "filesNeedDecision_one": "Vor dem Abschließen ist für {{count}} Datei eine Entscheidung nötig.",
-      "filesNeedDecision_other": "Vor dem Abschließen ist für {{count}} Dateien eine Entscheidung nötig.",
-      "conflictsResolved": "Alle Konflikte sind gelöst. Über die Leiste unten abschließen.",
-      "continueOnComputer": "Alle Konflikte sind gelöst. Zum Abschließen auf dem Computer fortfahren.",
       "commits_one": "{{count}} Commit",
       "commits_other": "{{count}} Commits",
       "conflictsMayRemain": "Nicht alle Dateien werden aufgelistet, daher können noch Konflikte bestehen. Auf dem Computer prüfen."

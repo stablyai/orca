@@ -3986,12 +3986,7 @@
     },
     "commitFailurePanel": {
       "fix": "Corriger",
-      "fixWithAi": "Corriger l'échec du commit avec l'IA",
       "hideDetails": "Masquer les détails",
-      "hideFailureDetails": "Masquer les détails de l'échec du commit",
-      "showDetails": "Afficher les détails",
-      "showFailureDetails": "Afficher les détails de l'échec du commit",
-      "summary": "Échec du commit.",
       "title": "Échec du commit"
     },
     "commitMessageAi": {
@@ -4011,10 +4006,7 @@
       "cancelGeneration": "Annuler la génération du message de commit",
       "commitMessageDisabled": "Message de commit désactivé. Aucun fichier indexé.",
       "commitMessagePlaceholder": "Message de commit",
-      "emptyMessage": "Le worktree est propre.",
-      "emptyTitle": "Aucune modification locale",
       "generateMessage": "Générer le message de commit avec l'IA",
-      "reconnecting": "Reconnexion à l'ordinateur…",
       "regenerateHint": "Effacez le message pour le régénérer."
     },
     "createPrAction": {
@@ -4168,7 +4160,6 @@
       "updateDesktop": "Mettez à jour Orca sur cet hôte pour utiliser le contrôle de code source sur mobile."
     },
     "modals": {
-      "currentBranch": "actuelle",
       "discardButton": "Abandonner",
       "discardConfirmMessage": "Abandonner les modifications de « {{path}} » ? Cette action est irréversible.",
       "discardTitle": "Abandonner la modification",
@@ -4472,14 +4463,6 @@
       "behind": "{{count}} en retard",
       "upToDate": "À jour",
       "switchBranch": "Changer de branche (actuelle : {{branch}})",
-      "mergeInProgress": "Merge en cours",
-      "rebaseInProgress": "Rebase en cours",
-      "cherryPickInProgress": "Cherry-pick en cours",
-      "filesNeedDecision_many": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "filesNeedDecision_one": "{{count}} fichier nécessite une décision avant de pouvoir terminer.",
-      "filesNeedDecision_other": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "conflictsResolved": "Tous les conflits sont résolus. Terminez depuis la barre ci-dessous.",
-      "continueOnComputer": "Tous les conflits sont résolus. Continuez sur votre ordinateur pour terminer.",
       "commits_many": "{{count}} commits",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
