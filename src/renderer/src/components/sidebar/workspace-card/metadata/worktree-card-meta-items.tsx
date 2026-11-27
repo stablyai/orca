@@ -1,26 +1,12 @@
 import React from 'react'
 import { AlertTriangle, GitMerge } from 'lucide-react'
 
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import type { Repo } from '../../../../../../shared/repository/repo-types'
 import '../activity/worktree-card-empty-inputs'
 import { conflictOperationLabel } from './worktree-conflict-label'
 import { getDirectoryName } from '../controller/worktree-card-model'
-
-export function WorktreeCardMetaRepoBadge({ repo }: { repo: Repo }): React.JSX.Element {
-  return (
-    // Why: keep a 6rem name floor (+1.625rem chrome) so the branch shrinks first; grow only into width the branch leaves free.
-    <div className="flex min-w-0 max-w-max shrink-0 grow basis-[7.625rem] items-center gap-1.5 px-1.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-      <RepoBadgeMark color={repo.badgeColor} />
-      <span className="min-w-0 truncate text-[10px] font-semibold text-foreground leading-3.5 lowercase">
-        {repo.displayName}
-      </span>
-    </div>
-  )
-}
 
 export function WorktreeCardFolderPath({ path }: { path: string }): React.JSX.Element {
   return (

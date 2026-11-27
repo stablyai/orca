@@ -52,7 +52,7 @@ function runningCard(
     current === 1
       ? t('components.managed-runtime.unpackingDetail', 'Unpacking the runtime')
       : current === 2
-        ? t('components.managed-runtime.checkingDetail', 'Checking the downloaded runtime')
+        ? t('components.managed-runtime.checkingDetail', 'Verifying {{agent}}…', { agent })
         : total === null
           ? t('components.managed-runtime.downloading', 'Downloading {{done}} MB.', {
               done: megabytes(done)

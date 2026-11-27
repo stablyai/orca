@@ -88,4 +88,15 @@ describe('runAgentCliUpdate', () => {
     expect(await before).toEqual([])
     expect(await during).toEqual([])
   })
+
+  it('reports success when the update fails but the CLI is already the latest', async () => {
+    onDisk = new Map([['/b/bin/opencode', '1.0.0']])
+    found = '/b/bin/opencode'
+    expect(await checkAgentCliUpdates({}, ['opencode'])).toMatchObject([{ agent: 'opencode' }])
+    // The desktop app updated the CLI its wrapper runs; `opencode upgrade` can't detect that install.
+    onDisk.set('/b/bin/opencode', '2.0.0')
+    runProcess.mockResolvedValue({ code: 1, stdout: '', stderr: 'unsupported', timedOut: false })
+
+    expect(await runAgentCliUpdate('opencode', {})).toEqual({ ok: true })
+  })
 })

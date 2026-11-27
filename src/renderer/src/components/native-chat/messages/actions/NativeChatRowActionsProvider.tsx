@@ -6,7 +6,6 @@ import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-
 import {
   NativeChatForkContext,
   NativeChatForkedFromContext,
-  NativeChatForkSlotContext,
   NativeChatSideChatForkPointContext
 } from '@/components/native-chat/messages/actions/native-chat-fork-context'
 import { NativeChatRewindContext } from '@/components/native-chat/messages/actions/native-chat-rewind-context'
@@ -56,7 +55,7 @@ export function NativeChatRowActionsProvider({
                 structuredSession: { sessionId: sourceSessionId, workspaceId: worktreeId },
                 agent
               },
-              target
+              { target, retry: 'open' }
             )
         : undefined,
     [agent, target, worktreeId, sourceOpenable]
@@ -66,13 +65,11 @@ export function NativeChatRowActionsProvider({
       <NativeChatForkContext.Provider value={forks.fork}>
         <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
           <NativeChatForkedFromContext.Provider value={openSource}>
-            <NativeChatForkSlotContext.Provider value>
-              <NativeChatWaitingAgentMailContext.Provider value={chat.waitingAgentMail}>
-                <NativeChatWaitingAgentMailRowsContext.Provider value={chat.waitingAgentRows}>
-                  {children}
-                </NativeChatWaitingAgentMailRowsContext.Provider>
-              </NativeChatWaitingAgentMailContext.Provider>
-            </NativeChatForkSlotContext.Provider>
+            <NativeChatWaitingAgentMailContext.Provider value={chat.waitingAgentMail}>
+              <NativeChatWaitingAgentMailRowsContext.Provider value={chat.waitingAgentRows}>
+                {children}
+              </NativeChatWaitingAgentMailRowsContext.Provider>
+            </NativeChatWaitingAgentMailContext.Provider>
           </NativeChatForkedFromContext.Provider>
         </NativeChatSideChatForkPointContext.Provider>
       </NativeChatForkContext.Provider>

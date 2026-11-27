@@ -3,7 +3,7 @@
  *  tool_result, so an allowed command's only once it finishes, and that tool_result: a hook's deny
  *  message verbatim, the user's No, the 2:00 safety-check block, or the command's own output, which
  *  is an error when an allowed command fails. Hook events do not say this: a deny or a No fires no PostToolUse or PostToolUseFailure. */
-import { open, stat, type FileHandle } from 'node:fs/promises'
+import { readClaudeTranscriptTailText } from '../../../../claude/transcripts/claude-transcript-tail-text'
 import type { WorkerApprovalOutcome } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type ClaudeToolResult = { isError: boolean; text: string }
@@ -25,33 +25,17 @@ export async function readClaudeToolRecord(
   transcriptPath: string,
   toolUseId: string
 ): Promise<ClaudeToolRecord | null> {
-  let file: FileHandle | null = null
-  try {
-    // Why stat before open: opening a FIFO waits for a writer.
-    const stats = await stat(transcriptPath)
-    if (!stats.isFile()) {
-      return null
-    }
-    file = await open(transcriptPath, 'r')
-    const length = Math.min(stats.size, TAIL_BYTES)
-    const { buffer, bytesRead } = await file.read(
-      Buffer.alloc(length),
-      0,
-      length,
-      stats.size - length
-    )
-    const record: ClaudeToolRecord = { hookDecision: null, result: null }
-    for (const line of buffer.subarray(0, bytesRead).toString('utf8').split('\n')) {
-      const entry = line.includes(toolUseId) ? parseLine(line) : null
-      record.hookDecision ??= hookDecisionIn(entry, toolUseId)
-      record.result ??= toolResultIn(entry, toolUseId)
-    }
-    return record.hookDecision || record.result ? record : null
-  } catch {
+  const text = await readClaudeTranscriptTailText(transcriptPath, TAIL_BYTES)
+  if (text === null) {
     return null
-  } finally {
-    await file?.close().catch(() => {})
   }
+  const record: ClaudeToolRecord = { hookDecision: null, result: null }
+  for (const line of text.split('\n')) {
+    const entry = line.includes(toolUseId) ? parseLine(line) : null
+    record.hookDecision ??= hookDecisionIn(entry, toolUseId)
+    record.result ??= toolResultIn(entry, toolUseId)
+  }
+  return record.hookDecision || record.result ? record : null
 }
 
 function parseLine(line: string): unknown {

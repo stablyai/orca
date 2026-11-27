@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_ID_MAX_LENGTH,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS,
@@ -6,28 +7,28 @@ import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
 } from '../../linear/issue-attribute-filter'
 
-export const LinearAttributeFilterId = z
-  .string()
-  .trim()
-  .min(1)
-  .max(LINEAR_ISSUE_ATTRIBUTE_FILTER_ID_MAX_LENGTH)
+export const LinearAttributeFilterId = lazyZodSchema(() =>
+  z.string().trim().min(1).max(LINEAR_ISSUE_ATTRIBUTE_FILTER_ID_MAX_LENGTH)
+)
 
-export const LinearIssueAttributeFilterSchema = z
-  .object({
-    stateIds: z.array(LinearAttributeFilterId).max(LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS),
-    priorities: z
-      .array(z.number().int().min(0).max(4))
-      .max(LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_PRIORITIES),
-    assignee: z.union([
-      z.object({ kind: z.literal('unassigned') }).strict(),
-      z
-        .object({
-          kind: z.literal('user'),
-          id: LinearAttributeFilterId
-        })
-        .strict(),
-      z.null()
-    ]),
-    labelIds: z.array(LinearAttributeFilterId).max(LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS)
-  })
-  .strict()
+export const LinearIssueAttributeFilterSchema = lazyZodSchema(() =>
+  z
+    .object({
+      stateIds: z.array(LinearAttributeFilterId).max(LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS),
+      priorities: z
+        .array(z.number().int().min(0).max(4))
+        .max(LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_PRIORITIES),
+      assignee: z.union([
+        z.object({ kind: z.literal('unassigned') }).strict(),
+        z
+          .object({
+            kind: z.literal('user'),
+            id: LinearAttributeFilterId
+          })
+          .strict(),
+        z.null()
+      ]),
+      labelIds: z.array(LinearAttributeFilterId).max(LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS)
+    })
+    .strict()
+)

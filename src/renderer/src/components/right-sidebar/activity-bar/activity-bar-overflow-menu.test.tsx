@@ -85,6 +85,27 @@ it('moves past hidden tabs and resets the arrangement', () => {
   expect(useAppStore.getState().activityBarHidden).toEqual([])
 })
 
+it('names the checks status on its overflowed row', () => {
+  const checks: ActivityBarItem = { id: 'checks', title: 'Checks', icon: () => null, shortcut: '' }
+  render(
+    <TopActivityOverflowMenu
+      items={[checks]}
+      arrangementItems={[items[0], checks]}
+      activeTab="explorer"
+      onSelect={vi.fn()}
+      checksStatus="failure"
+      activityBarPosition="top"
+      onChangeActivityBarPosition={vi.fn()}
+    />
+  )
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'More sidebar tabs — Error' }), {
+    button: 0,
+    pointerType: 'mouse',
+    ctrlKey: false
+  })
+  expect(screen.getByRole('menuitem', { name: 'Checks — Error' })).toBeTruthy()
+})
+
 it('opens the neighbouring panel when hiding the active panel', () => {
   useAppStore.setState({
     rightSidebarEffectiveTab: 'plugin:test:panel',

@@ -25,6 +25,7 @@ const RUNNING: StructuredSessionBackgroundTasksView = {
 
 // The session holds its target across updates; tests are not compiled, so keep it stable here.
 const LOCAL = { kind: 'local' } as const
+const NO_CLEARS = { clears: 0 }
 
 /** A structured chat as its session mounts it: each update builds a new controller. */
 function Chat(_props: { update: number }) {
@@ -33,7 +34,13 @@ function Chat(_props: { update: number }) {
     target: LOCAL,
     paneKey: 'tab_chat:pane',
     isVisible: true,
-    controller: { backgroundTasks: RUNNING, stopBackgroundTask: async () => null }
+    controller: {
+      backgroundTasks: RUNNING,
+      stopBackgroundTask: async () => null,
+      prompts: [],
+      epoch: null,
+      contextClear: NO_CLEARS
+    }
   })
   return subagents.dock
 }

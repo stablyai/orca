@@ -109,14 +109,20 @@ export function claudeConversationForkBoundary(
     }
     return next > 0 ? String(chain[next - 1]!.uuid) : unavailable()
   }
+  // Claude Code writes one row per content block; builds before `apiBlockIndex` imply it by order.
+  const blockPositions = new Map<string, number>()
   const selected = chain.findIndex((row) => {
+    if (row.uuid === checkpoint.throughMessage?.uuid) {
+      return true
+    }
     const message = claudeRecord(row.message)
-    return (
-      row.uuid === checkpoint.throughMessage?.uuid ||
-      (typeof message?.id === 'string' &&
-        typeof row.apiBlockIndex === 'number' &&
-        claudeSourceBlockId(message.id, row.apiBlockIndex) === checkpoint.throughMessage?.uuid)
-    )
+    if (typeof message?.id !== 'string') {
+      return false
+    }
+    const position = blockPositions.get(message.id) ?? 0
+    blockPositions.set(message.id, position + 1)
+    const index = typeof row.apiBlockIndex === 'number' ? row.apiBlockIndex : position
+    return claudeSourceBlockId(message.id, index) === checkpoint.throughMessage?.uuid
   })
   const opener = checkpoint.rootMessage
     ? chain.findIndex(

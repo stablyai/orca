@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
@@ -79,8 +80,10 @@ export function resolvePrivacySetting(
   }
 }
 
-const detailsSchema = z.object({ incognito: z.boolean() }).partial().loose()
-const setSchema = z.object({ value: z.unknown(), scope: z.string() }).partial().loose()
+const detailsSchema = lazyZodSchema(() => z.object({ incognito: z.boolean() }).partial().loose())
+const setSchema = lazyZodSchema(() =>
+  z.object({ value: z.unknown(), scope: z.string() }).partial().loose()
+)
 
 function readProfile(caller: BrowserExtensionCaller) {
   return getBrowserExtensionProfileStateStore().readProfile(caller.browserProfileId)

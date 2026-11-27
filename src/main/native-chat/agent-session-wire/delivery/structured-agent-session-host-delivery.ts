@@ -9,6 +9,7 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-
 import {
   openStructuredAgentSessionConversation,
   resettleOpenStructuredAgentSessionConversation,
+  settleGoneStructuredAgentSessionGeneration,
   type OpenedStructuredAgentSessionConversation,
   type StructuredAgentSessionConversationOpenOptions
 } from '../host/structured-agent-session-conversation-open'
@@ -16,7 +17,10 @@ import type { StructuredAgentSessionClientDelivery } from '../publication/subscr
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 
-import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
+import {
+  launchToolsRefreshDue,
+  type StructuredAgentSessionDeliveryLoopDeps
+} from './structured-agent-session-delivery-loop-deps'
 import { structuredAgentSessionCommandRunning } from '../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
@@ -28,22 +32,24 @@ import type {
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import { readStructuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { settleInterruptedStructuredAgentSessionCommands } from '../rewind/structured-rewind-recovery'
+import { structuredAgentSessionChildOwesWork } from '../recovery/structured-agent-session-outgrown-child'
+import { structuredAgentSessionImmediatePermission } from '../options/structured-agent-session-launch-permission'
 import {
-  retireOutgrownStructuredAgentSessionChild,
-  structuredAgentSessionChildOwesWork
-} from '../recovery/structured-agent-session-outgrown-child'
-import {
-  structuredAgentSessionLaunchPermission,
-  structuredAgentSessionInputCompilerPermission,
-  structuredAgentSessionImmediatePermission
-} from '../options/structured-agent-session-launch-permission'
+  createStructuredAgentSessionOutgrownRetirement,
+  retireStructuredAgentSessionChildOnOtherAccount
+} from './structured-agent-session-outgrown-retirement'
 import { closeWhatTheUserClosed } from '../structured-agent-session-user-closed-sends'
+import { recoverStructuredAgentSessionKeptOpen } from '../host/structured-agent-session-kept-at-open'
+import { StructuredAgentSessionKeptOpens } from './structured-agent-session-kept-open-reconciler'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
+import type { StructuredAgentSessionStopEnding } from '../termination/structured-agent-session-host-stop-event'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
+  /** The chat closed: a run it waited on stops being asked about for it. */
+  closed: (sessionId: string) => void
   open: (
     sessionId: string,
     options?: StructuredAgentSessionConversationOpenOptions
@@ -53,6 +59,8 @@ export type StructuredAgentSessionConversationDelivery = {
   /** Settle edges affect status/steer holds without rows or renewed idle activity. */
   afterSettleEdge: (sessionId: string, journal: AgentSessionJournal) => void
   dispose: () => void
+  /** After an account switch; see `retireStructuredAgentSessionChildOnOtherAccount`. */
+  offAccount: (sessionId: string, committed: () => boolean) => Promise<void>
   adoptOpened: (
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
@@ -75,10 +83,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
   ) => StructuredAgentSessionStartReadiness | null
-  /** Stops a child the chat outgrew, so the start after it reads a new login, account or permission
-   *  mode. */
-  stopOutgrownAgent: (sessionId: string) => Promise<void>
-  stopPermissionTransitionChild: (sessionId: string) => Promise<void>
+  /** Stops a chat's child as its lifetime does, for one the chat outgrew (a new login, account or
+   *  permission mode) or one a permission change replaces. */
+  stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>
   clientDelivery: Pick<
     StructuredAgentSessionClientDelivery,
     | 'publishRestored'
@@ -109,6 +116,15 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   const owesWork = async (sessionId: string, id: string): Promise<boolean> =>
     sessions.has(sessionId) &&
     (await structuredAgentSessionChildOwesWork(retainedWork(sessionId, id)))
+  const retireOutgrownChild = createStructuredAgentSessionOutgrownRetirement({
+    deps,
+    sessions,
+    retainedWork,
+    readStopping: input.clientDelivery.readStopping,
+    // Retire at rest; the next start refreshes login and permission mode.
+    stopOutgrownAgent: (sessionId, onlyIf) =>
+      input.stopAgent(sessionId, { cause: 'evict', resting: true, ...(onlyIf ? { onlyIf } : {}) })
+  })
   const loop = new StructuredAgentSessionDeliveryLoop({
     activityChanged: (id) => sessions.get(id)?.workChanged?.(),
     sessions,
@@ -117,57 +133,14 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
-    stopPermissionTransitionChild: input.stopPermissionTransitionChild,
-    retireOutgrownChild: async (sessionId, continuingId, next) => {
-      // Defer retirement while personal Stop holds handover; its next step decides.
-      const session = (await input.clientDelivery.readStopping(sessionId))
-        ? undefined
-        : sessions.get(sessionId)
-      await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
-        next,
-        requiresModelTransitionRestart: (submission) =>
-          session?.child?.phase === 'ready' &&
-          deps.adapter.requiresModelTransitionRestart?.({
-            sessionId,
-            fence: session.child.fence,
-            executionOptions: submission.options
-          }) === true,
-        work: retainedWork(sessionId, continuingId),
-        launchPermission: async () => {
-          const record = deps.store.getRecord(sessionId)
-          return (
-            structuredAgentSessionInputCompilerPermission(session?.journal, continuingId) ??
-            (record ? structuredAgentSessionLaunchPermission(deps, record) : null)
-          )
-        },
-        permissionRequiresAcquisition: (mode) =>
-          structuredAgentSessionInputCompilerPermission(session?.journal, continuingId)
-            ? true
-            : (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, mode) ??
-              mode !== session?.child?.permissionMode),
-        stopAgent: (sessionId) => {
-          deps.store.requireWritableRecord(sessionId)
-          return input.stopOutgrownAgent(sessionId)
-        },
-        launchAccountHome: async () => {
-          const record = deps.store.getRecord(sessionId)
-          return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
-        },
-        ...(launchTools ? { launchToolsChanged: () => launchTools.changed(sessionId) } : {}),
-        logger: deps.logger
-      })
-    },
+    stopPermissionTransitionChild: (sessionId) => input.stopAgent(sessionId, { cause: 'evict' }),
+    retireOutgrownChild,
     immediatePermission: (sessionId) => {
       const record = deps.store.getRecord(sessionId)
       return record ? structuredAgentSessionImmediatePermission(deps, record) : null
     },
     retainedWork: owesWork,
-    ...(launchTools
-      ? {
-          launchToolsRefreshDue: async (sessionId: string, id: string) =>
-            launchTools.outdated(sessionId) && !(await owesWork(sessionId, id))
-        }
-      : {}),
+    ...(launchTools ? { launchToolsRefreshDue: launchToolsRefreshDue(launchTools, owesWork) } : {}),
     readiness: input.readiness,
     startFlights: input.startFlights,
     deliveryOrder: input.deliveryOrder,
@@ -227,12 +200,25 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         fence
       )
   })
+  const keptOpens = new StructuredAgentSessionKeptOpens({
+    sessions,
+    serialize: input.serialize,
+    trackStart: input.trackStart,
+    record: (id) => deps.store.getConversation(id) ?? null,
+    fence: (id) => deps.store.getConversation(id)?.currentFence,
+    settle: async (id, open, fence, openedSince) => {
+      await settleGoneStructuredAgentSessionGeneration(deps, id, open)
+      await recoverStructuredAgentSessionKeptOpen(open.journal, fence, openedSince)
+    },
+    logger: deps.logger
+  })
   const adoptOpened = async (
     sessionId: string,
     { session }: OpenedStructuredAgentSessionConversation
   ): Promise<void> => {
     sessions.set(sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
+    keptOpens.adopted(sessionId, session)
     await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
     if (
@@ -296,15 +282,25 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   })
   return {
     loop,
+    closed: (sessionId) => keptOpens.closed(sessionId),
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
       input.clientDelivery.publishStatusAndSettlement(sessionId)
       afterCommit(sessionId, journal)
     },
     adoptOpened,
+    offAccount: (sessionId, committed) =>
+      retireStructuredAgentSessionChildOnOtherAccount(sessionId, {
+        committed,
+        sessions,
+        serialize: input.serialize,
+        delivering: (id) => loop.isRunning(id),
+        retire: retireOutgrownChild
+      }),
     dispose: () => {
       loop.dispose()
       stopResettling()
+      keptOpens.dispose()
     },
     open: (sessionId, options) =>
       openStructuredAgentSessionConversation({ deps, sessions, adoptOpened }, sessionId, options)

@@ -7,12 +7,14 @@ import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
 import { SavedHostScopeWidenGate } from '../components/sidebar/worktree-list/listing/SavedHostScopeWidenGate'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
 import { RemoteHostBrowserControlNoticeHost } from '../components/browser-pane/remote-host-control/RemoteHostBrowserControlNoticeHost'
+import { SshConnectLinkPromptHost } from '../components/ssh-connect-link/SshConnectLinkPrompt'
 import { useAppStore } from '../store/index'
 import { ActiveWorkspaceSyncGate } from './ActiveWorkspaceSyncGate'
 import { StructuredAgentSessionAttentionBridge } from '../components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
 import { StructuredAgentSessionStatusBridge } from '../components/native-chat/session/status/StructuredAgentSessionStatusBridge'
 import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 import { usePairedMobileDevices } from '../components/mobile/paired-mobile-devices'
+import { useBotSlackIcons } from '../components/bots/use-bot-slack-icons'
 
 const DashboardPopoutBridge = lazy(
   () => import('../components/dashboard/popout-bridge/DashboardPopoutBridge')
@@ -30,6 +32,8 @@ export function AppBackgroundServices(): React.JSX.Element {
   const canPublishAgentList = Boolean(window.api.agentStatus?.publishListVerdicts)
   // The list builds on every agent update, so only a desktop with a paired phone pays for it.
   const { hasPairedDevice } = usePairedMobileDevices({ enabled: canPublishAgentList })
+  // A Slack-linked bot's colored or dressed mascot is drawn here, from the bots list once anything loads it.
+  useBotSlackIcons()
 
   return (
     <>
@@ -39,6 +43,7 @@ export function AppBackgroundServices(): React.JSX.Element {
       {/* Keep permission notices available across app surfaces. */}
       <MacosTccPromptNoticeHost />
       <RemoteHostBrowserControlNoticeHost />
+      <SshConnectLinkPromptHost />
       {/* Keep agent-status retention subscriptions out of the App render tree. */}
       <AiVaultTabTitleSyncGate />
       <TerminalSessionNameSyncGate />

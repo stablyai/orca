@@ -7,20 +7,25 @@ import {
 import type { Bot } from '../../../../shared/bot-types'
 import { botGroupFaces, type BotGroupFace } from '../../../../shared/bots/bot-group-face-layout'
 import { BotAvatar, BotAvatarTile } from './BotAvatar'
+import { botRefKey } from '@/lib/bot-hosts'
 
-// The sidebar row's picture at four times its size.
-const SCALE = 4
 const POP = 'cubic-bezier(0.34, 1.56, 0.64, 1)'
 const SETTLE_MS = 420
 
 type Face = BotGroupFace<Bot> | { key: 'empty'; face: null; x: number; y: number; size: number }
 
 /** The group's picture as the sidebar will draw it; faces pop in and out as members change. */
-export function BotGroupFaceCluster({ members }: { members: readonly Bot[] }): React.JSX.Element {
+export function BotGroupFaceCluster({
+  members,
+  compact = false
+}: {
+  members: readonly Bot[]
+  compact?: boolean
+}): React.JSX.Element {
   const reduced = usePrefersReducedMotion()
   const faces: Face[] =
     members.length > 0
-      ? botGroupFaces(members, (bot) => bot.id)
+      ? botGroupFaces(members, botRefKey)
       : [{ key: 'empty', face: null, x: 4, y: 4, size: 20 }]
   const signature = faces.map((face) => face.key).join(' ')
   // Faces just dropped stay until they have shrunk away.
@@ -35,18 +40,19 @@ export function BotGroupFaceCluster({ members }: { members: readonly Bot[] }): R
     ])
   }
   return (
-    <span className="relative block size-28" aria-hidden>
+    <span className={compact ? 'relative block size-7' : 'relative block size-28'} aria-hidden>
       {leaving.map((face) => (
         <ClusterFace
           key={`leaving-${face.key}`}
           face={face}
           z={0}
           reduced={reduced}
+          compact={compact}
           onLeft={() => setLeaving((current) => current.filter((old) => old.key !== face.key))}
         />
       ))}
       {faces.map((face, index) => (
-        <ClusterFace key={face.key} face={face} z={index + 1} reduced={reduced} />
+        <ClusterFace key={face.key} face={face} z={index + 1} reduced={reduced} compact={compact} />
       ))}
     </span>
   )
@@ -57,11 +63,13 @@ function ClusterFace({
   face,
   z,
   reduced,
+  compact,
   onLeft
 }: {
   face: Face
   z: number
   reduced: boolean
+  compact: boolean
   onLeft?: () => void
 }): React.JSX.Element {
   const ref = useRef<HTMLSpanElement>(null)
@@ -106,39 +114,47 @@ function ClusterFace({
       )
     }
   }, [more])
+  const scale = compact ? 1 : 4
   return (
     <span
       ref={ref}
       className="absolute flex rounded-full"
       style={{
-        left: face.x * SCALE,
-        top: face.y * SCALE,
-        width: face.size * SCALE,
-        height: face.size * SCALE,
+        left: face.x * scale,
+        top: face.y * scale,
+        width: face.size * scale,
+        height: face.size * scale,
         zIndex: z,
         // A ring in the dialog's own colour parts overlapping faces.
-        boxShadow: face.face ? '0 0 0 4px var(--dialog-surface)' : undefined,
+        boxShadow: face.face ? `0 0 0 ${scale}px var(--dialog-surface)` : undefined,
         transition: reduced
           ? undefined
           : ['left', 'top', 'width', 'height'].map((p) => `${p} ${SETTLE_MS}ms ${POP}`).join(', ')
       }}
     >
       {face.face === null ? (
-        <span className="flex size-full items-center justify-center rounded-full border border-dashed border-input text-muted-foreground">
-          <Users className="size-8" strokeWidth={1.5} />
+        <span
+          className={
+            compact
+              ? 'flex size-full items-center justify-center text-muted-foreground'
+              : 'flex size-full items-center justify-center rounded-full border border-dashed border-input text-muted-foreground'
+          }
+        >
+          <Users className={compact ? 'size-4.5' : 'size-8'} strokeWidth={1.5} />
         </span>
       ) : 'member' in face.face ? (
         <BotAvatar
           bot={face.face.member}
-          size="large"
+          size={compact ? 'small' : 'large'}
           className="size-full rounded-full"
-          style={{ fontSize: 28 }}
+          style={{ fontSize: compact ? face.font : 28 }}
         />
       ) : (
         <BotAvatarTile
           src={null}
           fallback={`+${face.face.more}`}
           className="size-full rounded-full text-xl font-medium text-muted-foreground tabular-nums"
+          style={compact ? { fontSize: face.font } : undefined}
         />
       )}
     </span>

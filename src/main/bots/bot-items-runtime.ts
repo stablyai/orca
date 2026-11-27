@@ -98,12 +98,20 @@ export class BotItemsHost {
   }
 
   /** The store only when this profile already has an items file: nothing links work before one. */
-  private openedStore(): BotItemsRemote | null {
+  openedStore(): BotItemsRemote | null {
     return this.openedTracked()?.remote ?? null
   }
 
   private openedTracked(): TrackedBotItems | null {
     return this.stores.get(botItemsStoreFile(getProfileUserDataPath())) ?? null
+  }
+
+  async owedCommentAttachmentUploads(
+    stateDirectory: string,
+    root: string
+  ): Promise<ReadonlySet<string>> {
+    const tracked = this.stores.get(botItemsStoreFile(stateDirectory))
+    return new Set(await tracked?.remote.owedCommentAttachmentUploads(root))
   }
 
   /** Once the runtime has its bot hooks: an existing items file sends what a crash left owed and
@@ -255,6 +263,24 @@ export class BotItemsHost {
       items.map((item) => item.uid),
       withWaitingAsks
     )
+    return this.viewsFromRows(items, rows, summary)
+  }
+
+  async showView(
+    item: BotItemRecord,
+    afterId: number,
+    limit: number
+  ): Promise<{ item: BotItem; events: BotItemEvent[] }> {
+    const { rows, events } = await this.store().showRows(item.uid, afterId, limit)
+    const [view] = await this.viewsFromRows([item], rows, false)
+    return { item: view!, events: events.map(eventViewOf) }
+  }
+
+  private async viewsFromRows(
+    items: readonly BotItemRecord[],
+    rows: Awaited<ReturnType<BotItemsRemote['viewRows']>>,
+    summary: boolean
+  ): Promise<BotItem[]> {
     const refs = Object.values(rows.links)
       .flat()
       .flatMap((link) => (link.kind === 'dispatch' ? [link.ref] : []))
@@ -306,6 +332,11 @@ export class BotItemsHost {
   /** The newest `limit` events before `beforeId` (0: the newest of all), oldest first. */
   async eventsBefore(uid: string, beforeId: number, limit: number): Promise<BotItemEvent[]> {
     return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventViewOf)
+  }
+
+  /** A write to any Dispatch's rows (the database's notice), or a paired server's verdict on one. */
+  workersWritten(dispatchIds: readonly string[] = [], deleted = false): void {
+    this.join.workersWritten(dispatchIds, deleted)
   }
 
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */

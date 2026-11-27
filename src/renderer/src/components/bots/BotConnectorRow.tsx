@@ -86,6 +86,7 @@ function BotConnectorFoldRow(props: BotConnectorRowFrameProps): React.JSX.Elemen
           <BotConnectorMenu
             name={typeof name === 'string' ? name : botConnectorTitleText(name)}
             actions={actions}
+            popover={props.menuPopover}
           />
         ) : null}
         {/* Passes clicks to the stretched name button, so it folds the row too. */}

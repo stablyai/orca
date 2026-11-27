@@ -1,5 +1,6 @@
 import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { resolveGeneralSubPage } from '../general/general-sub-pages'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useEffect } from 'react'
 import { ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT } from '../../../../../shared/updater/updater-renderer-events'
 import { toast } from 'sonner'
@@ -34,6 +35,8 @@ export function useSettingsPageEffects(
   const {
     activeSectionId,
     setGeneralSubPage,
+    setMcpServerSubPage,
+    settingsHostScope,
     clearSettingsTarget,
     fetchKeybindings,
     fetchSettings,
@@ -72,6 +75,14 @@ export function useSettingsPageEffects(
       setGeneralSubPage(null)
     }
   }, [activeSectionId, setGeneralSubPage])
+
+  // A server's page is one host's; another host or section goes back to the list.
+  const settingsHostKey = runtimeTargetEnvironmentId(settingsHostScope.target)
+  useEffect(() => {
+    setMcpServerSubPage((page) =>
+      page && activeSectionId === 'mcp-servers' && page.host === settingsHostKey ? page : null
+    )
+  }, [activeSectionId, settingsHostKey, setMcpServerSubPage])
 
   useEffect(() => {
     fetchSettings()
@@ -223,6 +234,13 @@ export function useSettingsPageEffects(
     if (settingsNavigationTarget.pane === 'general') {
       setGeneralSubPage(resolveGeneralSubPage(settingsNavigationTarget.sectionId))
     }
+    if (settingsNavigationTarget.pane === 'mcp-servers') {
+      const serverId = settingsNavigationTarget.sectionId
+      const host = settingsNavigationTarget.hostScope ?? settingsHostScope.target
+      setMcpServerSubPage(
+        serverId ? { id: serverId, title: '', host: runtimeTargetEnvironmentId(host) } : null
+      )
+    }
     cancelSettingsListReveal()
     consumeSettingsNavigation(settingsNavigationTarget)
     // A newer navigation supersedes any focus an earlier deep link is still waiting to give.
@@ -284,6 +302,8 @@ export function useSettingsPageEffects(
     setRemoteServerAddIntentSignal,
     consumeSettingsNavigation,
     setGeneralSubPage,
+    setMcpServerSubPage,
+    settingsHostScope.target,
     setSettingsProjectHostSelection,
     setSshHostAddIntentSignal,
     settings,

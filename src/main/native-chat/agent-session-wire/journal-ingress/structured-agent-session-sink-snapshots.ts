@@ -1,5 +1,6 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ClaudeJournalSnapshot } from '../../../claude/subagents/claude-subagent-journaled-identities'
+import type { LiveTextReaders } from './structured-agent-session-event-sink'
 
 /** How a conversation's owner delivers saved facts and holds reading across a replacement. */
 export type StructuredAgentSessionSnapshotRecipient = {
@@ -10,24 +11,40 @@ export type StructuredAgentSessionSnapshotSource = (
   recipient: StructuredAgentSessionSnapshotRecipient
 ) => { release: () => void; adopted: Promise<void> }
 
+/** A stream owner's unsaved text; `has` answers without building it. */
+export type StructuredAgentSessionLiveTextSource = {
+  read(epoch: string, readers?: LiveTextReaders): readonly AgentJournalRenderItem[]
+  /** Absent for display-only rows, whose text their owner's own source reports. */
+  has?(epoch: string): boolean
+  flush(): void
+  /** Saved on a forced ack or hand-off only; ordinary acks may cover it (it never replays). */
+  deferrable?: true
+}
+
 /** One acquisition's saved facts, replaced whole per epoch, and the holds a replacement places. */
 export class StructuredAgentSessionSinkSnapshots {
-  private readonly liveSources = new Set<{
-    read(epoch: string): readonly AgentJournalRenderItem[]
-    flush(): void
-  }>()
+  private readonly liveSources = new Set<StructuredAgentSessionLiveTextSource>()
 
-  bindLiveText = (source: {
-    read(epoch: string): readonly AgentJournalRenderItem[]
-    flush(): void
-  }): (() => void) => {
+  bindLiveText = (source: StructuredAgentSessionLiveTextSource): (() => void) => {
     this.liveSources.add(source)
     return () => {
       this.liveSources.delete(source)
     }
   }
-  readLiveText = (epoch: string): readonly AgentJournalRenderItem[] =>
-    this.held || this.closed ? [] : [...this.liveSources].flatMap((source) => source.read(epoch))
+  readLiveText = (
+    epoch: string | null,
+    readers?: LiveTextReaders
+  ): readonly AgentJournalRenderItem[] =>
+    epoch === null || this.held || this.closed
+      ? []
+      : [...this.liveSources].flatMap((source) => source.read(epoch, readers))
+  hasLiveText = (epoch: string | null, includeDeferrable = false): boolean =>
+    epoch !== null &&
+    !this.held &&
+    !this.closed &&
+    [...this.liveSources].some(
+      (source) => (includeDeferrable || !source.deferrable) && source.has?.(epoch) === true
+    )
   flushLiveText = (): void => {
     this.liveSources.forEach((source) => source.flush())
   }
