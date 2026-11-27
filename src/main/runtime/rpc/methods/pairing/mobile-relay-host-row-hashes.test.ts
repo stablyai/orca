@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import {
   MOBILE_RELAY_HOST_WORKTREES_METHOD,
   MobileRelayHostWorktreesParamsSchema
@@ -32,6 +33,12 @@ const worktreesMethod = MOBILE_RELAY_HOSTS_METHODS.find(
 )!
 
 const WORKTREES = 7_500
+
+const ReplySchema = z.looseObject({
+  snapshotId: z.string(),
+  rowsFromBase: z.array(z.unknown()).optional(),
+  worktrees: z.array(z.unknown()).optional()
+})
 
 function serverRow(index: number, agentState = 'idle') {
   return {
@@ -100,14 +107,16 @@ function relayedServer() {
     mobileRelayHosts: catalog
   } as unknown as RpcContext
   const read = async (afterSnapshotId: string | null) =>
-    (await worktreesMethod.handler(
-      MobileRelayHostWorktreesParamsSchema.parse({
-        hostId: 'runtime:env-1',
-        afterSnapshotId,
-        acceptRowDelta: true
-      }),
-      ctx
-    )) as { snapshotId: string; rowsFromBase?: unknown[]; worktrees?: unknown[] }
+    ReplySchema.parse(
+      await worktreesMethod.handler(
+        MobileRelayHostWorktreesParamsSchema.parse({
+          hostId: 'runtime:env-1',
+          afterSnapshotId,
+          acceptRowDelta: true
+        }),
+        ctx
+      )
+    )
   const changeOneRow = (index: number) => {
     rows = rows.map((row, at) => (at === index ? serverRow(index, 'working') : row))
   }
