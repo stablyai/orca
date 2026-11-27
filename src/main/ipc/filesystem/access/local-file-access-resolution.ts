@@ -40,13 +40,23 @@ export async function resolveDesktopAuthorizedPath(
   })
 }
 
+function isHomeRelativePath(targetPath: string): boolean {
+  return targetPath.startsWith('~/') || targetPath.startsWith('~\\')
+}
+
+function expandHomeRelativePath(targetPath: string): string {
+  // Strip repeated leading separators so `~//notes.txt` never causes path.resolve to drop homedir().
+  const suffix = targetPath.slice(2).replace(/^[\\/]+/, '')
+  return resolve(homedir(), suffix)
+}
+
 /** User-named absolute or home-relative paths require no root and grant no persistent access. */
 function resolveUserNamedLocalPath(targetPath: string): string {
   if (typeof targetPath !== 'string') {
     throw new Error(USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE)
   }
-  if (targetPath.startsWith('~/') || targetPath.startsWith('~\\')) {
-    return resolve(homedir(), targetPath.slice(2))
+  if (isHomeRelativePath(targetPath)) {
+    return expandHomeRelativePath(targetPath)
   }
   // Reject raw relative and drive-relative paths before resolve can anchor them to main's cwd.
   if (!isAbsolute(targetPath)) {
@@ -260,17 +270,23 @@ export async function resolveLocalRequestPath(
   if (typeof targetPath !== 'string') {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
+  // Expand home-relative user-file paths before project authorization so a cwd inside a
+  // registered root never hijacks `~/...` as `<cwd>/~/...`.
+  const effectiveTargetPath =
+    fileAccess.kind === 'user-file' && isHomeRelativePath(targetPath)
+      ? expandHomeRelativePath(targetPath)
+      : targetPath
   // Device names must be refused before any automatic load, even inside projects.
   const automaticLoad = fileAccess.kind === 'document-resource' || fileAccess.kind === 'chat-image'
-  if (automaticLoad && isRefusedAutomaticLoadPath(resolve(targetPath))) {
+  if (automaticLoad && isRefusedAutomaticLoadPath(resolve(effectiveTargetPath))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   // The default textual root check refuses outside paths without contacting shares.
-  const insideRoots = await resolveDesktopAuthorizedPath(targetPath, store, options).catch(
+  const insideRoots = await resolveDesktopAuthorizedPath(effectiveTargetPath, store, options).catch(
     () => undefined
   )
   if (insideRoots === undefined) {
-    return kindRule(targetPath)
+    return kindRule(effectiveTargetPath)
   }
   if (automaticLoad && isRefusedAutomaticLoadPath(insideRoots)) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
