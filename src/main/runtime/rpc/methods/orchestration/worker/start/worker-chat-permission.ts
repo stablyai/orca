@@ -22,7 +22,8 @@ export function snapshotCoordinatorChatPermission(
   if (!session || !host) {
     return undefined
   }
-  const record = host.deps.store.getRecord(session.sessionId)
+  const { sessionId } = session
+  const record = host.deps.store.getRecord(sessionId)
   if (!record) {
     return undefined
   }
@@ -31,14 +32,14 @@ export function snapshotCoordinatorChatPermission(
     return undefined
   }
   const saved = savedChatPermissionMode(support, record.permissionMode)
+  const { adapter } = host.deps
+  const launch = host.reads.childLaunchPermissionMode(sessionId)
+  const requiresAcquisition = adapter.permissionModeRequiresAcquisition?.(sessionId, saved)
   if (saved === 'own') {
-    return { agent: record.provider, mode: saved }
+    const pending = requiresAcquisition ?? (launch !== undefined && launch !== 'own')
+    return { agent: record.provider, mode: pending ? 'ask' : saved }
   }
-  const running =
-    host.deps.adapter.runningPermissionMode?.(session.sessionId) ??
-    host.reads.childLaunchPermissionMode(session.sessionId)
-  return {
-    agent: record.provider,
-    mode: running === undefined || running === saved ? saved : 'ask'
-  }
+  const running = adapter.runningPermissionMode?.(sessionId) ?? launch
+  const pending = requiresAcquisition === true || (running !== undefined && running !== saved)
+  return { agent: record.provider, mode: pending ? 'ask' : saved }
 }

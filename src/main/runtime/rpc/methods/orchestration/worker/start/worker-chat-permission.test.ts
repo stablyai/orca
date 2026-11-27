@@ -28,6 +28,7 @@ type Case = {
   saved?: AgentChatPermissionChoice
   running?: AgentChatPermissionChoice
   launched?: AgentChatPermissionChoice
+  requiresAcquisition?: boolean
   global: 'ask' | 'full-access'
   expected: AgentChatPermissionChoice | undefined
   coordinator?: 'claude'
@@ -82,6 +83,43 @@ it.each<Case>([
     worker: 'codex',
     saved: 'own',
     running: 'accept-edits',
+    global: 'full-access',
+    expected: 'ask'
+  },
+  {
+    name: 'Claude settings launched as own when Claude reports Accept Edits',
+    coordinator: 'claude',
+    worker: 'claude',
+    saved: 'own',
+    running: 'accept-edits',
+    launched: 'own',
+    global: 'full-access',
+    expected: 'own'
+  },
+  {
+    name: 'a switch from Ask to agent settings that requires acquisition',
+    coordinator: 'claude',
+    worker: 'claude',
+    saved: 'own',
+    running: 'ask',
+    launched: 'own',
+    requiresAcquisition: true,
+    global: 'full-access',
+    expected: 'ask'
+  },
+  {
+    name: 'a switch to agent settings after launching with Ask without an acquisition report',
+    saved: 'own',
+    launched: 'ask',
+    global: 'full-access',
+    expected: 'ask'
+  },
+  {
+    name: 'Full access that still requires acquisition despite the running mode report',
+    saved: 'full-access',
+    running: 'full-access',
+    launched: 'full-access',
+    requiresAcquisition: true,
     global: 'full-access',
     expected: 'ask'
   },
@@ -180,8 +218,10 @@ it.each<Case>([
     publishBackgroundTasks: () => {},
     reads: { childLaunchPermissionMode: () => scenario.launched },
     deps: {
-      adapter:
-        scenario.running === undefined ? {} : { runningPermissionMode: () => scenario.running },
+      adapter: {
+        runningPermissionMode: () => scenario.running,
+        permissionModeRequiresAcquisition: () => scenario.requiresAcquisition
+      },
       store: {
         getRecord: (id: string) => (id === SESSION ? record : null),
         getConversation: (id: string) =>
