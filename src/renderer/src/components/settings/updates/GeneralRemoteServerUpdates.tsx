@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -31,12 +31,13 @@ type Snapshot =
   | { phase: 'running'; request: Promise<RemoteServerUpdateCheck | undefined> }
   | { phase: 'ready'; check: RemoteServerUpdateCheck }
 
-type SummaryPart = { text: string; count: number }
+type SummaryPart = { text: string; count: number; destructive?: boolean }
 
 function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): SummaryPart[] {
   const count = (phase: RemoteServerUpdateEntry['phase']): number =>
     entries.filter((entry) => entry.phase === phase).length
-  const available = entries.filter(isEligible).length
+  const available = count('available')
+  const failed = count('failed')
   const settled = entries.filter((entry) => entry.phase === 'current' || entry.phase === 'updated')
   // A newer server needs nothing from its own updater; this app is the one behind.
   const newer = settled.filter((entry) => getRemoteServerNewerThanClientVersion(entry)).length
@@ -44,6 +45,12 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): S
   const manual = count('manual')
   const offline = count('offline')
   const parts: SummaryPart[] = [
+    // First, so the narrow summary never folds a failure into "N other".
+    {
+      count: failed,
+      destructive: true,
+      text: t('settings.about.servers.failedCount', '{{value0}} failed', { value0: failed })
+    },
     {
       count: available,
       text: t('settings.about.servers.readyCount', '{{value0}} ready', {
@@ -107,6 +114,10 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): S
 }
 
 /** All counts; when narrow, the first count plus the rest folded into "N other" so none disappear. */
+function SummaryText({ part }: { part: SummaryPart }): React.JSX.Element {
+  return part.destructive ? <span className="text-destructive">{part.text}</span> : <>{part.text}</>
+}
+
 function ServerSummary({ parts }: { parts: SummaryPart[] }): React.JSX.Element {
   const t = useTranslate()
   const [first, ...rest] = parts
@@ -114,11 +125,16 @@ function ServerSummary({ parts }: { parts: SummaryPart[] }): React.JSX.Element {
   return (
     <>
       <span className={rest.length > 0 ? '@max-xs/about-row:hidden' : undefined}>
-        {parts.map((part) => part.text).join(' · ')}
+        {parts.map((part, index) => (
+          <Fragment key={part.text}>
+            {index > 0 ? ' · ' : null}
+            <SummaryText part={part} />
+          </Fragment>
+        ))}
       </span>
       {rest.length > 0 ? (
         <span className="hidden @max-xs/about-row:inline">
-          {first.text}
+          <SummaryText part={first} />
           {' · '}
           {t('settings.about.servers.otherCount', '{{value0}} other', {
             value0: other

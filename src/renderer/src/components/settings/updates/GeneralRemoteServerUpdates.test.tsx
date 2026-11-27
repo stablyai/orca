@@ -176,3 +176,14 @@ it("shows each server's own update state while updates run", async () => {
   expect(screen.getByText('Failed')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Retry' }).hasAttribute('disabled')).toBe(true)
 })
+
+it('names a failed server as failed, not ready, once updates settle', () => {
+  seed([
+    server('env-1', 'build-box', 'updated', { currentVersion: '1.4.281' }),
+    server('env-2', 'gpu-west', 'failed', { error: 'Did not reconnect.' })
+  ])
+  renderServers()
+  const failed = screen.getAllByText('1 failed')[0]
+  expect(failed.className).toContain('text-destructive')
+  expect(failed.parentElement?.textContent).toBe('1 failed · 1 up to date')
+})
