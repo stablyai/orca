@@ -40,7 +40,7 @@ export function isGitLabMRFilter(
 export function isGitLabIssueFilter(
   value: GitLabTaskFilter | GitLabIssueFilter
 ): value is GitLabIssueFilter {
-  return value === 'opened' || value === 'assigned-to-me'
+  return value === 'opened' || value === 'closed' || value === 'assigned-to-me'
 }
 export const TASK_SEARCH_DEBOUNCE_MS = 300
 export const LINEAR_ITEM_LIMIT = 36

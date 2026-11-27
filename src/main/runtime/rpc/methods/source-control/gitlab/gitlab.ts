@@ -12,6 +12,7 @@ import {
   JobTrace,
   MergeMr,
   MergeRequestsList,
+  ProjectMetadata,
   RepoSelector,
   ResolveMRDiscussion,
   RetryJob,
@@ -88,14 +89,16 @@ export const GITLAB_METHODS = [
   defineMethod({
     name: 'gitlab.listLabels',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.listGitLabRepoLabels(params.repo)
+    params: ProjectMetadata,
+    handler: async (params, { runtime }) =>
+      runtime.listGitLabRepoLabels(params.repo, params.projectRef)
   }),
   defineMethod({
     name: 'gitlab.listAssignableUsers',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.listGitLabRepoAssignableUsers(params.repo)
+    params: ProjectMetadata,
+    handler: async (params, { runtime }) =>
+      runtime.listGitLabRepoAssignableUsers(params.repo, params.projectRef)
   }),
   defineMethod({
     name: 'gitlab.createIssue',

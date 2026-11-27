@@ -4,12 +4,13 @@ import { useAppStore } from '@/store'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, ExternalLink } from 'lucide-react'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import { GitLabItemActions } from './GitLabItemActions'
 
 const GITLAB_ITEM_GRID_CLASS =
-  'grid grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] @max-xl:grid-cols-[48px_minmax(0,1fr)_76px_50px] gap-3 px-3 py-2'
+  'grid grid-cols-[80px_minmax(0,3fr)_120px_110px_56px] @max-xl:grid-cols-[48px_minmax(0,1fr)_76px_56px] gap-3 px-3 py-2'
 
 export function TaskPageGitLabItemList({
   model
@@ -25,7 +26,9 @@ export function TaskPageGitLabItemList({
     gitlabEmptyState,
     displayedGitLabItems,
     openGitLabDetailPage,
-    handleUseGitLabItem
+    handleUseGitLabItem,
+    selectedRepos,
+    setGitlabRefreshNonce
   } = model
   return (
     <div className="@container flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
@@ -84,7 +87,7 @@ export function TaskPageGitLabItemList({
             <div
               role="button"
               tabIndex={0}
-              key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
+              key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}:${item.url}`}
               onClick={() => {
                 useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
                 openGitLabDetailPage(item)
@@ -169,17 +172,11 @@ export function TaskPageGitLabItemList({
                     {t('auto.components.TaskPage.9497f2787c', 'Start workspace')}
                   </TooltipContent>
                 </Tooltip>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openAppHttpLink(item.url, { event: e })
-                  }}
-                  aria-label={t('auto.components.TaskPage.bcdc1330b2', 'Open in GitLab')}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <ExternalLink className="size-3.5" />
-                </button>
+                <GitLabItemActions
+                  item={item}
+                  repo={getWorkItemRepo(selectedRepos, item)}
+                  onRefresh={() => setGitlabRefreshNonce((nonce) => nonce + 1)}
+                />
               </div>
             </div>
           ))}

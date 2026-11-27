@@ -144,26 +144,30 @@ export class RuntimeGitLabQueryCommands {
   }
 
   async listGitLabRepoLabels(
-    repoSelector: string
+    repoSelector: string,
+    projectRef?: GitLabProjectRef | null
   ): Promise<Awaited<ReturnType<typeof listLabels>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return listLabels(
       repo.path,
       repo.issueSourcePreference,
       getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      projectRef
     )
   }
 
   async listGitLabRepoAssignableUsers(
-    repoSelector: string
+    repoSelector: string,
+    projectRef?: GitLabProjectRef | null
   ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return listAssignableUsers(
       repo.path,
       repo.issueSourcePreference,
       getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      projectRef
     )
   }
 

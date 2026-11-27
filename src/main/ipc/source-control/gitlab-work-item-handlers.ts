@@ -73,7 +73,7 @@ export function registerGitLabWorkItemHandlers(
           args.type,
           repo.issueSourcePreference,
           repoConnectionId(repo),
-          undefined,
+          args.projectRef,
           localGitOptions,
           // Only the phone reads viewerDidAuthor, so desktop skips the `glab api user` lookup.
           { includeReviewDetails: args.includeReviewDetails, markViewerComments: false }

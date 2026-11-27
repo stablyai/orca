@@ -138,7 +138,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
             return gitLabApiFor(selector)
               .listIssues({
                 ...selector,
-                state: 'opened',
+                state: activeIssueFilter === 'closed' ? 'closed' : 'opened',
                 assignee: isAssignedToMe ? '@me' : undefined,
                 limit: 50
               })

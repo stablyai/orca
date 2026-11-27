@@ -1,4 +1,4 @@
-import type { GitLabAssignableUser } from '../../../shared/gitlab/gitlab-types'
+import type { GitLabAssignableUser, GitLabProjectRef } from '../../../shared/gitlab/gitlab-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { acquire, release } from '../requests/glab-request-admission'
@@ -13,16 +13,20 @@ export async function listLabels(
   repoPath: string,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  projectRefOverride?: GitLabProjectRef | null
 ): Promise<string[]> {
-  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
-  const { source: projectRef } = await resolveIssueSource(
-    repoPath,
-    preference,
-    knownHosts,
-    connectionId,
-    localGitOptions
-  )
+  const projectRef =
+    projectRefOverride ??
+    (
+      await resolveIssueSource(
+        repoPath,
+        preference,
+        await getGlabKnownHosts(connectionId, localGitOptions),
+        connectionId,
+        localGitOptions
+      )
+    ).source
   if (!projectRef) {
     return []
   }
@@ -47,16 +51,20 @@ export async function listAssignableUsers(
   repoPath: string,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  projectRefOverride?: GitLabProjectRef | null
 ): Promise<GitLabAssignableUser[]> {
-  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
-  const { source: projectRef } = await resolveIssueSource(
-    repoPath,
-    preference,
-    knownHosts,
-    connectionId,
-    localGitOptions
-  )
+  const projectRef =
+    projectRefOverride ??
+    (
+      await resolveIssueSource(
+        repoPath,
+        preference,
+        await getGlabKnownHosts(connectionId, localGitOptions),
+        connectionId,
+        localGitOptions
+      )
+    ).source
   if (!projectRef) {
     return []
   }

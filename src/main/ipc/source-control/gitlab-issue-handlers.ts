@@ -116,7 +116,7 @@ export function registerGitLabIssueHandlers(store: Store, ipc: IpcHandleRegistra
         args.updates,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -144,7 +144,8 @@ export function registerGitLabIssueHandlers(store: Store, ipc: IpcHandleRegistra
       repo.path,
       repo.issueSourcePreference,
       repoConnectionId(repo),
-      ...localGitOptionArgs(store, repo)
+      localGitOptionArgs(store, repo)[0],
+      args.projectRef
     )
   })
 
@@ -154,7 +155,8 @@ export function registerGitLabIssueHandlers(store: Store, ipc: IpcHandleRegistra
       repo.path,
       repo.issueSourcePreference,
       repoConnectionId(repo),
-      ...localGitOptionArgs(store, repo)
+      localGitOptionArgs(store, repo)[0],
+      args.projectRef
     )
   })
 }

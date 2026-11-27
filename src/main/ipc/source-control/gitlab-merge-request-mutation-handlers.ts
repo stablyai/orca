@@ -38,7 +38,7 @@ export function registerGitLabMergeRequestMutationHandlers(
       args.iid,
       repo.issueSourcePreference,
       repoConnectionId(repo),
-      undefined,
+      args.projectRef,
       ...localGitOptionArgs(store, repo)
     )
   })
@@ -50,7 +50,7 @@ export function registerGitLabMergeRequestMutationHandlers(
       args.iid,
       repo.issueSourcePreference,
       repoConnectionId(repo),
-      undefined,
+      args.projectRef,
       ...localGitOptionArgs(store, repo)
     )
   })
@@ -84,7 +84,7 @@ export function registerGitLabMergeRequestMutationHandlers(
         args.updates,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
