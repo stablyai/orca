@@ -47,26 +47,18 @@ export function ReleaseChannelSection(): React.JSX.Element {
     : 'stable'
   const busy = updateStatus.state === 'checking' || updateStatus.state === 'downloading'
 
-  useEffect(() => {
-    let cancelled = false
-    void window.api.updater
-      .getVersion()
-      .then((version) => {
-        if (!cancelled) {
-          setAppVersion(version)
-        }
-      })
-      .catch((error: unknown) => {
-        // Without the running version there is no channel to compare against; say so where the
-        // build list would have been.
-        if (!cancelled) {
-          setLoadError({ message: errorMessage(error) })
-        }
-      })
-    return () => {
-      cancelled = true
-    }
+  // Without the running version there is no channel to compare against; a failure shows where the
+  // build list would have been, and the list's Refresh retries it.
+  const loadVersion = useCallback((): void => {
+    void window.api.updater.getVersion().then(
+      (version) => {
+        setLoadError(null)
+        setAppVersion(version)
+      },
+      (error: unknown) => setLoadError({ message: errorMessage(error) })
+    )
   }, [])
+  useEffect(loadVersion, [loadVersion])
 
   // Version resolution and rapid clicks can overlap loads; reject earlier requests that finish on the wrong channel.
   const latestRequestRef = useRef(0)
@@ -230,7 +222,11 @@ export function ReleaseChannelSection(): React.JSX.Element {
                   'Refresh build list'
                 )}
                 disabled={loading}
-                onClick={() => void loadBuilds(activeChannel, { force: true })}
+                onClick={() =>
+                  appVersion === null
+                    ? loadVersion()
+                    : void loadBuilds(activeChannel, { force: true })
+                }
               >
                 {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
               </Button>

@@ -13,6 +13,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { useAppStore } from '@/store/index'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateCheck } from '@/store/slices/runtime-host-updates/remote-server-updates'
 import { useTranslate } from '@/i18n/use-translate'
 import { RemoteServerUpdateStatus } from './RemoteServerUpdateStatus'
 import {
@@ -108,20 +109,36 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
           value0: liveLeafCount
         })
 
-  // A failed refresh leaves the previous targets on screen; they stay visible but can't be updated
-  // until a retry succeeds.
+  // Updates act only on targets and live-session counts this dialog checked itself: it owns the
+  // check its own refresh returned, for the current revision. A refresh skipped because another
+  // check or update was running is retried once that work ends; a failed one waits for Retry.
+  const revision = useAppStore((state) => state.remoteServerUpdatesCheckRevision)
+  const [ownedCheck, setOwnedCheck] = useState<RemoteServerUpdateCheck | null>(null)
   const [refreshFailed, setRefreshFailed] = useState(false)
+  if (!open && (ownedCheck !== null || refreshFailed)) {
+    // Each opening checks afresh.
+    setOwnedCheck(null)
+    setRefreshFailed(false)
+  }
+  const currentCheck = ownedCheck?.revision === revision ? ownedCheck : null
   const runRefresh = useCallback((): void => {
+    setRefreshFailed(false)
     void refresh().then(
-      () => setRefreshFailed(false),
+      (check) => {
+        if (check) {
+          setOwnedCheck(check)
+        }
+      },
       () => setRefreshFailed(true)
     )
   }, [refresh])
+  const needsCheck = open && currentCheck === null && !refreshFailed && !checking && !running
   useEffect(() => {
-    if (open) {
+    if (needsCheck) {
       runRefresh()
     }
-  }, [open, runRefresh])
+  }, [needsCheck, runRefresh])
+  const updatesBlocked = currentCheck === null || checking || running
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -165,7 +182,8 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
                     'Checking paired servers…'
                   )}
                 </span>
-              ) : (
+              ) : refreshFailed ? null : (
+                // A failed check says nothing about pairing; its error line below says what happened.
                 t(
                   'auto.components.settings.RemoteServerUpdateDialog.empty',
                   'No paired Remote Orca Servers.'
@@ -178,8 +196,12 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
                 <ServerUpdateRow
                   key={entry.environmentId}
                   entry={entry}
-                  disabled={running || checking || refreshFailed}
-                  onUpdate={() => void start([entry.environmentId])}
+                  disabled={updatesBlocked}
+                  onUpdate={() => {
+                    if (currentCheck) {
+                      void start([entry.environmentId], currentCheck)
+                    }
+                  }}
                 />
               ))}
             </div>
@@ -200,7 +222,13 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               'auto.components.settings.RemoteServerUpdateDialog.refreshFailed',
               'Could not check paired servers.'
             )}{' '}
-            <Button type="button" variant="link" size="inlineInherit" onClick={runRefresh}>
+            <Button
+              type="button"
+              variant="link"
+              size="inlineInherit"
+              disabled={running}
+              onClick={runRefresh}
+            >
               {t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')}
             </Button>
           </p>
@@ -219,8 +247,12 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               type="button"
               size="sm"
               autoFocus={eligible.length > 0}
-              onClick={() => void start()}
-              disabled={checking || running || refreshFailed}
+              onClick={() => {
+                if (currentCheck) {
+                  void start(undefined, currentCheck)
+                }
+              }}
+              disabled={updatesBlocked}
             >
               {t(
                 'auto.components.settings.RemoteServerUpdateDialog.updateAll',

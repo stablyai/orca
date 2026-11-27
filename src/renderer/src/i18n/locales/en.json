@@ -2294,8 +2294,7 @@
         "check": "Check",
         "retry": "Retry",
         "skipDelay": "Skip delay",
-        "install": "Install",
-        "installNow": "Install {{version}} now",
+        "checkHeldNow": "Check for {{version}} now. Your delay setting stays the same.",
         "restart": "Restart",
         "checkForUpdates": "Check for updates"
       },

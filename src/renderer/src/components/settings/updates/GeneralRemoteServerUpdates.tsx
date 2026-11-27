@@ -50,9 +50,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const toggleRef = useRef<HTMLButtonElement>(null)
   const bulkActionRef = useRef<HTMLDivElement>(null)
   const actionRef = useRef<HTMLDivElement>(null)
-  // Set while keyboard focus is in the header action; a removed button leaves it set.
-  const actionHadFocus = useRef(false)
-  const actionFocusGeneration = useRef(0)
+  // The action button that last had keyboard focus; cleared when focus genuinely moves away.
+  const lastFocusedAction = useRef<HTMLElement | null>(null)
   const [snapshot, setSnapshot] = useState<Snapshot>({ phase: 'owed' })
   const refreshSnapshot = useCallback(
     (options?: UpdateCheckOptions): void => {
@@ -131,13 +130,19 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       return
     }
     const active = container.ownerDocument.activeElement
-    const dropped = actionHadFocus.current && (!active || active === container.ownerDocument.body)
+    // Dropped only when the button that had focus was removed; a button still on the page that the
+    // user blurred to the page must not pull focus back.
+    const lastFocused = lastFocusedAction.current
+    const dropped =
+      lastFocused !== null &&
+      !lastFocused.isConnected &&
+      (!active || active === container.ownerDocument.body)
     const stranded =
       active instanceof HTMLButtonElement &&
       container.contains(active) &&
       (active.disabled || active.getClientRects().length === 0)
     if (dropped || stranded) {
-      actionHadFocus.current = false
+      lastFocusedAction.current = null
       toggleRef.current?.focus()
     }
   }, [])
@@ -320,25 +325,15 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
             ref={actionRef}
             // Keeps the header's height when updates hide its button, so the rows below don't jump.
             className="flex min-h-8 items-center"
-            onFocus={() => {
-              actionHadFocus.current = true
-              actionFocusGeneration.current += 1
+            onFocus={(event) => {
+              lastFocusedAction.current = event.target instanceof HTMLElement ? event.target : null
             }}
             onBlur={(event) => {
-              // Keep the flag only when the focused button itself was removed, so focus can be
-              // restored; any other blur (to another control or the page) clears it.
-              const blurred = event.target
-              if (event.relatedTarget) {
-                actionHadFocus.current = false
-                return
+              // A blur from a button still on the page is a real move away; a removed button's
+              // blur keeps the ref so its focus can land on Servers.
+              if (event.target.isConnected) {
+                lastFocusedAction.current = null
               }
-              // A later focus inside the action owns the flag; this deferred check must not clear it.
-              const generation = actionFocusGeneration.current
-              requestAnimationFrame(() => {
-                if (blurred.isConnected && generation === actionFocusGeneration.current) {
-                  actionHadFocus.current = false
-                }
-              })
             }}
           >
             {action}

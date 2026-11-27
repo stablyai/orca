@@ -186,11 +186,14 @@ function getPrimaryModel(
       const stuck = status.messageCode === 'macStagingTimeout'
       // Retry only when the host says the step can succeed again; otherwise the next move is a fresh
       // Check.
-      const action = canRetryInstall
-        ? act('retry-install')
-        : status.retryable === false || stuck
+      // A stuck staging can't be retried by any action, even when an older host also asks for an
+      // install retry, so it wins.
+      const action =
+        stuck || status.retryable === false
           ? act('check', false, stuck)
-          : act('retry-check')
+          : canRetryInstall
+            ? act('retry-install')
+            : act('retry-check')
       if (status.installBlock) {
         return {
           line: { kind: 'install-blocked' },

@@ -1539,8 +1539,7 @@
         "blocked": "已阻止"
       },
       "action": {
-        "install": "安装",
-        "installNow": "立即安装 {{version}}"
+        "checkHeldNow": "立即检查 {{version}}。你的延迟设置保持不变。"
       }
     }
   },

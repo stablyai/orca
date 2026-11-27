@@ -2290,8 +2290,7 @@
         "blocked": "Blockiert"
       },
       "action": {
-        "install": "Installieren",
-        "installNow": "{{version}} jetzt installieren"
+        "checkHeldNow": "Jetzt nach {{version}} suchen. Deine Verzögerungseinstellung bleibt gleich."
       }
     }
   },

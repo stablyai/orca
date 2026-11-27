@@ -2251,8 +2251,7 @@
         "blocked": "已封鎖"
       },
       "action": {
-        "install": "安裝",
-        "installNow": "立即安裝 {{version}}"
+        "checkHeldNow": "立即檢查 {{version}}。你的延遲設定保持不變。"
       }
     }
   },

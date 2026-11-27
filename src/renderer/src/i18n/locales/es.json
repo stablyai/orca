@@ -1565,8 +1565,7 @@
         "blocked": "Bloqueado"
       },
       "action": {
-        "install": "Instalar",
-        "installNow": "Instalar {{version}} ahora"
+        "checkHeldNow": "Buscar {{version}} ahora. Tu ajuste de retraso no cambia."
       }
     }
   },

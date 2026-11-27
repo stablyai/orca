@@ -1537,8 +1537,7 @@
         "blocked": "ブロック中"
       },
       "action": {
-        "install": "インストール",
-        "installNow": "{{version}} を今すぐインストール"
+        "checkHeldNow": "今すぐ {{version}} を確認します。遅延設定は変わりません。"
       }
     }
   },

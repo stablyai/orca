@@ -275,9 +275,11 @@ export function UpdateStatusRow({
       {showDetails ? (
         <UpdateStatusDetails
           text={details}
-          // Coded messages are translated prose; only an uncoded raw error keeps monospace lines.
+          // Translated copy is prose; an untranslated message (no code, or an unknown one that
+          // falls back to the raw text) keeps monospace lines.
           prose={
-            model.details !== 'message' || (status.state === 'error' && Boolean(status.messageCode))
+            model.details !== 'message' ||
+            (status.state === 'error' && Boolean(status.messageCode) && details !== status.message)
           }
         />
       ) : null}
@@ -325,34 +327,38 @@ function UpdateStatusAction({
           </span>
         </Button>
       )
-    case 'skip-delay':
+    case 'skip-delay': {
+      const skipHint =
+        model.line.kind === 'held'
+          ? t(
+              'settings.about.action.checkHeldNow',
+              'Check for {{version}} now. Your delay setting stays the same.',
+              { version: model.line.version }
+            )
+          : t(
+              'settings.updateDelay.skipDelayOnceHint',
+              'Check for this release now. Your delay setting stays the same.'
+            )
       return (
         <Button
           type="button"
           variant="outline"
           size="sm"
-          title={t(
-            'settings.updateDelay.skipDelayOnceHint',
-            'Check for this release now. Your delay setting stays the same.'
-          )}
-          aria-description={
-            model.line.kind === 'held'
-              ? t('settings.about.action.installNow', 'Install {{version}} now', {
-                  version: model.line.version
-                })
-              : undefined
-          }
+          title={skipHint}
+          // The narrow label is just "Check", so the description says what it checks.
+          aria-description={skipHint}
           onClick={() => runUpdateCheck({ ignoreUpdateDelay: true })}
         >
-          {/* "Skip delay" crowds the version on the 256px card; "Install" is the same action. */}
+          {/* "Skip delay" crowds the version on the 256px card; it only checks, so it says Check there. */}
           <span className="@max-xs/about-status:hidden">
             {t('settings.about.action.skipDelay', 'Skip delay')}
           </span>
           <span className="hidden @max-xs/about-status:inline">
-            {t('settings.about.action.install', 'Install')}
+            {t('settings.about.action.check', 'Check')}
           </span>
         </Button>
       )
+    }
     case 'download':
       return (
         <Button type="button" size="sm" onClick={onDownload}>

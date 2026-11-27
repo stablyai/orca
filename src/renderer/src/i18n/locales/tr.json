@@ -2290,8 +2290,7 @@
         "blocked": "Engellendi"
       },
       "action": {
-        "install": "Yükle",
-        "installNow": "{{version}} sürümünü şimdi yükle"
+        "checkHeldNow": "{{version}} sürümünü şimdi denetle. Gecikme ayarınız aynı kalır."
       }
     }
   },
