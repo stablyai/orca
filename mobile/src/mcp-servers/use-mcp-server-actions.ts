@@ -259,7 +259,7 @@ export function useMcpServerActions(args: {
         title: t('mcpServers.moveTitle', 'Move {{name}} to Orca?', { name: entry.name }),
         message: t(
           'mcpServers.moveMessage',
-          "Orca uses a new or existing entry on this host's MCP server list. It tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
+          'Orca uses a new or existing entry on this host’s MCP server list. It tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.',
           {
             agents: new Intl.ListFormat(getUiIntlLocale(), { type: 'conjunction' }).format(
               mcpMoveRemovesFrom(entry).map(mcpAgentName)

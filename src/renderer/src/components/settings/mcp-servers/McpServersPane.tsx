@@ -129,12 +129,12 @@ export function McpServersPane({
       description: one
         ? t(
             'settings.mcpServers.move.line',
-            "Orca uses a new or existing entry on this host's MCP server list. It tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
+            'Orca uses a new or existing entry on this host’s MCP server list. It tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.',
             { agents: agentNames }
           )
         : t(
             'settings.mcpServers.move.allLine',
-            "Orca moves servers one at a time, stopping if one fails. For each server it reaches, it uses a new or existing entry on this host's MCP server list and tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
+            'Orca moves servers one at a time, stopping if one fails. For each server it reaches, it uses a new or existing entry on this host’s MCP server list and tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.',
             { agents: agentNames }
           ),
       confirmLabel: t('settings.mcpServers.move.confirm', 'Move')

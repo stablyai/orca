@@ -8664,7 +8664,7 @@
     "removeMessage": "New sessions won’t have it. You can add it again any time.",
     "remove": "Remove",
     "moveTitle": "Move {{name}} to Orca?",
-    "moveMessage": "Orca uses a new or existing entry on this host's MCP server list. It tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
+    "moveMessage": "Orca uses a new or existing entry on this host’s MCP server list. It tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
     "move": "Move",
     "workspacesCount": "{{count}} workspaces",
     "workspacesAllButCount": "All but {{count}}",

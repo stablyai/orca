@@ -2170,8 +2170,8 @@
       "move": {
         "title": "Move {{name}} to Orca?",
         "allTitle": "Move {{count}} servers to Orca?",
-        "line": "Orca uses a new or existing entry on this host's MCP server list. It tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
-        "allLine": "Orca moves servers one at a time, stopping if one fails. For each server it reaches, it uses a new or existing entry on this host's MCP server list and tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
+        "line": "Orca uses a new or existing entry on this host’s MCP server list. It tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
+        "allLine": "Orca moves servers one at a time, stopping if one fails. For each server it reaches, it uses a new or existing entry on this host’s MCP server list and tries to remove eligible copies from the settings for {{agents}}. Before removing entries from a settings file, Orca backs up that file.",
         "confirm": "Move"
       },
       "yours": "Yours",
