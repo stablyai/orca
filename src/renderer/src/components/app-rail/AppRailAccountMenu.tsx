@@ -20,10 +20,19 @@ import {
   type HelpMenuController,
   type SetupMilestones
 } from '@/components/sidebar/chrome/help-menu-controller'
-import { OrcaProfileSignOutConfirmDialog } from '@/components/orca-profiles/OrcaProfileSignOutConfirmDialog'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
 import { refocusTriggerIfFocusLost } from './AppRailCustomizeMenu'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
+
+const LazyOrcaProfileSignOutConfirmDialog = lazyWithRetry(
+  () =>
+    import('@/components/orca-profiles/OrcaProfileSignOutConfirmDialog').then((module) => ({
+      default: module.OrcaProfileSignOutConfirmDialog
+    })),
+  { reloadKey: 'orca-profile-sign-out-confirm-dialog' }
+)
 
 export type AppRailAccount = { name: string; email: string | undefined; initial: string }
 
@@ -101,6 +110,7 @@ export function AppRailAccountMenu({
   const signOutReturnTarget = (): HTMLElement | null =>
     triggerRef.current?.isConnected ? triggerRef.current : getTitlebarSidebarToggle()
   const [signOutOpen, setSignOutOpen] = useState(false)
+  const hasOpenedSignOut = useLatchedOpen(signOutOpen)
   const [signingOut, setSigningOut] = useState(false)
 
   const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
@@ -245,13 +255,17 @@ export function AppRailAccountMenu({
           )}
         </span>
       ) : null}
-      <OrcaProfileSignOutConfirmDialog
-        open={signOutOpen}
-        onOpenChange={setSignOutOpen}
-        onConfirm={() => void confirmSignOut()}
-        signingOut={signingOut}
-        returnFocusTo={signOutReturnTarget}
-      />
+      {hasOpenedSignOut ? (
+        <React.Suspense fallback={null}>
+          <LazyOrcaProfileSignOutConfirmDialog
+            open={signOutOpen}
+            onOpenChange={setSignOutOpen}
+            onConfirm={() => void confirmSignOut()}
+            signingOut={signingOut}
+            returnFocusTo={signOutReturnTarget}
+          />
+        </React.Suspense>
+      ) : null}
     </>
   )
 }
