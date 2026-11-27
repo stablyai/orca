@@ -29,6 +29,8 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     candidates?: Iterable<MobileSessionTabSubscription>
   ): MobileSessionTabSubscription[]
 
+  protected abstract hasPaneStatusListeners(paneKey: string): boolean
+
   abstract getTerminalWorktreeIdForPaneKey(
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
   ): ReturnType<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
