@@ -275,7 +275,10 @@ export function acpStructuredLaunchPart(
     // The host list's never shares a name with the agent's own (above).
     // A loader that needs the agent's version reads nothing without it (a kept agent's launch).
     const ownRead = !spec.ownMcpServers || (launchedVersion ?? null) !== null
-    const { mcpServers, toolsKey } = acpLaunchMcpServers(tools, ownServers, { toolsOff, ownRead })
+    const { mcpServers, toolsKey } = await acpLaunchMcpServers(tools, ownServers, {
+      toolsOff,
+      ownRead
+    })
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
