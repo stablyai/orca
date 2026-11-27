@@ -25645,7 +25645,9 @@
       "chatOtherWindow": "Sign-in is in progress in another window.",
       "chatPageDidntOpen": "Page didn't open?",
       "chatPasteCode": "Paste the code",
-      "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address"
+      "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address",
+      "launchesUse": "New agy launches use this account",
+      "loginNow": "agy's login right now"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",

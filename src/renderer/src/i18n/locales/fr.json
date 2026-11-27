@@ -25461,7 +25461,9 @@
       "chatOtherWindow": "Une connexion est en cours dans une autre fenêtre.",
       "chatPageDidntOpen": "La page ne s'est pas ouverte ?",
       "chatPasteCode": "Collez le code",
-      "chatPasteCodeLabel": "Le code que Google affiche après la connexion, ou l'adresse de cette page"
+      "chatPasteCodeLabel": "Le code que Google affiche après la connexion, ou l'adresse de cette page",
+      "launchesUse": "Les nouveaux lancements d'agy utilisent ce compte",
+      "loginNow": "Connexion agy actuelle"
     },
     "claude": {
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",

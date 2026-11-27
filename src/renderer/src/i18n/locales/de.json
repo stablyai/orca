@@ -25237,7 +25237,9 @@
       "chatOtherWindow": "Die Anmeldung läuft bereits in einem anderen Fenster.",
       "chatPageDidntOpen": "Seite nicht geöffnet?",
       "chatPasteCode": "Code einfügen",
-      "chatPasteCodeLabel": "Der Code, den Google nach der Anmeldung anzeigt, oder die Adresse dieser Seite"
+      "chatPasteCodeLabel": "Der Code, den Google nach der Anmeldung anzeigt, oder die Adresse dieser Seite",
+      "launchesUse": "Neue agy-Starts verwenden dieses Konto",
+      "loginNow": "Aktuelle agy-Anmeldung"
     },
     "claude": {
       "added": "Konto hinzugefügt. Das Konto auswählen, um es beim nächsten Start von Claude zu verwenden.",
