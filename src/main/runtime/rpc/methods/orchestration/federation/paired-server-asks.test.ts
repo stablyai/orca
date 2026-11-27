@@ -387,7 +387,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     expect(await cards()).toEqual([])
   })
 
-  it("names this computer and only the agents it always lets the server ask, for the server's bot list", async () => {
+  it("names this computer and only the agents it always lets the server ask, in the server's own bot list", async () => {
     vi.mocked(computer.runtime.bots.list).mockReturnValue([
       makeTestBot({ id: 'docs', name: 'Docs' }),
       makeTestBot({ id: 'notes', name: 'Notes' }),
@@ -398,51 +398,40 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     await listening()
 
     // Notes was never allowed, and Quiet is paused: an ask to either would not be taken.
-    await vi.waitFor(() =>
-      expect(connectedClientRosters(server.runtime)).toEqual([
-        { name: "Alice's Mac", onClient: 'install_a', bots: [{ id: 'docs', name: 'Docs' }] }
-      ])
-    )
+    const listed = {
+      name: "Alice's Mac",
+      onClient: 'install_a',
+      bots: [{ id: 'docs', name: 'Docs' }]
+    }
+    await vi.waitFor(() => expect(connectedClientRosters(server.runtime)).toEqual([listed]))
+
+    // The server's own caller gets it; a paired computer reading the server's roster never does.
+    vi.spyOn(server.runtime.bots, 'roster').mockResolvedValue([])
+    vi.spyOn(server.runtime, 'listOrchestrationWorkerServers').mockResolvedValue([])
+    const roster = (context: Parameters<RpcDispatcher['dispatch']>[1]) =>
+      new RpcDispatcher({ runtime: server.runtime, methods: BOT_METHODS })
+        .dispatch(
+          {
+            id: `roster_${callCount++}`,
+            authToken: 'local',
+            method: 'bots.roster',
+            params: { allComputers: true }
+          },
+          context
+        )
+        .then((response) => (response.ok ? response.result : response.error))
+    expect(await roster({ caller: { kind: 'desktop' } })).toMatchObject({ clients: [listed] })
+    expect(
+      await roster({
+        authenticatedCallerFingerprint: pairing,
+        pairedDeviceId: 'device_a',
+        clientKind: 'runtime'
+      })
+    ).toEqual({ bots: [] })
 
     // Removed: the next pull stops naming it.
     await call('pairedServerAsks.disallow', { botId: 'docs', serverKey: 'fingerprint_s' })
     await vi.waitFor(() => expect(connectedClientRosters(server.runtime)[0]?.bots).toEqual([]))
-  })
-
-  it("gives the server's own bot list this computer, and a paired caller's list never", async () => {
-    await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
-    await listening()
-    await vi.waitFor(() => expect(connectedClientRosters(server.runtime)[0]?.bots).toHaveLength(1))
-    vi.spyOn(server.runtime.bots, 'roster').mockResolvedValue([])
-    vi.spyOn(server.runtime, 'listOrchestrationWorkerServers').mockResolvedValue([])
-    const roster = async (context: Parameters<RpcDispatcher['dispatch']>[1]) => {
-      const response = await new RpcDispatcher({
-        runtime: server.runtime,
-        methods: BOT_METHODS
-      }).dispatch(
-        {
-          id: `roster_${callCount++}`,
-          authToken: 'local',
-          method: 'bots.roster',
-          params: { allComputers: true }
-        },
-        context
-      )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-      return response.result
-    }
-
-    expect(await roster({ caller: { kind: 'desktop' } })).toMatchObject({
-      clients: [{ onClient: 'install_a', bots: [{ id: 'docs', name: 'Docs' }] }]
-    })
-    const paired = await roster({
-      authenticatedCallerFingerprint: pairing,
-      pairedDeviceId: 'device_a',
-      clientKind: 'runtime'
-    })
-    expect(paired).toEqual({ bots: [] })
   })
 
   it("names the sender by this computer's name for the server, in the request and its header", async () => {
