@@ -25,7 +25,7 @@ export type RunTargetHostOption = {
   keepOpen?: boolean
 }
 
-/** A row in the run-target list. Hosts commit; the last two open a submenu. */
+/** A row in the run-target list. Hosts commit; the recipe and Add host rows open a submenu. */
 export type RunTargetRowModel =
   | { key: string; kind: 'host'; option: RunTargetHostOption }
   | { key: typeof RUN_TARGET_RECIPES_KEY; kind: 'recipes' }
@@ -62,11 +62,11 @@ function matches(haystack: string, query: string): boolean {
   return haystack.toLowerCase().includes(query)
 }
 
-/** Show ready hosts first; bound and rank unready hosts, which may include every configured SSH host. */
+/** Split ready hosts from unready ones; bound and rank unready hosts, which may include every configured SSH host. */
 function buildHostRows(
   hostOptions: readonly RunTargetHostOption[],
   query: string
-): { rows: RunTargetRowModel[]; hiddenHostCount: number } {
+): { ready: RunTargetRowModel[]; needsSetup: RunTargetRowModel[]; hiddenHostCount: number } {
   const hostMatches = (option: RunTargetHostOption): boolean =>
     query === '' ||
     matches(option.label, query) ||
@@ -88,10 +88,16 @@ function buildHostRows(
     // Why the query again: ranks an exact name first so typing it always reaches the host.
     { query }
   )
-  const rows: RunTargetRowModel[] = [...ready, ...needsSetup.shown.map(({ option }) => option)].map(
-    (option) => ({ key: `host:${option.id}`, kind: 'host', option })
-  )
-  return { rows, hiddenHostCount: needsSetup.hiddenCount }
+  const toRow = (option: RunTargetHostOption): RunTargetRowModel => ({
+    key: `host:${option.id}`,
+    kind: 'host',
+    option
+  })
+  return {
+    ready: ready.map(toRow),
+    needsSetup: needsSetup.shown.map(({ option }) => toRow(option)),
+    hiddenHostCount: needsSetup.hiddenCount
+  }
 }
 
 function matchRecipes(
@@ -108,18 +114,8 @@ function matchRecipes(
   )
 }
 
-function buildSubmenuRows(hasRecipes: boolean, hasAddHost: boolean): RunTargetRowModel[] {
-  const rows: RunTargetRowModel[] = []
-  if (hasRecipes) {
-    rows.push({ key: RUN_TARGET_RECIPES_KEY, kind: 'recipes' })
-  }
-  if (hasAddHost) {
-    rows.push({ key: RUN_TARGET_ADD_HOST_KEY, kind: 'add-host' })
-  }
-  return rows
-}
-
-/** Filter host/recipe rows but always keep Add host reachable; other submenus require matching contents. */
+/** Filter host/recipe rows but always keep Add host reachable; other submenus require matching contents.
+ *  Recipes follow the ready hosts: unready hosts need a setup step first and may run to dozens of rows. */
 export function buildRunTargetRows(
   {
     hostOptions,
@@ -143,8 +139,12 @@ export function buildRunTargetRows(
   const matchedRecipes = matchRecipes(recipes, trimmed, t)
   const hostRows = buildHostRows(hostOptions, trimmed)
   const rows: RunTargetRowModel[] = [
-    ...hostRows.rows,
-    ...buildSubmenuRows(matchedRecipes.length > 0, hasAddHost)
+    ...hostRows.ready,
+    ...(matchedRecipes.length > 0
+      ? [{ key: RUN_TARGET_RECIPES_KEY, kind: 'recipes' } as const]
+      : []),
+    ...hostRows.needsSetup,
+    ...(hasAddHost ? [{ key: RUN_TARGET_ADD_HOST_KEY, kind: 'add-host' } as const] : [])
   ]
   return { rows, matchedRecipes, hiddenHostCount: hostRows.hiddenHostCount }
 }

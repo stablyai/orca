@@ -12,7 +12,10 @@ import {
 } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 
-type RuntimeEnvironmentSource = Pick<PublicKnownRuntimeEnvironment, 'id' | 'source'>
+type RuntimeEnvironmentSource = Pick<
+  PublicKnownRuntimeEnvironment,
+  'id' | 'source' | 'orcadDeployment'
+>
 
 /** Per-workspace runtimes come in two kinds: runtime-owned SSH targets and ephemeral-VM Orca servers. */
 function isPerWorkspaceRuntimeRepo(

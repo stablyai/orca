@@ -6,6 +6,7 @@ import {
   type PairedRuntimeConnection
 } from '../pairing/paired-runtime-connection'
 import { classifyRemotePairingHostname } from '../pairing/remote-pairing-address'
+import { isRuntimeOwnedSshTargetId } from '../../execution-host/execution-host'
 import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
 import {
   OrcadWslDeploymentLinkSchema,
@@ -224,10 +225,16 @@ export function createEnvironmentFromPairingOffer(args: {
   })
 }
 
+/** A recipe VM's own server: paired by its recipe, or the one Orca deploys over the VM's SSH target. */
 export function isEphemeralVmRuntimeEnvironment(
-  environment: Pick<PublicKnownRuntimeEnvironment, 'source'>
+  environment: Pick<PublicKnownRuntimeEnvironment, 'source'> & {
+    orcadDeployment?: { kind?: string; sshTargetId?: string } | null
+  }
 ): boolean {
-  return environment.source === 'ephemeral-vm'
+  return (
+    environment.source === 'ephemeral-vm' ||
+    isRuntimeOwnedSshTargetId(environment.orcadDeployment?.sshTargetId)
+  )
 }
 
 export function isUserManagedRuntimeEnvironment(

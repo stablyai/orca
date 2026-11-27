@@ -1,8 +1,6 @@
 import { listEphemeralVmRuntimes } from './ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from './ephemeral-vm-runtimes'
-import { isRuntimeOwnedSshTargetId } from '../../execution-host/execution-host'
 import {
-  getOrcadSshDeployment,
   isEphemeralVmRuntimeEnvironment,
   type KnownRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
@@ -12,12 +10,8 @@ export function findEnvironmentEphemeralVmRuntime(
   userDataPath: string,
   environment: Pick<KnownRuntimeEnvironment, 'id' | 'source' | 'orcadDeployment'>
 ): (EphemeralVmRuntimeRecord & { workspaceId: string }) | undefined {
-  // Why: only a VM's own environments (paired, or over its runtime-owned SSH target) can be
-  // asleep; the VM store read stays off every other call.
-  const servedByVm =
-    isEphemeralVmRuntimeEnvironment(environment) ||
-    isRuntimeOwnedSshTargetId(getOrcadSshDeployment(environment)?.sshTargetId)
-  if (!servedByVm) {
+  // Why: only a VM's own environments can be asleep; the VM store read stays off every other call.
+  if (!isEphemeralVmRuntimeEnvironment(environment)) {
     return undefined
   }
   const runtime = listEphemeralVmRuntimes(userDataPath).find(
