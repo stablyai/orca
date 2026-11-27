@@ -24,16 +24,55 @@ function findTagEnd(html: string, from: number): number {
   return -1
 }
 
-/** Attributes of each `<tagName ...>` in document order; stops at the first unclosed tag. */
-export function* htmlTagAttributes(html: string, tagName: string): Generator<Map<string, string>> {
-  const open = new RegExp(`<${tagName}\\b`, 'gi')
-  while (open.test(html)) {
-    const end = findTagEnd(html, open.lastIndex)
+type HtmlTag = { attributesStart: number; end: number; contentEnd?: number }
+
+/** Skip inert text before interpreting tag-shaped strings as page metadata. */
+function* htmlTags(html: string, tagName: string): Generator<HtmlTag> {
+  const wanted = tagName.toLowerCase()
+  const open = /<!--|<([a-z][a-z0-9:-]*)(?=[\s/>])/gi
+  for (let match = open.exec(html); match; match = open.exec(html)) {
+    if (match[0] === '<!--') {
+      const end = html.indexOf('-->', open.lastIndex)
+      if (end === -1) {
+        return
+      }
+      open.lastIndex = end + 3
+      continue
+    }
+    const name = match[1].toLowerCase()
+    const attributesStart = open.lastIndex
+    const end = findTagEnd(html, attributesStart)
     if (end === -1) {
       return
     }
-    const tag = html.slice(open.lastIndex, end)
     open.lastIndex = end + 1
+    let contentEnd: number | undefined
+    if (/^(script|style|title|textarea|xmp|iframe|noembed|noframes)$/.test(name)) {
+      const close = new RegExp(`</${name}(?=[\\s/>])`, 'gi')
+      close.lastIndex = open.lastIndex
+      const closing = close.exec(html)
+      if (!closing) {
+        return
+      }
+      contentEnd = closing.index
+      const closingEnd = findTagEnd(html, close.lastIndex)
+      if (closingEnd === -1) {
+        return
+      }
+      open.lastIndex = closingEnd + 1
+    } else if (name === 'plaintext') {
+      return
+    }
+    if (name === wanted) {
+      yield { attributesStart, end, contentEnd }
+    }
+  }
+}
+
+/** Attributes of each `<tagName ...>` in document order; stops at the first unclosed tag. */
+export function* htmlTagAttributes(html: string, tagName: string): Generator<Map<string, string>> {
+  for (const { attributesStart, end } of htmlTags(html, tagName)) {
+    const tag = html.slice(attributesStart, end)
     const attributes = new Map<string, string>()
     // Names start after whitespace so a long unquoted run cannot backtrack from every offset.
     for (const [, name, double, single, bare] of tag.matchAll(
@@ -46,21 +85,10 @@ export function* htmlTagAttributes(html: string, tagName: string): Generator<Map
 }
 
 export function extractHtmlTitle(html: string): string | null {
-  const open = /<title\b/gi
-  if (!open.test(html)) {
-    return null
+  for (const { end, contentEnd } of htmlTags(html, 'title')) {
+    return normalizeHtmlText(html.slice(end + 1, contentEnd)) || null
   }
-  const tagEnd = html.indexOf('>', open.lastIndex)
-  if (tagEnd === -1) {
-    return null
-  }
-  const close = /<\/title>/gi
-  close.lastIndex = tagEnd + 1
-  const end = close.exec(html)
-  if (!end) {
-    return null
-  }
-  return normalizeHtmlText(html.slice(tagEnd + 1, end.index)) || null
+  return null
 }
 
 export function findIconHref(html: string): string | null {
