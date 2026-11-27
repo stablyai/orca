@@ -86,10 +86,41 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
   const ends: { seq: number; scope: string; lift: boolean }[] = []
   const endsThrough = (through: number): void => {
     const due = ends.findIndex((end) => end.seq > through)
+    const lifts: number[] = []
     for (const end of ends.splice(0, due === -1 ? ends.length : due)) {
       closeScope(end.scope, end.seq)
       if (end.lift) {
         keepAfter(end.seq)
+        lifts.push(end.seq)
+      }
+    }
+    liftStopped(lifts)
+  }
+  /** Lifts applied once the reader is past them, after a stream that crossed one may have stopped:
+   *  each stop is visited once for all of them (`lifts` ascend), never once per lift. */
+  const liftStopped = (lifts: readonly number[]): void => {
+    const last = lifts.at(-1)
+    if (last === undefined) {
+      return
+    }
+    for (const stopped of closed.values()) {
+      for (const message of stopped) {
+        if (message.start > last) {
+          continue
+        }
+        // The first lift at or past the start: the stream crossed it if it stopped after it.
+        let low = 0
+        let high = lifts.length
+        while (low < high) {
+          const mid = (low + high) >> 1
+          if (lifts[mid] < message.start) {
+            low = mid + 1
+          } else {
+            high = mid
+          }
+        }
+        cut ||= low < lifts.length && lifts[low] < message.stop
+        message.start = last + 1
       }
     }
   }
@@ -105,13 +136,6 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
     for (const map of [open, starts]) {
       for (const [scope, from] of map) {
         map.set(scope, Math.max(from, seq + 1))
-      }
-    }
-    // Applied once the reader is past the result, after a stream that crossed it may have stopped.
-    for (const stopped of closed.values()) {
-      for (const message of stopped) {
-        cut ||= message.start <= seq && message.stop > seq
-        message.start = Math.max(message.start, seq + 1)
       }
     }
     for (const tool of tools.values()) {
