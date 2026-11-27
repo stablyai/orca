@@ -14,8 +14,8 @@ import {
 } from '../../session/native-chat/transcript/bot-cards/mobile-composio-operations'
 import { rereadMobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import { AppLogo, type ComposioScope } from './MobileBotComposio'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** One app the bot signed in to through Composio: who as, Sign in again, and Disconnect. */
 export function MobileBotComposioApp(
@@ -26,6 +26,7 @@ export function MobileBotComposioApp(
     onBack: () => void
   }
 ) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { connection } = props
   const [confirm, setConfirm] = useState(false)

@@ -7,17 +7,17 @@ import {
   type ViewStyle,
   type TextInputInstance
 } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useTextInputContentHeight } from '../../platform/text-input/text-input-content-height'
 import { ComposerSendButton } from './ComposerSendButton'
 import {
-  composerInputStyles as styles,
+  composerInputStylesSheet as stylesSheet,
   FORM_MESSAGE_MIN_HEIGHT,
+  linesHeight,
   MESSAGE_MAX_HEIGHT,
   MESSAGE_MIN_HEIGHT
 } from './composer-input-styles'
-import { useInputFocus } from './use-input-focus'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type MessageBoxProps = Omit<
   TextInputProps,
@@ -38,6 +38,8 @@ type MessageBoxProps = Omit<
   monospace?: boolean
   /** One pill-shaped row with its controls beside the text, for short replies. */
   inline?: boolean
+  /** How many lines a bare box opens at and grows to; 3 and 7 by default. */
+  lines?: { min: number; max: number }
   style?: StyleProp<ViewStyle>
 }
 
@@ -54,27 +56,30 @@ export function MessageBox({
   trailing,
   monospace = false,
   inline = false,
+  lines,
   style,
   editable = true,
   multiline = true,
-  onFocus,
-  onBlur,
   ...inputProps
 }: MessageBoxProps): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const ownRef = useRef<TextInputInstance>(null)
   const ref = inputRef ?? ownRef
   const contentHeight = useTextInputContentHeight(ref, value)
-  const focus = useInputFocus({ onFocus, onBlur })
   const hasActions = leading !== undefined || trailing !== undefined || onSend !== undefined
-  const minHeight = hasActions ? MESSAGE_MIN_HEIGHT : FORM_MESSAGE_MIN_HEIGHT
+  const minHeight = lines
+    ? linesHeight(lines.min)
+    : hasActions
+      ? MESSAGE_MIN_HEIGHT
+      : FORM_MESSAGE_MIN_HEIGHT
+  const maxHeight = lines ? linesHeight(lines.max) : MESSAGE_MAX_HEIGHT
   return (
     <View
       style={[
         styles.box,
-        // A box with its own controls is marked by them, like the chat composer; a bare one by its edge.
+        // A box with its own controls is the chat composer; a bare one is a grouped row, like TextField.
         !hasActions && styles.formBox,
-        !hasActions && focus.focused && styles.focused,
         inline && styles.inlineBox,
         style
       ]}
@@ -92,16 +97,14 @@ export function MessageBox({
           style={[
             styles.messageText,
             !hasActions && styles.formText,
+            lines && { minHeight, maxHeight },
             monospace && styles.mono,
             contentHeight !== undefined && {
-              height: Math.min(MESSAGE_MAX_HEIGHT, Math.max(minHeight, contentHeight))
+              height: Math.min(maxHeight, Math.max(minHeight, contentHeight))
             },
             !editable && styles.disabled
           ]}
           {...inputProps}
-          // Only a bare box draws a ring, so only it re-renders on focus.
-          onFocus={hasActions ? onFocus : focus.onFocus}
-          onBlur={hasActions ? onBlur : focus.onBlur}
         />
       </View>
       {hasActions ? (

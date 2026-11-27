@@ -7,6 +7,16 @@ const priorOwnerIdsSql = (row: 'NEW' | 'r') =>
 const INSERT_PRIOR_OWNERS_SQL = `INSERT OR IGNORE INTO worker_terminal_resource_prior_owners (dispatch_id, resource_id)
     SELECT prior.value, NEW.id FROM ${priorOwnerIdsSql('NEW')} WHERE prior.type = 'text';`
 
+// Compare the full prefix without rebuilding or enumerating its JSON values.
+const OWNER_APPEND_SQL = `OLD.id IS NEW.id AND OLD.owner_dispatch_id IS NOT NEW.owner_dispatch_id
+  AND NEW.prior_owner_dispatch_ids IS CASE
+    WHEN OLD.prior_owner_dispatch_ids = '[]' THEN json_array(OLD.owner_dispatch_id)
+    WHEN substr(OLD.prior_owner_dispatch_ids, 1, 1) = '['
+      AND substr(OLD.prior_owner_dispatch_ids, -2) = '"]'
+    THEN substr(OLD.prior_owner_dispatch_ids, 1, length(OLD.prior_owner_dispatch_ids) - 1)
+      || ',' || substr(json_array(OLD.owner_dispatch_id), 2)
+  END AND json_valid(OLD.prior_owner_dispatch_ids)`
+
 // Stored as written, so a changed body differs from sqlite_master and is reinstalled.
 const PRIOR_OWNER_TRIGGERS: Record<string, string> = {
   trg_worker_terminal_prior_owners_insert: `CREATE TRIGGER trg_worker_terminal_prior_owners_insert
@@ -18,10 +28,15 @@ END`,
 AFTER UPDATE OF id, prior_owner_dispatch_ids ON worker_terminal_resources
 WHEN OLD.id IS NOT NEW.id OR OLD.prior_owner_dispatch_ids IS NOT NEW.prior_owner_dispatch_ids
 BEGIN
-  DELETE FROM worker_terminal_resource_prior_owners WHERE resource_id = OLD.id
+  DELETE FROM worker_terminal_resource_prior_owners
+    WHERE resource_id = CASE WHEN ${OWNER_APPEND_SQL} THEN NULL ELSE OLD.id END
     AND (OLD.id IS NOT NEW.id OR dispatch_id NOT IN (
       SELECT prior.value FROM ${priorOwnerIdsSql('NEW')} WHERE prior.type = 'text'));
-  ${INSERT_PRIOR_OWNERS_SQL}
+  INSERT OR IGNORE INTO worker_terminal_resource_prior_owners (dispatch_id, resource_id)
+    SELECT prior.value, NEW.id FROM json_each(CASE
+      WHEN ${OWNER_APPEND_SQL} THEN json_array(OLD.owner_dispatch_id)
+      WHEN json_valid(NEW.prior_owner_dispatch_ids) THEN NEW.prior_owner_dispatch_ids
+      ELSE '[]' END) AS prior WHERE prior.type = 'text';
 END`,
   trg_worker_terminal_prior_owners_delete: `CREATE TRIGGER trg_worker_terminal_prior_owners_delete
 AFTER DELETE ON worker_terminal_resources

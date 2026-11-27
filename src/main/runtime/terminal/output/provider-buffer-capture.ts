@@ -216,11 +216,15 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
       (this.getTerminalSize(ptyId)?.rows ?? 0)
     const state = this.readWholeScreenModel(ptyId)
-    if (!state) {
-      return this.readProviderTerminalTailLines(ptyId, rowLimit, {
+    // A zero-scrollback mirror (daemon owns scrollback) can only prove the visible screen; tails need the provider.
+    if (!state || (state.providerOwnsScrollback && !providerSnapshot.visibleScreenOnly)) {
+      const providerProjection = await this.readProviderTerminalTailLines(ptyId, rowLimit, {
         timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
         ...providerSnapshot
       })
+      if (!state || providerProjection.lines.length > 0) {
+        return providerProjection
+      }
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain

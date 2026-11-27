@@ -1,3 +1,4 @@
+import { ipcMain } from 'electron'
 import type {
   BrowserPasswordEntrySummary,
   BrowserPasswordFillOutcome,
@@ -12,13 +13,28 @@ import {
 } from '../../browser-passwords/browser-password-guest-service'
 import { respondToBrowserPasswordSavePrompt } from '../../browser-passwords/browser-password-save-prompts'
 import { browserPasswordReauthMethod } from '../../browser-passwords/browser-password-reauth'
-import { registerBrowserPasswordsEntryHandlers } from './browser-passwords-entry-ipc'
-import { registerBrowserPasswordsImportHandlers } from './browser-passwords-import-ipc'
+import { registerLazyIpcHandleGroup } from '../lazy-ipc-handle-group'
 import {
   handleBrowserPasswordsChannel,
   readBrowserPasswordsArgs,
   readBrowserPasswordsVaultRequest
 } from './browser-passwords-ipc-request'
+
+const BROWSER_PASSWORDS_ENTRY_CHANNELS = [
+  'browserPasswords:getEntryDetails',
+  'browserPasswords:copyPassword',
+  'browserPasswords:addEntry',
+  'browserPasswords:updateEntry',
+  'browserPasswords:deleteEntry',
+  'browserPasswords:deleteAll',
+  'browserPasswords:listNever',
+  'browserPasswords:removeNever'
+] as const
+
+const BROWSER_PASSWORDS_IMPORT_CHANNELS = [
+  'browserPasswords:importCsv',
+  'browserPasswords:importFromBrowser'
+] as const
 
 export type BrowserPasswordsSettingsSource = {
   getSettings: () => Pick<
@@ -35,8 +51,21 @@ export function registerBrowserPasswordsHandlers(store: BrowserPasswordsSettings
       fillRequiresReauth: settings.browserPasswordsFillRequiresReauth === true
     }
   })
-  registerBrowserPasswordsEntryHandlers()
-  registerBrowserPasswordsImportHandlers()
+  for (const channel of [
+    ...BROWSER_PASSWORDS_ENTRY_CHANNELS,
+    ...BROWSER_PASSWORDS_IMPORT_CHANNELS
+  ]) {
+    ipcMain.removeHandler(channel)
+  }
+  registerLazyIpcHandleGroup(BROWSER_PASSWORDS_ENTRY_CHANNELS, async (ipc) => {
+    const { registerBrowserPasswordsEntryHandlers } = await import('./browser-passwords-entry-ipc')
+    registerBrowserPasswordsEntryHandlers(ipc)
+  })
+  registerLazyIpcHandleGroup(BROWSER_PASSWORDS_IMPORT_CHANNELS, async (ipc) => {
+    const { registerBrowserPasswordsImportHandlers } =
+      await import('./browser-passwords-import-ipc')
+    registerBrowserPasswordsImportHandlers(ipc)
+  })
 
   handleBrowserPasswordsChannel(
     'browserPasswords:getStatus',

@@ -1,4 +1,6 @@
 import React from 'react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { WorkspaceSetupSection } from '../setup/WorkspaceSetupSection'
 import { selectWorkspaceSetupCopy } from '../setup/workspace-setup-section-model'
 import {
@@ -6,7 +8,6 @@ import {
   getComposerSetupStartupLabel
 } from '../setup/workspace-setup-composer-copy'
 import { toast } from 'sonner'
-import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import { cn } from '@/lib/class-names'
 import { TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES } from '@/lib/text-input/paste/text-control-paste-model'
 import {
@@ -16,8 +17,20 @@ import {
 } from '@/lib/text-input/paste/text-control-paste'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { ComposerParentWorktreePicker } from '../branch-selection/ComposerParentWorktreePicker'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
+
+const LazySparseCheckoutPresetSelect = lazyWithRetry(
+  () => import('@/components/sparse/SparseCheckoutPresetSelect'),
+  { reloadKey: 'sparse-checkout-preset-select' }
+)
+
+const LazyComposerParentWorktreePicker = lazyWithRetry(
+  () =>
+    import('../branch-selection/ComposerParentWorktreePicker').then((module) => ({
+      default: module.ComposerParentWorktreePicker
+    })),
+  { reloadKey: 'composer-parent-worktree-picker' }
+)
 
 type NewWorkspaceComposerAdvancedSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -101,6 +114,7 @@ export function NewWorkspaceComposerAdvancedSection({
   canUseSparseCheckout
 }: NewWorkspaceComposerAdvancedSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const hasOpenedAdvanced = useLatchedOpen(advancedOpen)
   const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = event.clipboardData.getData('text/plain')
     const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
@@ -196,16 +210,18 @@ export function NewWorkspaceComposerAdvancedSection({
             </div>
           ) : null}
 
-          {selectedRepoIsGit && branchesEnabled && onParentWorktreeIdChange ? (
-            <ComposerParentWorktreePicker
-              repoId={repoId}
-              executionHostId={selectedRepoExecutionHostId}
-              projectId={selectedRepoProjectId}
-              value={parentWorktreeId}
-              onChange={onParentWorktreeIdChange}
-              activeFolderWorkspaceId={activeFolderWorkspaceId}
-              disabled={!advancedOpen}
-            />
+          {hasOpenedAdvanced && selectedRepoIsGit && branchesEnabled && onParentWorktreeIdChange ? (
+            <React.Suspense fallback={null}>
+              <LazyComposerParentWorktreePicker
+                repoId={repoId}
+                executionHostId={selectedRepoExecutionHostId}
+                projectId={selectedRepoProjectId}
+                value={parentWorktreeId}
+                onChange={onParentWorktreeIdChange}
+                activeFolderWorkspaceId={activeFolderWorkspaceId}
+                disabled={!advancedOpen}
+              />
+            </React.Suspense>
           ) : null}
 
           <div className="space-y-1">
@@ -245,20 +261,22 @@ export function NewWorkspaceComposerAdvancedSection({
             />
           ) : null}
 
-          {sparseControlsEnabled ? (
+          {hasOpenedAdvanced && sparseControlsEnabled ? (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
                 {t('auto.components.NewWorkspaceComposerCard.d861de981b', 'Sparse checkout')}
               </label>
-              <SparseCheckoutPresetSelect
-                key={repoId}
-                repoId={repoId}
-                onEditingChange={onSparseEditingChange}
-                presets={sparsePresets}
-                selectedPresetId={sparseSelectedPresetId}
-                onSelectPreset={onSparseSelectPreset}
-                disabled={!canUseSparseCheckout}
-              />
+              <React.Suspense fallback={null}>
+                <LazySparseCheckoutPresetSelect
+                  key={repoId}
+                  repoId={repoId}
+                  onEditingChange={onSparseEditingChange}
+                  presets={sparsePresets}
+                  selectedPresetId={sparseSelectedPresetId}
+                  onSelectPreset={onSparseSelectPreset}
+                  disabled={!canUseSparseCheckout}
+                />
+              </React.Suspense>
               {!canUseSparseCheckout ? (
                 <p className="text-[11px] text-muted-foreground">
                   {t(

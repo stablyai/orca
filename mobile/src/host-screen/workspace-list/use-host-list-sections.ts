@@ -33,6 +33,7 @@ import { useHostBotSections } from '../../bots/use-host-bot-sections'
 import type { LastVisitedWorktreeOnHost } from '../../worktree/row-presentation/host-list-highlight'
 import { indexHiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
@@ -82,9 +83,10 @@ function useFilterRepos(
   catalogRepos: readonly SectionRepo[],
   displayWorktrees: Worktree[]
 ): WorkspaceSectionRepo[] {
+  const t = useMobileTranslation()
   return useMemo(
-    () => buildFilterRepos(catalogRepos, displayWorktrees),
-    [catalogRepos, displayWorktrees]
+    () => buildFilterRepos(catalogRepos, displayWorktrees, t),
+    [catalogRepos, displayWorktrees, t]
   )
 }
 

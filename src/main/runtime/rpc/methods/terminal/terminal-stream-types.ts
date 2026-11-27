@@ -76,6 +76,8 @@ export type TerminalMultiplexStream = {
   supportsEndpointLossNotice: boolean
   // Set only when the client negotiated `inputAck`; sequenced Input frames are then deduped and acked.
   inputSessionId: string | null
+  // Unsequenced input runs one frame at a time so a chunked paste cannot interleave with later frames.
+  unsequencedInputTail: Promise<unknown>
   outputPaused: boolean
   supportsOutputCadence: boolean
   supportsDesktopViewportClaims: boolean

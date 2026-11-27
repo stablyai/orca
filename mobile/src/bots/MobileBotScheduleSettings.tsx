@@ -10,7 +10,8 @@ import { tidyUpSupported } from '../../../src/shared/bot-types'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { DrillRow } from '../host-screen/workspace-options/workspace-option-rows'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { lookAroundLine, tidyUpLine } from './bot-settings-lines'
@@ -43,6 +44,7 @@ export function useBotScheduleSettings(
   }
 ): SettingsFeature {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { bot, reads, activity } = settings.routeBot
   const { banner, locked, page, setPage, save } = context
   // A page drilled into from Look around or Memory upkeep; its Back returns there.
@@ -78,7 +80,12 @@ export function useBotScheduleSettings(
             node: (
               <DrillRow
                 label={t('bots.lookAround.title', 'Look around')}
-                value={lookAroundLine(botLookAround(bot), activity?.upNext?.state.lastLookedAt)}
+                value={lookAroundLine(
+                  botLookAround(bot),
+                  activity?.upNext?.state.lastLookedAt,
+                  t,
+                  intlLocale
+                )}
                 detail
                 onPress={() => setPage('look-around')}
               />
@@ -92,7 +99,7 @@ export function useBotScheduleSettings(
       node: (
         <DrillRow
           label={t('bots.tidyUp.title', 'Memory upkeep')}
-          value={tidyUpLine(botTidyUp(bot), tidyUp.view?.last?.at)}
+          value={tidyUpLine(botTidyUp(bot), tidyUp.view?.last?.at, t, intlLocale)}
           detail
           onPress={() => setPage('tidy-up')}
         />

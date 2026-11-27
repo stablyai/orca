@@ -1,23 +1,19 @@
 import type { ConnectionState } from './connection-state'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 
-export const MOBILE_SESSION_STATUS_LABELS: Record<ConnectionState, string> = {
-  get connecting() {
-    return translate('session.routeHelpers.connecting', 'Connecting')
-  },
-  get handshaking() {
-    return translate('session.routeHelpers.securing', 'Securing')
-  },
-  get connected() {
-    return translate('session.routeHelpers.connected', 'Connected')
-  },
-  get disconnected() {
-    return translate('session.routeHelpers.disconnected', 'Disconnected')
-  },
-  get reconnecting() {
-    return translate('session.routeHelpers.reconnecting', 'Reconnecting')
-  },
-  get 'auth-failed'() {
-    return translate('session.routeHelpers.pairingInvalid', 'Pairing invalid')
+export function mobileSessionStatusLabel(state: ConnectionState, t: Translate): string {
+  switch (state) {
+    case 'connecting':
+      return t('session.routeHelpers.connecting', 'Connecting')
+    case 'handshaking':
+      return t('session.routeHelpers.securing', 'Securing')
+    case 'connected':
+      return t('session.routeHelpers.connected', 'Connected')
+    case 'disconnected':
+      return t('session.routeHelpers.disconnected', 'Disconnected')
+    case 'reconnecting':
+      return t('session.routeHelpers.reconnecting', 'Reconnecting')
+    case 'auth-failed':
+      return t('session.routeHelpers.pairingInvalid', 'Pairing invalid')
   }
 }

@@ -1,6 +1,13 @@
+import { Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
+
+const TerminalSshReconnectOverlay = lazy(() =>
+  import('./TerminalSshReconnectOverlay').then((module) => ({
+    default: module.TerminalSshReconnectOverlay
+  }))
+)
 
 export function TerminalPaneSshReconnectPortals({
   controller
@@ -25,15 +32,17 @@ export function TerminalPaneSshReconnectPortals({
     <>
       {managedPanes.map((pane) =>
         createPortal(
-          <TerminalSshReconnectOverlay
-            targetId={sshReconnectTargetId}
-            targetLabel={sshReconnectTargetLabel}
-            status={sshReconnectStatus}
-            error={sshReconnectError}
-            targetRemoved={sshReconnectTargetRemoved}
-            worktreeId={worktreeId}
-            sshOwnerEnvironmentId={sshReconnectEnvironmentId}
-          />,
+          <Suspense fallback={null}>
+            <TerminalSshReconnectOverlay
+              targetId={sshReconnectTargetId}
+              targetLabel={sshReconnectTargetLabel}
+              status={sshReconnectStatus}
+              error={sshReconnectError}
+              targetRemoved={sshReconnectTargetRemoved}
+              worktreeId={worktreeId}
+              sshOwnerEnvironmentId={sshReconnectEnvironmentId}
+            />
+          </Suspense>,
           pane.container,
           `ssh-reconnect-${pane.id}`
         )

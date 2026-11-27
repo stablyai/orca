@@ -43,9 +43,8 @@ export type AcpLaunchSpec = {
     antigravityChatAuth?: AntigravityChatAuthConfig
   ): string[]
   dialect: AcpDialect
-  /** Initialize's identity for the launched version (null when unknown), for agents that grant
-   *  features by client name; absent sends Orca's. */
-  clientInfo?(version: string | null): Implementation
+  /** Initialize's fixed identity for an agent that needs one; absent sends Orca's. */
+  clientInfo?: Implementation
   loginCommand: readonly string[]
   /** Selects authentication from the execution host's resolved launch inputs. */
   authMethod?(input: {

@@ -9,8 +9,11 @@ import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActivePr
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/orca-profiles/constants'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
+import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../../search/settings-search'
 import {
@@ -31,12 +34,29 @@ type BrowserUseSetupProps = {
   onOpenComputerUse?: () => void
 }
 
-export function BrowserUseSetup({
+export function BrowserUseSetup(props: BrowserUseSetupProps): React.JSX.Element {
+  const t = useTranslate()
+  const blocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.browserUse)
+  if (blocked) {
+    return (
+      <div id={BROWSER_USE_SETTINGS_TARGET_ID}>
+        <SettingsRow
+          label={t('settings.browserUse.teamDisabled', 'Browser Use is turned off by your team.')}
+          control={null}
+        />
+      </div>
+    )
+  }
+  return <BrowserUseSetupContent {...props} />
+}
+
+function BrowserUseSetupContent({
   hostId,
   onConfigureMoreBrowsers,
   onOpenComputerUse
 }: BrowserUseSetupProps): React.JSX.Element {
   const t = useTranslate()
+  const computerUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.computerUse)
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
@@ -150,7 +170,7 @@ export function BrowserUseSetup({
         </div>
       </div>
 
-      {onOpenComputerUse ? (
+      {onOpenComputerUse && !computerUseBlocked ? (
         <BrowserUseComputerUseNotice onOpenComputerUse={onOpenComputerUse} />
       ) : null}
 

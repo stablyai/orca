@@ -9,7 +9,7 @@ import {
 import { agentModelCatalogScriptEntry } from './agent-model-catalog-script-entry'
 
 // Config files are small; anything larger keeps the cheaper file-identity stamp.
-const MAX_HASHED_CONFIG_BYTES = 1024 * 1024
+export const MAX_HASHED_CONFIG_BYTES = 1024 * 1024
 
 async function fileStamp(path: string, byContent = false): Promise<unknown> {
   try {

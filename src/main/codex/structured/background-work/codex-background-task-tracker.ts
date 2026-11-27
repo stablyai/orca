@@ -50,7 +50,7 @@ export class CodexBackgroundTaskTracker {
   private terminalStops: CodexTerminalStopSupport | 'probing' = 'unknown'
 
   constructor(
-    private readonly primaryThreadId: string,
+    readonly primaryThreadId: string,
     private readonly executions = new CodexSubagentExecutions(),
     private readonly childWorkSink?: CodexChildWorkSink
   ) {
@@ -84,6 +84,15 @@ export class CodexBackgroundTaskTracker {
     this.terminalStops = support
     if (support === 'supported') {
       this.childWork.restateCommands(this.commands.liveCommands())
+    }
+  }
+
+  /** The work the open app's idle stop counts, keyed as `CODEX_RELAY_WORK_MARKERS` key it. */
+  relayOpenWork(rootTurnRunning: boolean): Record<string, string[][]> {
+    const turns = this.executions.workingChildren().map((child) => [child.agentThreadId])
+    return {
+      turn: rootTurnRunning ? [[this.primaryThreadId], ...turns] : turns,
+      command: this.commands.openKeys()
     }
   }
 

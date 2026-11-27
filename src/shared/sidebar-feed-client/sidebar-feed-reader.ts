@@ -125,12 +125,11 @@ export class SidebarFeedReader {
   private send(request: SidebarInputsFeedRequest): void {
     this.transport(request.params).then(
       (outcome) => {
-        if (this.disposed) {
+        if (this.disposed || request.id !== this.state.inFlight) {
           return
         }
         if (outcome.kind === 'answered') {
-          const answered = this.state.inFlight === request.id ? request.id : null
-          this.apply(sidebarInputsReplied(this.state, request.id, outcome.reply), answered)
+          this.apply(sidebarInputsReplied(this.state, request.id, outcome.reply), request.id)
           return
         }
         if (outcome.kind === 'unavailable' && !this.unavailable) {

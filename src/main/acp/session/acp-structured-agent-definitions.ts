@@ -39,7 +39,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       contextUsage: true,
       // Narrowed by each agent's advertised startup capabilities.
       imagePrompts: spec.imagePrompts !== false,
-      steering: 'queue',
+      steering: spec.dialect.sessionSteering ? 'inject' : 'queue',
       approvalEnforcement: spec.autonomousTools ? 'provider' : 'orca'
     },
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),

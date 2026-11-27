@@ -1,11 +1,11 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 // Dock width leaves diff ~380px at 700px breakpoint (KTD2/U4).
 export const PR_SIDEBAR_DOCK_WIDTH = 320
 
-export const mobilePrSidebarStyles = themedStyleSheet(() => ({
+export const mobilePrSidebarStylesSheet = themedStyleSheet((colors) => ({
   dockColumn: {
     width: PR_SIDEBAR_DOCK_WIDTH,
     backgroundColor: colors.bgPanel,

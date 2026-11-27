@@ -1,9 +1,9 @@
 import type { ComponentType } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type IconProps = { size?: number; color?: string; strokeWidth?: number }
 
@@ -30,7 +30,8 @@ export function FilterChip({
   disabled = false,
   accessibilityLabel
 }: FilterChipProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const color = active ? colors.textPrimary : colors.textSecondary
   return (
     <Pressable
@@ -62,7 +63,7 @@ export function FilterChip({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   touch: {
     flexGrow: 1,
     minHeight: 44,

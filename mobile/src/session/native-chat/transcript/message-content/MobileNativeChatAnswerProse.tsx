@@ -3,8 +3,9 @@ import { Text } from 'react-native'
 import { quietBotAnswerBlocks } from '../../../../../../src/shared/bot-quiet-result'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot-identity'
-import { scaledType, styles } from '../messages/mobile-native-chat-message-styles'
+import { scaledType, stylesSheet } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatPacedProse } from './MobileNativeChatPacedProse'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 /** Whether an automation's row opened the row's turn, and whether the turn said or did something
  *  others see; either already accounts for a quiet result. */
@@ -20,6 +21,7 @@ export function MobileNativeChatAnswerProse({
   fontScale,
   ...prose
 }: ComponentProps<typeof MobileNativeChatPacedProse> & { fontScale: number }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const bot = useContext(MobileNativeChatBotIdentityContext)
   // Paced prose is an assistant's own reply; another agent's message draws as its card.

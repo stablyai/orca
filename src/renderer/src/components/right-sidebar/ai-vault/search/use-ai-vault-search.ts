@@ -94,10 +94,9 @@ export function useAiVaultSearch(
           identity,
           hits:
             response.kind === 'results'
-              ? [
-                  ...(append && previous?.identity === identity ? previous.hits : []),
-                  ...response.hits
-                ]
+              ? append && previous?.identity === identity
+                ? appendSearchPage(previous.hits, response.hits)
+                : response.hits
               : [],
           response,
           error: false,
@@ -176,6 +175,24 @@ export function useAiVaultSearch(
 
 // Answers that a retry from this client cannot change; `not-ready` can, so it keeps searching.
 const TITLE_ONLY_UNAVAILABLE_REASONS = new Set<string>(['disabled', 'no-service'])
+
+// A chat's other conversations can rank onto a later page; it stays listed once.
+function appendSearchPage(
+  shown: AiVaultSearchHit[],
+  page: readonly AiVaultSearchHit[]
+): AiVaultSearchHit[] {
+  const chatKey = (hit: AiVaultSearchHit) =>
+    hit.structuredSession
+      ? `${hit.executionHostId ?? ''}\0${hit.structuredSession.sessionId}`
+      : null
+  const chats = new Set(shown.map(chatKey))
+  const added = page.filter((hit) => {
+    const key = chatKey(hit)
+    return key === null || !chats.has(key)
+  })
+  // A page of only already-listed chats leaves the list, and everything derived from it, unchanged.
+  return added.length === 0 ? shown : [...shown, ...added]
+}
 
 // All-host hits name their host; single-host responses belong to the addressed host.
 function hitExecutionHostId(hit: AiVaultSearchHit, host: ExecutionHostId | null): ExecutionHostId {

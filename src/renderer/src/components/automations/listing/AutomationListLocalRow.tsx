@@ -328,9 +328,9 @@ export function AutomationListLocalRow({
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="size-7 text-muted-foreground"
+                variant="ghost-muted"
+                size="icon-toolbar"
+                className="justify-self-end"
                 aria-label={t(
                   'auto.components.automations.AutomationListLocalRows.c92c9463c6',
                   'Automation actions'

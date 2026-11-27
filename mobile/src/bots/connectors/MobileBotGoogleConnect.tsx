@@ -18,7 +18,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useMediaPicker } from '../../platform/media-picking/media-picker'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import { decodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
@@ -32,6 +31,7 @@ import { useRouteCapability } from '../../worktree/execution-hosts/use-route-cap
 import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import type { GoogleSignInAsk } from './connector-pages'
 import type { PhoneGoogle } from './phone-google-accounts'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileBotGoogleConnect(props: {
   client: RpcClient | null
@@ -48,6 +48,7 @@ export function MobileBotGoogleConnect(props: {
   /** An app but no sign-in: Google's sign-in, then this page again to turn Google on; null once back. */
   onSignIn: ((ask: GoogleSignInAsk) => void) | null
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, client } = props
   const signsIn = useRouteCapability(BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY)

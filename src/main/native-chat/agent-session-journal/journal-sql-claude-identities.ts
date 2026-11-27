@@ -42,6 +42,20 @@ export function readJournalDomainClaudeIdentities(
     GROUP BY name.subagent_id ORDER BY MIN(item.ordinal)`)
     .all(...prefix)
     .map((row) => String(row.subagent_id))
+  // Only items that already name a subagent, each payload read once, so this never walks the journal.
+  const backgroundSubagents = db
+    .prepare(`SELECT DISTINCT json_extract(block.value,'$.id') AS subagent_id
+    FROM (SELECT DISTINCT item_id FROM journal_item_subagent_names
+      WHERE session_id=? AND epoch=?) named
+    JOIN journal_items item ON item.session_id=? AND item.epoch=? AND item.item_id=named.item_id,
+      json_each(item.payload_json,'$.body.blocks') block
+    WHERE item.hidden=0 AND json_extract(block.value,'$.type')='subagent'
+      AND json_extract(block.value,'$.background')=1
+      AND EXISTS (SELECT 1 FROM journal_item_subagent_names name
+        WHERE name.session_id=item.session_id AND name.epoch=item.epoch
+          AND name.item_id=item.item_id AND name.subagent_id=json_extract(block.value,'$.id'))`)
+    .all(...prefix, ...prefix)
+    .map((row) => String(row.subagent_id))
   const parents = new Map<string, Map<string | undefined, AgentJournalProducerLinkage>>()
   for (const row of db
     .prepare(`SELECT placement_json FROM journal_items
@@ -89,6 +103,7 @@ export function readJournalDomainClaudeIdentities(
     canonicalByToolUse,
     attemptByAgent,
     subagents,
+    backgroundSubagents,
     parents: [...parents].map(([id, runs]) => [id, [...runs]]),
     backgrounds: [...backgrounds].map(([id, index]) => [
       id,

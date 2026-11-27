@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { pressedStyle } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { queuedMessageStyles } from './mobile-native-chat-queued-message-styles'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { queuedMessageStylesSheet } from './mobile-native-chat-queued-message-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 
 // A clipped message opens in place on tap, inside the queue's own capped scroller.
@@ -19,7 +18,8 @@ export function MobileQueuedCardText({
   expanded: boolean
   onToggle: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const queuedMessageStyles = useThemedStyles(queuedMessageStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [clipped, setClipped] = useState(false)
   const measure = (
@@ -63,7 +63,7 @@ export function MobileQueuedCardText({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   // Clip the full-text probe so it cannot stretch the queue's scroll range.
   probeBounds: {
     overflow: 'hidden'

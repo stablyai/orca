@@ -26,6 +26,10 @@ import {
   PairingProvisionRelayParamsSchema
 } from '../../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import {
+  PAIRING_GET_DIRECT_ENDPOINTS_METHOD,
+  PairingGetDirectEndpointsParamsSchema
+} from '../../../../../shared/remote-runtime/pairing/pairing-direct-endpoints-contract'
+import {
   PAIRING_CREATE_OFFER_METHOD,
   PairingCreateOfferParamsSchema
 } from '../../../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
@@ -57,6 +61,17 @@ export const PAIRING_METHODS = [
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.getEndpoints(params)
+    }
+  }),
+  defineMethod({
+    name: PAIRING_GET_DIRECT_ENDPOINTS_METHOD,
+    permission: 'pairing-admin',
+    params: PairingGetDirectEndpointsParamsSchema,
+    handler: async (_params, ctx) => {
+      if (!ctx.pairingDirectEndpoints) {
+        throw new Error('pairing_context_unavailable')
+      }
+      return { v: 1, endpoints: await ctx.pairingDirectEndpoints() }
     }
   }),
   defineMethod({

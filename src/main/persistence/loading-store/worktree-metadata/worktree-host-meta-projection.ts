@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/worktree/host-qualified-identity'
 import { isLocalOnlyWorktreeMetaId } from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
-import { resolveAliasIdentityKey } from './worktree-identity-metadata'
+import { resolveAliasIdentityKey } from './worktree-identity-alias'
 
 type WorktreeMetaState = Pick<
   PersistedState,
