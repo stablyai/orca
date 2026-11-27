@@ -127,33 +127,60 @@ function mixedBodyParts(
   children: { mimeType?: string; leaves: Part[] }[],
   textOf: (part: Part) => string
 ): Part[] {
-  // Explicit multipart children are independent sections, even if selection leaves one part.
-  if (!children.some((child) => child.mimeType === 'text/html')) {
+  // A related container contributes one root representation; alternative/mixed groups remain
+  // independent sections even when selection leaves only one text part.
+  const representations = children.map((child) =>
+    child.leaves.length === 1 &&
+    ['text/plain', 'text/html', 'multipart/related'].includes(child.mimeType ?? '')
+      ? child.leaves[0]
+      : undefined
+  )
+  if (!representations.some((part) => part?.mimeType === 'text/html')) {
     return children.flatMap((child) => child.leaves)
   }
   const pairedPlain = new Set<number>()
+  const omitted = new Set<number>()
   const equivalentText = (part: Part) => textOf(part).replace(/\s+/g, ' ').trim()
+  representations.forEach((part, index) => {
+    if (part?.mimeType !== 'text/html') {
+      return
+    }
+    const html = equivalentText(part)
+    // Do not pair across another visible section: its position is meaningful in mixed mail.
+    for (const neighbor of [index - 1, index + 1]) {
+      const plain = representations[neighbor]
+      if (plain?.mimeType !== 'text/plain' || pairedPlain.has(neighbor)) {
+        continue
+      }
+      const text = equivalentText(plain)
+      if (text === html) {
+        omitted.add(index)
+      } else if (containsCompleteBody(html, text)) {
+        // Retain the richer representation so template text is not lost along with the duplicate.
+        omitted.add(neighbor)
+      } else {
+        continue
+      }
+      pairedPlain.add(neighbor)
+      break
+    }
+  })
   return children
-    .filter((child, index) => {
-      if (child.mimeType !== 'text/html') {
-        return true
-      }
-      const text = equivalentText(child.leaves[0])
-      // Do not pair across another visible section: its position is meaningful in mixed mail.
-      for (const neighbor of [index - 1, index + 1]) {
-        const plain = children[neighbor]
-        if (
-          plain?.mimeType === 'text/plain' &&
-          !pairedPlain.has(neighbor) &&
-          equivalentText(plain.leaves[0]) === text
-        ) {
-          pairedPlain.add(neighbor)
-          return false
-        }
-      }
-      return true
-    })
+    .filter((_, index) => !omitted.has(index))
     .flatMap((child) => child.leaves)
+}
+
+function containsCompleteBody(html: string, plain: string): boolean {
+  if (!plain) {
+    return false
+  }
+  const at = html.indexOf(plain)
+  return (
+    at >= 0 &&
+    (!/^[\p{L}\p{M}\p{N}_]/u.test(plain) || !/[\p{L}\p{M}\p{N}_]$/u.test(html.slice(0, at))) &&
+    (!/[\p{L}\p{M}\p{N}_]$/u.test(plain) ||
+      !/^[\p{L}\p{M}\p{N}_]/u.test(html.slice(at + plain.length)))
+  )
 }
 
 /** Keep mixed sections in order; prefer plain text within each alternative. */

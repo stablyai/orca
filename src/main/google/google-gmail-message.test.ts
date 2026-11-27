@@ -187,6 +187,70 @@ it('pairs equivalent mixed plain and HTML siblings without removing independent 
   expect(bodyText(message)).toBe(
     'Daily\tstatus\nRepeated plain section\nRepeated plain section\nIndependent HTML section\nIndependent HTML section\nNested section\nNested section'
   )
+  const report = 'Nightly report\nAll checks passed. See the chart below.'
+  expect(
+    bodyText({
+      mimeType: 'multipart/mixed',
+      parts: [
+        textPart('text/plain', report),
+        textPart(
+          'text/html',
+          `<p>Nightly report</p><p>All checks passed. See the chart below.</p><img src="data:image/png;base64,${'A'.repeat(200_000)}">`
+        )
+      ]
+    })
+  ).toBe(report)
+})
+
+it('pairs a related root with its adjacent plain representation while excluding its resources', () => {
+  const plain = textPart('text/plain', 'Build 42 passed.')
+  const html = {
+    ...textPart('text/html', '<p>Build 42 passed.</p>'),
+    headers: [{ name: 'Content-ID', value: '<body>' }]
+  }
+  const related: Part = {
+    mimeType: 'multipart/related',
+    headers: [{ name: 'Content-Type', value: 'multipart/related; start="<body>"' }],
+    parts: [textPart('text/plain', 'A resource, not the body'), html, { mimeType: 'image/png' }]
+  }
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, related] })).toBe('Build 42 passed.')
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [related, plain] })).toBe('Build 42 passed.')
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, related, plain] })).toBe(
+    'Build 42 passed.\nBuild 42 passed.'
+  )
+})
+
+it('keeps a richer HTML representation once when its complete adjacent plain body is included', () => {
+  const plain = textPart('text/plain', 'Build 42 passed.')
+  const html = textPart(
+    'text/html',
+    '<div><header>Nightly reports</header></div><div><nav>History and account settings</nav></div><p>Build 42 passed.</p><div><footer>Unsubscribe or read the legal terms for automated build notifications.</footer></div>'
+  )
+  const expected =
+    'Nightly reports\nHistory and account settings\nBuild 42 passed.\nUnsubscribe or read the legal terms for automated build notifications.'
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, html] })).toBe(expected)
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [html, plain] })).toBe(expected)
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, html, plain] })).toBe(
+    `${expected}\nBuild 42 passed.`
+  )
+  expect(
+    bodyText({
+      mimeType: 'multipart/mixed',
+      parts: [{ mimeType: 'multipart/alternative', parts: [plain] }, html]
+    })
+  ).toBe(`Build 42 passed.\n${expected}`)
+  for (const [plainText, htmlText] of [
+    ['Build', 'ReBuild'],
+    ['pass', 'passes'],
+    ['भारत', 'अभारत']
+  ]) {
+    expect(
+      bodyText({
+        mimeType: 'multipart/mixed',
+        parts: [textPart('text/plain', plainText), textPart('text/html', `<p>${htmlText}</p>`)]
+      })
+    ).toBe(`${plainText}\n${htmlText}`)
+  }
 })
 
 it('keeps equivalent text in independently grouped mixed sections', () => {
