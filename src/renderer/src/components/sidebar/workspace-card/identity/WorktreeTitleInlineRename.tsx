@@ -223,11 +223,10 @@ export function WorktreeTitleInlineRename({
               'Failed to rename workspace.'
             )
       )
-    } finally {
-      savingRef.current = false
-      if (mountedRef.current) {
-        setSaving(false)
-      }
+    }
+    savingRef.current = false
+    if (mountedRef.current) {
+      setSaving(false)
     }
   }, [cancelRename, displayName, onRename, setEditingMode, value])
   useBlurSaveOnUnmount(() => editing && editingRef.current, commitRename)
