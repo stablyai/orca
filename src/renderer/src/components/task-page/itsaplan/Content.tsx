@@ -3,6 +3,7 @@ import { AlertCircle, LoaderCircle } from 'lucide-react'
 import { ItsaplanIcon } from '@/components/icons/ItsaplanIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
+import ItsaplanIssueWorkspace from '@/components/ItsaplanIssueWorkspace'
 import { ItsaplanIssueRow } from './listing/ItsaplanIssueRow'
 
 export function TaskPageItsaplanContent({
@@ -23,9 +24,22 @@ export function TaskPageItsaplanContent({
     itsaplanCredentialInvalid,
     appliedItsaplanSearch,
     setItsaplanConnectOpen,
+    selectedItsaplanIssue,
     openItsaplanDetailPage,
+    closeTaskDetailPage,
     openComposerForItsaplanItem
   } = model
+  if (selectedItsaplanIssue) {
+    return (
+      <ItsaplanIssueWorkspace
+        issue={selectedItsaplanIssue}
+        backLabel={t('taskProviders.itsaplan.listLabel', "It's a Plan list")}
+        onUse={openComposerForItsaplanItem}
+        onOpenIssue={openItsaplanDetailPage}
+        onClose={closeTaskDetailPage}
+      />
+    )
+  }
   if (!itsaplanStatusReady) {
     return (
       <div className="mt-4 flex items-center justify-center py-14">

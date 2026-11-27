@@ -47,7 +47,7 @@ export function ItsaplanIssueRow({
   onStart: (issue: ItsaplanIssue) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const labels = issue.labels.slice(0, 3)
+  const labels = issue.labels.slice(0, 2)
   const assigneeName =
     issue.assignee?.name ?? t('auto.components.TaskPage.42a9160321', 'Unassigned')
   return (
