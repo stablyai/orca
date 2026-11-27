@@ -27,6 +27,14 @@ type Snapshot =
   | { phase: 'running'; request: Promise<RemoteServerUpdateCheck | undefined> }
   | { phase: 'ready'; check: RemoteServerUpdateCheck }
 
+function isFocusable(element: HTMLElement): boolean {
+  return (
+    element.isConnected &&
+    !(element instanceof HTMLButtonElement && element.disabled) &&
+    element.getClientRects().length > 0
+  )
+}
+
 /** Which button is waiting for its second click, bound to the servers it would restart. */
 type Armed = {
   /** One server's id, or null for Update all. */
@@ -130,12 +138,12 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       return
     }
     const active = container.ownerDocument.activeElement
-    // Dropped only when the button that had focus was removed; a button still on the page that the
-    // user blurred to the page must not pull focus back.
+    // Dropped only when the button that had focus can no longer take it (removed, disabled or
+    // hidden); a usable button the user blurred to the page must not pull focus back.
     const lastFocused = lastFocusedAction.current
     const dropped =
       lastFocused !== null &&
-      !lastFocused.isConnected &&
+      !isFocusable(lastFocused) &&
       (!active || active === container.ownerDocument.body)
     const stranded =
       active instanceof HTMLButtonElement &&
@@ -329,9 +337,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               lastFocusedAction.current = event.target instanceof HTMLElement ? event.target : null
             }}
             onBlur={(event) => {
-              // A blur from a button still on the page is a real move away; a removed button's
-              // blur keeps the ref so its focus can land on Servers.
-              if (event.target.isConnected) {
+              // A blur from a button that can still take focus is a real move away. Chromium also
+              // blurs a button that was removed, disabled or hidden; that keeps the ref so its
+              // focus can land on Servers.
+              if (event.target instanceof HTMLElement && isFocusable(event.target)) {
                 lastFocusedAction.current = null
               }
             }}

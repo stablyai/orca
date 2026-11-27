@@ -18,6 +18,7 @@ import type { UpdateStatusLine, UpdateStatusRowModel } from './update-status-row
 import { UpdateStatusDetails } from './UpdateStatusDetails'
 import { detailsText } from './update-status-details-text'
 import { runUpdateCheck } from './run-update-check'
+import { hasTranslatedUpdaterMessage } from '@/app-shell/updates/updater-message-copy'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
@@ -279,7 +280,7 @@ export function UpdateStatusRow({
           // falls back to the raw text) keeps monospace lines.
           prose={
             model.details !== 'message' ||
-            (status.state === 'error' && Boolean(status.messageCode) && details !== status.message)
+            (status.state === 'error' && hasTranslatedUpdaterMessage(status))
           }
         />
       ) : null}

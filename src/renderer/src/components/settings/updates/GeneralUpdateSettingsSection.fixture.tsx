@@ -2,6 +2,7 @@ import { defineFixture, type ComponentFixture } from '../../../component-fixture
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import type { ReleaseBuild } from '../../../../../shared/updater/release-channel'
+import { updaterCodedMessage } from '../../../../../shared/updater/updater-failure-copy'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { useAppStore } from '@/store'
 import { GeneralSupportStarAction } from '../general/GeneralSupportSection'
@@ -415,11 +416,11 @@ export const browserInstallBlockNarrow = narrow(browserInstallBlock)
 
 /** A coded updater error: translated prose, shown in the normal font. */
 export const codedErrorDetails = about(
+  // The payload main really sends: the message is the same English copy the code resolves to.
   {
     state: 'error',
     version: NEXT,
-    message: 'staging timed out',
-    messageCode: 'macStagingTimeout',
+    ...updaterCodedMessage('macStagingTimeout'),
     userInitiated: true
   },
   { interact: (frame) => expand(frame, 'Show details') }
