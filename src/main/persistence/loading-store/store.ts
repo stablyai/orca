@@ -3,7 +3,7 @@ import { setMigrationUnsupportedPtyPersistenceListener } from '../../agent-hooks
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { ActiveViewPreference } from '../preferences/active-view-preference'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
-import { copyChatReadMarksAtLoad } from '../restoring-sessions/chat-read-mark-copy-at-load'
+import { moveChatReadMarksAtLoad } from '../restoring-sessions/chat-read-mark-move-at-load'
 import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
 import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
 import {
@@ -125,8 +125,8 @@ export class Store {
         collectUnboundPaneAlias: options.collectUnboundPaneAlias
       }
     )
-    const readMarkCopy = copyChatReadMarksAtLoad(normalized.state)
-    let initialState = readMarkCopy.state
+    const movedReadMarks = moveChatReadMarksAtLoad(normalized.state)
+    let initialState = movedReadMarks
     // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
     if (options.initializeHomeWorkspace && !profileDocumentExisted) {
       initialState = createInitialHomeWorkspaceState(initialState)
@@ -167,11 +167,8 @@ export class Store {
         sweptRepoIds.length > 0
       ) {
         scheduleFullProfileSave(this.domains.scheduling)
-      } else if (readMarkCopy.recordsChanged) {
+      } else if (movedReadMarks !== normalized.state) {
         scheduleSave(this.domains.scheduling, ['ui'])
-      } else if (readMarkCopy.state !== normalized.state) {
-        // Include the flag in the next selective save.
-        this.runtime.dirtyProfileStateDomains?.add('ui')
       }
     }
   }
