@@ -1,28 +1,35 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
-const Id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
-const Correlation = z
-  .string()
-  .max(128)
-  .nullish()
-  .transform((value) => value || undefined)
-const Status = z.string().max(64)
-const Policy = z.object({ upload_rustfs: z.boolean(), publish_spl: z.boolean() })
+const Id = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9_-]{1,128}$/))
+const Correlation = lazyZodSchema(() =>
+  z
+    .string()
+    .max(128)
+    .nullish()
+    .transform((value) => value || undefined)
+)
+const Status = lazyZodSchema(() => z.string().max(64))
+const Policy = lazyZodSchema(() =>
+  z.object({ upload_rustfs: z.boolean(), publish_spl: z.boolean() })
+)
 const noticeIds = { workflow_id: Id, serverpack_id: Id }
 
-export const SpcTerminalNotice = z.discriminatedUnion('kind', [
-  z.object({
-    ...noticeIds,
-    kind: z.literal('spc_test_completed'),
-    test_task_id: Id
-  }),
-  z.object({
-    ...noticeIds,
-    kind: z.literal('spc_publish_finished'),
-    test_task_id: Id.optional(),
-    publish_id: Id
-  })
-])
+export const SpcTerminalNotice = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({
+      ...noticeIds,
+      kind: z.literal('spc_test_completed'),
+      test_task_id: Id
+    }),
+    z.object({
+      ...noticeIds,
+      kind: z.literal('spc_publish_finished'),
+      test_task_id: Id.optional(),
+      publish_id: Id
+    })
+  ])
+)
 
 export type SpcTerminalNotice = z.infer<typeof SpcTerminalNotice>
 export type SpcRead = (
@@ -30,60 +37,66 @@ export type SpcRead = (
   args: Record<string, string | number>
 ) => Promise<unknown>
 
-const TestLog = z.object({
-  summary: z.object({
-    id: Id,
-    workflow_id: Id,
-    task_type: z.literal('test'),
-    serverpack_id: Id.optional(),
-    status: Status,
-    correlation_id: Correlation,
-    post_test: Policy.nullish()
-  }),
-  correlation_id: Correlation
-})
-
-const PackStatus = z.object({
-  server_pack: z.object({ id: Id }),
-  workflow_id: Id,
-  publication_error: z.string().optional(),
-  publication: z
-    .object({
-      reviewed_test_log_id: Id.optional(),
+const TestLog = lazyZodSchema(() =>
+  z.object({
+    summary: z.object({
+      id: Id,
+      workflow_id: Id,
+      task_type: z.literal('test'),
+      serverpack_id: Id.optional(),
+      status: Status,
+      correlation_id: Correlation,
       post_test: Policy.nullish()
-    })
-    .nullish(),
-  test: z.object({
-    log_id: z.string(),
-    passed: z.boolean(),
-    observed: z.boolean(),
-    process_reaped: z.boolean(),
-    process_running: z.boolean(),
-    done: z.object({ message: z.string() }).optional(),
-    success: z.object({ message: z.string() }).optional()
+    }),
+    correlation_id: Correlation
   })
-})
+)
 
-const Publication = z.object({
-  ...noticeIds,
-  id: Id,
-  correlation_id: Correlation,
-  reviewed_test_log_id: Id.optional(),
-  status: Status,
-  post_test: Policy.nullish(),
-  archive_verified: z.boolean(),
-  artifact_sha256: z.string().optional(),
-  object_confirmed: z.boolean(),
-  object_url: z.string().optional(),
-  verification: z
-    .object({
-      matches: z.boolean(),
-      mismatch_count: z.number().int(),
-      unverified_count: z.number().int(),
-      fields: z.array(z.object({ matches: z.boolean(), unknown: z.boolean().optional() }))
+const PackStatus = lazyZodSchema(() =>
+  z.object({
+    server_pack: z.object({ id: Id }),
+    workflow_id: Id,
+    publication_error: z.string().optional(),
+    publication: z
+      .object({
+        reviewed_test_log_id: Id.optional(),
+        post_test: Policy.nullish()
+      })
+      .nullish(),
+    test: z.object({
+      log_id: z.string(),
+      passed: z.boolean(),
+      observed: z.boolean(),
+      process_reaped: z.boolean(),
+      process_running: z.boolean(),
+      done: z.object({ message: z.string() }).optional(),
+      success: z.object({ message: z.string() }).optional()
     })
-    .nullish()
-})
+  })
+)
+
+const Publication = lazyZodSchema(() =>
+  z.object({
+    ...noticeIds,
+    id: Id,
+    correlation_id: Correlation,
+    reviewed_test_log_id: Id.optional(),
+    status: Status,
+    post_test: Policy.nullish(),
+    archive_verified: z.boolean(),
+    artifact_sha256: z.string().optional(),
+    object_confirmed: z.boolean(),
+    object_url: z.string().optional(),
+    verification: z
+      .object({
+        matches: z.boolean(),
+        mismatch_count: z.number().int(),
+        unverified_count: z.number().int(),
+        fields: z.array(z.object({ matches: z.boolean(), unknown: z.boolean().optional() }))
+      })
+      .nullish()
+  })
+)
 
 const terminal = (status: string) => ['completed', 'failed', 'error', 'cancelled'].includes(status)
 const processesArchive = (policy: z.infer<typeof Policy> | null | undefined) =>

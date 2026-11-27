@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   botToolVaultChangeSchema,
   vaultDraftSchema,
@@ -19,7 +20,7 @@ import { publishClipboardText } from '../../window/clipboard/clipboard-text-publ
 import { CredentialVault } from './credential-vault'
 import { callServerVault, serverVaultTargetSchema } from './server-vault-client'
 
-const summaries = z.array(vaultEntrySchema)
+const summaries = lazyZodSchema(() => z.array(vaultEntrySchema))
 
 function isTrusted(event: IpcMainInvokeEvent): boolean {
   return (

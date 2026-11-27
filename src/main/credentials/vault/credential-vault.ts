@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { inCredentialFileOrder, stageCredentialFile } from '../credential-file-io'
 import { withFileTransactionLock } from '../../filesystem/file-transaction-lock'
 import { getSecretStore } from '../../../shared/secure-storage/secret-store'
@@ -14,11 +15,15 @@ import {
 
 const MAX_ENTRIES = 250
 const FORMAT = 'orca-credential-vault-v1'
-const diskSchema = z.object({
-  format: z.literal(FORMAT),
-  entries: z.array(z.object({ entry: vaultEntrySchema, sealed: z.string() })).max(MAX_ENTRIES)
-})
-const sealedValueSchema = z.tuple([z.literal(FORMAT), vaultIdSchema, vaultValueSchema])
+const diskSchema = lazyZodSchema(() =>
+  z.object({
+    format: z.literal(FORMAT),
+    entries: z.array(z.object({ entry: vaultEntrySchema, sealed: z.string() })).max(MAX_ENTRIES)
+  })
+)
+const sealedValueSchema = lazyZodSchema(() =>
+  z.tuple([z.literal(FORMAT), vaultIdSchema, vaultValueSchema])
+)
 type DiskVault = z.infer<typeof diskSchema>
 
 export class CredentialVault {

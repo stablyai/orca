@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   CREDENTIAL_VAULT_METHOD,
   type CredentialVaultOperation
@@ -13,14 +14,18 @@ import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environment
 import { isRuntimeEnvironmentManuallyDisconnected } from '../../ipc/runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 
-export const serverVaultTargetSchema = z.object({
-  environmentId: z.string().min(1).max(256),
-  pairingRevision: z.number().finite()
-})
-const remoteFailureSchema = z.object({
-  ok: z.literal(false),
-  reason: z.enum(VAULT_FAILURE_REASONS)
-})
+export const serverVaultTargetSchema = lazyZodSchema(() =>
+  z.object({
+    environmentId: z.string().min(1).max(256),
+    pairingRevision: z.number().finite()
+  })
+)
+const remoteFailureSchema = lazyZodSchema(() =>
+  z.object({
+    ok: z.literal(false),
+    reason: z.enum(VAULT_FAILURE_REASONS)
+  })
+)
 
 export async function callServerVault<T>(
   target: ServerVaultTarget,

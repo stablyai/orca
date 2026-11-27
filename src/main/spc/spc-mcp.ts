@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { RelayRefusal } from '../bots/tool-relay/bot-tool-relay-requests'
 import type { BotToolRequestBinding } from '../bots/tool-relay/bot-tool-relay-grants'
 import type { SpcRead } from './spc-terminal-result'
@@ -15,13 +16,15 @@ const startsWorkflow = new Set([
   'schedule_create_spl'
 ])
 
-const ToolCall = z.looseObject({
-  method: z.literal('tools/call'),
-  params: z.looseObject({
-    name: z.string(),
-    arguments: z.record(z.string(), z.unknown())
+const ToolCall = lazyZodSchema(() =>
+  z.looseObject({
+    method: z.literal('tools/call'),
+    params: z.looseObject({
+      name: z.string(),
+      arguments: z.record(z.string(), z.unknown())
+    })
   })
-})
+)
 
 export function bindSpcMcpRequest(body: Buffer, bind: (requestId: string) => string): Buffer {
   let value: unknown
@@ -76,13 +79,15 @@ export function spcRequestBinding(input: {
   }
 }
 
-const Answer = z.object({
-  id: z.literal(1),
-  result: z.object({
-    isError: z.boolean().optional(),
-    structuredContent: z.object({ success: z.literal(true), data: z.unknown() })
+const Answer = lazyZodSchema(() =>
+  z.object({
+    id: z.literal(1),
+    result: z.object({
+      isError: z.boolean().optional(),
+      structuredContent: z.object({ success: z.literal(true), data: z.unknown() })
+    })
   })
-})
+)
 
 export function spcMcpReader(
   send: (body: string, signal: AbortSignal) => Promise<Response>

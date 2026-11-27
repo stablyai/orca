@@ -1,12 +1,15 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { getServerCredentialVault } from '../credentials/vault/server-credential-vault'
 
 const PREFIX = 'server-vault:'
-const bindingSchema = z.object({
-  scope: z.string().regex(/^[a-f0-9]{64}$/),
-  id: z.uuid(),
-  scheme: z.enum(['bearer', 'api-key'])
-})
+const bindingSchema = lazyZodSchema(() =>
+  z.object({
+    scope: z.string().regex(/^[a-f0-9]{64}$/),
+    id: z.uuid(),
+    scheme: z.enum(['bearer', 'api-key'])
+  })
+)
 export type BotVaultBinding = z.infer<typeof bindingSchema>
 
 export function isBotVaultSource(source: string | undefined): boolean {

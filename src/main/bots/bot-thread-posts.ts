@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { mintAgentSessionOperationId } from '../runtime/orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
@@ -12,25 +13,29 @@ export type BotThreadPost = {
   wake: boolean
 }
 
-const Destination = z.enum(['thread', 'inbox'])
-const BotThreadReceipt = z.object({
-  delivery_id: z.string(),
-  message_id: z.string(),
-  thread_id: z.string(),
-  destination: Destination,
-  wake: z.boolean()
-})
+const Destination = lazyZodSchema(() => z.enum(['thread', 'inbox']))
+const BotThreadReceipt = lazyZodSchema(() =>
+  z.object({
+    delivery_id: z.string(),
+    message_id: z.string(),
+    thread_id: z.string(),
+    destination: Destination,
+    wake: z.boolean()
+  })
+)
 
 export type BotThreadReceipt = z.infer<typeof BotThreadReceipt>
 
-const PostRow = z.object({
-  thread_id: z.string(),
-  destination: Destination,
-  text: z.string(),
-  wake: z.union([z.literal(0), z.literal(1)]),
-  operation_id: z.string(),
-  receipt: z.string().nullable()
-})
+const PostRow = lazyZodSchema(() =>
+  z.object({
+    thread_id: z.string(),
+    destination: Destination,
+    text: z.string(),
+    wake: z.union([z.literal(0), z.literal(1)]),
+    operation_id: z.string(),
+    receipt: z.string().nullable()
+  })
+)
 
 type PostRow = z.infer<typeof PostRow>
 
