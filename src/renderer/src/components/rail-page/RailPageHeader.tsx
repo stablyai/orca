@@ -91,7 +91,7 @@ export function RailPageHeader({
         <h1
           {...headingProps}
           className={cn(
-            'min-w-0 shrink-0 truncate text-[15px] font-semibold tracking-tight outline-none',
+            'min-w-0 truncate text-[15px] font-semibold tracking-tight outline-none',
             headingProps?.className
           )}
         >
