@@ -17,6 +17,7 @@ export type ReceiptDocument = {
 
 type RendererWatches = {
   pid: number
+  document: AbortSignal
   primary?: ProcessExitWatch
   proof?: ProcessExitWatch
 }
@@ -87,8 +88,13 @@ export class DesktopProviderReceiptWindow {
     return watch === 'gone' ? undefined : (watch ?? undefined)
   }
 
-  watchRenderer(pid: number): boolean {
-    if (this.watches?.pid === pid && this.watches.primary && this.watches.proof) {
+  watchRenderer(pid: number, document: AbortSignal): boolean {
+    if (
+      this.watches?.pid === pid &&
+      this.watches.document === document &&
+      this.watches.primary &&
+      this.watches.proof
+    ) {
       return true
     }
     if (this.readers.hasPostedReply(this.transport.signal)) {
@@ -96,7 +102,7 @@ export class DesktopProviderReceiptWindow {
     }
     // Separate kernel registrations pin the process instance before handoff and outlive the window.
     this.stopWatching()
-    const watches: RendererWatches = { pid }
+    const watches: RendererWatches = { pid, document }
     this.watches = watches
     watches.primary = this.armWatch(watches, 'primary')
     watches.proof = watches.primary && this.armWatch(watches, 'proof')

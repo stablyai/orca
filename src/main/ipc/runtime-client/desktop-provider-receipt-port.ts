@@ -235,7 +235,7 @@ export class DesktopProviderReceiptPort {
             prepared.reply.status !== 'reader_unknown' &&
             canPost() &&
             senderFrame.osProcessId === pid &&
-            window.watchRenderer(pid) &&
+            window.watchRenderer(pid, endpoint.document) &&
             this.readers.handoff(endpoint, (encoded) => port1.postMessage(encoded))
         } catch {
           // Failure to hand off a reply retires this binding below.

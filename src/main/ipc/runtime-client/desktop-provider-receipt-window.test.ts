@@ -38,7 +38,7 @@ it.each([true, false])(
         undefined,
         'closed'
       )
-      expect(window.watchRenderer(process.pid)).toBe(true)
+      expect(window.watchRenderer(process.pid, endpoint.document)).toBe(true)
       expect(readers.handoff(endpoint)).toBe(true)
       sender.emit('destroyed')
 
@@ -66,3 +66,43 @@ it.each([true, false])(
     }
   }
 )
+
+it('arms new proof for a successor document even if its PID matches', async () => {
+  const signals: ((exited?: boolean) => void)[] = []
+  setProcessExitWatchNativeForTests({
+    watchProcessExit: () => null,
+    watchProcessExitWithProof: (_pid, notice) => signals.push(notice),
+    unwatchProcessExit: () => undefined
+  })
+  const readers = new ProviderReceiptReaders(() => 'test')
+  const window = new DesktopProviderReceiptWindow(new EventEmitter(), readers, () => {})
+  const transport = window.transport
+  const post = async () => {
+    const document = new AbortController()
+    const endpoint = { transport: transport.signal, document: document.signal }
+    const reply = await readers.read(
+      endpoint,
+      { reader: { id: randomUUID(), generation: 1 }, since: null, hostIncarnation: null },
+      undefined,
+      'closed'
+    )
+    expect(window.watchRenderer(process.pid, document.signal)).toBe(true)
+    expect(readers.handoff(endpoint)).toBe(true)
+    return { document, endpoint, reply }
+  }
+  try {
+    const old = await post()
+    readers.discard(old.endpoint, old.reply.revision)
+    old.document.abort()
+    await post()
+    expect(signals).toHaveLength(4)
+    signals[1]!(true)
+    expect(readers.hasPostedReply(transport.signal)).toBe(true)
+    signals[3]!(true)
+    expect(readers.hasPostedReply(transport.signal)).toBe(false)
+  } finally {
+    transport.abort()
+    window.dispose()
+    setProcessExitWatchNativeForTests(undefined)
+  }
+})
