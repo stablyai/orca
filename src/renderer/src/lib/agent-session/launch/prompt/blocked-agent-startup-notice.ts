@@ -1,5 +1,5 @@
 import { XIcon } from 'lucide-react'
-import { createElement } from 'react'
+import { createElement, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -9,35 +9,61 @@ const STARTUP_PROMPT_PREVIEW_LINES = 4
 const STARTUP_PROMPT_PREVIEW_URL_CHARACTERS = 64
 const BLOCKED_STARTUP_DRAFTS_TOAST_ID = 'blocked-startup-drafts'
 const MAX_BLOCKED_STARTUP_DRAFTS = 3
-const blockedStartupDrafts: { reason: AgentProgramBlockReason; prompt: string }[] = []
+type StartupDraft = { prompt: string }
+type BlockedStartupDraft = StartupDraft & { reason: AgentProgramBlockReason }
+
+let blockedStartupDrafts: readonly BlockedStartupDraft[] = []
+const draftListeners = new Set<() => void>()
 let copyingDraft = false
+let draftNoticeMounted = false
 let dismissingDraftNotice = false
 
-type StartupDraft = { worktreeId: string; prompt: string } | { creationId: string; prompt: string }
-
-export function notifyBlockedAgentStartup(
-  reason: AgentProgramBlockReason,
-  request: string | StartupDraft | undefined
-): void {
-  if (typeof request === 'object') {
-    blockedStartupDrafts.unshift({ reason, prompt: request.prompt })
-    // Keep only the three latest drafts. Each replaces the preview as it arrives.
-    if (blockedStartupDrafts.length > MAX_BLOCKED_STARTUP_DRAFTS) {
-      blockedStartupDrafts.pop()
-    }
-    showBlockedStartupDraftNotice()
-    return
+function subscribeToStartupDrafts(listener: () => void): () => void {
+  draftListeners.add(listener)
+  return () => {
+    draftListeners.delete(listener)
   }
+}
 
+function getStartupDrafts(): readonly BlockedStartupDraft[] {
+  return blockedStartupDrafts
+}
+
+function setStartupDrafts(drafts: readonly BlockedStartupDraft[]): void {
+  blockedStartupDrafts = drafts
+  for (const listener of draftListeners) {
+    listener()
+  }
+}
+
+export function notifyBlockedAgentStartup<Draft extends StartupDraft>(
+  reason: AgentProgramBlockReason,
+  request: string | Draft | undefined
+): void {
   if (reason === 'unbuildable') {
     void import('../failure/agent-launch-failure')
       .then(({ notifyAgentLaunchFailure }) => notifyAgentLaunchFailure('hermes'))
       .catch((error: unknown) =>
         console.warn('[terminal] could not show the startup notice', error)
       )
-    return
   }
-  toast.message(blockedStartupTitle(reason), request ? copyDroppedTextAction(request) : undefined)
+
+  if (typeof request === 'object') {
+    const wasEmpty = blockedStartupDrafts.length === 0
+    setStartupDrafts(
+      [{ reason, prompt: request.prompt }, ...blockedStartupDrafts].slice(
+        0,
+        MAX_BLOCKED_STARTUP_DRAFTS
+      )
+    )
+    if (draftNoticeMounted) {
+      dismissBlockedStartupDraftNotice()
+    } else if (wasEmpty) {
+      showBlockedStartupDraftNotice()
+    }
+  } else if (reason !== 'unbuildable') {
+    toast.message(blockedStartupTitle(reason), request ? copyDroppedTextAction(request) : undefined)
+  }
 }
 
 function blockedStartupTitle(reason: AgentProgramBlockReason): string {
@@ -109,9 +135,13 @@ function shortenPreviewUrl(url: string): string {
   return `${start.slice(0, headLength).join('')}…${end.slice(-tailLength).join('')}`
 }
 
-function BlockedStartupDraftDescription(): ReturnType<typeof createElement> {
-  const draft = blockedStartupDrafts[0]
-  const moreCount = blockedStartupDrafts.length - 1
+function BlockedStartupDraftText({
+  draft,
+  moreCount
+}: {
+  draft: BlockedStartupDraft
+  moreCount: number
+}): ReturnType<typeof createElement> {
   const notDelivered = translate(
     'terminal.startupPromptNotDelivered',
     "The startup prompt wasn't delivered."
@@ -122,7 +152,38 @@ function BlockedStartupDraftDescription(): ReturnType<typeof createElement> {
       : null
   return createElement(
     'div',
-    { ref: finishBlockedStartupDraftDismissal },
+    { className: 'flex flex-col gap-1.5' },
+    createElement('div', { 'data-title': '' }, blockedStartupTitle(draft.reason)),
+    createElement(
+      'div',
+      { 'data-description': '' },
+      createElement('div', null, notDelivered, more && ` ${more}`),
+      createElement(
+        'div',
+        { className: 'line-clamp-4 whitespace-pre-wrap wrap-anywhere' },
+        startupPromptPreview(draft.prompt)
+      )
+    )
+  )
+}
+
+function BlockedStartupDraftNotice(): ReturnType<typeof createElement> {
+  const drafts = useSyncExternalStore(subscribeToStartupDrafts, getStartupDrafts)
+  // Sonner measures the card on mount. Reserve room for the drafts this card advances through.
+  const [sizingDrafts] = useState(() => {
+    const initialDrafts = getStartupDrafts()
+    return initialDrafts.map((draft, index) =>
+      createElement(
+        'div',
+        { key: index, className: 'invisible col-start-1 row-start-1', 'aria-hidden': true },
+        createElement(BlockedStartupDraftText, { draft, moreCount: initialDrafts.length - 1 })
+      )
+    )
+  })
+  const draft = drafts[0]
+  return createElement(
+    'div',
+    { ref: setBlockedStartupDraftNoticeElement, className: 'flex flex-col gap-2.5' },
     createElement(
       'button',
       {
@@ -131,37 +192,38 @@ function BlockedStartupDraftDescription(): ReturnType<typeof createElement> {
         'data-close-button': true,
         onClick: () => {
           if (draft && blockedStartupDrafts[0] === draft) {
-            blockedStartupDrafts.shift()
-            refreshBlockedStartupDraftNotice()
+            removeStartupDraft(draft)
           }
         }
       },
       createElement(XIcon, { className: 'size-3', 'aria-hidden': true })
     ),
-    createElement('div', null, notDelivered, more && ` ${more}`),
     createElement(
       'div',
-      { className: 'line-clamp-4 whitespace-pre-wrap wrap-anywhere' },
-      draft ? startupPromptPreview(draft.prompt) : null
-    )
-  )
-}
-
-function BlockedStartupDraftCopyButton(): ReturnType<typeof createElement> {
-  const draft = blockedStartupDrafts[0]
-  return createElement(
-    'button',
-    {
-      type: 'button',
-      'data-button': true,
-      'data-action': true,
-      onClick: () => {
-        if (draft && blockedStartupDrafts[0] === draft) {
-          void copyStartupDraft(draft)
+      { className: 'grid' },
+      sizingDrafts,
+      draft &&
+        createElement(
+          'div',
+          { className: 'col-start-1 row-start-1' },
+          createElement(BlockedStartupDraftText, { draft, moreCount: drafts.length - 1 })
+        )
+    ),
+    createElement(
+      'button',
+      {
+        type: 'button',
+        className: 'self-start',
+        'data-button': true,
+        'data-action': true,
+        onClick: () => {
+          if (draft && blockedStartupDrafts[0] === draft) {
+            void copyStartupDraft(draft)
+          }
         }
-      }
-    },
-    translate('menu.copy', 'Copy')
+      },
+      translate('menu.copy', 'Copy')
+    )
   )
 }
 
@@ -169,43 +231,47 @@ function showBlockedStartupDraftNotice(): void {
   if (blockedStartupDrafts.length === 0 || dismissingDraftNotice) {
     return
   }
-  // Sonner's message API replaces the history record for this id.
-  toast.message(
-    () => {
-      const draft = blockedStartupDrafts[0]
-      return draft ? blockedStartupTitle(draft.reason) : null
-    },
-    {
-      id: BLOCKED_STARTUP_DRAFTS_TOAST_ID,
-      description: createElement(BlockedStartupDraftDescription),
-      duration: Infinity,
-      closeButton: false,
-      dismissible: false,
-      action: createElement(BlockedStartupDraftCopyButton)
-    }
-  )
+  toast.message(createElement(BlockedStartupDraftNotice), {
+    id: BLOCKED_STARTUP_DRAFTS_TOAST_ID,
+    classNames: { title: 'contents' },
+    duration: Infinity,
+    closeButton: false,
+    dismissible: false
+  })
 }
 
-function refreshBlockedStartupDraftNotice(): void {
-  if (blockedStartupDrafts.length > 0) {
-    showBlockedStartupDraftNotice()
-  } else {
+function dismissBlockedStartupDraftNotice(): void {
+  if (!dismissingDraftNotice) {
     dismissingDraftNotice = true
     toast.dismiss(BLOCKED_STARTUP_DRAFTS_TOAST_ID)
   }
 }
 
-function finishBlockedStartupDraftDismissal(element: HTMLDivElement | null): void {
-  if (element === null && dismissingDraftNotice) {
-    // Sonner removes the old card after its exit animation, even if its id was updated.
-    dismissingDraftNotice = false
-    if (blockedStartupDrafts.length > 0) {
-      queueMicrotask(showBlockedStartupDraftNotice)
-    }
+function setBlockedStartupDraftNoticeElement(element: HTMLDivElement | null): void {
+  draftNoticeMounted = element !== null
+  if (!draftNoticeMounted && dismissingDraftNotice) {
+    // Recreate after Sonner removes the old card so this id returns at the front of the stack.
+    queueMicrotask(() => {
+      if (!draftNoticeMounted && dismissingDraftNotice) {
+        dismissingDraftNotice = false
+        showBlockedStartupDraftNotice()
+      }
+    })
   }
 }
 
-async function copyStartupDraft(draft: (typeof blockedStartupDrafts)[number]): Promise<void> {
+function removeStartupDraft(draft: BlockedStartupDraft): void {
+  const drafts = blockedStartupDrafts.filter((queuedDraft) => queuedDraft !== draft)
+  if (drafts.length === blockedStartupDrafts.length) {
+    return
+  }
+  setStartupDrafts(drafts)
+  if (drafts.length === 0) {
+    dismissBlockedStartupDraftNotice()
+  }
+}
+
+async function copyStartupDraft(draft: BlockedStartupDraft): Promise<void> {
   if (copyingDraft) {
     return
   }
@@ -217,11 +283,7 @@ async function copyStartupDraft(draft: (typeof blockedStartupDrafts)[number]): P
   } finally {
     copyingDraft = false
   }
-  const index = blockedStartupDrafts.indexOf(draft)
-  if (index !== -1) {
-    blockedStartupDrafts.splice(index, 1)
-    refreshBlockedStartupDraftNotice()
-  }
+  removeStartupDraft(draft)
 }
 
 export function copyDroppedTextAction(text: string): {
