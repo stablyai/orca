@@ -62,6 +62,8 @@ export type HangObservation = {
   tier?: 'stall' | 'hang'
   /** When a stall-tier record crossed the hang timeout; durationMs keeps the stall-detection age. */
   escalatedAt?: number
+  /** The version that observed it; the next launch may run another one. */
+  appVersion?: string
 }
 /** Pre-tier records are hangs: the watchdog used to observe nothing shorter than its timeout. */
 export function isHangTierObservation(record: HangObservation): boolean {
@@ -104,5 +106,6 @@ export type HangDetectionMarker = {
   parentPid: number
   unresponsiveMs: number
   selfRecovered: boolean
+  appVersion?: string
 }
 import type { MainJsCapture, NativeHangCapture } from './hang-stacks'

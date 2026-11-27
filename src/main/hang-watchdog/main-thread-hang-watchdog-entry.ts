@@ -156,6 +156,9 @@ export function runWatchdog(
       completedSpans: null,
       powerEvents,
       initialSleepAssociated,
+      ...(config.processMetadata?.appVersion
+        ? { appVersion: config.processMetadata.appVersion }
+        : {}),
       ...(kind === 'heartbeat-stall' ? { workerSends: recentWorkerSends(now) } : {}),
       ...(options.tier ? { tier: options.tier } : {}),
       ...(options.recovered ? { selfRecovered: true } : {})
@@ -214,7 +217,7 @@ export function runWatchdog(
       openReceiptWindow(id)
       reportRecovered(id, unresponsiveMs, endedAt)
     },
-    onStallEndedBySleep: () => {
+    onEpisodeEndedBySleep: () => {
       activeStallId = null
     },
     onStallMissed: (durationMs, startedAt) => {
@@ -258,6 +261,7 @@ export function runWatchdog(
       recentPower = [...recentPower, receipt].slice(-4)
       if (receipt.event === 'suspend') {
         sleepPeriod = { suspend: receipt, resumeAt: null }
+        loop.recordSuspend()
       } else if (receipt.event === 'resume' && sleepPeriod) {
         sleepPeriod.resumeAt = receipt.observedAt
       }

@@ -11,13 +11,15 @@ export type HangWatchdogDetectionLoopConfig = {
   onHangResolved: (unresponsiveMs: number) => void
   /** Heartbeats resumed after a stall no tick saw; its evidence can only be gathered afterwards. */
   onStallMissed?: (unresponsiveMs: number, startedAt: number) => void
-  /** A sleep interrupted a detected stall; its silence after this point belongs to the machine. */
-  onStallEndedBySleep?: () => void
+  /** A sleep interrupted a detected stall or hang; its silence after this point belongs to the machine. */
+  onEpisodeEndedBySleep?: () => void
   onWatchdogGap?: (gapMs: number, startedAt: number) => void
 }
 
 export type HangWatchdogDetectionLoop = {
   recordHeartbeat: () => void
+  /** Main relayed a suspend, so it answered then; the silence that follows is the machine's. */
+  recordSuspend: () => void
   tick: () => void
 }
 
@@ -36,7 +38,7 @@ export function createHangWatchdogDetectionLoop(
     recordHeartbeat: () => {
       const now = config.now()
       const silentMs = now - lastHeartbeatAt
-      if (detected === 'stall' && now - lastTickAt > sleepGapMs) {
+      if (detected && now - lastTickAt > sleepGapMs) {
         // Woke before the overdue tick: report and consume its gap first, in the tick's order, so it attaches to this stall.
         const tickGap = now - lastTickAt
         if (tickGap > config.timeoutMs) {
@@ -44,7 +46,7 @@ export function createHangWatchdogDetectionLoop(
         }
         lastTickAt = now
         detected = null
-        config.onStallEndedBySleep?.()
+        config.onEpisodeEndedBySleep?.()
       } else if (detected) {
         detected = null
         config.onHangResolved(silentMs)
@@ -54,6 +56,13 @@ export function createHangWatchdogDetectionLoop(
       }
       wokeHeartbeat ||= now - lastTickAt > sleepGapMs
       lastHeartbeatAt = now
+    },
+    recordSuspend: () => {
+      if (detected) {
+        detected = null
+        config.onEpisodeEndedBySleep?.()
+      }
+      lastHeartbeatAt = config.now()
     },
     tick: () => {
       const now = config.now()
@@ -65,9 +74,9 @@ export function createHangWatchdogDetectionLoop(
         if (tickGap > config.timeoutMs) {
           config.onWatchdogGap?.(tickGap, now - tickGap)
         }
-        if (detected === 'stall') {
+        if (detected) {
           detected = null
-          config.onStallEndedBySleep?.()
+          config.onEpisodeEndedBySleep?.()
         }
         // A wake heartbeat older than a sleep gap predates another sleep; it no longer marks main's start.
         if (!detected && !(wokeHeartbeat && now - lastHeartbeatAt <= sleepGapMs)) {

@@ -154,6 +154,9 @@ function parseObservation(value: unknown): HangObservation | null {
         }
       : {}),
     ...(workerSends ? { workerSends } : {}),
+    ...(typeof data.appVersion === 'string' && data.appVersion.length <= 64
+      ? { appVersion: data.appVersion }
+      : {}),
     ...parseHangTierFields(data)
   }
 }
@@ -246,6 +249,9 @@ export function retainHangObservation(
           }
         : old.native,
       powerEvents: [...receipts.values()].slice(-4),
+      ...((old.appVersion ?? record.appVersion)
+        ? { appVersion: old.appVersion ?? record.appVersion }
+        : {}),
       ...mergeHangTierFields(old, record),
       watchdogGap:
         old.watchdogGap && old.watchdogGap.durationMs > (record.watchdogGap?.durationMs ?? -1)
@@ -299,7 +305,8 @@ export function latestHangMarker(
         detectedAt: record.detectedAt,
         parentPid: record.parentPid,
         unresponsiveMs: hangObservationUnresponsiveMs(record),
-        selfRecovered: record.selfRecovered
+        selfRecovered: record.selfRecovered,
+        ...(record.appVersion ? { appVersion: record.appVersion } : {})
       }
     : null
 }
