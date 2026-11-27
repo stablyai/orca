@@ -1,6 +1,5 @@
 import type { GitReviewBranchSource } from '../../../../shared/git/remotes/git-review-branch-source'
 import {
-  TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS,
   trackedUpstreamSnapshotCache,
   trackedUpstreamSnapshotInFlight,
   trackedUpstreamSnapshotGenerations,
@@ -18,6 +17,7 @@ import {
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
 import {
+  TRACKED_UPSTREAM_ROUTE_CHANGED,
   probeRawTrackedUpstreamBranches,
   probeTrackedUpstreamSnapshot,
   type TrackedUpstreamLocalGitOptions
@@ -109,22 +109,26 @@ async function lookupTrackedUpstreamSnapshot(
 ): Promise<TrackedUpstreamSnapshotProbeResult> {
   const route = getTrackedUpstreamRoute(repoPath, connectionId, localGitOptions)
   const { cacheKey } = route
+  const routeIsCurrent = () =>
+    getTrackedUpstreamRoute(repoPath, connectionId, localGitOptions).runsIn === route.runsIn
   const serves = (
     value: Pick<
       TrackedUpstreamSnapshotProbeResult,
+      | 'expiresAt'
       | 'upstreamsByBranchName'
       | 'rawUpstreamsByBranchName'
       | 'reviewSources'
       | 'reviewSourceResolver'
     >
   ): boolean =>
+    value.expiresAt > Date.now() &&
     (value.rawUpstreamsByBranchName?.has(branchName) === true ||
       value.upstreamsByBranchName.has(branchName)) &&
     (!includeReviewSources ||
       value.reviewSourceResolver !== undefined ||
       value.reviewSources?.has(branchName) === true)
   const validate = async (
-    value: Pick<TrackedUpstreamSnapshotProbeResult, 'gitConfigSignature'>,
+    value: Pick<TrackedUpstreamSnapshotProbeResult, 'expiresAt' | 'gitConfigSignature'>,
     allowUnsignedHit = false
   ): Promise<boolean> =>
     (await doesTrackedUpstreamCacheConfigSignatureMatch(
@@ -132,33 +136,45 @@ async function lookupTrackedUpstreamSnapshot(
       repoPath,
       route,
       allowUnsignedHit
-    )) && getTrackedUpstreamRoute(repoPath, connectionId, localGitOptions).runsIn === route.runsIn
-  const acceptsJoined = async (result: TrackedUpstreamSnapshotProbeResult): Promise<boolean> =>
-    result.cacheable && serves(result) && (await validate(result))
+    )) && value.expiresAt > Date.now()
+  const join = async (
+    probe: Promise<TrackedUpstreamSnapshotProbeResult>
+  ): Promise<TrackedUpstreamSnapshotProbeResult | undefined> => {
+    const result = await probe
+    const valid = result.cacheable && serves(result) && (await validate(result))
+    if (!routeIsCurrent()) {
+      return TRACKED_UPSTREAM_ROUTE_CHANGED
+    }
+    return valid ? result : undefined
+  }
 
-  const cached = trackedUpstreamSnapshotCache.get(cacheKey)
+  // Refresh bypasses the entry for this caller; a usable old snapshot stays until replacement.
+  const cached = force ? undefined : trackedUpstreamSnapshotCache.get(cacheKey)
   if (cached) {
-    const unexpired = !force && cached.expiresAt > Date.now()
-    if (unexpired && serves(cached)) {
-      if ((await validate(cached, true)) && cached.expiresAt > Date.now()) {
+    if (serves(cached)) {
+      const valid = await validate(cached, true)
+      if (!routeIsCurrent()) {
+        return TRACKED_UPSTREAM_ROUTE_CHANGED
+      }
+      if (valid) {
         return snapshotFromEntry(cached)
       }
       deleteTrackedUpstreamSnapshot(cacheKey, cached)
-    } else if (!unexpired) {
+    } else if (cached.expiresAt <= Date.now()) {
       deleteTrackedUpstreamSnapshot(cacheKey, cached)
     }
     // A valid entry that lacks this branch or a resolver stays until a successful probe replaces it.
   }
-  const inFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
-  if (inFlight && !force) {
-    const result = await inFlight
-    if (await acceptsJoined(result)) {
+  const inFlight = force ? undefined : trackedUpstreamSnapshotInFlight.get(cacheKey)
+  if (inFlight) {
+    const result = await join(inFlight)
+    if (result) {
       return result
     }
     const retry = trackedUpstreamSnapshotInFlight.get(cacheKey)
     if (retry && retry !== inFlight) {
-      const fresh = await retry
-      if (await acceptsJoined(fresh)) {
+      const fresh = await join(retry)
+      if (fresh) {
         return fresh
       }
     }
@@ -177,8 +193,11 @@ async function lookupTrackedUpstreamSnapshot(
   let superseded: boolean
   try {
     result = await probe
+    if (!routeIsCurrent()) {
+      return TRACKED_UPSTREAM_ROUTE_CHANGED
+    }
     superseded = trackedUpstreamSnapshotGenerations.get(cacheKey) !== generation
-    if (result.cacheable && !superseded) {
+    if (result.cacheable && !superseded && result.expiresAt > Date.now()) {
       publishTrackedUpstreamSnapshot(cacheKey, {
         ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
@@ -189,7 +208,7 @@ async function lookupTrackedUpstreamSnapshot(
         ...(result.reviewSourceResolver
           ? { reviewSourceResolver: result.reviewSourceResolver }
           : {}),
-        expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
+        expiresAt: result.expiresAt
       })
     }
   } finally {
@@ -201,15 +220,14 @@ async function lookupTrackedUpstreamSnapshot(
   if (superseded) {
     // Only a newer, still-valid publication beats this probe's own answer; an older survivor never does.
     const fresh = trackedUpstreamSnapshotCache.get(cacheKey)
-    if (
-      fresh &&
-      fresh.publishedSeq > startSeq &&
-      fresh.expiresAt > Date.now() &&
-      serves(fresh) &&
-      (await validate(fresh)) &&
-      fresh.expiresAt > Date.now()
-    ) {
-      return snapshotFromEntry(fresh)
+    if (fresh && fresh.publishedSeq > startSeq && serves(fresh)) {
+      const valid = await validate(fresh)
+      if (!routeIsCurrent()) {
+        return TRACKED_UPSTREAM_ROUTE_CHANGED
+      }
+      if (valid) {
+        return snapshotFromEntry(fresh)
+      }
     }
   }
   return result

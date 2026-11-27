@@ -8,6 +8,7 @@ import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-co
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
+  TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS,
   getTrackedUpstreamRoute,
   parseRawTrackedUpstreamBranches,
   readTrackedUpstreamConfigSignature,
@@ -23,6 +24,14 @@ export type TrackedUpstreamLocalGitOptions = {
 
 const EMPTY_UPSTREAMS_MAP = new Map<string, TrackedUpstreamBranch | null>()
 
+export const TRACKED_UPSTREAM_ROUTE_CHANGED: TrackedUpstreamSnapshotProbeResult = {
+  expiresAt: 0,
+  cacheable: false,
+  coherent: false,
+  probeFailed: true,
+  upstreamsByBranchName: EMPTY_UPSTREAMS_MAP
+}
+
 export async function probeTrackedUpstreamSnapshot(
   repoPath: string,
   connectionId?: string | null,
@@ -34,31 +43,51 @@ export async function probeTrackedUpstreamSnapshot(
   const observeGitRuntime = (runsIn: string): void => {
     routeChanged ||= runsIn !== route.runsIn
   }
+  const routeIsCurrent = (): boolean => {
+    if (!routeChanged) {
+      observeGitRuntime(getTrackedUpstreamRoute(repoPath, connectionId, localGitOptions).runsIn)
+    }
+    return !routeChanged
+  }
   const startingGitConfigSignature = await readTrackedUpstreamConfigSignature(repoPath, route)
+  if (!routeIsCurrent()) {
+    return TRACKED_UPSTREAM_ROUTE_CHANGED
+  }
+  const gitOptions = {
+    ...localGitOptions,
+    observeGitRuntime,
+    ...(process.platform === 'win32' ? { canStart: () => !routeChanged } : {})
+  }
   let { probeFailed, rawUpstreamsByBranchName } = await probeRawTrackedUpstreamBranches(
     repoPath,
     connectionId,
-    { ...localGitOptions, observeGitRuntime }
+    gitOptions
   )
   let reviewSourceResolver: GitReviewBranchSourceResolver | undefined
-  if (reviewBranchName && !probeFailed) {
+  if (reviewBranchName && !probeFailed && !routeChanged) {
     try {
       requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
       if (!rawUpstreamsByBranchName.has(reviewBranchName)) {
         rawUpstreamsByBranchName.set(reviewBranchName, '')
       }
-      reviewSourceResolver = await createGitReviewBranchSourceResolver((args) =>
-        gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions, observeGitRuntime })
-      )
+      reviewSourceResolver = await createGitReviewBranchSourceResolver((args) => {
+        if (!routeIsCurrent()) {
+          throw new Error('Git runtime changed during the review snapshot')
+        }
+        return gitExecFileAsync(args, { cwd: repoPath, ...gitOptions })
+      })
     } catch {
       probeFailed = true
     }
   }
-  const endingGitConfigSignature = await readTrackedUpstreamConfigSignature(repoPath, route)
-  observeGitRuntime(getTrackedUpstreamRoute(repoPath, connectionId, localGitOptions).runsIn)
+  const endingGitConfigSignature = routeIsCurrent()
+    ? await readTrackedUpstreamConfigSignature(repoPath, route)
+    : undefined
   const torn = startingGitConfigSignature !== endingGitConfigSignature
-  const coherent = !torn && !routeChanged
+  const coherent = routeIsCurrent() && !torn
   return {
+    // Joined callers and the published entry share the deadline from probe completion.
+    expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS,
     // Do not cache failed or incoherent snapshots; later lookups must be able to retry.
     cacheable: coherent && !probeFailed,
     coherent,
@@ -73,7 +102,8 @@ export async function probeTrackedUpstreamSnapshot(
 export async function probeRawTrackedUpstreamBranches(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: TrackedUpstreamLocalGitOptions & Pick<GitExecOptions, 'observeGitRuntime'> = {}
+  localGitOptions: TrackedUpstreamLocalGitOptions &
+    Pick<GitExecOptions, 'observeGitRuntime' | 'canStart'> = {}
 ): Promise<{
   probeFailed: boolean
   rawUpstreamsByBranchName: Map<string, string>

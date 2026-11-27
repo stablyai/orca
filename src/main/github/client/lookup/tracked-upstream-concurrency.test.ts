@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 type PendingGit = {
   args: string[]
   cwd: string
+  canStart?: () => boolean
   observeGitRuntime?: (runsIn: string) => void
   resolve: (value: { stdout: string; stderr: string }) => void
   reject: (error: Error) => void
@@ -19,7 +20,10 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock('../../../git/command-runner/git-exec-file', () => ({
-  gitExecFileAsync: (args: string[], options: Pick<PendingGit, 'cwd' | 'observeGitRuntime'>) =>
+  gitExecFileAsync: (
+    args: string[],
+    options: Pick<PendingGit, 'cwd' | 'observeGitRuntime' | 'canStart'>
+  ) =>
     new Promise((resolve, reject) => {
       h.pending.push({ args, ...options, resolve, reject })
     })
@@ -278,6 +282,64 @@ describe('tracked upstream snapshot concurrency', () => {
     )
   })
 
+  it('rejects a superseded signed join that expires while its signature is checked', async () => {
+    const now = 1_000_000
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    const older = getTrackedUpstreamBranch(REPO, 'feature')
+    const olderRefs = await take('for-each-ref')
+    const waiter = getTrackedUpstreamBranch(REPO, 'feature')
+    const forced = getTrackedUpstreamBranch(REPO, 'feature', null, {}, true)
+    const forcedRefs = await take('for-each-ref')
+
+    const completionTime = now + 2 * TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
+    clock.mockReturnValue(completionTime)
+    h.holdSignatures = true
+    olderRefs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/origin/feature\n', stderr: '' })
+    await releaseSignature(0, 'S0')
+    await expect(older).resolves.toEqual({ remoteName: 'origin', branchName: 'feature' })
+    expect(entryFor()).toBeUndefined()
+    expect(h.signatureGates).toHaveLength(2)
+    clock.mockReturnValue(completionTime + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS)
+    h.holdSignatures = false
+    await releaseSignature(1, 'S0')
+
+    forcedRefs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/current\n', stderr: '' })
+    await expect(forced).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+    await expect(waiter).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+  })
+
+  it('re-probes when a second unsigned join is already expired', async () => {
+    const now = 1_000_000
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const repo = '\\\\server\\share\\app'
+    const older = getTrackedUpstreamBranch(repo, 'other')
+    const olderRefs = await take('for-each-ref', repo)
+    const waiter = getTrackedUpstreamBranch(repo, 'feature')
+    const forced = getTrackedUpstreamBranch(repo, 'feature', null, {}, true)
+    const forcedRefs = await take('for-each-ref', repo)
+    const secondProbe = trackedUpstreamSnapshotInFlight.get(getTrackedUpstreamRoute(repo).cacheKey)
+    if (!secondProbe) {
+      throw new Error('Expected the forced probe')
+    }
+    // Advance after the probe settles, ahead of the waiter attached after the first join.
+    const elapsed = secondProbe.then(() => {
+      clock.mockReturnValue(now + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS)
+    })
+    olderRefs.resolve({ stdout: 'refs/heads/other\0refs/remotes/origin/other\n', stderr: '' })
+    await expect(older).resolves.toEqual({ remoteName: 'origin', branchName: 'other' })
+    await flush()
+
+    forcedRefs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/origin/expired\n', stderr: '' })
+    await expect(forced).resolves.toEqual({ remoteName: 'origin', branchName: 'expired' })
+    await elapsed
+    await flush()
+    h.pending
+      .shift()
+      ?.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/current\n', stderr: '' })
+    await expect(waiter).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+  })
+
   it('does not adopt a newer host publication without a signature, but serves it on a warm hit', async () => {
     h.signature = undefined
     const older = getTrackedUpstreamBranch(REPO, 'feature')
@@ -309,6 +371,29 @@ describe('tracked upstream snapshot concurrency', () => {
       branchName: 'feature'
     })
     await flush()
+    expect(h.pending).toEqual([])
+  })
+
+  it('keeps a valid upstream entry available during and after a failed forced review refresh', async () => {
+    await publishUpstreamOnly()
+    const entry = entryFor()
+    const review = expect(getReviewBranchSource(REPO, 'feature', null, {}, true)).rejects.toThrow(
+      'Cannot establish the branch review source'
+    )
+    const refs = await take('for-each-ref')
+    expect(entryFor()).toBe(entry)
+    await expect(getTrackedUpstreamBranch(REPO, 'feature')).resolves.toEqual({
+      remoteName: 'origin',
+      branchName: 'feature'
+    })
+    refs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/unpublished\n', stderr: '' })
+    ;(await take('config')).reject(new Error('config unreadable'))
+    await review
+    expect(entryFor()).toBe(entry)
+    await expect(getTrackedUpstreamBranch(REPO, 'feature')).resolves.toEqual({
+      remoteName: 'origin',
+      branchName: 'feature'
+    })
     expect(h.pending).toEqual([])
   })
 
@@ -349,8 +434,11 @@ describe('tracked upstream snapshot concurrency', () => {
     const repo = 'C:\\fixture\\repo'
     const lookup = getTrackedUpstreamBranch(repo, 'feature')
     expect(getTrackedUpstreamRoute(repo).runsIn).toBe('host')
+    const first = await take('for-each-ref', repo)
     distro = 'Ubuntu'
-    await answerRefs('refs/remotes/origin/feature', repo)
+    first.observeGitRuntime?.('wsl:ubuntu')
+    expect(first.canStart?.()).toBe(false)
+    first.reject(new Error('Git runtime changed before spawn'))
     expect(trackedUpstreamSnapshotCache.size).toBe(0)
     await answerRefs('refs/remotes/fork/fork-feature', repo)
     await expect(lookup).resolves.toEqual({ remoteName: 'fork', branchName: 'fork-feature' })
@@ -360,20 +448,46 @@ describe('tracked upstream snapshot concurrency', () => {
     ).toBeUndefined()
   })
 
-  it('discards a mixed-route review even when the predicted route at both ends agrees', async () => {
+  it('stops a mixed-route review before the remaining resolver Git command', async () => {
     const lookup = getReviewBranchSource(REPO, 'feature')
     await answerRefs('refs/remotes/origin/feature')
     const config = await take('config')
     config.observeGitRuntime?.('wsl:ubuntu')
     config.resolve({ stdout: 'remote.pushdefault\nfork\0', stderr: '' })
-    ;(await take('remote')).resolve({ stdout: REMOTES, stderr: '' })
-
     const retry = await take('for-each-ref')
+    expect(h.pending).toEqual([])
     expect(entryFor()).toBeUndefined()
     retry.resolve({ stdout: 'refs/heads/feature\0refs/remotes/origin/feature\n', stderr: '' })
     await answerResolver()
     await expect(lookup).resolves.toMatchObject({ remoteName: 'origin', urls: [ORIGIN] })
     expect(entryFor()?.gitConfigSignature).toBe('S0')
+  })
+
+  it('retries a warm-hit route flip without probing the old route or evicting its entry', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let distro: string | undefined
+    setLocalGitRuntimeRouter(() => distro)
+    const repo = 'C:\\fixture\\repo'
+    const hostKey = getTrackedUpstreamRoute(repo).cacheKey
+    const initial = getTrackedUpstreamBranch(repo, 'feature')
+    await answerRefs('refs/remotes/origin/feature', repo)
+    await initial
+    const host = trackedUpstreamSnapshotCache.get(hostKey)
+    h.holdSignatures = true
+    const hit = getTrackedUpstreamBranch(repo, 'feature')
+    await flush()
+    distro = 'Ubuntu'
+    h.holdSignatures = false
+    await releaseSignature(0, 'S0')
+    const refs = await take('for-each-ref', repo)
+    refs.observeGitRuntime?.('wsl:ubuntu')
+    refs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/current\n', stderr: '' })
+    await flush()
+
+    expect(h.pending).toEqual([])
+    await expect(hit).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+    expect(trackedUpstreamSnapshotCache.get(hostKey)).toBe(host)
+    expect(entryFor(repo)?.gitConfigSignature).toBeUndefined()
   })
 
   it('lets a forced lookup bypass an in-flight probe without the old probe publishing', async () => {

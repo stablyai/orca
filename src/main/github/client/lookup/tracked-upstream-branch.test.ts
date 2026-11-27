@@ -2,7 +2,7 @@ import { mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as GitExecFile from '../../../git/command-runner/git-exec-file'
+import * as GitExecFile from '../../../git/command-runner/git-exec-file'
 import type { GitExecOptions } from '../../../git/command-runner/git-exec-options'
 import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
 import {
@@ -63,6 +63,16 @@ const mainSource = { remoteName: 'origin', urls: [ORIGIN_URL], branchName: 'feat
 const linkedSource = { remoteName: 'fork', urls: [FORK_URL], branchName: 'feature' }
 
 describe('tracked upstream lookups follow each linked worktree’s effective config', () => {
+  it('observes host Git when the buffered runner reads a real linked worktree', async () => {
+    const runtimes: string[] = []
+    const result = await GitExecFile.gitExecFileAsync(['rev-parse', '--is-inside-work-tree'], {
+      cwd: fixture.worktreePath,
+      observeGitRuntime: (runsIn) => runtimes.push(runsIn)
+    })
+    expect(result.stdout.trim()).toBe('true')
+    expect(runtimes).toEqual(['host'])
+  })
+
   it('resolves each worktree’s own upstream and review source, main first', async () => {
     const { repoPath, worktreePath } = fixture
     await expect(getTrackedUpstreamBranch(repoPath, 'feature')).resolves.toEqual({

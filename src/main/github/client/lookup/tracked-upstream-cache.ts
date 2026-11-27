@@ -31,6 +31,7 @@ export type TrackedUpstreamSnapshotCacheEntry = {
 }
 
 export type TrackedUpstreamSnapshotProbeResult = {
+  expiresAt: number
   cacheable: boolean
   /** False when config or the Git route changed during the probe: its commands may disagree. */
   coherent: boolean

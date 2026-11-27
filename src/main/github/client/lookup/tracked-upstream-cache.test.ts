@@ -82,6 +82,25 @@ describe('getTrackedUpstreamRoute', () => {
     })
     expect(getTrackedUpstreamRoute('C:\\src\\app', 'conn-1')).toMatchObject({ signed: false })
   })
+
+  it('keeps extended Windows UNC paths unsigned in their host or explicit WSL cache namespace', () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const unc = '\\\\?\\UNC\\server\\share\\app'
+    expect(getTrackedUpstreamRoute(unc)).toEqual({
+      cacheKey: `host\0${unc}`,
+      runsIn: 'host',
+      signed: false
+    })
+    expect(getTrackedUpstreamRoute(unc, null, { wslDistro: 'Ubuntu' })).toEqual({
+      cacheKey: `wsl:ubuntu\0${unc}`,
+      runsIn: 'wsl:ubuntu',
+      signed: false
+    })
+    expect(getTrackedUpstreamRoute('\\\\?\\C:\\src\\app')).toMatchObject({
+      runsIn: 'host',
+      signed: true
+    })
+  })
 })
 
 describe('doesTrackedUpstreamCacheConfigSignatureMatch', () => {
