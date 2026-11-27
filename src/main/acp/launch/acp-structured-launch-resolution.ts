@@ -193,12 +193,13 @@ export function acpStructuredLaunchPart(
   return withAcpToolFreeFolder(deps, async (basis, identity) => {
     // A custom agent's spec changes in place when its settings are saved; one launch reads one
     // version of the command, environment and arguments however long it awaits in between.
-    agentSpec = { ...agentSpec }
+    // The copy is this launch's alone; the next launch copies the spec as it is then.
+    const launchSpec = { ...agentSpec }
     const { record } = basis
-    const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
+    const movedHome = await homeBeforeFirstTurn(launchSpec, record, basis, deps.dataDirectory)
     const accountHome = movedHome ?? record.accountHome
     const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
-      await resolveAcpLaunchInvocation(agentSpec, accountHome, {
+      await resolveAcpLaunchInvocation(launchSpec, accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
         resolveCommandSettings: basis.commandSettings,

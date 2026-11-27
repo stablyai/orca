@@ -69,7 +69,7 @@ export function AgentsPane({
       />
       {/* Saved in this machine's settings; a paired server keeps its own. */}
       {hostScope.target.kind === 'local' && !isPairedWebClientWindow() ? (
-        <CustomAcpAgentsSetting settings={settings} updateSettings={updateSettings} />
+        <CustomAcpAgentsSetting settings={settings} />
       ) : null}
       <SettingsGroup>
         <CodexHistorySharingSetting

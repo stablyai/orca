@@ -15,6 +15,7 @@ import { CustomAcpAgentRow } from './CustomAcpAgentRow'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import { reloadLocalHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents-sync'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
@@ -23,6 +24,9 @@ import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import {
   customAcpAgentDraftFrom,
   customAcpAgentDraftProblems,
+  customAcpArgFits,
+  customAcpDraftRowsFit,
+  customAcpEnvValueFits,
   draftRowKey,
   emptyCustomAcpAgentDraft,
   saveCustomAcpAgentDraft,
@@ -32,13 +36,15 @@ import {
 
 type Props = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
 
 const randomSuffix = (): string => createNonSecureContextUuid().replace(/-/g, '')
 
-export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): React.JSX.Element {
+export function CustomAcpAgentsSetting({ settings }: Props): React.JSX.Element {
   const t = useTranslate()
+  // The throwing write: the store's updateSettings logs a failed save and resolves, which would
+  // close the editor on a draft that was never saved.
+  const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const saved = normalizeCustomAcpAgents(settings.customAcpAgents)
   const [draft, setDraft] = useState<CustomAcpAgentDraft | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'failed'>('idle')
@@ -54,7 +60,8 @@ export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): Rea
         customAcpAgents: next,
         ...(settings.defaultCustomAcpAgent && !keepsDefault ? { defaultCustomAcpAgent: null } : {})
       })
-    } catch {
+    } catch (error) {
+      console.error('Failed to save custom ACP agents:', error)
       return false
     }
     // New chats list this machine's agents from its runtime, which reads the saved settings.
@@ -67,7 +74,10 @@ export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): Rea
   }
   const setDefault = (id: CustomAcpAgentId | null): void => {
     // Built-in choices clear this one; this clears the built-in default, so one agent is the default.
-    void updateSettings({ ...buildDefaultAgentSettingsUpdate(null), defaultCustomAcpAgent: id })
+    void updateSettings({
+      ...buildDefaultAgentSettingsUpdate(null),
+      defaultCustomAcpAgent: id
+    }).catch((error: unknown) => console.error('Failed to set the default agent:', error))
   }
   const editor = (current: CustomAcpAgentDraft): React.JSX.Element => (
     <CustomAcpAgentEditor
@@ -169,6 +179,7 @@ function CustomAcpAgentEditor({
   // Errors show once a field has text, so an empty new form does not open in red.
   const nameInvalid = problems.has('name') && draft.name !== ''
   const commandInvalid = problems.has('command') && draft.command !== ''
+  const rowsFit = customAcpDraftRowsFit(draft)
   const idPrefix = draft.id ?? 'new-custom-acp-agent'
   const setArg = (key: number, value: string): void =>
     onChange({ ...draft, args: draft.args.map((row) => (row.key === key ? { key, value } : row)) })
@@ -211,6 +222,10 @@ function CustomAcpAgentEditor({
       <CustomAcpAgentModelField
         agent={draft.id}
         value={draft.defaultModel}
+        invalid={
+          problems.has('tooLong') &&
+          draft.defaultModel.trim().length > CUSTOM_ACP_AGENT_LIMITS.model
+        }
         onChange={(defaultModel) => onChange({ ...draft, defaultModel })}
         idPrefix={idPrefix}
       />
@@ -227,6 +242,7 @@ function CustomAcpAgentEditor({
             <Input
               variant="code"
               value={arg.value}
+              aria-invalid={!customAcpArgFits(arg.value)}
               spellCheck={false}
               aria-label={t('settings.agents.customAcp.argLabel', 'Argument {{value0}}', {
                 value0: index + 1
@@ -247,6 +263,7 @@ function CustomAcpAgentEditor({
           type="button"
           variant="ghost"
           size="xs"
+          disabled={!rowsFit.args}
           onClick={() =>
             onChange({ ...draft, args: [...draft.args, { key: draftRowKey(), value: '' }] })
           }
@@ -274,6 +291,7 @@ function CustomAcpAgentEditor({
             <Input
               variant="code"
               value={entry.value}
+              aria-invalid={!customAcpEnvValueFits(entry.value)}
               spellCheck={false}
               placeholder={t('settings.agents.customAcp.envValuePlaceholder', 'value')}
               aria-label={t('settings.agents.customAcp.envValue', 'Variable {{value0}} value', {
@@ -295,6 +313,7 @@ function CustomAcpAgentEditor({
           type="button"
           variant="ghost"
           size="xs"
+          disabled={!rowsFit.env}
           onClick={() =>
             onChange({
               ...draft,
@@ -311,8 +330,19 @@ function CustomAcpAgentEditor({
           <p role="alert" className="mr-auto text-xs text-destructive">
             {t('settings.agents.customAcp.saveFailed', "Orca couldn't save the agent. Try again.")}
           </p>
+        ) : problems.has('tooLong') ? (
+          <p className="mr-auto text-xs text-destructive">
+            {t('settings.agents.customAcp.tooLong', 'A highlighted value is too long to save.')}
+          </p>
         ) : null}
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          // A pending save settles this draft; another opened meanwhile would take its result.
+          disabled={saveState === 'saving'}
+          onClick={onCancel}
+        >
           {t('settings.agents.customAcp.cancel', 'Cancel')}
         </Button>
         <Button

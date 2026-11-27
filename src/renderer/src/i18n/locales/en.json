@@ -1350,7 +1350,8 @@
           "summary": "Model: {{value0}}"
         },
         "limit": "Orca keeps up to {{limit}} custom agents. Remove one to add another.",
-        "saveFailed": "Orca couldn't save the agent. Try again."
+        "saveFailed": "Orca couldn't save the agent. Try again.",
+        "tooLong": "A highlighted value is too long to save."
       }
     },
     "followSymlinkedDirectoriesKeywords": {

@@ -32,7 +32,8 @@ export function draftRowKey(): number {
   return nextRowKey
 }
 
-export type CustomAcpAgentDraftProblem = 'name' | 'command' | 'envName'
+/** `tooLong`: an argument, variable value or model id past what saved settings keep. */
+export type CustomAcpAgentDraftProblem = 'name' | 'command' | 'envName' | 'tooLong'
 
 export function emptyCustomAcpAgentDraft(): CustomAcpAgentDraft {
   return { name: '', command: '', args: [], env: [], defaultModel: '' }
@@ -65,7 +66,29 @@ export function customAcpAgentDraftProblems(
   if (draft.env.some((entry) => entry.name.trim() && !isValidCustomAcpEnvName(entry.name.trim()))) {
     problems.add('envName')
   }
+  // Settings drop an agent with a value past its limit, so Save waits until each one fits.
+  if (
+    draft.args.some(({ value }) => !customAcpArgFits(value)) ||
+    draft.env.some(({ value }) => !customAcpEnvValueFits(value)) ||
+    draft.defaultModel.trim().length > CUSTOM_ACP_AGENT_LIMITS.model
+  ) {
+    problems.add('tooLong')
+  }
   return problems
+}
+
+export const customAcpArgFits = (value: string): boolean =>
+  value.length <= CUSTOM_ACP_AGENT_LIMITS.arg
+
+export const customAcpEnvValueFits = (value: string): boolean =>
+  value.length <= CUSTOM_ACP_AGENT_LIMITS.envValue
+
+/** Whether another argument or variable row fits; rows past the limit could not be saved. */
+export function customAcpDraftRowsFit(draft: CustomAcpAgentDraft): { args: boolean; env: boolean } {
+  return {
+    args: draft.args.length < CUSTOM_ACP_AGENT_LIMITS.args,
+    env: draft.env.length < CUSTOM_ACP_AGENT_LIMITS.envEntries
+  }
 }
 
 /** The saved list with `draft` added or replacing its earlier version; unnamed environment rows

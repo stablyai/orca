@@ -29,13 +29,16 @@ export function CustomAcpAgentModelField({
   agent,
   value,
   onChange,
-  idPrefix
+  idPrefix,
+  invalid = false
 }: {
   /** Undefined until the agent is saved: the host can only list a saved agent's models. */
   agent: CustomAcpAgentId | undefined
   value: string
   onChange: (model: string) => void
   idPrefix: string
+  /** The typed id is too long to save. */
+  invalid?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const { models, state, problem, refresh } = useCustomAcpAgentModels(agent)
@@ -95,6 +98,7 @@ export function CustomAcpAgentModelField({
       <Input
         variant="code"
         value={value}
+        aria-invalid={invalid}
         spellCheck={false}
         placeholder={t('settings.agents.customAcp.models.idPlaceholder', 'Or type a model id')}
         aria-label={t('settings.agents.customAcp.models.idLabel', 'Default model id')}
