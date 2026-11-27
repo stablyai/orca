@@ -318,12 +318,14 @@ export function NativeChatQuestionCard({
           >
             <div
               // The question is shown in full: an answer needs the whole question, so capping its
-              // height hid the reason it was being asked. The options and the answer field, each with
-              // their own cap, take the squeeze in a short pane; this keeps a two-line floor there.
+              // height hid the reason it was being asked. It never gives up height either, so the
+              // flex pass cannot squeeze it into a cut-off box while the options still have room.
+              // The options and the answer field, each with their own cap, take the squeeze in a
+              // short pane; this keeps a two-line floor there.
               data-native-chat-dock-floor-lines={2}
               className={cn(
                 // The card's heading, one step above its body text and scaling with it; it fades while more lies below.
-                'native-chat-question-card-question min-h-[1lh] shrink overflow-y-auto px-3.5 text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek',
+                'native-chat-question-card-question min-h-[1lh] shrink-0 overflow-y-auto px-3.5 text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek',
                 'pt-3',
                 '[[data-native-chat-dock-fit~=card]_&]:shrink-0'
               )}
