@@ -175,17 +175,27 @@ describe('GPS-C8-02: the gesture that opened the confirmation answers neither bu
     expect(host.update).not.toHaveBeenCalled()
   })
 
-  it('a Space held from before it opened, released on Cancel or Give access, answers neither', async () => {
+  it('a Space held from before it opened has its release withheld on Cancel and Give access', async () => {
     await openedByEnter()
     for (const name of ['Cancel', 'Give access']) {
-      // Released with no press since it opened: its default is withheld, and the keyboard click
-      // a button makes on Space's release (no click count) doesn't answer.
+      // Released with no press since it opened: its default (a button's Space activation) is
+      // withheld. Chromium and WebKit don't click on such a release anyway; this is a defense.
       expect(fireEvent.keyUp(button(name), { key: ' ' })).toBe(false)
-      fireEvent.click(button(name), { detail: 0 })
       await settle()
     }
     expect(dialog()).toBeTruthy()
     expect(host.update).not.toHaveBeenCalled()
+  })
+
+  it('a click with no key (assistive tech) right after such a release still answers', async () => {
+    await openedByEnter()
+    fireEvent.keyUp(button('Give access'), { key: ' ' })
+    await act(async () => {
+      button('Give access').click()
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(dialog()).toBeNull()
+    expect(host.update).toHaveBeenCalledOnce()
   })
 
   it('a fresh Space on the focused Cancel answers it, and nothing is written', async () => {

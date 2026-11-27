@@ -94,6 +94,9 @@ export function useWhoCanAskSearch(
     // When more of the search lands, ask again for this same query in place: the rows stay up
     // until the fuller answer replaces them. Not before this query's own first search (its
     // debounce), and not while a retry waits for its whole answer.
+    // One settlement can be heard twice (this session's own listener and the ledger's): the
+    // answers asked in one turn are composed once, from everything settled by then.
+    let queued = false
     const again = (): void => {
       if (!issued || generation.current !== gen) {
         return
@@ -102,7 +105,21 @@ export function useWhoCanAskSearch(
         stale.current = true
         return
       }
-      ask(active, query, { generation, order, setSearch }, gen)
+      if (queued) {
+        return
+      }
+      queued = true
+      queueMicrotask(() => {
+        queued = false
+        if (generation.current !== gen) {
+          return
+        }
+        if (retryOwner.current !== null) {
+          stale.current = true
+          return
+        }
+        ask(active, query, { generation, order, setSearch }, gen)
+      })
     }
     const stopWatching = active.onUpdate?.(again) ?? (() => {})
     // A check settling anywhere this open (an earlier session's included) can change who this

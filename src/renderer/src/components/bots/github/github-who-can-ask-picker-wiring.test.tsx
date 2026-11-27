@@ -388,3 +388,111 @@ describe('the Add picker on a GitHub session', () => {
     expect(users).toHaveBeenCalledOnce()
   })
 })
+
+describe('one settled check, composed once', () => {
+  /** A picker whose sessions share its ledger; every composition (session search) is counted. */
+  function counted() {
+    // Each query's lookups still out, oldest first.
+    const lookups: { query: string; resolve: (value: Users) => void }[] = []
+    const users = vi.fn(
+      ({ query }: { query: string }) =>
+        new Promise<Users>((resolve) => {
+          lookups.push({ query, resolve })
+        })
+    )
+    const people = vi.fn(async (): Promise<BotSlackResult<BotGitHubRoster>> => ({
+      ok: true,
+      value: roster
+    }))
+    const scope = { repositories: ['acme/web'], owners: [], more: false }
+    const composed = vi.fn()
+    const beginWith =
+      (context: string) => (ledger: Parameters<NonNullable<BotWhoCanAskService['begin']>>[0]) => {
+        const session = gitHubWhoCanAskSession(
+          { people, users },
+          { scope, ownerLogin: context, producer: 'local', t },
+          ledger
+        )
+        return {
+          ...session,
+          search: (query: string) => {
+            composed(query)
+            return session.search(query)
+          }
+        }
+      }
+    const { service } = setUp()
+    const serviceFor = (context: string): BotWhoCanAskService => {
+      const begin = beginWith(context)
+      return { ...service, begin, search: () => Promise.resolve({ ok: false, error: 'unused' }) }
+    }
+    const view = render(
+      <BotWhoCanAskPicker bot={bot} service={serviceFor('o')} owner="You" onPicked={vi.fn()} />
+    )
+    const answer = async (query: string, value: Users): Promise<void> => {
+      await act(async () => {
+        const index = lookups.findIndex((lookup) => lookup.query === query)
+        lookups.splice(index, 1)[0]?.resolve(value)
+        await vi.advanceTimersByTimeAsync(0)
+      })
+    }
+    const type = async (value: string): Promise<void> => {
+      fireEvent.change(screen.getByPlaceholderText('Search by name or username'), {
+        target: { value }
+      })
+      await act(() => vi.advanceTimersByTimeAsync(300))
+    }
+    return {
+      users,
+      people,
+      composed,
+      answer,
+      type,
+      retire: () =>
+        view.rerender(
+          <BotWhoCanAskPicker bot={bot} service={serviceFor('o2')} owner="You" onPicked={vi.fn()} />
+        )
+    }
+  }
+
+  it('the current query’s own lookup: one more composition, with the list’s rows up early', async () => {
+    const { users, people, composed, answer, type } = counted()
+    await type('brennan')
+    // The list's row is up while the lookup is still out.
+    expect(screen.getByText('brennanb2025')).toBeTruthy()
+    const before = composed.mock.calls.length
+    await answer('brennan', usersOfOne('9', 'brennan'))
+    expect(composed.mock.calls.length - before).toBe(1)
+    expect(screen.getByText('brennan')).toBeTruthy()
+    expect(users).toHaveBeenCalledOnce()
+    expect(people).toHaveBeenCalledOnce()
+  })
+
+  it('a replaced query’s lookup in the same session: one composition of the current query', async () => {
+    const { users, composed, answer, type } = counted()
+    await type('brennan')
+    await type('brenda')
+    const before = composed.mock.calls.length
+    await answer('brennan', usersOfOne('9', 'brennan'))
+    expect(composed.mock.calls.slice(before)).toEqual([['brenda']])
+    expect(users.mock.calls.map(([args]) => args.query)).toEqual(['brennan', 'brenda'])
+  })
+
+  it('a retired session’s lookup: one composition in the session now in use', async () => {
+    const { users, people, composed, answer, type, retire } = counted()
+    await type('brennan')
+    retire()
+    await act(() => vi.advanceTimersByTimeAsync(300))
+    const before = composed.mock.calls.length
+    const rpcs = users.mock.calls.length + people.mock.calls.length
+    // The new session asked for its own; the first session's lookup lands after it was replaced.
+    expect(users.mock.calls.map(([args]) => args.query)).toEqual(['brennan', 'brennan'])
+    await answer('brennan', usersOfOne('9', 'brennan'))
+    expect(composed.mock.calls.length - before).toBe(1)
+    expect(users.mock.calls.length + people.mock.calls.length).toBe(rpcs)
+  })
+})
+
+function usersOfOne(id: string, name: string): Users {
+  return { ok: true, value: { members: [{ id, name }], complete: true } }
+}

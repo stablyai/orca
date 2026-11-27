@@ -68,8 +68,8 @@ export function heldPicks(
 
 /** The picks handed to Add, still tied to the checks this picker open had already asked: those
  *  keep settling after the picker closes, so the grant can see what they found before writing.
- *  Reads are synchronous, so the grant can decide and hand off to the writer with nothing in
- *  between; only `settled` waits, and only on checks already out. */
+ *  Reads are synchronous, so the grant's last decision and its hand-off to the writer are one
+ *  step; only `settled` waits, and only on checks already out. */
 export type WhoCanAskProposal = {
   /** Whether a check still out could change one of `people`. */
   held: (people: readonly BotMember[]) => boolean
@@ -97,5 +97,23 @@ export function whoCanAskProposal(
           resolve()
         })
       })
+  }
+}
+
+/** The same people under the same logins: anything else needs a fresh answer. */
+export const sameProposal = (next: readonly BotMember[], asked: readonly BotMember[]): boolean =>
+  next.length === asked.length &&
+  next.every(
+    (member, index) => member.id === asked[index]?.id && member.name === asked[index]?.name
+  )
+
+/** Waits until no check the picker had already asked could still change one of `people` (only
+ *  checks already out; each settles on its own bounds). */
+export async function settledFor(
+  people: readonly BotMember[],
+  proposal?: WhoCanAskProposal
+): Promise<void> {
+  while (proposal?.held(people)) {
+    await proposal.settled()
   }
 }

@@ -33,14 +33,7 @@ import { botErrorMessage } from './bot-presentation'
 import type { BotWhoCanAskService } from './BotWhoCanAskList'
 import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
 import { useBotHostLabel } from './use-bot-host-label'
-import type { WhoCanAskProposal } from './who-can-ask-picks'
-
-/** The same people under the same logins: anything else needs a fresh answer. */
-const sameProposal = (next: readonly BotMember[], asked: readonly BotMember[]): boolean =>
-  next.length === asked.length &&
-  next.every(
-    (member, index) => member.id === asked[index]?.id && member.name === asked[index]?.name
-  )
+import { sameProposal, settledFor, type WhoCanAskProposal } from './who-can-ask-picks'
 
 // A request's row repeats no name: Slack's real name often equals the display name.
 export const requestLine = (request: HostAccessRequest): string => {
@@ -188,42 +181,57 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
       request ? () => void decideAccessRequest(request, 'declined') : undefined
     )
 
-  // Who among `people` to add now, as of this moment: once no check the picker had asked could still
-  // change one of them, renamed or dropped as those checks say, and only those still eligible.
-  // Waits only on checks already out; the eligibility and identity read and whatever the caller
-  // does next run with nothing in between.
+  // Who among `people` to add as of this moment: renamed or dropped as those checks say, and only
+  // those still eligible. Synchronous, so its answer and what the caller does with it are one step.
+  const qualifyNow = (people: readonly BotMember[], proposal?: WhoCanAskProposal): BotMember[] =>
+    stillEligible(proposal ? proposal.current(people) : [...people])
   const qualify = async (
     people: readonly BotMember[],
     proposal?: WhoCanAskProposal
   ): Promise<BotMember[]> => {
-    while (proposal?.held(people)) {
-      await proposal.settled()
-    }
-    return stillEligible(proposal ? proposal.current(people) : [...people])
+    await settledFor(people, proposal)
+    return qualifyNow(people, proposal)
   }
 
   // Writes the last approved people, asking again first whenever they would change (someone
   // stopped being eligible, or a check renamed or displaced someone): never on an earlier answer.
-  // A failed save's Try again comes back here, so it too adds who is right then.
+  // The last check and the hand-off to the writer are one synchronous step. Cancelled, or with
+  // nobody left, nothing is written and the attempt ends.
   const deliver = async (approved: BotMember[], proposal?: WhoCanAskProposal): Promise<void> => {
     for (;;) {
-      const now = await qualify(approved, proposal)
+      await settledFor(approved, proposal)
+      if (proposal?.held(approved)) {
+        continue
+      }
+      const now = qualifyNow(approved, proposal)
       if (sameProposal(now, approved)) {
         break
       }
       if (now.length === 0 || !(await confirmPeople(now))) {
+        setSave({ kind: 'idle' })
         return
       }
       approved = now
     }
     const { bot: current, service: list } = latest.current
+    // A failed save's Try again is claimed on its first press, before any wait: a second press of
+    // the same offer starts nothing, and that attempt owns everything up to the writer.
+    let claimed = false
+    const retry = (): void => {
+      if (claimed) {
+        return
+      }
+      claimed = true
+      setSave({ kind: 'saving' })
+      void deliver(approved, proposal)
+    }
     saveMembers(
       { addMembers: newBotMembers(current.members, approved, list) },
       t('bots.whoCanAsk.addFailed', 'Couldn’t add {{names}}.', {
         names: approved.map((member) => member.name || member.id).join(', ')
       }),
       () => setKeptOnlyMe(null),
-      () => void deliver(approved, proposal)
+      retry
     )
   }
 

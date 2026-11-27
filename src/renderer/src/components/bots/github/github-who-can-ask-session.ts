@@ -128,8 +128,9 @@ export function gitHubWhoCanAskSession(
       }
       const seq = ledger.issue(login)
       void entry.answer.then((answer) => {
-        ledger.settle(seq, login, answer.ok ? answer.value.members : null)
+        // The answer is in place before anyone hears of it, so whoever asks next sees it.
         entry.settled = answer
+        ledger.settle(seq, login, answer.ok ? answer.value.members : null)
         // Even a replaced query's lookup can change who the current rows are.
         tell()
       })

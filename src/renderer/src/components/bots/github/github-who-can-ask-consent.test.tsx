@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addButton,
+  bot,
   deferred,
   gitHubView,
   mountSettingsWhoCanAsk,
@@ -19,7 +20,8 @@ import {
   type Users
 } from './github-who-can-ask-mount'
 import { ROSTER_WAIT_MS } from './github-who-can-ask-session'
-import { botMembersFullError } from '../../../../../shared/bots/bot-member-capacity'
+import { BOT_MAX_MEMBERS, type Bot } from '../../../../../shared/bot-types'
+import { applyBotUpdates } from '../../../../../shared/rpc-contract/bots-params'
 
 const host = vi.hoisted(() => {
   let view: unknown = null
@@ -96,6 +98,26 @@ vi.mock('../use-bot-host-label', async () => {
 const calls = host.calls
 const read = (roster: ReturnType<typeof rosterOf>): Promise<People> =>
   Promise.resolve({ ok: true, value: roster })
+
+// Sends that got past updateBot's optimistic apply; a refused one never gets here.
+const sent = vi.fn()
+const fullBot: Bot = {
+  ...bot,
+  members: Array.from({ length: BOT_MAX_MEMBERS }, (_, index) => ({
+    id: `U${index}`,
+    name: `member-${index}`
+  }))
+}
+/** The next write is refused the way updateBot refuses it, before any request goes out: its
+ *  optimistic apply against a bot already full throws the capacity error. */
+function refuseFirstWriteAsFull(): void {
+  sent.mockClear()
+  host.update.mockImplementationOnce(async (_bot, updates) => {
+    applyBotUpdates(fullBot, updates)
+    sent()
+    return undefined
+  })
+}
 
 async function clickAdd(): Promise<void> {
   await act(async () => {
@@ -315,10 +337,7 @@ describe('GPS-C9-01: who is written is decided right before each write', () => {
           ? jordy.promise
           : Promise.resolve(usersOf([]))
     )
-    // The writer refuses before sending anything, as its local capacity check does.
-    host.update.mockRejectedValueOnce(
-      botMembersFullError({ scope: 'bot', limit: 20, names: ['jordan'] })
-    )
+    refuseFirstWriteAsFull()
     mountSettingsWhoCanAsk('11')
     await typeQuery('jordan')
     pickRow('jordanNot in your repo list')
@@ -357,6 +376,93 @@ describe('GPS-C9-01: who is written is decided right before each write', () => {
     expect(stamped()).toEqual([
       [{ id: '50', name: 'jordan', source: 'github', workspaceId: '11' }],
       [{ id: '50', name: 'jordan', source: 'github', workspaceId: '11' }]
+    ])
+  })
+})
+
+describe('a failed save’s Try again acts once, on its first press', () => {
+  /** A save refused before sending (capacity), then a check that is about the pick still out. */
+  async function refusedWithCheckOut(): Promise<{ lee: ReturnType<typeof deferred<Users>> }> {
+    const roster = deferred<People>()
+    const lee = deferred<Users>()
+    calls().people.mockReturnValue(roster.promise)
+    calls().users.mockImplementation(({ query }) =>
+      query === 'jordan'
+        ? Promise.resolve(usersOf([{ id: '50', name: 'jordan' }]))
+        : query === 'lee'
+          ? lee.promise
+          : Promise.resolve(usersOf([]))
+    )
+    refuseFirstWriteAsFull()
+    mountSettingsWhoCanAsk('11')
+    await typeQuery('jordan', 300 + ROSTER_WAIT_MS)
+    pickRow('jordanRepos still loading')
+    await typeQuery('lee')
+    await clickAdd()
+    expect(screen.getByRole('alert').textContent).toContain('Nobody was added')
+    expect(sent).not.toHaveBeenCalled()
+    // The list lands: the "lee" check is now about this person, and still out.
+    await land(roster, {
+      ok: true,
+      value: rosterOf([{ id: '50', login: 'jordan', name: 'Jordan Lee' }])
+    })
+    // Try again, pressed twice on the same offer.
+    const retry = screen.getByRole('button', { name: 'Try again' })
+    await act(async () => {
+      fireEvent.click(retry)
+      fireEvent.click(retry)
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    expect(host.update).toHaveBeenCalledOnce()
+    return { lee }
+  }
+
+  it('renamed meanwhile: one renewed confirmation, then one write', async () => {
+    const { lee } = await refusedWithCheckOut()
+    await land(lee, usersOf([{ id: '50', name: 'lee' }]))
+    await settle()
+    expect(asked()).toEqual([[{ id: '50', name: 'jordan' }], [{ id: '50', name: 'lee' }]])
+    expect(stamped()).toEqual([
+      [{ id: '50', name: 'jordan', source: 'github', workspaceId: '11' }],
+      [{ id: '50', name: 'lee', source: 'github', workspaceId: '11' }]
+    ])
+  })
+
+  it('unchanged: one write, with no new confirmation', async () => {
+    const { lee } = await refusedWithCheckOut()
+    await land(lee, usersOf([]))
+    await settle()
+    expect(asked()).toHaveLength(1)
+    expect(stamped()).toEqual([
+      [{ id: '50', name: 'jordan', source: 'github', workspaceId: '11' }],
+      [{ id: '50', name: 'jordan', source: 'github', workspaceId: '11' }]
+    ])
+  })
+
+  it('the renewed confirmation cancelled: the attempt ends, nothing written, nothing else asked', async () => {
+    const { lee } = await refusedWithCheckOut()
+    host.confirm.mockResolvedValueOnce(false)
+    await land(lee, usersOf([{ id: '50', name: 'lee' }]))
+    await settle(ROSTER_WAIT_MS)
+    expect(asked()).toHaveLength(2)
+    expect(host.update).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('a later failure offers its own Try again, which writes', async () => {
+    const { lee } = await refusedWithCheckOut()
+    host.update.mockRejectedValueOnce(new Error('network'))
+    await land(lee, usersOf([]))
+    await settle()
+    expect(host.update).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(stamped()).toHaveLength(3)
+    expect(stamped()[2]).toEqual([
+      { id: '50', name: 'jordan', source: 'github', workspaceId: '11' }
     ])
   })
 })
