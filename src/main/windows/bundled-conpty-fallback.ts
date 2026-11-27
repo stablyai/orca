@@ -1,3 +1,6 @@
+import type { IPty } from 'node-pty'
+import { recordConptySpawnStartedAt } from './conpty-spawn-time'
+
 // Failures specific to Orca's bundled conpty.dll path; pipe-creation failures are transient and stay out.
 const BUNDLED_CONPTY_FAILURE_PREFIXES = [
   'Cannot launch conpty: ConptyCreatePseudoConsole failed',
@@ -38,13 +41,20 @@ export function isBundledConptyFailure(error: unknown): boolean {
  * Spawn on the bundled ConPTY, retrying on the system ConPTY when the bundled DLL or its
  * console host cannot start (#47506). Off Windows this is a plain spawn.
  */
-export function spawnWithSystemConptyFallback<T>(
+export function spawnWithSystemConptyFallback<T extends IPty>(
   spawn: (useConptyDll: boolean) => T,
   label: string
 ): T {
   if (process.platform !== 'win32') {
     return spawn(false)
   }
+  const startedAt = Date.now()
+  const proc = spawnPreferringBundledConpty(spawn, label)
+  recordConptySpawnStartedAt(proc, startedAt)
+  return proc
+}
+
+function spawnPreferringBundledConpty<T>(spawn: (useConptyDll: boolean) => T, label: string): T {
   if (bundledConptyFailure !== null && memoActive(bundledConptyFailure)) {
     bundledConptyFailure.systemSpawns += 1
     return spawn(false)

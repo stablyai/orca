@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionResetResult,
@@ -8,8 +9,8 @@ import type {
 import { computerUsePermissionStatusGate } from '../computer/macos-permissions/macos-computer-use-permission-status-gate'
 import { mainI18n } from '../i18n/main-i18n'
 
-export function registerComputerUsePermissionHandlers(): void {
-  ipcMain.handle(
+export function registerComputerUsePermissionHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'computerUsePermissions:openSetup',
     async (
       _event,
@@ -22,11 +23,10 @@ export function registerComputerUsePermissionHandlers(): void {
       })
     }
   )
-  ipcMain.handle(
-    'computerUsePermissions:getStatus',
-    (): Promise<ComputerUsePermissionStatusResult> => computerUsePermissionStatusGate.read()
+  ipc.handle('computerUsePermissions:getStatus', (): Promise<ComputerUsePermissionStatusResult> =>
+    computerUsePermissionStatusGate.read()
   )
-  ipcMain.handle(
+  ipc.handle(
     'computerUsePermissions:reset',
     async (): Promise<ComputerUsePermissionResetResult> => {
       const { resetComputerUsePermissions } =

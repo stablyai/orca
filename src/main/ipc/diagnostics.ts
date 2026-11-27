@@ -1,6 +1,7 @@
 // Main owns redacted payloads and upload endpoints; validate renderer requests and enforce consent here (telemetry-error-tracking.md).
 
 import { app, dialog, ipcMain, shell } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { arch as osArch, platform as osPlatform, release as osRelease, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -201,12 +202,12 @@ async function confirmBundleUpload(bundle: CollectedBundle): Promise<boolean> {
   return result.response === 0
 }
 
-export function registerDiagnosticsHandlers(): void {
-  ipcMain.handle('diagnostics:getStatus', (): DiagnosticsStatus => {
+export function registerDiagnosticsHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('diagnostics:getStatus', (): DiagnosticsStatus => {
     return getDiagnosticsStatus()
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'diagnostics:collectBundle',
     async (_event, lookbackMinutesIn: unknown): Promise<DiagnosticsBundlePreview> => {
       // Enforce consent in main; hiding renderer controls is insufficient.
@@ -232,7 +233,7 @@ export function registerDiagnosticsHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'diagnostics:uploadBundle',
     async (_event, bundleSubmissionId: unknown): Promise<UploadBundleIpcResult> => {
       // Accept only main-retained payload IDs, never renderer-supplied bytes.
@@ -267,7 +268,7 @@ export function registerDiagnosticsHandlers(): void {
     }
   )
 
-  ipcMain.handle('diagnostics:openBundlePreview', async (_event, bundleSubmissionId: unknown) => {
+  ipc.handle('diagnostics:openBundlePreview', async (_event, bundleSubmissionId: unknown) => {
     const previewFilePath = getPendingPreviewFilePath(bundleSubmissionId)
     const errorMessage = await shell.openPath(previewFilePath)
     if (errorMessage) {
@@ -279,11 +280,11 @@ export function registerDiagnosticsHandlers(): void {
     }
   })
 
-  ipcMain.handle('diagnostics:discardBundlePreview', (_event, bundleSubmissionId: unknown) => {
+  ipc.handle('diagnostics:discardBundlePreview', (_event, bundleSubmissionId: unknown) => {
     discardPendingBundle(bundleSubmissionId)
   })
 
-  ipcMain.handle('diagnostics:deleteBundle', async (_event, ticketId: unknown): Promise<void> => {
+  ipc.handle('diagnostics:deleteBundle', async (_event, ticketId: unknown): Promise<void> => {
     if (!isTicketId(ticketId)) {
       throw new Error('ticketId has invalid format')
     }

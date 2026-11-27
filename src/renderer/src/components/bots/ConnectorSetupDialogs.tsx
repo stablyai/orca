@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { botTarget } from '@/lib/bot-hosts'
 import { toast } from 'sonner'
 import { readBotGitHub } from '@/lib/bot-github-state'
@@ -6,11 +7,7 @@ import { addGitHubAccess, openGitHubInstall } from '@/lib/bot-github-install-rec
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { BotConnectorId } from './AddConnectorDialog'
 import { openGitHubInstallPage } from './github/github-install-page'
-import { BotLinearSetupDialog } from './linear/BotLinearSetupDialog'
-import { BotSlackSetupDialog } from './slack/BotSlackSetupDialog'
-import { GoogleAccountsDialog } from './google/GoogleAccountsChoice'
 import { refreshGoogle } from './google/google-connect-client'
-import { GoogleHostChoiceDialog } from './google/GoogleHostChoiceDialog'
 import {
   answerGoogleSetup,
   startGoogleSetupInChat
@@ -19,6 +16,27 @@ import { botErrorMessage } from './bot-presentation'
 import { handOffConnectorSetup } from './connector-setup-handoff'
 import type { Bot } from '../../../../shared/bot-types'
 import { googleBotConnectState } from '../../../../shared/google/google-bot-connect-state'
+
+const BotLinearSetupDialog = lazy(() =>
+  import('./linear/BotLinearSetupDialog').then((module) => ({
+    default: module.BotLinearSetupDialog
+  }))
+)
+const BotSlackSetupDialog = lazy(() =>
+  import('./slack/BotSlackSetupDialog').then((module) => ({
+    default: module.BotSlackSetupDialog
+  }))
+)
+const GoogleAccountsDialog = lazy(() =>
+  import('./google/GoogleAccountsChoice').then((module) => ({
+    default: module.GoogleAccountsDialog
+  }))
+)
+const GoogleHostChoiceDialog = lazy(() =>
+  import('./google/GoogleHostChoiceDialog').then((module) => ({
+    default: module.GoogleHostChoiceDialog
+  }))
+)
 
 /** Each account connector's own setup, as Add connector opens it; `start` opens one. `workspace`:
  *  the org or workspace asked for, e.g. by a chat card. */
@@ -74,28 +92,36 @@ export function useConnectorSetup(bot: Bot): {
     setSetupOpen(connector)
   }
   const dialogs = (
-    <>
-      <BotSlackSetupDialog
-        bot={bot}
-        open={setupOpen === 'slack'}
-        onOpenChange={(next) => setSetupOpen(next ? 'slack' : null)}
-      />
-      <BotLinearSetupDialog
-        bot={bot}
-        open={setupOpen === 'linear'}
-        onOpenChange={(next) => setSetupOpen(next ? 'linear' : null)}
-      />
-      <GoogleAccountsDialog
-        bot={bot}
-        open={setupOpen === 'google-accounts'}
-        onOpenChange={(next) => setSetupOpen(next ? 'google-accounts' : null)}
-      />
-      <GoogleHostChoiceDialog
-        bot={bot}
-        open={setupOpen === 'google'}
-        onOpenChange={(next) => setSetupOpen(next ? 'google' : null)}
-      />
-    </>
+    <Suspense fallback={null}>
+      {setupOpen === 'slack' ? (
+        <BotSlackSetupDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'slack' : null)}
+        />
+      ) : null}
+      {setupOpen === 'linear' ? (
+        <BotLinearSetupDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'linear' : null)}
+        />
+      ) : null}
+      {setupOpen === 'google-accounts' ? (
+        <GoogleAccountsDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'google-accounts' : null)}
+        />
+      ) : null}
+      {setupOpen === 'google' ? (
+        <GoogleHostChoiceDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'google' : null)}
+        />
+      ) : null}
+    </Suspense>
   )
   return { start, dialogs }
 }

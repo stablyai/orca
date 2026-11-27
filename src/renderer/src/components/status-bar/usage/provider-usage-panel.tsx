@@ -1,6 +1,5 @@
 import type {
   ProviderRateLimits,
-  RateLimitBucket,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
@@ -15,7 +14,6 @@ import {
   type UsageWindowSection
 } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
-import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
@@ -25,7 +23,6 @@ import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCo
 import { recomputeOn } from '@/lib/recompute-on'
 import { ProviderExtraUsageSection } from './provider-extra-usage-section'
 import { formatWindowLabel } from './rate-limit-window-localized-label'
-import { formatPoolCardLabel } from './usage-pool-label'
 import { formatResetsInCaption } from './usage-reset-caption'
 import { UsageBar, UsageValue } from './usage-meter'
 
@@ -76,9 +73,6 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />
-  }
-  if (provider === 'antigravity') {
-    return <AgentIcon agent="antigravity" size={13} />
   }
   if (provider === 'minimax') {
     return <MiniMaxIcon size={13} />
@@ -138,23 +132,16 @@ export function getWindowSections(
   p: ProviderRateLimits,
   t?: Translate
 ): { label: string; window: RateLimitWindow | null }[] {
-  const buckets = p.buckets ?? []
   return getUsageWindowSections(p).map((section) => ({
-    label: getWindowSectionLabel(section, buckets, t),
+    label: getWindowSectionLabel(section, t),
     window: section.window
   }))
 }
 
-function getWindowSectionLabel(
-  section: UsageWindowSection,
-  buckets: readonly RateLimitBucket[],
-  t: Translate = translate
-): string {
+function getWindowSectionLabel(section: UsageWindowSection, t: Translate = translate): string {
   switch (section.kind) {
     case 'bucket':
-      return isGroupedUsagePool(section.window)
-        ? formatPoolCardLabel(section.window, buckets, t)
-        : section.name
+      return section.name
     case 'session':
       // Why: name the window by its length ("5h") when known, matching the roster and status bar.
       return section.window && section.window.windowMinutes > 0

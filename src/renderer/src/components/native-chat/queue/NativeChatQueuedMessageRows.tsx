@@ -183,13 +183,14 @@ function QueuedMessagePresentation({
   if (!renderer) {
     throw new Error('Queued message renderer is missing')
   }
+  const { setNodeRef, setActivatorNodeRef, transform, transition, attributes, listeners } = sortable
   const movable = card.hold !== 'sending'
   const label = t('components.native-chat.queuedMessages.reorderMessage', 'Reorder message')
   return renderer.renderCard(card, {
-    rowRef: sortable.setNodeRef,
+    rowRef: setNodeRef,
     rowStyle: {
-      transform: CSS.Transform.toString(sortable.transform),
-      transition: sortable.transition
+      transform: CSS.Transform.toString(transform),
+      transition
     },
     insertion,
     grip: movable ? (
@@ -200,10 +201,10 @@ function QueuedMessagePresentation({
               type="button"
               variant="ghost"
               size="icon-xs"
-              ref={sortable.setActivatorNodeRef}
+              ref={setActivatorNodeRef}
               className="h-7 w-5 cursor-grab touch-none active:cursor-grabbing"
-              {...sortable.attributes}
-              {...sortable.listeners}
+              {...attributes}
+              {...listeners}
               aria-label={label}
               aria-keyshortcuts="ArrowUp ArrowDown"
               aria-disabled={pending}

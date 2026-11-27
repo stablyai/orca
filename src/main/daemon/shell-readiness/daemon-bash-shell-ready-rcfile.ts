@@ -108,13 +108,16 @@ __orca_osc133_preexec() {
   [[ -z "\${__orca_in_prompt_command:-}" ]] || return 0
   # Emit C once per foreground command, excluding prompt hooks and repeated chained-trap calls.
   [[ -z "\${__orca_in_command:-}" ]] || return 0
+  # functrace subshells (e.g. PS0 $(...)) inherit this trap but cannot set __orca_in_command here.
+  (( BASH_SUBSHELL == 0 )) || return 0
   printf "\\033]133;C\\007"
   __orca_in_command=1
 }
 # Adopt the latest user trap before reclaiming lifecycle ownership.
 __orca_osc133_epilogue() {
-  unset __orca_in_prompt_command
+  # functrace runs DEBUG inside the adoption helpers; keep the prompt flag set so they cannot emit C.
   __orca_adopt_outer_debug_trap
+  unset __orca_in_prompt_command
   trap '__orca_osc133_preexec' DEBUG
   # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
   if [[ -n "$__orca_ready_marker" ]]; then

@@ -24,7 +24,7 @@ export function handleMarkdownPreviewSystemLinkClick({
   filePath,
   context
 }: {
-  event: React.MouseEvent<HTMLAnchorElement>
+  event: React.MouseEvent
   href: string
   filePath: string
   context: MarkdownPreviewLinkContext

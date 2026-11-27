@@ -44,7 +44,7 @@ function appendNodes<T extends { id: string } | null>(
 export async function readCompletePRConversation(
   initial: string,
   read: (query: string, variables: Record<string, string>) => Promise<string>
-): Promise<ReturnType<typeof mapPRConversationSources>> {
+): ReturnType<typeof mapPRConversationSources> {
   const sources = parsePRConversationSources(initial)
   try {
     const readSource = async (name: PRConversationSource, cursor: string) =>
@@ -79,7 +79,7 @@ export async function readCompletePRConversation(
         cursor = nextCursor(page.comments.pageInfo, seen)
       }
     }
-    return mapPRConversationSources(sources)
+    return await mapPRConversationSources(sources)
   } catch (cause) {
     if (cause instanceof IncompletePRConversationError) {
       throw cause

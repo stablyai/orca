@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useAppStore } from '@/store'
 import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { Label } from '../../../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
@@ -11,6 +12,9 @@ import {
   RUNTIME_PAIRING_LOOPBACK_ADDRESS,
   cacheGeneratedRuntimePairingLink,
   clearGeneratedRuntimePairingLink,
+  followedRuntimePairingInterface,
+  readRuntimePairingInterface,
+  resolveAnotherDeviceAddress,
   runtimePairingLinkCache,
   runtimePairingReachForIntent,
   selectRuntimePairingIntent,
@@ -61,6 +65,10 @@ export function RuntimePairingUrlGenerator({
   const networkInterfaceLoadIdRef = useRef(0)
   const mountedRef = useMountedRef()
   const { copiedTarget, copyGeneratedUrl, setContainerNode } = useRuntimePairingUrlCopy(mountedRef)
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const chosenInterface = useAppStore((state) =>
+    readRuntimePairingInterface(state.settings?.runtimePairingInterface)
+  )
 
   const loadNetworkInterfaces = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
@@ -107,15 +115,24 @@ export function RuntimePairingUrlGenerator({
     if (intent !== 'another' || networkInterfaces.length === 0) {
       return
     }
-    const addressStillAvailable = networkInterfaces.some(
-      (networkInterface) => networkInterface.address === selectedAddress
+    const nextAddress = resolveAnotherDeviceAddress(
+      networkInterfaces,
+      selectedAddress,
+      chosenInterface
     )
-    if (!addressStillAvailable) {
-      const nextAddress = networkInterfaces[0]?.address ?? ''
+    if (nextAddress !== selectedAddress) {
       runtimePairingLinkCache.selectedAddress = nextAddress
       setSelectedAddress(nextAddress)
+      const followed = followedRuntimePairingInterface(
+        networkInterfaces,
+        nextAddress,
+        chosenInterface
+      )
+      if (followed) {
+        void updateSettings({ runtimePairingInterface: followed })
+      }
     }
-  }, [intent, networkInterfaces, selectedAddress])
+  }, [chosenInterface, intent, networkInterfaces, selectedAddress, updateSettings])
 
   const clearGeneratedUrls = (): void => {
     clearGeneratedRuntimePairingLink()
@@ -264,13 +281,32 @@ export function RuntimePairingUrlGenerator({
     : 'space-y-4'
   const sharedAccessClassName = showGeneratorForm ? 'border-t border-border/40 pt-3' : ''
 
+  const disconnectedInterface =
+    intent === 'another' &&
+    networkInterfaces.length > 0 &&
+    chosenInterface?.address === selectedAddress &&
+    !networkInterfaces.some((networkInterface) => networkInterface.address === selectedAddress)
+      ? chosenInterface
+      : null
+
   const updateSelectedAddress = (address: string): void => {
     runtimePairingLinkCache.selectedAddress = address
     setSelectedAddress(address)
-    if (
-      intent === 'another' &&
-      !networkInterfaces.some((networkInterface) => networkInterface.address === address)
-    ) {
+    const pickedInterface =
+      intent === 'another'
+        ? networkInterfaces.find((networkInterface) => networkInterface.address === address)
+        : undefined
+    if (pickedInterface) {
+      // Why: the top-ranked address is the default, so picking it clears the choice instead of pinning it.
+      const nextChoice =
+        pickedInterface === networkInterfaces[0] ? null : { name: pickedInterface.name, address }
+      if (
+        nextChoice?.name !== chosenInterface?.name ||
+        nextChoice?.address !== chosenInterface?.address
+      ) {
+        void updateSettings({ runtimePairingInterface: nextChoice })
+      }
+    } else if (intent === 'another') {
       runtimePairingLinkCache.customAddress = address
       runtimePairingLinkCache.intent = 'custom'
       setIntent('custom')
@@ -281,13 +317,20 @@ export function RuntimePairingUrlGenerator({
 
   const updateIntent = (nextIntent: RuntimePairingIntent): void => {
     setIntent(nextIntent)
-    setSelectedAddress(
-      selectRuntimePairingIntent(
-        nextIntent,
-        networkInterfaces,
-        runtimePairingLinkCache.customAddress
-      )
+    const nextAddress = selectRuntimePairingIntent(
+      nextIntent,
+      networkInterfaces,
+      runtimePairingLinkCache.customAddress,
+      chosenInterface
     )
+    setSelectedAddress(nextAddress)
+    const followed =
+      nextIntent === 'another'
+        ? followedRuntimePairingInterface(networkInterfaces, nextAddress, chosenInterface)
+        : null
+    if (followed) {
+      void updateSettings({ runtimePairingInterface: followed })
+    }
   }
 
   return (
@@ -313,6 +356,7 @@ export function RuntimePairingUrlGenerator({
           intent={intent}
           loopbackAddress={RUNTIME_PAIRING_LOOPBACK_ADDRESS}
           networkInterfaces={networkInterfaces}
+          disconnectedInterface={disconnectedInterface}
           selectedAddress={selectedAddress}
           refreshingNetworkInterfaces={refreshingNetworkInterfaces}
           isGeneratingPairing={isGeneratingPairing}

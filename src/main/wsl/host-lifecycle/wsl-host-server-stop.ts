@@ -146,7 +146,7 @@ export function wslHostRuntimeStopSteps(
       readWslHostPeerDesktops((method, params) => access.call(environmentId, method, params)),
     endTerminals: async () => {
       const list = TerminalHandlesSchema.parse(
-        await access.call(environmentId, 'terminal.list', { limit: 1000 })
+        await access.call(environmentId, 'terminal.list', { limit: 1000, includePreview: false })
       )
       const leftovers: WslHostTerminalLeftover[] = []
       // Close by handle so deleted-project terminals remain addressable; one refusal must not skip other terminals/server stop.

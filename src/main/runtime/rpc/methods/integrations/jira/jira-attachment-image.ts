@@ -2,11 +2,6 @@ import { encodeJiraImageFrame } from '../../../../../../shared/jira/jira-image-s
 import { JIRA_IMAGE_CHUNK_BYTES } from '../../../../../../shared/jira/jira-attachment-image'
 import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
 import { throwIfSignalAborted } from '../../../../../../shared/concurrency/abort-signal-reason'
-import {
-  attachmentImageGrant,
-  isAttachmentImageGrantCurrent
-} from '../../../../../jira/attachments/image-grants'
-import { readGrantedAttachmentImage } from '../../../../../jira/attachments/image-read'
 import { AttachmentImage } from '../../../../../../shared/rpc-contract/jira/jira-params'
 import { defineStreamingMethod } from '../../../core'
 
@@ -19,6 +14,13 @@ export const JIRA_ATTACHMENT_IMAGE_METHODS = [
       if (!sendBinary) {
         throw new Error('Jira images require a binary subscription transport.')
       }
+      const [
+        { attachmentImageGrant, isAttachmentImageGrantCurrent },
+        { readGrantedAttachmentImage }
+      ] = await Promise.all([
+        import('../../../../../jira/attachments/image-grants'),
+        import('../../../../../jira/attachments/image-read')
+      ])
       const grant = attachmentImageGrant(reference)
       const image = grant && (await readGrantedAttachmentImage(reference, signal))
       if (!image || !grant) {
