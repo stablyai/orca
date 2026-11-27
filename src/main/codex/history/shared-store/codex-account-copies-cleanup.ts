@@ -176,6 +176,10 @@ export async function cleanUpCodexAccountCopies(args: {
         continue
       }
       const deleted = await args.worker.call({ op: 'delete-trashed', accountHome, copies: closed })
+      // Before the stop check: files a stopped batch deleted still leave disk usage.
+      if (deleted.ok && deleted.op === 'delete-trashed' && deleted.tally.deleted > 0) {
+        args.onDeleted?.()
+      }
       if (args.shouldStop()) {
         return null
       }
@@ -184,9 +188,6 @@ export async function cleanUpCodexAccountCopies(args: {
         continue
       }
       addTally(total, deleted.tally)
-      if (deleted.tally.deleted > 0) {
-        args.onDeleted?.()
-      }
     }
     const checked = await args.worker.call({
       op: 'verify',

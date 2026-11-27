@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanUpCodexAccountCopies } from './codex-account-copies-cleanup'
 import { runCodexAccountCopiesRequest, verifyCodexAccountCopies } from './codex-account-copies'
 import { TRASH_GRACE_MS } from './codex-account-copies-trash-entries'
+import { recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 
 const REL = '2026/11/20/rollout-2026-11-20T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.jsonl'
@@ -498,4 +499,64 @@ describe('verifyCodexAccountCopies', () => {
     expect(launches[0].verified.map((copy) => copy.copy)).toEqual([small])
     expect(launches).toHaveLength(4)
   })
+})
+
+describe('copies a launch could not clear', () => {
+  it('reaches all 40,000 in turn when the first 5,000 never clear', async () => {
+    const count = 40_000
+    const day = '2026/11/20'
+    mkdirSync(join(store, 'sessions', day), { recursive: true })
+    mkdirSync(join(home, 'sessions.orca-profile-merge', day), { recursive: true })
+    for (let i = 0; i < count; i += 1) {
+      const name = `rollout-2026-11-20T10-00-00-0199a1b2-c3d4-7e5f-8a9b-${i.toString(16).padStart(12, '0')}.jsonl`
+      writeFileSync(join(store, 'sessions', day, name), LINE_1)
+      writeFileSync(join(home, 'sessions.orca-profile-merge', day, name), LINE_1)
+    }
+    const verify = () =>
+      verifyCodexAccountCopies({
+        accountHome: home,
+        storeHome: store,
+        budget: { maxBytes: 4 * 1024 ** 3, deadline: Date.now() + 600_000 },
+        version: `test-${Math.random()}`,
+        managedAccountsRoot: join(root, 'codex-accounts')
+      })
+    // Nothing is ever moved, as when every offered copy stays open: each launch offers 5,000.
+    // The first 8 launches compare fresh copies; after that every one is a remembered retry.
+    const offered = new Set<string>()
+    const all = new Map<string, Awaited<ReturnType<typeof verify>>['verified'][number]>()
+    for (let launch = 0; launch < 16; launch += 1) {
+      for (const copy of (await verify()).verified) {
+        all.set(copy.copy, copy)
+        if (launch >= 8) {
+          offered.add(copy.copy)
+        }
+      }
+    }
+    expect(all.size).toBe(count)
+    expect(offered.size).toBe(count)
+
+    const locks = join(root, 'locks')
+    mkdirSync(locks)
+    await runCodexAccountCopiesRequest({
+      op: 'trash',
+      accountHome: home,
+      copies: [...all.values()],
+      lockFolders: [locks]
+    })
+    const ready = new Set<string>()
+    for (let launch = 0; launch < 16; launch += 1) {
+      const recheck = recheckTrashedCopies({
+        accountHome: home,
+        maxBytes: 4 * 1024 ** 3,
+        deadline: Date.now() + 600_000,
+        now: Date.now() + TRASH_GRACE_MS + 60_000
+      })
+      if (launch >= 8) {
+        for (const copy of recheck.ready) {
+          ready.add(copy.copy)
+        }
+      }
+    }
+    expect(ready.size).toBe(count)
+  }, 300_000)
 })

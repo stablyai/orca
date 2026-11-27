@@ -11,6 +11,7 @@ import {
 import { originalHoldsCopy } from './codex-account-copy-content'
 import {
   readKeptCopies,
+  takeInTurn,
   writeKeptCopies,
   type CompareProgress,
   type KeptCopies
@@ -234,7 +235,14 @@ export async function verifyCodexAccountCopies(args: {
       tally.error += 1
     }
   }
-  verified.push(...retry.slice(0, Math.max(0, MAX_VERIFIED_PER_HOME - verified.length)))
+  const turn = takeInTurn(
+    retry,
+    (copy) => relative(args.accountHome, copy.copy).split(/[\\/]/).join('/'),
+    record.retryAfter,
+    MAX_VERIFIED_PER_HOME - verified.length
+  )
+  verified.push(...turn.taken)
+  tally.deferred += retry.length - turn.taken.length
   if (outOfTime) {
     for (const [name, key] of Object.entries(remembered)) {
       if (!visited.has(name)) {
@@ -268,7 +276,9 @@ export async function verifyCodexAccountCopies(args: {
     differs: nextKept,
     settled: settled ? stamp : null,
     progress: nextProgress,
-    verified: nextVerified
+    verified: nextVerified,
+    retryAfter: turn.next,
+    trashRetryAfter: record.trashRetryAfter
   })
   return { verified, tally, bytesRead }
 }

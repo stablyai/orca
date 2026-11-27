@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path'
 import { rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
 import { originalHoldsCopy } from './codex-account-copy-content'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
+import { readKeptCopies, takeInTurn, writeKeptCopies } from './codex-account-copies-kept'
 import {
   fileKey,
   hasNoLinkBelowHome,
@@ -166,8 +167,18 @@ export function recheckTrashedCopies(args: {
       writeList(trash, list.name, next)
     }
   }
-  ready.push(...retries.slice(0, Math.max(0, MAX_READY_PER_HOME - ready.length)))
-  tally.deferred += Math.max(0, retries.length - MAX_READY_PER_HOME)
+  const record = readKeptCopies(args.accountHome)
+  const turn = takeInTurn(
+    retries,
+    (copy) => basename(copy.copy),
+    record.trashRetryAfter,
+    MAX_READY_PER_HOME - ready.length
+  )
+  ready.push(...turn.taken)
+  tally.deferred += retries.length - turn.taken.length
+  if (turn.next !== record.trashRetryAfter) {
+    writeKeptCopies(args.accountHome, { ...record, trashRetryAfter: turn.next })
+  }
   return { ready, tally, bytesRead }
 }
 
