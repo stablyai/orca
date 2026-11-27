@@ -18,10 +18,12 @@ type RuntimeCall = {
   orchestration?: { contractVersion: number; requestId: string }
 }
 
+type ReceiptPort = { reader: ProviderReceiptReader; nonce: string; port: MessagePort }
+
 let pending = false
 let unread: ProviderReceiptCursor | undefined
 let last: ProviderReceiptCursor | undefined
-let active: { reader: ProviderReceiptReader; port: MessagePort } | undefined
+let active: ReceiptPort | undefined
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true })
 
@@ -43,9 +45,9 @@ export function discardProviderReceiptReply(revision: ProviderReceiptCursor): vo
   }
 }
 
-async function acquire(reader: ProviderReceiptReader): Promise<MessagePort> {
+async function acquire(reader: ProviderReceiptReader): Promise<ReceiptPort> {
   if (active?.reader.id === reader.id && active.reader.generation === reader.generation) {
-    return active.port
+    return active
   }
   if (active && (active.reader.id !== reader.id || active.reader.generation >= reader.generation)) {
     throw new Error('provider_receipt_read_pending')
@@ -70,7 +72,8 @@ async function acquire(reader: ProviderReceiptReader): Promise<MessagePort> {
     }
     const port = await promise
     active?.port.close()
-    active = { reader, port }
+    const binding = { reader, nonce, port }
+    active = binding
     port.addEventListener(
       'close',
       () => {
@@ -80,7 +83,7 @@ async function acquire(reader: ProviderReceiptReader): Promise<MessagePort> {
       },
       { once: true }
     )
-    return port
+    return binding
   } catch (error) {
     arrived?.close()
     throw error
@@ -90,12 +93,22 @@ async function acquire(reader: ProviderReceiptReader): Promise<MessagePort> {
 }
 
 async function exchange(
-  port: MessagePort,
+  binding: ReceiptPort,
   encoded: Uint8Array
 ): Promise<RuntimeRpcResponse<ProviderReceiptReply>> {
+  const { port, nonce } = binding
   const { resolve, reject, promise } =
     Promise.withResolvers<RuntimeRpcResponse<ProviderReceiptReply>>()
   const closed = (): void => reject(new Error('provider_receipt_sender_retired'))
+  const restart = (event: Electron.IpcRendererEvent, received: unknown): void => {
+    if (received === nonce && event.ports.length === 0) {
+      if (active === binding) {
+        active = undefined
+      }
+      port.close()
+      closed()
+    }
+  }
   const receive = ({ data }: MessageEvent<unknown>): void => {
     if (!(data instanceof Uint8Array) || data.byteLength > MAX_PROVIDER_RECEIPT_REPLY_BYTES) {
       return closed()
@@ -109,12 +122,15 @@ async function exchange(
   port.addEventListener('message', receive, { once: true })
   port.addEventListener('messageerror', closed, { once: true })
   port.addEventListener('close', closed, { once: true })
+  // Blink does not dispatch a peer-close event by default.
+  ipcRenderer.on(PROVIDER_RECEIPT_PORT_DELIVERY, restart)
   try {
     port.start()
     port.postMessage(encoded)
     unread = undefined
     return await promise
   } finally {
+    ipcRenderer.off(PROVIDER_RECEIPT_PORT_DELIVERY, restart)
     port.removeEventListener('message', receive)
     port.removeEventListener('messageerror', closed)
     port.removeEventListener('close', closed)

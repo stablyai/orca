@@ -150,8 +150,12 @@ export class DesktopProviderReceiptPort {
     }
     const isCurrent = (): boolean => document.binding === binding && document.isCurrent()
     const restart = (): void => {
+      const notify = isCurrent()
       this.readers.suppress(endpoint)
       binding.close()
+      if (notify) {
+        senderFrame.postMessage(PROVIDER_RECEIPT_PORT_DELIVERY, nonce)
+      }
     }
     const onMessage = ({ data }: { data: unknown }): void => {
       if (!isCurrent() || binding.pending) {
