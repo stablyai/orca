@@ -622,6 +622,11 @@ module.exports = {
         context.packager
       )
       await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-mic-active-status'),
+        'orca-mic-active-status',
+        context.packager
+      )
+      await signMacStandaloneHelper(
         finalizePackagedProviderExec(resourcesDir, 'darwin'),
         'orca-provider-exec',
         context.packager
@@ -753,6 +758,10 @@ module.exports = {
       {
         from: 'native/socket-owner-macos/.build/release/orca-socket-owner',
         to: 'MacOS/orca-socket-owner'
+      },
+      {
+        from: 'native/mic-active-status-macos/.build/release/orca-mic-active-status',
+        to: 'MacOS/orca-mic-active-status'
       },
       // Nested executables belong in Contents/MacOS, where afterPack signs them before the app.
       {

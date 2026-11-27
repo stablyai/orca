@@ -28,9 +28,11 @@ import {
 export function deliverNativeNotification(
   args: NotificationDispatchRequest,
   notificationOptions: ReturnType<typeof buildNotificationOptions>,
-  settings: NotificationSettings
+  settings: NotificationSettings,
+  options?: { suppressSound?: boolean }
 ): NotificationDispatchResult | Promise<NotificationDispatchResult> {
-  if (getEffectiveNotificationSoundId(settings) !== 'system') {
+  const suppressSound = options?.suppressSound === true
+  if (suppressSound || getEffectiveNotificationSoundId(settings) !== 'system') {
     notificationOptions.silent = true
   }
   const notification = new Notification({
@@ -136,7 +138,7 @@ export function deliverNativeNotification(
         return { delivered: false, reason: 'not-displayed' }
       }
       recordNotificationDeliveryOutcome('delivered')
-      return { delivered: true }
+      return { delivered: true, ...(suppressSound ? { soundSuppressed: true } : {}) }
     })
   }
 
@@ -146,5 +148,5 @@ export function deliverNativeNotification(
       shown ? { delivered: true } : { delivered: false, reason: 'not-displayed' }
     )
   }
-  return { delivered: true }
+  return { delivered: true, ...(suppressSound ? { soundSuppressed: true } : {}) }
 }

@@ -14,6 +14,7 @@ import type {
 import { isNotificationAttentionAcknowledgement } from '../../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
+import { readMicActiveStatusForDelivery } from './mic-active-status'
 import { setTrayAttention } from '../../tray/system-tray'
 import { isMainWindowVisible } from '../../window/visibility/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
@@ -234,6 +235,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       ? (payload) => runtime.dispatchMobileNotification(payload)
       : null,
     readAuthorizationStatus: readNotificationAuthorizationStatus,
+    readMicActiveStatus: readMicActiveStatusForDelivery,
     recordDeliveryOutcome: recordNotificationDeliveryOutcome,
     deliverNative: deliverNativeNotification,
     platform: process.platform,

@@ -7,6 +7,7 @@ export function getDefaultNotificationSettings(): NotificationSettings {
     agentNeedsInput: true,
     terminalBell: false,
     suppressWhenFocused: true,
+    suppressWhileMicActive: false,
     customSoundId: 'system',
     customSoundPath: null,
     customSoundVolume: 100,
