@@ -20,11 +20,20 @@ const state = vi.hoisted(
   (): {
     runs: GoogleSetupRuns | null
     offers: number
+    shown: boolean
     lines: string[]
     accounts: GoogleAccountView[]
     cards: string[]
     duringCheck: (() => void) | null
-  } => ({ runs: null, offers: 0, lines: [], accounts: [], cards: [], duringCheck: null })
+  } => ({
+    runs: null,
+    offers: 0,
+    shown: true,
+    lines: [],
+    accounts: [],
+    cards: [],
+    duringCheck: null
+  })
 )
 const BOT = { id: 'bot-1', name: 'Ada', google: true, chatSessionId: 'chat-1' }
 const OLD_CLIENT: GoogleClientView = {
@@ -78,8 +87,12 @@ vi.mock('../../../bots/bot-chat-session', () => ({
   })
 }))
 vi.mock('./bots-connector-offer', () => ({
-  postConnectorOffer: async () => {
+  offerConnectorCard: async (...args: [unknown, unknown, unknown, unknown, string]) => {
     state.offers += 1
+    return {
+      shown: state.shown,
+      message: state.shown ? `${args[4]} (with note)` : 'No card was shown.'
+    }
   }
 }))
 
@@ -108,6 +121,7 @@ beforeEach(() => {
   runs = new GoogleSetupRuns(() => join(dir, 'runs.json'))
   state.runs = runs
   state.offers = 0
+  state.shown = true
   state.lines = []
   state.duringCheck = null
   state.accounts = []
@@ -119,7 +133,17 @@ describe('bots.googleSetup.write start with an app already here', () => {
   it('shows the Connect card without --new-app', async () => {
     const result = await write.handler({ botToken: 't', change: { action: 'start' } }, context)
     expect(result).toMatchObject({ routed: 'offer' })
+    // The card's answer, with any thread note, not the bare ask.
+    expect(result).toMatchObject({ message: expect.stringMatching(/\(with note\)$/) })
     expect(state.offers).toBe(1)
+    expect(runs.get(BOT.id)).toBeNull()
+  })
+
+  it('fails rather than routing to a card that was not written', async () => {
+    state.shown = false
+    await expect(
+      write.handler({ botToken: 't', change: { action: 'start' } }, context)
+    ).rejects.toThrow('No card was shown.')
     expect(runs.get(BOT.id)).toBeNull()
   })
 

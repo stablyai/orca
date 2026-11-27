@@ -18,7 +18,7 @@ Run `ORCA bot google-setup start --new-app` only to make a new app: when your ow
 
 ## Flow
 
-1. `ORCA bot google-setup start`, then end your turn. Do nothing else until your owner has answered both the path card and the services card that follows it: don't open Google Cloud, and don't post about the cards, which already ask. The services answer is the one that wakes you (an imported setup file has no services card). If the path is recorded and the services aren't yet, end your turn. If `start` answers that Google is already set up (a Connect card, or already on), there is nothing to set up: end your turn, and don't run the steps below (unless you need `--new-app`, above).
+1. `ORCA bot google-setup start`, then end your turn. Do nothing else until your owner has answered both the path card and the services card that follows it: don't open Google Cloud, and don't post about the cards, which already ask. The services answer is the one that wakes you (an imported setup file has no services card). If the path is recorded and the services aren't yet, end your turn. If `start` answers that Google is already set up (a Connect card, or already on), there is nothing to set up: end your turn, and don't run the steps below (unless you need `--new-app`, above). When that answer gives you a line for the thread you answer, your final message there still includes it: it is how your owner reaches the card.
 2. Account:
    - In do-it-for-me and guide-here, open Google Cloud and read the account (see Browser). In guide-browser, ask for it (see Paths).
    - Record it with `ORCA bot google-setup set --account <email> --kind <work|personal>`.
