@@ -1,8 +1,9 @@
-// An item's links as the rows its Links section draws, in order: workers, PRs and issues, other links,
-// files. A worker's PR is listed once with the PRs, beside any link to the same PR.
+// An item's links as the rows its Links section draws, in order: workers, PRs and issues, other items,
+// other links, files. A worker's PR is listed once with the PRs, beside any link to the same PR.
 import type { BotChatTreeWorker } from './bot-chat-tree'
 import type {
   BotItemIssue,
+  BotItemLinkedItem,
   BotItemLinkView,
   BotItemPullRequest,
   BotItemWorkerState
@@ -37,6 +38,8 @@ export type BotItemLinkRow =
   | { kind: 'file'; key: string; path: string; name: string }
   /** A wait or schedule that will wake the agent for the item; `active` while it exists and is on. */
   | { kind: 'automation'; key: string; name: string | null; active: boolean }
+  /** Another item, opened by `uid`; `item` null when it can't be read. */
+  | { kind: 'item'; key: string; uid: string; item: BotItemLinkedItem | null }
 
 /** A GitHub PR or issue on one line; `title` and `state` are null until the host's cache has read it. */
 export type BotItemGitHubRow = {
@@ -126,11 +129,13 @@ function group(row: BotItemLinkRow): number {
     case 'server-pr':
       return 1
     case 'web':
-      return row.linear ? 2 : 3
+      return row.linear ? 2 : 4
+    case 'item':
+      return 3
     case 'file':
-      return 4
-    case 'automation':
       return 5
+    case 'automation':
+      return 6
   }
 }
 
@@ -260,6 +265,9 @@ function linkRowsWithRecency(links: readonly BotItemLinkView[]): {
           },
           index
         )
+        break
+      case 'item':
+        push({ kind: 'item', key: `item:${link.ref}`, uid: link.ref, item: link.item }, index)
         break
     }
   }

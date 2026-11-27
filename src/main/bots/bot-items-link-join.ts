@@ -5,12 +5,16 @@ import {
   botItemPrRefOfUrl,
   botItemPrUrl,
   type BotItemIssue,
+  type BotItemLinkedItem,
   type BotItemLinkView,
   type BotItemPullRequest,
   type BotItemWorkerState
 } from '../../shared/bots/bot-items'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
+import { botItemsChangeScope, type BotChangeScope } from '../../shared/bots/bot-change-scope'
+import type { BotItemsRemote } from './bot-items-ops'
+import type { BotItemLinkedRow, BotItemLinkTargets } from './bot-items-reads'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
@@ -182,7 +186,12 @@ export class BotItemLinkJoin {
     return entry ? { title: entry.data.title, state: entry.data.state } : null
   }
 
-  linkView(link: BotItemLinkRecord, read: WorkerRead | undefined): BotItemLinkView {
+  /** `linked`: what an `item:` link points at, read with the item; null when it can't be read. */
+  linkView(
+    link: BotItemLinkRecord,
+    read: WorkerRead | undefined,
+    linked: BotItemLinkedItem | null = null
+  ): BotItemLinkView {
     switch (link.kind) {
       case 'dispatch': {
         const worker = read?.worker ?? null
@@ -227,6 +236,8 @@ export class BotItemLinkJoin {
           active: automation?.enabled === true
         }
       }
+      case 'item':
+        return { kind: 'item', ref: link.ref, item: linked }
     }
   }
 }
@@ -242,4 +253,37 @@ function workerState(worker: BotWorkWorker | null): BotItemWorkerState {
     return 'stopped'
   }
   return worker.state === 'unverifiable' ? 'unknown' : worker.state
+}
+
+/** An `item:` link's target as its link shows it, its bot named as this host names it. */
+export function linkedItemView(
+  row: BotItemLinkedRow | undefined,
+  nameOf: (botId: string) => string | null
+): BotItemLinkedItem | null {
+  return row
+    ? {
+        number: row.number,
+        owner: { botId: row.ownerBotId, name: nameOf(row.ownerBotId) },
+        title: row.title,
+        status: row.status
+      }
+    : null
+}
+
+/** Tells the bots whose items link `target` to re-read them; with more than a page linking it, every
+ *  bot's items re-read. A failed read only warns. */
+export function notifyItemsLinking(
+  store: BotItemsRemote | null,
+  target: BotItemLinkTargets,
+  notify: (scope: BotChangeScope) => void
+): void {
+  void store
+    ?.itemsLinkingItems(target)
+    .then(({ linking, more }) => {
+      const scope = more ? { kinds: ['items' as const] } : botItemsChangeScope(linking)
+      if (scope) {
+        notify(scope)
+      }
+    })
+    .catch((error: unknown) => console.warn('[bots] items: could not find linking items', error))
 }

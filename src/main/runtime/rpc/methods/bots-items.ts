@@ -13,7 +13,13 @@ import { defineMethod } from '../core'
 import { itemsReader, itemsWriter } from './bots-items-caller'
 import { BOT_ITEMS_OWNER_METHODS } from './bots-items-owner-methods'
 import { BOT_ITEMS_WRITE_METHODS } from './bots-items-write-methods'
-import { pageSize, parseCursor, parseItemLink, resolveItem } from './bots-items-write-support'
+import {
+  linkedItemOf,
+  pageSize,
+  parseCursor,
+  parseItemLink,
+  resolveItem
+} from './bots-items-write-support'
 import {
   botItemCountsForClient,
   botItemEventsForClient,
@@ -40,8 +46,12 @@ const LIST = defineMethod({
       : params.chat?.replace(/^chat:/, '')
     const limit = pageSize(params.limit, BOT_ITEM_LIMITS.listPage, BOT_ITEM_LIMITS.listPageMax)
     const cursor = parseCursor(params.cursor)
-    const link = params.link !== undefined ? parseItemLink(params.link) : undefined
-    const page = await runtime.botItems.store().list({
+    const store = runtime.botItems.store()
+    const typed = params.link !== undefined ? parseItemLink(params.link) : undefined
+    // An item link is kept by uid; one naming no item matches nothing, as any other link would.
+    const target = typed?.kind === 'item' ? await linkedItemOf(store, typed.ref) : null
+    const link = target ? { kind: 'item' as const, ref: target.uid } : typed
+    const page = await store.list({
       botId: bot.id,
       statuses,
       ...(chatId !== undefined ? { chatIds: [chatId] } : {}),

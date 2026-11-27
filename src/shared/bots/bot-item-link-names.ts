@@ -1,7 +1,12 @@
 // A linked thing's short name, as an item's Links rows and chat lines show it: a GitHub PR or issue as
 // #n (its repo only when it isn't the item's), a Linear issue as its key, a URL as its host, a file as
-// its name, a worker as its task title.
-import { botItemPrRefOfUrl, parseBotItemPrRef, type BotItemLinkView } from './bot-items'
+// its name, a worker as its task title, another item as its bot and number.
+import {
+  botItemPrRefOfUrl,
+  parseBotItemPrRef,
+  type BotItemLinkedItem,
+  type BotItemLinkView
+} from './bot-items'
 
 const GITHUB_PATH = /^\/([\w.-]+\/[\w.-]+)\/(pull|issues)\/(\d+)/
 const LINEAR_PATH = /^\/[^/]+\/issue\/([A-Za-z0-9]+-\d+)/
@@ -82,6 +87,7 @@ function prRefOf(link: BotItemLinkView): string | null {
       return botItemPrRefOfUrl(link.ref)
     case 'file':
     case 'automation':
+    case 'item':
       return null
   }
 }
@@ -105,6 +111,7 @@ type NameContext = {
   homeRepo: string | null
   workerTitle: (dispatchId: string) => string | null
   automationName?: (automationId: string) => string | null
+  itemName?: (uid: string) => string | null
 }
 
 function githubName(repo: string, number: number, homeRepo: string | null): string {
@@ -135,6 +142,8 @@ export function botItemLinkName(word: string, context: NameContext): string | nu
       return botItemFileName(ref)
     case 'automation':
       return context.automationName?.(ref) ?? 'automation'
+    case 'item':
+      return context.itemName?.(ref) ?? 'item'
     default:
       return word
   }
@@ -154,6 +163,10 @@ export function botItemLinkNames(
     automationName: (id) => {
       const automation = links.find((link) => link.kind === 'automation' && link.ref === id)
       return (automation?.kind === 'automation' && automation.name?.trim()) || null
+    },
+    itemName: (uid) => {
+      const linked = links.find((link) => link.kind === 'item' && link.ref === uid)
+      return linked?.kind === 'item' && linked.item ? botItemLinkedItemName(linked.item) : null
     }
   }
   const names: Record<string, string> = {}
@@ -164,4 +177,9 @@ export function botItemLinkNames(
     }
   }
   return names
+}
+
+/** `Backend #4`, or `#4` when its bot isn't known. */
+export function botItemLinkedItemName(item: BotItemLinkedItem): string {
+  return item.owner.name ? `${item.owner.name} #${item.number}` : `#${item.number}`
 }

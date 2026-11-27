@@ -19,10 +19,13 @@ import { dispatchStarter, dispatchStarterBotId } from './bot-item-dispatch-facts
 import { botItemsStoreFile } from './bot-items-input'
 import {
   BotItemLinkJoin,
+  linkedItemView,
+  notifyItemsLinking,
   type BotItemAutomations,
   type BotItemGitHubCache
 } from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
+import type { BotItemLinkTargets } from './bot-items-reads'
 import { eventViewOf } from './bot-items-rows'
 import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
@@ -188,7 +191,13 @@ export class BotItemsHost {
     const scope = botItemsChangeScope(items)
     if (scope) {
       this.deps.notify(scope)
+      this.notifyLinking({ uids: items.map((item) => item.uid) })
     }
+  }
+
+  /** Items linking these (`item:`) or a deleted bot's show their target, so they re-read too. */
+  notifyLinking(target: BotItemLinkTargets): void {
+    notifyItemsLinking(this.openedStore(), target, this.deps.notify)
   }
 
   /** The scheduler's minute: a usage-limit stop whose time passed unannounced ends. */
@@ -293,7 +302,11 @@ export class BotItemsHost {
         closeNote: summary ? null : item.closeNote,
         wait: wait && waitText !== null ? { text: waitText, at: wait.createdAt } : null,
         links: (rows.links[item.uid] ?? []).map((link) =>
-          this.join.linkView(link, workers.get(link.ref))
+          this.join.linkView(
+            link,
+            workers.get(link.ref),
+            linkedItemView(rows.linked[link.ref], nameOf)
+          )
         ),
         version: item.version,
         lastEventId: botItemEventId(item.lastEventId),

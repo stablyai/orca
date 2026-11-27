@@ -17,6 +17,7 @@ import {
   botItemWorkerRow,
   type BotItemLinkRow
 } from '../../../../../shared/bots/bot-item-link-rows'
+import { botItemLinkedItemName } from '../../../../../shared/bots/bot-item-link-names'
 import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
 import {
   botChatTreeWorkerOpen,
@@ -25,6 +26,8 @@ import {
 } from '../BotChatTreeWorkerRow'
 import { useWorkerStop, WorkerActivityDetails } from '../WorkerActivityRow'
 import { openBotItemFile, type BotItemFileContext } from './bot-item-file-open'
+import { openLinkedBotItem } from './bot-item-open'
+import { BotItemLinkedItemIcon } from './BotItemLinkedItemIcon'
 import { BotItemChipButton as ChipButton } from './BotItemChipButton'
 import { BotItemGitHubChip as GitHubChip } from './BotItemGitHubChip'
 import {
@@ -292,7 +295,33 @@ function Chip({
           disabled={!row.active}
         />
       )
+    case 'item':
+      return <LinkedItemChip bot={bot} row={row} />
   }
+}
+
+/** Another item as `Backend #4`, its title on hover. Unreadable, or its bot gone from this host: said
+ *  so, and nothing to open it in. */
+function LinkedItemChip({
+  bot,
+  row
+}: {
+  bot: Bot
+  row: Extract<BotItemLinkRow, { kind: 'item' }>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const { item } = row
+  return (
+    <ChipButton
+      icon={<BotItemLinkedItemIcon item={item} />}
+      label={
+        item ? botItemLinkedItemName(item) : t('bots.items.link.itemMissing', 'Item not found')
+      }
+      tip={item?.title}
+      disabled={!item?.owner.name}
+      onClick={item ? () => openLinkedBotItem(bot, item, row.uid) : undefined}
+    />
+  )
 }
 
 function WebChip({ row }: { row: Extract<BotItemLinkRow, { kind: 'web' }> }): React.JSX.Element {

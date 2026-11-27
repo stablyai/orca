@@ -30578,7 +30578,9 @@
         "serverPr": "PR not shown for server work yet",
         "automation": "Automation",
         "automationOn": "Will wake the agent for this item",
-        "automationEnded": "Ended"
+        "automationEnded": "Ended",
+        "itemMissing": "Item not found",
+        "itemOpenFailed": "Couldn't open {{item}} yet."
       },
       "menu": {
         "cancel": "Cancel",

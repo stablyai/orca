@@ -108,14 +108,21 @@ export function botNamed(value: string, writer: Bot, bots: readonly Bot[]): Bot 
   return bot
 }
 
-/** `dispatch:<id>`, `automation:<id>`, `pr:<owner/repo#n>`, a URL (a GitHub PR URL is that PR), or a
- *  path. One form per thing, so `item list --link` finds it however it was written. */
+/** `dispatch:<id>`, `automation:<id>`, `item:<uid or number>`, `pr:<owner/repo#n>`, a URL (a GitHub PR
+ *  URL is that PR), or a path. One form per thing, so `item list --link` finds it however it was
+ *  written; an `item:` link is stored by uid once `itemLinksByUid` resolves it. */
 export function parseItemLink(ref: string): BotItemLinkInput {
   const value = ref.trim()
   const [scheme = '', ...rest] = value.split(':')
   const body = rest.join(':')
   if ((scheme === 'dispatch' || scheme === 'automation') && body) {
     return { kind: scheme, ref: body }
+  }
+  if (scheme === 'item') {
+    if (!body.trim()) {
+      throw new BotItemError('invalid_argument', `${value}: an item link is item:<number or uid>.`)
+    }
+    return { kind: 'item', ref: body.trim() }
   }
   if (scheme === 'pr') {
     if (!parseBotItemPrRef(body)) {
@@ -131,6 +138,41 @@ export function parseItemLink(ref: string): BotItemLinkInput {
     throw new BotItemError('invalid_argument', 'An empty link.')
   }
   return { kind: 'file', ref: scheme === 'file' && body ? body : value }
+}
+
+/** Each `item:` link by the uid of the item its number or uid names on this host; refused when it
+ *  names no item, or `self`, the item being linked. */
+export async function itemLinksByUid(
+  store: BotItemsRemote,
+  links: readonly BotItemLinkInput[],
+  self?: string
+): Promise<BotItemLinkInput[]> {
+  return Promise.all(
+    links.map(async (link) => {
+      if (link.kind !== 'item') {
+        return link
+      }
+      const target = await linkedItemOf(store, link.ref)
+      if (!target) {
+        throw new BotItemError(
+          'not_found',
+          `item:${link.ref}: no such item on this computer. \`orca bot item list --bot <name> --all\` lists a bot's items.`
+        )
+      }
+      if (target.uid === self) {
+        throw new BotItemError('invalid_argument', `Item ${target.number} can't link itself.`)
+      }
+      return { kind: 'item', ref: target.uid }
+    })
+  )
+}
+
+/** The item an `item:` link's number or uid names on this host. */
+export async function linkedItemOf(
+  store: BotItemsRemote,
+  ref: string
+): Promise<BotItemRecord | null> {
+  return /^\d+$/.test(ref) ? store.byNumber(Number(ref)) : store.get(ref)
 }
 
 /** A list cursor as a list printed it. */

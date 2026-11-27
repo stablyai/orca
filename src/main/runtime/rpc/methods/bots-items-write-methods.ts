@@ -29,7 +29,13 @@ import type { Bot } from '../../../../shared/bot-types'
 import { commentAsMaker } from './bots-items-maker-comment'
 import { runtimeChatHost } from '../../../external-conversations/external-conversation-chat'
 import { closingChatActsFor } from './bots-items-close-acts-for'
-import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
+import {
+  itemLinksByUid,
+  parseItemLink,
+  resolveItem,
+  writeResult,
+  writerOf
+} from './bots-items-write-support'
 
 const ADD = defineMethod({
   name: 'bots.items.add',
@@ -160,7 +166,7 @@ const LINK = defineMethod({
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
     const db = context.runtime.getOrchestrationDb()
-    const requested = params.refs.map(parseItemLink)
+    const requested = await itemLinksByUid(store, params.refs.map(parseItemLink), item.uid)
     const startedBy: Record<string, string | null> =
       item.ownerBotId === writer.bot.id
         ? {}

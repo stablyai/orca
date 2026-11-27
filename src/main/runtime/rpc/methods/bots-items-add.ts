@@ -19,6 +19,7 @@ import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import {
   botNamed,
+  itemLinksByUid,
   parseItemLink,
   writeResult,
   writerOf,
@@ -32,7 +33,7 @@ export async function addItem(
   const { runtime } = context
   const writer = writerOf(params, context)
   const store = runtime.botItems.store()
-  const typed = (params.links ?? []).map(parseItemLink)
+  const typed = await itemLinksByUid(store, (params.links ?? []).map(parseItemLink))
   const startedIn = await originUrl(context, writer.sessionId)
   const links = uniqueBotItemLinks(startedIn ? withOrigin(typed, startedIn) : typed)
   const target = params.forBot

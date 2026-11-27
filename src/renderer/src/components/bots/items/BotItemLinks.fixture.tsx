@@ -155,6 +155,27 @@ export const mergedSinceHostRead = defineFixture({
     ])
 })
 
+/** Another bot's item beside the worker and PR, its title and `Backend #4`; one that's gone. */
+export const linkedItems = defineFixture({
+  width: 360,
+  render: () =>
+    frame([
+      worker('d1', 'Run the release smoke tests', 'working', { startedAt: now - 6 * min }),
+      prLink(pr('acme/app', 41230, 'open', 'success', 'Share link API with expiring tokens')),
+      {
+        kind: 'item',
+        ref: 'uid-4',
+        item: {
+          number: 4,
+          owner: { botId: 'backend', name: 'Backend' },
+          title: 'Release the share link API',
+          status: 'done'
+        }
+      },
+      { kind: 'item', ref: 'uid-gone', item: null }
+    ])
+})
+
 export const serverWork = defineFixture({
   width: 360,
   render: () =>

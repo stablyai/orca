@@ -69,7 +69,7 @@ export const BOT_ITEM_LIMITS = {
   eventsPage: 50
 } as const
 
-export const BOT_ITEM_LINK_KINDS = ['dispatch', 'pr', 'url', 'file', 'automation'] as const
+export const BOT_ITEM_LINK_KINDS = ['dispatch', 'pr', 'url', 'file', 'automation', 'item'] as const
 export type BotItemLinkKind = (typeof BOT_ITEM_LINK_KINDS)[number]
 
 export type BotItemChatKind = 'home' | 'chat' | 'thread' | 'automation'
@@ -143,6 +143,16 @@ export type BotItemLinkView =
   /** `automations create --item`: a wait or schedule that will wake the bot for it. `active`: it still
    *  exists and is on. */
   | { kind: 'automation'; ref: string; name: string | null; active: boolean }
+  /** `item:<uid>`: another item on this host, any bot's. `item` is null once it can't be read. */
+  | { kind: 'item'; ref: string; item: BotItemLinkedItem | null }
+
+/** A linked item as its link shows it: `Backend #4`, opened by the link's uid. */
+export type BotItemLinkedItem = {
+  number: number
+  owner: { botId: string; name: string | null }
+  title: string
+  status: BotItemStatus
+}
 
 /** One link per worker: a bot can link several steps of one follow-up chain, and each step reads as the
  *  chain's newest Dispatch, so all but the first are the same worker again. */

@@ -10,6 +10,7 @@ const READ_OPS: ReadonlySet<BotItemsOp> = new Set<BotItemsOp>([
   'eventsBefore',
   'linksTo',
   'itemsLinking',
+  'itemsLinkingItems',
   'reportFact',
   'linkedDispatchRefs',
   'usageLimitWaitUids',
