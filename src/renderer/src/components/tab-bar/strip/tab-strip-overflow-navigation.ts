@@ -59,6 +59,7 @@ function isTabStripScrolledToEnd(el: HTMLElement): boolean {
 export function useTabStripOverflowNavigation({
   activeVisibleTabId,
   activeDockSlotId,
+  isFocused,
   layoutKey,
   slotIds,
   worktreeId
@@ -66,6 +67,8 @@ export function useTabStripOverflowNavigation({
   activeVisibleTabId: string | null
   /** The slot drawn active; a client-hosted row can take it without `activeVisibleTabId` changing. */
   activeDockSlotId: string | null
+  /** When a split gains focus, bring its selected tab back into view. */
+  isFocused?: boolean
   layoutKey: string
   /** Every slot in strip order, mounted or not: a windowed strip's DOM holds only part of it. */
   slotIds: readonly string[]
@@ -87,6 +90,7 @@ export function useTabStripOverflowNavigation({
   const stickToEndRef = useRef(false)
   const tabClosedThisCommitRef = useRef(false)
   const activeTabIdRef = useRef<string | null>(null)
+  const previousFocusRef = useRef(isFocused)
   const slotIdsRef = useRef<readonly string[]>(slotIds)
   const hoverDeferredRevealIdsRef = useRef<Set<string>>(new Set())
   const scrollAnchorRef = useRef<{
@@ -298,6 +302,12 @@ export function useTabStripOverflowNavigation({
       recordScrollAnchor()
       return
     }
+    const focusChanged = previousFocusRef.current !== isFocused
+    previousFocusRef.current = isFocused
+    if (focusChanged && !isFocused) {
+      recordScrollAnchor()
+      return
+    }
     // Hold the strip through tab presses and closes so it cannot slide under the pointer or chase distant MRU targets.
     if (isTabStripPointerGestureActive() || tabClosedThisCommitRef.current) {
       requestAnimationFrame(updateTabStripOverflowState)
@@ -309,7 +319,7 @@ export function useTabStripOverflowNavigation({
     stickToEndRef.current = isTabStripScrolledToEnd(strip)
     requestAnimationFrame(updateTabStripOverflowState)
     recordScrollAnchor()
-  }, [activeVisibleTabId, recordScrollAnchor, updateTabStripOverflowState])
+  }, [activeVisibleTabId, isFocused, recordScrollAnchor, updateTabStripOverflowState])
 
   // Dock ownership and drag transitions change sticky layout without scrolling or resizing.
   useLayoutEffect(() => {
