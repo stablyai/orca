@@ -30770,7 +30770,8 @@
       "showPaused": "Show paused bots",
       "show": "Show",
       "matchCount_one": "{{count}} match",
-      "matchCount_other": "{{count}} matches"
+      "matchCount_other": "{{count}} matches",
+      "announcement": "{{matches}}. {{paused}}"
     },
     "setup": {
       "copyHowToAsk": "Copy {{text}}",

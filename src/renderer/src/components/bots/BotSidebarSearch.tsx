@@ -382,10 +382,12 @@ function BotSearchAnnouncement({
             defaultValue_one: '{{count}} paused match'
           })
         : null
-    const timer = window.setTimeout(
-      () => setText([message, paused].filter(Boolean).join('. ')),
-      ANNOUNCE_DELAY_MS
-    )
+    // One message when both are spoken, so a language can order and join them its own way.
+    const announcement =
+      message && paused
+        ? t('bots.search.announcement', '{{matches}}. {{paused}}', { matches: message, paused })
+        : message || paused || ''
+    const timer = window.setTimeout(() => setText(announcement), ANNOUNCE_DELAY_MS)
     return () => window.clearTimeout(timer)
   }, [active, count, pausedCount, t])
   return (
