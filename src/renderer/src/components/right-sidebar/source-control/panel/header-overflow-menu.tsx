@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  GitGraph,
   List,
   ListTree,
   MessageSquare,
@@ -33,6 +34,9 @@ export type SourceControlPanelActions = {
   branchCompareRefreshDisabled: boolean
   diffCommentCount: number
   onExpandNotes: () => void
+  /** Absent where the context has no Git history (folders). */
+  onOpenGitGraph?: () => void
+  gitGraphDisabled: boolean
 }
 
 export function SourceControlHeaderOverflowMenu({
@@ -92,6 +96,15 @@ export function SourceControlHeaderOverflowMenu({
               )}
               {viewModeLabel}
             </DropdownMenuItem>
+            {panelActions.onOpenGitGraph ? (
+              <DropdownMenuItem
+                disabled={panelActions.gitGraphDisabled}
+                onSelect={panelActions.onOpenGitGraph}
+              >
+                <GitGraph className="size-3.5" />
+                {t('auto.components.right.sidebar.SourceControl.gitGraphButton', 'Graph')}
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onSelect={panelActions.onChangeBaseRef}>
               <Settings2 className="size-3.5" />
               {t('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}…
