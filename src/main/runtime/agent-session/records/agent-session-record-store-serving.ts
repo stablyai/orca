@@ -1,3 +1,4 @@
+import { localChatClient } from '../../../native-chat/local-host/local-chat-routing'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { isHostShuttingDown } from '../../../startup/quit/host-shutdown-state'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
@@ -20,7 +21,7 @@ function startOldChatHistoryCleanup(runtime: ServingRuntime): void {
 }
 
 export function agentSessionRecordStoreHostServing(runtime: ServingRuntime): void {
-  if (isHostShuttingDown()) {
+  if (isHostShuttingDown() || localChatClient()) {
     return
   }
   startOldChatHistoryCleanup(runtime)

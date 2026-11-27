@@ -1,3 +1,4 @@
+import { localChatClient } from '../../../native-chat/local-host/local-chat-routing'
 import { prepareStructuredWorkspaceAuthority } from './structured-workspace-authority'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { OrcaRuntimeWithStructuredSessionAccountHome } from './structured-session-account-home'
@@ -55,6 +56,10 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     worktreeSelector: string
   ): Promise<NotificationAttentionAcknowledgement> {
     const worktree = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
+    const client = localChatClient()
+    if (client) {
+      return { worktree, reads: await client.callHost('workspaceAttentionReads', worktree) }
+    }
     const host = getStructuredAgentSessionHost()
     const reads = host
       ? await host.attentionReads.workspace(worktree)
@@ -65,6 +70,10 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
   /** This host's native-chat sessions of one workspace, matched on host, distro, id and kind. */
   async listWorkspaceStructuredSessions(worktreeId: string) {
     const location = await this.resolveStructuredAgentSessionLocation(`id:${worktreeId}`)
+    const client = localChatClient()
+    if (client) {
+      return client.callHost('listWorkspaceSessions', location)
+    }
     return (await this.openAgentSessionRecordStore()).listWorkspaceSessions(location)
   }
 

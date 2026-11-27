@@ -1,3 +1,4 @@
+import { LocalChatRpcError } from '../../../native-chat/local-host/local-chat-rpc-methods'
 import { BranchSwitchLandedWithWarningError } from '../../../git/worktrees/checkout/branch-switch'
 import { mapBrowserError } from './browser-error-response'
 import { ZodError } from 'zod'
@@ -34,6 +35,15 @@ export function mapDispatcherError(
   meta: RpcEnvelopeMeta,
   error: unknown
 ): RpcResponse {
+  if (error instanceof LocalChatRpcError) {
+    return errorResponse(
+      request.id,
+      meta,
+      error.failure.code,
+      error.failure.message,
+      error.failure.data
+    )
+  }
   if (request.method === 'git.checkout' && error instanceof BranchSwitchLandedWithWarningError) {
     return errorResponse(request.id, meta, 'runtime_error', error.message, {
       outcome: 'landed-with-warning'

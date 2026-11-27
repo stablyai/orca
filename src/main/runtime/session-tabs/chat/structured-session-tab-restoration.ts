@@ -1,3 +1,4 @@
+import { localChatClient } from '../../../native-chat/local-host/local-chat-routing'
 import {
   admitStructuredSessionTabPublication,
   projectStructuredSessionTab,
@@ -43,6 +44,17 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['notifyMobileSessionTabSnapshots']>
 
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
+    const client = localChatClient()
+    if (client) {
+      for (const { tabId, ...tab } of await client.visibleTabs()) {
+        this.projectStructuredAgentSessionTab({
+          ...tab,
+          tabId: tabId ?? undefined,
+          activate: false
+        })
+      }
+      return
+    }
     await this.prepareStructuredAgentSessionStartupRestoration()
     const host = getStructuredAgentSessionHost()
     if (host?.getPersistedVisibleSessionTabIndex?.().present !== true) {

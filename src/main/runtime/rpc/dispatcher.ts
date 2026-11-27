@@ -1,3 +1,4 @@
+import { routeLocalChatMethods } from '../../native-chat/local-host/local-chat-rpc-methods'
 import {
   buildRegistry,
   isStreamingMethod,
@@ -16,14 +17,16 @@ import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-t
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { isDurableMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
-import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import {
   getOrchestrationMutationExecutor,
   type DurableMutationInvocation,
   type OrchestrationMutationExecutor
 } from './orchestration/mutations/orchestration-mutation-executor'
 import { OrchestrationLegacyCompatibility } from './orchestration/compatibility/orchestration-legacy-compatibility'
-import type { RpcDispatchStreamingOptions } from './dispatch/dispatcher-stream-options'
+import type {
+  RpcDispatchStreamingOptions,
+  AdmittedUnaryCall
+} from './dispatch/dispatcher-stream-options'
 import { mapDispatcherError } from './responses/dispatcher-error-response'
 import { createDispatcherStreamingFeatureEmitter } from './dispatch/dispatcher-streaming-feature-emitter'
 import { recordRuntimeFeatureInteraction } from './dispatch/runtime-feature-interaction'
@@ -40,13 +43,6 @@ export type DispatcherOptions = {
   callerScope?: RpcCallerScope
 }
 
-type AdmittedUnaryCall = {
-  request: RpcRequest
-  method: RpcMethod
-  params: unknown
-  caller: OrchestrationEntryCaller | undefined
-}
-
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
   private readonly registry: RpcRegistry
@@ -57,7 +53,9 @@ export class RpcDispatcher {
   constructor({ runtime, methods, callerScope }: DispatcherOptions) {
     this.runtime = runtime
     this.pinnedCallerScope = callerScope
-    this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
+    this.registry = routeLocalChatMethods(
+      buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
+    )
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
   }

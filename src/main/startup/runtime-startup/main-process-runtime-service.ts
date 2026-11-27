@@ -1,3 +1,5 @@
+import { LocalChatHostClient } from '../../native-chat/local-host/local-chat-host-client'
+import { installLocalChatClient } from '../../native-chat/local-host/local-chat-routing'
 import {
   desktopWorkspaceSleepPlatform,
   installDesktopWorkspaceVmWaker,
@@ -74,6 +76,13 @@ export function initializeMainProcessRuntime(
   deps: DesktopRuntimeServiceDeps
 ): OrcaRuntimeService {
   const { store, stats, userDataPath } = deps
+  if (
+    process.platform === 'darwin' &&
+    deps.servedOrcaProfileId &&
+    !process.argv.includes('--serve')
+  ) {
+    installLocalChatClient(new LocalChatHostClient(userDataPath, deps.servedOrcaProfileId))
+  }
   // Desktop and headless serve alike: whichever runs the profile's cleanup reports through here.
   installLegacyJournalRetirementReporting()
   // Process-scope subscription covers desktop, headless serve and fleet status.

@@ -8,6 +8,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'runtime-environment-store-worker-entry': resolve(
     'src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts'
   ),
+  'local-chat-host-entry': resolve('src/main/native-chat/local-host/local-chat-host-entry.ts'),
   'backend-entry': resolve('src/main/backend/backend-entry.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(
     'src/main/browser/extensions/native-messaging/browser-extension-native-host-supervisor-entry.ts'

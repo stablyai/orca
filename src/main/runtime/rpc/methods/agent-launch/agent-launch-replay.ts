@@ -1,3 +1,5 @@
+import { localChatClient } from '../../../../native-chat/local-host/local-chat-routing'
+import type { LocalChatOperations } from '../../../../native-chat/local-host/local-chat-operations'
 /** Admit before live selector/lease checks so replay returns the recorded answer despite changed preconditions.
  * At-most-once admission refuses unknown outcomes; recovering stranded surfaces is a separate responsibility. */
 
@@ -176,7 +178,14 @@ export async function admitAgentLaunchOperation(
   }
   const callerKey = agentLaunchOperationCallerKey(context)
   // The ledger alone: admitting a terminal launch has no use for the chat host.
-  const store = await context.runtime.openAgentSessionRecordStore()
+  const client = localChatClient()
+  const store: Pick<LocalChatOperations, 'admitAndClaimOperation' | 'recordOperationOutcome'> =
+    client
+      ? {
+          admitAndClaimOperation: (args) => client.callHost('admitAndClaimOperation', args),
+          recordOperationOutcome: (args) => client.callHost('recordOperationOutcome', args)
+        }
+      : await context.runtime.openAgentSessionRecordStore()
   const { decision: admitted, claim } = await store.admitAndClaimOperation({
     callerKey,
     operationId,

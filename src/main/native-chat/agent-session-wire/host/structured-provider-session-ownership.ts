@@ -1,3 +1,4 @@
+import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type {
   AgentSessionOwnerObservation,
   AgentSessionConversationView
@@ -72,4 +73,16 @@ export function terminalResumeBlocked(holding: StructuredProviderSessionOwnershi
     !sameIdTerminalResumeEnabled(holding.provider) ||
     (holding.role === 'head' && agentSessionLeasePossiblyWriting(holding.ownerObservation))
   )
+}
+
+/** Read both indexes at the writer's current revision before a saved terminal can resume. */
+export function terminalResumeOwnership(
+  store: Pick<AgentSessionRecordStore, 'listConversations' | 'getVisibleSessionTabIndex'>
+) {
+  return {
+    heads: listStructuredProviderSessionOwnership(store.listConversations()).filter(
+      (holding) => holding.role === 'head'
+    ),
+    tabs: store.getVisibleSessionTabIndex()
+  }
 }
