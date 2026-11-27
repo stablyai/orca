@@ -166,7 +166,7 @@ export class StagedFileSaves {
 
   /**
    * Creates the target from the staged bytes; a name taken since begin refuses the upload. Once
-   * committing, a closed socket lets the copy finish; only a host crash mid-copy leaves a short file.
+   * committing, a closed socket lets the copy finish.
    */
   async commitUpload(
     owner: string,
