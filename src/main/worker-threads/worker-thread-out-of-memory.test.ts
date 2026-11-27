@@ -16,9 +16,11 @@ parentPort.on('message', (request) => {
 
 const originalType = process.type
 // V8 flags are process-wide; put back any launch heap flag (e.g. CI's NODE_OPTIONS) for later files.
-const launchHeapFlag = [...process.execArgv, ...(process.env.NODE_OPTIONS ?? '').split(/\s+/)].find(
-  (arg) => arg.startsWith('--max-old-space-size=')
-)
+// Command-line flags win over NODE_OPTIONS, and the last repeat wins.
+const launchHeapFlag = [
+  ...(process.env.NODE_OPTIONS ?? '').split(/\s+/),
+  ...process.execArgv
+].findLast((arg) => /^--max[-_]old[-_]space[-_]size=/.test(arg))
 afterEach(() => {
   Object.defineProperty(process, 'type', { value: originalType, configurable: true })
   setFlagsFromString(launchHeapFlag ?? '--max-old-space-size=0')
