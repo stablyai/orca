@@ -1,9 +1,11 @@
 import { ipcMain, webContents } from 'electron'
 import type { HeapProfiler } from 'node:inspector'
 import { Session } from 'node:inspector/promises'
+import { types } from 'node:util'
 import type { CrashReportDetailValue } from '../../shared/crash-reporting/crash-reporting'
 
-/** Names what main allocates in a spike, for one bounded window; records hold names only, never arguments or paths. */
+// Names what main allocates in a spike, for one bounded window; records hold names only, never arguments or paths.
+
 /** Opt-in: stopping the sampler forces a full GC (~100 ms at 400 MB of heap, ~270 ms at 1.2 GB). */
 export const MAIN_ALLOCATION_SAMPLING_ENV = 'ORCA_MAIN_ALLOCATION_SAMPLING'
 export const MAIN_ALLOCATION_WINDOW_MS = 15_000
@@ -20,6 +22,7 @@ const MB = 2 ** 20
 type Details = Record<string, CrashReportDetailValue>
 type ProfileNode = HeapProfiler.SamplingHeapProfileNode
 type ChannelTally = { calls: number; bytes: number }
+type IpcTally = { tally: Map<string, ChannelTally>; rendererSendsTallied: boolean }
 type InvokeHandler = (...args: unknown[]) => unknown
 
 let active = false
@@ -33,7 +36,7 @@ export async function sampleMainAllocations(
   active = true
   const session = new Session()
   const heapBeforeMB = process.memoryUsage().heapUsed / MB
-  let stopIpcTally: (() => Map<string, ChannelTally>) | null = null
+  let stopIpcTally: (() => IpcTally) | null = null
   try {
     session.connect()
     await session.post('HeapProfiler.enable')
@@ -48,10 +51,12 @@ export async function sampleMainAllocations(
     await new Promise((resolve) => setTimeout(resolve, windowMs).unref())
     const channels = stopIpcTally()
     stopIpcTally = null
+    // Read before stopSampling, whose forced GC would hide the window's growth.
+    const heapGrowthMB = Math.round(process.memoryUsage().heapUsed / MB - heapBeforeMB)
     const { profile } = await session.post('HeapProfiler.stopSampling')
     return {
       allocationWindowMs: windowMs,
-      allocationWindowHeapGrowthMB: Math.round(process.memoryUsage().heapUsed / MB - heapBeforeMB),
+      allocationWindowHeapGrowthMB: heapGrowthMB,
       ...summarizeAllocationProfile(profile.head),
       ...summarizeIpcTally(channels)
     }
@@ -109,7 +114,12 @@ export function summarizeAllocationProfile(head: ProfileNode): Details {
 function formatFrame(frame: ProfileNode['callFrame']): string {
   const file = frame.url.split(/[?#]/)[0].split(/[/\\]/).pop() ?? ''
   const safeFile = /^[\w.-]{1,60}$/.test(file) ? file : file ? '?' : ''
-  const name = (frame.functionName || '(anonymous)').slice(0, 60)
+  // V8 infers names from computed keys, so a name can be a path or user data; keep plain identifiers only.
+  const name = /^[\w$.<>()[\] -]{1,60}$/.test(frame.functionName)
+    ? frame.functionName
+    : frame.functionName
+      ? '(unnamed)'
+      : '(anonymous)'
   return safeFile ? `${name} ${safeFile}:${frame.lineNumber + 1}` : name
 }
 
@@ -117,7 +127,7 @@ function formatFrame(frame: ProfileNode['callFrame']): string {
  * Wraps handlers only for the window; Electron reads its invoke map directly, so values are swapped.
  * Frame-scoped `webContents.ipc` listeners are not counted.
  */
-function startIpcTally(): () => Map<string, ChannelTally> {
+function startIpcTally(): () => IpcTally {
   const tally = new Map<string, ChannelTally>()
   let stopped = false
   const count = (channel: unknown, payload: unknown, calls = 1, suffix = ''): void => {
@@ -139,72 +149,94 @@ function startIpcTally(): () => Map<string, ChannelTally> {
       ? ipcMain._invokeHandlers
       : null
   const wrapped = new Map<unknown, { original: InvokeHandler; wrapper: InvokeHandler }>()
-  for (const [channel, original] of handlers ?? []) {
-    if (!isInvokeHandler(original)) {
-      continue
-    }
-    const wrapper: InvokeHandler = (event, ...args) => {
-      count(channel, args)
-      const result = original(event, ...args)
-      if (result instanceof Promise) {
-        void result.then(
-          (value) => count(channel, value, 0),
-          () => {}
-        )
-      } else {
-        count(channel, result, 0)
-      }
-      return result
-    }
-    handlers!.set(channel, wrapper)
-    wrapped.set(channel, { original, wrapper })
-  }
   const originalEmit = ipcMain.emit
-  const emitWrapper = function (this: unknown, channel: string | symbol, ...args: unknown[]) {
-    if (typeof channel === 'string' && channel !== 'newListener' && channel !== 'removeListener') {
-      count(channel, args.slice(1))
-    }
-    return originalEmit.call(this, channel, ...args)
-  }
-  ipcMain.emit = emitWrapper
-  const contentsProto: { send?: unknown } | null = webContents.getAllWebContents()[0]
-    ? Object.getPrototypeOf(webContents.getAllWebContents()[0])
-    : null
-  const originalSend = contentsProto?.send
-  const sendWrapper = isInvokeHandler(originalSend)
-    ? function (this: unknown, channel: unknown, ...args: unknown[]) {
-        count(channel, args, 1, ' (to renderer)')
-        return originalSend.call(this, channel, ...args)
+  let emitWrapper: typeof ipcMain.emit | null = null
+  let contentsProto: { send?: unknown } | null = null
+  let originalSend: unknown = undefined
+  let sendWrapper: InvokeHandler | null = null
+  const restore = (): void => {
+    stopped = true
+    // Leave a handler re-registered during the window alone.
+    for (const [channel, { original, wrapper }] of wrapped) {
+      if (handlers!.get(channel) === wrapper) {
+        handlers!.set(channel, original)
       }
-    : null
-  if (contentsProto && sendWrapper) {
-    contentsProto.send = sendWrapper
+    }
+    if (emitWrapper && ipcMain.emit === emitWrapper) {
+      ipcMain.emit = originalEmit
+    }
+    if (contentsProto && sendWrapper && contentsProto.send === sendWrapper) {
+      contentsProto.send = originalSend
+    }
   }
+  try {
+    for (const [channel, original] of handlers ?? []) {
+      if (!isInvokeHandler(original)) {
+        continue
+      }
+      const wrapper: InvokeHandler = (event, ...args) => {
+        count(channel, args)
+        const result = original(event, ...args)
+        if (result instanceof Promise) {
+          void result.then(
+            (value) => count(channel, value, 0),
+            () => {}
+          )
+        } else {
+          count(channel, result, 0)
+        }
+        return result
+      }
+      handlers!.set(channel, wrapper)
+      wrapped.set(channel, { original, wrapper })
+    }
+    emitWrapper = function (this: unknown, channel: string | symbol, ...args: unknown[]) {
+      if (
+        typeof channel === 'string' &&
+        channel !== 'newListener' &&
+        channel !== 'removeListener'
+      ) {
+        count(channel, args.slice(1))
+      }
+      return originalEmit.call(this, channel, ...args)
+    }
+    ipcMain.emit = emitWrapper
+    const firstContents = webContents.getAllWebContents()[0]
+    contentsProto = firstContents ? Object.getPrototypeOf(firstContents) : null
+    const send = contentsProto?.send
+    originalSend = send
+    sendWrapper = isInvokeHandler(send)
+      ? function (this: unknown, channel: unknown, ...args: unknown[]) {
+          count(channel, args, 1, ' (to renderer)')
+          return send.call(this, channel, ...args)
+        }
+      : null
+    if (contentsProto && sendWrapper) {
+      contentsProto.send = sendWrapper
+    }
+  } catch (error) {
+    // A partial patch must not outlive the window.
+    restore()
+    throw error
+  }
+  // Frame-level sends (sendToFrame, webFrameMain.send, postMessage) are not counted.
+  const rendererSendsTallied = sendWrapper !== null
   return () => {
     if (!stopped) {
-      stopped = true
-      // Leave a handler re-registered during the window alone.
-      for (const [channel, { original, wrapper }] of wrapped) {
-        if (handlers!.get(channel) === wrapper) {
-          handlers!.set(channel, original)
-        }
-      }
-      if (ipcMain.emit === emitWrapper) {
-        ipcMain.emit = originalEmit
-      }
-      if (contentsProto && sendWrapper && contentsProto.send === sendWrapper) {
-        contentsProto.send = originalSend
-      }
+      restore()
     }
-    return tally
+    return { tally, rendererSendsTallied }
   }
 }
 
-/** Bytes cover both a call's arguments and an invoke's result. */
-function summarizeIpcTally(tally: Map<string, ChannelTally>): Details {
-  const details: Details = { ipcChannels: tally.size }
+/** Ranked by calls: bytes count only top-level strings, buffers and arrays, so most object payloads read 0. */
+function summarizeIpcTally({ tally, rendererSendsTallied }: IpcTally): Details {
+  const details: Details = {
+    ipcChannels: tally.size,
+    ipcRendererSendsTallied: rendererSendsTallied
+  }
   ;[...tally]
-    .sort((a, b) => b[1].bytes - a[1].bytes || b[1].calls - a[1].calls)
+    .sort((a, b) => b[1].calls - a[1].calls || b[1].bytes - a[1].bytes)
     .slice(0, TOP_CHANNELS)
     .forEach(([channel, entry], index) => {
       details[`ipc_${index + 1}_channel`] = channel
@@ -238,7 +270,7 @@ export function approxBytes(value: unknown): number {
       bytes += item.byteLength
     } else if (item instanceof ArrayBuffer) {
       bytes += item.byteLength
-    } else if (Array.isArray(item)) {
+    } else if (Array.isArray(item) && !types.isProxy(item)) {
       // Holes and skipped getters cost budget too, so no array can loop past the cap.
       for (let index = 0; index < item.length && budget > 0; index += 1, budget -= 1) {
         // A caller-owned array (a send or invoke result) may have getters; reading one could change what is sent.

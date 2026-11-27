@@ -16,14 +16,14 @@ it('keeps only function names and script basenames in allocation stacks', () => 
   const head = frame(0, '(root)', '', [
     frame(1, 'saveSession', 'file:///Users/alice/Apps/Orca.app/out/main/index.js', [
       frame(2, 'stringify', 'C:\\Users\\alice\\AppData\\Orca\\out\\main\\index.js?x=1'),
-      frame(3, '', '/home/alice/notes/alice plan.js')
+      frame(3, '/home/alice/notes/key', '/home/alice/notes/alice plan.js')
     ])
   ])
   const details = summarizeAllocationProfile(head)
   expect(details).toEqual({
     allocationSampledMB: 6,
     alloc_1_kb: 3072,
-    alloc_1_stack: '(anonymous) ?:10 < saveSession index.js:10',
+    alloc_1_stack: '(unnamed) ?:10 < saveSession index.js:10',
     alloc_2_kb: 2048,
     alloc_2_stack: 'stringify index.js:10 < saveSession index.js:10',
     alloc_3_kb: 1024,
@@ -32,15 +32,14 @@ it('keeps only function names and script basenames in allocation stacks', () => 
   expect(JSON.stringify(details)).not.toContain('alice')
 })
 
-it('sizes arrays without running their getters', () => {
+it('sizes arrays within the visit budget without running their getters', () => {
   let reads = 0
-  const payload = ['abcd']
+  const payload: unknown[] = [
+    new Uint8Array(1024 * 1024),
+    0,
+    ...Array.from({ length: 1998 }, () => 1)
+  ]
   Object.defineProperty(payload, 1, { enumerable: true, get: () => ++reads })
-  expect(approxBytes(payload)).toBe(4)
+  expect(approxBytes(payload)).toBe(1024 * 1024 + 1998 * 8)
   expect(reads).toBe(0)
-})
-
-it('counts a large buffer at the front of an array that fills the size budget', () => {
-  const payload: unknown[] = [new Uint8Array(1024 * 1024), ...Array.from({ length: 1999 }, () => 1)]
-  expect(approxBytes(payload)).toBe(1024 * 1024 + 1999 * 8)
 })
