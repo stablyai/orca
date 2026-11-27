@@ -1551,7 +1551,7 @@
 4 src/shared/remote-runtime/host-store/runtime-environment-store-command.ts
 2 src/shared/remote-runtime/host-store/runtime-environment-store-file.ts
 6 src/shared/remote-runtime/host-store/runtime-environment-store-observation.ts
-9 src/shared/remote-runtime/host-store/runtime-environment-store-operations.ts
+10 src/shared/remote-runtime/host-store/runtime-environment-store-operations.ts # renameEnvironment persists through the same worker-served writeEnvironmentStore as the other store ops; its sync call reaches the event loop only on the inline CLI/worker-down fallback
 1 src/shared/remote-runtime/host-store/runtime-environment-store-read-cache.ts
 2 src/shared/remote-runtime/host-store/runtime-environment-store-records.ts
 1 src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts

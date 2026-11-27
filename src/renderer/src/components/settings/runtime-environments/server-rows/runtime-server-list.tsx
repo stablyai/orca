@@ -48,6 +48,7 @@ type RuntimeServerListProps = {
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
+  onRename: (environment: PublicKnownRuntimeEnvironment) => void
   onMakeDefault: (environment: PublicKnownRuntimeEnvironment) => void
   onCheckForUpdates: (options: UpdateCheckOptions) => void
   onRecheck: () => void
@@ -72,6 +73,7 @@ export function RuntimeServerList({
   onConnect,
   onDisconnect,
   onRemove,
+  onRename,
   onMakeDefault,
   onCheckForUpdates,
   onRecheck,
@@ -129,6 +131,7 @@ export function RuntimeServerList({
           onConnect,
           onDisconnect,
           onRemove,
+          onRename,
           onMakeDefault,
           onCheckForUpdates,
           onRefreshSshTargets: () => void reload().catch(() => {}),

@@ -33,6 +33,7 @@ import {
   getClientForEnvironment,
   manuallyDisconnectedEnvironmentIds,
   removeActiveRuntimeEnvironment,
+  saveEnvironmentIfPairingCurrent,
   requireActiveEnvironmentOrNull,
   resolveEnvironment,
   webRuntimeState
@@ -188,6 +189,28 @@ export function createRuntimeEnvironmentsApi(): PreloadApi['runtimeEnvironments'
       }
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
+    },
+    rename: async ({ selector, name }) => {
+      const environment = resolveEnvironment(selector)
+      const trimmed = name.trim()
+      if (!trimmed) {
+        throw new Error(
+          translate(
+            'auto.web.webPreloadApi.runtimeEnvironmentNameRequired',
+            'A server name is required.'
+          )
+        )
+      }
+      if (trimmed === environment.name) {
+        return { environment: redactStoredWebRuntimeEnvironment(environment) }
+      }
+      // The resolved record may predate a re-pair in another tab; refuse to rename that stale copy.
+      const next = { ...environment, name: trimmed, updatedAt: Date.now() }
+      saveEnvironmentIfPairingCurrent(next, environment)
+      if (webRuntimeState.activeEnvironment?.id === environment.id) {
+        webRuntimeState.activeEnvironment = next
+      }
+      return { environment: redactStoredWebRuntimeEnvironment(next) }
     },
     disconnect: async ({ selector }) => {
       const environment = resolveEnvironment(selector)

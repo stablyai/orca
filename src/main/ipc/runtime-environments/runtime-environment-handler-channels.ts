@@ -6,6 +6,7 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:repairFromPairingCode',
   'runtimeEnvironments:resolve',
   'runtimeEnvironments:remove',
+  'runtimeEnvironments:rename',
   'runtimeEnvironments:disconnect',
   'runtimeEnvironments:connect',
   'runtimeEnvironments:prepareBrowserClientHostPlacement',

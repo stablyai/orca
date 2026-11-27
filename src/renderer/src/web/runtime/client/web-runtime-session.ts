@@ -13,6 +13,7 @@ import {
   getPreferredWebRuntimeConnection,
   readStoredWebRuntimeEnvironment,
   replaceStoredTokenWithDeviceKey,
+  saveStoredWebRuntimeEnvironmentIfCurrent,
   updateStoredEnvironmentRuntimeId,
   type StoredWebRuntimeEnvironment
 } from '../../pairing/web-runtime-environment'
@@ -210,6 +211,16 @@ const PAIRING_CHANGED_MESSAGE = 'The paired Orca server changed while the reques
 
 export function assertActiveEnvironment(environmentId: string): void {
   if (requireActiveEnvironment().id !== environmentId) {
+    throw new Error(PAIRING_CHANGED_MESSAGE)
+  }
+}
+
+/** Writes `next` only while storage still holds `expected`'s exact pairing; compare-and-swap so another tab's change cannot land between a check and the write. */
+export function saveEnvironmentIfPairingCurrent(
+  next: StoredWebRuntimeEnvironment,
+  expected: StoredWebRuntimeEnvironment
+): void {
+  if (!saveStoredWebRuntimeEnvironmentIfCurrent(next, expected)) {
     throw new Error(PAIRING_CHANGED_MESSAGE)
   }
 }
