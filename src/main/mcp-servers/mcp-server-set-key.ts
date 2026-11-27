@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto'
+import { createHmac } from 'node:crypto'
+import { mcpServerSetKeySecret } from './mcp-server-set-key-secret'
 
 /** The fields that say which MCP server an agent was given; providers' own shapes fit it. */
 export type McpServerIdentity = {
@@ -12,12 +13,16 @@ export type McpServerIdentity = {
 }
 
 /**
- * A short digest of the MCP servers an agent launched with, to tell later whether a kept agent
- * still has the set a launch would give it: any change to a server (its url, command, arguments,
- * environment or headers) changes it, and order doesn't. A relayed server's url carries this run's
- * credential, so it differs every run; such a launch replaces a kept agent anyway.
+ * A short keyed digest of the MCP servers an agent launched with, to tell later whether a kept
+ * agent still has the set a launch would give it: any change to a server (its url, command,
+ * arguments, environment or headers) changes it, and order doesn't. It's an HMAC under this
+ * install's secret, so no stored key lets a value in it be guessed. A relayed server's url carries
+ * this run's credential, so it differs every run; such a launch replaces a kept agent anyway.
  */
-export function mcpServerSetKey(servers: readonly McpServerIdentity[]): string {
+export async function mcpServerSetKey(
+  servers: readonly McpServerIdentity[],
+  secret: Promise<Buffer> = mcpServerSetKeySecret()
+): Promise<string> {
   const each = servers
     .map((server) =>
       JSON.stringify([
@@ -31,5 +36,8 @@ export function mcpServerSetKey(servers: readonly McpServerIdentity[]): string {
       ])
     )
     .sort()
-  return createHash('sha256').update(JSON.stringify(each)).digest('hex').slice(0, 16)
+  return createHmac('sha256', await secret)
+    .update(JSON.stringify(each))
+    .digest('hex')
+    .slice(0, 16)
 }
