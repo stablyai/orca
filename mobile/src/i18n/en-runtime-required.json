@@ -1362,8 +1362,8 @@
       "teams_other": "{{count}} teams"
     },
     "filterSheet": {
-      "projectItems_one": "{{count}} item",
-      "projectItems_other": "{{count}} items"
+      "done": "Done",
+      "title": "Filter & display"
     },
     "githubProjectList": {
       "moreFields_one": "+{{count}} field",

@@ -4293,24 +4293,11 @@
     "filterPickers": {
       "allTeams": "全チーム",
       "changeStatus": "ステータスを変更",
-      "fieldHidden": "カードでは非表示",
-      "fieldShown": "カードに表示",
-      "fieldsSubtitle": "アイテムカードに表示するプロジェクトのフィールドを選択してください。",
-      "fieldsTitle": "プロジェクトのフィールド",
-      "gitlabFilter": "GitLab フィルター",
-      "gitlabView": "GitLab ビュー",
-      "jiraFilter": "Jira フィルター",
-      "jiraSite": "Jira サイト",
       "statesFailed": "状態を読み込めませんでした。開き直して再試行してください。",
-      "linearFilter": "Linear フィルター",
       "linearIssue": "Linear Issue",
-      "linearWorkspace": "Linear ワークスペース",
       "loadingStates": "ステータスを読み込み中…",
-      "noFields": "このビューに表示できる追加フィールドはありません。",
       "noStates": "利用可能なステータスがありません。",
       "switchWorkspaceFailed": "ワークスペースの切り替えに失敗しました",
-      "teamsSubtitle": "「タスク」に表示するチームを選択してください。",
-      "teamsTitle": "Linear チーム",
       "teams_one": "{{count}} チーム",
       "teams_other": "{{count}} チーム"
     },
@@ -4457,9 +4444,6 @@
     "linearList": {
       "changeStatusFrom": "状態を「{{status}}」から変更"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "表示項目"
-    },
     "listSurface": {
       "connectLinearButton": "Linear に接続",
       "connectLinearMessage": "「タスク」から、担当する Linear の Issue を確認して作業を開始できます。",
@@ -4513,7 +4497,6 @@
       "projectMergeRequests": "プロジェクトの MR",
       "projectMergeRequestsDescription": "リポジトリ別の MR と Issue",
       "projects": "プロジェクト",
-      "pullRequests": "PR",
       "repository": "リポジトリ",
       "repositorySortDescription": "リポジトリ別にグループ化し、アクティビティが新しい順に表示",
       "reviewRequestsDescription": "私に割り当てられたレビュー依頼",
@@ -4524,32 +4507,18 @@
     },
     "pagination": {
       "pageUnreachable": "ページ {{page}} は GitHub 検索で取得できる範囲を超えています。",
-      "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。",
-      "noMoreResults": "ページ {{page}} にこれ以上の結果はありません。"
+      "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。"
     },
     "filterSheet": {
-      "sortBy": "並べ替え",
       "issueSource": "Issue ソース",
-      "issueSourceRow": "upstream または origin",
       "view": "表示",
-      "projectView": "プロジェクトビュー",
-      "projectItems_one": "{{count}} 件のアイテム",
-      "projectItems_other": "{{count}} 件のアイテム",
-      "chooseView": "選択",
       "showOnRows": "行に表示",
-      "projectFields": "プロジェクトのフィールド",
       "workspace": "ワークスペース",
-      "linearWorkspace": "Linear ワークスペース",
       "layout": "レイアウト",
       "groupBy": "グループ化",
       "orderBy": "並び順",
-      "displayProperties": "表示プロパティ",
       "title": "フィルターと表示",
-      "done": "完了",
-      "jqlReplacesPreset": "JQL 検索中は「表示」のプリセットが置き換えられます。プリセットを選び直すには、検索をクリアしてください。"
-    },
-    "jiraViewControls": {
-      "jqlSearch": "JQL 検索"
+      "done": "完了"
     },
     "itemComments": {
       "noComments": "コメントはまだありません",
@@ -4677,42 +4646,8 @@
       "reviewers": "レビュアー",
       "viewFile": "表示"
     },
-    "providerControls": {
-      "myTodos": "自分の ToDo",
-      "reposLabel": "リポジトリ: {{repos}}",
-      "filterCount": "フィルター · {{count}}",
-      "filter": "フィルター",
-      "filterLabel": "フィルターと表示",
-      "projectMergeRequests": "プロジェクトの MR"
-    },
-    "providerItemList": {
-      "intoBranch": "{{base}} へ",
-      "kindAndStatus": "{{kind}}、{{status}}",
-      "nextPage": "次のページ",
-      "page": "{{page}} ページ",
-      "pageOfTotal": "{{page}} / {{total}} ページ",
-      "previousPage": "前のページへ",
-      "selectPage": "ページを選択、{{page}} ページ",
-      "selectPageOfTotal": "ページを選択、全 {{total}} ページ中 {{page}} ページ"
-    },
     "providerPickers": {
-      "allRepositories": "すべてのリポジトリ",
-      "githubView": "GitHub の表示",
-      "issueSources": "GitHub Issue の取得元",
-      "issueSourcesDescription": "リポジトリごとに、検索や作業の作成に使うソースを upstream または origin から選択してください。",
-      "issues": "Issue",
-      "noIssueSources": "ほかに利用できる Issue の取得元はありません。",
-      "origin": "origin",
-      "pageHint": "読み込み済みまたは利用可能な結果ページに移動します。",
-      "pageLoaded": "読み込み済み",
-      "pageNotLoaded": "以前の結果を読み込み",
-      "pageNumber": "{{page}} ページ",
-      "pages": "GitHub の結果ページ",
-      "pullRequests": "PR",
-      "queryingSource": "検索対象: {{source}}",
-      "repoDescription": "検索対象のリポジトリを選択してください。",
-      "repos": "リポジトリ",
-      "upstream": "upstream"
+      "allRepositories": "すべてのリポジトリ"
     },
     "providerViewProjection": {
       "all": "全て",
@@ -4721,7 +4656,6 @@
       "allWorkspaces": "すべてのワークスペース",
       "chooseProject": "プロジェクトを選択",
       "default": "デフォルト",
-      "defaultSubtitle": "{{subtitle}} · デフォルト",
       "issues": "Issue",
       "openState": "オープン",
       "projects": "プロジェクト",
@@ -4737,15 +4671,7 @@
     "screenChrome": {
       "newGitHubIssue": "GitHub の新規 Issue",
       "newLinearIssue": "新規 Linear Issue",
-      "refreshGitHub": "GitHub の作業を更新する",
-      "refreshGitLab": "GitLab 作業項目を更新する",
-      "refreshJira": "Jira Issue を更新する",
-      "refreshLinear": "Linear を更新",
       "title": "タスク"
-    },
-    "searchControl": {
-      "projectPlaceholder": "プロジェクトビューを検索…",
-      "providerPlaceholder": "{{provider}} のタスクを検索…"
     },
     "smartSourceModes": {
       "allStates": "全て",
@@ -5221,7 +5147,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Issue を検索するか JQL を入力、例: project = ABC",
         "jiraTextMatchesNotice": "テキスト一致を表示しています。Jira はこの検索を JQL として実行できませんでした。"
       },
       "editor": {

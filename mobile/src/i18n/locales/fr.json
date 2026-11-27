@@ -4419,33 +4419,18 @@
     },
     "pagination": {
       "pageUnreachable": "La page {{page}} dépasse la limite des résultats de recherche GitHub.",
-      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub.",
-      "noMoreResults": "Aucun autre résultat sur la page {{page}}."
+      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub."
     },
     "filterSheet": {
-      "sortBy": "Trier par",
       "issueSource": "Source des issues",
-      "issueSourceRow": "Upstream ou origin",
       "view": "Affichage",
-      "projectView": "Vue de projet",
-      "projectItems_many": "{{count}} éléments",
-      "projectItems_one": "{{count}} élément",
-      "projectItems_other": "{{count}} éléments",
-      "chooseView": "Choisir",
       "showOnRows": "Afficher sur les lignes",
-      "projectFields": "Champs du projet",
       "workspace": "Espace de travail",
-      "linearWorkspace": "Espace de travail Linear",
       "layout": "Disposition",
       "groupBy": "Grouper par",
       "orderBy": "Ordonner par",
-      "displayProperties": "Propriétés affichées",
       "title": "Filtre et affichage",
-      "done": "Terminé",
-      "jqlReplacesPreset": "Votre recherche JQL remplace le préréglage « Afficher ». Effacez la recherche pour en choisir un à nouveau."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Recherche JQL"
+      "done": "Terminé"
     },
     "itemComments": {
       "noComments": "Aucun commentaire pour l'instant",
@@ -4483,24 +4468,11 @@
     "filterPickers": {
       "allTeams": "Toutes les équipes",
       "changeStatus": "Changer le statut",
-      "fieldHidden": "Masqué sur les cartes",
-      "fieldShown": "Affiché sur les cartes",
-      "fieldsSubtitle": "Choisissez les champs du projet à afficher sur les cartes des éléments.",
-      "fieldsTitle": "Champs du projet",
-      "gitlabFilter": "Filtre GitLab",
-      "gitlabView": "Vue GitLab",
-      "jiraFilter": "Filtre Jira",
-      "jiraSite": "Site Jira",
       "statesFailed": "Impossible de charger les statuts. Rouvrez pour réessayer.",
-      "linearFilter": "Filtre Linear",
       "linearIssue": "Ticket Linear",
-      "linearWorkspace": "Espace de travail Linear",
       "loadingStates": "Chargement des statuts…",
-      "noFields": "Cette vue n'a aucun champ supplémentaire à afficher.",
       "noStates": "Aucun statut disponible",
       "switchWorkspaceFailed": "Impossible de changer d'espace de travail",
-      "teamsSubtitle": "Choisissez les équipes à afficher dans Tâches.",
-      "teamsTitle": "Équipes Linear",
       "teams_many": "{{count}} équipes",
       "teams_one": "{{count}} équipe",
       "teams_other": "{{count}} équipes"
@@ -4642,9 +4614,6 @@
     "linearList": {
       "changeStatusFrom": "Changer le statut actuel : {{status}}"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Propriétés affichées"
-    },
     "listSurface": {
       "connectLinearButton": "Connecter Linear",
       "connectLinearMessage": "Parcourez les issues Linear qui vous sont assignées et commencez à y travailler directement depuis Tâches.",
@@ -4698,7 +4667,6 @@
       "projectMergeRequests": "MR du projet",
       "projectMergeRequestsDescription": "Merge requests et issues par dépôt",
       "projects": "Projets",
-      "pullRequests": "PRs",
       "repository": "Dépôt",
       "repositorySortDescription": "Par dépôt, puis par activité la plus récente",
       "reviewRequestsDescription": "Demandes de revue qui vous sont assignées",
@@ -4820,42 +4788,8 @@
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },
-    "providerControls": {
-      "myTodos": "Mes tâches à faire",
-      "reposLabel": "Dépôts : {{repos}}",
-      "filterCount": "Filtre · {{count}}",
-      "filter": "Filtre",
-      "filterLabel": "Filtre et affichage",
-      "projectMergeRequests": "MR du projet"
-    },
-    "providerItemList": {
-      "intoBranch": "vers {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "Page suivante",
-      "page": "Page {{page}}",
-      "pageOfTotal": "Page {{page}} sur {{total}}",
-      "previousPage": "Page précédente",
-      "selectPage": "Sélectionner une page, page {{page}}",
-      "selectPageOfTotal": "Sélectionner une page, page {{page}} sur {{total}}"
-    },
     "providerPickers": {
-      "allRepositories": "Tous les dépôts",
-      "githubView": "Vue GitHub",
-      "issueSources": "Sources des tickets GitHub",
-      "issueSourcesDescription": "Pour chaque dépôt, choisissez upstream ou origin pour rechercher et créer des tickets.",
-      "issues": "Tickets",
-      "noIssueSources": "Aucune autre source de tickets disponible.",
-      "origin": "Origine",
-      "pageHint": "Accédez à une page de résultats chargée ou disponible.",
-      "pageLoaded": "Chargée",
-      "pageNotLoaded": "Charge des résultats plus anciens",
-      "pageNumber": "Page {{page}}",
-      "pages": "Pages GitHub",
-      "pullRequests": "Pull requests",
-      "queryingSource": "Recherche dans {{source}}",
-      "repoDescription": "Choisissez les dépôts à interroger.",
-      "repos": "Dépôts",
-      "upstream": "Upstream"
+      "allRepositories": "Tous les dépôts"
     },
     "providerViewProjection": {
       "all": "Tous",
@@ -4864,7 +4798,6 @@
       "allWorkspaces": "Tous les espaces de travail",
       "chooseProject": "Choisir le projet",
       "default": "Par défaut",
-      "defaultSubtitle": "{{subtitle}} · Par défaut",
       "issues": "Tickets",
       "openState": "Ouvert",
       "projects": "Projets",
@@ -4881,15 +4814,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nouveau ticket GitHub",
       "newLinearIssue": "Nouveau ticket Linear",
-      "refreshGitHub": "Actualiser le travail GitHub",
-      "refreshGitLab": "Actualiser les éléments de travail GitLab",
-      "refreshJira": "Actualiser les tickets Jira",
-      "refreshLinear": "Actualiser Linear",
       "title": "Tâches"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Rechercher dans la vue du projet…",
-      "providerPlaceholder": "Rechercher des tâches {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Toutes",
@@ -5369,7 +5294,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC",
         "jiraTextMatchesNotice": "Résultats textuels affichés. Jira n'a pas pu exécuter cette recherche en JQL."
       },
       "editor": {
