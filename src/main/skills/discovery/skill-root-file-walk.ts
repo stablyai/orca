@@ -39,7 +39,7 @@ function entersDirectory(name: string, options: SkillFileWalkOptions): boolean {
 }
 
 function holdsSkillFile(entries: readonly Dirent[]): boolean {
-  return entries.some((entry) => entry.name === SKILL_FILE_NAME && !entry.isDirectory())
+  return entries.some((entry) => entry.name === SKILL_FILE_NAME && entry.isFile())
 }
 
 /** Entry indexes of the plain child directories a walk enters. */

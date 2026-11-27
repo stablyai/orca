@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import { basename, dirname, relative, resolve } from 'node:path'
 import {
   hasNestedPiExclusion,
@@ -68,7 +69,14 @@ async function expandPositivePattern(
     if (!isPathWithinPackageRoot(packageRoot, resolved)) {
       return []
     }
-    return [basename(resolved).toLowerCase() === 'skill.md' ? dirname(resolved) : resolved]
+    if (basename(resolved).toLowerCase() === 'skill.md') {
+      const isFile = await stat(resolved).then(
+        (info) => info.isFile(),
+        () => false
+      )
+      return isFile ? [dirname(resolved)] : []
+    }
+    return [resolved]
   }
   const normalized = clean.replace(/\/SKILL\.md$/i, '')
   const metaIndex = normalized.search(/[*?[\]]/)
@@ -250,9 +258,10 @@ export async function filterPiManifestRoots(
   }
 
   const isShadowedBySkillDir = async (candidate: string): Promise<boolean> => {
-    const base = manifestRoots.find(
-      (root) => root !== candidate && isPathWithinPackageRoot(root, candidate)
-    )
+    // The deepest declared root is the independent scan that can reach the candidate.
+    const base = manifestRoots
+      .filter((root) => root !== candidate && isPathWithinPackageRoot(root, candidate))
+      .sort((a, b) => b.length - a.length)[0]
     if (!base) {
       return false
     }

@@ -56,7 +56,11 @@ export async function buildSkillDeleteRootSet(input: {
   const cwd = input.target.cwd
   const [claudePluginRoots, piPackageRoots] = await Promise.all([
     cwd ? discoverClaudePluginSkillSources({ homeDir: home, cwd }).catch(() => []) : [],
-    discoverPiPackageSkillSources({ homeDir: home, ...(cwd ? { cwd } : {}) }).catch(() => [])
+    discoverPiPackageSkillSources({
+      homeDir: home,
+      ignoreSkillFilters: true,
+      ...(cwd ? { cwd } : {})
+    }).catch(() => [])
   ])
   return {
     roots: [

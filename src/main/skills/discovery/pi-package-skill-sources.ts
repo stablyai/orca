@@ -92,6 +92,8 @@ export async function discoverPiPackageSkillSources(args: {
   cwd?: string
   env?: NodeJS.ProcessEnv
   skipUserSettings?: boolean
+  /** Delete protection needs every package skill, including ones a settings filter hides from the picker. */
+  ignoreSkillFilters?: boolean
   isPathBlocked?: (path: string) => Promise<boolean>
   unavailableOut?: SkillScanRoot[]
   signal?: AbortSignal
@@ -133,7 +135,7 @@ export async function discoverPiPackageSkillSources(args: {
       if (!resolved) {
         continue
       }
-      if (entry.skills && entry.skills.length === 0) {
+      if (entry.skills && entry.skills.length === 0 && !args.ignoreSkillFilters) {
         resolvedPackages.delete(resolved.packageKey)
         continue
       }
@@ -159,7 +161,7 @@ export async function discoverPiPackageSkillSources(args: {
       }
       if (pkg.fallbackPackageRoot) {
         const exists = await stat(activePackageRoot).then(
-          () => true,
+          (info) => info.isDirectory(),
           () => false
         )
         if (!exists) {
@@ -174,7 +176,7 @@ export async function discoverPiPackageSkillSources(args: {
         labelName: pkg.labelName,
         skillRoots: await resolveSkillRootsForPackage(
           activePackageRoot,
-          pkg.skillsFilter,
+          args.ignoreSkillFilters ? undefined : pkg.skillsFilter,
           args.signal
         )
       }

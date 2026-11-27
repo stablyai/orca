@@ -16,7 +16,12 @@ export async function readSkillMetadataFile(
     const file = await open(pathValue, 'r')
     try {
       signal?.throwIfAborted()
-      const buffer = Buffer.alloc(fileStat.size)
+      // Size the read from the opened handle; the path may have been replaced since stat.
+      const openedStat = await file.stat()
+      if (!openedStat.isFile() || openedStat.size > MAX_SKILL_METADATA_BYTES) {
+        return null
+      }
+      const buffer = Buffer.alloc(openedStat.size)
       const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
       signal?.throwIfAborted()
       return buffer.toString('utf8', 0, bytesRead)
