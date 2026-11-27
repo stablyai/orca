@@ -33,7 +33,8 @@ export function ReopenBrowserPageOnServerButton({
   worktreeId,
   reopenUrl,
   className,
-  variant = 'secondary'
+  variant = 'secondary',
+  caveatTooltip = true
 }: {
   browserPageId: string
   environmentId: string
@@ -41,6 +42,8 @@ export function ReopenBrowserPageOnServerButton({
   reopenUrl: string | null | undefined
   className?: string
   variant?: 'default' | 'secondary'
+  /** Off where the caveat already sits behind its own disclosure. */
+  caveatTooltip?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [pending, setPending] = useState(false)
@@ -94,7 +97,7 @@ export function ReopenBrowserPageOnServerButton({
       className={className}
       disabled={pending}
       aria-busy={pending}
-      title={reopenOnServerCaveat(t)}
+      title={caveatTooltip ? reopenOnServerCaveat(t) : undefined}
       onClick={reopen}
     >
       {/* Both labels share one grid cell, so the swap cannot resize the button mid-action. */}

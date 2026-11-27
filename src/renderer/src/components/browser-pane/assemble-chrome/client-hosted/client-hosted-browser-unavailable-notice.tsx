@@ -61,6 +61,7 @@ export function ClientHostedBrowserUnavailableNotice({
             <ReopenBrowserPageOnServerButton
               className="mt-4"
               variant="default"
+              caveatTooltip={false}
               browserPageId={browserPageId}
               environmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
