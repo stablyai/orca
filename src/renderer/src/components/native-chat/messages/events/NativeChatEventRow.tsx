@@ -24,16 +24,23 @@ export type NativeChatEventBadge = 'running' | 'failed' | 'needs-input' | 'queue
 /** The row's 14px mark with its state in a badge at the bottom right: a spinner while it runs, a red ✕ when it failed. */
 export function NativeChatEventIcon({
   children,
-  badge
+  badge,
+  badgeClassName
 }: {
   children: React.ReactNode
   badge?: NativeChatEventBadge | null
+  badgeClassName?: string
 }): React.JSX.Element {
   return (
     <span className="relative flex size-3.5 items-center justify-center">
       {children}
       {badge ? (
-        <span className="absolute -right-1 -bottom-1 flex size-2.5 items-center justify-center rounded-full bg-chat-pane">
+        <span
+          className={cn(
+            'absolute -right-1 -bottom-1 flex size-2.5 items-center justify-center rounded-full bg-chat-pane',
+            badgeClassName
+          )}
+        >
           {badge === 'running' ? (
             <AgentWorkingSpinner className="size-[7px] border-[1.5px]" />
           ) : badge === 'failed' ? (

@@ -148,9 +148,12 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           }
         }}
       >
-        <span className="flex h-5 shrink-0 items-center">
+        <span className="flex h-5 w-3 shrink-0 items-center justify-center">
           {row?.kind === 'worker' ? (
-            <NativeChatEventIcon badge={workerDockBadge(row)}>
+            <NativeChatEventIcon
+              badge={workerDockBadge(row)}
+              badgeClassName="group-hover/worker:bg-accent group-focus-within/worker:bg-accent"
+            >
               <AgentTypeIcon agentType={row.agent ?? null} size={14} />
             </NativeChatEventIcon>
           ) : (
