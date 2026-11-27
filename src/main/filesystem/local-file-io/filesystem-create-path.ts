@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { lstat, mkdir, open, rm, writeFile } from 'node:fs/promises'
-import { basename, dirname } from 'node:path'
+import { link, lstat, mkdir, open, rm, writeFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
+import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 import { NEW_IPYNB_CONTENT } from '../../../shared/editor/notebooks/new-ipynb-content'
 import { isENOENT } from './filesystem-path-containment'
 
@@ -17,28 +19,42 @@ export async function createLocalFile(filePath: string): Promise<void> {
 }
 
 /**
- * Creates `filePath` holding `sourcePath`'s bytes. Any existing entry, a link included, refuses it;
- * the new file gets the folder's default mode, not the source's.
+ * Creates `filePath` holding `sourcePath`'s bytes, refusing any existing entry (a link included).
+ * The bytes go to a hidden file of our own beside it first, so the name only ever holds the whole
+ * file and nothing else writing that name can mix with our copy. A host crash mid-copy can leave
+ * that hidden `.orca-upload-*` file, never a short file under the real name.
  */
 export async function createLocalFileFromSource(
   sourcePath: string,
   filePath: string
 ): Promise<void> {
-  const handle = await open(filePath, 'wx').catch((error: unknown) => {
-    throw createPathError(error, basename(filePath))
-  })
-  let created: { dev: number; ino: number } | null = null
+  const name = basename(filePath)
+  // No leaf in the name: a long file name plus a suffix could pass the folder's name limit.
+  const tempPath = join(dirname(filePath), `.orca-upload-${randomUUID()}`)
   try {
-    created = await handle.stat()
+    // 'wx' makes the temp ours alone, so removing it below can't take anyone else's file.
+    const handle = await open(tempPath, 'wx').catch((error: unknown) => {
+      throw createPathError(error, name)
+    })
     await pipeline(createReadStream(sourcePath), handle.createWriteStream())
+    await publishNoClobber(tempPath, filePath).catch((error: unknown) => {
+      throw createPathError(error, name)
+    })
+  } finally {
+    await rm(tempPath, { force: true }).catch(() => {})
+  }
+}
+
+// A hard link is an atomic create that fails on a taken name. Volumes without hard links (FAT,
+// some network shares) fall back to the file explorer's no-clobber rename.
+async function publishNoClobber(tempPath: string, filePath: string): Promise<void> {
+  try {
+    await link(tempPath, filePath)
   } catch (error) {
-    await handle.close().catch(() => {})
-    // Remove only the file this call created: something saved over it since is not ours to delete.
-    const current = await lstat(filePath).catch(() => null)
-    if (created && current?.dev === created.dev && current.ino === created.ino) {
-      await rm(filePath, { force: true }).catch(() => {})
+    if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+      throw error
     }
-    throw error
+    await renameLocalPathSerializedByDestination(tempPath, filePath)
   }
 }
 

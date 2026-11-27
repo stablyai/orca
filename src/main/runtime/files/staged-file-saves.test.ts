@@ -287,6 +287,7 @@ describe('a staged upload', () => {
     writeFileSync(taken, 'mine')
     await expect(staged.commitUpload('conn-1', late.saveId, same)).rejects.toThrow('already exists')
     expect(readFileSync(taken, 'utf8')).toBe('mine')
+    expect(readdirSync(root).filter((name) => name.startsWith('.orca-upload-'))).toEqual([])
 
     const save = await staged.begin('conn-1', at(taken), 3)
     await staged.append('conn-1', save.saveId, 0, Buffer.from('new'))
