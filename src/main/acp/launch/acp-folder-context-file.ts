@@ -81,6 +81,29 @@ export async function writeFolderContextFile(
   )
 }
 
+const folderContextSlots = new Map<string, Promise<void>>()
+
+/** Serializes writes to one folder-context file: the slot is held until the returned release
+ *  runs, which a session-open hook runs only after the open read the file, so two chats starting
+ *  in the same folder cannot read each other's text. */
+export async function acquireFolderContextSlot(cwd: string, path: string): Promise<() => void> {
+  const target = join(await realpath(cwd).catch(() => cwd), path)
+  const previous = folderContextSlots.get(target) ?? Promise.resolve()
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const tail = previous.then(() => gate)
+  folderContextSlots.set(target, tail)
+  await previous
+  return () => {
+    release()
+    if (folderContextSlots.get(target) === tail) {
+      folderContextSlots.delete(target)
+    }
+  }
+}
+
 /** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or
  *  removes only Orca's block from a file the user wrote. A symlink, or a file that cannot be
  *  read as UTF-8, stays. */

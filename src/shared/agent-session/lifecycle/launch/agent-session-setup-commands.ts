@@ -5,7 +5,7 @@ import {
   type AgentStartupShell
 } from '../../../agent-launch/startup/tui-agent-startup-shell'
 
-/** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer. */
+/** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer URL; `windowsInstallCommand` is a direct PowerShell command line for installers that publish no .ps1. */
 export const AGENT_SESSION_SETUP_COMMANDS = [
   {
     agent: 'claude',
@@ -134,7 +134,10 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     // Signs in via Mistral AI Studio OAuth (browser-auth) or MISTRAL_API_KEY.
     loginCommand: ['vibe-acp', '--setup'],
     // The documented POSIX install; it bootstraps uv itself, so it works without a prior uv.
-    installCommand: 'curl -LsSf https://mistral.ai/vibe/install.sh | bash'
+    installCommand: 'curl -LsSf https://mistral.ai/vibe/install.sh | bash',
+    // Vibe publishes no install.ps1; bootstrap uv, then install vibe through it.
+    windowsInstallCommand:
+      'irm https://astral.sh/uv/install.ps1 | iex; uv tool install --python 3.12 mistral-vibe'
   }
 ] as const
 
@@ -212,9 +215,13 @@ export function agentSessionInstallCommand(
   }
   if (hostPlatform === 'win32') {
     // Why powershell.exe: one line that runs the same from PowerShell, cmd and Git Bash terminals.
-    return 'windowsInstallScript' in entry
-      ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm ${entry.windowsInstallScript} | iex"`
-      : null
+    if ('windowsInstallScript' in entry) {
+      return `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm ${entry.windowsInstallScript} | iex"`
+    }
+    if ('windowsInstallCommand' in entry) {
+      return `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "${entry.windowsInstallCommand}"`
+    }
+    return null
   }
   return 'installCommand' in entry ? entry.installCommand : null
 }

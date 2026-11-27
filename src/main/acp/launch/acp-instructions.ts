@@ -10,7 +10,11 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
-import { removeFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
+import {
+  acquireFolderContextSlot,
+  removeFolderContextFile,
+  writeFolderContextFile
+} from './acp-folder-context-file'
 import { clearEarlierRunsOnce } from './acp-instructions-earlier-runs'
 import {
   openCodeSourceConfigDirectory,
@@ -249,12 +253,24 @@ export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, 
 
 // Vibe builds its system prompt from AGENTS.md files at session open (walk-up from the cwd plus
 // $VIBE_HOME/AGENTS.md) and keeps it with the session; new_session discards extra kwargs, so
-// sessionMeta cannot carry the text. The write is held only across the open, so two chats
-// starting in one folder cannot read each other's instructions.
+// sessionMeta cannot carry the text. The per-file slot is held until the open returns, so two
+// chats starting in one folder cannot read each other's instructions.
 export const deliverVibeInstructions = keptWithSession(async ({ text }) => ({
   aroundSessionOpen: async (cwd) => {
-    await writeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe', text)
-    return () => removeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe')
+    const release = await acquireFolderContextSlot(cwd, 'AGENTS.md')
+    try {
+      await writeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe', text)
+    } catch (error) {
+      release()
+      throw error
+    }
+    return async () => {
+      try {
+        await removeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe')
+      } finally {
+        release()
+      }
+    }
   }
 }))
 

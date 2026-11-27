@@ -14,7 +14,11 @@ import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { removeFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
+import {
+  acquireFolderContextSlot,
+  removeFolderContextFile,
+  writeFolderContextFile
+} from './acp-folder-context-file'
 
 // Runs once right after the next read of the context file, as a user's editor saving meanwhile.
 let saveAfterNextRead: (() => Promise<void>) | null = null
@@ -181,4 +185,28 @@ it.each([
   await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
   expect(await readFile(path, 'utf8')).toBe(saved)
   expect(await readdir(dir)).toEqual(['GEMINI.md'])
+})
+
+describe('acquireFolderContextSlot', () => {
+  it('serializes slots for one file and releases only when told', async () => {
+    const events: string[] = []
+    const first = await acquireFolderContextSlot(dir, 'AGENTS.md')
+    const secondStarted = acquireFolderContextSlot(dir, 'AGENTS.md').then((release) => {
+      events.push('second-acquired')
+      return release
+    })
+    await Promise.resolve()
+    expect(events).toEqual([])
+    first()
+    const secondRelease = await secondStarted
+    expect(events).toEqual(['second-acquired'])
+    secondRelease()
+  })
+
+  it('does not block slots for a different file in the same folder', async () => {
+    const first = await acquireFolderContextSlot(dir, 'AGENTS.md')
+    const second = await acquireFolderContextSlot(dir, '.hermes.md')
+    first()
+    second()
+  })
 })
