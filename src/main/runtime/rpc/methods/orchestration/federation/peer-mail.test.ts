@@ -276,7 +276,7 @@ describe('agent mail between paired Orca servers', () => {
     return notes
   }
 
-  async function botAsksAcross(opener: unknown) {
+  async function botAsksAcross(opener: unknown, to = 'bot:Docs') {
     receivingBotHome(false, { opener })
     const send = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.send')!
     const sessionId = CHAT_ON_A.slice('orca_session_id:'.length)
@@ -291,7 +291,7 @@ describe('agent mail between paired Orca servers', () => {
       }
     }
     await send.handler(
-      { from: CHAT_ON_A, on: 'devB', to: 'bot:Docs', subject: 'Review it', type: 'question' },
+      { from: CHAT_ON_A, on: 'devB', to, subject: 'Review it', type: 'question' },
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
       context as unknown as RpcContext
     )
@@ -363,25 +363,37 @@ describe('agent mail between paired Orca servers', () => {
     )
   })
 
-  it("holds a teammate's turn on A to the teammate on B, never to the owner alone", async () => {
-    const record = await botAsksAcross({
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'ask Docs to review' }],
-      origin: 'connector',
-      asker: {
+  it.each(['bot:Docs', CHAT_ON_B])(
+    "holds a teammate's turn on A to the teammate on B, never to the owner alone (to %s)",
+    async (to) => {
+      const record = await botAsksAcross(
+        {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'ask Docs to review' }],
+          origin: 'connector',
+          asker: {
+            source: 'slack',
+            userId: 'U_DANA',
+            name: 'Dana',
+            role: 'member',
+            place: { kind: 'public_channel', id: 'C1' }
+          }
+        },
+        to
+      )
+      const dana = {
+        kind: 'person',
         source: 'slack',
         userId: 'U_DANA',
         name: 'Dana',
-        role: 'member',
-        place: { kind: 'public_channel', id: 'C1' }
+        role: 'member'
       }
-    })
-    const dana = { kind: 'person', source: 'slack', userId: 'U_DANA', name: 'Dana', role: 'member' }
-    expect(record.askers).toMatchObject([{ kind: 'owner' }, dana])
-    expect(record.askedBy).toMatchObject([{ kind: 'owner' }, dana])
-    expect(turnActsForOwner({ askers: record.askers })).toBe(false)
-  })
+      expect(record.askers).toMatchObject([{ kind: 'owner' }, dana])
+      expect(record.askedBy).toMatchObject([{ kind: 'owner' }, dana])
+      expect(turnActsForOwner({ askers: record.askers })).toBe(false)
+    }
+  )
 
   it("keeps the owner's own turn on A the owner's on B", async () => {
     const record = await botAsksAcross({

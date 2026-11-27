@@ -13,6 +13,7 @@ import {
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import type { RpcContext } from '../../../core'
 import { parseBotAddress } from '../../../../../../shared/bot-roster'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { peerMailLocalCaller } from './peer-mail-local-caller'
 import { sendClientAsk } from './client-ask-send'
@@ -69,22 +70,24 @@ export async function sendPeerMail(args: {
   const toBot =
     parseBotAddress(to) !== null || params.chat !== undefined || params.item !== undefined
   const server = await requirePeerMailServer(runtime, params.on, toBot, type)
-  // Who the sending turn acts for, as a local send records it, so the receiver never reads it as the owner's alone.
-  const acting = toBot
-    ? await readActingSender(
-        runtime,
-        runtime.getOrchestrationDb(),
-        sessionCallerOf(args.orchestrationCaller)?.sessionId,
-        {
-          sender: orchestrationCallerIdentity(runtime, {
-            handle: caller.address,
-            paneKey: caller.paneKey,
-            session: args.orchestrationCaller
-          })
-        },
-        null
-      )
-    : null
+  // Who the sending turn acts for, as a local send records it, so the receiver never reads it as the
+  // owner's alone. A session address may be a bot's chat there, which only that computer can tell.
+  const acting =
+    toBot || parseOrcaSessionAddress(to) !== null
+      ? await readActingSender(
+          runtime,
+          runtime.getOrchestrationDb(),
+          sessionCallerOf(args.orchestrationCaller)?.sessionId,
+          {
+            sender: orchestrationCallerIdentity(runtime, {
+              handle: caller.address,
+              paneKey: caller.paneKey,
+              session: args.orchestrationCaller
+            })
+          },
+          null
+        )
+      : null
   const conversation = runtime.getOrchestrationDb().openHomePeerMailConversation({
     environmentId: server.environmentId,
     peerFingerprint: peerMailPairing(server),
