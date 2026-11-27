@@ -192,6 +192,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const [open, setOpen] = useState(false)
   const [armed, setArmed] = useState<Armed | null>(null)
+  const disarm = useCallback((): void => setArmed(null), [])
   const toggleRef = useRef<HTMLButtonElement>(null)
   const bulkActionRef = useRef<HTMLDivElement>(null)
   const [snapshot, setSnapshot] = useState<Snapshot>({ phase: 'owed' })
@@ -267,7 +268,6 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   }
 
   const focusServers = (): void => toggleRef.current?.focus()
-  const disarm = (): void => setArmed(null)
   const arm = (serverId: string | null): void => {
     setArmed({ serverId, key: keyOf(targetsOf(serverId)) })
   }

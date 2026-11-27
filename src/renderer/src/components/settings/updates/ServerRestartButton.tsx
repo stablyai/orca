@@ -20,6 +20,7 @@ type ServerRestartButtonProps = {
   target?: string
   describedBy?: string
   onArm: () => void
+  /** Must be stable (useCallback): the armed listeners re-subscribe when it changes. */
   onDisarm: () => void
   onConfirm: () => void
 }
@@ -43,8 +44,6 @@ export function ServerRestartButton({
   onConfirm
 }: ServerRestartButtonProps): React.JSX.Element {
   const ref = useRef<HTMLButtonElement>(null)
-  const disarmRef = useRef(onDisarm)
-  disarmRef.current = onDisarm
 
   useEffect(() => {
     if (!armed) {
@@ -53,12 +52,12 @@ export function ServerRestartButton({
     const doc = ref.current?.ownerDocument ?? document
     const onPointerDown = (event: PointerEvent): void => {
       if (!(event.target instanceof Node) || !ref.current?.contains(event.target)) {
-        disarmRef.current()
+        onDisarm()
       }
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        disarmRef.current()
+        onDisarm()
       }
     }
     doc.addEventListener('pointerdown', onPointerDown, true)
@@ -67,7 +66,7 @@ export function ServerRestartButton({
       doc.removeEventListener('pointerdown', onPointerDown, true)
       doc.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [armed])
+  }, [armed, onDisarm])
 
   const button = (
     <Button
