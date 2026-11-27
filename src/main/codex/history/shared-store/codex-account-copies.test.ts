@@ -49,6 +49,8 @@ function run(
     acl?: (paths: string[]) => Set<string> | null
     /** Moves never answer, as on a hung mount; `events` records the order of steps. */
     hangMove?: boolean
+    /** The open check never answers, as on a stalled volume. */
+    hangOpen?: boolean
     /** Moves happen, but their answer never arrives: a move that lands after the locks went. */
     lateMove?: boolean
     events?: string[]
@@ -62,7 +64,12 @@ function run(
     version: `test-${Math.random()}`,
     moveOutcome: () => options.outcome ?? 'moved',
     shouldStop: () => false,
-    findOpen: async (paths) => (options.open ? options.open(paths) : new Set()),
+    findOpen: async (paths) =>
+      options.hangOpen
+        ? new Promise<never>(() => {})
+        : options.open
+          ? options.open(paths)
+          : new Set(),
     findAcl: async (paths) => (options.acl ? options.acl([...paths]) : new Set()),
     holdLocks: async () => {
       if (options.locks === false) {
@@ -266,7 +273,18 @@ describe('cleanUpCodexAccountCopies', () => {
 
     expect(await run({ hangMove: true, events })).toBeNull()
 
-    expect(events.slice(events.indexOf('trash'))).toEqual(['trash', 'release', 'stop'])
+    expect(events.slice(events.indexOf('trash'))).toEqual(['trash', 'stop', 'release'])
+    expect(existsSync(copy)).toBe(true)
+  })
+
+  it('lets go of the locks on time when the open check stalls under them', async () => {
+    put(storeFile(), LINE_1)
+    const copy = put(conflictCopy(), LINE_1)
+    const events: string[] = []
+
+    expect(await run({ hangOpen: true, events })).toBeNull()
+
+    expect(events.slice(events.indexOf('hold'))).toEqual(['hold', 'stop', 'release'])
     expect(existsSync(copy)).toBe(true)
   })
 
@@ -375,6 +393,19 @@ describe('trashed copies', () => {
 
     expect(await afterGrace()).toMatchObject({ deleted: 0, restored: 1 })
     expect(readFileSync(copy, 'utf8')).toBe(LINE_1 + LINE_2)
+  })
+
+  it('never puts a copy back over a file that took its place', async () => {
+    put(storeFile(), LINE_1 + LINE_2)
+    const copy = put(conflictCopy(), LINE_1 + LINE_2)
+    await run()
+
+    writeFileSync(storeFile(), LINE_1.slice(0, 4))
+    put(copy, 'newer')
+
+    expect(await afterGrace()).toMatchObject({ deleted: 0, restored: 0 })
+    expect(readFileSync(copy, 'utf8')).toBe('newer')
+    expect(trashed().map((path) => readFileSync(path, 'utf8'))).toEqual([LINE_1 + LINE_2])
   })
 
   it('puts a copy back when Codex compressed its original meanwhile, never decoding it', async () => {

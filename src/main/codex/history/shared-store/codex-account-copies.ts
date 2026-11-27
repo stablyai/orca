@@ -87,7 +87,11 @@ export async function verifyCodexAccountCopies(args: {
   }
   const kept = record.differs
   const progress = record.progress ?? {}
+  const remembered = record.verified ?? {}
   const nextKept: KeptCopies = {}
+  const nextVerified: KeptCopies = {}
+  // Passed last launch with both files unchanged, but not moved: offered after fresh copies, unread.
+  const retry: VerifiedCopy[] = []
   const nextProgress: CompareProgress = {}
   const visited = new Set<string>()
   // Pairs larger than what's left of the budget: compared after every other copy, from saved progress.
@@ -115,6 +119,7 @@ export async function verifyCodexAccountCopies(args: {
       nextProgress[name] = { key, matched: result.matched }
       tally.deferred += 1
     } else if (result.holds) {
+      nextVerified[name] = key
       verified.push({
         copy,
         original: original.path,
@@ -186,6 +191,17 @@ export async function verifyCodexAccountCopies(args: {
           tally.differs += 1
           continue
         }
+        if (remembered[name] === key) {
+          // The move rechecks both keys under the lock, and the trash compares again in full.
+          nextVerified[name] = key
+          retry.push({
+            copy,
+            original: original.path,
+            copyKey: fileKey(copyStats),
+            originalKey: fileKey(original.stats)
+          })
+          continue
+        }
         const from = progress[name]?.key === key ? progress[name].matched : 0
         const candidate = { name, key, copy, copyStats, original, from }
         // The most the comparison reads of both files.
@@ -218,7 +234,13 @@ export async function verifyCodexAccountCopies(args: {
       tally.error += 1
     }
   }
+  verified.push(...retry.slice(0, Math.max(0, MAX_VERIFIED_PER_HOME - verified.length)))
   if (outOfTime) {
+    for (const [name, key] of Object.entries(remembered)) {
+      if (!visited.has(name)) {
+        nextVerified[name] = key
+      }
+    }
     for (const [name, key] of Object.entries(kept)) {
       if (!visited.has(name)) {
         nextKept[name] = key
@@ -245,7 +267,8 @@ export async function verifyCodexAccountCopies(args: {
   writeKeptCopies(args.accountHome, {
     differs: nextKept,
     settled: settled ? stamp : null,
-    progress: nextProgress
+    progress: nextProgress,
+    verified: nextVerified
   })
   return { verified, tally, bytesRead }
 }

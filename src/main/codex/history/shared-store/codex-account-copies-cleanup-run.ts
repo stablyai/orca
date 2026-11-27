@@ -62,7 +62,8 @@ export class CodexAccountCopiesCleanupRun {
       return
     }
     const homes = this.deps.homes().filter((home) => this.deps.moveOutcome(home) === 'moved')
-    if (homes.length === 0) {
+    // Only macOS and Windows can tell open files: elsewhere no worker starts.
+    if (homes.length === 0 || (process.platform !== 'darwin' && process.platform !== 'win32')) {
       return
     }
     const worker = startCodexAccountCopiesWorker()

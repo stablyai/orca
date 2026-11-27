@@ -12,10 +12,10 @@ import {
 import {
   busyOnWindows,
   homePath,
-  readEntries,
+  newListName,
   safeToRemove,
   trashFolder,
-  writeEntries,
+  writeList,
   type TrashEntry
 } from './codex-account-copies-trash-entries'
 
@@ -67,10 +67,8 @@ export function moveCheckedCopiesToTrash(
     return tally
   }
   let trash: string | null = null
-  let entries: TrashEntry[] | null = null
   try {
     trash = trashFolder(accountHome, true)
-    entries = trash ? readEntries(trash) : null
   } catch {
     // Kept below.
   }
@@ -88,7 +86,14 @@ export function moveCheckedCopiesToTrash(
     } satisfies TrashEntry
   }))
   // Listed before any move, so a copy in the trash always has its origin and checks on record.
-  if (!trash || !entries || !writeEntries(trash, [...entries, ...moving.map((m) => m.entry)])) {
+  if (
+    !trash ||
+    !writeList(
+      trash,
+      newListName(now),
+      moving.map((m) => m.entry)
+    )
+  ) {
     tally.error += passing.length
     return tally
   }

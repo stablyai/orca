@@ -154,16 +154,22 @@ export async function cleanUpCodexAccountCopies(args: {
     addTally(total, rechecked.tally)
     for (let start = 0; start < rechecked.ready.length; start += OPEN_CHECK_BATCH) {
       const batch = rechecked.ready.slice(start, start + OPEN_CHECK_BATCH)
+      if (Date.now() > deadline || !moved(accountHome)) {
+        total.deferred += rechecked.ready.length - start
+        break
+      }
       const paths = batch.map((copy) => copy.copy)
       const open = await findOpen(paths, { shouldStop: args.shouldStop })
       const withAcl = open ? await findAcl(paths) : null
       if (args.shouldStop()) {
         return null
       }
-      const closed =
-        open && withAcl && moved(accountHome)
-          ? batch.filter((copy) => !open.has(copy.copy) && !withAcl.has(copy.copy))
-          : []
+      if (!open || !withAcl) {
+        // The checks can't answer now: the rest waits for a later launch, not one probe each.
+        total.open += rechecked.ready.length - start
+        break
+      }
+      const closed = batch.filter((copy) => !open.has(copy.copy) && !withAcl.has(copy.copy))
       total.open += batch.length - closed.length
       if (closed.length === 0) {
         continue
@@ -218,11 +224,15 @@ export async function cleanUpCodexAccountCopies(args: {
       // macOS: an ACL can let another user write without any mode bit, and lsof can't see them.
       // Checked before the hold, so Codex never waits on it; the trash's recheck looks again.
       const withAcl = await findAcl(batch.map((copy) => copy.copy))
-      const aclKept = withAcl ? batch.filter((copy) => withAcl.has(copy.copy)) : []
+      if (!withAcl) {
+        total.open += checked.verified.length - start
+        break
+      }
+      const aclKept = batch.filter((copy) => withAcl.has(copy.copy))
       if (aclKept.length > 0) {
         await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKept })
       }
-      const candidates = withAcl ? batch.filter((copy) => !withAcl.has(copy.copy)) : []
+      const candidates = batch.filter((copy) => !withAcl.has(copy.copy))
       total.open += batch.length - candidates.length
       if (candidates.length === 0) {
         continue
@@ -234,18 +244,32 @@ export async function cleanUpCodexAccountCopies(args: {
         total.busy += candidates.length
         continue
       }
+      // Everything under the hold shares one deadline, the open check included: a stalled disk
+      // can delay a step, never the release.
       const releaseBy = Date.now() + lockHoldMs
       let stuck = false
       try {
-        const open = await findOpen(
-          candidates.map((copy) => copy.copy),
-          { shouldStop: args.shouldStop }
+        const probe = await withTimeoutResult(
+          findOpen(
+            candidates.map((copy) => copy.copy),
+            { shouldStop: args.shouldStop }
+          ),
+          lockHoldMs
         )
+        if (!probe.ok) {
+          stuck = true
+          return null
+        }
         if (args.shouldStop()) {
           return null
         }
+        const open = probe.value
+        if (!open) {
+          total.open += checked.verified.length - start
+          break
+        }
         const closed =
-          open && hold.stillHeld() && moved(accountHome)
+          hold.stillHeld() && moved(accountHome)
             ? candidates.filter((copy) => !open.has(copy.copy))
             : []
         total.open += candidates.length - closed.length
@@ -262,7 +286,7 @@ export async function cleanUpCodexAccountCopies(args: {
           timeLeft
         )
         if (!answer.ok) {
-          // A move stuck on a hung disk: the locks go now, so Codex never waits on it. A move
+          // A move stuck on a hung disk: the locks go now, so Codex never waits on it. A rename
           // that still lands later loses nothing, and the trash is checked again before deleting.
           stuck = true
           return null
@@ -275,10 +299,11 @@ export async function cleanUpCodexAccountCopies(args: {
         addTally(total, trashed.tally)
         trashedHere += trashed.tally.trashed
       } finally {
-        await hold.release()
         if (stuck) {
-          await args.worker.stop()
+          // Ended first, so a move still under way can't start the next rename after the release.
+          void args.worker.stop()
         }
+        await hold.release()
       }
     }
     // Once per home and outside the locks: empty folders only, so Codex never waits on the walk.

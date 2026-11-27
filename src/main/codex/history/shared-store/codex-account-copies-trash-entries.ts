@@ -1,7 +1,9 @@
+import { randomBytes } from 'node:crypto'
 import {
   type BigIntStats,
   mkdirSync,
   readFileSync,
+  readdirSync,
   renameSync,
   unlinkSync,
   writeFileSync
@@ -20,7 +22,9 @@ import {
 
 /** How long a moved copy waits before its recheck may delete it: room to undo a bad release. */
 export const TRASH_GRACE_MS = 7 * 24 * 60 * 60_000
-export const ENTRIES_FILE = 'entries.json'
+// One list per moved batch, named for its move time: a launch reads only the lists that are due,
+// and rewrites only the ones it changed, so bookkeeping grows with the copies, never their square.
+const LIST_FILE = /^list-([0-9a-z]+)-[0-9a-f]+\.json$/
 // Where a copy may be put back: the folders sharing left copies in, never elsewhere in the home.
 export const RESTORE_ROOT = new RegExp(
   `^(?:(?:sessions|archived_sessions)(?:\\.\\d+)?\\.orca-profile-merge|${SET_ASIDE_ROLLOUTS_DIR.replaceAll('.', '\\.')})$`
@@ -51,16 +55,21 @@ function isEntry(value: unknown): value is TrashEntry {
   )
 }
 
-/** Null when the list exists but can't be read: nothing in that trash is moved, restored or deleted. */
-export function readEntries(trash: string): TrashEntry[] | null {
-  let text: string
+export const newListName = (now: number): string =>
+  `list-${now.toString(36)}-${randomBytes(4).toString('hex')}.json`
+
+/** The trash's lists, each with the time its batch was moved. */
+export function listFiles(trash: string): { name: string; movedAt: number }[] {
+  return readdirSync(trash).flatMap((name) => {
+    const match = LIST_FILE.exec(name)
+    return match ? [{ name, movedAt: Number.parseInt(match[1], 36) }] : []
+  })
+}
+
+/** Null when the list can't be read: nothing it names is restored or deleted. */
+export function readList(trash: string, list: string): TrashEntry[] | null {
   try {
-    text = readFileSync(join(trash, ENTRIES_FILE), 'utf8')
-  } catch (error) {
-    return errnoCodeOrUnknown(error) === 'ENOENT' ? [] : null
-  }
-  try {
-    const parsed: unknown = JSON.parse(text)
+    const parsed: unknown = JSON.parse(readFileSync(join(trash, list), 'utf8'))
     const entries =
       typeof parsed === 'object' && parsed !== null && 'entries' in parsed ? parsed.entries : null
     return Array.isArray(entries) ? entries.filter(isEntry) : null
@@ -69,8 +78,17 @@ export function readEntries(trash: string): TrashEntry[] | null {
   }
 }
 
-export function writeEntries(trash: string, entries: TrashEntry[]): boolean {
-  const target = join(trash, ENTRIES_FILE)
+/** Writes a list whole (staged, then renamed), or removes it once it names nothing. */
+export function writeList(trash: string, list: string, entries: TrashEntry[]): boolean {
+  const target = join(trash, list)
+  if (entries.length === 0) {
+    try {
+      unlinkSync(target)
+      return true
+    } catch {
+      return false
+    }
+  }
   const staged = `${target}.${process.pid}.tmp`
   try {
     writeFileSync(staged, `${JSON.stringify({ version: 1, entries })}\n`)
@@ -96,7 +114,7 @@ export function trashFolder(accountHome: string, create: boolean): string | null
   return stats?.isDirectory() &&
     !stats.isSymbolicLink() &&
     hasNoLinkBelowHome(accountHome, trash) &&
-    isInsideHome(accountHome, join(trash, ENTRIES_FILE))
+    isInsideHome(accountHome, join(trash, 'list'))
     ? trash
     : null
 }

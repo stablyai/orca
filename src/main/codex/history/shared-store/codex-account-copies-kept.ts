@@ -15,9 +15,20 @@ export type KeptCopiesRecord = {
   settled: string | null
   /** Bytes a comparison matched before its launch ran out, while the pair keeps `key`. */
   progress?: CompareProgress
+  /** Copies whose comparison passed with both files at `key`, not yet moved (open, busy). */
+  verified?: KeptCopies
 }
 
 export type CompareProgress = Record<string, { key: string; matched: number }>
+
+function readKeys(value: unknown): KeptCopies {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+  )
+}
 
 function readProgress(value: unknown): CompareProgress {
   if (!value || typeof value !== 'object') {
@@ -47,13 +58,10 @@ export function readKeptCopies(accountHome: string): KeptCopiesRecord {
         'settled' in parsed && typeof parsed.settled === 'string' ? parsed.settled : null
       if (differs && typeof differs === 'object') {
         return {
-          differs: Object.fromEntries(
-            Object.entries(differs).filter((entry): entry is [string, string] => {
-              return typeof entry[1] === 'string'
-            })
-          ),
+          differs: readKeys(differs),
           settled,
-          progress: readProgress('progress' in parsed ? parsed.progress : null)
+          progress: readProgress('progress' in parsed ? parsed.progress : null),
+          verified: readKeys('verified' in parsed ? parsed.verified : null)
         }
       }
     }
@@ -66,12 +74,15 @@ export function readKeptCopies(accountHome: string): KeptCopiesRecord {
 // Only ever skips work: a stale entry keeps a copy, never deletes one.
 export function writeKeptCopies(
   accountHome: string,
-  { differs, settled, progress = {} }: KeptCopiesRecord
+  { differs, settled, progress = {}, verified = {} }: KeptCopiesRecord
 ): void {
   const target = join(accountHome, KEPT_COPIES_FILE)
   const staged = `${target}.${process.pid}.tmp`
   try {
-    writeFileSync(staged, `${JSON.stringify({ version: 1, differs, settled, progress })}\n`)
+    writeFileSync(
+      staged,
+      `${JSON.stringify({ version: 1, differs, settled, progress, verified })}\n`
+    )
     renameSync(staged, target)
   } catch {
     try {

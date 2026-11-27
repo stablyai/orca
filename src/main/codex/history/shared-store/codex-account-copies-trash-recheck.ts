@@ -1,8 +1,9 @@
 import {
   type BigIntStats,
+  linkSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
-  renameSync,
   rmdirSync,
   unlinkSync
 } from 'node:fs'
@@ -21,42 +22,70 @@ import {
 } from './codex-account-copy-checks'
 import {
   busyOnWindows,
-  ENTRIES_FILE,
-  readEntries,
+  listFiles,
+  readList,
   RESTORE_ROOT,
   safeToRemove,
   trashFolder,
   TRASH_GRACE_MS,
-  writeEntries,
+  writeList,
   type TrashEntry
 } from './codex-account-copies-trash-entries'
 
 // Sync file calls on purpose: this runs on the copies cleanup's own worker thread.
 
-/** Puts a copy back where it was; false when that place is taken or isn't safely inside the home. */
+// What one launch's open checks and deletes can get through; the rest waits for a later launch.
+const MAX_READY_PER_HOME = 5_000
+
+/** Makes each missing folder of `parts` under the home, one level at a time; false on a link. */
+function makeFolders(accountHome: string, parts: string[]): boolean {
+  let current = accountHome
+  for (const part of parts) {
+    current = join(current, part)
+    if (!lstatOrNull(current)) {
+      mkdirSync(current)
+    }
+    const stats = lstatSync(current)
+    if (!stats.isDirectory() || stats.isSymbolicLink()) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Puts a copy back where it was, never over another file (a hard link fails on one that exists);
+ * false when that place is taken or isn't safely inside the home.
+ */
 function restore(accountHome: string, path: string, entry: TrashEntry): boolean {
   const parts = entry.from.split('/')
   if (!RESTORE_ROOT.test(parts[0]) || parts.some((part) => part === '' || part === '..')) {
     return false
   }
   const target = join(accountHome, ...parts)
-  if (lstatOrNull(target)) {
+  const there = lstatOrNull(target)
+  const here = lstatOrNull(path)
+  // A restore cut short after its link: both names hold the same file.
+  if (there && here && there.dev === here.dev && there.ino === here.ino) {
+    unlinkSync(path)
+    return true
+  }
+  if (there || !makeFolders(accountHome, parts.slice(0, -1))) {
     return false
   }
-  mkdirSync(dirname(target), { recursive: true })
   if (!hasNoLinkBelowHome(accountHome, dirname(target)) || !isInsideHome(accountHome, target)) {
     return false
   }
-  renameSync(path, target)
+  linkSync(path, target)
+  unlinkSync(path)
   return true
 }
-
-type DueEntry = { entry: TrashEntry; path: string; stats: BigIntStats }
 
 /**
  * Rechecks, with no lock held, each copy that has waited out its grace period: one whose
  * ~/.codex original still holds every byte, both files unchanged, is returned for the caller's
  * open check and `deleteTrashedCopies`; one that no longer qualifies goes back where it was.
+ * Only lists already due are read, and only changed ones are written.
  */
 export function recheckTrashedCopies(args: {
   accountHome: string
@@ -67,73 +96,81 @@ export function recheckTrashedCopies(args: {
   const tally = emptyTally()
   const ready: VerifiedCopy[] = []
   const trash = trashFolder(args.accountHome, false)
-  const entries = trash ? readEntries(trash) : []
-  if (!trash || !entries) {
-    tally.error += trash ? 1 : 0
+  if (!trash) {
     return { ready, tally, bytesRead: 0 }
   }
   const now = args.now ?? Date.now()
-  const next: TrashEntry[] = []
-  const due: DueEntry[] = []
-  for (const entry of entries) {
-    const path = join(trash, basename(entry.name))
-    const stats = lstatOrNull(path)
-    if (!stats) {
-      // Listed, but its move never happened; dropped once no late move could still land.
-      if (now - entry.movedAt < TRASH_GRACE_MS) {
-        next.push(entry)
-      }
-      continue
-    }
-    if (now - entry.movedAt < TRASH_GRACE_MS) {
-      next.push(entry)
-    } else {
-      due.push({ entry, path, stats })
+  const lists = listFiles(trash)
+    .filter((list) => now - list.movedAt >= TRASH_GRACE_MS)
+    .sort((a, b) => a.movedAt - b.movedAt)
+  let bytesRead = 0
+  const budget = {
+    left: () => args.maxBytes - bytesRead,
+    spend: (n: number) => {
+      bytesRead += n
     }
   }
-  // Smallest first: one huge copy can't hold back the rest, and it resumes where it stopped.
-  due.sort((a, b) => Number(a.stats.size - b.stats.size))
-  let bytesRead = 0
-  for (const { entry, path, stats } of due) {
-    let reason: keyof CopiesTally | null = null
-    try {
-      reason = recheckOne(
-        args,
-        entry,
-        path,
-        stats,
-        ready,
-        () => args.maxBytes - bytesRead,
-        (n) => {
-          bytesRead += n
-        }
-      )
-    } catch {
-      reason = 'error'
-    }
-    if (reason === null) {
-      // Listed until its delete.
-      next.push(entry)
+  for (const list of lists) {
+    if (ready.length >= MAX_READY_PER_HOME || Date.now() > args.deadline) {
+      tally.deferred += 1
       continue
     }
-    if (reason === 'deferred' || reason === 'error') {
-      tally[reason] += 1
-      next.push(entry)
+    const entries = readList(trash, list.name)
+    if (!entries) {
+      tally.error += 1
       continue
     }
-    try {
-      if (restore(args.accountHome, path, entry)) {
-        tally.restored += 1
-        tally[reason] += 1
+    const next: TrashEntry[] = []
+    let changed = false
+    // Smallest first: one huge copy can't hold back the rest, and it resumes where it stopped.
+    const present = entries
+      .map((entry) => ({ entry, path: join(trash, basename(entry.name)) }))
+      .map((item) => ({ ...item, stats: lstatOrNull(item.path) }))
+      .sort((a, b) => Number((a.stats?.size ?? 0n) - (b.stats?.size ?? 0n)))
+    for (const { entry, path, stats } of present) {
+      if (!stats) {
+        // Listed, but its move never happened (the list is older than any late move).
+        changed = true
         continue
       }
-      tally.error += 1
-    } catch (error) {
-      tally[busyOnWindows(error) ? 'open' : 'error'] += 1
+      const before = entry.progress?.matched
+      let reason: keyof CopiesTally | null
+      try {
+        reason =
+          ready.length >= MAX_READY_PER_HOME
+            ? 'deferred'
+            : recheckOne(args, entry, list.name, path, stats, ready, budget)
+      } catch {
+        reason = 'error'
+      }
+      changed ||= entry.progress?.matched !== before
+      if (reason === null) {
+        // Listed until its delete.
+        next.push(entry)
+        continue
+      }
+      if (reason === 'deferred' || reason === 'error') {
+        tally[reason] += 1
+        next.push(entry)
+        continue
+      }
+      try {
+        if (restore(args.accountHome, path, entry)) {
+          tally.restored += 1
+          tally[reason] += 1
+          changed = true
+          continue
+        }
+        tally.error += 1
+      } catch (error) {
+        tally[busyOnWindows(error) ? 'open' : 'error'] += 1
+      }
+      next.push(entry)
     }
-    next.push(entry)
+    if (changed) {
+      writeList(trash, list.name, next)
+    }
   }
-  writeEntries(trash, next)
   return { ready, tally, bytesRead }
 }
 
@@ -144,11 +181,11 @@ export function recheckTrashedCopies(args: {
 function recheckOne(
   args: { accountHome: string; deadline: number },
   entry: TrashEntry,
+  list: string,
   path: string,
   stats: BigIntStats,
   ready: VerifiedCopy[],
-  bytesLeft: () => number,
-  spend: (bytes: number) => void
+  budget: { left: () => number; spend: (bytes: number) => void }
 ): keyof CopiesTally | null {
   if (
     !stats.isFile() ||
@@ -183,11 +220,11 @@ function recheckOne(
   }
   const pairKey = `${trashKey(stats)}|${fileKey(original)}`
   const from = entry.progress?.key === pairKey ? entry.progress.matched : 0
-  const allowance = Math.min(Number(stats.size) - from, Math.floor((bytesLeft() - 1) / 2))
+  const allowance = Math.min(Number(stats.size) - from, Math.floor((budget.left() - 1) / 2))
   if (allowance <= 0 && Number(stats.size) > from) {
     return 'deferred'
   }
-  spend(allowance * 2 + 1)
+  budget.spend(allowance * 2 + 1)
   const result = originalHoldsCopy(path, entry.original, stats.size, {
     from,
     maxBytes: allowance,
@@ -215,7 +252,8 @@ function recheckOne(
     copy: path,
     original: entry.original,
     copyKey: trashKey(stats),
-    originalKey: fileKey(original)
+    originalKey: fileKey(original),
+    list
   })
   return null
 }
@@ -227,17 +265,17 @@ function recheckOne(
 export function deleteTrashedCopies(accountHome: string, copies: VerifiedCopy[]): CopiesTally {
   const tally = emptyTally()
   const trash = trashFolder(accountHome, false)
-  const entries = trash ? readEntries(trash) : null
-  if (!trash || !entries) {
+  if (!trash) {
     tally.error += copies.length
     return tally
   }
-  const deleted = new Set<string>()
+  const deletedByList = new Map<string, Set<string>>()
   for (const copy of copies) {
     try {
       const stats = lstatOrNull(copy.copy)
       const original = lstatOrNull(copy.original)
       if (
+        !copy.list ||
         dirname(copy.copy) !== trash ||
         !stats ||
         trashKey(stats) !== copy.copyKey ||
@@ -249,28 +287,29 @@ export function deleteTrashedCopies(accountHome: string, copies: VerifiedCopy[])
         continue
       }
       unlinkSync(copy.copy)
+      const deleted = deletedByList.get(copy.list) ?? new Set<string>()
       deleted.add(basename(copy.copy))
+      deletedByList.set(copy.list, deleted)
       tally.deleted += 1
       tally.bytesReclaimed += Number(stats.size)
     } catch {
       tally.error += 1
     }
   }
-  if (deleted.size === 0) {
-    return tally
+  for (const [list, deleted] of deletedByList) {
+    const entries = readList(trash, list)
+    if (entries) {
+      writeList(
+        trash,
+        list,
+        entries.filter((entry) => !deleted.has(entry.name))
+      )
+    }
   }
-  const left = entries.filter((entry) => !deleted.has(entry.name))
-  if (left.length > 0) {
-    writeEntries(trash, left)
-    return tally
-  }
-  // Empty: the list goes, then the folder if nothing else is in it.
+  // Empty: the folder goes; anything else in it keeps it.
   try {
-    if (readdirSync(trash).every((name) => name === ENTRIES_FILE)) {
-      unlinkSync(join(trash, ENTRIES_FILE))
+    if (deletedByList.size > 0 && readdirSync(trash).length === 0) {
       rmdirSync(trash)
-    } else {
-      writeEntries(trash, left)
     }
   } catch {
     // Stays for a later launch.

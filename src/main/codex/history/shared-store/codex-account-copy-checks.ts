@@ -3,7 +3,14 @@ import { basename, dirname, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 
 /** A copy whose bytes its ~/.codex original holds, with both files as they were checked. */
-export type VerifiedCopy = { copy: string; original: string; copyKey: string; originalKey: string }
+export type VerifiedCopy = {
+  copy: string
+  original: string
+  copyKey: string
+  originalKey: string
+  /** For a trashed copy: the trash list that names it. */
+  list?: string
+}
 
 // Inode, size, mtime and ctime: any write, replace or compression since the check changes one.
 export function fileKey(stats: BigIntStats): string {
