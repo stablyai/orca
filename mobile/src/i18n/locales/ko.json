@@ -452,7 +452,7 @@
           },
           "apis": {
             "project": "맨 위의 프로젝트가 방금 만든 프로젝트인지 확인하세요.",
-            "enable": "<b>다음</b>을 클릭한 뒤 <b>사용</b>을 클릭하세요."
+            "enable": "<b>다음</b>을 클릭한 뒤 <b>사용 설정</b>을 클릭하세요."
           },
           "branding": {
             "start": "<b>시작하기</b>를 클릭하세요.",
@@ -464,7 +464,7 @@
             "agree": "<b>Google API 서비스: 사용자 데이터 정책에 동의합니다</b>를 선택한 뒤 <b>만들기</b>를 클릭하세요."
           },
           "links": {
-            "domain": "<b>앱 도메인</b>에 홈페이지 링크와 개인정보처리방침 링크를 붙여 넣으세요.",
+            "domain": "<b>앱 도메인</b>에 홈페이지 링크와 개인정보처리방침 링크를 붙여넣으세요.",
             "authorized": "<b>승인된 도메인</b>에 도메인을 추가하세요.",
             "save": "<b>저장</b>을 클릭하세요."
           },
@@ -494,7 +494,7 @@
           "checkFailed": "Orca가 {{services}}을(를) 확인하지 못했습니다."
         },
         "ownerStep": "3단계 중 {{step}}단계",
-        "adminRequest": "Google 관리 콘솔(보안 › 액세스 및 데이터 관리 › API 관리 › 앱 액세스 관리)에서 이 Google 앱을 ‘신뢰할 수 있음’으로 설정해 주세요: {{clientId}}"
+        "adminRequest": "Google 관리 콘솔(보안 › API 제어 › 서드 파티 앱 액세스 관리)에서 이 Google 앱을 ‘신뢰할 수 있음’으로 설정해 주세요: {{clientId}}"
       },
       "importDone": {
         "heading": "가져오기 완료",
@@ -523,7 +523,7 @@
         "step": "{{total}}단계 중 {{index}}단계",
         "setUpTitle": "{{app}}은(는) Composio에서 한 번 설정해야 합니다",
         "setUpDeveloperApp": "{{app}} 개발자 사이트에서 개발자 앱을 만드세요. 방법은 Composio의 {{app}} 페이지에 나와 있습니다.",
-        "setUpAuthConfig": "Composio에서 Auth Configs를 열고 {{app}}용 항목을 추가한 뒤 개발자 앱의 키를 붙여 넣으세요.",
+        "setUpAuthConfig": "Composio에서 Auth Configs를 열고 {{app}}용 항목을 추가한 뒤 개발자 앱의 키를 붙여넣으세요.",
         "setUpCheckAgain": "여기로 돌아와 다시 확인을 선택하세요.",
         "setUpNotYet": "Composio에 아직 {{app}}용 Auth Config가 없습니다.",
         "openAuthConfigs": "Auth Configs 열기",
@@ -539,7 +539,7 @@
         "keyFirst": "먼저 Composio 키를 추가하세요.",
         "connect": "{{app}} 연결",
         "byHandCopy": "{{bot}}의 주소를 복사하세요.",
-        "byHandPaste": "Composio에서 프로젝트 설정의 Webhooks를 열고 붙여 넣으세요.",
+        "byHandPaste": "Composio에서 프로젝트 설정의 Webhooks를 열고 붙여넣으세요.",
         "byHandOpen": "Composio 열기",
         "byHandDone": "완료",
         "byHandDoneNote": "그러면 Orca가 {{trigger}}을(를) 켜고 Composio의 서명 시크릿을 저장합니다.",
@@ -557,7 +557,7 @@
         "keyTitle": "Composio 키 추가",
         "keyRejectedNote": "Composio가 저장된 키를 더 이상 받지 않습니다. Composio의 Settings › API Keys에서 새 키를 만드세요.",
         "keyLabel": "Composio API 키",
-        "keyPlaceholder": "키를 붙여 넣으세요",
+        "keyPlaceholder": "키를 붙여넣으세요",
         "keyPurposeOnHost": "Composio 프로젝트 키가 있으면 {{host}}의 봇이 Composio에 연결한 앱을 사용할 수 있습니다. 키는 {{host}}에만 보관되며 봇은 키를 볼 수 없습니다.",
         "keyPurpose": "Composio 프로젝트 키가 있으면 봇이 Composio에 연결한 앱을 사용할 수 있습니다. 키는 내 컴퓨터에만 보관되며 봇은 키를 볼 수 없습니다.",
         "checking": "확인 중…",
