@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_CHAT_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
@@ -82,13 +83,20 @@ export function peerMailMessageId(
   return `msg_${digest.slice(0, 12)}`
 }
 
+/** A paired server mail goes to, with the files its Orca takes: `takesFiles` with mail about an item,
+ *  `takesChatFiles` with other bot mail too. */
+export type PeerMailServer = OrchestrationWorkerServer & {
+  takesFiles: boolean
+  takesChatFiles: boolean
+}
+
 /** Refuses before any effect when the server's Orca cannot receive mail or queue its replies. */
 export async function requirePeerMailServer(
   runtime: PeerMailRuntime,
   selector: string,
   toBot = false,
   type?: z.infer<typeof PeerMailMessageType>
-): Promise<OrchestrationWorkerServer & { takesFiles: boolean }> {
+): Promise<PeerMailServer> {
   const server = await runtime.resolveOrchestrationWorkerServer(selector)
   const status = RuntimeStatusCapabilities.safeParse(
     await runtime.callOrchestrationWorkerServer(
@@ -136,9 +144,12 @@ export async function requirePeerMailServer(
       { ...NOTHING_SENT, server: server.name }
     )
   }
-  const takesFiles =
-    status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY) === true
-  return { ...server, takesFiles }
+  const has = (capability: string) => status.data.capabilities?.includes(capability) === true
+  return {
+    ...server,
+    takesFiles: has(ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY),
+    takesChatFiles: has(ORCHESTRATION_PEER_MAIL_CHAT_FILES_RUNTIME_CAPABILITY)
+  }
 }
 
 /** The pairing credential the server knows this Orca by; a re-pair starts new conversations under it. */

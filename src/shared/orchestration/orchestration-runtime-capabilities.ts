@@ -65,6 +65,10 @@ export const ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY =
 /** Peer mail about a bot's item also carries files uploaded here for that item's chat. */
 export const ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY =
   'orchestration.peer-mail-files.v1' as const
+/** Peer mail to a bot without an item also carries files, uploaded here for the bot (upload target
+ *  `bot`) and admitted into the chat the mail lands in: the `--chat` it names, or the Home Chat. */
+export const ORCHESTRATION_PEER_MAIL_CHAT_FILES_RUNTIME_CAPABILITY =
+  'orchestration.peer-mail-chat-files.v1' as const
 /** Runs the workers a paired Orca places here as its own, coordinated from that Orca (wire v1). */
 export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
   'orchestration.remote-owned-workers.v1' as const
@@ -105,6 +109,7 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_CHAT_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
   ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
 ] as const

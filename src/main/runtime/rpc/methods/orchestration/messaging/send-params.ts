@@ -41,7 +41,7 @@ export const SendParams = lazyZodSchema(() =>
       /** With `to: bot:<name>`, an item number: the mail lands in the chat that owns it. With
        *  `to: dispatch:<id>` of a finished worker, its follow-up is for that item, as `worker-start --item`. */
       item: OptionalString,
-      /** With `item`: files on this computer, sent with the mail into the item's chat. */
+      /** Files on this computer, sent with the mail into its chat: the item's with `item`; with `on`, also a bot's `chat` or Home Chat. */
       files: z.array(z.string().min(1).max(4096)).max(30).optional(),
       // A paired server: this Orca carries the mail there and the replies back (`send --on`).
       on: OptionalString,

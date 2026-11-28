@@ -42,14 +42,14 @@ export async function routeBotMail(
   }
 ): Promise<{ to: string; body?: string } | { receipt: unknown }> {
   const chat = await chatForItem(context.runtime, input.to, input.params)
-  const mail = await withItemMailFiles(context.runtime, input)
   const newChat = chat === BOT_NEW_CHAT
-  let to = mail.to
   if (newChat) {
-    assertNewChatAddress(to, mail.params.type)
-  } else if (chat) {
-    to = await botChatAddress(context.runtime, to, chat)
+    assertNewChatAddress(input.to, input.params.type)
   }
+  // The chat it lands in, named before its files are admitted there.
+  const named = chat && !newChat ? await botChatAddress(context.runtime, input.to, chat) : undefined
+  const mail = await withItemMailFiles(context.runtime, input, { named, newChat })
+  const to = named ?? mail.to
   // Checked first so other mail keeps sending without a pause before it is stored.
   const toBot =
     mayReachBot(context.runtime, to, mail.sender) &&

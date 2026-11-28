@@ -8,4 +8,5 @@ for deliberate fan-out.
 
 To reach an agent on a paired server, use `send --on <server>`; a reply to mail
 from another server needs no flag. See
-[Placement and remote execution](placement-and-remote.md).
+[Placement and remote execution](placement-and-remote.md). Mail sent with `--on`
+carries text only; to attach files, send to a bot there with `--file`.

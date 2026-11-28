@@ -19,7 +19,11 @@ import { peerMailSendingAskers } from './peer-mail-sending-askers'
 import { sendClientAsk } from './client-ask-send'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
-import { uploadPeerMailFiles } from './peer-mail-files'
+import {
+  assertPeerMailFilesAddress,
+  assertPeerMailServerTakesFiles,
+  uploadPeerMailFiles
+} from './peer-mail-files'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import {
   forgetPeerQuestionOut,
@@ -62,10 +66,12 @@ export async function sendPeerMail(args: {
       NOTHING_SENT
     )
   }
+  assertPeerMailFilesAddress(params)
   const caller = peerMailLocalCaller({ ...args, from: params.from })
   const toBot =
     parseBotAddress(to) !== null || params.chat !== undefined || params.item !== undefined
   const server = await requirePeerMailServer(runtime, params.on, toBot, type)
+  assertPeerMailServerTakesFiles(server, params)
   const askers = await peerMailSendingAskers(runtime, args.orchestrationCaller, caller, {
     ...params,
     to
@@ -77,19 +83,8 @@ export async function sendPeerMail(args: {
     localPaneKey: caller.paneKey
   })
   const id = peerMailMessageId(args.orchestrationMutation)
-  // An Orca from before files keeps the words and drops the files, so they go only where they're taken.
-  const files = server.takesFiles ? params.files : undefined
-  const attachments = await uploadPeerMailFiles(runtime, server, { ...params, files })
-  const warnings: SendRecipientWarning[] =
-    params.files?.length && !server.takesFiles
-      ? [
-          {
-            code: 'files_not_sent',
-            recipient: to,
-            message: `${server.name}'s Orca needs an update to receive files, so the message went without them.`
-          }
-        ]
-      : []
+  const attachments = await uploadPeerMailFiles(runtime, server, params)
+  const warnings: SendRecipientWarning[] = []
   const db = runtime.getOrchestrationDb()
   if (type === 'question') {
     // Kept until its answer or notice comes back, so an unpair can tell the asker none will;
