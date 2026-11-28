@@ -20,6 +20,7 @@
 
 /* Why: padding, not max-width, keeps the body full width so annotated blocks can hang their rail into it. */
 .markdown-preview > .markdown-body {
+  font-variant-numeric: tabular-nums;
   --md-measure: calc(var(--markdown-reading-measure-em) * 1em);
   --md-rail-space: 0px;
   /* Why: main's min(28cqw, 300px) of the shell, measured against the scroller's 64px-narrower content box. */
@@ -30,6 +31,10 @@
   );
   padding-left: var(--md-pad-start);
   padding-right: max(var(--md-rail-space), 100% - var(--md-measure) - var(--md-pad-start));
+}
+
+.markdown-preview > .markdown-body :is(code, pre) {
+  font-variant-numeric: normal;
 }
 
 .markdown-preview.has-markdown-review-rail > .markdown-body {
