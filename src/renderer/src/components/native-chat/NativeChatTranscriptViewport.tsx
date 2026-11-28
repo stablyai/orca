@@ -22,6 +22,7 @@ export function NativeChatTranscriptViewport({
   showJump,
   onJump,
   overlays,
+  topOverlay,
   label,
   memoryKey,
   children
@@ -35,6 +36,8 @@ export function NativeChatTranscriptViewport({
   onJump: () => void
   /** Drawn over the scroller, beside Jump to latest. */
   overlays?: ReactNode
+  /** Pinned to the scroller's top edge, above its scrollbar so the two never overlap. */
+  topOverlay?: ReactNode
   /** The scroller's accessible name; the conversation by default. */
   label?: string
   /** This transcript within its chat tab, for disclosures that outlive a released view. */
@@ -62,6 +65,7 @@ export function NativeChatTranscriptViewport({
               {children}
             </NativeChatTranscriptScrollContext.Provider>
           </div>
+          {topOverlay}
           {overlays}
           <NativeChatJumpToLatest visible={showJump} onJump={onJump} />
         </div>
