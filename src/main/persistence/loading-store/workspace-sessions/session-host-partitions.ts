@@ -4,7 +4,6 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
@@ -52,6 +51,15 @@ import {
   noteRuntimeTopologyChange,
   runtimePartitionFencePrior
 } from './runtime-partition-topology-fence'
+import {
+  executionHostOfPartition,
+  isExecutionHostPartition,
+  normalizeWorkspaceSessionPartitionId,
+  personWorkspacePartition,
+  savedSessionPartitionIds,
+  type WorkspaceSessionPartitionId
+} from '../../../../shared/workspace-session/teammate-homes-session-partition'
+import { withRequiredWorkspaceSessionMaps } from './workspace-session-required-maps'
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -100,17 +108,15 @@ export class SessionHostPartitionOperations {
     return hasPersistedWorkspaceSession(this, resolveHostId(hostId))
   }
 
+  /** The machines with a saved partition, to enumerate hosts; the teammates' partition is none. */
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
-    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
-    for (const key of Object.keys(
-      this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId ?? {}
-    )) {
-      const hostId = normalizeExecutionHostId(key)
-      if (hostId) {
-        hostIds.add(hostId)
-      }
-    }
-    return [...hostIds]
+    return this.getAllWorkspaceSessionPartitionIds().filter(isExecutionHostPartition)
+  }
+
+  /** Every saved partition, for persistence, topology, hydration and removal. */
+  getAllWorkspaceSessionPartitionIds(): WorkspaceSessionPartitionId[] {
+    const { state } = this[sessionHostPartitionOperationsContext].runtime
+    return savedSessionPartitionIds(state.workspaceSessionsByHostId)
   }
 
   removeWorkspaceSessionHost(hostId: ExecutionHostId): void {
@@ -151,7 +157,8 @@ export class SessionHostPartitionOperations {
     target: HostWorktreeTarget,
     options: { advanceTerminalTopologyRevision?: boolean } = {}
   ): void {
-    for (const resolved of workspaceSessionPartitionIdsForHost(target.hostId)) {
+    const person = personWorkspacePartition(target.id)
+    for (const resolved of person ? [person] : workspaceSessionPartitionIdsForHost(target.hostId)) {
       removeWorkspaceSessionOwnerInPartition(this, target.id, resolved, options)
     }
   }
@@ -186,13 +193,13 @@ export class SessionHostPartitionOperations {
   }
 }
 
-export function resolveHostId(hostId?: string | null): ExecutionHostId {
-  return normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+export function resolveHostId(hostId?: string | null): WorkspaceSessionPartitionId {
+  return normalizeWorkspaceSessionPartitionId(hostId) ?? LOCAL_EXECUTION_HOST_ID
 }
 
 export function hasPersistedWorkspaceSession(
   owner: SessionHostPartitionOperations,
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
 ): boolean {
   return (
     hostId === LOCAL_EXECUTION_HOST_ID ||
@@ -205,7 +212,7 @@ export function hasPersistedWorkspaceSession(
 export function removeWorkspaceSessionOwnerInPartition(
   owner: SessionHostPartitionOperations,
   worktreeId: string,
-  resolved: ExecutionHostId,
+  resolved: WorkspaceSessionPartitionId,
   options: { advanceTerminalTopologyRevision?: boolean }
 ): void {
   if (!hasPersistedWorkspaceSession(owner, resolved)) {
@@ -250,7 +257,7 @@ export function removeWorkspaceSessionOwnerInPartition(
 export function partitionOwnsWorktreeTabs(
   owner: SessionHostPartitionOperations,
   worktreeId: string,
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
 ): boolean {
   return owner.getWorkspaceSession(hostId).tabsByWorktree?.[worktreeId] !== undefined
 }
@@ -258,7 +265,7 @@ export function partitionOwnsWorktreeTabs(
 export function partitionHasOtherRepoWorktreeTabs(
   owner: SessionHostPartitionOperations,
   worktreeId: string,
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
 ): boolean {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const tabsByWorktree = owner.getWorkspaceSession(hostId).tabsByWorktree ?? {}
@@ -270,7 +277,7 @@ export function partitionHasOtherRepoWorktreeTabs(
 
 export function setHostWorkspaceSession(
   owner: SessionHostPartitionOperations,
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   written?: WrittenWorkspaceScope
 ): void {
@@ -297,8 +304,8 @@ export function setHostWorkspaceSession(
     prior
   )
   session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, bindingRecovery, {
-    targetIdForWorktree: sshTargetIdForWorkspaceSessionHost(hostId),
-    executionHostId: hostId
+    targetIdForWorktree: sshTargetIdForWorkspaceSessionHost(executionHostOfPartition(hostId)),
+    executionHostId: executionHostOfPartition(hostId)
   })
   const scrollbackKept = pruneLocalTerminalScrollbackBuffers(session, runtime.state.repos)
   // Strip redundant globals on every write so stale snapshots cannot reinject local-owned data.
@@ -319,15 +326,4 @@ export function setHostWorkspaceSession(
     // A prune can strip scrollback from workspaces the caller never named.
     scrollbackKept === session ? withStoreRewrites(written, rewrites) : undefined
   )
-}
-
-/** Restore required maps omitted by the renderer's sparse host split. */
-export function withRequiredWorkspaceSessionMaps(
-  session: WorkspaceSessionState
-): WorkspaceSessionState {
-  return {
-    ...session,
-    tabsByWorktree: session.tabsByWorktree ?? {},
-    terminalLayoutsByTabId: session.terminalLayoutsByTabId ?? {}
-  }
 }

@@ -1,6 +1,6 @@
 // Reproject dirty Store partitions (only the workspaces a write reported, when it did) and publish each workspace only from its owning partition.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { stableJson } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
@@ -31,15 +31,15 @@ export type ProjectionStore = Pick<
   | 'getLayoutEditorViews'
 >
 
-export type DirtyPartitions = Set<ExecutionHostId> | 'all'
+export type DirtyPartitions = Set<WorkspaceSessionPartitionId> | 'all'
 
 /** Per partition, the workspaces written since its last load, or 'whole' when a write did not say. */
-type StaleWorkspaces = Map<ExecutionHostId, Set<string> | 'whole'> | 'all'
+type StaleWorkspaces = Map<WorkspaceSessionPartitionId, Set<string> | 'whole'> | 'all'
 
 /** Carry binding generations on leaves and in-memory editor views on workspaces. */
 export function runtimeLayoutLoadContext(
   store: Pick<RuntimeStore, 'getPtyBindingGeneration' | 'getLayoutEditorViews'> | null,
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
 ): WorkspaceLayoutLoadContext {
   // Window-owned builds retain name-based loading without views or generations.
   if (!ORCA_LAYOUT_OWNER_IS_MAIN || !store) {
@@ -59,7 +59,7 @@ export function runtimeLayoutLoadContext(
 
 class ProjectedPartition {
   constructor(
-    private readonly hostId: ExecutionHostId,
+    private readonly hostId: WorkspaceSessionPartitionId,
     readonly load: PartitionLoad | null,
     private published: Map<string, ProjectedLayout> | null = null
   ) {}
@@ -92,14 +92,14 @@ class ProjectedPartition {
   }
 }
 
-function publish(workspace: WorkspaceLayout, hostId: ExecutionHostId): ProjectedLayout {
+function publish(workspace: WorkspaceLayout, hostId: WorkspaceSessionPartitionId): ProjectedLayout {
   const layout = publishWorkspaceLayout(workspace, hostId)
   return { layout, json: stableJson(layout) }
 }
 
 export class WorkspaceLayoutProjection {
   published = new Map<string, ProjectedLayout>()
-  private partitions = new Map<ExecutionHostId, ProjectedPartition>()
+  private partitions = new Map<WorkspaceSessionPartitionId, ProjectedPartition>()
   private stale: StaleWorkspaces = 'all'
   /** Keep routing failures separate so they cannot suppress later projection/listener errors. */
   private routingFailureLogged = false
@@ -107,7 +107,7 @@ export class WorkspaceLayoutProjection {
   constructor(
     private readonly deps: {
       store: () => ProjectionStore | null
-      homeHostId: (key: string) => ExecutionHostId | null
+      homeHostId: (key: string) => WorkspaceSessionPartitionId | null
     }
   ) {}
 
@@ -123,7 +123,7 @@ export class WorkspaceLayoutProjection {
 
   /** `workspaces` absent: any workspace of the partition may have changed. `refs`: share refs naming more written workspaces. */
   invalidate(
-    hostId: ExecutionHostId | null,
+    hostId: WorkspaceSessionPartitionId | null,
     workspaces?: ReadonlySet<string>,
     refs?: ReadonlySet<string>
   ): void {
@@ -143,7 +143,7 @@ export class WorkspaceLayoutProjection {
 
   /** Add the workspaces holding each ref as of the last load, which any later change to them reported; null when that load kept no refs. */
   private withHolders(
-    hostId: ExecutionHostId,
+    hostId: WorkspaceSessionPartitionId,
     workspaces: ReadonlySet<string>,
     refs: ReadonlySet<string> | undefined
   ): ReadonlySet<string> | null {
@@ -162,7 +162,7 @@ export class WorkspaceLayoutProjection {
   }
 
   /** Cache only for readers that invalidate on every write; null without a Store. */
-  loaded(hostId: ExecutionHostId, keep: boolean): LoadedWorkspaceLayoutRead | null {
+  loaded(hostId: WorkspaceSessionPartitionId, keep: boolean): LoadedWorkspaceLayoutRead | null {
     return keep ? this.cachedPartition(hostId).loaded : this.loadPartition(hostId, false).loaded
   }
 
@@ -179,7 +179,7 @@ export class WorkspaceLayoutProjection {
     return this.route(new Map(hostIds.map((hostId) => [hostId, this.loadPartition(hostId, false)])))
   }
 
-  private cachedPartition(hostId: ExecutionHostId): ProjectedPartition {
+  private cachedPartition(hostId: WorkspaceSessionPartitionId): ProjectedPartition {
     if (this.stale === 'all') {
       const hostIds = this.deps.store()?.getWorkspaceSessionHostIds?.() ?? []
       this.stale = new Map(hostIds.map((id) => [id, 'whole' as const]))
@@ -199,7 +199,7 @@ export class WorkspaceLayoutProjection {
   }
 
   private reload(
-    hostId: ExecutionHostId,
+    hostId: WorkspaceSessionPartitionId,
     cached: ProjectedPartition,
     written: ReadonlySet<string>
   ): ProjectedPartition | null {
@@ -219,7 +219,7 @@ export class WorkspaceLayoutProjection {
   }
 
   /** `indexed` keeps what a later partial reload needs; one-off loads skip it. */
-  private loadPartition(hostId: ExecutionHostId, indexed: boolean): ProjectedPartition {
+  private loadPartition(hostId: WorkspaceSessionPartitionId, indexed: boolean): ProjectedPartition {
     const store = this.deps.store()
     const session = store?.getWorkspaceSession?.(hostId)
     if (!session) {
@@ -235,7 +235,7 @@ export class WorkspaceLayoutProjection {
   }
 
   private route(
-    partitions: Map<ExecutionHostId, ProjectedPartition>
+    partitions: Map<WorkspaceSessionPartitionId, ProjectedPartition>
   ): Map<string, ProjectedLayout> {
     const projected = new Map<string, ProjectedLayout>()
     const unroutable = new Set<string>()
@@ -258,7 +258,7 @@ export class WorkspaceLayoutProjection {
   }
 
   /** Record unroutable keys without stopping peers; guessing a repeated repo/path could publish another host's copy. */
-  private homeOf(key: string, unroutable: Set<string>): ExecutionHostId | null {
+  private homeOf(key: string, unroutable: Set<string>): WorkspaceSessionPartitionId | null {
     try {
       return this.deps.homeHostId(key)
     } catch (error) {

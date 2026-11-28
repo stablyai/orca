@@ -1,6 +1,10 @@
 // Explicit layout.subscribe wire projection includes terminal startup inputs and permits live pane titles/status. Persistence-only records and view selection stay private.
 
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import {
+  executionHostOfPartition,
+  type WorkspaceSessionPartitionId
+} from '../../workspace-session/teammate-homes-session-partition'
 import type { AiVaultSessionTitle } from '../../ai-vault/contracts/ai-vault-session-title'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-groups/tab-types'
@@ -58,7 +62,7 @@ export type PublishedTab = {
   id: string
   kind: TabContentType
   entityId: string
-  /** The host that runs the tab's content: an editor tab's file owner, else the partition. */
+  /** The host that runs the tab's content: an editor tab's file owner, else the partition's host. */
   executionHostId: ExecutionHostId
   createdAt: number
   customTitle: string | null
@@ -136,13 +140,13 @@ export function publishEditorFile(file: LayoutEditorFile): PublishedEditorFile {
 function publishTab(
   tab: LayoutTab,
   workspace: WorkspaceLayout,
-  partition: ExecutionHostId
+  hostId: ExecutionHostId
 ): PublishedTab {
   const published: PublishedTab = {
     id: tab.id,
     kind: tab.kind,
     entityId: tab.entityId,
-    executionHostId: tabExecutionHostId(tab, workspace, partition),
+    executionHostId: tabExecutionHostId(tab, workspace, hostId),
     createdAt: tab.createdAt,
     customTitle: tab.customTitle,
     color: tab.color,
@@ -186,13 +190,14 @@ function publishTab(
 
 export function publishWorkspaceLayout(
   workspace: WorkspaceLayout,
-  partition: ExecutionHostId
+  partition: WorkspaceSessionPartitionId
 ): PublishedWorkspaceLayout {
+  const hostId = executionHostOfPartition(partition)
   return {
     worktreeId: workspace.worktreeId,
     groups: workspace.groups.map((group) => ({ id: group.id, tabIds: [...group.tabOrder] })),
     ...(workspace.groupLayout ? { groupLayout: workspace.groupLayout } : {}),
-    tabs: tabsInOrder(workspace).map((tab) => publishTab(tab, workspace, partition)),
+    tabs: tabsInOrder(workspace).map((tab) => publishTab(tab, workspace, hostId)),
     editorFiles: (workspace.editorFiles ?? []).map(publishEditorFile),
     browserTabs: (workspace.browserTabs ?? []).map((tab) => ({
       id: tab.id,

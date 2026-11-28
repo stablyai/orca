@@ -1,11 +1,11 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { partitionHoldsWorktree } from '../../workspaces/session-hosts/twin-repo-session-host'
 
 type LabelBaseline = {
-  hostId: ExecutionHostId | null
-  claims: Map<ExecutionHostId, number>
+  hostId: WorkspaceSessionPartitionId | null
+  claims: Map<WorkspaceSessionPartitionId, number>
   aliases: Map<string, string | null>
 }
 
@@ -32,7 +32,7 @@ export class StructuredConversationLabelChanges {
 
   constructor(
     private readonly store: RuntimeStore | null,
-    private readonly resolveHost: (workspaceId: string) => ExecutionHostId | null
+    private readonly resolveHost: (workspaceId: string) => WorkspaceSessionPartitionId | null
   ) {}
 
   seed(workspaceId: string): void {
@@ -40,10 +40,10 @@ export class StructuredConversationLabelChanges {
       return
     }
     const hostId = this.resolveHost(workspaceId)
-    const claims = new Map<ExecutionHostId, number>()
-    for (const id of new Set<ExecutionHostId>([
+    const claims = new Map<WorkspaceSessionPartitionId, number>()
+    for (const id of new Set<WorkspaceSessionPartitionId>([
       'local',
-      ...(this.store?.getWorkspaceSessionHostIds?.() ?? [])
+      ...(this.store?.getAllWorkspaceSessionPartitionIds?.() ?? [])
     ])) {
       const claim = routeClaim(this.store?.getWorkspaceSession?.(id), workspaceId)
       if (claim !== 0) {
@@ -69,15 +69,15 @@ export class StructuredConversationLabelChanges {
   }
 
   reconcile(
-    writtenHost: ExecutionHostId | null,
+    writtenHost: WorkspaceSessionPartitionId | null,
     routesDirty: boolean
   ): Map<string, Map<string, string | null>> {
     const changes = new Map<string, Map<string, string | null>>()
     if (this.workspaces.size === 0) {
       return changes
     }
-    const sessions = new Map<ExecutionHostId, WorkspaceSessionState | undefined>()
-    const sessionFor = (id: ExecutionHostId) => {
+    const sessions = new Map<WorkspaceSessionPartitionId, WorkspaceSessionState | undefined>()
+    const sessionFor = (id: WorkspaceSessionPartitionId) => {
       if (!sessions.has(id)) {
         sessions.set(id, this.store?.getWorkspaceSession?.(id))
       }
@@ -85,7 +85,10 @@ export class StructuredConversationLabelChanges {
     }
     const hosts =
       writtenHost === null
-        ? new Set<ExecutionHostId>(['local', ...(this.store?.getWorkspaceSessionHostIds?.() ?? [])])
+        ? new Set<WorkspaceSessionPartitionId>([
+            'local',
+            ...(this.store?.getAllWorkspaceSessionPartitionIds?.() ?? [])
+          ])
         : new Set([writtenHost])
     for (const [workspaceId, baseline] of this.workspaces) {
       let reroute = routesDirty || writtenHost === null

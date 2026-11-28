@@ -1,6 +1,6 @@
 // Layout-owner builds fence removed panes against late spawns that would recreate missing membership.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
@@ -13,14 +13,14 @@ export const CLOSED_PANE_BINDING_FENCE_MS = 5 * 60_000
 const closedAtByPaneKey = new Map<string, number>()
 
 type SessionsRead = {
-  hostIds: () => readonly ExecutionHostId[]
-  getSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
+  hostIds: () => readonly WorkspaceSessionPartitionId[]
+  getSession: (hostId: WorkspaceSessionPartitionId) => WorkspaceSessionState | null | undefined
 }
 
 type Fence = { sessions: SessionsRead; fences: boolean }
 
 function paneKeysIn(
-  hostIds: readonly ExecutionHostId[],
+  hostIds: readonly WorkspaceSessionPartitionId[],
   getSession: SessionsRead['getSession']
 ): Set<string> {
   const keys = new Set<string>()
@@ -53,7 +53,7 @@ export function fencedIfLayoutOwner<V>(
 
 /** Close/take-back writes add fences; other partition writes only lift them. */
 export function partitionsFence(
-  hostIds: readonly ExecutionHostId[],
+  hostIds: readonly WorkspaceSessionPartitionId[],
   getSession: SessionsRead['getSession'],
   fences: boolean
 ): Fence {
@@ -63,7 +63,7 @@ export function partitionsFence(
 /** Layout closes fence, creates lift, other commands leave fences unchanged. */
 export function layoutCommandFence(
   type: LayoutCommand['type'],
-  hostIds: readonly ExecutionHostId[],
+  hostIds: readonly WorkspaceSessionPartitionId[],
   getSession: SessionsRead['getSession']
 ): Fence | null {
   if (type === 'closePane' || type === 'closeTabs') {

@@ -76,7 +76,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     if (fromPtyId === 'foreign') {
       return {}
     }
-    const hostId = fromPtyId ?? this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+    const hostId = fromPtyId ?? this.tryGetExecutionHostIdForWorktree(worktreeId)
     return hostId ? { executionHostId: hostId } : {}
   }
 

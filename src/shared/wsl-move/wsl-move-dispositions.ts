@@ -73,7 +73,7 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   workspaceSessionsByHostId: {
     disposition: 'rewrite-desktop',
     item: 22,
-    note: "The desktop seeds the WSL host's session from the moved 'local' rows."
+    note: "The desktop seeds the WSL host's session from the moved 'local' rows; the teammates' partition stays with the Homes."
   },
   remoteLayoutSnapshots: {
     disposition: 'rederive',

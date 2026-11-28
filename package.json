@@ -59,6 +59,7 @@
     "check:path-literal-ratchet": "node config/scripts/static-analysis/ratchets/source-budget/check-path-literal-ratchet.mjs",
     "check:legacy-relay-fence-ratchet": "node config/scripts/static-analysis/process-boundaries/check-legacy-relay-fence-ratchet.mjs",
     "check:unproven-pty-retirement-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-unproven-pty-retirement-ratchet.mjs",
+    "check:raw-tab-list-read-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-raw-tab-list-read-ratchet.mjs",
     "check:daemon-blocking-call-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-daemon-blocking-call-ratchet.mjs",
     "check:id-only-store-write-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-id-only-store-write-ratchet.mjs",
     "check:repo-host-read-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-repo-host-read-ratchet.mjs",

@@ -1,7 +1,5 @@
-import {
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type {
   CommandOf,
   LayoutApplyReply,
@@ -38,7 +36,7 @@ export type LayoutCommandRunOptions = NonNullable<
  * Preserve desktop pane-move rules and refuse WSL-move-paused workspaces whose writes would be dropped. */
 export async function applyWindowLayoutCommand(
   store: RuntimeStore,
-  hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
+  hostIdsFor: (worktreeId: string, tabId: string | null) => WorkspaceSessionPartitionId[],
   command: WindowLayoutCommand,
   /** Agent status and orchestration records follow a pane moved into a new tab. */
   onPaneMoved: (move: TerminalLeafMoveRequest) => void = () => {},
@@ -151,11 +149,11 @@ export async function applyWindowLayoutCommand(
 /** Rename in each tab's routed partition in one durable write; untitled reports the same refusal codes as renameTab. */
 async function renameTabs(
   store: RuntimeStore,
-  hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
+  hostIdsFor: (worktreeId: string, tabId: string | null) => WorkspaceSessionPartitionId[],
   command: RenameTabsCommand
 ): Promise<LayoutApplyReply> {
   const untitled: UntitledTab[] = []
-  const byHost = new Map<ExecutionHostId, CommandOf<'renameTab'>[]>()
+  const byHost = new Map<WorkspaceSessionPartitionId, CommandOf<'renameTab'>[]>()
   for (const rename of renameTabCommandsOf(command)) {
     const { workspace, tabId } = rename
     const [hostId] = hostIdsFor(workspace, tabId)
@@ -190,7 +188,7 @@ async function renameTabs(
 /** Move groups within/across holding partitions atomically; window save no longer carries the move. */
 async function moveTabToWorkspace(
   store: RuntimeStore,
-  hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
+  hostIdsFor: (worktreeId: string, tabId: string | null) => WorkspaceSessionPartitionId[],
   command: CommandOf<'moveTabToWorkspace'>,
   run?: LayoutCommandRunOptions
 ): Promise<LayoutApplyReply> {
@@ -222,7 +220,7 @@ async function moveTabToWorkspace(
 /** Rename disk-move paths across partitions in one durable write; paired-server ownership refuses the whole operation. */
 async function renameEditorFilesInWorkspaces(
   store: RuntimeStore,
-  hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
+  hostIdsFor: (worktreeId: string, tabId: string | null) => WorkspaceSessionPartitionId[],
   command: CommandOf<'renameEditorFiles'>
 ): Promise<LayoutApplyReply> {
   const parts = [
@@ -232,7 +230,10 @@ async function renameEditorFilesInWorkspaces(
   if (parts.some((part) => isWslMoveWorkspaceSessionFrozen(part.workspace))) {
     return { ok: false, code: 'wsl_move_in_progress' }
   }
-  const batches: { hostId: ExecutionHostId; command: CommandOf<'renameEditorFiles'> }[] = []
+  const batches: {
+    hostId: WorkspaceSessionPartitionId
+    command: CommandOf<'renameEditorFiles'>
+  }[] = []
   for (const part of parts) {
     const [hostId] = hostIdsFor(part.workspace, null)
     if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
@@ -261,7 +262,7 @@ async function renameEditorFilesInWorkspaces(
 /** A tab-bar id's terminal id, which a legacy entry's can differ from. */
 function terminalIdOf(
   store: RuntimeStore,
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   workspace: string,
   tabId: string
 ): string {

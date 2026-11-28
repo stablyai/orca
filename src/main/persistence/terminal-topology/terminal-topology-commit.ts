@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../shared/workspace-session/teammate-homes-session-partition'
 import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type {
@@ -82,7 +82,7 @@ export function moveLeaf(
 
 /** Persist pane, tab-bar and group membership before starting the terminal. */
 export function admitPane(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   admission: TerminalPaneAdmission,
   context: TerminalTopologyCommitContext
 ): () => DurableProfileStateMutation<TerminalPaneAdmissionOutcome> {
@@ -120,7 +120,7 @@ export function admitPane(
 
 /** Remove failed-start admissions so failed creates leave no empty tabs. */
 export function withdrawPane(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   pane: CommandOf<'closePane'>,
   context: TerminalTopologyCommitContext
 ): () => DurableProfileStateMutation<LayoutRefusalCode | null> {
@@ -142,7 +142,7 @@ export function withdrawPane(
 
 /** Apply to all holders, routed first; its result is the reply and its refusal prevents all writes. */
 export function applyLayout(
-  hostIds: readonly ExecutionHostId[],
+  hostIds: readonly WorkspaceSessionPartitionId[],
   command: LayoutCommand,
   context: TerminalTopologyCommitContext,
   run: LayoutCommandRun = {}
@@ -166,7 +166,10 @@ export function applyLayout(
 }
 
 export function applyEditorFileRenamesInPartitions(
-  batches: readonly { hostId: ExecutionHostId; command: CommandOf<'renameEditorFiles'> }[],
+  batches: readonly {
+    hostId: WorkspaceSessionPartitionId
+    command: CommandOf<'renameEditorFiles'>
+  }[],
   context: TerminalTopologyCommitContext
 ): () => DurableProfileStateMutation<LayoutApplyOutcome> {
   return traced(
@@ -214,8 +217,8 @@ type TopologyState = Pick<
 
 export type TerminalTopologyCommitContext = {
   state: TopologyState
-  hostIds: () => ExecutionHostId[]
-  getSession: (hostId: ExecutionHostId) => WorkspaceSessionState
+  hostIds: () => WorkspaceSessionPartitionId[]
+  getSession: (hostId: WorkspaceSessionPartitionId) => WorkspaceSessionState
   markDirty: (
     domain: 'workspaceSession' | 'workspaceSessionsByHostId' | 'ui' | 'sshRemotePtyLeases'
   ) => void
@@ -231,12 +234,12 @@ export function topologyCommitContext({
     Partial<Pick<StoreRuntimeState, 'layoutEditorViews'>>
   sessions: Pick<
     SessionHostPartitionOperations,
-    'getWorkspaceSessionHostIds' | 'getWorkspaceSession'
+    'getAllWorkspaceSessionPartitionIds' | 'getWorkspaceSession'
   >
 }): TerminalTopologyCommitContext {
   return {
     state: runtime.state,
-    hostIds: () => sessions.getWorkspaceSessionHostIds(),
+    hostIds: () => sessions.getAllWorkspaceSessionPartitionIds(),
     getSession: (hostId) => sessions.getWorkspaceSession(hostId),
     markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain),
     ...(runtime.layoutEditorViews
@@ -272,7 +275,7 @@ function commitLeafMove(
 }
 
 function commitPaneChange<T>(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   change: PaneLayoutChange<T>,
   context: TerminalTopologyCommitContext
 ): DurableProfileStateMutation<T> {

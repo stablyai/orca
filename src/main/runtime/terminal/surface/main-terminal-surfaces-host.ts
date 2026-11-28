@@ -1,5 +1,5 @@
 import type { PaneStartFactOf } from './pane-start-statuses'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type {
   RuntimeSyncWindowGraph,
   RuntimeMobileSessionTabsSnapshot
@@ -15,7 +15,7 @@ export type MainTerminalSurfacesHost = {
   > | null
   /** Main's one layout projection. */
   reads: () => WorkspaceLayoutReads
-  homeHostId: (key: string) => ExecutionHostId | null
+  homeHostId: (key: string) => WorkspaceSessionPartitionId | null
   /** The PTY registry's terminal of that id, or null. */
   registered: (ptyId: string) => BoundTerminal | null
   /** Whether the host certified the terminal exited (not merely disconnected or unverifiable). */

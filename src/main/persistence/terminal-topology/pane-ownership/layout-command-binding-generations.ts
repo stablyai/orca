@@ -1,6 +1,6 @@
 // Layout-owner commands and rollback advance generations only for changed bindings, excluding moves/removals.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -34,8 +34,8 @@ export function reboundLeafIds(
 
 export function raisingBindingGenerations<T>(
   runtime: Pick<StoreRuntimeState, 'ptyBindingGenerations'>,
-  hostIds: readonly ExecutionHostId[],
-  getSession: (hostId: ExecutionHostId) => WorkspaceSessionState,
+  hostIds: readonly WorkspaceSessionPartitionId[],
+  getSession: (hostId: WorkspaceSessionPartitionId) => WorkspaceSessionState,
   mutate: () => DurableProfileStateMutation<T>
 ): () => DurableProfileStateMutation<T> {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {

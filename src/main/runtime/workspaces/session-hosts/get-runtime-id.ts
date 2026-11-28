@@ -5,6 +5,10 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import {
+  executionHostOfPartition,
+  type WorkspaceSessionPartitionId
+} from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { TerminalListHostScope } from '../../terminal/query/terminal-list-host-scope'
@@ -23,20 +27,34 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
     return this.startedAt
   }
 
-  protected tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
+  protected tryGetWorkspaceSessionHostIdForWorktree(
+    worktreeId: string
+  ): WorkspaceSessionPartitionId | null {
     return this.workspaceSessions.tryGetHostId(worktreeId)
   }
 
-  protected getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
+  /** The machine a workspace's terminals run on, which a session partition is not always. */
+  protected tryGetExecutionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
+    const partition = this.workspaceSessions.tryGetHostId(worktreeId)
+    return partition && executionHostOfPartition(partition)
+  }
+
+  protected getWorkspaceSessionHostIdForWorktree(worktreeId: string): WorkspaceSessionPartitionId {
     return this.workspaceSessions.getHostId(worktreeId)
   }
 
   // Why by tab: one worktree's tabs can be split across local and runtime partitions (#18202).
-  protected getWorkspaceSessionHostIdsForTab(worktreeId: string, tabId: string): ExecutionHostId[] {
+  protected getWorkspaceSessionHostIdsForTab(
+    worktreeId: string,
+    tabId: string
+  ): WorkspaceSessionPartitionId[] {
     return this.workspaceSessions.getHostIdsForTab(worktreeId, tabId)
   }
 
-  protected getWorkspaceSessionHostIdForTab(worktreeId: string, tabId: string): ExecutionHostId {
+  protected getWorkspaceSessionHostIdForTab(
+    worktreeId: string,
+    tabId: string
+  ): WorkspaceSessionPartitionId {
     return (
       this.workspaceSessions.getHostIdsForTab(worktreeId, tabId)[0] ??
       this.workspaceSessions.getHostId(worktreeId)

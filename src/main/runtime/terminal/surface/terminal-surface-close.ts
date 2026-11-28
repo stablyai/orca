@@ -1,4 +1,5 @@
 import type { RuntimeSessionTabCloseReason } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   hasClosedTerminalTabRecord,
@@ -16,7 +17,6 @@ import {
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import type { DurableProfileStateMutation } from '../../../persistence/loading-store/store-runtime-state'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   capturePersistedTerminalTabCopy,
   isSamePersistedTerminalTabCopy,
@@ -179,11 +179,11 @@ export type TerminalSurfaceCloseCommit = {
   /** The tab's owner identity still matches the one the close was asked against. */
   ownerMatches: () => boolean
   /** The partitions holding the tab, routed partition first; empty when unroutable. */
-  hostIds: () => readonly ExecutionHostId[]
+  hostIds: () => readonly WorkspaceSessionPartitionId[]
   /** Fence every holder against new/rebound copies, not just ownerMatches' first holder; capture snapshots because binding writes mutate sessions in place. */
-  requestedHolders?: ReadonlyMap<ExecutionHostId, PersistedTerminalTabCopy>
-  getSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
-  setSession: (session: WorkspaceSessionState, hostId: ExecutionHostId) => void
+  requestedHolders?: ReadonlyMap<WorkspaceSessionPartitionId, PersistedTerminalTabCopy>
+  getSession: (hostId: WorkspaceSessionPartitionId) => WorkspaceSessionState | null | undefined
+  setSession: (session: WorkspaceSessionState, hostId: WorkspaceSessionPartitionId) => void
   onClosed: (ptyIdsToKill: string[]) => void
 }
 
@@ -191,15 +191,17 @@ export type TerminalSurfaceCloseCommit = {
 export function captureTerminalCloseRequest(
   worktreeId: string,
   target: TerminalSurfaceCloseTarget,
-  hostIds: readonly ExecutionHostId[],
-  store: { getWorkspaceSession: (hostId: ExecutionHostId) => WorkspaceSessionState | undefined },
+  hostIds: readonly WorkspaceSessionPartitionId[],
+  store: {
+    getWorkspaceSession: (hostId: WorkspaceSessionPartitionId) => WorkspaceSessionState | undefined
+  },
   fenced: boolean
 ): Pick<TerminalSurfaceCloseCommit, 'requestedSession' | 'requestedHolders'> {
   const requestedSession = hostIds[0] ? store.getWorkspaceSession(hostIds[0]) : null
   if (!fenced) {
     return { requestedSession }
   }
-  const copyOf = (id: ExecutionHostId) =>
+  const copyOf = (id: WorkspaceSessionPartitionId) =>
     capturePersistedTerminalTabCopy(store.getWorkspaceSession(id), worktreeId, target.tabId)
   return { requestedSession, requestedHolders: new Map(hostIds.map((id) => [id, copyOf(id)])) }
 }
@@ -221,7 +223,7 @@ export function terminalSurfaceCloseMutation(
       return { value: new Error('terminal_pane_owner_changed'), persist: false }
     }
     const results: {
-      hostId: ExecutionHostId
+      hostId: WorkspaceSessionPartitionId
       session: WorkspaceSessionState
       result: TerminalSurfaceCloseResult
     }[] = []

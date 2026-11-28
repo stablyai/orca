@@ -1,9 +1,7 @@
 // Bind panes before registration so main can resolve them immediately; unbound registration throws in tests/dev and ships without a pane.
 
-import {
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 
 export function assertPaneBoundAtRegistration(
   ptyId: string,
@@ -23,6 +21,6 @@ export function assertPaneBoundAtRegistration(
 }
 
 /** A paired server's workspace: main's index leaves it out, as that server owns its layout. */
-export function isRuntimeHostedWorkspace(hostId: ExecutionHostId | null): boolean {
+export function isRuntimeHostedWorkspace(hostId: WorkspaceSessionPartitionId | null): boolean {
   return hostId !== null && parseExecutionHostId(hostId)?.kind === 'runtime'
 }

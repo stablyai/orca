@@ -1,10 +1,10 @@
 // Keep editor views in memory through partition applies and tab moves; never serialize them.
 
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+  savedSessionPartitionIds,
+  type WorkspaceSessionPartitionId
+} from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutEditorView } from '../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
 import type { WorkspaceLayoutModel } from '../../../../shared/workspace-layout/workspace-layout-model'
@@ -20,7 +20,7 @@ type ViewsRuntime = Pick<StoreRuntimeState, 'layoutEditorViews'>
 /** Window-owned builds retain no main-process views. */
 export function partitionEditorViewsOf(
   runtime: ViewsRuntime,
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
 ): PartitionEditorViews | undefined {
   return ORCA_LAYOUT_OWNER_IS_MAIN ? (runtime.layoutEditorViews.get(hostId) ?? {}) : undefined
 }
@@ -38,7 +38,7 @@ export function editorViewsOfModel(model: WorkspaceLayoutModel): PartitionEditor
 /** Restore only if no later keep replaced this partition's views. */
 export function keepPartitionEditorViews(
   runtime: ViewsRuntime,
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   views: PartitionEditorViews
 ): () => void {
   const before = runtime.layoutEditorViews.get(hostId) ?? {}
@@ -53,12 +53,15 @@ export function keepPartitionEditorViews(
 /** Follow moved/rekeyed tabs and drop removed ones; preserve untouched identity for pending rollbacks. */
 export function refileEditorViews(
   runtime: Pick<StoreRuntimeState, 'layoutEditorViews' | 'state'>
-): ReadonlySet<ExecutionHostId> {
+): ReadonlySet<WorkspaceSessionPartitionId> {
   if (runtime.layoutEditorViews.size === 0) {
     return new Set()
   }
-  const edited = new Map<ExecutionHostId, Record<string, Record<string, LayoutEditorView>>>()
-  const editable = (hostId: ExecutionHostId) => {
+  const edited = new Map<
+    WorkspaceSessionPartitionId,
+    Record<string, Record<string, LayoutEditorView>>
+  >()
+  const editable = (hostId: WorkspaceSessionPartitionId) => {
     let partition = edited.get(hostId)
     if (!partition) {
       const current = runtime.layoutEditorViews.get(hostId) ?? {}
@@ -106,7 +109,7 @@ export function refileEditorViews(
 
 function sessionOf(
   runtime: Pick<StoreRuntimeState, 'state'>,
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
 ): WorkspaceSessionState | undefined {
   return hostId === LOCAL_EXECUTION_HOST_ID
     ? runtime.state.workspaceSession
@@ -128,14 +131,8 @@ function holdsEditorTab(
 function placesHolding(
   runtime: Pick<StoreRuntimeState, 'state'>,
   tabId: string
-): { hostId: ExecutionHostId; key: string }[] {
-  const hostIds = new Set<ExecutionHostId>([
-    LOCAL_EXECUTION_HOST_ID,
-    ...Object.keys(runtime.state.workspaceSessionsByHostId ?? {}).flatMap(
-      (id) => normalizeExecutionHostId(id) ?? []
-    )
-  ])
-  return [...hostIds].flatMap((hostId) => {
+): { hostId: WorkspaceSessionPartitionId; key: string }[] {
+  return savedSessionPartitionIds(runtime.state.workspaceSessionsByHostId).flatMap((hostId) => {
     const session = sessionOf(runtime, hostId)
     return Object.keys(session?.unifiedTabs ?? {})
       .filter((key) => holdsEditorTab(session, key, tabId))

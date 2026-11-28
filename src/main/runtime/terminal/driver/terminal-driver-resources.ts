@@ -1,7 +1,7 @@
 import type { RuntimeServiceCommandSurface } from '../../construction/runtime-service-command-surface'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
@@ -68,7 +68,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   protected abstract resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
     id: string
     repoId?: string
-    hostId?: ExecutionHostId
+    hostId?: WorkspaceSessionPartitionId
   }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost>
   abstract getAuthoritativeWindowId(missingWindowMessage?: string): number
   protected abstract getAvailableAuthoritativeWindowId(): number | null
@@ -79,7 +79,9 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     options: BrowserSessionTabSelectionOptions
   ): Promise<void>
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
-  protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
+  protected abstract getWorkspaceSessionHostIdForWorktree(
+    worktreeId: string
+  ): WorkspaceSessionPartitionId
   protected abstract setWorkspaceSessionForWorktree(
     worktreeId: string,
     session: WorkspaceSessionState
@@ -162,7 +164,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     // Switch point: a layout-owner build writes served tabs through `layout.apply`.
     ...(ORCA_LAYOUT_OWNER_IS_MAIN
       ? {
-          applyLayout: async (command: LayoutCommand, hostId: ExecutionHostId) => {
+          applyLayout: async (command: LayoutCommand, hostId: WorkspaceSessionPartitionId) => {
             const store = this.requireStore()
             if (!store.applyLayoutCommand) {
               throw new Error('layout_store_unavailable')

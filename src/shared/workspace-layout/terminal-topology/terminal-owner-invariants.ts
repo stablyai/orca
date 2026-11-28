@@ -1,4 +1,8 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
+import {
+  executionHostOfPartition,
+  type WorkspaceSessionPartitionId
+} from '../../workspace-session/teammate-homes-session-partition'
 import { parseAppSshPtyId } from '../../remote-runtime/ssh/ssh-pty-id'
 import { isTerminalLeafId } from '../stable-pane-id'
 import type { TerminalTab } from '../terminal-tab-types'
@@ -7,10 +11,13 @@ import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 
 // Require one leaf per terminal and one tab per leaf ID; binding writes report breaches without removing them.
 
-export type TerminalSessionPartition = { hostId: ExecutionHostId; session: WorkspaceSessionState }
+export type TerminalSessionPartition = {
+  hostId: WorkspaceSessionPartitionId
+  session: WorkspaceSessionState
+}
 
 export type TerminalLeafOwner = {
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
   worktreeId: string
   tab: TerminalTab
   leafId: string
@@ -27,8 +34,8 @@ export type TerminalOwnerConflictReason =
   | 'leaf_in_other_tab_on_other_host'
 
 /** `runtime:` partitions belong to a remote Orca server and are written only by its tab sync. */
-export function isTerminalOwnerPartition(hostId: ExecutionHostId): boolean {
-  const kind = parseExecutionHostId(hostId)?.kind
+export function isTerminalOwnerPartition(hostId: WorkspaceSessionPartitionId): boolean {
+  const kind = parseExecutionHostId(executionHostOfPartition(hostId))?.kind
   return kind === 'local' || kind === 'ssh'
 }
 
@@ -80,7 +87,7 @@ export function isSameTerminal(
 /** Find duplicate saved ownership; the same tab:leaf across partitions is one surface because older SSH reattaches left local copies. */
 export function findTerminalBindingConflict(
   binding: { tabId: string; leafId: string; ptyId: string; incarnationId?: string },
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   partitions: readonly TerminalSessionPartition[]
 ): { reason: TerminalOwnerConflictReason; owner: TerminalLeafOwner } | null {
   // Legacy leaf ids are never written into leaf-keyed layout state, so they cannot own a terminal.

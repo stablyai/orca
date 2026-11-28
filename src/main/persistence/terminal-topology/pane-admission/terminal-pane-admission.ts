@@ -1,7 +1,7 @@
 // Persist runtime pane membership before spawning through the same layout model used by client commands.
 
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   leafIdsOf,
@@ -61,7 +61,7 @@ export type LayoutLiveContext = Pick<
 >
 
 export function admitPaneToSession(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   admission: TerminalPaneAdmission
 ): PaneLayoutChange<TerminalPaneAdmissionOutcome> {
@@ -76,7 +76,7 @@ export function admitPaneToSession(
 }
 
 export function withdrawPaneFromSession(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   pane: CommandOf<'closePane'>
 ): PaneLayoutChange<LayoutRefusalCode | null> {
@@ -104,7 +104,7 @@ function touchedRecords(
 
 /** Mint IDs in main and rewrite only changed records, preserving unnormalized untouched rows. */
 export function applyCommandToSession(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   command: LayoutCommand,
   /** In-memory views absent from saved sessions. */
@@ -138,7 +138,7 @@ export function applyCommandToSession(
 
 /** Apply renames on one partition load; return each refused rename and code. */
 export function applyRenamesToSession(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   renames: readonly CommandOf<'renameTab'>[]
 ): PaneLayoutChange<{ rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[]> {

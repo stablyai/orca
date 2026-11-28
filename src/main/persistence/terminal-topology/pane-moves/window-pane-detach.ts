@@ -1,8 +1,8 @@
 // Validate every holder before any partition writes a renderer-requested detach.
 
 import { randomUUID } from 'node:crypto'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   collectLayoutLeafIdsInOrder,
   layoutContainsLeafId
@@ -37,7 +37,7 @@ export type ResolvedWindowPaneDetach =
 
 export function resolveWindowPaneDetach(
   partitions: readonly TerminalSessionPartition[],
-  holderIds: readonly ExecutionHostId[],
+  holderIds: readonly WorkspaceSessionPartitionId[],
   command: WindowPaneDetachCommand
 ): ResolvedWindowPaneDetach {
   const { leafId } = command

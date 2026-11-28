@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../workspace-session/teammate-homes-session-partition'
 import {
   collectTerminalLeafOwners,
   isSameTerminal
@@ -69,7 +69,7 @@ export function checkWorkspaceLayoutIdStability(
 }
 
 export function checkLayoutIdStability(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   previous: LayoutEntities,
   next: LayoutEntities
 ): WorkspaceLayoutViolation[] {

@@ -1,8 +1,8 @@
 // Close removes the pane before exit; resolve it by PTY and incarnation in closed-pane records, then retire that entry (L80 Q2).
 import { closedTerminalPaneOf } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-panes'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
@@ -15,7 +15,7 @@ export type ClosedPaneOfExit = {
 
 export function closedPaneOfExitedPty(
   store: RuntimeStore | null | undefined,
-  hostId: ExecutionHostId | null,
+  hostId: WorkspaceSessionPartitionId | null,
   pty: { ptyId: string; worktreeId: string },
   incarnationId: string | null | undefined
 ): ClosedPaneOfExit | null {

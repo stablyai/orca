@@ -1,7 +1,5 @@
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   normalizeTerminalLayoutPtyOwnership,
@@ -105,7 +103,7 @@ export function repairDuplicatePtyPanesMutation(
       .hostIds()
       // Paired-server partitions are display copies of server-owned layouts.
       .filter((hostId) => !hostId.startsWith('runtime:'))
-      .flatMap((hostId: ExecutionHostId) => {
+      .flatMap((hostId: WorkspaceSessionPartitionId) => {
         const plan = planDuplicatePtyPaneRepair(
           context.getSession(hostId),
           (worktreeId) =>

@@ -11,9 +11,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/iden
 import { RuntimeFederationOperations } from '../../orchestration/federation/runtime-federation-operations'
 
 export abstract class TerminalListHostScope extends RuntimeFederationOperations {
-  protected abstract tryGetWorkspaceSessionHostIdForWorktree(
-    worktreeId: string
-  ): ExecutionHostId | null
+  protected abstract tryGetExecutionHostIdForWorktree(worktreeId: string): ExecutionHostId | null
 
   protected listKnownExecutionHostIds(
     additionalHostIds: Iterable<ExecutionHostId> = [],
@@ -74,7 +72,7 @@ export abstract class TerminalListHostScope extends RuntimeFederationOperations 
       }
     }
     const scoped = targetWorktreeId
-      ? (targetHost ?? this.tryGetWorkspaceSessionHostIdForWorktree(targetWorktreeId))
+      ? (targetHost ?? this.tryGetExecutionHostIdForWorktree(targetWorktreeId))
       : null
     if (scoped) {
       known.add(scoped)

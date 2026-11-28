@@ -1,6 +1,6 @@
 // Check structural rules on stored runtime partitions; optionally compare previous partitions for ID remounts.
 
-import type { ExecutionHostId } from '../../execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../workspace-session/teammate-homes-session-partition'
 import type { Tab, TabGroup } from '../tab-groups/tab-types'
 import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'
 import {
@@ -20,7 +20,7 @@ function describeOwner(owner: PaneOwner): string {
 }
 
 /** Owner partitions share PTY ids (relay rows left in `local`); a `runtime:` mirror is checked alone. */
-export function paneOwnerGroups<Partition extends { hostId: ExecutionHostId }>(
+export function paneOwnerGroups<Partition extends { hostId: WorkspaceSessionPartitionId }>(
   partitions: readonly Partition[],
   collect: (partition: Partition) => PaneOwner[]
 ): PaneOwner[][] {
@@ -106,7 +106,7 @@ function sameOrder(left: readonly string[], right: readonly string[]): boolean {
 }
 
 function checkGroups(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   worktreeId: string,
   terminalTabIds: readonly string[],
   tabs: readonly Tab[] | undefined,

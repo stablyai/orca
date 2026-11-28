@@ -1,4 +1,5 @@
 import { webContents } from 'electron'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
@@ -165,7 +166,7 @@ export function noteWindowSessionSaveUnchanged(hostId: string | null | undefined
 
 function reconcileSavedBrowserPages(
   next: SavedBrowserTabsSource,
-  hostId: ExecutionHostId | null
+  hostId: WorkspaceSessionPartitionId | null
 ): void {
   if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
     return

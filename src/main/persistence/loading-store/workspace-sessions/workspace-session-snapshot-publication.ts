@@ -1,11 +1,9 @@
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { setMigrationUnsupportedPty } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
@@ -105,7 +103,7 @@ export function setLocalWorkspaceSession(
     registerPersistedPaneKeyAlias(entry)
   }
   session = normalized.session
-  const remapsByHostId = new Map<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>([
+  const remapsByHostId = new Map<WorkspaceSessionPartitionId, WorkspaceSessionPaneIdentityRemap>([
     [LOCAL_EXECUTION_HOST_ID, normalized]
   ])
   const remappedLeases = remapSshRemotePtyLeaseLeafIds(

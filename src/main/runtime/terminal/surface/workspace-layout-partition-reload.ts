@@ -1,6 +1,6 @@
 // Reload only the workspaces a write reported, plus every workspace sharing a Loader ref with them; null whenever the partial result could differ from a whole load.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ReverseIndexedMap } from '../../../../shared/collections/reverse-indexed-map'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import {
@@ -51,7 +51,7 @@ function hasRowWithoutLayout(session: WorkspaceSessionState): boolean {
 }
 
 export function loadWholePartition(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   context: WorkspaceLayoutLoadContext
 ): PartitionLoad {
@@ -85,7 +85,7 @@ export function loadWholePartition(
 
 /** The reloaded partition and the workspaces it reloaded; null when only a whole load is exact. */
 export function reloadWorkspaces(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   previous: PartitionLoad,
   session: WorkspaceSessionState,
   written: ReadonlySet<string>,

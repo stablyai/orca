@@ -38,16 +38,22 @@ import {
   type WorkspaceSessionEntriesPatch,
   type WorkspaceSessionEntriesPatchResult
 } from '../../shared/workspace-session/workspace-session-entries-patch'
+import { isTeammateHomesSessionPartition } from '../../shared/workspace-session/teammate-homes-session-partition'
+import { getDefaultWorkspaceSession } from '../../shared/orca-profiles/constants'
 
 export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
   // Why: renderer saves would change a fenced host's frozen source partition, or write back what a
   // WSL move rewrote under this window before main reloads it.
   const isFenced = (hostId?: string | null): boolean =>
-    isFrozenOrcadSourceSessionPartition(store, hostId) || isWslMoveWindowWriteHeld()
+    isTeammateHomesSessionPartition(hostId) ||
+    isFrozenOrcadSourceSessionPartition(store, hostId) ||
+    isWslMoveWindowWriteHeld()
 
   // Optional hostId preserves local-partition behavior for older renderers.
   ipcMain.handle('session:get', (_event, hostId?: string | null) => {
-    return store.getWorkspaceSession(hostId)
+    return isTeammateHomesSessionPartition(hostId)
+      ? getDefaultWorkspaceSession()
+      : store.getWorkspaceSession(hostId)
   })
 
   // Repo catalogs omit folder-only SSH hosts; enumerate session partitions directly (#12723).

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { WorkspaceSessionPartitionId } from '../../../shared/workspace-session/teammate-homes-session-partition'
 import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -6,7 +7,6 @@ import type {
   WorkspaceSessionOperationListener,
   WorkspaceSessionWriteListener
 } from './workspace-sessions/workspace-session-write-listeners'
-import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   StateWriteListener,
   WorktreeMetaWriteListener
@@ -43,9 +43,9 @@ export type DurableProfileStateMutation<T> = {
   persist?: boolean | 'if-dirty'
   rollback?: () => void
   /** Absent means any host may have changed; otherwise notify only listed partitions. */
-  writtenHostIds?: readonly ExecutionHostId[]
+  writtenHostIds?: readonly WorkspaceSessionPartitionId[]
   /** The workspaces a listed host's write changed; a listed host absent here may have changed any. */
-  writtenWorkspaces?: ReadonlyMap<ExecutionHostId, ReadonlySet<string>>
+  writtenWorkspaces?: ReadonlyMap<WorkspaceSessionPartitionId, ReadonlySet<string>>
 }
 
 export type StoreRuntimeOptions = {
@@ -121,7 +121,7 @@ export class StoreRuntimeState {
   /** In-memory host/leaf binding generations; layout-owner builds only. */
   readonly ptyBindingGenerations = new Map<string, number>()
   /** In-memory editor views by partition; layout-owner builds only. */
-  readonly layoutEditorViews = new Map<ExecutionHostId, PartitionEditorViews>()
+  readonly layoutEditorViews = new Map<WorkspaceSessionPartitionId, PartitionEditorViews>()
   readonly stateWriteListeners = new Set<StateWriteListener>()
   readonly worktreeMetaWriteListeners = new Set<WorktreeMetaWriteListener>()
   // This store's workspaceMetadata position: a new epoch per process, one seq per published record.

@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from '../../terminal/surface/mobile-session-terminal-persistence-retirement'
 import type { OrchestrationDb } from '../db/orchestration-db'
@@ -28,7 +28,7 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
     private readonly getStore: () => RuntimeStore | null,
     // A profile without a database has no workers to recover.
     private readonly getDb: () => OrchestrationDb | null,
-    private readonly getHostId: (worktreeId: string) => ExecutionHostId | null
+    private readonly getHostId: (worktreeId: string) => WorkspaceSessionPartitionId | null
   ) {}
 
   prepare(dispatchIds?: readonly string[]): LegacyWorkerTerminalRecoveryPlan {
@@ -47,8 +47,8 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
     }
     const getWorkspaceSession = store.getWorkspaceSession.bind(store)
     const setWorkspaceSession = store.setWorkspaceSession.bind(store)
-    const originals = new Map<ExecutionHostId, WorkspaceSessionState>()
-    const staged = new Map<ExecutionHostId, WorkspaceSessionState>()
+    const originals = new Map<WorkspaceSessionPartitionId, WorkspaceSessionState>()
+    const staged = new Map<WorkspaceSessionPartitionId, WorkspaceSessionState>()
     const dispatchIds = new Set<string>()
     let adopted = false
     try {

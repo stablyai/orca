@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithTeammateHomeTabMove } from '../person/teammate-home-tab-move-on-start'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { StructuredConversationLabelChanges } from './structured-conversation-label-changes'
 import { retitleStructuredConversationTabs } from './structured-conversation-tab-title'
 import { savedWorkspaceCatalog } from '../../../persistence/profile-save-domains'
@@ -6,7 +7,6 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { structuredChatDisplayName } from '../../../../shared/agent-session/view/structured-chat-row-name'
 import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithSavedConversationTitlePublication extends OrcaRuntimeWithTeammateHomeTabMove {
@@ -55,7 +55,7 @@ export abstract class OrcaRuntimeWithSavedConversationTitlePublication extends O
     super.notifyMobileSessionTabsRemoved(workspaceId)
   }
 
-  private refreshSavedConversationTitles(hostId: ExecutionHostId | null): void {
+  private refreshSavedConversationTitles(hostId: WorkspaceSessionPartitionId | null): void {
     const nameStore = getStructuredAgentSessionHost()?.deps?.store ?? null
     const sourceChanged = nameStore !== this.titleNameStore
     this.titleNameStore = nameStore

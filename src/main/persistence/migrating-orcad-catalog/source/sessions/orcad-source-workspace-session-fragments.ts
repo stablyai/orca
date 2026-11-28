@@ -2,7 +2,8 @@ import { serializeOrcadMigrationValue } from '../../../../../shared/orcad-migrat
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { mergeWorkspaceSessions } from '../../../../orca-profiles/project-transfer/profile-project-session-state'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../../../orca-profiles/project-transfer/profile-project-session-field-disposition'
-import { withRequiredWorkspaceSessionMaps } from '../../../loading-store/workspace-sessions/session-host-partitions'
+import { withRequiredWorkspaceSessionMaps } from '../../../loading-store/workspace-sessions/workspace-session-required-maps'
+import { isTeammateHomesSessionPartition } from '../../../../../shared/workspace-session/teammate-homes-session-partition'
 
 export function sessionPartitions(
   state: {
@@ -15,8 +16,10 @@ export function sessionPartitions(
     [localHostId, withRequiredWorkspaceSessionMaps(state.workspaceSession)],
     ...Object.entries(state.workspaceSessionsByHostId ?? {}).flatMap(
       ([hostId, session]): [string, WorkspaceSessionState][] =>
-        // Older sparse partitions may omit required maps.
-        session ? [[hostId, withRequiredWorkspaceSessionMaps(session)]] : []
+        // Older sparse partitions may omit required maps; teammates' workspaces stay with the Homes.
+        session && !isTeammateHomesSessionPartition(hostId)
+          ? [[hostId, withRequiredWorkspaceSessionMaps(session)]]
+          : []
     )
   ]
 }
