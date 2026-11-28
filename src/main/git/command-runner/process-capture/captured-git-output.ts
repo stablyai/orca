@@ -28,3 +28,13 @@ export function readCapturedGitString(stdout: string, resolved: ResolvedCommand)
   const endIndex = stdout.indexOf(captured.endMarker, payloadStart)
   return endIndex === -1 ? stdout.slice(payloadStart) : stdout.slice(payloadStart, endIndex)
 }
+
+/** Callers parse stdout of non-zero exits (check-ignore exit 1), so strip the fence there too. */
+export function withCapturedErrorStdout(error: unknown, command: ResolvedCommand): unknown {
+  if (command.captured && error && typeof error === 'object' && 'stdout' in error) {
+    if (typeof error.stdout === 'string') {
+      error.stdout = readCapturedGitString(error.stdout, command)
+    }
+  }
+  return error
+}
