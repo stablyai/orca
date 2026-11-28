@@ -6,21 +6,21 @@ import {
   getGitHubTaskKind,
   scopeGitHubTaskSearch
 } from '../../../../src/shared/work-items/task-github-search'
-import { translate } from '../../i18n/mobile-i18n'
 import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'
 import { mobileTasksFilterCount } from './mobile-tasks-filter-selection'
 import { githubQueryFromSearchField, githubSearchFieldText } from './github-task-search-field'
 
 function searchPlaceholder(model: ConnectionPresentationModel): string {
+  const { t } = model
   if (model.isGithubProjectSearch) {
-    return translate('tasks.searchControl.viewPlaceholder', 'Search this view')
+    return t('tasks.searchControl.viewPlaceholder', 'Search this view')
   }
   if (model.provider === 'github') {
     return model.githubKind === 'prs'
-      ? translate('tasks.searchControl.pullRequestsPlaceholder', 'Search pull requests')
-      : translate('tasks.searchControl.issuesPlaceholder', 'Search issues')
+      ? t('tasks.searchControl.pullRequestsPlaceholder', 'Search pull requests')
+      : t('tasks.searchControl.issuesPlaceholder', 'Search issues')
   }
-  return translate('tasks.searchControl.sourcePlaceholder', 'Search {{provider}}', {
+  return t('tasks.searchControl.sourcePlaceholder', 'Search {{provider}}', {
     provider: model.providerLabel
   })
 }
@@ -57,6 +57,7 @@ export function renderMobileTasksSearchControl(
     setShowCreateTask,
     setShowFilterSheet,
     showHeaderCreateTask,
+    t,
     taskUiReady
   } = model
   const searchable = mobileTasksSearchable(model)
@@ -87,7 +88,7 @@ export function renderMobileTasksSearchControl(
       bottomInset={insets.bottom}
       leading={{
         icon: SlidersHorizontal,
-        accessibilityLabel: translate('tasks.searchControl.filter', 'Filter'),
+        accessibilityLabel: t('tasks.searchControl.filter', 'Filter'),
         onPress: () => setShowFilterSheet(true),
         disabled: !taskUiReady,
         badge: mobileTasksFilterCount(model)
@@ -139,8 +140,8 @@ export function renderMobileTasksSearchControl(
               icon: Plus,
               accessibilityLabel:
                 provider === 'github'
-                  ? translate('tasks.screenChrome.newGitHubIssue', 'New GitHub issue')
-                  : translate('tasks.screenChrome.newLinearIssue', 'New Linear issue'),
+                  ? t('tasks.screenChrome.newGitHubIssue', 'New GitHub issue')
+                  : t('tasks.screenChrome.newLinearIssue', 'New Linear issue'),
               disabled: !taskUiReady,
               onPress: () => setShowCreateTask(true)
             }

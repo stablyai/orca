@@ -92,7 +92,10 @@ export async function spawnNativeDaemonPty(args: {
         // Bundled ConPTY provides the wrap-marker behavior xterm expects.
         ...(process.platform === 'win32' ? { useConptyDll } : {})
       })
-      dropInheritedNiceBoost(spawned.pid)
+      // Linux-only, and an older process-host left by a partial update lacks it (#51055).
+      if (process.platform === 'linux') {
+        dropInheritedNiceBoost(spawned.pid)
+      }
       return spawned
     }
     try {

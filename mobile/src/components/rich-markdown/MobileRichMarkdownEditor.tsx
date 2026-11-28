@@ -1,8 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { View, type HostInstance } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
@@ -52,6 +51,7 @@ function MobileRichMarkdownEditorWebInner({
 }: MobileRichMarkdownEditorComponentProps) {
   const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const hostRef = useRef<HostInstance>(null)
   const documentRef = useRef<RichMarkdownWebDocument | null>(null)
   // Document reports ready synchronously during mount before documentRef exists; queue controller content/editable calls until handle arrives or editor stays empty.
@@ -229,7 +229,7 @@ function MobileRichMarkdownEditorWebInner({
 
 export const MobileRichMarkdownEditor = memo(MobileRichMarkdownEditorWebInner)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase },
   hostFrame: { flex: 1, minHeight: 0 },
   host: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase }

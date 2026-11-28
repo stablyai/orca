@@ -18,6 +18,7 @@ import {
 } from '../options/structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { settleUnheldStructuredAgentSessionTurns } from '../termination/structured-agent-session-unheld-turns'
+import { applyStructuredAgentSessionPermissionPick } from '../options/structured-agent-session-live-permission'
 import { AgentSessionStartFailure } from './structured-agent-session-start-failure'
 import {
   applyRewindAtStart,
@@ -159,6 +160,19 @@ function settleReady(
         child.fence,
         event.reportedOptions
       )
+      // A pick saved while the child started wasn't handed to it; it goes ahead of queued sends.
+      if (sourceChild?.permissionMode !== undefined) {
+        applyStructuredAgentSessionPermissionPick(
+          context,
+          {
+            sessionId: event.sessionId,
+            fence: child.fence,
+            publish: () => context.publishStatus?.(event.sessionId),
+            logger: context.deps.logger
+          },
+          sourceChild.permissionMode
+        )
+      }
       void context.wakeDelivery(event.sessionId)
       noteStructuredAgentSessionProviderStarted(
         context.deps,

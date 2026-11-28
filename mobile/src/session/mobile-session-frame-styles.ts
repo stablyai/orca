@@ -1,9 +1,8 @@
 import { StyleSheet } from 'react-native'
 
-import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileSessionFrameStyles = themedStyleSheet(() => ({
+export const mobileSessionFrameStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -23,6 +22,10 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle
+  },
+  sessionChromeOnChat: {
+    backgroundColor: colors.chatCanvas,
+    borderBottomColor: 'transparent'
   },
   contentFrame: {
     flex: 1,

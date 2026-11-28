@@ -46,6 +46,8 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   overflowAnchor: 'none'
 }
 
+const EMPTY_DRAG_UNITS_BY_ROW: ReadonlyMap<number, { identity: string }> = new Map()
+
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
 ) {
@@ -164,7 +166,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     worktreeMap,
     worktreeLineageById,
-    worktreeDragGroups: session.worktreeDragGroups,
+    getWorktreeDragGroups: session.getWorktreeDragGroups,
     keepsFolderParent: rowGeometry.keepsFolderParent,
     captureFolderRetention: rowGeometry.captureFolderRetention
   })
@@ -338,7 +340,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
   const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
   const rowContext = buildWorktreeVirtualRowContext({
-    dragUnitsByRow: rowGeometry.ranges.byRow,
+    dragUnitsByRow:
+      runtime.worktreeDragState.previewOffsetsByWorktreeId.size > 0
+        ? rowGeometry.getRanges().byRow
+        : EMPTY_DRAG_UNITS_BY_ROW,
     hiddenDragRanges,
     props: rowProps,
     projection,

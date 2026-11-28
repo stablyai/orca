@@ -50,7 +50,8 @@ export function useMobileSourceControlChangesMenu({
                 id: 'abort',
                 label: mobileConflictAbortLabel(
                   operation,
-                  isMobileConflictAborting(busyAction, operation)
+                  isMobileConflictAborting(busyAction, operation),
+                  t
                 ),
                 icon: CircleX,
                 disabled: ioBusy,
@@ -75,7 +76,7 @@ export function useMobileSourceControlChangesMenu({
         'sourceControl.conflictAbort.confirmMessage',
         'The branch goes back to where it was, and the resolved files are lost.'
       )}
-      confirmLabel={mobileConflictAbortLabel(confirming ?? 'merge', false)}
+      confirmLabel={mobileConflictAbortLabel(confirming ?? 'merge', false, t)}
       destructive
       onConfirm={() => {
         // The merge may have finished or changed while the confirm was up.

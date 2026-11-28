@@ -10,7 +10,6 @@ import { OrcaHookTrustDrawer } from '../components/hook-trust/OrcaHookTrustDrawe
 import { NewWorktreeModalController } from '../new-workspace/creation/modal/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { WorkspaceOptionsSheet } from './workspace-options/workspace-options-sheet'
 import { HostNewBotSheet } from './host-new-bot-sheet'
 import { WorkspaceDetailsSheet } from './workspace-actions/workspace-details-sheet'
@@ -24,7 +23,7 @@ import type { HostScreenController } from './use-host-screen-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { MobileRepoIcon } from '../components/icons/MobileRepoIcon'
-import { colors } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useRepoLookById } from './catalog/host-repo-looks'
 
 // The sheet's one muted line: the project, then the branch when the name doesn't already say it.
@@ -35,8 +34,8 @@ function workspaceSubjectLine(row: Worktree): string {
 }
 
 export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const {
     actions,
     catalog,

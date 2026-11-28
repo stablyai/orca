@@ -101,11 +101,6 @@ export class ServerRowSnapshots {
     }
   }
 
-  /** One server's rows, leaving the other servers' snapshots alone. */
-  readOne(client: RpcClient, hostId: ExecutionHostId): Promise<Worktree[] | null> {
-    return this.readHost(client, this.hostsOf(client), hostId)
-  }
-
   private hostsOf(client: RpcClient): Map<ExecutionHostId, WorktreeCatalogSnapshotClient> {
     let byHost = this.byClient.get(client)
     if (!byHost) {

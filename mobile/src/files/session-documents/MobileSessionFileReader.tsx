@@ -21,10 +21,10 @@ import {
 import { MobileHtmlPreview } from '../preview/documents/MobileHtmlPreview'
 import { MobilePanZoomImage } from '../media/presentation/MobilePanZoomImage'
 import { MobileSvgPreview } from '../preview/documents/MobileSvgPreview'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { styles } from '../../session/mobile-session-styles'
+import { stylesSheet } from '../../session/mobile-session-styles'
 import type { DiffComment } from '../../../../src/shared/file-review/diff-comment-types'
 import type {
   DiffCommentActions,
@@ -36,6 +36,7 @@ import { DiffLineRow } from '../../source-control/review/review-notes/MobileSess
 import { sendableMobileDiffComments } from '../../source-control/review/review-notes/mobile-diff-comments'
 import { MobileLoadErrorState, MobileStateView } from '../../components/feedback/MobileStateView'
 import { useDurableDraftField } from '../../drafts/durable-draft-fields'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type FileReaderProps = {
   doc: FileDocState | undefined
@@ -64,7 +65,8 @@ function FileReaderDocument({
   diffCommentActions,
   noteDraftKey
 }: FileReaderProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),

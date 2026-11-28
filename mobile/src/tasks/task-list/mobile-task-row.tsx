@@ -1,8 +1,10 @@
 import { StyleSheet, View } from 'react-native'
 import { ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { translate } from '../../i18n/mobile-i18n'
+import { radii, spacing, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { HostedReviewMergeTone } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-state'
 import {
   getGitHubMergeChip,
@@ -14,7 +16,7 @@ import { taskKindLabel } from '../item-detail/mobile-tasks-item-comments'
 import { taskItemStateGlyph } from '../item-detail/mobile-tasks-item-state-glyph'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 
-function toneColor(tone: HostedReviewMergeTone): string {
+function toneColor(tone: HostedReviewMergeTone, colors: MobilePalette): string {
   switch (tone) {
     case 'success':
       return colors.statusGreen
@@ -28,31 +30,35 @@ function toneColor(tone: HostedReviewMergeTone): string {
 }
 
 /** The one word a review row leads with: what blocks it or what's next, in its tone. */
-export function taskRowStatus(item: TaskItem): { text: string; color: string } | null {
+export function taskRowStatus(
+  item: TaskItem,
+  t: Translate,
+  colors: MobilePalette
+): { text: string; color: string } | null {
   const review =
     item.provider === 'github' && item.source.type === 'pr'
-      ? { source: item.source, chip: getGitHubMergeChip(item.source) }
+      ? { source: item.source, chip: getGitHubMergeChip(t, item.source) }
       : item.provider === 'gitlab' && item.source.type === 'mr'
-        ? { source: item.source, chip: getGitLabMergeChip(item.source) }
+        ? { source: item.source, chip: getGitLabMergeChip(t, item.source) }
         : null
   if (!review) {
     return null
   }
   if (review.source.state === 'draft') {
-    return { text: translate('tasks.row.draft', 'Draft'), color: colors.textMuted }
+    return { text: t('tasks.row.draft', 'Draft'), color: colors.textMuted }
   }
   if (review.chip) {
-    return { text: review.chip.label, color: toneColor(review.chip.tone) }
+    return { text: review.chip.label, color: toneColor(review.chip.tone, colors) }
   }
   // List reads often carry no merge metadata; checks and the review still say what's next.
   if (getHostedReviewSignalTone(review.source, 'checks') === 'danger') {
     return {
-      text: translate('auto.components.github.pr.merge.state.87fa36ac83', 'Checks failed'),
+      text: t('auto.components.github.pr.merge.state.87fa36ac83', 'Checks failed'),
       color: colors.statusRed
     }
   }
   return review.source.reviewDecision === 'APPROVED'
-    ? { text: translate('tasks.row.approved', 'Approved'), color: colors.statusGreen }
+    ? { text: t('tasks.row.approved', 'Approved'), color: colors.statusGreen }
     : null
 }
 
@@ -82,8 +88,11 @@ export function MobileTaskRow({
   meta?: string
   onPress: () => void
 }) {
-  const glyph = taskItemStateGlyph(item)
-  const status = taskRowStatus(item)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const glyph = taskItemStateGlyph(item, colors)
+  const status = taskRowStatus(item, t, colors)
   return (
     <View style={[styles.cell, first && styles.first, last && styles.last]}>
       <ListRow
@@ -104,6 +113,7 @@ export function MobileTaskRow({
 
 /** The hairline between two rows of a page group, from the text's start. */
 export function MobileTaskRowSeparator() {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={[styles.cell, styles.separator]}>
       <View style={styles.hairline} />
@@ -111,7 +121,7 @@ export function MobileTaskRowSeparator() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // Rows draw the group themselves so a long list stays one virtualized FlatList.
   cell: {
     marginHorizontal: spacing.lg,

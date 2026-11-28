@@ -40,7 +40,7 @@ import {
   type RuntimeServiceCommandSurface,
   installRuntimeServiceCommandSurface
 } from './runtime-service-command-surface'
-import { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
+import { LazyRuntimeSkillCommands } from '../integrations/skill/lazy-runtime-skill-commands'
 import {
   type RuntimeSkillCommandSurface,
   installRuntimeSkillCommandSurface
@@ -50,7 +50,7 @@ import { RuntimeClientSettingsController } from '../client/settings/runtime-clie
 import { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../orchestration/federation/runtime-orchestration-federation'
-import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
+import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-session-sources-registry'
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal/output/terminal-model-query-authority'
@@ -195,7 +195,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       browserDrivers: this.browserDrivers,
       messageWaiters: this.messageWaiters
     })
-    this.skillCommands = new RuntimeSkillCommands({
+    this.skillCommands = new LazyRuntimeSkillCommands({
       getRuntimeId: () => this.runtimeId,
       getUserDataPath: () => getAppEnvironment().getPath('userData'),
       isPackaged: () => getAppEnvironment().isPackaged(),

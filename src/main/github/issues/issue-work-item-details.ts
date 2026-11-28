@@ -145,13 +145,16 @@ export async function getIssueDetailsViaGraphQL(
     const details: CollapsedIssueDetails = {
       ...(itemData?.success
         ? {
-            item: mapIssueWorkItem({
-              ...itemData.data,
-              state: itemData.data.state.toLowerCase(),
-              user: restIssueActor(itemData.data.author),
-              labels: itemData.data.labels.nodes,
-              assignees: assigneeUsers
-            })
+            item: mapIssueWorkItem(
+              {
+                ...itemData.data,
+                state: itemData.data.state.toLowerCase(),
+                user: restIssueActor(itemData.data.author),
+                labels: itemData.data.labels.nodes,
+                assignees: assigneeUsers
+              },
+              repository
+            )
           }
         : {}),
       body: issue.body ?? '',

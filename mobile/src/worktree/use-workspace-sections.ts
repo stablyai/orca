@@ -68,18 +68,19 @@ export function useWorkspaceSections(args: {
   } = args
 
   const uniqueRepos = useMemo(
-    () => buildFilterRepos(filterCatalogRepos, displayWorktrees),
+    () => buildFilterRepos(filterCatalogRepos, displayWorktrees, t),
     [filterCatalogRepos, displayWorktrees, t]
   )
 
   const repoById = useMemo(
-    () => buildSectionRepoMap(projectCatalog.repos, displayWorktrees),
+    () => buildSectionRepoMap(projectCatalog.repos, displayWorktrees, t),
     [projectCatalog.repos, displayWorktrees, t]
   )
 
   const plan = useMemo(
     () =>
       buildMobileWorkspacePlan(
+        t,
         displayWorktrees,
         sortMode,
         filters,

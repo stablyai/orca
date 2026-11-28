@@ -23,7 +23,8 @@ export function useAutomationsListChrome(controller: AutomationsPageController) 
     !list.scopedExternal.loading &&
     list.scopedExternal.failures.length === 0 &&
     !list.externalManagersUncheckedNotice
-      ? list.visibleRows.length + list.externalAutomationEntries.length
+      ? // Every listed automation, before search and filters (waits are never listed).
+        list.searchCounts.hostRowCount
       : null
   const tabs = (current: 'automations' | 'runs'): React.ReactNode => (
     <RailPageNav

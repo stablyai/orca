@@ -41,7 +41,7 @@ export function ensureDocumentStyle(host: HTMLElement) {
   style.id = STYLE_ELEMENT_ID
   style.dataset.scheme = scheme
   style.textContent = scopeDocumentStyleToHost(
-    richMarkdownEditorStyle(),
+    richMarkdownEditorStyle(scheme),
     `.${RICH_MARKDOWN_HOST_CLASS}`
   )
   if (!existing) {

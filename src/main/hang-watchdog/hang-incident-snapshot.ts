@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
+import { open } from 'node:fs/promises'
 import { freemem, loadavg, totalmem } from 'node:os'
 import { sanitizeCrashReportString } from '../../shared/crash-reporting/crash-report-redaction'
 import { redactString } from '../../shared/observability/redactor'
@@ -92,19 +92,20 @@ export async function collectHangMachineSnapshot(
   return snapshot
 }
 
-export function readCompletedHangContext(
+export async function readCompletedHangContext(
   tracePath: string | undefined
-): CompletedHangContext[] | null {
+): Promise<CompletedHangContext[] | null> {
   if (!tracePath) {
     return null
   }
-  let fd: number | undefined
+  // Async so a stalled disk cannot block the watchdog loop that must still escalate and spawn sample.
+  let file: Awaited<ReturnType<typeof open>> | undefined
   try {
-    fd = openSync(tracePath, 'r')
-    const size = fstatSync(fd).size
+    file = await open(tracePath, 'r')
+    const size = (await file.stat()).size
     const offset = Math.max(0, size - 32 * 1024)
     const buffer = Buffer.allocUnsafe(Math.min(size, 32 * 1024))
-    const bytes = readSync(fd, buffer, 0, buffer.length, offset)
+    const { bytesRead: bytes } = await file.read(buffer, 0, buffer.length, offset)
     const lines = buffer.subarray(0, bytes).toString('utf8').split('\n')
     lines.pop()
     if (offset > 0) {
@@ -142,8 +143,8 @@ export function readCompletedHangContext(
   } catch {
     return null
   } finally {
-    if (fd !== undefined) {
-      closeSync(fd)
+    if (file !== undefined) {
+      await file.close().catch(() => {})
     }
   }
 }

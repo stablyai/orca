@@ -51,5 +51,11 @@ export function findExtraFolderWorkspaceIds(
   metaById: Record<string, WorktreeMeta>
 ): string[] {
   const prefix = `${getRepoMainWorktreeId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
-  return Object.keys(metaById).filter((worktreeId) => worktreeId.startsWith(prefix))
+  const extraIds: string[] = []
+  for (const worktreeId in metaById) {
+    if (Object.hasOwn(metaById, worktreeId) && worktreeId.startsWith(prefix)) {
+      extraIds.push(worktreeId)
+    }
+  }
+  return extraIds
 }

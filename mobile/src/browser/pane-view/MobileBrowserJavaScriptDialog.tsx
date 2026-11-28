@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Text } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { ConfirmModal } from '../../components/sheets/ConfirmModal'
 import { TextInputSheetContent } from '../../components/sheets/TextInputModal'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import { useLastShownData } from '../../query/use-last-shown-data'
 import { mobileBrowserSiteName } from './mobile-browser-page-prompt-copy'
-import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
+import { mobileBrowserPaneStylesSheet as stylesSheet } from './mobile-browser-pane-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type DialogMethod = 'browser.dialogDismiss' | 'browser.dialogAccept'
 
@@ -23,8 +23,8 @@ export function MobileBrowserJavaScriptDialog({
   dialog: BrowserDialogState | null
   sendDialogCommand: (method: DialogMethod, promptText?: string) => Promise<void>
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   // Kept through the sheet's close, after the host has let the page go.
   const shown = useLastShownData(dialog ?? undefined, null)
   if (!shown) {
@@ -34,7 +34,7 @@ export function MobileBrowserJavaScriptDialog({
   const pending = shown.pending !== undefined
   const title = shown.origin
     ? t('browser.paneView.dialogTitleWithOrigin', '{{origin}} says', {
-        origin: mobileBrowserSiteName(shown.origin)
+        origin: mobileBrowserSiteName(shown.origin, t)
       })
     : t('browser.paneView.dialogTitleNoOrigin', 'This page says')
   // Only the host's close event closes the sheet, so the page is never left blocked behind nothing.

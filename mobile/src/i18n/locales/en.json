@@ -12,7 +12,7 @@
       "language": {
         "systemWithCurrent": "System ({{language}})",
         "heading": "Language",
-        "description": "System follows this device’s language. Permission prompts always use the device language."
+        "footer": "Permission prompts use the device language."
       },
       "usage": {
         "used": "Used",
@@ -47,17 +47,15 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Ask each time",
-      "askEachTimeDescription": "Choose Orca browser, phone browser, or copy the link each time.",
       "desktopBrowser": "Orca browser on desktop",
-      "desktopBrowserDescription": "Open in the streamed browser from your paired desktop.",
       "phoneBrowser": "Phone browser",
-      "phoneBrowserDescription": "Open in Safari, Chrome, or another browser on this phone.",
       "title": "Browser",
-      "linksHeading": "Links",
-      "terminalAndChatLinksDescription": "Choose where web links tapped in terminal output and chat open.",
       "loadFailed": "Could not load browser preferences. Try again.",
       "saveFailed": "Could not save browser preferences. Try again.",
-      "openLinks": "Open links"
+      "openLinks": "Open links",
+      "askHint": "Pick a browser or copy the link",
+      "desktopHint": "Streamed from your computer",
+      "phoneHint": "Safari, Chrome or another app"
     },
     "menuItems": {
       "appearance": "Appearance",
@@ -71,11 +69,8 @@
       "updateAvailable": "Update available"
     },
     "nativeChatSettingsScreen": {
-      "defaultViewHeading": "Default view",
-      "defaultViewDescription": "Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.",
-      "openInChatUi": "Open sessions in Chat UI",
-      "on": "On",
-      "off": "Off"
+      "defaultViewFooter": "Switch one session from its long-press menu.",
+      "openInChat": "Open agent sessions in chat"
     },
     "nativeChatText": {
       "heading": "Text",
@@ -167,23 +162,20 @@
       "title": "Voice",
       "connectDesktop": "Connect to a desktop to manage voice settings.",
       "loadFailedMessage": "Failed to load voice settings.",
-      "dictationHeading": "Dictation",
-      "enableDictation": "Enable Voice Dictation",
-      "dictationDescription": "Dictate text into any focused pane on your desktop.",
-      "dictationMode": "Dictation Mode",
-      "dictationModeDescription": "Toggle: press once to start, again to stop. Hold: dictate while held.",
-      "dictationModeWithAutoDescription": "Auto: tap to start and stop; on your computer, holding the shortcut records until you let go. Hold: dictate while held. Toggle: press once to start, again to stop.",
       "autoMode": "Auto",
-      "speechModelHeading": "Speech model",
-      "speechModel": "Speech Model",
-      "loading": "Loading voice settings…"
-    },
-    "agents": {
-      "permissionOwnAll": "Agents' own settings"
+      "loading": "Loading voice settings…",
+      "toggleModeHint": "Tap to start, tap again to stop",
+      "holdModeHint": "Talk while you hold",
+      "autoModeHint": "Tap to start and stop; hold the shortcut on the computer",
+      "dictation": "Dictation",
+      "mode": "Mode",
+      "model": "Model",
+      "runsOn": "Runs on {{name}}",
+      "dictationOffFooter": "Talk instead of typing in chats and terminals.",
+      "swipeToDelete": "Swipe a downloaded model left to delete it."
     },
     "voiceTranscribeOn": {
       "heading": "Transcribe on",
-      "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
       "automatic": "Automatic",
       "phone": "This phone",
       "computer": "Computer",
@@ -193,7 +185,8 @@
       "phoneUnsupported": "Not available on this phone",
       "download": "Download for this phone",
       "downloadSize": "About {{size}} MB",
-      "phoneChecking": "Checking…"
+      "phoneChecking": "Checking…",
+      "footer": "Automatic uses this phone when it can."
     },
     "bots": {
       "slackStatus": {
@@ -268,22 +261,21 @@
   },
   "host": {
     "edit": {
-      "missingHost": "Missing host.",
-      "hostRemoved": "This host was removed from this phone.",
-      "loadFailed": "Failed to load host.",
-      "saveFailed": "Failed to save host.",
-      "title": "Edit host",
-      "removeHost": "Remove host",
-      "saveHost": "Save host",
       "goBack": "Go back",
       "name": "Name",
-      "hostNamePlaceholder": "Host name",
       "address": "Address",
       "connectionPreview": "Connects to {{endpoint}}",
       "updateStepsServiceManager": "Update it with its package manager or service manager.",
       "updateStepsSourceCheckout": "Update it from its source checkout.",
       "updateStepsServer": "Update Orca on the server, then restart it.",
-      "orcaVersion": "Orca version"
+      "orcaVersion": "Orca version",
+      "computerNotFound": "This computer isn’t on this phone.",
+      "computerRemoved": "This computer was removed.",
+      "couldNotLoad": "Couldn’t load this computer.",
+      "couldNotSave": "Couldn’t save this computer.",
+      "editComputer": "Edit computer",
+      "save": "Save",
+      "removeComputer": "Remove computer"
     }
   },
   "app": {
@@ -331,25 +323,16 @@
     "terminalSettings": {
       "restoreAfterMinutes_one": "After {{count}} minute",
       "restoreAfterMinutes_other": "After {{count}} minutes",
-      "keepPhoneSize": "Keep at phone size (default)",
       "restoreAfterSeconds_one": "After {{count}}s",
       "restoreAfterSeconds_other": "After {{count}}s",
       "title": "Terminal",
       "leaveAppHeading": "When you leave the app",
-      "leaveAppDescription": "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually.",
-      "noPairedDesktops": "No paired desktops yet. Pair one to control terminal behavior.",
-      "restoreHost": "Restore {{name}}",
       "previewColumns_one": "{{count}} column",
       "previewColumns_other": "{{count}} columns",
       "previewLabel": "Terminal preview",
-      "previewHeading": "Preview",
-      "fontHeading": "Font",
-      "fontDescription": "Pinch in a terminal to change the size; it saves here. Only changes this device, not the desktop terminal.",
       "font": "Font",
       "size": "Size",
       "sizePoints": "{{size}} pt",
-      "smaller": "Smaller",
-      "larger": "Larger",
       "lineSpacing": "Line spacing",
       "lineSpacingTight": "Tight",
       "lineSpacingNormal": "Normal",
@@ -363,7 +346,16 @@
       "fontsIncluded": "Included with Orca",
       "systemMono": "System mono",
       "defaultFont": "Default",
-      "resetFont": "Reset font settings"
+      "resetFont": "Reset font settings",
+      "phoneSize": "Phone size",
+      "offline": "Offline",
+      "fontAndSize": "Font and size",
+      "keyRow": "Key row",
+      "leaveAppFooter": "Phone size keeps CLI tools from redrawing.",
+      "noComputers": "No computers paired yet.",
+      "pinchFooter": "Pinch in a terminal to change the size.",
+      "reorderKeys": "Reorder keys",
+      "doneReordering": "Done reordering"
     },
     "pairing": {
       "connectTimedOut": "Your computer didn’t answer in {{seconds}} seconds.",
@@ -739,28 +731,24 @@
       "openSettingsMobile": "Open Orca on your computer, then Settings → Mobile."
     },
     "listFooter": {
-      "hostPickerTitle": "Open Tasks On"
+      "openTasksOn": "Open Tasks on"
     },
     "listHeader": {
-      "desktopsHeading": "Desktops"
+      "computersHeading": "Computers"
     },
     "screen": {
       "pairingCheckFailed": "Could not check pairing",
       "tryAgain": "Please try again.",
-      "removeHostFailed": "Could not remove host",
-      "removeHostTitle": "Remove Host",
-      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
+      "removeComputerFailed": "Couldn’t remove computer",
+      "sameNetworkOnly": "Connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in to Orca on your computer and pair again.",
+      "removeComputerTitle": "Remove computer",
+      "removeComputerMessage": "Remove “{{name}}”? You can pair it again later."
     },
     "bottomBar": {
-      "connectFirst": "Connect a desktop to start new work.",
       "newWorkspace": "New workspace"
     },
-    "desktops": {
-      "pairDesktop": "Pair a desktop"
-    },
     "sections": {
-      "tasks": "Tasks",
-      "tasksSubtitle": "Browse your issues and reviews"
+      "tasks": "Tasks"
     },
     "stats": {
       "heading": "Your stats",
@@ -773,37 +761,33 @@
     },
     "automationsTab": {
       "newAutomation": "New automation",
-      "lastStatus": "Last: {{status}}",
-      "paused": "Paused",
       "showFor": "Show automations for",
       "emptyTitle": "Schedule agent work",
-      "pairDesktop": "Pair a desktop to view and run automations.",
       "updateDesktop": "Update Orca on {{desktop}} to use automations.",
       "connectDesktop": "Connect {{desktop}} to view and run automations.",
-      "noAutomations": "No automations yet",
-      "createHint": "Tap + to schedule an agent.",
       "scheduled": "Scheduled",
-      "toggleFailed": "Couldn’t update {{name}}"
+      "toggleFailed": "Couldn’t update {{name}}",
+      "pairComputer": "Pair a computer to view and run automations."
     },
     "tabs": {
       "automations": "Automations",
       "feed": "Feed",
-      "chooseDesktop": "{{desktop}}, choose another desktop",
       "usage": "Usage",
       "agents": "Agents",
-      "bots": "Bots"
+      "bots": "Bots",
+      "chooseComputer": "{{desktop}}, choose another computer"
     },
     "usage": {
       "refresh": "Refresh usage",
       "showUsageFor": "Show usage for",
-      "pairDesktop": "Pair a desktop to see agent account usage.",
       "connectDesktop": "Connect {{desktop}} to see agent account usage.",
-      "addAccounts": "Add accounts from desktop Settings → Accounts.",
       "updatedJustNow": "Updated just now",
       "updatedAgo": "Updated {{time}} ago",
       "active": "Active",
-      "openAccountsHint": "Opens this desktop’s accounts",
-      "emptyTitle": "No usage yet"
+      "emptyTitle": "No usage yet",
+      "pairComputer": "Pair a computer to see agent account usage.",
+      "addAccountsOnComputer": "Add accounts in Orca on your computer, in Settings → Accounts.",
+      "openComputerAccountsHint": "Opens this computer’s accounts"
     },
     "activeAgents": {
       "heading": "Active",
@@ -811,7 +795,6 @@
     },
     "bots": {
       "noBotsTitle": "No bots yet",
-      "pairDesktop": "Pair a desktop to see its bots here.",
       "seeAll": "See all bots",
       "updateOneBody": "Its version of Orca can’t show bots on your phone yet.",
       "updateManyTitle": "Update Orca on your computers",
@@ -829,7 +812,11 @@
         "workers_other": "{{count}} workers",
         "items_one": "item",
         "items_other": "{{count}} items"
-      }
+      },
+      "pairComputer": "Pair a computer to see its bots here."
+    },
+    "computers": {
+      "pairComputer": "Pair a computer"
     }
   },
   "hooks": {
@@ -853,15 +840,16 @@
       "connect": "Connect",
       "disconnect": "Disconnect",
       "networkDiagnostics": "Network diagnostics",
-      "editHost": "Edit host"
+      "editComputer": "Edit computer"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Creating workspace…"
     },
     "hostScreenHeader": {
-      "backToHosts": "Back to hosts",
       "reconnect": "Reconnect",
-      "floatingWorkspace": "Floating Workspace",
+      "offlineSince": "Offline since {{time}}",
+      "notConnected": "Not connected",
+      "floatingWorkspace": "Floating workspace",
       "hideSidebar": "Hide sidebar",
       "accounts": "Accounts",
       "tasks": "Tasks",
@@ -965,7 +953,6 @@
       "agentActivityLayout": "Agent activity layout"
     },
     "workspaceOptionsSheet": {
-      "hosts": "Hosts",
       "projects": "Projects",
       "groupBy": "Group by",
       "sortBy": "Sort by",
@@ -976,23 +963,23 @@
       "hideSleeping": "Hide sleeping",
       "exceptDefaultBranch": "Except default branch",
       "hideDefaultBranch": "Hide default branch",
-      "hideAutomationCreated": "Hide automation-created",
-      "hideCliCreated": "Hide CLI-created",
-      "hideOtherClientWorkspaces": "Hide other-client workspaces",
-      "hideDetachedHead": "Hide detached HEAD",
       "show": "Show",
       "filters": "Filters",
       "localMac": "Local Mac",
       "localWindows": "Local Windows",
       "localLinux": "Local Linux",
       "thisComputer": "This computer",
-      "waitingForDesktop": "Still waiting for the host",
-      "savingToDesktop": "Saving to the host",
       "backToOptions": "Back to Workspace options",
       "workspaceOptions": "Workspace options",
-      "syncedAcrossDevices": "Synced across your devices",
       "done": "Done",
-      "reset": "Reset"
+      "reset": "Reset",
+      "computers": "Computers",
+      "hideAutomationWorkspaces": "Hide automation workspaces",
+      "hideCliWorkspaces": "Hide CLI workspaces",
+      "hideOtherDevicesWorkspaces": "Hide other devices’ workspaces",
+      "hideNoBranch": "Hide workspaces with no branch",
+      "saving": "Saving…",
+      "stillSaving": "Still saving…"
     },
     "hostBottomBar": {
       "workspaceOptions": "Workspace options",
@@ -1036,7 +1023,6 @@
   "navigation": {
     "hostStackScreens": {
       "host": "Host",
-      "editHost": "Edit host",
       "accounts": "Accounts",
       "tasks": "Tasks",
       "terminal": "Terminal",
@@ -1046,19 +1032,19 @@
       "pullRequest": "Pull Request",
       "workspace": "Workspace",
       "automations": "Automations",
-      "mcpServers": "MCP servers"
+      "mcpServers": "MCP servers",
+      "editComputer": "Edit computer"
     }
   },
   "notifications": {
     "notificationDeliverySection": {
-      "onlyWhenAway": "Only when away from desktop",
-      "onlyWhenAwayHint": "After 3 minutes without keyboard or mouse activity, or when locked.",
       "sound": "Notification sound",
-      "suppressWhileFocused": "Suppress while focused",
-      "suppressWhileFocusedHint": "Skip alerts for the workspace open on this phone.",
-      "footer": "Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume.",
       "onlyWhenAgentNeedsInput": "Only when an agent needs me",
-      "onlyWhenAgentNeedsInputHint": "Permission requests and questions. Skips finished agents."
+      "pauseFooter": "Alerts pause after 7 days without opening this app.",
+      "onlyWhenAwayFromComputer": "Only when I’m away",
+      "awayHint": "Idle for 3 minutes or locked",
+      "needsMeHint": "Permissions and questions only",
+      "notWhileViewing": "Not for the workspace I’m viewing"
     },
     "desktopChannel": {
       "silentName": "Orca silent notifications",
@@ -1160,13 +1146,15 @@
     },
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
-      "loadFailed": "Could not load workspaces from this host",
+      "loadFailed": "Couldn’t load workspaces",
+      "pairingRefused": "Pairing was refused",
+      "pairAgain": "Pair again from Orca on your computer.",
+      "clearFilters": "Clear filters",
       "noFilterMatches": "No workspaces match filters",
       "empty": "No workspaces",
       "reopen": "Reopen to update",
       "reopenDetail": "This host lists workspaces in a way this page does not know yet.",
-      "loading": "Loading workspaces…",
-      "retryingAutomatically": "Retrying automatically."
+      "loading": "Loading workspaces…"
     },
     "workspaceListSections": {
       "pinned": "Pinned",
@@ -1192,12 +1180,8 @@
       "monitoring": "Monitoring background tasks",
       "unverifiable": "No recent update"
     },
-    "authFailedBanner": {
-      "message": "Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop."
-    },
     "authFailedBannerActions": {
-      "repair": "Re-pair",
-      "webNote": "Reconnect or remove this host from the Orca app."
+      "repair": "Re-pair"
     },
     "codexResetCreditAction": {
       "earnedReset": "Earned Codex rate-limit reset",
@@ -1228,9 +1212,6 @@
       "reorderHint": "Use the move up and move down actions to reorder without dragging",
       "moveUp": "Move up",
       "moveDown": "Move down"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "View network diagnostics"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Checking host compatibility"
@@ -1363,13 +1344,13 @@
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
       "pairingInvalid": "Pairing invalid",
       "pairingTemporarilyUnavailable": "Pairing temporarily unavailable",
-      "sameNetworkOnlyHint": "Only connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in on your desktop and pair again",
-      "repairHint": "Tap to re-pair with your desktop",
       "unlockHint": "Unlock your phone, then tap to retry",
       "openHost": "Open {{title}}",
       "hostActions": "Actions for {{title}}",
       "needsYou_one": "{{count}} needs you",
-      "needsYou_other": "{{count}} need you"
+      "needsYou_other": "{{count}} need you",
+      "offlineSameWifiOnly": "Offline · same Wi-Fi only",
+      "tapToPairAgain": "Tap to pair again"
     },
     "htmlPreview": {
       "previewRenderedHtml": "Preview rendered HTML",
@@ -1430,7 +1411,6 @@
       "serverRecovery": "Its server needs recovering from the desktop: Settings → SSH hosts → Recover server."
     },
     "newWorktreeFormSheet": {
-      "createWorktree": "Create worktree",
       "noProjectsFound": "No projects found",
       "workspaceName": "Workspace name",
       "agent": "Agent",
@@ -1439,9 +1419,10 @@
       "notePlaceholder": "Write a note",
       "connectTarget": "Connect target",
       "options": "Options",
-      "createWorkspace": "Create workspace",
       "startFrom": "Start from",
-      "loadingProjects": "Loading projects…"
+      "loadingProjects": "Loading projects…",
+      "newWorkspace": "New workspace",
+      "create": "Create"
     },
     "newWorktreeModal": {
       "remoteRepository": "Remote repository"
@@ -1531,30 +1512,27 @@
       "mergeRequest": "MR !{{number}}"
     },
     "terminalShortcutSettings": {
-      "resetDefaults": "Reset Defaults",
-      "resetDescription": "Show every built-in shortcut key in the original order",
-      "customShortcuts": "Custom shortcuts",
-      "empty": "No custom shortcuts defined yet.",
       "removeShortcut": "Remove {{label}}",
-      "addShortcut": "Add Custom Shortcut…",
-      "addDescription": "Create key combo or text macro",
       "moreKeys": "More keys",
-      "moreKeysDescription": "These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.",
-      "directionPad": "Direction pad",
       "showDirectionPad": "Show D-pad",
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
-      "showShortcut": "Show {{label}} shortcut"
+      "swipeToRemove": "Swipe a key left to remove it.",
+      "addKey": "Add a key",
+      "newKey": "New key…",
+      "remove": "Remove",
+      "delete": "Delete",
+      "deleteKey": "Delete {{label}}",
+      "yourKeys": "Your keys",
+      "resetKeys": "Reset keys"
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",
       "modelProgress": "{{size}} · {{progress}}%",
       "modelExtracting": "{{size}} · extracting…",
       "recommended": "Recommended",
-      "inUse": "In use",
-      "useModel": "Use {{label}}",
-      "use": "Use",
       "deleteModel": "Delete {{label}}",
-      "downloadModel": "Download {{label}}"
+      "downloadModel": "Download {{label}}",
+      "delete": "Delete"
     },
     "workspaceDetailPlaceholder": {
       "title": "No workspace open",
@@ -1672,9 +1650,9 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files",
         "partial": "Partial diff",
+        "changed_one": "Changed {{count}} file",
+        "changed_other": "Changed {{count}} files",
         "showMoreFiles": "Show {{count}} more"
       },
       "composer": {
@@ -1697,7 +1675,9 @@
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
-        "permissionFullAccessDescription": "Never asks before edits or commands"
+        "permissionFullAccessDescription": "Never asks before edits or commands",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -2006,8 +1986,8 @@
       "titleLabel": "Title",
       "descriptionLabel": "Description",
       "writeWithAi": "Write with AI",
-      "descriptionPlaceholder": "Optional",
-      "draft": "Create as draft"
+      "draft": "Create as draft",
+      "create": "Create"
     },
     "screens": {
       "hideLog": "Hide log",
@@ -2511,10 +2491,8 @@
       "advanced": "Advanced",
       "appendEnter": "Append Enter",
       "appendEnterDescription": "Submit immediately instead of only inserting text.",
-      "scope": "Scope",
       "globalScope": "Global",
-      "projectScope": "Project",
-      "addQuickCommand": "Add Quick Command"
+      "projectScope": "Project"
     },
     "quickCommandRow": {
       "copyFailed": "Couldn't copy",
@@ -2539,7 +2517,7 @@
       "addTitle": "Add Quick Command",
       "chooseAgentTitle": "Choose Agent",
       "title": "Quick Commands",
-      "editorDescription": "Save terminal commands or agent prompts for quick access."
+      "add": "Add"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Failed to create terminal",
@@ -2674,22 +2652,21 @@
     "nativeChatAttachActions": {
       "photos": "Photos",
       "files": "Files",
-      "fileTypes": "PDF, text, code…",
       "workspaceFile": "Workspace file",
       "skills": "Skills",
-      "availableSkills": "{{count}} available",
-      "commands": "Commands"
+      "commands": "Commands",
+      "plan": "Plan first",
+      "goal": "Set a goal"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Resume in New CLI"
+      "continueInTerminal": "Continue in terminal"
     },
     "nativeChatRenderData": {
       "notFoundTitle": "Can't find this conversation yet",
-      "notFoundSubtitle": "Send a message to start one, or open the terminal view to see what {{agent}} is doing.",
+      "notFoundMessage": "Send a message to start one.",
       "emptyTitle": "Start a chat with {{agent}}",
-      "emptySubtitle": "Ask {{agent}} to inspect code, explain output, or make a change.",
       "errorTitle": "Could not load conversation",
-      "errorSubtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
+      "errorMessage": "The conversation couldn’t be read. The terminal view still works.",
       "defaultAgentLabel": "the agent"
     },
     "nativeChatToggleAction": {
@@ -3292,13 +3269,25 @@
       "needsYou": "Needs you",
       "files": "Files",
       "otherWorkspaces": "Other workspaces"
+    },
+    "terminalChatContinuation": {
+      "busy": "Another chat or terminal is opening. Wait, then try again.",
+      "continueInChat": "Continue in chat",
+      "failed": "Couldn't continue in chat. {{detail}}",
+      "failedAfterClose": "Couldn't continue in chat. {{detail}} The conversation is in Agent History.",
+      "otherJob": "{{process}} is running in this terminal. Quit it, then continue in chat.",
+      "terminalChanged": "This terminal changed while Orca checked it. Try again.",
+      "tryAgain": "Try again.",
+      "unavailable": "{{agent}} chats aren't available on this computer.",
+      "uncheckable": "Orca couldn't check what's running in this terminal. Try again.",
+      "unconfirmed": "Orca couldn't confirm the chat opened. Check your tabs before trying again."
     }
   },
   "chat": {
     "composer": {
       "addToMessage": "Add to message",
       "attachImage": "Attach image",
-      "placeholder": "Ask anything, @ to mention files, / for commands",
+      "askAnything": "Ask anything",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
       "sendMessage": "Send message",
@@ -3309,10 +3298,10 @@
       "sendSteerHint": "Goes into what the agent is doing now"
     },
     "contextUsage": {
-      "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
       "title": "Context",
-      "estimated": "Estimated from the last response.",
-      "deferredNote": "Loaded on demand. Not counted in the used total."
+      "left": "{{percent}}% context left",
+      "used": "{{percent}}% used",
+      "compact": "Compact"
     },
     "composerAttachments": {
       "file": "File",
@@ -3381,27 +3370,24 @@
     },
     "sessionOptionPickers": {
       "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
+      "title": "Chat options",
       "modelFullAccessLabel": "Model, {{value}}, full access",
       "modelLabel": "Model, {{value}}",
       "permissionsLabel": "Permissions, {{value}}",
-      "backToModels": "Back to models",
-      "agentWorking": "Agent is working",
       "settingsLocked": "Model settings unlock when this turn finishes.",
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
       "permissions": "Permissions",
       "applying": "Applying…",
       "onAttach": "Applies when the chat attaches",
       "heldPickRefused": "{{picked}} isn't available in this chat. Kept {{kept}}.",
-      "optionsSection": "Options"
+      "searchModels": "Search models",
+      "noModelsMatch": "No models match “{{query}}”"
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",
       "notReportedMarker": "Not reported",
       "moreModels": "More models",
       "fewerModels": "Fewer models"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Sent to the agent — not confirmed"
     },
     "stopButton": {
       "stoppingState": "Stopping…",
@@ -3483,8 +3469,7 @@
     "message": {
       "copyMessage": "Copy message",
       "forkFromResponse": "Fork from this response",
-      "scrollMessageToTop": "Scroll this message to top",
-      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
+      "moreActions": "More actions"
     },
     "messageActionsSheet": {
       "copyMessage": "Copy message",
@@ -3520,13 +3505,11 @@
       "openImageHint": "Opens the image full size"
     },
     "nativeChatToolLine": {
-      "durationMilliseconds": "{{milliseconds}}ms",
       "durationSeconds": "{{seconds}}s",
       "durationMinutes": "{{minutes}}m {{seconds}}s",
       "durationHours": "{{hours}}h {{minutes}}m {{seconds}}s",
       "result": "Result",
       "exitCode": "exit {{exitCode}}",
-      "copyCommand": "Copy command",
       "running": "Running",
       "ran": "Ran",
       "reading": "Reading",
@@ -3671,8 +3654,7 @@
       "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
-      "waitingForTerminal": "Waiting for terminal…",
-      "prompt": "Ask anything, @ to mention files, / for commands"
+      "waitingForTerminal": "Waiting for terminal…"
     },
     "nativeChatImageViewer": {
       "closeImage": "Close image",
@@ -3880,8 +3862,12 @@
         "waitingForSignIn": "Waiting for sign-in…",
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
-        "off": "Off",
-        "notStarted": "Not started"
+        "disabled": "Disabled",
+        "notStarted": "Not started",
+        "commandNotFound": "Command not found",
+        "unreachable": "Can’t reach {{host}}",
+        "orcaRemoved": "Removed: restarts on next message",
+        "orcaChanged": "Changed: restarts on next message"
       },
       "title": "MCP servers",
       "notRunning": "MCP servers connect when you send your next message.",
@@ -3889,6 +3875,7 @@
       "readFailed": "Couldn't load MCP servers.",
       "retry": "Retry",
       "empty": "No MCP servers are set up for this chat.",
+      "unreported": "{{agent}} doesn't report connection status.",
       "signIn": "Sign in",
       "reconnect": "Reconnect",
       "toggleLabel": "Use {{name}}",
@@ -3906,7 +3893,8 @@
         "failed": "{{count}} failed"
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
-      "manage": "Manage MCP servers"
+      "manage": "Manage MCP servers",
+      "stillFailing": "Still failing after reconnecting."
     },
     "selectionQuote": {
       "action": "Quote",
@@ -4664,6 +4652,9 @@
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
+      "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+      "antigravityInvalidResult": "Antigravity returned an invalid result.",
+      "antigravityNoFinalResult": "Antigravity returned no final result.",
       "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
       "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
       "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -4828,7 +4819,7 @@
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Create Workspace On"
+      "newWorkspaceOn": "New workspace on"
     },
     "loadingDrawer": {
       "loading": "Loading",
@@ -4882,28 +4873,22 @@
       "doneSubtitle": "Your recently resolved issues"
     },
     "tasksCreateDrawers": {
-      "newIssueTitle": "New {{providerLabel}} Issue",
-      "repositorySubtitle": "Create an issue in the selected repository.",
-      "linearTeamSubtitle": "Create an issue in the selected Linear team.",
       "repository": "Repository",
       "team": "Team",
-      "issueSource": "Issue source",
-      "fileIn": "File in {{slug}}",
       "upstream": "Upstream",
       "origin": "Origin",
       "title": "Title",
-      "titlePlaceholder": "Task title",
       "description": "Description",
-      "descriptionPlaceholder": "Add context",
-      "createIssue": "Create Issue",
       "linearTeam": "Linear Team",
-      "connectLinearWorkspace": "Connect Linear workspace",
-      "linearConnectSubtitle": "Paste a Personal API key to browse issues from that workspace.",
       "personalApiKey": "Personal API key",
       "linearSettingsLink": "Open Linear settings",
       "keySecurityHint": "Your key is encrypted via the host OS keychain and stored locally.",
       "connect": "Connect",
-      "createWorkspaceIn": "Create Workspace In"
+      "createWorkspaceIn": "Create Workspace In",
+      "newIssue": "New issue",
+      "create": "Create",
+      "fileInRow": "File in",
+      "connectLinear": "Connect Linear"
     },
     "filterPickers": {
       "switchWorkspaceFailed": "Failed to switch workspace",
@@ -5216,7 +5201,6 @@
       "newSparsePreset": "New Sparse Preset",
       "editSparsePreset": "Edit Sparse Preset",
       "nameLabel": "Name",
-      "namePlaceholder": "Renderer UI",
       "directoriesLabel": "Directories",
       "directories_one": "{{count}} directory",
       "directories_other": "{{count}} directories",
@@ -6470,12 +6454,9 @@
         "confirmMany": "Cancel {{count}}"
       },
       "wait": {
-        "titleOne": "What is {{title}} waiting on?",
-        "titleMany": "What are {{count}} items waiting on?",
         "placeholder": "Waiting on",
-        "keep": "Cancel",
-        "confirm": "Set Waiting",
-        "offline": "{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back."
+        "offlineSave": "{{host}} is offline. What you typed is kept; Save works again when it’s back.",
+        "count": "{{count}} items"
       },
       "group": {
         "stale": "Stale",
@@ -6553,7 +6534,6 @@
       "nothingToReport": "Nothing to report",
       "mentionOwnChats": "Your other chats",
       "mentionPaused": "Paused",
-      "mentionPlaceholder": "Ask anything, @ to mention bots or files, / for commands",
       "mentionChatsLoadFailed": "Couldn't load chats"
     },
     "access": {
@@ -6971,6 +6951,7 @@
       "signIn": {
         "action": "Sign in",
         "step1Detail": "Sign in to {{app}} and allow access.",
+        "step1Copy": "Copy the link below and open it in your browser.",
         "step2": "Copy the address",
         "step2Detail": "The last page won’t load. That’s expected. Copy its address.",
         "step3": "Paste it here",
@@ -6981,7 +6962,11 @@
         "finish": "Finish",
         "open": "Open sign-in page",
         "notThisSignIn": "That address isn’t from this sign-in. Paste the address you landed on.",
-        "pasteLanded": "After you sign in, paste the address you landed on."
+        "pasteLanded": "After you sign in, paste the address you landed on.",
+        "copyLink": "Copy link",
+        "copyFailed": "Couldn’t copy the link.",
+        "pasteInBrowser": "Paste it into your browser to sign in.",
+        "copyThenPaste": "Copy the link, sign in from your browser, then paste the address you landed on."
       },
       "updateHost": "Update Orca on {{host}} to sign in to apps",
       "none": "None",
@@ -7941,12 +7926,8 @@
       "installAndEnableAnAgentOnThisHostThenRetry": "Install and enable an agent on this host, then retry.",
       "back": "Back",
       "loadingAutomations": "Loading automations…",
-      "letYourAgentsWorkOnASchedule": "Let your agents work on a schedule",
-      "createAnAutomationToRunATaskOnThisHost": "Create an automation to run a task on this host.",
-      "nextDate": "Next: {{date}}",
       "automations": "Automations",
       "runs": "Runs",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconnect to this host to refresh or make changes. Saved information remains available below.",
       "refresh": "Refresh",
       "recentRuns": "Recent runs",
       "automation": "Automation",
@@ -7960,19 +7941,13 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Could not verify the original agent pane. Reconnect and try again.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "The original agent pane is no longer available to open. Saved output remains here.",
       "allRuns": "All runs",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "This run is no longer in the host’s retained history. Last saved information remains below.",
       "scheduledFor": "Scheduled for",
       "started": "Started",
       "trigger": "Trigger",
-      "notCreated": "Not created",
-      "projectHost": "Project host",
-      "notRecorded": "Not recorded",
-      "run": "Run",
       "output": "Output",
       "noOutput": "No output content available.",
       "capturedTruncated": "Captured {{date}} · Output truncated by host",
       "capturedDate": "Captured {{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "The original agent pane is unavailable. Saved output remains here.",
       "openAgent": "Open agent",
       "retryHistory": "Retry history",
       "fullOutputUnavailable": "Couldn't load the full output.",
@@ -8060,7 +8035,20 @@
       "existingWorkspaces": "Existing workspaces",
       "notSet": "Not set",
       "catchUpHours": "Within {{count}} hours",
-      "catchUpMinutes": "Within {{count}} minutes"
+      "catchUpMinutes": "Within {{count}} minutes",
+      "offlineSaved": "Offline. Showing saved automations.",
+      "noAutomations": "No automations yet",
+      "noAutomationsHint": "Schedule an agent to work on this computer.",
+      "runNoLongerRetained": "This run is no longer in the host’s history.",
+      "status": "Status",
+      "copyRunId": "Copy run ID",
+      "copyFailed": "Couldn’t copy",
+      "searchRuns": "Search runs",
+      "filter": "Filter",
+      "filterActive": "Filter, {{count}} active",
+      "reset": "Reset",
+      "done": "Done",
+      "noMatchingRuns": "No matching runs"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
@@ -8565,6 +8553,7 @@
     "workspacesCount": "{{count}} workspaces",
     "workspacesAllButCount": "All but {{count}}",
     "headerMissing": "Fill in {{header}} to add this server.",
-    "servers": "Servers"
+    "servers": "Servers",
+    "unreadable": "Saved sign-in or key can’t be opened. Sign in again."
   }
 }

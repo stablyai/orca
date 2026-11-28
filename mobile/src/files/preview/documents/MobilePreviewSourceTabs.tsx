@@ -1,9 +1,9 @@
 import { Pressable, Text, View } from 'react-native'
 import { Code, Eye } from 'lucide-react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 export type MobilePreviewMode = 'preview' | 'source'
 
@@ -16,7 +16,8 @@ type Props = {
 
 export function MobilePreviewSourceTabs({ mode, onModeChange, previewLabel, sourceLabel }: Props) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     // Expose selected tab to assistive readers; active styling alone is silent.
     <View style={styles.toolbar} accessibilityRole="tablist">
@@ -55,7 +56,7 @@ export function MobilePreviewSourceTabs({ mode, onModeChange, previewLabel, sour
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   toolbar: {
     flexDirection: 'row',
     gap: spacing.sm,

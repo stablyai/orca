@@ -295,18 +295,8 @@ export type RunOwnHandleRuntime = Pick<
 >
 
 /** Reject reused pane handles whose PTY no longer belongs to this run, or has exited. */
-export function runOwnHandle(runtime: RunOwnHandleRuntime, run: AutomationRun): string | null {
-  const handle = run.terminalPaneKey
-    ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
-    : null
-  // A closed pane's handle still resolves to its PTY for exit waits; only the exit verdict tells.
-  return handle &&
-    run.terminalPtyId &&
-    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId &&
-    runtime.getPtyLivenessVerdict(run.terminalPtyId)?.status !== 'exited'
-    ? handle
-    : null
-}
+import { runOwnHandle } from '../terminal-retention/runtime-run-terminal-retention'
+export { runOwnHandle }
 
 function requireWorkspaceId(automation: Automation): string {
   if (!automation.workspaceId) {

@@ -147,26 +147,17 @@
       "runtimeAccessLink": "이 링크는 다른 Orca 앱용입니다. 컴퓨터의 설정 → 모바일에서 코드를 스캔하거나, 서버에서 orca pair --mobile을 실행하세요."
     },
     "terminalSettings": {
-      "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
-      "leaveAppDescription": "휴대폰에서 터미널을 사용하는 동안 Orca는 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 대화형 CLI 도구의 화면 배치가 바뀌지 않도록 휴대폰 크기를 유지할지 데스크톱 크기로 되돌릴지 설정합니다. 데스크톱 배너의 '복원'을 눌러 언제든 직접 크기를 조정할 수 있습니다.",
       "leaveAppHeading": "앱을 벗어날 때",
-      "noPairedDesktops": "아직 페어링된 데스크톱이 없습니다. 터미널 동작을 설정하려면 데스크톱을 페어링하세요.",
       "restoreAfterMinutes_one": "{{count}}분 후",
       "restoreAfterMinutes_other": "{{count}}분 후",
       "restoreAfterSeconds_one": "{{count}}초 후",
       "restoreAfterSeconds_other": "{{count}}초 후",
-      "restoreHost": "{{name}} 복원",
       "previewColumns_one": "{{count}}열",
       "previewColumns_other": "{{count}}열",
       "previewLabel": "터미널 미리보기",
-      "previewHeading": "미리보기",
-      "fontHeading": "글꼴",
-      "fontDescription": "터미널에서 두 손가락을 모으거나 벌려 크기를 바꿀 수 있습니다. 변경 내용은 여기에 저장됩니다. 데스크톱 터미널에는 적용되지 않고 이 기기에만 적용됩니다.",
       "font": "글꼴",
       "size": "크기",
       "sizePoints": "{{size}}pt",
-      "smaller": "더 작게",
-      "larger": "더 크게",
       "lineSpacing": "줄 간격",
       "lineSpacingTight": "좁게",
       "lineSpacingNormal": "보통",
@@ -589,7 +580,6 @@
       "addToMessage": "메시지에 추가",
       "attachImage": "이미지 첨부",
       "cancelEditing": "편집 취소",
-      "placeholder": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
       "saveEditedMessage": "수정한 메시지 저장",
       "sendMessage": "메시지 보내기",
       "sendQueue": "대기열에 추가",
@@ -599,10 +589,7 @@
       "sendSteerHint": "에이전트가 지금 하고 있는 작업에 들어갑니다"
     },
     "contextUsage": {
-      "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
-      "title": "컨텍스트",
-      "estimated": "마지막 응답 기준 추정치입니다.",
-      "deferredNote": "필요할 때 불러옵니다. 사용량에 포함되지 않습니다."
+      "title": "컨텍스트"
     },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
@@ -614,7 +601,6 @@
       "uploadingFile": "{{name}} 업로드 중"
     },
     "composerPlaceholder": {
-      "prompt": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
       "waitingForTerminal": "터미널 대기 중…"
     },
     "diffCard": {
@@ -630,9 +616,7 @@
     },
     "message": {
       "copyMessage": "메시지 복사",
-      "forkFromResponse": "이 응답에서 분기",
-      "scrollMessageToTop": "이 메시지를 맨 위로 스크롤",
-      "forkFromResponseHint": "이 턴의 끝까지 전체 응답이 포함된 새 채팅"
+      "forkFromResponse": "이 응답에서 분기"
     },
     "messageActionsSheet": {
       "clipboardRejected": "클립보드에서 텍스트를 거부했습니다.",
@@ -664,10 +648,8 @@
     },
     "nativeChatToolLine": {
       "added": "추가",
-      "copyCommand": "명령 복사",
       "deleted": "삭제",
       "durationHours": "{{hours}}시간 {{minutes}}분 {{seconds}}초",
-      "durationMilliseconds": "{{milliseconds}}ms",
       "durationMinutes": "{{minutes}}분 {{seconds}}초",
       "durationSeconds": "{{seconds}}초",
       "edited": "수정",
@@ -845,8 +827,6 @@
       "xhighShort": "매우 높음"
     },
     "sessionOptionPickers": {
-      "agentWorking": "에이전트 작업 중",
-      "backToModels": "모델 목록으로 돌아가기",
       "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음",
       "modelFullAccessLabel": "모델, {{value}}, 전체 액세스",
       "modelLabel": "모델, {{value}}",
@@ -854,7 +834,6 @@
       "applying": "적용 중…",
       "onAttach": "채팅이 연결될 때 적용됩니다",
       "heldPickRefused": "이 채팅에서는 {{picked}}을(를) 사용할 수 없습니다. {{kept}}을(를) 유지했습니다.",
-      "optionsSection": "옵션",
       "permissionsLabel": "권한, {{value}}",
       "settingsLocked": "이번 턴이 끝나면 모델 설정을 변경할 수 있습니다.",
       "workingAnnouncement": "에이전트가 작업 중입니다. 이번 턴이 끝나면 모델 설정을 변경할 수 있습니다."
@@ -864,9 +843,6 @@
       "notReportedMarker": "보고되지 않음",
       "moreModels": "모델 더 보기",
       "fewerModels": "모델 간단히 보기"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음"
     },
     "stopButton": {
       "stopAgent": "에이전트 중지",
@@ -1058,6 +1034,7 @@
         "task": "작업"
       },
       "unnamedRecipient": "에이전트",
+      "recipientName": "{{name}}",
       "event": {
         "followedUp": "후속 메시지 보냄",
         "update": "업데이트",
@@ -1173,11 +1150,13 @@
         "finishOnPage": "열린 페이지에서 완료하세요",
         "needsAuth": "로그인 필요",
         "needsAuthAfterSend": "로그인이 필요합니다. 메시지를 보내면 여기서 로그인할 수 있습니다.",
-        "off": "꺼짐",
+        "disabled": "비활성화됨",
         "pending": "연결 중…",
         "tools_other": "도구 {{count}}개",
         "waitingForSignIn": "로그인을 기다리는 중…",
-        "tools_one": "도구 {{count}}개"
+        "tools_one": "도구 {{count}}개",
+        "orcaRemoved": "제거됨: 다음 메시지에서 다시 시작",
+        "orcaChanged": "변경됨: 다음 메시지에서 다시 시작"
       },
       "source": {
         "project": "프로젝트",
@@ -1209,7 +1188,8 @@
         "failed": "실패: {{count}}"
       },
       "pasteHint": "브라우저가 불러올 수 없는 페이지로 이동하면 주소를 복사해 여기에 붙여넣으세요.",
-      "manage": "MCP 서버 관리"
+      "manage": "MCP 서버 관리",
+      "stillFailing": "다시 연결한 후에도 실패합니다."
     }
   },
   "common": {
@@ -1268,12 +1248,8 @@
       "monitoring": "백그라운드 작업 모니터링 중",
       "unverifiable": "최근 업데이트 없음"
     },
-    "authFailedBanner": {
-      "message": "인증에 실패했습니다. 먼저 다시 연결하고, 계속 실패하면 데스크톱에서 다시 페어링하세요."
-    },
     "authFailedBannerActions": {
-      "repair": "다시 페어링",
-      "webNote": "Orca 앱에서 이 호스트에 다시 연결하거나 호스트를 제거하세요."
+      "repair": "다시 페어링"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "이미 재설정됨",
@@ -1436,13 +1412,9 @@
       "openHost": "{{title}} 열기",
       "pairingInvalid": "페어링이 유효하지 않음",
       "pairingTemporarilyUnavailable": "페어링 일시 사용 불가",
-      "repairHint": "탭하여 데스크톱과 다시 페어링하세요.",
-      "sameNetworkOnlyHint": "같은 Wi-Fi 또는 Tailscale에서만 연결됩니다. 어디서나 연결하려면 데스크톱에서 로그인한 후 다시 페어링하세요",
       "unlockHint": "휴대폰 잠금을 해제한 후 탭하여 다시 시도하세요.",
-      "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "네트워크 진단 보기"
+      "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개",
+      "tapToPairAgain": "탭하여 데스크톱과 다시 페어링하세요."
     },
     "hostProtocolGate": {
       "checkingCompatibility": "호스트 호환성 확인 중"
@@ -1501,11 +1473,9 @@
       "agent": "에이전트",
       "connectTarget": "대상 연결",
       "options": "옵션",
-      "createWorkspace": "워크스페이스 만들기",
       "startFrom": "시작 기준",
       "loadingProjects": "프로젝트 불러오는 중…",
       "connectTargetFirst": "먼저 대상에 연결하세요",
-      "createWorktree": "작업 트리 만들기",
       "noProjectsFound": "프로젝트를 찾을 수 없습니다.",
       "note": "메모",
       "notePlaceholder": "메모 쓰기",
@@ -1633,19 +1603,10 @@
       "failed": "실패"
     },
     "terminalShortcutSettings": {
-      "addDescription": "키 조합 또는 텍스트 매크로 만들기",
-      "addShortcut": "맞춤 단축키 추가…",
-      "customShortcuts": "맞춤 단축키",
-      "empty": "아직 설정된 맞춤 단축키가 없습니다.",
       "removeShortcut": "{{label}} 제거",
-      "resetDefaults": "기본값 복원",
-      "resetDescription": "모든 기본 단축키를 원래 순서로 표시",
       "moreKeys": "더 많은 키",
-      "moreKeysDescription": "이 키는 터미널 키 행의 ⋯ 아래에 있습니다. 키의 표시 여부를 전환하고 핸들을 길게 눌러 원하는 순서로 끌어 놓으세요. Esc나 화살표처럼 이미 행에 있는 키는 ⋯에 표시되지 않습니다.",
-      "directionPad": "방향 패드",
       "showDirectionPad": "방향 패드 표시",
-      "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다.",
-      "showShortcut": "{{label}} 단축키 표시"
+      "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "사용량 한도를 재설정하시겠습니까?",
@@ -1664,13 +1625,10 @@
     "voiceModelList": {
       "deleteModel": "{{label}} 삭제",
       "downloadModel": "{{label}} 다운로드",
-      "inUse": "사용 중",
       "modelExtracting": "{{size}} · 압축 해제 중…",
       "modelProgress": "{{size}} · {{progress}}%",
       "modelSize": "{{size}} MB",
-      "recommended": "권장",
-      "use": "사용",
-      "useModel": "{{label}} 사용"
+      "recommended": "권장"
     },
     "workspaceDetailPlaceholder": {
       "description": "사이드바에서 워크스페이스를 선택하면 해당 터미널이 여기에 열립니다.",
@@ -1730,8 +1688,8 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "변경된 파일 {{count}}개",
-        "changedFiles_other": "변경된 파일 {{count}}개",
+        "changed_one": "변경된 파일 {{count}}개",
+        "changed_other": "변경된 파일 {{count}}개",
         "partial": "부분적인 차이점",
         "showMoreFiles": "{{count}}개 더 보기"
       },
@@ -1754,7 +1712,9 @@
         "permissionAcceptEditsDescription": "파일 편집과 파일 명령은 승인하고, 나머지는 묻습니다",
         "permissionAutoDescription": "승인 요청을 대신 검토합니다",
         "permissionFullAccessCodexDescription": "묻지 않습니다. 모든 파일을 편집하고 네트워크를 사용할 수 있습니다",
-        "permissionFullAccessDescription": "편집이나 명령 전에 묻지 않습니다"
+        "permissionFullAccessDescription": "편집이나 명령 전에 묻지 않습니다",
+        "permissionAgentSettings": "{{agent}} 설정",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} 설정에서"
       },
       "slackMirror": {
         "retry": "다시 시도",
@@ -2197,41 +2157,33 @@
     },
     "automationsTab": {
       "connectDesktop": "자동화를 보고 실행하려면 {{desktop}}에 연결하세요.",
-      "createHint": "+를 탭하여 에이전트를 예약하세요.",
       "emptyTitle": "에이전트 작업 예약",
-      "lastStatus": "최근: {{status}}",
       "newAutomation": "새 자동화",
-      "noAutomations": "아직 자동화가 없습니다",
-      "pairDesktop": "자동화를 보고 실행하려면 데스크톱을 페어링하세요.",
-      "paused": "일시 중지됨",
       "scheduled": "예약됨",
       "showFor": "자동화를 볼 데스크톱",
       "toggleFailed": "{{name}}을(를) 업데이트할 수 없습니다",
-      "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요."
+      "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요.",
+      "pairComputer": "자동화를 보고 실행하려면 데스크톱을 페어링하세요."
     },
     "listFooter": {
-      "hostPickerTitle": "작업을 열 호스트"
+      "openTasksOn": "작업을 열 호스트"
     },
     "listHeader": {
-      "desktopsHeading": "데스크탑"
+      "computersHeading": "데스크탑"
     },
     "screen": {
       "pairingCheckFailed": "페어링 확인 실패",
-      "removeHostFailed": "호스트 제거 실패",
-      "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
-      "removeHostTitle": "호스트 제거",
-      "tryAgain": "다시 시도하세요."
+      "tryAgain": "다시 시도하세요.",
+      "removeComputerFailed": "호스트 제거 실패",
+      "removeComputerTitle": "호스트 제거",
+      "removeComputerMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
+      "sameNetworkOnly": "같은 Wi-Fi 또는 Tailscale에서만 연결됩니다. 어디서나 연결하려면 데스크톱에서 로그인한 후 다시 페어링하세요"
     },
     "bottomBar": {
-      "connectFirst": "새 작업을 시작하려면 데스크톱을 연결하세요.",
       "newWorkspace": "새 워크스페이스"
     },
-    "desktops": {
-      "pairDesktop": "데스크톱 페어링"
-    },
     "sections": {
-      "tasks": "작업",
-      "tasksSubtitle": "내 이슈와 리뷰 둘러보기"
+      "tasks": "작업"
     },
     "stats": {
       "agentTime": "에이전트 시간",
@@ -2245,22 +2197,22 @@
     "tabs": {
       "bots": "Bots",
       "automations": "자동화",
-      "chooseDesktop": "{{desktop}}, 다른 데스크톱 선택",
       "feed": "피드",
       "usage": "사용량",
-      "agents": "에이전트"
+      "agents": "에이전트",
+      "chooseComputer": "{{desktop}}, 다른 데스크톱 선택"
     },
     "usage": {
       "active": "사용 중",
-      "addAccounts": "데스크톱의 설정 → 계정에서 계정을 추가하세요.",
       "connectDesktop": "에이전트 계정 사용량을 보려면 {{desktop}}에 연결하세요.",
       "emptyTitle": "아직 사용량이 없습니다",
-      "openAccountsHint": "이 데스크톱의 계정을 엽니다",
-      "pairDesktop": "에이전트 계정 사용량을 보려면 데스크톱을 페어링하세요.",
       "refresh": "사용량 새로고침",
       "showUsageFor": "사용량을 볼 데스크톱",
       "updatedAgo": "{{time}} 전 업데이트됨",
-      "updatedJustNow": "방금 업데이트됨"
+      "updatedJustNow": "방금 업데이트됨",
+      "pairComputer": "에이전트 계정 사용량을 보려면 데스크톱을 페어링하세요.",
+      "addAccountsOnComputer": "데스크톱의 설정 → 계정에서 계정을 추가하세요.",
+      "openComputerAccountsHint": "이 데스크톱의 계정을 엽니다"
     },
     "activeAgents": {
       "heading": "활성",
@@ -2291,15 +2243,12 @@
       "updateStepsServer": "서버에서 Orca를 업데이트한 뒤 다시 시작하세요.",
       "orcaVersion": "Orca 버전",
       "goBack": "돌아가기",
-      "hostNamePlaceholder": "호스트 이름",
-      "hostRemoved": "이 호스트는 이 휴대폰에서 제거되었습니다.",
-      "loadFailed": "호스트 정보를 불러오지 못했습니다.",
-      "missingHost": "호스트가 없습니다.",
       "name": "이름",
-      "saveFailed": "호스트를 저장하지 못했습니다.",
-      "saveHost": "호스트 저장",
-      "title": "호스트 편집",
-      "removeHost": "호스트 제거"
+      "editComputer": "호스트 편집",
+      "computerRemoved": "이 호스트는 이 휴대폰에서 제거되었습니다.",
+      "couldNotLoad": "호스트 정보를 불러오지 못했습니다.",
+      "couldNotSave": "호스트를 저장하지 못했습니다.",
+      "save": "저장"
     }
   },
   "hostMutation": {
@@ -2312,9 +2261,9 @@
     "hostListActionSheetActions": {
       "connect": "연결",
       "disconnect": "연결 해제",
-      "editHost": "호스트 편집",
       "networkDiagnostics": "네트워크 진단",
-      "reconnect": "다시 연결"
+      "reconnect": "다시 연결",
+      "editComputer": "호스트 편집"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "워크스페이스 만드는 중…"
@@ -2322,7 +2271,6 @@
     "hostScreenHeader": {
       "sharedLinks": "공유 링크",
       "accounts": "계정",
-      "backToHosts": "호스트 목록으로 돌아가기",
       "floatingWorkspace": "플로팅 워크스페이스",
       "hideSidebar": "사이드바 숨기기",
       "reconnect": "다시 연결",
@@ -2422,27 +2370,19 @@
       "exceptDefaultBranch": "기본 브랜치는 제외",
       "filters": "필터",
       "groupBy": "그룹화 기준",
-      "hideAutomationCreated": "자동화로 생성된 워크스페이스 숨기기",
-      "hideCliCreated": "CLI로 생성된 워크스페이스 숨기기",
       "hideDefaultBranch": "기본 브랜치 숨기기",
-      "hideDetachedHead": "분리된 HEAD 숨기기",
-      "hideOtherClientWorkspaces": "다른 클라이언트 워크스페이스 숨기기",
       "hideSleeping": "절전 중인 항목 숨기기",
-      "hosts": "호스트",
       "localLinux": "로컬 Linux",
       "localMac": "로컬 Mac",
       "localWindows": "로컬 Windows",
       "projectOrder": "프로젝트 순서",
       "projects": "프로젝트",
-      "savingToDesktop": "호스트에 저장 중",
       "show": "표시",
       "showProperties": "속성 표시",
       "sortBy": "정렬 기준",
-      "syncedAcrossDevices": "기기 간 동기화됨",
       "done": "완료",
       "reset": "재설정",
       "thisComputer": "이 컴퓨터",
-      "waitingForDesktop": "아직 호스트 응답을 기다리는 중",
       "workspaceOptions": "워크스페이스 옵션"
     },
     "hostBottomBar": {
@@ -2467,7 +2407,6 @@
       "accounts": "계정",
       "agentSessionHistory": "에이전트 세션 기록",
       "changes": "변경 사항",
-      "editHost": "호스트 편집",
       "host": "호스트",
       "pullRequest": "PR",
       "sourceControl": "소스 제어",
@@ -2475,12 +2414,13 @@
       "terminal": "터미널",
       "workspace": "워크스페이스",
       "automations": "자동화",
-      "mcpServers": "MCP 서버"
+      "mcpServers": "MCP 서버",
+      "editComputer": "호스트 편집"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "워크스페이스 생성 호스트"
+      "newWorkspaceOn": "워크스페이스 생성 호스트"
     },
     "loadingDrawer": {
       "downloadProgress": "다운로드 중… {{progress}}",
@@ -2499,14 +2439,8 @@
       "silentName": "Orca 무음 알림"
     },
     "notificationDeliverySection": {
-      "footer": "알림 유형은 페어링된 각 데스크톱의 알림 설정을 따릅니다. 이 앱을 7일 동안 사용하지 않으면 알림이 일시 중지됩니다. 다시 받으려면 앱을 열고 다시 연결하세요.",
       "onlyWhenAgentNeedsInput": "에이전트가 내 응답을 기다릴 때만",
-      "onlyWhenAgentNeedsInputHint": "권한 요청과 질문만 알립니다. 작업 완료는 알리지 않습니다.",
-      "onlyWhenAway": "데스크톱을 사용하지 않을 때만",
-      "onlyWhenAwayHint": "키보드나 마우스를 3분간 사용하지 않거나 데스크톱이 잠겨 있을 때 알림을 보냅니다.",
-      "sound": "알림음",
-      "suppressWhileFocused": "보고 있는 동안 알림 끄기",
-      "suppressWhileFocusedHint": "이 휴대폰에서 열어 둔 워크스페이스의 알림을 받지 않습니다."
+      "sound": "알림음"
     }
   },
   "onboarding": {
@@ -2750,8 +2684,8 @@
       "titleLabel": "제목",
       "descriptionLabel": "설명",
       "writeWithAi": "AI로 작성",
-      "descriptionPlaceholder": "선택 사항",
-      "draft": "초안으로 만들기"
+      "draft": "초안으로 만들기",
+      "create": "만들기"
     },
     "screens": {
       "hideLog": "로그 숨기기",
@@ -3195,9 +3129,7 @@
       "readOnly": "읽기 전용"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}}개 사용 가능",
       "commands": "명령어",
-      "fileTypes": "PDF, 텍스트, 코드…",
       "files": "파일",
       "photos": "사진",
       "skills": "스킬",
@@ -3207,7 +3139,7 @@
       "collapse": "접기"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "새 CLI에서 재개"
+      "continueInTerminal": "터미널에서 계속"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "최신 내용으로 스크롤"
@@ -3222,11 +3154,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "에이전트",
-      "emptySubtitle": "{{agent}}에게 코드 확인, 출력 설명 또는 변경을 요청하세요.",
       "emptyTitle": "{{agent}}과(와) 채팅 시작",
-      "errorSubtitle": "대화 기록을 읽을 수 없습니다. 계속 작업하려면 터미널로 다시 전환하세요.",
       "errorTitle": "대화를 로드할 수 없습니다.",
-      "notFoundSubtitle": "메시지를 보내 대화를 시작하거나, 터미널 보기에서 {{agent}}이(가) 무엇을 하는지 확인하세요.",
       "notFoundTitle": "아직 이 대화를 찾을 수 없습니다."
     },
     "nativeChatToggleAction": {
@@ -3275,7 +3204,6 @@
     },
     "quickCommandEditorForm": {
       "action": "동작",
-      "addQuickCommand": "빠른 명령 추가",
       "advanced": "고급",
       "agent": "에이전트",
       "agentPrompt": "에이전트 프롬프트",
@@ -3294,7 +3222,6 @@
       "promptSizeCharacters": "{{used}} / {{max}}자",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "너무 길어서 저장할 수 없습니다.",
-      "scope": "범위",
       "terminalCommand": "터미널 명령"
     },
     "quickCommandLaunch": {
@@ -3323,9 +3250,9 @@
       "chooseAgentTitle": "에이전트 선택",
       "deleteConfirmMessage": "이 빠른 명령은 저장된 목록에서 제거됩니다.",
       "editTitle": "빠른 명령 편집",
-      "editorDescription": "터미널 명령이나 에이전트 프롬프트를 저장하여 빠르게 사용하세요.",
       "title": "빠른 명령어",
-      "untitled": "제목 없음"
+      "untitled": "제목 없음",
+      "add": "추가"
     },
     "routeHelpers": {
       "connected": "연결됨",
@@ -3766,6 +3693,18 @@
       "terminalTitle": "터미널 텍스트",
       "pointsAndColumns": "{{points}} · {{count}}열",
       "moreTerminal": "터미널 설정 더 보기"
+    },
+    "terminalChatContinuation": {
+      "busy": "다른 채팅이나 터미널을 여는 중입니다. 잠시 후 다시 시도하세요.",
+      "continueInChat": "채팅에서 계속",
+      "failed": "채팅에서 계속할 수 없습니다. {{detail}}",
+      "failedAfterClose": "채팅에서 계속할 수 없습니다. {{detail}} 대화는 에이전트 기록에 있습니다.",
+      "otherJob": "이 터미널에서 {{process}}이(가) 실행 중입니다. 종료한 뒤 채팅에서 계속하세요.",
+      "terminalChanged": "Orca가 확인하는 동안 이 터미널이 바뀌었습니다. 다시 시도하세요.",
+      "tryAgain": "다시 시도하세요.",
+      "unavailable": "이 컴퓨터에서는 {{agent}} 채팅을 사용할 수 없습니다.",
+      "uncheckable": "Orca가 이 터미널에서 실행 중인 항목을 확인하지 못했습니다. 다시 시도하세요.",
+      "unconfirmed": "Orca가 채팅이 열렸는지 확인하지 못했습니다. 다시 시도하기 전에 탭을 확인하세요."
     }
   },
   "settings": {
@@ -3795,7 +3734,6 @@
     },
     "appearance": {
       "language": {
-        "description": "시스템을 선택하면 이 기기의 언어를 따릅니다. 권한 요청은 항상 기기 언어로 표시됩니다.",
         "heading": "언어",
         "systemWithCurrent": "시스템 ({{language}})"
       },
@@ -3816,15 +3754,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "매번 묻기",
-      "askEachTimeDescription": "Orca 브라우저, 휴대폰 브라우저, 링크 복사 중에서 매번 선택합니다.",
       "desktopBrowser": "데스크톱 Orca 브라우저",
-      "desktopBrowserDescription": "페어링된 데스크톱에서 스트리밍되는 브라우저로 엽니다.",
-      "terminalAndChatLinksDescription": "터미널 출력과 채팅의 웹 링크를 탭했을 때 열 위치를 선택하세요.",
-      "linksHeading": "링크",
       "loadFailed": "브라우저 설정을 불러오지 못했습니다. 다시 시도하세요.",
       "openLinks": "링크 열기",
       "phoneBrowser": "휴대폰 브라우저",
-      "phoneBrowserDescription": "이 휴대폰의 Safari, Chrome 또는 다른 브라우저에서 엽니다.",
       "saveFailed": "브라우저 설정을 저장하지 못했습니다. 다시 시도하세요.",
       "title": "브라우저"
     },
@@ -3840,13 +3773,6 @@
     "menuScreen": {
       "privacyPolicy": "개인정보 처리방침",
       "support": "지원"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "지원되는 에이전트 세션(Claude, Codex 및 기타 채팅 지원 에이전트)을 이 기기에서 여는 방식을 선택하세요. 터미널은 CLI를 그대로 표시하며, 채팅 UI는 데스크톱 앱과 같은 채팅 인터페이스를 표시합니다. 각 세션의 보기 방식은 길게 눌러 여는 메뉴에서 개별적으로 전환할 수 있습니다.",
-      "defaultViewHeading": "기본 보기",
-      "off": "꺼짐",
-      "on": "켜짐",
-      "openInChatUi": "채팅 UI로 세션 열기"
     },
     "nativeChatText": {
       "heading": "텍스트",
@@ -3925,32 +3851,20 @@
     "voiceSettingsScreen": {
       "connectDesktop": "음성 설정을 관리하려면 데스크톱에 연결하세요.",
       "deleteFailed": "삭제 실패",
-      "dictationDescription": "데스크톱에서 포커스가 있는 창에 음성으로 텍스트를 입력합니다.",
-      "dictationHeading": "받아쓰기",
-      "dictationMode": "받아쓰기 모드",
-      "dictationModeDescription": "토글: 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다.",
-      "dictationModeWithAutoDescription": "자동: 탭하여 시작하고 중지합니다. 컴퓨터에서는 단축키를 길게 누르면 손을 뗄 때까지 녹음합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다. 토글: 한 번 누르면 시작하고, 다시 누르면 중지합니다.",
       "autoMode": "자동",
       "downloadFailed": "다운로드 실패",
-      "enableDictation": "음성 받아쓰기 활성화",
       "holdMode": "길게 누르기",
       "loadFailed": "음성 설정을 불러오지 못했습니다.",
       "loadFailedMessage": "음성 설정을 불러오지 못했습니다.",
       "noneSelected": "선택 안 됨",
       "selectModelFailed": "모델을 선택하지 못했습니다.",
-      "speechModel": "음성 모델",
       "loading": "음성 설정 불러오는 중…",
-      "speechModelHeading": "음성 모델",
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
     },
-    "agents": {
-      "permissionOwnAll": "에이전트 자체 설정"
-    },
     "voiceTranscribeOn": {
       "heading": "받아쓰기 위치",
-      "description": "이 휴대폰이 들은 음성은 휴대폰 밖으로 나가지 않습니다. 자동은 이 휴대폰이 받아쓸 수 없을 때 컴퓨터를 사용합니다.",
       "automatic": "자동",
       "phone": "이 휴대폰",
       "computer": "컴퓨터",
@@ -4373,6 +4287,9 @@
       "agentCouldNotStart": "{{label}}을(를) 시작할 수 없습니다. 설정에서 에이전트 명령을 확인하고 다시 시도하세요.",
       "agentFailedToStart": "{{label}} 시작에 실패했습니다. 설정에서 에이전트 명령을 확인하고 다시 시도하세요.",
       "agentReportedError": "{{label}}에서 오류를 보고했습니다.",
+      "antigravityInvalidEvents": "Antigravity가 잘못된 JSON 이벤트를 반환했습니다.",
+      "antigravityInvalidResult": "Antigravity가 잘못된 결과를 반환했습니다.",
+      "antigravityNoFinalResult": "Antigravity가 최종 결과를 반환하지 않았습니다.",
       "chatNameAgentUnsupported": "설정 -> 채팅 -> 채팅 이름에서 이 작업에 사용할 수 있는 채팅 이름 생성 에이전트를 선택하세요. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
       "chatNameCustomCommandEmpty": "사용자 지정 명령이 비어 있습니다. 설정 -> 채팅 -> 채팅 이름에서 추가하세요.",
       "cliFailed": "{{label}} CLI 명령이 코드 {{exitCode}}로 실패했습니다.",
@@ -4944,27 +4861,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "연결",
-      "connectLinearWorkspace": "Linear 워크스페이스 연결",
-      "createIssue": "이슈 생성",
       "createWorkspaceIn": "워크스페이스 생성 저장소",
       "description": "설명",
-      "descriptionPlaceholder": "배경 설명 추가",
-      "fileIn": "{{slug}}에 이슈 등록",
-      "issueSource": "이슈 소스",
       "keySecurityHint": "키는 호스트 OS 키체인을 통해 암호화되어 로컬에 저장됩니다.",
-      "linearConnectSubtitle": "해당 워크스페이스의 이슈를 보려면 개인 API 키를 붙여넣으세요.",
       "linearSettingsLink": "Linear 설정 열기",
       "linearTeam": "Linear 팀",
-      "linearTeamSubtitle": "선택한 Linear 팀에 이슈를 생성하세요.",
-      "newIssueTitle": "새 {{providerLabel}} 이슈",
       "origin": "origin",
       "personalApiKey": "개인 API 키",
       "repository": "저장소",
-      "repositorySubtitle": "선택한 저장소에 이슈를 생성하세요.",
       "team": "팀",
       "title": "제목",
-      "titlePlaceholder": "작업 제목",
-      "upstream": "업스트림"
+      "upstream": "업스트림",
+      "newIssue": "새 이슈",
+      "create": "만들기",
+      "fileInRow": "등록 위치",
+      "connectLinear": "Linear 연결"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "빈 터미널"
@@ -5022,7 +4933,6 @@
       "directories_other": "디렉터리 {{count}}개",
       "editSparsePreset": "스파스 프리셋 편집",
       "nameLabel": "이름",
-      "namePlaceholder": "렌더러 UI",
       "newSparsePreset": "새 스파스 프리셋",
       "runSetupAndCreate": "설정 실행 후 만들기",
       "setupSubtitle": "{{name}}의 워크스페이스를 만들려면 먼저 설정 스크립트 실행 여부를 선택해야 합니다.",
@@ -5145,8 +5055,7 @@
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
       "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다.",
-      "loading": "워크스페이스를 불러오는 중…",
-      "retryingAutomatically": "자동으로 다시 시도하는 중입니다."
+      "loading": "워크스페이스를 불러오는 중…"
     },
     "workspaceListSections": {
       "all": "모두",
@@ -5192,7 +5101,6 @@
       "skipped": "건너뛰었습니다.",
       "started": "시작됨",
       "trigger": "트리거",
-      "run": "실행",
       "output": "출력",
       "noOutput": "사용 가능한 출력 내용이 없습니다.",
       "loadingRuns": "실행 로드 중…",
@@ -5218,10 +5126,6 @@
       "loadMoreWorkspaces": "작업 공간 더 불러오기",
       "installAndEnableAnAgentOnThisHostThenRetry": "이 호스트에 에이전트를 설치하고 활성화한 후 다시 시도하세요.",
       "loadingAutomations": "자동화 불러오는 중…",
-      "letYourAgentsWorkOnASchedule": "에이전트가 일정에 따라 작업하도록 하세요",
-      "createAnAutomationToRunATaskOnThisHost": "이 호스트에서 작업을 실행할 자동화를 만드세요.",
-      "nextDate": "다음: {{date}}",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "새로 고치거나 변경하려면 이 호스트에 다시 연결하세요. 저장된 정보는 아래에서 계속 확인할 수 있습니다.",
       "recentRuns": "최근 실행",
       "outcome": "결과",
       "allOutcomes": "모든 결과",
@@ -5230,14 +5134,9 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "원래 에이전트 창을 확인하지 못했습니다. 다시 연결한 후 시도하세요.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "원래 에이전트 창을 더 이상 열 수 없습니다. 저장된 출력은 여기에 유지됩니다.",
       "allRuns": "모든 실행",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "이 실행은 더 이상 호스트의 보관 기록에 없습니다. 마지막으로 저장된 정보는 아래에 유지됩니다.",
       "scheduledFor": "예약 시간",
-      "notCreated": "생성되지 않음",
-      "projectHost": "프로젝트 호스트",
-      "notRecorded": "기록되지 않음",
       "capturedTruncated": "캡처: {{date}} · 호스트가 출력을 잘랐습니다",
       "capturedDate": "캡처: {{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "원래 에이전트 창을 사용할 수 없습니다. 저장된 출력은 여기에 유지됩니다.",
       "openAgent": "에이전트 열기",
       "retryHistory": "기록 다시 불러오기",
       "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
@@ -5676,7 +5575,6 @@
     "chat": {
       "mentionOwnChats": "내 다른 채팅",
       "mentionPaused": "일시 중지됨",
-      "mentionPlaceholder": "무엇이든 물어보세요. @로 봇이나 파일 멘션, /로 명령어 실행",
       "mentionChatsLoadFailed": "채팅을 불러오지 못함"
     },
     "tabs": {
@@ -6025,7 +5923,11 @@
         "signIn": "GitHub에 로그인",
         "pickSubtitle": "작업할 수 있는 저장소를 선택하세요"
       },
-      "allRepositoriesShort": "모든 저장소"
+      "allRepositoriesShort": "모든 저장소",
+      "ghSignedOut": {
+        "line": "{{host}}에서 gh에 로그인되어 있지 않습니다. 해당 컴퓨터에서 gh auth login을 실행하세요.",
+        "copy": "{{text}} 복사"
+      }
     },
     "connect": {
       "finishOnHost": "{{host}}의 Orca에서 {{service}} 연결을 마치세요.",
@@ -6713,12 +6615,9 @@
         "next": "다음 항목"
       },
       "wait": {
-        "titleOne": "{{title}}은(는) 무엇을 기다리고 있나요?",
-        "titleMany": "항목 {{count}}개는 무엇을 기다리고 있나요?",
-        "placeholder": "기다리는 대상",
-        "keep": "취소",
-        "confirm": "대기 중으로 설정",
-        "offline": "{{host}}이(가) 오프라인입니다. 입력한 내용은 그대로 남으며, 다시 연결되면 대기 중으로 설정할 수 있습니다."
+        "offlineSave": "{{host}}이(가) 오프라인입니다. 입력한 내용은 유지되며, 다시 연결되면 저장할 수 있습니다.",
+        "placeholder": "대기 사유",
+        "count": "항목 {{count}}개"
       },
       "empty": {
         "allClear": "확인이 필요한 것이 없습니다"
@@ -6733,6 +6632,7 @@
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
         "replacedByNewer": "새 질문으로 대체됨",
         "skipped": "건너뜀",
+        "notNow": "나중에",
         "heldImagesLimit": "답변은 댓글 하나로 보내지며, 사진은 최대 {{max}}장까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요.",
         "heldSkillsLimit": "답변은 댓글 하나로 보내지며, 스킬은 최대 {{max}}개까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요."
       }
@@ -7776,6 +7676,7 @@
     "agentFilesMessage": "Orca가 각 에이전트의 설정 파일에서 MCP 서버를 관리합니다. 직접 추가한 항목은 그대로 유지됩니다.",
     "allow": "허용",
     "removeTitle": "{{name}}을(를) 제거할까요?",
+    "removeMessageSavedData": "이 서버를 사용하는 세션은 즉시 접근 권한을 잃을 수 있습니다. 이 서버용으로 저장된 헤더, 환경 변수 또는 로그인 정보가 삭제될 수 있습니다. 그런 경우 접근 권한을 되찾으려면 정보를 다시 입력하거나 다시 로그인해야 할 수 있습니다.",
     "remove": "제거",
     "moveTitle": "{{name}}을(를) Orca로 이동할까요?",
     "moveMessage": "Orca가 {{agents}} 설정에서 이 서버를 제거하고 백업을 보관합니다.",
@@ -7783,6 +7684,7 @@
     "workspacesCount": "워크스페이스 {{count}}개",
     "workspacesAllButCount": "{{count}}개 제외 전체",
     "headerMissing": "이 서버를 추가하려면 {{header}} 값을 입력하세요.",
-    "servers": "서버"
+    "servers": "서버",
+    "unreadable": "저장된 로그인 또는 키를 열 수 없습니다. 다시 로그인하세요."
   }
 }

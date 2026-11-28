@@ -1,6 +1,6 @@
 // Import from another app: pick a bot OpenClaw, Hermes or OpenBot keeps on this computer, or an export the
-// old bot made, and create the Orca bot whose first turn brings it over. Laid out like New group.
-import React, { useId, useState } from 'react'
+// old bot made, and create the Orca bot whose first turn brings it over. One row: picture and name.
+import React, { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,19 +12,16 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { getRuntimePathBasename } from '../../../../shared/file-access/cross-platform-path'
 import { createBot, openBotHomeTab, readHostBots } from '@/lib/bot-catalog'
 import { BOT_NAME_MAX_LENGTH, type Bot } from '../../../../shared/bot-types'
-import { botInitial } from '../../../../shared/bots/bot-avatar-fallback'
 import {
   BOT_IMPORT_APP_LABELS,
   botNameFromExportFolder,
   type BotImportCandidate,
   type BotImportSource
 } from '../../../../shared/bots/bot-import'
+import { BotAvatar } from './BotAvatar'
 import { botErrorMessage } from './bot-presentation'
 import { BotNameSuggestion, takeSuggestionOnTab } from './BotNameSuggestion'
 import { BotRunsOnPicker } from './BotRunsOnPicker'
@@ -35,8 +32,8 @@ import {
   ImportBotExportFields,
   type ImportBotExport
 } from './ImportBotExportFields'
-import { ImportBotHero } from './ImportBotHero'
-import { importPickKey, ImportBotSourceList } from './ImportBotSourceList'
+import { importPickKey, ImportBotSourceTitle } from './ImportBotSourceTitle'
+import { NewBotPictureButton } from './NewBotPictureButton'
 import { useBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
@@ -58,12 +55,12 @@ export function ImportBotDialog({
   onCreated?: (bot: Bot) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const nameId = useId()
   const hostChoice = useBotCreateHost(open)
   const { hostId, blocked } = hostChoice.host
   const read = useBotImportSources(open, hostId)
-  const [view, setView] = useState<'pick' | 'export'>('pick')
   const [picked, setPicked] = useState<ImportPick | null>(null)
+  // With bots found, the owner can still bring over an export instead.
+  const [fromExport, setFromExport] = useState(false)
   const [exported, setExported] = useState<ImportBotExport>(NO_EXPORT)
   // Follows the picked bot until the owner types one.
   const [typedName, setTypedName] = useState<string | null>(null)
@@ -72,8 +69,8 @@ export function ImportBotDialog({
   const agentSetup = useBotAgentSetup(menu, hostId)
   const picture = useNewBotPicture(useNewBotHostLooks(hostId))
   const [creating, setCreating] = useState(false)
-  // Kept by the dialog, not its hero, so a run outlives the popover and the hero swapping to a bot an
-  // earlier import made while the name is cleared; only dismissing the dialog ends it.
+  // Kept by the dialog, not its picture button, so a run outlives the popover; only dismissing the dialog
+  // ends it.
   const { intake, face } = useNewBotDialogPicture(picture, creating)
 
   const picks =
@@ -82,7 +79,7 @@ export function ImportBotDialog({
       : []
   // With nothing found there is nothing to pick: straight to asking the old bot.
   const nothingFound = read.status !== 'loading' && picks.length === 0
-  const exporting = view === 'export' || nothingFound
+  const exporting = nothingFound || fromExport
   // A pick from another computer's list, before the host changed, gives way to this one's first.
   const pick = exporting
     ? null
@@ -103,28 +100,22 @@ export function ImportBotDialog({
       : null
 
   // The export's folder is picked on this computer, which a server can't read.
-  const missing =
+  const notOnServer =
     exporting && hostId !== LOCAL_EXECUTION_HOST_ID
       ? t(
           'bots.import.exportNotOnServer',
           'Export folders on this computer can’t go to {{host}} yet. Copy the folder to {{host}}, or create the bot here.',
           { host: hostChoice.host.label }
         )
-      : exporting && !exportPaths
-        ? t('bots.import.addFolder', 'Add its folder')
-        : !exporting && !pick
-          ? null
-          : !trimmedName && !again
-            ? t('bots.import.nameIt', 'Name your bot')
-            : null
+      : null
   const ready =
-    !missing && Boolean(trimmedName) && (exporting ? exportPaths !== null : pick !== null)
+    !notOnServer && Boolean(trimmedName) && (exporting ? exportPaths !== null : pick !== null)
   // Enter and the Create button share this, so neither creates before the agents are known.
   const canCreate = ready && !creating && !intake.reading && !blocked && choices.length > 0
 
   const close = (): void => {
-    setView('pick')
     setPicked(null)
+    setFromExport(false)
     setExported(NO_EXPORT)
     setTypedName(null)
     intake.dismiss()
@@ -194,51 +185,48 @@ export function ImportBotDialog({
     })
   }
 
-  const oldName = exporting
-    ? exportPaths &&
-      (botNameFromExportFolder(exportPaths.path) ?? getRuntimePathBasename(exportPaths.path))
-    : pick?.bot.name
-  const old = {
-    key: exporting ? (exportPaths?.path ?? 'none') : pick ? importPickKey(pick) : 'none',
-    initial: oldName ? botInitial(oldName) : null,
-    label: exporting
-      ? exportPaths
-        ? getRuntimePathBasename(exportPaths.path)
-        : t('bots.import.oldBot', 'Old bot')
-      : pick
-        ? BOT_IMPORT_APP_LABELS[pick.source.app]
-        : t('bots.import.oldBot', 'Old bot')
-  }
-
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : !creating && close())}>
-      <DialogContent scrollable className="sm:max-w-md">
-        <DialogHeader className="sm:text-center">
-          <DialogTitle>{t('bots.import.title', 'Import from another app')}</DialogTitle>
-          <DialogDescription>
-            {exporting
-              ? t(
-                  'bots.import.exportDescription',
-                  'Ask your old bot for a copy of itself, then give the copy to your new bot.'
-                )
-              : t('bots.import.description', 'Your new bot reads the old one and sets itself up.')}
-          </DialogDescription>
+      <DialogContent size="confirm" scrollable showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="min-w-0">
+            <ImportBotSourceTitle
+              picks={picks}
+              picked={pick}
+              onPick={(next) => {
+                setPicked(next)
+                setTypedName(null)
+              }}
+            />
+          </DialogTitle>
+          {exporting ? (
+            <DialogDescription>
+              {t(
+                'bots.import.exportDescription',
+                'Ask your old bot for a copy of itself, then give the copy to your new bot.'
+              )}
+            </DialogDescription>
+          ) : (
+            <DialogDescription className="sr-only">
+              {t('bots.import.description', 'Your new bot reads the old one and sets itself up.')}
+            </DialogDescription>
+          )}
         </DialogHeader>
-        <ImportBotHero
-          old={old}
+        <NewBotPictureButton
           picture={picture}
-          existing={existing}
+          intake={intake}
+          submitted
           generate={face}
           disabled={creating}
-          intake={intake}
-        />
-        <div>
-          <Label htmlFor={nameId} className="sr-only">
-            {t('bots.new.name', 'Name')}
-          </Label>
+          pencil="hover"
+          readOnly={
+            existing ? (
+              <BotAvatar bot={existing} size="large" className="size-16 shrink-0 rounded-[18px]" />
+            ) : undefined
+          }
+        >
           <Input
-            id={nameId}
-            variant="heading"
+            aria-label={t('bots.new.name', 'Name')}
             autoFocus
             autoComplete="off"
             spellCheck={false}
@@ -256,43 +244,20 @@ export function ImportBotDialog({
               }
             }}
           />
-          <BotNameSuggestion suggestion={suggestion} onTake={setTypedName}>
-            {again ? (
-              <span className="text-xs leading-4 text-muted-foreground">
-                {t('bots.import.importedBefore', '{{bot}} came from this bot', {
-                  bot: again.name
-                })}
-              </span>
-            ) : null}
-          </BotNameSuggestion>
-        </div>
-        {exporting ? (
-          <div className="space-y-2">
-            {nothingFound && read.status === 'ready' ? (
-              <p className="text-center text-xs text-muted-foreground">
-                {t(
-                  'bots.import.noneFoundNote',
-                  'No bots found in OpenClaw (~/.openclaw), Hermes (~/.hermes) or OpenBot.'
-                )}
-              </p>
-            ) : null}
-            <ImportBotExportFields value={exported} onChange={setExported} />
-          </div>
-        ) : (
-          <ImportBotSourceList
-            picks={picks}
-            loading={read.status === 'loading'}
-            picked={pick}
-            onPick={(next) => {
-              setPicked(next)
-              setTypedName(null)
-            }}
-            onOtherApp={() => {
-              setTypedName(null)
-              setView('export')
-            }}
-          />
-        )}
+          {/* Only when it has something to say, so the field stays centred on the picture. */}
+          {suggestion || again ? (
+            <BotNameSuggestion suggestion={suggestion} onTake={setTypedName} compact>
+              {again ? (
+                <span className="truncate text-xs leading-4 text-muted-foreground">
+                  {t('bots.import.importedBefore', '{{bot}} came from this bot', {
+                    bot: again.name
+                  })}
+                </span>
+              ) : null}
+            </BotNameSuggestion>
+          ) : null}
+        </NewBotPictureButton>
+        {/* New bot's own Computer and Agent fields, so both dialogs pick where a bot runs the same way. */}
         {again ? null : (
           <BotRunsOnPicker
             hostChoice={hostChoice}
@@ -300,74 +265,52 @@ export function ImportBotDialog({
             model={menu.model}
             choices={choices}
             onSetupChange={agentSetup.setSetup}
-            name={name}
+            keptPermission={agentSetup.intent}
+            chatDefault={agentSetup.chatDefault}
           />
         )}
-        <DialogFooter className="items-center">
-          {missing ? (
-            <span className="mr-auto max-w-max flex-1 text-xs text-muted-foreground">
-              {missing}
-            </span>
-          ) : again ? null : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="mr-auto max-w-max flex-1 text-xs text-muted-foreground">
-                  {t('bots.import.keysStay', 'Keys and logins stay behind')}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {t(
-                  'bots.import.neverCopied',
-                  'Keys, tokens and logins are never copied; you reconnect them here.'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          <Button
+        {picks.length > 0 ? (
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
+            className="-mt-1 self-start justify-self-start rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none"
             disabled={creating}
             onClick={() => {
-              if (view === 'export' && picks.length > 0) {
-                setTypedName(null)
-                setView('pick')
-              } else {
-                close()
-              }
+              setTypedName(null)
+              setFromExport(!fromExport)
             }}
           >
-            {view === 'export' && picks.length > 0
+            {fromExport
               ? t('bots.import.back', 'Back')
-              : t('bots.new.cancel', 'Cancel')}
+              : t('bots.import.fromExport', 'From export')}
+          </button>
+        ) : null}
+        {exporting ? (
+          <div className="space-y-2">
+            {nothingFound && read.status === 'ready' ? (
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'bots.import.noneFoundNote',
+                  'No bots found in OpenClaw (~/.openclaw), Hermes (~/.hermes) or OpenBot.'
+                )}
+              </p>
+            ) : null}
+            <ImportBotExportFields value={exported} onChange={setExported} />
+            {notOnServer ? <p className="text-xs text-muted-foreground">{notOnServer}</p> : null}
+          </div>
+        ) : null}
+        <DialogFooter>
+          <Button type="button" variant="ghost" size="sm" disabled={creating} onClick={close}>
+            {t('bots.new.cancel', 'Cancel')}
           </Button>
           {again ? (
-            <Button
-              type="button"
-              size="sm"
-              className="max-w-full min-w-0 shrink"
-              disabled={!existing}
-              onClick={() => void update()}
-            >
-              <span className="truncate">
-                {t('bots.import.update', 'Update {{bot}}', { bot: again.name })}
-              </span>
+            <Button type="button" size="sm" disabled={!existing} onClick={() => void update()}>
+              {t('bots.import.update', 'Update {{bot}}', { bot: again.name })}
             </Button>
           ) : (
-            <Button
-              type="button"
-              size="sm"
-              className="max-w-full min-w-0 shrink"
-              disabled={!canCreate}
-              onClick={() => void create()}
-            >
-              <span className="truncate">
-                {creating
-                  ? t('bots.new.creating', 'Creating…')
-                  : trimmedName
-                    ? t('bots.import.create', 'Create {{name}}', { name: trimmedName })
-                    : t('bots.new.create', 'Create')}
-              </span>
+            <Button type="button" size="sm" disabled={!canCreate} onClick={() => void create()}>
+              {creating
+                ? t('bots.import.importing', 'Importing…')
+                : t('bots.import.import', 'Import')}
             </Button>
           )}
         </DialogFooter>

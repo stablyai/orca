@@ -1,8 +1,7 @@
 import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
@@ -11,7 +10,8 @@ import type {
   MobileAgentHistoryCard,
   MobileAgentHistoryResumeActionState
 } from './agent-history-session-card'
-import { styles } from './agent-history-styles'
+import { stylesSheet } from './agent-history-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type Props = {
   card: MobileAgentHistoryCard
@@ -34,7 +34,8 @@ export function AgentHistorySessionRow({
   primaryAction = 'resume',
   onLongPress
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const count = card.messageCount
   const messages =
@@ -67,7 +68,7 @@ export function AgentHistorySessionRow({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled, busy }}
-      accessibilityLabel={card.forked ? mobileForkAccessibleName(card.title) : card.title}
+      accessibilityLabel={card.forked ? mobileForkAccessibleName(card.title, t) : card.title}
       accessibilityHint={action}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >

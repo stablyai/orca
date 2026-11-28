@@ -80,6 +80,7 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   cliProvenance?: CliWorkspaceProvenance
 }
 import {
+  getWorktreeNameGitPlatform,
   sanitizeWorktreeName,
   sanitizeWorktreeBranchName,
   computeWorktreePath,
@@ -1075,8 +1076,9 @@ async function performLocalWorktreeCreate(
   })
 
   const requestedName = args.name
-  const sanitizedName = sanitizeWorktreeName(args.name)
-  const branchSafeName = sanitizeWorktreeBranchName(args.name)
+  const gitPlatform = getWorktreeNameGitPlatform(repo.path, localWorktreeGitOptions)
+  const sanitizedName = sanitizeWorktreeName(args.name, gitPlatform)
+  const branchSafeName = sanitizeWorktreeBranchName(args.name, gitPlatform)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     args.displayName,
     args.displayNameKind,

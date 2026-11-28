@@ -36,6 +36,7 @@ import {
   readWslHostAutomationStates,
   restoreWslHostAutomations
 } from '../../wsl/host-lifecycle/wsl-host-automation-disable'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 /** `user`: the user's undo, which may start the distro. `automatic`: a bring-back, which never does. */
 export type WslMoveUndoMode = 'user' | 'automatic'
@@ -56,12 +57,14 @@ export type WslMoveUndoPorts = {
 }
 
 // What undo reads of the host's terminal list: whether each terminal is still running.
-const HostTerminalList = z.object({
-  terminals: z.array(
-    z.object({ connected: z.boolean(), worktreeId: z.string().optional() }).passthrough()
-  ),
-  truncated: z.boolean().optional()
-})
+const HostTerminalList = lazyZodSchema(() =>
+  z.object({
+    terminals: z.array(
+      z.object({ connected: z.boolean(), worktreeId: z.string().optional() }).passthrough()
+    ),
+    truncated: z.boolean().optional()
+  })
+)
 
 // The host's answer for a workspace selector it does not have.
 const HOST_WORKSPACE_NOT_FOUND = 'selector_not_found'

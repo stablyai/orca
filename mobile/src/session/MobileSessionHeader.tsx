@@ -20,8 +20,8 @@ import {
 import { useNow } from '../hooks/use-now'
 import type { MobileSessionSidebar } from './tabs/use-mobile-session-sidebar'
 import { mobileForkAccessibleName } from './fork/mobile-fork-marked-name'
-import { styles } from './mobile-session-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { stylesSheet } from './mobile-session-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -43,7 +43,7 @@ export function MobileSessionHeader({
   /** Something is wrong with the connection, so the subtitle says what instead of the workspace. */
   connectionIssue: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const {
     hostId,
@@ -59,6 +59,7 @@ export function MobileSessionHeader({
     terminalResume,
     connState,
     statusDot,
+    nativeChatController,
     activeSessionTabId,
     openSessionTabActionSheetAfterKeyboardDismiss
   } = controller
@@ -112,7 +113,7 @@ export function MobileSessionHeader({
       subtitle={connectionIssue ? terminalSummary : place}
       status={connectionIssue ? statusDot : null}
       accessibilityLabel={
-        isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active.title
+        isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title, t) : active.title
       }
       onPress={press(() => openSessionTabActionSheetAfterKeyboardDismiss(active.tab))}
       showConnectionRetry={showConnectionRetry}
@@ -160,6 +161,8 @@ export function MobileSessionHeader({
           <SafeAreaView
             style={[
               styles.sessionChrome,
+              // A chat is one ground from the top: its header sits on the canvas, with no line under it.
+              nativeChatController.showNativeChat && styles.sessionChromeOnChat,
               topChrome.space && {
                 paddingLeft: topChrome.space.left,
                 paddingRight: topChrome.space.right,

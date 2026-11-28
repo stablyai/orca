@@ -8,17 +8,33 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
+function countRepoOwners(repos: readonly Repo[], repoId: string): number {
+  let count = 0
+  for (const candidate of repos) {
+    if (candidate.id === repoId) {
+      count += 1
+    }
+  }
+  return count
+}
+
 export function hasConflictingStoredWorktreeOwner(
   store: Store,
   repo: Repo,
   worktreeIds: readonly string[]
 ): boolean {
+  if (worktreeIds.length === 0) {
+    return false
+  }
   const expectedHostId = getRepoExecutionHostId(repo)
-  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-  return worktreeIds.some((worktreeId) => {
+  const repoOwnerCount = countRepoOwners(store.getRepos(), repo.id)
+  for (const worktreeId of worktreeIds) {
     const meta = store.getWorktreeMeta(worktreeId)
-    return !!meta && (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1)
-  })
+    if (meta && (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1)) {
+      return true
+    }
+  }
+  return false
 }
 
 export type RepoOwnershipEvidence =
@@ -52,19 +68,22 @@ export function findExactRepoOwner(
   repoId: string,
   executionHostId?: ExecutionHostId
 ): Repo | undefined {
-  const candidates = store.getRepos().filter((repo) => repo.id === repoId)
-  const evidence = candidates.map(resolveRepoOwnershipEvidence)
-  if (evidence.some((owner) => owner.status !== 'owned')) {
-    return undefined
+  let matched: Repo | undefined
+  let matchCount = 0
+  for (const candidate of store.getRepos()) {
+    if (candidate.id !== repoId) {
+      continue
+    }
+    const owner = resolveRepoOwnershipEvidence(candidate)
+    if (owner.status !== 'owned') {
+      return undefined
+    }
+    if (executionHostId === undefined || owner.hostId === executionHostId) {
+      matched = candidate
+      matchCount += 1
+    }
   }
-  const matches = candidates.filter((_, index) => {
-    const owner = evidence[index]
-    return (
-      owner?.status === 'owned' &&
-      (executionHostId === undefined || owner.hostId === executionHostId)
-    )
-  })
-  return matches.length === 1 ? matches[0] : undefined
+  return matchCount === 1 ? matched : undefined
 }
 
 export function isCapturedRepoCurrent(

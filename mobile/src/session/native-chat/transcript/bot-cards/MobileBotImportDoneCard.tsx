@@ -4,13 +4,14 @@ import { Pressable, Text, View } from 'react-native'
 import { Check, ChevronRight, CirclePause } from 'lucide-react-native'
 import type { BotImportDone } from '../../../../../../src/shared/bots/bot-import-cards'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
 import { useBotPanelOpener } from '../../../../bots/bot-item-open'
 import { MobileGoogleSetupOnComputer } from './MobileGoogleSetupCardParts'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 type Created = BotImportDone['created'][number]
 
@@ -21,6 +22,8 @@ export function MobileBotImportDoneCard({
   done: BotImportDone
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
   // As the desktop: soul and memory open in the bot's Settings, where an older host has no panel to open.
@@ -108,7 +111,7 @@ export function MobileBotImportDoneCard({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 36 },
   text: { flex: 1, minWidth: 0, gap: 1 },
   what: { color: colors.textPrimary, fontWeight: '600' },

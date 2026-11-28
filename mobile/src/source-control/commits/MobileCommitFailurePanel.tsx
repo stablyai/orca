@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { Sparkles } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { AgentLaunchNotice } from '../../agents/presentation/AgentLaunchNotice'
 import { PrTextLink } from '../review/pull-request/PrTextLink'
 import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 import type { MobileCommitFailureRecoveryAction } from './use-mobile-commit-failure-recovery'
-import { styles } from '../mobile-source-control-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type Props = {
   failure: MobileCommitFailureRecovery
@@ -17,7 +17,8 @@ type Props = {
 
 // A failed commit as one red line, like any other error here; Fix and Details are text actions on it.
 export function MobileCommitFailurePanel({ failure, action }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const detailsText = failure.error.trim()

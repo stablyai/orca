@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input/text-input-font-size'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { COMPOSER_TEXT_SIZE } from '../../components/composer-input/composer-input-styles'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
+export const mobileBrowserPaneStylesSheet = themedStyleSheet((colors) => ({
   root: {
     flex: 1,
     minHeight: 0,
@@ -92,7 +92,7 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     width: 1,
     height: 1,
     opacity: 0,
-    fontSize: TEXT_INPUT_FONT_SIZE
+    fontSize: COMPOSER_TEXT_SIZE
   },
   promptLine: {
     color: colors.textSecondary,

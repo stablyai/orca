@@ -11,7 +11,6 @@ import {
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { resolve } from 'node:path'
 import { readTextOrFileFlag } from '../arguments/command-body-input'
 import { printResult } from '../output/command-result-output'
 import {
@@ -34,6 +33,7 @@ import {
   type BotItemShowView,
   type BotItemWriteView
 } from './bot-items-format'
+import { resolveCallerFilePath } from '../arguments/caller-file-path'
 
 type Flags = HandlerContext['flags']
 const ItemVersionHostStatus = z.object({ capabilities: z.array(z.string()).optional() })
@@ -105,7 +105,7 @@ function optional(name: string, value: string | undefined): Record<string, strin
 
 /** `--file`, each resolved against the caller's folder: the host copies them from its own disk. */
 function files(flags: Flags, cwd: string): { files?: string[] } {
-  const paths = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
+  const paths = getRepeatedStringFlag(flags, 'file').map((path) => resolveCallerFilePath(path, cwd))
   return paths.length > 0 ? { files: paths } : {}
 }
 

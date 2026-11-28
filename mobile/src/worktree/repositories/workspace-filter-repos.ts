@@ -2,6 +2,7 @@ import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/ex
 import { resolveRepoBadgeColor } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { buildSectionRepoMap } from '../workspace-list/section-repo-map'
 import type { SectionRepo, Worktree } from '../workspace-list/workspace-list-types'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { isRepoHidden } from '../../../../src/shared/project/catalog/hidden-projects'
 
 export type WorkspaceSectionRepo = {
@@ -19,12 +20,13 @@ export function sectionRepoColor(repo: Pick<SectionRepo, 'badgeColor'>): string 
 // List catalog repos per host; before catalogs arrive, derive candidates from workspace rows.
 export function buildFilterRepos(
   filterCatalogRepos: readonly SectionRepo[],
-  worktrees: readonly Worktree[]
+  worktrees: readonly Worktree[],
+  t: Translate
 ): WorkspaceSectionRepo[] {
   const repos =
     filterCatalogRepos.length > 0
       ? filterCatalogRepos
-      : [...buildSectionRepoMap([], worktrees).values()]
+      : [...buildSectionRepoMap([], worktrees, t).values()]
   const seen = new Set<string>()
   return repos.flatMap((repo) => {
     const key = `${getRepoExecutionHostId(repo)}|${repo.id}`

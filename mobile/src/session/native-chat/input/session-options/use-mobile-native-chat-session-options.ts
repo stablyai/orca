@@ -35,7 +35,9 @@ import {
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-status-session-options'
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
-import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
+import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -103,6 +105,7 @@ function createMobileSurfaceEntry(args: {
   canSwitchOmpModel: boolean
   latest: { readonly current: HookArgs }
   activeIdentity: { readonly current: string | null }
+  t: Translate
 }): SurfaceEntry | null {
   const { agent, identity, latest, activeIdentity } = args
   const midSession = getAgentSessionOptionCatalog(agent)?.modelApply.midSession
@@ -113,7 +116,7 @@ function createMobileSurfaceEntry(args: {
     agent,
     scopeKey: args.scopeKey,
     mode: 'live',
-    modelLabel: sayMobileNativeChatSessionOption('model'),
+    modelLabel: mobileNativeChatSessionOptionSay(args.t)('model'),
     canSwitchOmpModel: args.canSwitchOmpModel,
     dispatchCommand: async (command, options) => {
       // One controller serves every tab: a queued pick must not reach the tab opened since.
@@ -172,6 +175,7 @@ export function useMobileNativeChatSessionOptions(
   const catalog = agent ? getAgentSessionOptionCatalog(agent) : null
   const identity = agent && scopeKey && catalog ? `${scopeKey}\0${agent}` : null
   const canSwitchOmpModel = args.modelSwitchCommand === 'orca-model'
+  const t = useMobileTranslation()
   const latest = useRef(args)
   const activeIdentityRef = useRef(identity)
   const [pending, setPending] = useState<PendingOperation | null>(null)
@@ -208,13 +212,14 @@ export function useMobileNativeChatSessionOptions(
       identity,
       canSwitchOmpModel,
       latest,
-      activeIdentity: activeIdentityRef
+      activeIdentity: activeIdentityRef,
+      t
     })
     if (created) {
       setBoundedScopeCacheEntry(surfaces, scopeKey, created)
     }
     return created
-  }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces])
+  }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces, t])
   const surface = entry?.surface ?? null
 
   useEffect(() => {

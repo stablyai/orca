@@ -13,9 +13,8 @@ import {
 } from '../src/pairing/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
 import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
-import { themedStyleSheet } from '../src/theme/themed-styles'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { spacing, typography } from '../src/theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../src/theme/themed-styles'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { formatConnectionLogHistory } from '../src/diagnostics/connection-diagnostics-report'
 import { MobileStateView } from '../src/components/feedback/MobileStateView'
@@ -41,18 +40,18 @@ type Status = 'awaiting-confirm' | 'connecting' | 'error'
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
 export default function PairConfirmScreen() {
-  useMobileTranslation()
+  const t = useMobileTranslation()
   const params = useLocalSearchParams<{ code?: string | string[] }>()
   return (
     <PairConfirmContent
       key={typeof params.code === 'string' ? params.code : undefined}
-      routeState={resolvePairConfirmRouteState(params.code)}
+      routeState={resolvePairConfirmRouteState(params.code, t)}
     />
   )
 }
 
 function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
@@ -231,7 +230,7 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase

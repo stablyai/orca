@@ -11,9 +11,8 @@ import { useBackClaim } from '../../navigation/use-back-claim'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { GITHUB_KIND_OPTIONS } from '../task-list/mobile-tasks-options'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { githubKindOptions } from '../task-list/mobile-tasks-options'
 import {
   mobileTasksFilterCount,
   resetMobileTasksFilters,
@@ -37,7 +36,7 @@ function FilterSheetContent({
   model: ConnectionPresentationModel
   pager: OptionPagerControls<MobileTasksFilterPageKey>
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const tr = useMobileTranslation()
   const { provider, providerOptions, githubMode, setShowFilterSheet } = model
   const done = {
@@ -79,7 +78,7 @@ function FilterSheetContent({
       {provider === 'github' ? (
         <ChoiceSection
           title={tr('tasks.filterSheet.show', 'Show')}
-          options={GITHUB_KIND_OPTIONS}
+          options={githubKindOptions(tr)}
           selected={githubMode === 'project' ? 'project' : model.githubKind}
           onSelect={(kind) => selectMobileTasksGitHubKind(model, kind)}
         />
@@ -124,6 +123,6 @@ export function MobileTasksFilterSheet({ model }: { model: ConnectionPresentatio
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   segmented: { marginBottom: spacing.xs }
 }))

@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { COMPOSER_CONTROL_SIZE } from '../../components/composer-input/composer-input-styles'
 
-export const listStyles = themedStyleSheet(() => ({
+export const listStylesSheet = themedStyleSheet((colors) => ({
   listContent: {
     paddingHorizontal: spacing.lg
   },

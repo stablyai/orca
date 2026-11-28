@@ -179,7 +179,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <MobileTerminalTabActionSheet controller={controller} />
       <ActionSheetModal
         visible={markdownActionTarget != null}
-        {...mobileSessionTabMenuHeader(markdownActionTarget, [])}
+        {...mobileSessionTabMenuHeader(markdownActionTarget, [], t)}
         groupDestructive
         title={markdownActionTarget?.title || t('session.sheets.markdown', 'Markdown')}
         actions={[
@@ -228,7 +228,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       />
       <ActionSheetModal
         visible={fileActionTarget != null}
-        {...mobileSessionTabMenuHeader(fileActionTarget, [])}
+        {...mobileSessionTabMenuHeader(fileActionTarget, [], t)}
         groupDestructive
         title={fileActionTarget?.title || t('session.sheets.file', 'File')}
         actions={[

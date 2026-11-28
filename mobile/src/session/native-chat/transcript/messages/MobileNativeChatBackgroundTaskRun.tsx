@@ -3,10 +3,11 @@ import type { NativeChatBackgroundTaskBlock } from '../../../../../../src/shared
 import { nativeChatBackgroundTaskRun } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-background-task-run'
 import { AGENT_STATE_DOT_SIZE, AgentStateDot } from '../../../../agents/presentation/AgentStateDot'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { sayMobileBackgroundTask } from '../../input/tasks/mobile-background-task-copy'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { mobileBackgroundTaskSay } from '../../input/tasks/mobile-background-task-copy'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { BackgroundTaskKindIcon } from '../../input/tasks/MobileNativeChatBackgroundTasks'
 import { scaledType } from './mobile-native-chat-message-styles'
 
@@ -19,8 +20,10 @@ export function MobileNativeChatBackgroundTaskRun({
   block: NativeChatBackgroundTaskBlock
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
-  const row = nativeChatBackgroundTaskRun(block, sayMobileBackgroundTask)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const row = nativeChatBackgroundTaskRun(block, mobileBackgroundTaskSay(t))
   const meta = scaledType(typography.metaSize, fontScale)
   // Lines up under the label, past the icon and the dot.
   const indent = { paddingLeft: ICON_SIZE * fontScale + AGENT_STATE_DOT_SIZE + 2 * spacing.sm }
@@ -66,7 +69,7 @@ export function MobileNativeChatBackgroundTaskRun({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   run: {
     paddingVertical: spacing.xs
   },

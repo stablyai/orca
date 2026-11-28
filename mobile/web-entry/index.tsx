@@ -5,8 +5,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { ExpoRoot } from 'expo-router'
 import {
   applyMobileColorScheme,
-  colors,
   getMobileColorScheme,
+  getMobilePalette,
   subscribeMobileColorScheme
 } from '../src/theme/mobile-theme'
 import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
@@ -20,7 +20,10 @@ import {
   linkOpenResultSchema,
   storageReadResultSchema
 } from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
-import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
+import {
+  BRIDGE_HOST_CATALOGS_GRANT,
+  bridgeExternalLinkMaxChars
+} from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
 import {
   publishPageStorage,
   refreshPageTerminalSettings
@@ -141,6 +144,7 @@ if (!container) {
 const target = document.documentElement
 // Keep <html> transparent: overlay routes show the native screen through it, and the shell paints bgBase behind the rest.
 function paintDocumentScheme(): void {
+  const colors = getMobilePalette()
   target.style.setProperty('--muted-foreground', colors.textMuted)
   target.style.setProperty('--foreground', colors.textPrimary)
   target.style.colorScheme = getMobileColorScheme()
@@ -189,7 +193,8 @@ bootstrapShellPage({
               return true
             }
           }
-        : (url) => client.notifyExternalLink(url)
+        : (url) => client.notifyExternalLink(url),
+      bridgeExternalLinkMaxChars((grant) => session.grants.native.includes(grant))
     )
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
     // Expose shell keyboard height to hooks and plain functions.

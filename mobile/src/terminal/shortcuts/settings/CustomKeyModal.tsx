@@ -13,12 +13,15 @@ import {
   type TerminalShortcutModifier,
   type TerminalShortcutSpecialKey
 } from '../../key-input/terminal-accessory-keys'
-import { TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS } from '../../key-input/terminal-key-definitions'
-import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
+import {
+  TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS,
+  terminalSpecialKeyAccessibilityLabel
+} from '../../key-input/terminal-key-definitions'
+import { customKeyModalStylesSheet } from './CustomKeyModal.styles'
 import { updateStoredCustomKeys, type CustomKey } from '../../key-input/terminal-custom-keys'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type Kind = 'combo' | 'text'
 
@@ -69,7 +72,7 @@ type Props = {
 
 // Add a key to the terminal's row: a key combo built from switches, or text to type.
 export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(customKeyModalStylesSheet)
   const t = useMobileTranslation()
   const [kind, setKind] = useState<Kind>('combo')
   const [pickingKey, setPickingKey] = useState(false)
@@ -195,7 +198,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
                         ]}
                         onPress={() => pickKey(id)}
                         accessibilityRole="button"
-                        accessibilityLabel={key.accessibilityLabel}
+                        accessibilityLabel={terminalSpecialKeyAccessibilityLabel(id, t)}
                         accessibilityState={{ selected }}
                       >
                         <Text style={[styles.keyCellText, selected && styles.keyCellTextSelected]}>

@@ -80,6 +80,14 @@ export class ClaudeBackgroundTaskTracker {
     return this.refreshMonitoring()
   }
 
+  /** Many task starts at once (a reattach restating its open tasks), with one roster rebuild. */
+  restate(starts: readonly Record<string, unknown>[]): boolean {
+    for (const start of starts) {
+      this.observeSystemFrame(start)
+    }
+    return this.refreshMonitoring()
+  }
+
   clear(): boolean {
     this.tasks.clear()
     this.retention.clear()

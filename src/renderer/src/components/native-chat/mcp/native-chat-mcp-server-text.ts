@@ -2,7 +2,12 @@ import type {
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
 } from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
-import { agentSessionMcpServerDisplayName } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
+import {
+  agentSessionMcpServerDisplayName,
+  agentSessionMcpShownStatus,
+  ORCA_MCP_SOURCE
+} from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
+import { urlHost } from '@/components/settings/mcp-servers/mcp-server-words'
 import type { Translate } from '@/i18n/use-translate'
 
 export function mcpSourceLabel(source: string, t: Translate): string {
@@ -26,8 +31,20 @@ export function mcpSourceLabel(source: string, t: Translate): string {
   }
 }
 
-/** The row's dot already says connected, so a connected server shows its tools. */
-export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate): string {
+/** The row's dot already says connected, so a connected server shows its tools. `hostName`: the
+ *  chat's host, which a command of Orca's that won't start is missing from. */
+export function mcpServerStatusLine(
+  server: AgentSessionMcpServer,
+  t: Translate,
+  hostName?: string
+): string {
+  // The chat keeps its launch copy of a server Orca changed until the next message restarts it.
+  if (server.orcaChange === 'removed') {
+    return t('components.native-chat.mcp.status.orcaRemoved', 'Removed: restarts on next message')
+  }
+  if (server.orcaChange === 'changed' && server.status !== 'connected') {
+    return t('components.native-chat.mcp.status.orcaChanged', 'Changed: restarts on next message')
+  }
   switch (server.status) {
     case 'connected':
       return server.toolCount === null
@@ -39,13 +56,26 @@ export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate)
     case 'pending':
       return t('components.native-chat.mcp.status.pending', 'Connecting…')
     case 'needs-auth':
-      return server.canSignIn
+      // Orca signs in to its own servers, from its MCP servers page.
+      return server.canSignIn || server.source === ORCA_MCP_SOURCE
         ? t('components.native-chat.mcp.status.needsAuth', 'Needs sign-in')
         : t(
             'components.native-chat.mcp.status.needsAuthAfterSend',
             'Needs sign-in. Send a message to sign in here.'
           )
     case 'failed':
+      // Orca's own check found it before the agent started, in the words its settings use.
+      if (server.orca && !server.error) {
+        return server.orca.url !== null
+          ? t('settings.mcpServers.status.unreachable', 'Can’t reach {{host}}', {
+              host: urlHost(server.orca.url)
+            })
+          : hostName
+            ? t('settings.mcpServers.status.commandFailed', 'Command not found on {{host}}', {
+                host: hostName
+              })
+            : t('components.native-chat.mcp.status.failed', 'Failed')
+      }
       return server.error
         ? t('components.native-chat.mcp.status.failedReason', 'Failed: {{error}}', {
             error: server.error
@@ -55,6 +85,8 @@ export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate)
       return t('components.native-chat.mcp.status.disabled', 'Disabled')
     case 'not-started':
       return t('components.native-chat.mcp.status.notStarted', 'Not started')
+    case 'unreported':
+      return ''
   }
 }
 
@@ -77,7 +109,7 @@ export function mcpTraySummary(
     ]
   }
   const count = (status: AgentSessionMcpServer['status']): number =>
-    servers.filter((server) => server.status === status).length
+    servers.filter((server) => agentSessionMcpShownStatus(server) === status).length
   const connected = count('connected')
   const needsAuth = count('needs-auth')
   const failed = count('failed')

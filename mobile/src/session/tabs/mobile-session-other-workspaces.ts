@@ -6,6 +6,7 @@ import {
   agentStateLabel,
   type AgentDotState
 } from '../../worktree/agent-lineage/agent-row-display'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { mobileAgentAskLine } from './mobile-session-tab-rows'
 
 const SHOWN = 3
@@ -29,7 +30,8 @@ export type OtherWorkspaceRow = {
 export function otherWorkspaceRows(
   worktrees: readonly Worktree[],
   currentWorktreeId: string,
-  now: number
+  now: number,
+  t: Translate
 ): OtherWorkspaceRow[] {
   type Candidate = {
     row: Worktree
@@ -77,12 +79,12 @@ export function otherWorkspaceRows(
   // Only the rows shown read what their agent asks.
   return best.map(({ row, needsYou, waiting, activityAt }) => {
     // Worded as the tab rows word it ("Allow Edit?"), else the Agents list's state and preview.
-    const ask = waiting ? mobileAgentAskLine(waiting.agent, waiting.state) : null
+    const ask = waiting ? mobileAgentAskLine(waiting.agent, waiting.state, t) : null
     return {
       worktreeId: row.worktreeId,
       name: row.displayName || row.repo,
       needsYou,
-      stateWord: ask?.stateWord ?? (waiting ? agentStateLabel(waiting.state) : ''),
+      stateWord: ask?.stateWord ?? (waiting ? agentStateLabel(waiting.state, t) : ''),
       ask:
         ask?.content ??
         (waiting

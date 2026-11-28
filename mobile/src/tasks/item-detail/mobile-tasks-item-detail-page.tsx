@@ -18,9 +18,9 @@ import type { ActionableTaskItem } from '../mobile-tasks-project-workspace-types
 import type { GitHubDetailCheck } from '../mobile-tasks-provider-detail-types'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
@@ -28,7 +28,7 @@ import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { TransientToast } from '../../components/feedback/TransientToast'
 import { describeLoadError } from '../../components/feedback/load-error-description'
 import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
-import { styles as legacyStyles } from '../mobile-tasks-legacy-styles'
+import { stylesSheet as legacyStylesSheet } from '../mobile-tasks-legacy-styles'
 import { OptionPager, useOptionPager } from '../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
 import { useBackClaim } from '../../navigation/use-back-claim'
@@ -79,7 +79,7 @@ export function MobileTasksItemDetailPage({
   item: ActionableTaskItem
   onBack: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const pager = useOptionPager<MobileTasksDetailSubpage>()
   const keyboard = useKeyboardOcclusion()
@@ -238,6 +238,7 @@ function DetailNavBar({
 
 // The list's banner is under this page; what this page's actions report shows here.
 function PageError({ model }: { model: ConnectionPresentationModel }) {
+  const legacyStyles = useThemedStyles(legacyStylesSheet)
   const t = useMobileTranslation()
   return model.error ? (
     <View style={legacyStyles.errorBanner}>
@@ -247,7 +248,9 @@ function PageError({ model }: { model: ConnectionPresentationModel }) {
 }
 
 function DetailHeading({ item }: { item: ActionableTaskItem }) {
-  const glyph = taskItemStateGlyph(item)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const glyph = taskItemStateGlyph(item, colors)
   const author = authorOf(item)
   const updated = formatUpdatedAt(item.updatedAt)
   return (
@@ -273,6 +276,7 @@ function StartWorkspaceBar({
   model: ConnectionPresentationModel
   item: ActionableTaskItem
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { creatingKey, insets, openWorkspaceCreate, setWorkspaceRepoPickerItem, workspaceRepos } =
     model
@@ -300,7 +304,7 @@ function StartWorkspaceBar({
 }
 
 // The shared classifier, so an approval-waiting run reads as pending and a startup failure as failed.
-function checkLook(check: GitHubDetailCheck, t: Translate) {
+function checkLook(check: GitHubDetailCheck, t: Translate, colors: MobilePalette) {
   const outcome = classifyCheckOutcome(check)
   if (outcome === 'failed') {
     return {
@@ -338,6 +342,8 @@ function checkLook(check: GitHubDetailCheck, t: Translate) {
 }
 
 function ChecksList({ model }: { model: ConnectionPresentationModel }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const payload = model.detailPayload
   if (payload?.provider !== 'github') {
@@ -346,7 +352,7 @@ function ChecksList({ model }: { model: ConnectionPresentationModel }) {
   return (
     <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
       {payload.checks.map((check) => {
-        const { Icon, color, word } = checkLook(check, t)
+        const { Icon, color, word } = checkLook(check, t, colors)
         const url = check.url
         return (
           <ListRow
@@ -369,6 +375,7 @@ function SubIssueList({
   model: ConnectionPresentationModel
   item: ActionableTaskItem
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const payload = model.detailPayload
   if (payload?.provider !== 'linear' || item.provider !== 'linear') {
     return null
@@ -389,7 +396,7 @@ function SubIssueList({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   fill: { flex: 1, backgroundColor: colors.bgBase },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   heading: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: 6 },
