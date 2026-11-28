@@ -1,5 +1,6 @@
 import { FILE_SECTION_START, isFileHeaderPair } from './native-chat-diff'
 import { MAX_EDIT_LINES, splitEditContent, type NativeChatEditLine } from './native-chat-edit-model'
+import { decodeGitCQuotedPath } from '../../git/paths/git-cquoted-path'
 
 const HUNK_RANGES = /^@@+ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
 
@@ -233,20 +234,31 @@ function sectionChangeKind(section: Section): UnifiedPatchSection['changeKind'] 
  *  trailing tab introduces the timestamp some producers append. */
 function sourceHeaderPath(line: string): string | null {
   const value = (line.slice(4).split('\t')[0] ?? '').trim()
-  return value === '' || value === '/dev/null' ? null : value.replace(/^[ab]\//, '')
+  return patchHeaderPath(value)
+}
+
+function patchHeaderPath(value: string): string | null {
+  const decoded = decodeGitCQuotedPath(value)
+  return decoded === '' || decoded === '/dev/null' ? null : decoded.replace(/^[ab]\//, '')
 }
 
 function gitHeaderPaths(line: string): { oldPath: string | null; newPath: string | null } {
   const rest = line.slice(GIT_DIFF_HEADER.length)
-  // Both halves carry the same path unless the file moved, so the second one
-  // starts at the last ` b/` rather than at the first space.
-  const split = rest.lastIndexOf(' b/')
-  if (split === -1) {
+  // Quoted paths can contain escaped quotes and spaces. Unquoted paths can also
+  // contain spaces, so only use the b/ boundary when neither side is quoted.
+  const quotedOldPath = /^"(?:\\.|[^"\\])*"/.exec(rest)?.[0]
+  const quotedNewPathStart = rest.indexOf(' "b/')
+  const split = quotedOldPath
+    ? quotedOldPath.length
+    : quotedNewPathStart === -1
+      ? rest.lastIndexOf(' b/')
+      : quotedNewPathStart
+  if (split === -1 || rest[split] !== ' ') {
     return { oldPath: null, newPath: null }
   }
   return {
-    oldPath: rest.slice(0, split).replace(/^a\//, ''),
-    newPath: rest.slice(split + 1).replace(/^b\//, '')
+    oldPath: patchHeaderPath(rest.slice(0, split)),
+    newPath: patchHeaderPath(rest.slice(split + 1))
   }
 }
 
