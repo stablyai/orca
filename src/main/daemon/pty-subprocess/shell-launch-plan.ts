@@ -31,6 +31,7 @@ import {
   resolveWindowsShellLaunchArgs
 } from '../../providers/shell-launch/windows/shell-args'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
+import { resolvePosixPaneShellPath } from '../../pty/shell-startup/posix-pwsh'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { addTerminalHandleToWslEnv, addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
@@ -59,10 +60,10 @@ export type PtyShellLaunchPlan = {
   startupAgentRecognition: RecognizedAgentProcess | null
 }
 
-export function createPtyShellLaunchPlan(
+export async function createPtyShellLaunchPlan(
   opts: PtySubprocessOptions,
   env: Record<string, string>
-): PtyShellLaunchPlan {
+): Promise<PtyShellLaunchPlan> {
   const resolvedWslContext = resolveWslSessionContext(opts)
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
@@ -197,7 +198,9 @@ export function createPtyShellLaunchPlan(
     addTerminalHandleToWslEnv(env)
   } else {
     rescrubDaemonPtyEnvironment(env, opts)
-    const preferredShellPath = shellPath
+    // Resolving a bare pwsh is not a fallback: no warning, and SHELL stays the user's login shell.
+    const preferredShellPath = await resolvePosixPaneShellPath(shellPath, env.PATH)
+    shellPath = preferredShellPath
     shellPath = resolveUnixShellPath(shellPath)
     if (shellPath !== preferredShellPath) {
       env.SHELL = shellPath

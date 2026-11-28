@@ -4,9 +4,11 @@ import { spawnProcess } from '@orca/process-host'
 import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../../shared/shell/launch/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
+import { resolvePosixPaneShellPathBy } from '../../pty/shell-startup/posix-pwsh'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 import { bindShellProbeLifetime } from './shell-probe-lifetime'
+import { uniquePathSegments } from './unique-path-segments'
 
 // GUI launches miss shell-profile PATH entries; probe the login shell instead of hardcoding every tool directory.
 
@@ -149,7 +151,12 @@ export function runWithLaunchPath<T>(action: () => T): T {
   }
 }
 
-function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
+async function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
+  const deadline = Date.now() + SPAWN_TIMEOUT_MS
+  const program = await resolvePosixPaneShellPathBy(shell, shellProbeEnv().PATH ?? '', deadline)
+  if (program === null) {
+    return { segments: [], ok: false, failureReason: 'timeout' }
+  }
   return new Promise((resolve) => {
     const probe = shellPathProbe(shell)
     let finished = false
@@ -159,7 +166,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     let child: ChildProcess
     try {
       child = spawnProcess({
-        program: shell,
+        program,
         args: probe.args,
         // Preserve environment for rc setup while suppressing noisy shell stderr and ignoring stdin.
         env: shellProbeEnv(),
@@ -192,11 +199,14 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       resolve(result)
     }
 
-    timer = setTimeout(() => {
-      // Bound slow rc setup so agent discovery can fall back rather than wait forever.
-      lifetime.kill()
-      finish({ segments: [], ok: false, failureReason: 'timeout' })
-    }, SPAWN_TIMEOUT_MS)
+    timer = setTimeout(
+      () => {
+        // Bound slow rc setup so agent discovery can fall back rather than wait forever.
+        lifetime.kill()
+        finish({ segments: [], ok: false, failureReason: 'timeout' })
+      },
+      Math.max(0, deadline - Date.now())
+    )
 
     const onStdoutData = (chunk: Buffer): void => {
       stdout += chunk.toString('utf8')
@@ -298,18 +308,6 @@ export function configureWindowsShellPathHydration(
   configuredWindowsFallbackShell = fallbackShell
   windowsShellConfigurationVersion += 1
   cached = null
-}
-
-function uniquePathSegments(segments: string[], pathKey: (segment: string) => string): string[] {
-  const seen = new Set<string>()
-  return segments.filter((segment) => {
-    const key = pathKey(segment)
-    if (seen.has(key)) {
-      return false
-    }
-    seen.add(key)
-    return true
-  })
 }
 
 /** Shell order wins over seeded PATH; report newly added segments for diagnostics. */

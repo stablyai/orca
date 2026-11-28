@@ -1,4 +1,5 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -12,10 +13,30 @@ vi.mock('./hydrate-shell-path', async (actual) => {
 })
 
 const launchPath = process.env.PATH
+const originalHome = process.env.HOME
+const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
 let dir: string | null = null
+
+// The pwsh on PATH, as an absolute login-shell path; null on Windows and where none is installed.
+const realPwsh =
+  process.platform === 'win32'
+    ? null
+    : spawnSync('pwsh', ['-NoLogo', '-NoProfile', '-Command', '[Environment]::ProcessPath'], {
+        encoding: 'utf8'
+      }).stdout?.trim() || null
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name]
+  } else {
+    process.env[name] = value
+  }
+}
 
 afterEach(() => {
   process.env.PATH = launchPath
+  restoreEnv('HOME', originalHome)
+  restoreEnv('XDG_CONFIG_HOME', originalXdgConfigHome)
   if (dir) {
     rmSync(dir, { recursive: true, force: true })
     dir = null
@@ -57,3 +78,30 @@ it.skipIf(process.platform === 'win32')('a cached read builds no probe env', asy
   expect(spawner).toHaveBeenCalledTimes(1)
   expect(vi.mocked(withLaunchPath)).toHaveBeenCalledTimes(1)
 })
+
+it.runIf(realPwsh !== null)(
+  'captures a PowerShell profile export when pwsh is the login shell',
+  async () => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-login-pwsh-env-'))
+    mkdirSync(join(dir, '.config', 'powershell'), { recursive: true })
+    writeFileSync(
+      join(dir, '.config', 'powershell', 'profile.ps1'),
+      "$env:ORCA_PWSH_PROFILE_ONLY = 'pwsh-profile'\n$env:Path = 'case-distinct'\n"
+    )
+    process.env.HOME = dir
+    delete process.env.XDG_CONFIG_HOME
+
+    // .NET cold start is slow on CI runners.
+    const capture = await captureLoginShellEnvironment({
+      shellOverride: realPwsh!,
+      timeoutMs: 20_000
+    })
+
+    expect(capture.status).toBe('captured')
+    expect(capture.env.ORCA_PWSH_PROFILE_ONLY).toBe('pwsh-profile')
+    // Unix env names are case-sensitive: Path is its own variable beside PATH.
+    expect(capture.env.Path).toBe('case-distinct')
+    expect(capture.env.PATH).toContain('/')
+  },
+  30_000
+)

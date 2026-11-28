@@ -69,7 +69,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   try {
     const size = normalizePtySize(opts.cols, opts.rows)
     const env = createDaemonPtyEnvironment(opts)
-    const launch = createPtyShellLaunchPlan(opts, env)
+    const launch = await createPtyShellLaunchPlan(opts, env)
 
     await preflightPtySpawn({
       validationCwd: launch.validationCwd,
