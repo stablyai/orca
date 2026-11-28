@@ -21,6 +21,11 @@ export function cancelPendingBotThreadOpen(): void {
   previous?.controller.abort()
 }
 
+/** Whether an external bot thread link is still opening, so a slower, older open can yield to it. */
+export function botThreadOpenPending(): boolean {
+  return pending !== undefined
+}
+
 export function noteBotThreadPaneActivation(
   tabId: string,
   leafId: string,

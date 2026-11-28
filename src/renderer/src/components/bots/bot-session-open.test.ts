@@ -86,6 +86,10 @@ vi.mock('@/lib/bot-hosts', () => ({
   callBotRpc: mocks.callBotRpc
 }))
 
+import {
+  cancelPendingBotThreadOpen,
+  runBotThreadOpen
+} from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { openBotChatTab, openBotSession, startAndOpenBotChat } from './bot-session-open'
 
 const opened = { opened: {} }
@@ -116,7 +120,25 @@ function heldFolderList(): { answer: () => void } {
   return { answer: () => answer() }
 }
 
+/** An external thread link still opening; `signal` aborts when a newer navigation takes over. */
+function pendingThreadLink(key: string): { signal: AbortSignal } {
+  let signal: AbortSignal | undefined
+  void runBotThreadOpen(
+    key,
+    (abort) =>
+      new Promise<void>((resolve) => {
+        signal = abort
+        abort.addEventListener('abort', () => resolve())
+      })
+  )
+  if (!signal) {
+    throw new Error('the thread link did not start')
+  }
+  return { signal }
+}
+
 function reset(): void {
+  cancelPendingBotThreadOpen()
   vi.clearAllMocks()
   mocks.listeners.clear()
   mocks.state.activeWorkspaceKey = 'folder:elsewhere'
@@ -202,6 +224,28 @@ describe('openBotChatTab', () => {
     await openBotChatTab({ ...serverBot, hostId: 'local' }, 'chat-1')
     expect(mocks.admit).not.toHaveBeenCalled()
     expect(mocks.activate).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels a pending thread link at the click, before the Home list loads', async () => {
+    const older = pendingThreadLink('link-a')
+    mocks.admit.mockReturnValue(missing)
+    const list = heldFolderList()
+    const open = openBotChatTab(serverBot, 'chat-1')
+    expect(older.signal.aborted).toBe(true)
+    list.answer()
+    await expect(open).resolves.toBe(true)
+    expect(mocks.activate).toHaveBeenCalledTimes(1)
+  })
+
+  it('yields to a thread link opened while the Home list loads, leaving it pending', async () => {
+    mocks.admit.mockReturnValue(missing)
+    const list = heldFolderList()
+    const open = openBotChatTab(serverBot, 'chat-1')
+    const newer = pendingThreadLink('link-b')
+    list.answer()
+    await expect(open).resolves.toBe(false)
+    expect(mocks.activate).not.toHaveBeenCalled()
+    expect(newer.signal.aborted).toBe(false)
   })
 
   it('stays put when the user moves to another workspace while the Home list loads', async () => {
@@ -324,6 +368,31 @@ describe('startAndOpenBotChat', () => {
     expect(mocks.admit).not.toHaveBeenCalled()
     expect(mocks.activate).not.toHaveBeenCalled()
     expect(mocks.state.activePendingCreationId).toBe('creation-1')
+  })
+
+  it('cancels a pending thread link at the click, before the host starts the chat', () => {
+    const older = pendingThreadLink('link-a')
+    startAndOpenBotChat(serverBot, () => new Promise<string>(() => {}), vi.fn())
+    expect(older.signal.aborted).toBe(true)
+  })
+
+  it('yields to a thread link opened while the host started the chat', async () => {
+    let started = (_sessionId: string): void => {}
+    startAndOpenBotChat(
+      serverBot,
+      () =>
+        new Promise<string>((resolve) => {
+          started = resolve
+        }),
+      vi.fn()
+    )
+    const newer = pendingThreadLink('link-b')
+    started('chat-1')
+    await vi.waitFor(() => expect(mocks.admit).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.listeners.size).toBe(0))
+    await Promise.resolve()
+    expect(mocks.activate).not.toHaveBeenCalled()
+    expect(newer.signal.aborted).toBe(false)
   })
 
   it('reports a failed start and stops watching', async () => {

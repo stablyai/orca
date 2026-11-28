@@ -1,5 +1,8 @@
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
-import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
+import {
+  botThreadOpenPending,
+  cancelPendingBotThreadOpen
+} from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { targetBotChatLatest } from '@/lib/agent-session/open/bot-link-item-target'
 import { botTarget, callBotRpc, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { activateAndRevealFolderWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
@@ -62,6 +65,13 @@ async function admitServerBotHome(
   return 'opened' in outcome ? 'opened' : outcome.refused.failureNotified ? 'notified' : 'refused'
 }
 
+/** The user's click on a bot chat. A pending thread link yields to it now, as to any newer
+ *  navigation, not once the Home step below has finished. */
+function clickBotOpen(): BotOpenIntent {
+  cancelPendingBotThreadOpen()
+  return watchBotOpenIntent()
+}
+
 /**
  * Opens one of the bot's chats as a focused tab, on the host that runs the bot. `intent` starts at the
  * user's click (a new chat's starts before the host made it); absent, the click is now. Retry is a
@@ -71,7 +81,7 @@ async function admitServerBotHome(
 export async function openBotChatTab(
   bot: BotHome,
   sessionId: string,
-  intent: BotOpenIntent = watchBotOpenIntent()
+  intent: BotOpenIntent = clickBotOpen()
 ): Promise<boolean> {
   const retry = (): Promise<boolean> => openBotChatTab(bot, sessionId)
   // The home switch below is this open's own move; nothing past it is watched.
@@ -83,6 +93,10 @@ export async function openBotChatTab(
         retry: () => void retry().catch(() => {})
       })
     }
+    return false
+  }
+  // A thread link opened since the click is newer; this open would cancel it, so it yields.
+  if (botThreadOpenPending()) {
     return false
   }
   return activateAiVaultStructuredSession(
@@ -99,7 +113,7 @@ export function startAndOpenBotChat(
   start: () => Promise<string>,
   onError: (error: unknown) => void
 ): void {
-  const intent = watchBotOpenIntent()
+  const intent = clickBotOpen()
   void start()
     .then((sessionId) => openBotChatTab(bot, sessionId, intent))
     .catch(onError)
