@@ -48,8 +48,8 @@ export abstract class RuntimeWorkspaceNavigation extends RuntimeWorkspaceCatalog
     startup?: WorktreeStartupLaunch,
     defaultTabs?: CreateWorktreeResult['defaultTabs'],
     providesInitialSurface?: boolean
-  ): void {
-    this.notifier?.activateWorktree(
+  ): boolean {
+    const sent = this.notifier?.activateWorktree(
       repoId,
       worktreeId,
       setup,
@@ -57,6 +57,7 @@ export abstract class RuntimeWorkspaceNavigation extends RuntimeWorkspaceCatalog
       defaultTabs,
       ...(providesInitialSurface ? ([true] as const) : [])
     )
+    return sent === true
   }
 
   protected notifyClientsActivateWorktree(

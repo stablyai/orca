@@ -41,6 +41,8 @@ import {
   type FreshComposerPtyHost
 } from '../../terminal/wait/launch-composer-watch'
 
+type HostWindowOutcome = 'requested' | 'none' | 'unavailable'
+
 export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithForegroundInspection {
   protected abstract toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
@@ -63,6 +65,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     activated: boolean
     /** unsupported-headless means no renderer holds wake records; clients must not claim agents resumed. */
     sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable'
+    /** Request delivery to the host window, without an acknowledgement of navigation. */
+    hostWindow?: HostWindowOutcome
   }> {
     this.assertGraphReady()
     const worktree = await this.resolveGitWorktreeSelector(worktreeSelector)
@@ -92,10 +96,16 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
 
     let sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable' =
       'not-applicable'
+    let hostWindow: HostWindowOutcome | undefined
     if (targetsHost || targetsClients) {
       // Inactive renderer-owned panes may need desktop activation to gain PTYs.
       if (targetsHost) {
-        this.notifyHostActivateWorktree(repo.id, worktree.id)
+        const requested = this.notifyHostActivateWorktree(repo.id, worktree.id)
+        hostWindow = requested
+          ? 'requested'
+          : this.hasAuthoritativeWindow()
+            ? 'unavailable'
+            : 'none'
       }
       if (targetsClients) {
         this.notifyClientsActivateWorktree(repo.id, worktree.id, undefined, navigation)
@@ -122,7 +132,13 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         )
       }
     }
-    return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
+    return {
+      repoId: repo.id,
+      worktreeId: worktree.id,
+      activated: true,
+      sleepingAgentWake,
+      ...(hostWindow ? { hostWindow } : {})
+    }
   }
 
   /** Use buildStartupForDraft's selection so launches can name the agent before creation. */
