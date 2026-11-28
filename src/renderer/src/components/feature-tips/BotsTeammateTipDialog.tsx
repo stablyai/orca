@@ -15,6 +15,7 @@ import { BotsTipPageNav } from './BotsTipPageNav'
 import { BotsTipSlackVisual } from './BotsTipSlackVisual'
 import { BOTS_TIP_PAGE_COUNT, mascotPawTapping } from './bots-tip-timeline'
 import { useBotsTipPlayback } from './use-bots-tip-playback'
+import { useWindowStreamVisible } from '@/lib/window-activity/use-window-stream-visibility'
 import './bots-tip.css'
 
 export function BotsTeammateTipDialog({
@@ -31,7 +32,10 @@ export function BotsTeammateTipDialog({
 }): JSX.Element {
   const t = useTranslate()
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
-  const playback = useBotsTipPlayback(open)
+  // A hidden window holds the card where it is, pill included, and resumes there. No grace: the
+  // frame clock stops at once on hide while the pill's CSS clock would run on.
+  const windowVisible = useWindowStreamVisible(0)
+  const playback = useBotsTipPlayback(open && windowVisible)
   const { page, visit, pageStarts, pageTimes, reducedMotion } = playback
   // Pages you pick are announced; the auto-advance stays quiet.
   const [announced, setAnnounced] = useState('')
@@ -152,7 +156,14 @@ export function BotsTeammateTipDialog({
         ))}
       </div>
       <div className="mt-8 flex items-center gap-2">
-        <BotsTipPageNav page={page} progress={playback.progress} onPage={goTo} />
+        <BotsTipPageNav
+          page={page}
+          visit={visit}
+          pageSeconds={playback.pageSeconds}
+          pageElapsed={playback.pageElapsed}
+          playing={playback.playing}
+          onPage={goTo}
+        />
         <span className="sr-only" aria-live="polite">
           {announced}
         </span>
