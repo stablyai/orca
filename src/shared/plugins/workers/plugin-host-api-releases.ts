@@ -1,4 +1,5 @@
 import type { PluginSurface } from '../frames/plugin-protocol'
+import { PLUGIN_AGENT_ATTENTION_SINCE } from '../contributions/plugin-event-contribution'
 import {
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
@@ -26,7 +27,8 @@ export const PLUGIN_HOST_API_MINOR_SINCE: readonly string[] = [
   PLUGIN_HOST_API_1_7_SINCE,
   PLUGIN_HOST_API_1_8_SINCE,
   PLUGIN_HOST_API_1_9_SINCE,
-  PLUGIN_HOST_API_1_10_SINCE
+  PLUGIN_HOST_API_1_10_SINCE,
+  PLUGIN_AGENT_ATTENTION_SINCE
 ]
 
 /** `orca.host.has` arrived with manifest format 2; on older Orca a guard throws instead of answering. */

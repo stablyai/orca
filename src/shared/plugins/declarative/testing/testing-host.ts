@@ -212,7 +212,10 @@ export function createMockHost(
   }
 
   const surfaceOf = (surface: Surface): MockHostSurface => ({
-    api: { major: PLUGIN_HOST_API_MAJOR, minor: pluginHostApiMinorFor(surfaceMethods[surface]) },
+    api: {
+      major: PLUGIN_HOST_API_MAJOR,
+      minor: pluginHostApiMinorFor(surfaceMethods[surface], surface)
+    },
     call(method, params) {
       calls.push({ method, params })
       const result = answer(method, params, surface)

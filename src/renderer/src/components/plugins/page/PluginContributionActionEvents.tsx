@@ -30,6 +30,11 @@ function eventTitle(event: PluginEventName, t: Translate = translate): string {
         'auto.components.settings.PluginContributionActionEvents.agentStatusChanged',
         'When an agent’s status changes'
       )
+    case 'agent.attention':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.agentAttention',
+        'When Orca has agent activity to notify you about'
+      )
     case 'workspace.changed':
       return t(
         'auto.components.settings.PluginContributionActionEvents.workspaceChanged',

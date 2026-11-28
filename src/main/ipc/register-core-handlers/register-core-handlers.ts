@@ -22,6 +22,7 @@ import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-
 import { registerLazyAiVaultHandlers } from '../ai-vault/lazy-ai-vault-handlers'
 import { registerLazyNativeChatHandlers } from '../lazy-native-chat-handlers'
 import { registerNotificationHandlers } from '../notifications/notifications'
+import { pluginAgentAttentionDelivery } from '../notifications/agent-attention-event'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
@@ -124,7 +125,7 @@ export async function registerCoreHandlers(
       registerLazyCrashReportingHandlers(crashReports)
     }
     registerStatsHandlers(stats)
-    registerNotificationHandlers(store, runtime)
+    registerNotificationHandlers(store, runtime, pluginAgentAttentionDelivery(store, pluginService))
     registerSettingsHandlers(store, agentAwakeService)
     registerLazySkillsHandlers(store, runtime)
     registerLazySkillDeleteIpcHandlers(store, runtime)

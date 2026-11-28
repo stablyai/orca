@@ -17,6 +17,7 @@ import { PLUGIN_COMMAND_REPLACES_SINCE } from '../contributions/plugin-command-c
 import { PLUGIN_APPEARANCE_SINCE } from '../workers/plugin-host-api-appearance'
 import { PLUGIN_FONTS_SINCE } from '../contributions/plugin-font-contribution'
 import { PLUGIN_MCP_SERVERS_SINCE } from '../contributions/plugin-mcp-server-contribution'
+import { PLUGIN_AGENT_ATTENTION_SINCE } from '../contributions/plugin-event-contribution'
 import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
 import { PLUGIN_HOST_API_1_7_SINCE } from '../workers/plugin-host-api-workspace-methods'
 import { PLUGIN_HOST_API_1_8_SINCE } from '../workers/plugin-host-api-1-8'
@@ -46,7 +47,8 @@ export const PLUGIN_SCHEMA_NEWEST_SINCE = [
   PLUGIN_HOST_API_1_8_SINCE,
   PLUGIN_HOST_API_1_9_SINCE,
   PLUGIN_HOST_API_1_10_SINCE,
-  PLUGIN_MCP_SERVERS_SINCE
+  PLUGIN_MCP_SERVERS_SINCE,
+  PLUGIN_AGENT_ATTENTION_SINCE
 ].reduce((newest, version) => (satisfiesOrcaEngineRange(version, `>=${newest}`) ? version : newest))
 
 /**

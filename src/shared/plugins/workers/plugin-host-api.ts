@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { PluginSurface } from '../frames/plugin-protocol'
+import { PLUGIN_AGENT_ATTENTION_HOST_API_MINOR } from '../contributions/plugin-event-contribution'
 import * as stored from './plugin-host-api-storage-schemas'
 import { PLUGIN_PANEL_BRIDGE_API } from './plugin-host-api-panel-methods'
 import { PLUGIN_WORKER_ACTIONS_API } from './plugin-host-api-worker-actions'
@@ -311,11 +312,10 @@ export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | nu
   return isPluginHostMethodName(name) ? PLUGIN_HOST_API[name] : null
 }
 
-/** The minor this host implements: the newest `since` or `paramsSince` among frozen methods. */
-export const PLUGIN_HOST_API_MINOR = Math.max(
-  ...PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) =>
-    Math.max(PLUGIN_HOST_API[name].since, ...Object.values(PLUGIN_HOST_API[name].paramsSince ?? {}))
-  )
+/** The minor this host implements across frozen methods and events. */
+export const PLUGIN_HOST_API_MINOR = pluginHostApiMinorFor(
+  PLUGIN_STABLE_HOST_METHOD_NAMES,
+  'worker'
 )
 
 /** Methods a surface may call, for `hello` and `host.has`; proposed ones only when allowed. */
@@ -336,13 +336,14 @@ export function pluginFrameMethodsFor(
   )
 }
 
-/** The minor a frame reports: the newest method it is actually offered, so iframes stay at 0. */
+/** The newest method or event a surface is offered. */
 export function pluginHostApiMinorFor(
   methods: readonly PluginHostMethodName[],
   surface: PluginSurface = 'panel'
 ): number {
+  const receivesEvents = surface === 'worker' || methods.includes('events.subscribe')
   return Math.max(
-    0,
+    receivesEvents ? PLUGIN_AGENT_ATTENTION_HOST_API_MINOR : 0,
     ...methods.map((name) => pluginHostMethodNewestMinorFor(PLUGIN_HOST_API[name], surface))
   )
 }

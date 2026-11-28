@@ -47,6 +47,8 @@ export type NotificationDeliveryDependencies = {
   recordAnnounced?: (request: NotificationDispatchRequest) => void
   /** Whether the chat behind a structured notification answers a Slack thread. */
   repliesInSlack?: (sessionId: string) => boolean
+  wantsAgentAttention?: () => boolean
+  emitAgentAttention?: (request: NotificationDispatchRequest) => void
 }
 
 export type NotificationDeliveryService = {
@@ -60,6 +62,7 @@ export function createNotificationDeliveryService(
 ): NotificationDeliveryService {
   const recentDesktopNotifications = new Map<string, number>()
   const recentMobileNotifications = new Map<string, number>()
+  const recentPluginAttention = new Map<string, number>()
 
   // Keyed news is announced once by its producer, so only its own repeat may collapse it.
   const dedupeKeyFor = (request: NotificationDispatchRequest): string =>
@@ -175,11 +178,19 @@ export function createNotificationDeliveryService(
         }
       }
 
-      if (!desktopAllowed || hostMuted) {
-        return {
-          delivered: false,
-          reason: !settings.enabled ? 'disabled' : hostMuted ? 'host-muted' : 'source-disabled'
-        }
+      const emitAttention =
+        !hostMuted &&
+        request.source === 'agent-task-complete' &&
+        deps.wantsAgentAttention?.() === true
+      const desktopSuppression =
+        !desktopAllowed || hostMuted
+          ? ({
+              delivered: false,
+              reason: !settings.enabled ? 'disabled' : hostMuted ? 'host-muted' : 'source-disabled'
+            } as const)
+          : undefined
+      if (desktopSuppression && !emitAttention) {
+        return desktopSuppression
       }
 
       const browserWindow = deps.findActiveWindow()
@@ -189,21 +200,24 @@ export function createNotificationDeliveryService(
         browserWindow &&
         browserWindow.isFocused()
       ) {
-        return { delivered: false, reason: 'suppressed-focus' }
+        return desktopSuppression ?? { delivered: false, reason: 'suppressed-focus' }
       }
 
-      // Explicit Settings tests bypass burst deduplication.
       if (request.source !== 'test') {
-        // Collapse unkeyed worktree events across sources; attention keys isolate their own repeats.
+        const dedupeKey = dedupeKeyFor(request)
+        const now = deps.now()
         if (
-          !reserveNotificationCooldown(
-            recentDesktopNotifications,
-            dedupeKeyFor(request),
-            deps.now()
-          )
+          !desktopSuppression &&
+          !reserveNotificationCooldown(recentDesktopNotifications, dedupeKey, now)
         ) {
           return { delivered: false, reason: 'cooldown' }
         }
+        if (emitAttention && reserveNotificationCooldown(recentPluginAttention, dedupeKey, now)) {
+          deps.emitAgentAttention?.(request)
+        }
+      }
+      if (desktopSuppression) {
+        return desktopSuppression
       }
 
       if (!deps.isNotificationSupported()) {

@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/notifications/notification-settings-types'
 import { isNotificationAttentionAcknowledgement } from '../../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import type { AgentAttentionDelivery } from './agent-attention-event'
 import { setTrayAttention } from '../../tray/system-tray'
 import { isMainWindowVisible } from '../../window/visibility/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
@@ -32,7 +33,11 @@ const NOTIFICATION_PERMISSION_IPC_CHANNELS = [
 
 let stopRuntimeAttentionEvents: (() => void) | undefined
 
-export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
+export function registerNotificationHandlers(
+  store: Store,
+  runtime?: OrcaRuntimeService,
+  attention?: AgentAttentionDelivery
+): void {
   ipcMain.removeHandler('notifications:getDesktopAwayState')
   ipcMain.handle('notifications:getDesktopAwayState', () => readDesktopAwayState(powerMonitor))
 
@@ -203,6 +208,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
             now: () => Date.now(),
             wasRead: announced.wasRead,
             repliesInSlack: (sessionId) => sessionRepliesInSlack(store, sessionId),
+            ...attention,
             reserveNative: (request) => {
               if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
                 return undefined
