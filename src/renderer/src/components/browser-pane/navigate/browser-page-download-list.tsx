@@ -34,7 +34,11 @@ export function BrowserPageDownloadList({
                 : (progressLabel ??
                   t('auto.components.browser.pane.BrowserPane.759f32af29', 'Downloading'))
               : download.status === 'completed'
-                ? t('auto.components.browser.pane.BrowserPane.5c3d530a68', 'Downloaded')
+                ? download.claimLabel
+                  ? t('browser.claimedDownload.saved', 'Saved to {{place}}', {
+                      place: download.claimLabel
+                    })
+                  : t('auto.components.browser.pane.BrowserPane.5c3d530a68', 'Downloaded')
                 : download.status === 'canceled'
                   ? t('auto.components.browser.pane.BrowserPane.4bb7424d6b', 'Canceled')
                   : (download.error ??
@@ -89,7 +93,8 @@ export function BrowserPageDownloadList({
                 >
                   {t('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
                 </Button>
-              ) : download.status === 'completed' ? (
+              ) : download.status === 'completed' && download.savePath ? (
+                // A download saved on another host has no file here to open or show.
                 <>
                   <Button
                     size="xs"

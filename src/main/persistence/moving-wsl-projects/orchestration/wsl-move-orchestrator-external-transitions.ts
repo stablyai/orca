@@ -2,6 +2,8 @@
  * The orchestrator's transitions for what happens outside a move step: the user's choices
  * (Retry, Not now, a release, a host Add or Remove), R38 distro verdicts, and startup settling.
  */
+import type { WslMoveUseLocallyResult } from '../../../../shared/wsl-move/wsl-moved-project'
+import type { WslMoveOrchestratorPorts } from './wsl-move-orchestrator-ports'
 import type {
   WslMoveOrchestratorDeclineCause,
   WslMoveOrchestratorRecord,
@@ -69,6 +71,30 @@ export function applyWslMoveReleasedByUser(
   cause: WslMoveOrchestratorDeclineCause
 ): WslMoveOrchestratorRecord {
   return withWslMoveOrchestratorState(record, { kind: 'parked', reason: 'declined', cause }, now)
+}
+
+/** A user's decline or Not now is never pruned; a `stateLost` hold is Orca's guess, not theirs. */
+export function recordsUserChoice(record: WslMoveOrchestratorRecord): boolean {
+  const { state } = record
+  return (
+    state.kind === 'parked' &&
+    state.stateLost !== true &&
+    (state.reason === 'declined' || state.reason === 'not-now')
+  )
+}
+
+/** R38 Restore, step one; a throwing port reads as a failed release, never an unhandled one. */
+export async function releaseWslMoveForRestore(
+  ports: Pick<WslMoveOrchestratorPorts, 'releaseFinishedMove'>,
+  distro: string,
+  unsavedWorkspaceIds: readonly string[]
+): Promise<WslMoveUseLocallyResult> {
+  try {
+    return await ports.releaseFinishedMove(distro, unsavedWorkspaceIds)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'restore_failed'
+    return { released: false, reason: 'failed', detail }
+  }
 }
 
 /** The user added the host themselves: a decline (theirs, by Remove or release) is taken back. */

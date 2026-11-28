@@ -25,6 +25,7 @@ import {
   resumeRuntimeEnvironmentStatus
 } from '../../ssh/ssh-host-user-disconnect'
 import { releaseUnlinkedHostTransport } from '../../ssh/ssh-session-teardown'
+import { forgetWslHostEnvironment } from '../../wsl/wsl-host-forget'
 import type { ManagedServerActions } from '../../../runtime/hosts/management/managed-server-actions-registry'
 import {
   retireRemovedRuntimeEnvironment,
@@ -58,12 +59,13 @@ export function createManagedOrcadActions(
   }
   return {
     status: (selector) => getManagedOrcadRuntimeStatus(userDataPath(), selector),
-    update: (selector, force, pastLiveTerminals) =>
+    update: (selector, force, pastLiveTerminals, endInProcessTerminals) =>
       asExplicitServerAction(userDataPath(), selector, async () => {
         const result = await updateManagedOrcadEnvironment(userDataPath(), {
           selector,
           force,
-          ...(pastLiveTerminals ? { pastLiveTerminals } : {})
+          ...(pastLiveTerminals ? { pastLiveTerminals } : {}),
+          ...(endInProcessTerminals === true ? { endInProcessTerminals } : {})
         })
         if (result.outcome === 'updated') {
           await options.invalidateTransport(result.environment.id)
@@ -104,8 +106,12 @@ export function createManagedOrcadActions(
     },
     cancelStop: async (selector) => await cancelManagedOrcadStop(userDataPath(), { selector }),
     forget: async (selector) => {
+      const wslHost = await forgetWslHostEnvironment(userDataPath(), selector, unlinkPolicy)
+      if (wslHost) {
+        return wslHost
+      }
       const result = await forgetManagedOrcadEnvironment(userDataPath(), { selector }, unlinkPolicy)
-      if (result.outcome === 'forgotten') {
+      if (result.outcome === 'forgotten' && result.sshTargetId) {
         options.clearHostServerStatus(result.sshTargetId)
       }
       return result
@@ -116,7 +122,7 @@ export function createManagedOrcadActions(
         { selector },
         unlinkPolicy
       )
-      if (result.outcome === 'forgotten') {
+      if (result.outcome === 'forgotten' && result.sshTargetId) {
         options.clearHostServerStatus(result.sshTargetId)
       }
       return result

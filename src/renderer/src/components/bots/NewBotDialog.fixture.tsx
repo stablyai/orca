@@ -1,12 +1,18 @@
-import { useState } from 'react'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
-import { useAppStore } from '@/store'
-import { PortalContainerContext } from '../ui/portal-container-context'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
 import { templateProposal, type BotProposal } from '../../../../shared/bots/bot-proposal'
 import type { BotShareReview } from '../../../../shared/bots/bot-share-received'
 import { NewBotDialog } from './NewBotDialog'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
+import {
+  LONG_FIXTURE_COMPUTER,
+  NewBotFixtureStage,
+  newBotFixture,
+  seedNewBotFixture,
+  typeInto
+} from './new-bot-stage-fixture'
 
 const dialog = () => (
   <div className="h-[720px] bg-background">
@@ -32,21 +38,6 @@ const proposed = (height: number, proposal: BotProposal, origin: string) => () =
   </div>
 )
 
-// Types into the controlled fields the way a person would, so React sees the change.
-const typeInto = (selector: string, text: string) => async (): Promise<void> => {
-  const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)
-  if (!field) {
-    return
-  }
-  const proto =
-    field instanceof HTMLTextAreaElement
-      ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype
-  Reflect.getOwnPropertyDescriptor(proto, 'value')?.set?.call(field, text)
-  field.dispatchEvent(new Event('input', { bubbles: true }))
-  await new Promise((resolve) => setTimeout(resolve, 50))
-}
-
 const typed = (purpose: string) => async (): Promise<void> => {
   await typeInto('[role="dialog"] input[autocomplete="off"]', 'Pulse')()
   await typeInto('[role="dialog"] textarea', purpose)()
@@ -69,6 +60,20 @@ export const longPurpose = defineFixture({
   interact: typed(
     'Watch app startup time on macOS, Windows and Linux, compare each new PR against main, and tell me in #perf when cold start gets more than 5% slower. Post a short summary there every Friday.'
   )
+})
+
+// Over the limit, as a value set past the box's maxLength arrives: Create shows Too long and sends nothing.
+export const tooLongPurpose = defineFixture({
+  ...newBotFixture(480),
+  interact: async () => {
+    await typeInto('input[autocomplete="off"]', 'Pulse')()
+    await typeInto(
+      'textarea',
+      'Watch app startup time and catch regressions on every platform. '.repeat(17)
+    )()
+    document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+    await new Promise(requestAnimationFrame)
+  }
 })
 
 export const proposal = defineFixture({
@@ -98,65 +103,6 @@ export const proposalLongPurpose = defineFixture({
   )
 })
 
-// Review shots at a 340 and a 480 px dialog. The dialog is fixed, so it portals into a transformed box
-// that wide (plus its 1rem margins) instead of the page's wide viewport.
-function Stage({
-  width,
-  nudge,
-  proposal,
-  height = 620,
-  link
-}: {
-  width: 340 | 480
-  nudge?: boolean
-  proposal?: BotProposal
-  height?: number
-  /** Opened from a reviewed link, as the link flow opens it. */
-  link?: BotShareReview
-}): React.JSX.Element {
-  const [box, setBox] = useState<HTMLElement | null>(null)
-  return (
-    <div
-      ref={setBox}
-      className="relative translate-x-0 bg-background"
-      style={{ width: width + 32, height }}
-    >
-      {box ? (
-        <PortalContainerContext.Provider value={box}>
-          <NewBotDialog
-            open
-            onOpenChange={() => {}}
-            onImport={nudge ? () => {} : undefined}
-            proposal={proposal}
-            {...(link
-              ? { fromShare: { review: link, toolIds: [], onBack: () => {}, onMoved: () => {} } }
-              : {})}
-          />
-        </PortalContainerContext.Provider>
-      ) : null}
-    </div>
-  )
-}
-
-const LONG_COMPUTER = 'build-runner-02.eu-west.internal'
-
-const seeded = (computer?: string) => (): void => {
-  stubBots([])
-  useAppStore.setState((state) => ({
-    detectedAgentIds: ['claude', 'codex'],
-    localDetectedAgentIdsByContext: {
-      host: ['claude', 'codex'],
-      'host\u0000all-agents': ['claude', 'codex']
-    },
-    ensureDetectedAgents: async () => ['claude', 'codex'],
-    isDetectingAgents: false,
-    settings: state.settings && {
-      ...state.settings,
-      hostSettingOverrides: computer ? { local: { displayLabel: computer } } : {}
-    }
-  }))
-}
-
 // A Hermes bot on this computer, so the first-bot import nudge shows.
 const HERMES_SOURCES = [
   {
@@ -167,7 +113,7 @@ const HERMES_SOURCES = [
 ]
 
 const withNudge = (): void => {
-  seeded()()
+  seedNewBotFixture()()
   try {
     localStorage.removeItem('orca.bots.import-nudge-dismissed')
   } catch {
@@ -200,12 +146,6 @@ const openComputerMenu = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 300))
 }
 
-const review = (width: 340 | 480, computer?: string) => ({
-  width: width + 32,
-  setup: seeded(computer),
-  render: () => <Stage width={width} />
-})
-
 const FILLED = named('Atlas', 'Triage new bugs and post a daily summary in #eng.')
 const LONGEST = named(
   'Customer Escalations Concierge for the Platform Team',
@@ -221,27 +161,75 @@ const LONGEST = named(
 export const nudge340 = defineFixture({
   width: 372,
   setup: withNudge,
-  render: () => <Stage width={340} nudge />
+  render: () => <NewBotFixtureStage width={340} nudge />
 })
 export const nudge480 = defineFixture({
   width: 512,
   setup: withNudge,
-  render: () => <Stage width={480} nudge />
+  render: () => <NewBotFixtureStage width={480} nudge />
 })
-export const empty340 = defineFixture(review(340))
-export const empty480 = defineFixture(review(480))
-export const filled340 = defineFixture({ ...review(340), interact: FILLED })
-export const filled480 = defineFixture({ ...review(480), interact: FILLED })
-export const longest340 = defineFixture({ ...review(340, LONG_COMPUTER), interact: LONGEST })
-export const longest480 = defineFixture({ ...review(480, LONG_COMPUTER), interact: LONGEST })
-export const picker340 = defineFixture({ ...review(340), interact: openPicker })
-export const picker480 = defineFixture({ ...review(480), interact: openPicker })
+export const empty340 = defineFixture(newBotFixture(340))
+export const empty480 = defineFixture(newBotFixture(480))
+
+export const filled340 = defineFixture({ ...newBotFixture(340), interact: FILLED })
+export const filled480 = defineFixture({ ...newBotFixture(480), interact: FILLED })
+export const longest340 = defineFixture({
+  ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
+  interact: LONGEST
+})
+export const longest480 = defineFixture({
+  ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
+  interact: LONGEST
+})
+const pictureReview = (width: 340 | 480) => ({
+  width: width + 32,
+  setup: () => {
+    seedNewBotFixture('Demo computer')()
+    const avatarGeneration: typeof window.api.avatarGeneration = {
+      ...window.api.avatarGeneration,
+      capability: async () => ({ agents: [{ agent: 'codex', status: 'ready' }] })
+    }
+    Reflect.set(window.api, 'avatarGeneration', avatarGeneration)
+    refreshAvatarCapability()
+  },
+  render: () => (
+    <NewBotFixtureStage
+      width={width}
+      proposal={{ name: 'Pebble', purpose: 'Sort invented notes for the demo.', mascot: 'B1' }}
+    />
+  )
+})
+
+export const picker340 = defineFixture({ ...pictureReview(340), interact: openPicker })
+export const picker480 = defineFixture({ ...pictureReview(480), interact: openPicker })
+
+const reopenDraft = async (): Promise<void> => {
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  await typeInto('textarea[aria-label="Picture description"]', 'a tiny violet robot gardener')()
+  const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+  popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+}
+
+export const pictureDraft340 = defineFixture({
+  ...pictureReview(340),
+  interact: reopenDraft
+})
+export const pictureDraft480 = defineFixture({
+  ...pictureReview(480),
+  interact: reopenDraft
+})
 export const computerMenu340 = defineFixture({
-  ...review(340, LONG_COMPUTER),
+  ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
 })
 export const computerMenu480 = defineFixture({
-  ...review(480, LONG_COMPUTER),
+  ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
 })
 
@@ -252,8 +240,8 @@ const fromTemplate = (id: string, name?: string) => {
 }
 const templateReview = (width: 340 | 480, id: string, name?: string) => ({
   width: width + 32,
-  setup: seeded(),
-  render: () => <Stage width={width} height={1100} proposal={fromTemplate(id, name)} />
+  setup: seedNewBotFixture(),
+  render: () => <NewBotFixtureStage width={width} height={1100} proposal={fromTemplate(id, name)} />
 })
 const openChip = (label: RegExp) => async (): Promise<void> => {
   const chip = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
@@ -267,7 +255,7 @@ const skillOff = async (): Promise<void> => {
   document.querySelector<HTMLButtonElement>('[role="switch"]')?.click()
   await new Promise((resolve) => setTimeout(resolve, 100))
 }
-const LONG_TEMPLATE_NAME = 'Pull request review for the Platform Team monorepo'
+const LONG_TEMPLATE_NAME = 'Customer Escalations Concierge for the Platform Reliability Team'
 
 export const prReview340 = defineFixture(templateReview(340, 'pr-review'))
 export const prReview480 = defineFixture(templateReview(480, 'pr-review'))
@@ -297,7 +285,7 @@ const LONGEST_LINK: BotShareReview = {
   reviewId: 'review-1',
   shareId: 'share-1',
   versionId: 'version-1',
-  publisher: 'Alexandra Whitfield',
+  publisher: 'Example Studio',
   publishedAt: '2026-11-08T00:00:00.000Z',
   bot: {
     schemaVersion: 1,
@@ -320,10 +308,121 @@ const LONGEST_LINK: BotShareReview = {
 
 const fromLink = (width: 340 | 480) => ({
   width: width + 32,
-  setup: seeded(LONG_COMPUTER),
-  render: () => <Stage width={width} link={LONGEST_LINK} />
+  setup: seedNewBotFixture(LONG_FIXTURE_COMPUTER),
+  render: () => <NewBotFixtureStage width={width} link={LONGEST_LINK} />,
+  interact: (frame: HTMLElement) => {
+    const name = frame.querySelector<HTMLInputElement>('input[aria-label="Name"]')
+    if (!name || document.activeElement === name || frame.querySelector('textarea')) {
+      throw new Error(
+        'A reviewed link must open with a prefilled, unfocused name and no Identity input'
+      )
+    }
+  }
 })
 
 // The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.
 export const link340 = defineFixture(fromLink(340))
 export const link480 = defineFixture(fromLink(480))
+
+const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const openAgentMenu = async (): Promise<void> => {
+  document
+    .querySelector<HTMLElement>('[role="dialog"] [data-agent-launch-picker-trigger]')
+    ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await settle(400)
+}
+const closeMenu = async (): Promise<void> => {
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  )
+  await settle(300)
+}
+// Claude on Opus, so Chat default is not the setup.
+const pickOpus = async (): Promise<void> => {
+  await FILLED()
+  await openAgentMenu()
+  const label = [...document.querySelectorAll<HTMLElement>('[role="menu"] *')].find(
+    (node) => node.childElementCount === 0 && node.textContent?.trim() === 'Opus'
+  )
+  label?.closest<HTMLElement>('[role="option"]')?.click()
+  await settle(300)
+  await closeMenu()
+}
+const chatDefaultRow = () =>
+  document.querySelector<HTMLElement>('[role="menu"] [role="menuitemcheckbox"]')
+const inLanguage = async (language?: 'de' | 'es' | 'ru'): Promise<void> => {
+  if (language) {
+    await i18n.changeLanguage(await loadRendererUiLanguage(language))
+    await settle(200)
+  }
+}
+// The same dialog, framed wide and tall enough to show the whole open menu.
+const menuFixture = (width: 340 | 480) => ({
+  ...newBotFixture(width),
+  width: width + 32 + 340,
+  render: () => <NewBotFixtureStage width={width} height={1000} />
+})
+// The menu over a picked model: Chat default first, unchecked.
+const chatDefaultMenu = (width: 340 | 480, language?: 'de' | 'es' | 'ru') =>
+  defineFixture({
+    ...menuFixture(width),
+    interact: async () => {
+      await inLanguage(language)
+      await pickOpus()
+      await openAgentMenu()
+      if (chatDefaultRow()?.getAttribute('aria-checked') !== 'false') {
+        throw new Error('Chat default must lead the menu, unchecked while a model is picked')
+      }
+    }
+  })
+// After picking Chat default: the field reads it, muted, on one line, and focus stays on the field.
+const chatDefaultPicked = (width: 340 | 480, language?: 'de' | 'es' | 'ru') =>
+  defineFixture({
+    ...newBotFixture(width),
+    interact: async () => {
+      await inLanguage(language)
+      await pickOpus()
+      await openAgentMenu()
+      chatDefaultRow()?.click()
+      await settle(400)
+      const trigger = document.querySelector<HTMLElement>(
+        '[role="dialog"] [data-agent-launch-picker-trigger]'
+      )
+      const label = trigger?.querySelector<HTMLElement>('span.truncate')
+      if (!trigger || !label || !label.classList.contains('text-muted-foreground')) {
+        throw new Error('The Agent field must read Chat default, muted')
+      }
+      if (label.scrollWidth > label.clientWidth + 1) {
+        throw new Error(
+          `Chat default must fit the field: ${label.scrollWidth}/${label.clientWidth}px`
+        )
+      }
+      if (label.scrollHeight > label.clientHeight + 1 || document.activeElement !== trigger) {
+        throw new Error('Chat default must stay on one line with focus on the Agent field')
+      }
+    }
+  })
+// Reopened on Chat default: its row is checked.
+const chatDefaultChecked = (width: 340 | 480) =>
+  defineFixture({
+    ...menuFixture(width),
+    interact: async () => {
+      await FILLED()
+      await openAgentMenu()
+      if (chatDefaultRow()?.getAttribute('aria-checked') !== 'true') {
+        throw new Error('With nothing chosen, Chat default must be checked')
+      }
+    }
+  })
+export const chatDefaultMenu340 = chatDefaultMenu(340)
+export const chatDefaultMenu480 = chatDefaultMenu(480)
+export const chatDefaultPicked340 = chatDefaultPicked(340)
+export const chatDefaultPicked480 = chatDefaultPicked(480)
+export const chatDefaultChecked340 = chatDefaultChecked(340)
+export const chatDefaultChecked480 = chatDefaultChecked(480)
+export const chatDefaultMenuDe340 = chatDefaultMenu(340, 'de')
+export const chatDefaultMenuEs340 = chatDefaultMenu(340, 'es')
+export const chatDefaultMenuRu340 = chatDefaultMenu(340, 'ru')
+export const chatDefaultPickedDe340 = chatDefaultPicked(340, 'de')
+export const chatDefaultPickedEs340 = chatDefaultPicked(340, 'es')
+export const chatDefaultPickedRu340 = chatDefaultPicked(340, 'ru')

@@ -134,7 +134,7 @@ function SecretForm({
           </Button>
           <Button
             onClick={() =>
-              copyWebhookSecret(generated, t('bots.webhooks.secret.copied', 'Secret copied'))
+              void copyWebhookSecret(generated, t('bots.webhooks.secret.copied', 'Secret copied'))
             }
           >
             {t('bots.webhooks.secret.copy', 'Copy secret')}

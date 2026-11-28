@@ -1,11 +1,11 @@
 import { saveOpenAiSpeechApiKey } from './openai-api-key-store'
 import { OPENAI_TRANSCRIPTION_URL } from './cloud-transcription-target'
 import {
-  openAiCompatibleTranscriptionUrl,
   resolveOpenAiCompatibleSpeechProviderInput,
   saveOpenAiCompatibleSpeechProvider
 } from './openai-compatible-speech-provider-store'
 import type { OpenAiCompatibleSpeechProvider } from '../../shared/speech/speech-types'
+import { openAiCompatibleTranscriptionUrl } from '../../shared/speech/openai-compatible-endpoint'
 import {
   postOpenAiTranscription,
   readOpenAiErrorMessage,

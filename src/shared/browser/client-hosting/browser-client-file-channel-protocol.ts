@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION = 1 as const
 export const BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY = 'file-channel-v1' as const
@@ -9,16 +10,20 @@ export const BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES = 64 * 1024 * 1024
 export const BROWSER_CLIENT_FILE_CHANNEL_MAX_FILES_PER_COMMAND = 16
 export const BROWSER_CLIENT_FILE_CHANNEL_MAX_ACTIVE_DOWNLOADS = 8
 
-const Identity = z.string().min(1).max(256)
-const Generation = z.number().int().min(1).max(0xffff_ffff)
-const FileChannelProtocolVersion = z.literal(BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION)
-const Base64Chunk = z
-  .string()
-  .max(Math.ceil(BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES / 3) * 4)
-  .refine(
-    (value) => value.length % 4 !== 1 && /^[A-Za-z0-9+/]*={0,2}$/.test(value),
-    'File channel chunk must be base64'
-  )
+const Identity = lazyZodSchema(() => z.string().min(1).max(256))
+const Generation = lazyZodSchema(() => z.number().int().min(1).max(0xffff_ffff))
+const FileChannelProtocolVersion = lazyZodSchema(() =>
+  z.literal(BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION)
+)
+const Base64Chunk = lazyZodSchema(() =>
+  z
+    .string()
+    .max(Math.ceil(BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES / 3) * 4)
+    .refine(
+      (value) => value.length % 4 !== 1 && /^[A-Za-z0-9+/]*={0,2}$/.test(value),
+      'File channel chunk must be base64'
+    )
+)
 
 // Why: Buffer.from tolerates malformed base64 by dropping bytes, which would silently corrupt a staged file.
 export function decodeBrowserClientFileChannelChunk(contentBase64: string): Buffer {
@@ -29,51 +34,61 @@ export function decodeBrowserClientFileChannelChunk(contentBase64: string): Buff
   return decoded
 }
 
-const FileChannelPageAuthority = z.object({
-  fileChannelProtocolVersion: FileChannelProtocolVersion,
-  authorityRuntimeId: Identity,
-  authorityEpoch: Identity,
-  browserHostClientId: Identity,
-  browserHostGeneration: Generation,
-  browserPageId: Identity,
-  pageHostGeneration: Generation
-})
+const FileChannelPageAuthority = lazyZodSchema(() =>
+  z.object({
+    fileChannelProtocolVersion: FileChannelProtocolVersion,
+    authorityRuntimeId: Identity,
+    authorityEpoch: Identity,
+    browserHostClientId: Identity,
+    browserHostGeneration: Generation,
+    browserPageId: Identity,
+    pageHostGeneration: Generation
+  })
+)
 
-export const BrowserClientFileChannelReadParams = FileChannelPageAuthority.extend({
-  // Why: remote upload sources are workspace-relative so containment is enforced by the runtime file target resolver.
-  workspaceRelativePath: z.string().min(1).max(4096),
-  offset: z.number().int().nonnegative().max(BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES),
-  length: z.number().int().positive().max(BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES)
-})
+export const BrowserClientFileChannelReadParams = lazyZodSchema(() =>
+  FileChannelPageAuthority.extend({
+    // Why: workspace-relative paths are containment-checked; an absolute one must be named by the host's own upload command.
+    workspaceRelativePath: z.string().min(1).max(4096),
+    offset: z.number().int().nonnegative().max(BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES),
+    length: z.number().int().positive().max(BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES)
+  })
+)
 
 export type BrowserClientFileChannelReadParams = z.infer<typeof BrowserClientFileChannelReadParams>
 
-export const BrowserClientFileChannelReadResult = z.object({
-  contentBase64: Base64Chunk,
-  bytesRead: z.number().int().nonnegative(),
-  totalBytes: z.number().int().nonnegative(),
-  eof: z.boolean()
-})
+export const BrowserClientFileChannelReadResult = lazyZodSchema(() =>
+  z.object({
+    contentBase64: Base64Chunk,
+    bytesRead: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative(),
+    eof: z.boolean()
+  })
+)
 
 export type BrowserClientFileChannelReadResult = z.infer<typeof BrowserClientFileChannelReadResult>
 
-export const BrowserClientFileChannelWriteParams = FileChannelPageAuthority.extend({
-  transferId: Identity,
-  filename: z.string().min(1).max(255),
-  contentBase64: Base64Chunk,
-  offset: z.number().int().nonnegative().max(BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES),
-  final: z.boolean()
-})
+export const BrowserClientFileChannelWriteParams = lazyZodSchema(() =>
+  FileChannelPageAuthority.extend({
+    transferId: Identity,
+    filename: z.string().min(1).max(255),
+    contentBase64: Base64Chunk,
+    offset: z.number().int().nonnegative().max(BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES),
+    final: z.boolean()
+  })
+)
 
 export type BrowserClientFileChannelWriteParams = z.infer<
   typeof BrowserClientFileChannelWriteParams
 >
 
-export const BrowserClientFileChannelWriteResult = z.object({
-  accepted: z.literal(true),
-  // Why: only the final chunk knows the committed destination, so earlier acks carry no path.
-  workspaceRelativePath: z.string().max(4096).optional()
-})
+export const BrowserClientFileChannelWriteResult = lazyZodSchema(() =>
+  z.object({
+    accepted: z.literal(true),
+    // Why: only the final chunk knows the committed destination, so earlier acks carry no path.
+    workspaceRelativePath: z.string().max(4096).optional()
+  })
+)
 
 export type BrowserClientFileChannelWriteResult = z.infer<
   typeof BrowserClientFileChannelWriteResult
@@ -81,17 +96,23 @@ export type BrowserClientFileChannelWriteResult = z.infer<
 
 /** Sent as a download starts, so this host binds it to what started it before any byte arrives.
  *  Servers without it answer method_not_found and the download takes the ordinary path. */
-export const BrowserClientFileChannelBeginParams = FileChannelPageAuthority.extend({
-  transferId: Identity,
-  filename: z.string().min(1).max(255),
-  /** The address of the page that started the download, as the desktop's browser has it. */
-  documentUrl: z.string().max(8192)
-})
+export const BrowserClientFileChannelBeginParams = lazyZodSchema(() =>
+  FileChannelPageAuthority.extend({
+    transferId: Identity,
+    filename: z.string().min(1).max(255),
+    /** The address of the page that started the download, as the desktop's browser has it. */
+    documentUrl: z.string().max(8192),
+    /** An agent's path-free `download` on this page asked for it; only the host sends those. */
+    agentDownload: z.literal(true).optional()
+  })
+)
 
 export type BrowserClientFileChannelBeginParams = z.infer<
   typeof BrowserClientFileChannelBeginParams
 >
 
-export const BrowserClientFileChannelAbortParams = FileChannelPageAuthority.extend({
-  transferId: Identity
-})
+export const BrowserClientFileChannelAbortParams = lazyZodSchema(() =>
+  FileChannelPageAuthority.extend({
+    transferId: Identity
+  })
+)

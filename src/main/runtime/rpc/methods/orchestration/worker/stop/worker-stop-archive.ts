@@ -1,6 +1,7 @@
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import {
   captureWorkerOutputReference,
+  deriveWorkerOutputReferenceFromSavedState,
   releaseCommitFieldsForCapturedArchive
 } from '../../../../../orchestration/workers/archives/worker-output-archive'
 import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
@@ -15,6 +16,11 @@ export function archiveWorkerOutputBeforeStop(args: {
   dispatchId: string
   terminalHandle: string
   attachedAt: string
+  /**
+   * Set only once the worker's exact process is proven gone: its pane may be too, so when the pane names no
+   * session, fall back to the newest one Orca saved while it ran, as an exit-proven release does.
+   */
+  exitProven?: boolean
 }): void {
   const { db, dispatchId } = args
   // Stopping matters more than the reference; on failure, release reports the output unavailable.
@@ -31,12 +37,23 @@ export function archiveWorkerOutputBeforeStop(args: {
     ) {
       return
     }
-    const captured = captureWorkerOutputReference({
+    const structuredWorker = resolveStructuredWorkerForDispatch(db, dispatchId)
+    let captured = captureWorkerOutputReference({
       runtime: args.runtime,
       terminalHandle: args.terminalHandle,
       attachedAtMs,
-      structuredWorker: resolveStructuredWorkerForDispatch(db, dispatchId)
+      structuredWorker
     })
+    if (captured.status === 'unavailable' && args.exitProven) {
+      // Read the session the capture above may just have saved.
+      const saved = deriveWorkerOutputReferenceFromSavedState({
+        resource: db.getWorkerTerminalResource(resource.id) ?? resource,
+        structuredWorker
+      })
+      if (saved.status === 'captured') {
+        captured = saved
+      }
+    }
     db.storeWorkerTerminalArchiveBeforeStop({
       dispatchId,
       resourceId: resource.id,

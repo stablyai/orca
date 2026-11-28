@@ -54,19 +54,30 @@ const BOTS = [
   bot('sleepy', 'Old reviewer', 'M1', 5, true)
 ]
 
+/** Invented names for the focus-ring shots. */
+const SAMPLE_BOTS = [
+  bot('weather', 'Weather watcher', 'D1', 0),
+  bot('garden', 'Garden planner', 'K2', 1),
+  bot('recipes', 'Recipe helper', 'H1', 2),
+  bot('trips', 'Trip organizer', 'F1', 3),
+  bot('budget', 'Budget keeper', 'H2', 4),
+  bot('books', 'Book club notes', 'M1', 5, true)
+]
+
 const PURPOSES: Record<string, string> = {
+  'local/weather': 'Sends the morning forecast and flags weekend storms',
   'local/release':
     'Cuts the weekly release, writes the changelog and asks the team to review risky changes',
   'local/docs': 'Keeps the docs in step with what shipped',
   'local/ux': 'Reviews designs and screens against the UX principles'
 }
 
-function store(hidePausedBots: boolean) {
+function store(hidePausedBots: boolean, bots: Bot[] = BOTS) {
   return {
     sidebarBotsHeight: 4000,
     collapsedGroups: new Set<string>(),
     botSidebarView: { sortBy: 'manual' as const, hidePausedBots, hideSleepingWorkers: false },
-    folderWorkspaces: BOTS.map((owner) =>
+    folderWorkspaces: bots.map((owner) =>
       makeFolderWorkspace({
         id: owner.folderWorkspaceId,
         projectGroupId: 'bots',
@@ -134,10 +145,11 @@ function typeInto(field: HTMLInputElement, value: string): void {
   field.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-function searching(query: string, options: { hidePaused?: boolean } = {}) {
+function searching(query: string, options: { hidePaused?: boolean; bots?: Bot[] } = {}) {
+  const bots = options.bots ?? BOTS
   return {
-    store: store(options.hidePaused ?? false),
-    setup: () => stubBots(BOTS),
+    store: store(options.hidePaused ?? false, bots),
+    setup: () => stubBots(bots),
     render: () => <Sidebar />,
     interact: async (frame: HTMLElement) => {
       const field = await openSearch(frame)
@@ -417,4 +429,38 @@ export const longListSmallestWindow = defineFixture({
 export const longListBeforeProjectReveal = defineFixture({
   width: 300,
   ...capped('bot', { height: 80, windowHeight: 386, realProjects: true })
+})
+
+/** Moves keyboard focus onto a result, as Down arrow does, so its focus ring shows. */
+function focusingResult<T extends { interact: (frame: HTMLElement) => Promise<void> }>(
+  fixture: T,
+  which: 'first' | 'middle' | 'last'
+): T {
+  return {
+    ...fixture,
+    interact: async (frame: HTMLElement) => {
+      await fixture.interact(frame)
+      const rows = frame.querySelectorAll<HTMLButtonElement>('[data-bot-search-result]')
+      rows[which === 'first' ? 0 : which === 'last' ? rows.length - 1 : rows.length >> 1]?.focus()
+      await settle()
+    }
+  }
+}
+
+/** The first result has keyboard focus: its ring shows whole under the field. */
+export const focusedFirstResult = defineFixture({
+  width: 300,
+  ...focusingResult(searching('e', { bots: SAMPLE_BOTS }), 'first')
+})
+
+/** A middle result has keyboard focus at the minimum sidebar width. */
+export const minimumWidthFocusedMiddleResult = defineFixture({
+  width: 252,
+  ...focusingResult(searching('e', { bots: SAMPLE_BOTS }), 'middle')
+})
+
+/** The last of many results has keyboard focus, scrolled to the end of the list. */
+export const longListFocusedLastResult = defineFixture({
+  width: 300,
+  ...focusingResult(capped('bot'), 'last')
 })

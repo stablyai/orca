@@ -93,7 +93,7 @@ function choicesIn(
 }
 
 function keyBlocker(run: GoogleSetupRun, google: SetupGoogle): GoogleSetupBlocker | null {
-  if (!google.client) {
+  if (!google.client || (run.newApp && google.client.savedAt < run.startedAt)) {
     return { kind: 'no-key', actions: [{ id: 'make-new-key' }, { id: 'import-key' }] }
   }
   if (google.clientKey === 'gone') {

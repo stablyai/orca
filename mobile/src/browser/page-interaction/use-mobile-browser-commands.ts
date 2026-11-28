@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
+import { RpcRefusedError } from '../../transport/rpc/rpc-refused-error'
 import type { BrowserScreencastFrameMetadata } from '../screencast/browser-screencast-protocol'
 import {
   browserDialogAccept,
@@ -22,9 +23,9 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
-import type { BrowserPointerModifier } from '../pane-view/MobileBrowserPointerModifiers'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import { useMobileBrowserWheelQueue } from './use-mobile-browser-wheel-queue'
+import { useMobileBrowserPageInputQueue } from './use-mobile-browser-page-input-queue'
 
 const TOUCH_CLICK_RADIUS_DIP = 14
 type SendBrowserRequest = (
@@ -35,16 +36,12 @@ type SendBrowserRequest = (
 type MobileBrowserCommandArgs = {
   client: RpcClient | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }
-  keyboardValue: string
   layoutRef: { current: BrowserTouchLayout | null }
   onToast: (message: string, durationMs?: number) => void
   pageParams: () => BrowserPageParams | null
-  pointerModifiers: BrowserPointerModifier[]
   sendBrowserRequest: SendBrowserRequest
   setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
   setError: Dispatch<SetStateAction<string | null>>
-  setKeyboardValue: Dispatch<SetStateAction<string>>
-  setPointerModifiers: Dispatch<SetStateAction<BrowserPointerModifier[]>>
   zoomRef: { current: BrowserZoomState }
 }
 
@@ -52,16 +49,12 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   const {
     client,
     frameMetadataRef,
-    keyboardValue,
     layoutRef,
     onToast,
     pageParams,
-    pointerModifiers,
     sendBrowserRequest,
     setDialog,
     setError,
-    setKeyboardValue,
-    setPointerModifiers,
     zoomRef
   } = args
 
@@ -74,21 +67,15 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     setError,
     zoomRef
   })
-  // A send claims the draft here, so a repeat tap before re-render finds it empty. The pane remounts
-  // per page, so the draft outlives a reconnect; only unmount ends a send's claim on it.
-  const keyboardDraftRef = useRef({ mounted: true, value: keyboardValue })
-  useLayoutEffect(() => {
-    keyboardDraftRef.current.value = keyboardValue
-  }, [keyboardValue])
+  const mountedRef = useRef(true)
   useEffect(() => {
-    const draft = keyboardDraftRef.current
-    draft.mounted = true
+    mountedRef.current = true
     return () => {
-      draft.mounted = false
+      mountedRef.current = false
     }
   }, [])
 
-  const sendPointerClick = useCallback(
+  const clickPage = useCallback(
     async (point: BrowserPoint, button: 'left' | 'right') => {
       const base = pageParams()
       if (!commandsMountedRef.current || !client || !base) {
@@ -104,7 +91,8 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
               x: point.x,
               y: point.y,
               button,
-              modifiers: pointerModifiers,
+              // This phone shows a tap's picker refusal instead of replaying the tap; old hosts strip it.
+              fileChooserRefusal: 1,
               ...(button === 'left'
                 ? {
                     radius: computeBrowserTouchClickRadiusCss(
@@ -124,12 +112,13 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         }
         return
       } catch (error) {
-        // Why: a timed-out click may still run on the host, and the move/down/up replay drops modifiers.
-        if (
-          generation !== commandGenerationRef.current ||
-          isRpcDeliveryUnknown(error) ||
-          pointerModifiers.length > 0
-        ) {
+        // The click landed and opened a file picker the host closed; replaying would open it again.
+        if (isFileChooserRefusal(error)) {
+          onToast(error.message, 3000)
+          return
+        }
+        // Why: a timed-out click may still run on the host.
+        if (generation !== commandGenerationRef.current || isRpcDeliveryUnknown(error)) {
           return
         }
       }
@@ -151,20 +140,15 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         if (generation === commandGenerationRef.current) {
           setError(null)
         }
-      } catch {
-        // Pointer sends race navigation; keep stream and surface actionable failures through navigation/stream paths.
+      } catch (error) {
+        if (isFileChooserRefusal(error)) {
+          onToast(error.message, 3000)
+        }
+        // Other pointer failures race navigation; keep stream and surface actionable failures through navigation/stream paths.
       }
     },
-    [client, pageParams, pointerModifiers]
+    [client, onToast, pageParams]
   )
-
-  const togglePointerModifier = useCallback((modifier: BrowserPointerModifier) => {
-    setPointerModifiers((current) =>
-      current.includes(modifier)
-        ? current.filter((candidate) => candidate !== modifier)
-        : [...current, modifier]
-    )
-  }, [])
 
   const mapTouchPoint = useCallback((locationX: number, locationY: number): BrowserPoint | null => {
     return mapScreenToBrowserPoint(
@@ -176,55 +160,87 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     )
   }, [])
 
-  const sendKeyboardText = useCallback(async () => {
-    const draft = keyboardDraftRef.current
-    const text = draft.value
-    if (!text) {
-      return
-    }
-    draft.value = ''
-    setKeyboardValue('')
-    let unconfirmed = false
-    const result = await sendBrowserRequest(
-      async (rpc, page, options) => {
-        try {
-          browserInsertText.interpret(
-            await browserInsertText.request(rpc, { ...page, text }, options)
-          )
-          return true
-        } catch (error) {
-          unconfirmed = isRpcDeliveryUnknown(error)
-          throw error
-        }
-      },
-      { suppressError: true }
-    )
-    if (!draft.mounted) {
-      return
-    }
-    if (result !== null) {
-      onToast(translate('browser.useBrowserCommands.sent', 'Sent'))
-      return
-    }
-    setKeyboardValue((current) => text + current)
-    if (unconfirmed) {
-      const warning = translate(
-        'browser.useBrowserCommands.deliveryUnconfirmed',
-        'Delivery unconfirmed — check page before retrying'
-      )
-      onToast(warning)
-    }
-  }, [onToast, sendBrowserRequest])
-
-  const sendKeypress = useCallback(
-    async (key: string) => {
-      await sendBrowserRequest(
-        async (rpc, page, options) =>
-          browserKeypress.interpret(await browserKeypress.request(rpc, { ...page, key }, options)),
-        { suppressError: true }
+  // Typing is live, so a failure says so once and the caller stops typing out of place.
+  const reportTypingFailure = useCallback(
+    (unconfirmed: boolean) => {
+      if (!mountedRef.current) {
+        return
+      }
+      onToast(
+        unconfirmed
+          ? translate(
+              'browser.useBrowserCommands.deliveryUnconfirmed',
+              'Delivery unconfirmed — check page before retrying'
+            )
+          : translate('browser.useBrowserCommands.typingFailed', "Typing didn't reach the page")
       )
     },
-    [sendBrowserRequest]
+    [onToast]
+  )
+
+  const sendText = useCallback(
+    async (text: string): Promise<boolean> => {
+      let unconfirmed = false
+      const result = await sendBrowserRequest(
+        async (rpc, page, options) => {
+          try {
+            browserInsertText.interpret(
+              await browserInsertText.request(rpc, { ...page, text }, options)
+            )
+            return true
+          } catch (error) {
+            unconfirmed = isRpcDeliveryUnknown(error)
+            throw error
+          }
+        },
+        { suppressError: true }
+      )
+      if (result === null) {
+        reportTypingFailure(unconfirmed)
+        return false
+      }
+      return true
+    },
+    [reportTypingFailure, sendBrowserRequest]
+  )
+
+  const sendKeypress = useCallback(
+    async (key: string): Promise<boolean> => {
+      let unconfirmed = false
+      let toasted = false
+      const result = await sendBrowserRequest(
+        async (rpc, page, options) => {
+          try {
+            browserKeypress.interpret(await browserKeypress.request(rpc, { ...page, key }, options))
+            return true
+          } catch (error) {
+            if (isFileChooserRefusal(error)) {
+              toasted = true
+              onToast(error.message, 3000)
+            }
+            unconfirmed = isRpcDeliveryUnknown(error)
+            throw error
+          }
+        },
+        { suppressError: true }
+      )
+      if (result === null) {
+        if (!toasted) {
+          reportTypingFailure(unconfirmed)
+        }
+        return false
+      }
+      return true
+    },
+    [onToast, reportTypingFailure, sendBrowserRequest]
+  )
+
+  const pageInput = useMobileBrowserPageInputQueue({ sendText, sendKeypress, mountedRef })
+
+  const sendPointerClick = useCallback(
+    (point: BrowserPoint, button: 'left' | 'right') =>
+      pageInput.queue([{ run: () => clickPage(point, button) }]),
+    [clickPage, pageInput]
   )
 
   // Card represents page’s actual block; only host dialogClosed proves answer applied, not button press.
@@ -269,11 +285,14 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   )
   return {
     mapTouchPoint,
+    pageInput,
     sendDialogCommand,
-    sendKeyboardText,
-    sendKeypress,
     sendPointerClick,
-    sendWheel,
-    togglePointerModifier
+    sendWheel
   }
+}
+
+/** The host's sentence for a file picker it refused to open from a remote view. */
+function isFileChooserRefusal(error: unknown): error is RpcRefusedError {
+  return error instanceof RpcRefusedError && error.code === 'browser_file_chooser_opened'
 }

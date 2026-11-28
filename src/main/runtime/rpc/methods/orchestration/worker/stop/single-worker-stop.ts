@@ -1,6 +1,7 @@
 import { stopAwaitingWorker } from './awaiting-worker-stop'
+import { stopStructuredDispatch, unknownReceipt } from './structured-worker-dispatch-stop'
 import { isWorkerAwaitingAgent } from '../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
-import { cancelWorkerStartWait } from '../start/readiness/worker-start-background-readiness'
+import { cancelWorkerStartWait } from '../start/readiness/worker-start-waits'
 import type { WorkerStopReceipt } from '../../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { RemoteCapabilities, RemoteStopReceipt, remoteHelpers } from './worker-stop-remote-receipt'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
@@ -15,10 +16,7 @@ import { inspectWorkerTerminal } from '../observation/worker-observation'
 import { resolvePinnedFederatedServer } from '../../../../../orchestration/legacy-remote-home/pinned-federated-server'
 import { refuseFederatedStopWhileKeptOpen } from '../worker-keep-open'
 import { archiveWorkerOutputBeforeStop } from './worker-stop-archive'
-import {
-  resolveStructuredWorkerForDispatch,
-  stopStructuredWorker
-} from '../../structured-workers/orchestration-structured-worker-lifecycle'
+import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestration/workers/structured-worker-handle'
 
 export type StopMutation = RpcContext['orchestrationMutation']
@@ -98,6 +96,7 @@ export async function stopSingleWorker(
           alreadySettled: remote.alreadySettled,
           processAction: remote.processAction,
           close: remote.close,
+          ...(remote.reason ? { reason: remote.reason } : {}),
           ...remoteHelpers(remote, status, server.name)
         }
       }
@@ -215,26 +214,7 @@ export async function stopSingleWorker(
   })
   const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
   if (structured) {
-    const stop = await stopStructuredWorker(structured, runtime)
-    if (!stop.stopped) {
-      // Only proven exit settles; if no close was issued, the receipt must not claim one.
-      return unknownReceipt(
-        dispatchId,
-        db.markWorkerStopUnknown(dispatchId, stop.reason ?? 'The close was not proven.'),
-        stop.closeAttempted ? 'closed_agent_terminal' : 'none'
-      )
-    }
-    // Closing the chat already settles the stop, as a terminal's exit does.
-    if (db.getWorkerDispatch(dispatchId)?.state !== 'stopped') {
-      db.settleWorkerStop(dispatchId)
-    }
-    runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-    return {
-      dispatchId,
-      state: db.getWorkerDispatch(dispatchId)?.state ?? 'stopped',
-      alreadySettled: false,
-      processAction: 'closed_agent_terminal'
-    }
+    return stopStructuredDispatch(runtime, db, dispatchId, structured)
   }
   const closed = await runtime
     .closeTerminal(liveHandle)
@@ -287,18 +267,4 @@ function contextOnlyStopWarning(result: {
   return result.releasedCurrentTask
     ? 'The assignment was stopped without closing its unsupervised terminal process.'
     : 'The superseded assignment was stopped without changing the current Task or terminal process.'
-}
-
-function unknownReceipt(
-  dispatchId: string,
-  worker: { state: string; last_error: string | null },
-  processAction: string
-): WorkerStopReceipt {
-  return {
-    dispatchId,
-    state: worker.state,
-    alreadySettled: false,
-    processAction,
-    lastError: worker.last_error
-  }
 }

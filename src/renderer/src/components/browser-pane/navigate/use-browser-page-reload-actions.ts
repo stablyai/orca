@@ -10,6 +10,7 @@ import {
 } from './browser-reload-action'
 import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
+import { isBrowserPageAttachWaiting } from '../host-guest/lifecycle/browser-page-deferred-attach'
 
 export function useBrowserPageReloadActions({
   browserTab,
@@ -73,7 +74,8 @@ export function useBrowserPageReloadActions({
         return
       }
       const webview = webviewRef.current
-      if (!webview) {
+      // No page yet while it waits for its profile's extensions (at most 5 s): nothing to stop or reload.
+      if (!webview || isBrowserPageAttachWaiting(webview)) {
         return
       }
       switch (resolveBrowserReloadIntent(trigger, reloadState)) {

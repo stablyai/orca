@@ -19,7 +19,6 @@ import { botRequestRecord } from './bot-request-record'
 import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
 import { noteBotQuestionFailure } from './bot-question-notices'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
-import { retireCoordinatorChatRuns } from '../../../../orchestration/db/runs/retired-chat-runs'
 import {
   stampQuestionTakes,
   type MailTaker
@@ -27,8 +26,11 @@ import {
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
+import { botRequestsTurnAnswered } from '../../../../../bots/bot-turn-answered-requests'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
 import { redactFailure } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-wording'
+import { failureNamingHostCap } from './turn-host-cap-refusal'
 
 const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
 
@@ -136,10 +138,11 @@ export async function noteBotRequestPost(
 export async function settleBotRequestTurn(
   runtime: OrcaRuntimeService,
   sessionId: string,
+  turnId: string,
   ended?: TurnEndedVerdict
 ): Promise<void> {
   if (ended?.outcome !== 'failure') {
-    await settleBotRequests(runtime, sessionId, 'ended')
+    await settleBotRequests(runtime, sessionId, turnId, { why: 'ended' })
   }
 }
 
@@ -153,26 +156,41 @@ export async function settleBotRequestFailure(
   }
   const error = await readChatRequestError(failure)
   const why = (await continuesAfterUsageLimit(failure.sessionId)) ? 'failed-continues' : 'failed'
+  const text = await failureNamingHostCap(runtime.getOrchestrationDb(), failure, error)
   // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
-  const reason = error ? redactFailure(error.text) : undefined
+  const reason = text ? redactFailure(text) : undefined
   noteBotQuestionFailure(failure.sessionId, { requestId: failure.id, why, reason })
-  await settleBotRequests(runtime, failure.sessionId, why, reason)
+  // A refused send settles only itself: other agents' mail refused says nothing of earlier requests.
+  await settleBotRequests(runtime, failure.sessionId, failure.id, {
+    why,
+    reason,
+    refusedSend: failure.kind === 'refused-send'
+  })
 }
 
 async function settleBotRequests(
   runtime: OrcaRuntimeService,
   sessionId: string,
-  why: 'ended' | 'failed' | 'failed-continues',
-  reason?: string
+  turnId: string,
+  {
+    why,
+    reason,
+    refusedSend = false
+  }: { why: 'ended' | 'failed' | 'failed-continues'; reason?: string; refusedSend?: boolean }
 ): Promise<void> {
   // Every chat's turn ends here; only a bot's can be on a request.
   if (!botOfSession(runtime.bots, sessionId)) {
     return
   }
   const db = runtime.getOrchestrationDb()
-  const { turn } = await readBotTurn(runtime, db, sessionId)
+  const requestIds = await botRequestsTurnAnswered(
+    await (await requireStructuredHost(runtime)).journalReads(sessionId),
+    turnId,
+    (messageId) => db.getBotRequest(messageId) !== undefined,
+    { reportFallback: !refusedSend }
+  )
   // Questions are decided by the question reconciler (mailbox/questions), from who took them.
-  const open = turn.requestIds.filter(
+  const open = requestIds.filter(
     (id) => db.getBotRequest(id)?.purpose === 'handoff' && db.getBotRequestOutcome(id) === null
   )
   if (open.length === 0) {
@@ -225,10 +243,6 @@ export async function dropUnreadBotRequests(
           }
         })
       }
-    }
-    if (why === 'chat-deleted' && onlyTo) {
-      // A replaced Chat's Runs are retired where it is closed (bot-chat-replacement.ts).
-      retireCoordinatorChatRuns(db, onlyTo)
     }
     const dropped = unread
       .filter(({ request }) => request.purpose !== 'question')

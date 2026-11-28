@@ -1,5 +1,4 @@
 import type { AcpItemOwnership } from './acp-item-ownership'
-import { createPatch } from 'diff'
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -12,10 +11,12 @@ import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
-import { replacementPatch } from '../../native-chat/agent-session-timeline/provider-timeline-replacement-patch'
+import { boundedPatch } from '../../native-chat/agent-session-timeline/provider-timeline-bounded-patch'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { AcpBackgroundTaskUpdate, AcpDialect } from '../acp-dialects/acp-dialect'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import { nativeChatToolImageReadPath } from '../../../shared/native-chat/tools/native-chat-tool-viewed-images'
+import { acpToolImagePaths } from './acp-tool-images'
 
 const rawStreamsSchema = z.object({ stdout: z.string().optional(), stderr: z.string().optional() })
 const rawExitCodeSchema = z.looseObject({ exitCode: z.number().int().safe() })
@@ -44,14 +45,6 @@ function outputText(update: ToolCallUpdate): string | undefined {
   return JSON.stringify(update.rawOutput) ?? ''
 }
 
-function boundedDiffPatch(path: string, oldText: string, newText: string): string {
-  const patch =
-    oldText.length + newText.length <= 256 * 1024
-      ? createPatch(path, oldText, newText, undefined, undefined, { maxEditLength: 1024 })
-      : undefined
-  return patch ?? replacementPatch(path, oldText, newText)
-}
-
 // A pending call is waiting to start, often on a person's approval.
 type ToolSnapshot = { body: AgentJournalToolCallItem; turn?: string; pending?: true }
 
@@ -60,6 +53,8 @@ export class AcpToolTimeline {
   private readonly tools = new Map<string, ToolSnapshot>()
   // Closing updates may omit fields; only their running journal copies are previews.
   private readonly whole = new Map<string, { input?: unknown; output?: string }>()
+  /** Running calls whose start a cut replay lost; their saved rows keep what updates omit. */
+  private readonly unseen = new Set<string>()
   // Kept after the task settles: its row is still Orca's inference, and settled reports latch.
   private readonly backgrounded = new BoundedMap<string, AcpBackgroundTaskUpdate | true>({
     maxEntries: 128
@@ -67,7 +62,13 @@ export class AcpToolTimeline {
   // Ownership remembers only the latest ended turn; late updates may name older calls.
   private readonly endedCalls = new BoundedMap<string, true>({ maxEntries: 512 })
 
+  private storeImages = true
+
   constructor(private readonly owners: AcpItemOwnership) {}
+
+  skipImageStore(): void {
+    this.storeImages = false
+  }
 
   /** Close the turn's running calls as launched; each continues as a background task. The call
    *  row reads completed because the call itself returned (agy answers it with "running as a
@@ -103,6 +104,19 @@ export class AcpToolTimeline {
       })
     }
     return { events, tasks }
+  }
+
+  /** A task an earlier app made of a call, still running: the call's updates report it again. */
+  restateBackgrounded(task: { taskId: string; parentToolUseId?: string }): void {
+    if (task.parentToolUseId === task.taskId && !this.backgrounded.has(task.taskId)) {
+      this.backgrounded.set(task.taskId, true)
+    }
+  }
+
+  /** The call with its whole input; a running journal copy holds only a preview. */
+  wholeCall(toolCallId: string, body: AgentJournalToolCallItem): AgentJournalToolCallItem {
+    const input = this.whole.get(toolCallId)?.input
+    return input === undefined ? body : { ...body, input }
   }
 
   /** Orca inferred this task from a call still running at its turn's end. */
@@ -214,6 +228,17 @@ export class AcpToolTimeline {
                 : journalToolPayload(output, state === 'running')
           })
     }
+    // Content replaces the call's snapshot; an update without it keeps the images it had.
+    // A read's file already previews by its path.
+    const imagePaths =
+      update.content == null
+        ? previous?.body.outputImagePaths
+        : this.storeImages && nativeChatToolImageReadPath(body) === null
+          ? acpToolImagePaths(update.content)
+          : undefined
+    if (imagePaths?.length) {
+      body.outputImagePaths = imagePaths
+    }
     if (turn !== undefined) {
       this.owners.remember(`tool:${update.toolCallId}`, turn)
     }
@@ -230,12 +255,21 @@ export class AcpToolTimeline {
     } else {
       this.tools.delete(update.toolCallId)
     }
+    // A call this run never saw start (a cut replay; its row is saved): every update keeps that row.
+    if (!previous && 'sessionUpdate' in raw && raw.sessionUpdate === 'tool_call_update') {
+      this.unseen.add(update.toolCallId)
+    }
+    const unseen = this.unseen.has(update.toolCallId)
+    if (state !== 'running') {
+      this.unseen.delete(update.toolCallId)
+    }
     const events: ProviderTimelineEvent[] = [
       {
         type: state === 'running' ? (previous ? 'item.update' : 'item.open') : 'item.close',
         item: `tool:${update.toolCallId}`,
         body,
-        join
+        join,
+        ...(unseen ? { keepsSavedCall: true as const } : {})
       }
     ]
     for (const content of update.content ?? []) {
@@ -247,12 +281,15 @@ export class AcpToolTimeline {
             kind: 'diff',
             path: content.path,
             patch: journalPayload(
-              boundedDiffPatch(content.path, content.oldText ?? '', content.newText)
+              boundedPatch(content.path, content.oldText ?? '', content.newText)
             )
           },
           join
         })
-      } else if (content.type === 'terminal' || content.content.type !== 'text') {
+      } else if (
+        content.type === 'terminal' ||
+        (content.content.type !== 'text' && content.content.type !== 'image')
+      ) {
         events.push({
           type: 'provider.frame',
           frameKind: `tool-content:${content.type}`,
@@ -273,6 +310,10 @@ export class AcpToolTimeline {
     return false
   }
 
+  runningIds(turn: string): string[] {
+    return [...this.tools].filter(([, snapshot]) => snapshot.turn === turn).map(([id]) => id)
+  }
+
   turn(toolCallId: string): string | undefined {
     return this.tools.get(toolCallId)?.turn ?? this.owners.get(`tool:${toolCallId}`)?.turn
   }
@@ -282,6 +323,7 @@ export class AcpToolTimeline {
       if (key.startsWith('tool:')) {
         this.tools.delete(key.slice(5))
         this.whole.delete(key.slice(5))
+        this.unseen.delete(key.slice(5))
         this.endedCalls.set(key.slice(5), true)
       }
     }
@@ -290,6 +332,7 @@ export class AcpToolTimeline {
   dispose(): void {
     this.tools.clear()
     this.whole.clear()
+    this.unseen.clear()
     this.backgrounded.clear()
     this.endedCalls.clear()
   }

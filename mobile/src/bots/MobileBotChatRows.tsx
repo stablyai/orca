@@ -10,7 +10,6 @@ import {
 } from '../../../src/shared/bots/bot-sidebar-workspaces'
 import { chatFoldSummary } from '../../../src/shared/bots/bot-chat-tree'
 import { botSidebarWorkerPagingLabel } from '../../../src/shared/bots/bot-sidebar-tree'
-import { structuredAgentSessionStatusPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-tab'
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'
 import { BotLineAgentLogos } from '../worktree/row-presentation/BotLineAgentLogos'
@@ -19,9 +18,9 @@ import { HostContextPill } from '../worktree/row-presentation/HostContextPill'
 import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerMediumImpact } from '../platform/haptics/haptics'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { agentDotState, formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
@@ -34,11 +33,12 @@ import type {
 } from './host-bot-row-facts'
 import { ChatBadgedIcon, useMobileBotChatLabel } from './MobileBotChatLeading'
 import { MobileBotTextButton } from './MobileBotTextButton'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/chat-pane-address'
 
-// The chat's slot sits under the bot's avatar, its title at the avatar's right edge; a worker's
-// status under the chat's title, each child one step further in.
-const CHAT_INDENT = 24
-const LINE_INDENT = 48
+// The chat's icon sits centred under the bot's 32 pt avatar and its title starts where the bot's
+// does; a worker's status under the chat's title, each child one step further in.
+const AVATAR = 32
+const LINE_INDENT = spacing.lg + AVATAR + spacing.md
 const DEPTH_STEP = 24
 // Grows the chevron's 20 pt column to a 44 pt target.
 const CHEVRON_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 } as const
@@ -57,7 +57,8 @@ function ChatRowComponent({
   /** Opens the bot's home with this chat's tab in front. */
   onOpen: (home: Worktree, paneKey: string) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { chat, foldable, open, trailing } = facts
   const now = useNow(30_000, trailing?.kind === 'time')
@@ -67,7 +68,7 @@ function ChatRowComponent({
     trailing?.kind === 'summary'
       ? chatFoldSummary(t, trailing.counts)
       : trailing?.kind === 'time'
-        ? formatTimeAgo(trailing.at, now)
+        ? formatTimeAgo(trailing.at, now, t)
         : null
   const toggle = foldable
     ? () => setBotChatFold(facts.hostKey, facts.botId, chat.chatId, open ? 'folded' : 'open')
@@ -79,7 +80,7 @@ function ChatRowComponent({
       {
         active: false,
         folded: foldable && !open,
-        open: () => onOpen(home, structuredAgentSessionStatusPaneKey(chat.chatId)),
+        open: () => onOpen(home, chatPaneKey(chat.chatId)),
         toggle: null
       },
       { detail: 1 }
@@ -93,7 +94,7 @@ function ChatRowComponent({
       accessibilityLabel={[label, text].filter(Boolean).join(', ')}
       accessibilityState={foldable ? { expanded: open } : undefined}
     >
-      <View style={styles.slot}>
+      <View style={styles.chatSlot}>
         <ChatBadgedIcon chat={chat} />
       </View>
       <Text style={[styles.chatTitle, chat.unread && styles.unread]} numberOfLines={1}>
@@ -104,9 +105,8 @@ function ChatRowComponent({
           {text}
         </Text>
       ) : null}
-      {/* Always reserved, so times line up whether or not a chat folds. */}
-      <View style={styles.chevron}>
-        {toggle ? (
+      {toggle ? (
+        <View style={styles.chevron}>
           <Pressable
             hitSlop={CHEVRON_HIT_SLOP}
             disabled={isReadOnly}
@@ -127,8 +127,8 @@ function ChatRowComponent({
               <ChevronRight size={14} color={colors.textMuted} />
             )}
           </Pressable>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
     </Pressable>
   )
 }
@@ -142,7 +142,7 @@ function PagingRowComponent({
   facts: MobileBotChatPagingFacts
   dimmed: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { paging, steps, stepsKey } = facts
   return (
@@ -153,7 +153,7 @@ function PagingRowComponent({
           onPress={() => setBotChatSteps(stepsKey, steps + 1)}
         />
       ) : null}
-      {paging && steps > 0 ? <Text style={styles.trailing}>·</Text> : null}
+      {paging && steps > 0 ? <Text style={styles.pagingDot}>·</Text> : null}
       {steps > 0 ? (
         <MobileBotTextButton
           label={t('bots.chats.showFewer', 'Show fewer')}
@@ -166,18 +166,8 @@ function PagingRowComponent({
 
 export const MobileBotChatPaging = memo(PagingRowComponent, areStructurallyEqual)
 
-/** One chat row's height, in the paging row's muted text, until the bot's first chats read lands. */
-export function MobileBotChatLoading({ dimmed }: { dimmed: boolean }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
-  return (
-    <View style={[styles.chatRow, dimmed && styles.dimmed]}>
-      <Text style={styles.trailing}>{t('bots.chats.loadingChats', 'Loading chats')}</Text>
-    </View>
-  )
-}
-
 function LineNote({ note }: { note: MobileBotChatLineFacts['note'] }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   if (!note) {
     return null
@@ -206,7 +196,8 @@ function WorkerLineComponent({
   onPress: (item: Worktree) => void
   onLongPress?: (item: Worktree) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const now = useNow(30_000, true)
   // One logo says who works there, as on the desktop's compact line.
   const agent = botWorkspaceLineAgent(
@@ -271,15 +262,16 @@ function WorkerLineComponent({
 
 export const MobileBotWorkerLine = memo(WorkerLineComponent, areStructurallyEqual)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
+  // The bot row's grid: its padding, the avatar's column and its gap.
   chatRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     minHeight: 44,
-    paddingLeft: CHAT_INDENT,
-    paddingRight: spacing.lg
+    paddingHorizontal: spacing.lg
   },
+  chatSlot: { width: AVATAR, alignItems: 'center', justifyContent: 'center' },
   line: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -288,11 +280,13 @@ const styles = themedStyleSheet(() => ({
     paddingRight: spacing.lg
   },
   slot: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
-  chatTitle: { flex: 1, minWidth: 0, fontSize: 15, color: colors.textPrimary },
+  chatTitle: { flex: 1, minWidth: 0, fontSize: 14, color: colors.textSecondary },
   lineName: { flex: 1, minWidth: 0, fontSize: 14, color: colors.textSecondary },
   unread: { fontWeight: '700', color: colors.textPrimary },
   note: { color: colors.textMuted, fontWeight: '400' },
-  trailing: { fontSize: 13, color: colors.textMuted, flexShrink: 0, maxWidth: '46%' },
+  // The bot row's age type, so a list's times share one size and edge.
+  trailing: { fontSize: 11, color: colors.textMuted, flexShrink: 0, maxWidth: '46%' },
+  pagingDot: { fontSize: 13, color: colors.textMuted },
   chevron: { width: 20, alignItems: 'flex-end' },
   pill: { flexShrink: 0, maxWidth: '40%' },
   noLogo: { width: BOT_WORKSPACE_LINE_LOGO.size },

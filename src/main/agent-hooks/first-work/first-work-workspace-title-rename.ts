@@ -1,8 +1,4 @@
 import { humanizeBranchSlug } from '../../../shared/source-control/ai/naming/branch-name-from-work'
-import {
-  generateBranchNameFromContext,
-  resolveCommitMessageSettings as resolveTextGenerationParams
-} from '../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import {
@@ -12,6 +8,7 @@ import {
   type FirstWorkVerdictBuilders
 } from './first-work-rename-verdicts'
 import type { FirstWorkAttempt, FirstWorkRenameVerdict } from './first-work-rename-attempts'
+import { WORKSPACE_NAME_ENVIRONMENT_FAILED_HEADLINE } from '../../../shared/worktree/branch-auto-rename-failure-headlines'
 
 export async function runFolderWorkspaceTitleAutoRename(
   worktreeId: string,
@@ -34,6 +31,10 @@ export async function runFolderWorkspaceTitleAutoRename(
 
   const originalDisplayName = deps.getCurrentDisplayName(worktreeId)
   const settings = deps.getSettings()
+  const {
+    generateBranchNameFromContext,
+    resolveCommitMessageSettings: resolveTextGenerationParams
+  } = await import('../../text-generation/commit-message-text-generation')
   const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
   if (!resolvedParams.ok) {
     deps.setRenameError(worktreeId, resolvedParams.error)
@@ -45,7 +46,7 @@ export async function runFolderWorkspaceTitleAutoRename(
   }
   const target = await resolveGenerationTarget(folderPath, resolvedParams.params.agentId, deps)
   if (!target) {
-    deps.setRenameError(worktreeId, 'Could not prepare the workspace-name generation environment.')
+    deps.setRenameError(worktreeId, WORKSPACE_NAME_ENVIRONMENT_FAILED_HEADLINE)
     return failed('could not prepare generation environment', false)
   }
 

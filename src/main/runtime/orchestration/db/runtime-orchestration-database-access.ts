@@ -2,6 +2,11 @@ import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
+import { closeOrchestrationReader } from './reader-worker/orchestration-reader-client'
+import {
+  OrchestrationDbCompaction,
+  type OrchestrationDbSwap
+} from './maintenance/orchestration-db-compaction'
 import { structuredWorkerSession } from '../terminal-authority/structured-sessions/structured-worker-authority'
 import { structuredWorkerIdentityFromRow } from '../terminal-authority/structured-sessions/structured-worker-identity'
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
@@ -13,6 +18,9 @@ import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persist
 
 export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWithAutomationApiOperations {
   private orchestrationDbMaintenance: OrchestrationDbMaintenance | undefined
+  private orchestrationDbCompaction: OrchestrationDbCompaction | undefined
+  private orchestrationDbCompactionAllowed = false
+  private orchestrationDbClosedForQuit = false
 
   abstract ensureOrchestrationFederationRelay(
     runId?: string,
@@ -20,6 +28,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   ): void
 
   protected abstract scheduleRestoredMessageRepoints(): void
+  protected abstract publishSleepingMail(scope?: { mailboxes?: Iterable<string> }): void
+  protected abstract owesAnySleepingMail(): boolean
 
   abstract hasLiveTerminalForPaneKey(
     paneKey: string,
@@ -31,9 +41,18 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
 
   // Defer until userData is final; tests can inject an in-memory DB.
   getOrchestrationDb(): OrchestrationDb {
+    if (this.orchestrationDbClosedForQuit) {
+      throw new Error('The orchestration database is closed for quit.')
+    }
     if (!this._orchestrationDb) {
-      const db = new OrchestrationDb(this.orchestrationDbPath())
+      const filename = this.orchestrationDbPath()
+      const db = new OrchestrationDb(filename)
       this._orchestrationDb = db
+      this.orchestrationDbCompaction = new OrchestrationDbCompaction(
+        db,
+        filename,
+        () => this.orchestrationDbCompactionAllowed
+      )
       this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(
         db,
         (dispatchId) => isReleasedChatReadable(db, dispatchId),
@@ -41,7 +60,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
           isLiveHandle: (handle) => this.isLiveOrchestrationHandle(handle),
           isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey),
           waitedMailboxes: () => this.messageWaiters.map.keys()
-        }
+        },
+        this.orchestrationDbCompaction
       )
       this.orchestrationDbMaintenance.start()
       this.bindMailHandBack(this._orchestrationDb)
@@ -60,14 +80,45 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
 
   /** The database, opened only if it already exists: a profile without one has no mail to redrive. */
   getExistingOrchestrationDb(): OrchestrationDb | null {
+    if (this.orchestrationDbClosedForQuit) {
+      return null
+    }
     return this._orchestrationDb || existsSync(this.orchestrationDbPath())
       ? this.getOrchestrationDb()
       : null
   }
 
-  setOrchestrationDb(db: OrchestrationDb): void {
-    this.orchestrationDbMaintenance?.stop()
+  /** Desktop only: the copy is swapped in at quit, and only the desktop quit does that. */
+  allowOrchestrationDbCompaction(): void {
+    this.orchestrationDbCompactionAllowed = true
+  }
+
+  /** At the end of a clean quit: swaps in a compacted copy taken while the file sat unwritten. */
+  async swapCompactedOrchestrationDbForQuit(): Promise<OrchestrationDbSwap> {
+    const compaction = this.orchestrationDbCompaction
+    if (!compaction?.hasCopy) {
+      // A partial copy is as large as the live data; a later launch may never clean it up.
+      await compaction?.discardUnfinishedCopy()
+      return { kind: 'none' }
+    }
+    // Its idle connection would hold the file open and make every swap busy.
+    await closeOrchestrationReader()
+    return compaction.swapAtQuit(() => this.detachOrchestrationDbForQuit())
+  }
+
+  /** At the end of a clean quit: hands the open database to the swap, which closes it; never reopened. */
+  private detachOrchestrationDbForQuit(): Promise<void> {
+    this.orchestrationDbClosedForQuit = true
+    const stopped = this.orchestrationDbMaintenance?.stop() ?? Promise.resolve()
     this.orchestrationDbMaintenance = undefined
+    this._orchestrationDb = null
+    return stopped
+  }
+
+  setOrchestrationDb(db: OrchestrationDb): void {
+    void this.orchestrationDbMaintenance?.stop()
+    this.orchestrationDbMaintenance = undefined
+    this.orchestrationDbCompaction = undefined
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
@@ -88,6 +139,14 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   private bindMailHandBack(db: OrchestrationDb): void {
+    db.mailReadListener = (mailboxes) =>
+      queueMicrotask(() => {
+        if (this._orchestrationDb === db) {
+          this.publishSleepingMail({ mailboxes })
+        }
+      })
+    // Nobody asleep: a read can release no sleeping-mail hold, so it costs nothing extra.
+    db.mailReadWanted = () => this.owesAnySleepingMail()
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
   }
 

@@ -1,10 +1,7 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import { pluginWorkspaceId } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
-import {
-  suggestCreatureNameForPaths,
-  suggestionPathBasename
-} from '../../../../shared/worktree/naming/worktree-name-suggestion'
 import { WorktreeCreateSetupChoiceRefusedError } from '../../../runtime/workspaces/creation/worktree-create-setup-choice-refusal'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
@@ -21,26 +18,32 @@ import { PLUGIN_AGENT_RESUME_HANDLERS } from './plugin-host-agent-resume-binding
 const api = PLUGIN_HOST_API
 
 // The parts of each runtime answer these methods read; anything else is dropped.
-const worktreeRecord = z.object({
-  id: z.string(),
-  identity: z.object({ key: z.string() }).optional()
-})
-const worktreeCreateAnswer = z.object({ worktree: worktreeRecord })
-const worktreeShowAnswer = z.object({ worktree: worktreeRecord })
-const agentLaunchAnswer = z.object({
-  worktreeId: z.string(),
-  outcome: z.object({ handle: z.string() })
-})
-const worktreeListAnswer = z.object({
-  worktrees: z.array(
-    worktreeRecord.extend({
-      repoId: z.string(),
-      path: z.string(),
-      displayName: z.string().optional(),
-      hostId: z.string().optional()
-    })
-  )
-})
+const worktreeRecord = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    identity: z.object({ key: z.string() }).optional()
+  })
+)
+const worktreeCreateAnswer = lazyZodSchema(() => z.object({ worktree: worktreeRecord }))
+const worktreeShowAnswer = lazyZodSchema(() => z.object({ worktree: worktreeRecord }))
+const agentLaunchAnswer = lazyZodSchema(() =>
+  z.object({
+    worktreeId: z.string(),
+    outcome: z.object({ handle: z.string() })
+  })
+)
+const worktreeListAnswer = lazyZodSchema(() =>
+  z.object({
+    worktrees: z.array(
+      worktreeRecord.extend({
+        repoId: z.string(),
+        path: z.string(),
+        displayName: z.string().optional(),
+        hostId: z.string().optional()
+      })
+    )
+  })
+)
 
 const listedId = (worktree: z.output<typeof worktreeRecord>): string =>
   pluginWorkspaceId({ id: worktree.id, identityKey: worktree.identity?.key })
@@ -77,7 +80,11 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
     const existing = await projectWorktrees(call, project)
     const open = params.open === true
     // A creature no workspace of the project uses; a later clash gets a suffix from the host.
-    const name = params.name?.trim() || suggestCreatureNameForPaths(existing.map((w) => w.path))
+    const name =
+      params.name?.trim() ||
+      (
+        await import('../../../../shared/worktree/naming/worktree-name-suggestion')
+      ).suggestCreatureNameForPaths(existing.map((w) => w.path))
     // Never `run`, an approved setup hash or a startup command: those approve or run repository
     // code the person has not. Absent, setup follows the project's settings and approvals.
     const create = {
@@ -136,8 +143,12 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
 
 /** Whether a worktree is the one a create named `name` makes: it shows that name, or its folder
  *  is that name, or that name with the `-N` Orca adds when the name is taken. */
-function madeFromName(worktree: { path: string; displayName?: string }, name: string): boolean {
-  const folder = suggestionPathBasename(worktree.path)
+function madeFromName(
+  worktree: { path: string; displayName?: string },
+  name: string,
+  pathBasename: (path: string) => string
+): boolean {
+  const folder = pathBasename(worktree.path)
   const suffix = folder.startsWith(`${name}-`) ? folder.slice(name.length + 1) : ''
   return (
     worktree.displayName === name ||
@@ -158,8 +169,14 @@ async function withCreatedWorkspace(
   error: unknown
 ): Promise<unknown> {
   const known = new Set(before.map((worktree) => worktree.id))
+  const { suggestionPathBasename } =
+    await import('../../../../shared/worktree/naming/worktree-name-suggestion')
   const created = await projectWorktrees(call, project).then(
-    (after) => after.filter((worktree) => !known.has(worktree.id) && madeFromName(worktree, name)),
+    (after) =>
+      after.filter(
+        (worktree) =>
+          !known.has(worktree.id) && madeFromName(worktree, name, suggestionPathBasename)
+      ),
     () => []
   )
   if (created.length !== 1 || !(error instanceof PluginHostCallError)) {

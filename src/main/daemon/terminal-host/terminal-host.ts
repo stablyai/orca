@@ -7,7 +7,7 @@ import type { Session } from '../sessions/session'
 import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 import type { SessionInfo } from '../protocol/daemon-session-info'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
-import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
+import type { TerminalSnapshot, TerminalSnapshotReadOptions } from '../protocol/terminal-snapshot'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
@@ -31,10 +31,9 @@ import {
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { randomUUID } from 'node:crypto'
-import {
-  inspectTerminalHostSession,
-  type TerminalHostProcessInspection
-} from './terminal-host-process-inspection'
+import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
+import { inspectTerminalHostSession } from './terminal-host-session-inspection'
+import { createForegroundExitWatches } from './foreground-agent-identity-check'
 
 import {
   confirmTerminalHostForegroundProcess,
@@ -45,6 +44,14 @@ import {
   getTerminalHostSnapshot,
   takeTerminalHostPendingOutput
 } from './terminal-host-session-inspection-operations'
+
+import type { ForegroundExitWatches } from '../../pty/process-retirement/foreground-exit-watches'
+import type { StreamStallHandler } from '../sessions/session-producer-pause'
+import {
+  pauseSessionProducer,
+  resumeSessionProducer,
+  sessionIncarnation
+} from './terminal-host-producer-flow'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
 
@@ -64,6 +71,7 @@ export class TerminalHost {
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
   private observationEpoch = 0
+  private readonly foregroundExitWatches: ForegroundExitWatches
   private readonly retiredIncarnations = new Map<
     string,
     { incarnationId: string; code: number; expiresAt: number }
@@ -74,6 +82,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
+    this.foregroundExitWatches = createForegroundExitWatches(opts.onSessionForegroundChange)
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
@@ -156,30 +165,22 @@ export class TerminalHost {
     getAliveTerminalHostSession(this.sessions, sessionId).resize(cols, rows)
   }
 
-  // Producer flow-control hints tolerate sessions that have already exited.
-  pauseProducer(sessionId: string, source?: 'stream', onStreamStall?: () => void): void {
-    const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      return
-    }
-    session.pauseProducer(source, onStreamStall)
+  pauseProducer(sessionId: string, source?: 'stream', onStreamStall?: StreamStallHandler) {
+    return pauseSessionProducer(this.sessions, sessionId, source, onStreamStall)
+  }
+
+  sessionIncarnation(sessionId: string): string | undefined {
+    return sessionIncarnation(this.sessions, sessionId)
   }
 
   resumeProducer(sessionId: string, source?: 'stream'): void {
-    this.sessions.get(sessionId)?.resumeProducer(source)
+    resumeSessionProducer(this.sessions, sessionId, source)
   }
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
-    const pending = this.sessionTeardown.get(sessionId)
-    if (pending) {
-      return Promise.resolve(
-        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
-      )
-    }
-    const session = getAliveTerminalHostSession(this.sessions, sessionId)
-    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
-    this.killedTombstones.record(sessionId)
-    return Promise.resolve(killed)
+    return this.sessionTeardown.kill(sessionId, opts.immediate === true, () =>
+      this.killedTombstones.record(sessionId)
+    )
   }
 
   beginFencedTermination(request: PtyFencedTerminationRequest) {
@@ -199,6 +200,7 @@ export class TerminalHost {
     }
     session.dispose()
     this.sessions.delete(sessionId)
+    this.foregroundExitWatches.forget(sessionId)
     this.onSessionReaped?.(sessionId)
   }
 
@@ -250,7 +252,8 @@ export class TerminalHost {
       sessionId,
       options,
       this.authorityGeneration,
-      () => ++this.observationEpoch
+      () => ++this.observationEpoch,
+      this.foregroundExitWatches
     )
   }
 
@@ -283,10 +286,7 @@ export class TerminalHost {
     return getTerminalHostSnapshot(this.sessions.get(sessionId), opts)
   }
 
-  async getSettledSnapshot(
-    sessionId: string,
-    opts: { scrollbackRows?: number } = {}
-  ): Promise<TerminalSnapshot | null> {
+  async getSettledSnapshot(sessionId: string, opts: TerminalSnapshotReadOptions = {}) {
     return getSettledTerminalHostSnapshot(this.sessions.get(sessionId), opts)
   }
 
@@ -327,6 +327,7 @@ export class TerminalHost {
 
   dispose(): Promise<void> {
     this.creationFenced = true
+    this.foregroundExitWatches.dispose()
     if (this.disposePromise) {
       return this.disposePromise
     }

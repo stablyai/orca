@@ -7,13 +7,13 @@ import type {
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { hookSilentPaneSendState } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   ptyHostGuardsSendApprovals,
   selectSendApprovalGuardEnvironmentIds
@@ -56,8 +56,7 @@ export type StructuredAgentSendTarget = RunningAgentSendTargetEligibility & {
   sessionId: string
   agentType: AgentType
   title: string
-  /** Null before the chat's first turn (the host publishes no status before one); only the
-   *  notes menu lists such chats, as the sidebar has no row for them. */
+  /** Null while the host has not published the chat yet; only the notes menu lists such chats. */
   entry: AgentStatusEntry | null
 }
 
@@ -85,7 +84,7 @@ export function deriveRunningAgentSendTargets(
   ]
 }
 
-/** Chats of the worktree that have not had their first turn yet, so no status entry exists. */
+/** Chats of the worktree with no status entry yet: the host has not published them. */
 export function deriveStatuslessStructuredAgentSendTargets(
   state: RunningAgentTargetState,
   worktreeId: string
@@ -153,7 +152,7 @@ function deriveTerminalAgentSendTargets(
   return targets
 }
 
-// Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes first-turn chats.
+// Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes chats the host has not published yet.
 function deriveStructuredAgentSendTargets(
   state: RunningAgentTargetState,
   worktreeId: string,
@@ -164,7 +163,7 @@ function deriveStructuredAgentSendTargets(
     if (!isStructuredTab(tab) || !tab.agentSessionAgent) {
       continue
     }
-    const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    const paneKey = chatPaneKey(tab.entityId)
     const entry = state.agentStatusByPaneKey.get(paneKey) ?? null
     if ((entry !== null) !== (status === 'with-status')) {
       continue

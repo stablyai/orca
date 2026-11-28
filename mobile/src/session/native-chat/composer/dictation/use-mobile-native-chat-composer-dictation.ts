@@ -1,8 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useRef } from 'react'
-import type { TextInputSelectionChangeEvent } from 'react-native'
 import {
   insertDictationText,
-  readMobileDictationAnchor,
   splitDraftForDictation,
   type MobileDictationAnchor
 } from '../../../../dictation/mobile-dictation-text-insertion'
@@ -75,8 +73,9 @@ export function useMobileNativeChatComposerDictation({
       : null
   return {
     preview,
-    readSelection: (event: TextInputSelectionChangeEvent) => {
-      selectionRef.current = readMobileDictationAnchor(event, value)
+    /** The field's selection, as a place in the draft. */
+    readSelection: (anchor: MobileDictationAnchor) => {
+      selectionRef.current = anchor
     }
   }
 }

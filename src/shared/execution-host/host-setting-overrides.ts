@@ -77,16 +77,25 @@ export function clearHostSettingOverride(
   return next
 }
 
+const EMPTY_HOST_DISPLAY_LABEL_OVERRIDES: ReadonlyMap<ExecutionHostId, string> = new Map()
+
 /** Builds the `displayLabel` lookup map the host registry consumes. */
 export function getHostDisplayLabelOverrides(
   settings: HostSettingsSlice | null | undefined
 ): ReadonlyMap<ExecutionHostId, string> {
-  const result = new Map<ExecutionHostId, string>()
-  for (const [hostId, overrides] of Object.entries(settings?.hostSettingOverrides ?? {})) {
-    const label = normalize(overrides?.displayLabel)
+  const hostOverrides = settings?.hostSettingOverrides
+  if (!hostOverrides) {
+    return EMPTY_HOST_DISPLAY_LABEL_OVERRIDES
+  }
+  let result: Map<ExecutionHostId, string> | undefined
+  for (const hostId in hostOverrides) {
+    if (!Object.hasOwn(hostOverrides, hostId)) {
+      continue
+    }
+    const label = normalize(hostOverrides[hostId as ExecutionHostId]?.displayLabel)
     if (label) {
-      result.set(hostId as ExecutionHostId, label)
+      ;(result ??= new Map<ExecutionHostId, string>()).set(hostId as ExecutionHostId, label)
     }
   }
-  return result
+  return result ?? EMPTY_HOST_DISPLAY_LABEL_OVERRIDES
 }

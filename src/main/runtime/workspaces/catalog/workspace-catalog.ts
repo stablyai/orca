@@ -15,7 +15,10 @@ import {
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
 import { WorktreeRowProjectionMemo } from './worktree-row-projection-memo'
-import { resolveScopedWorktreeIdRow } from './scoped-worktree-row-resolution'
+import {
+  resolveScopedWorktreeIdRow,
+  type ScopedWorktreeReads
+} from './scoped-worktree-row-resolution'
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
@@ -77,17 +80,22 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       // is already authoritative for this explicit target.
       return [targetWorktree]
     }
-    const worktreeIds = new Set(
-      Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
-        const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        return (
-          parsed?.repoId === target.repoId &&
-          Boolean(parsed.worktreePath) &&
-          (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
-            isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
-        )
-      })
-    )
+    const allMeta = this.store.getAllWorktreeMeta()
+    const worktreeIds = new Set<string>()
+    for (const worktreeId in allMeta) {
+      if (!Object.hasOwn(allMeta, worktreeId)) {
+        continue
+      }
+      const parsed = splitWorktreeIdForFilesystem(worktreeId)
+      if (
+        parsed?.repoId === target.repoId &&
+        Boolean(parsed.worktreePath) &&
+        (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
+          isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
+      ) {
+        worktreeIds.add(worktreeId)
+      }
+    }
     worktreeIds.add(targetWorktreeId)
 
     const resolved: ResolvedWorktree[] = []
@@ -218,7 +226,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
 
   protected async resolveExplicitWorktreeIdScoped(
     worktreeId: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    reads?: ScopedWorktreeReads
   ): Promise<ResolvedWorktree | null> {
     if (!this.store) {
       return null
@@ -227,7 +236,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     return await resolveScopedWorktreeIdRow(
       { ...this.repoWorktreeRowDeps(), rowMemo: undefined },
       worktreeId,
-      requiredHostId
+      requiredHostId,
+      reads
     )
   }
 

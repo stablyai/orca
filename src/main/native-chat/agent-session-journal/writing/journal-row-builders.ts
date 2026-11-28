@@ -143,6 +143,14 @@ export function journalDispatchRowBuilder(
             : null
         }
       : {}),
+    ...(input.state === 'accepted' && input.answeredInTurn
+      ? {
+          answeredInTurn: {
+            turnItemId: agentJournalItemKey(input.answeredInTurn.turn),
+            via: input.answeredInTurn.via
+          }
+        }
+      : {}),
     ...journalRowBase(state().epoch, seq, input.fence, ts),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     ...(input.state === 'pending' ? { turnScope: input.turnScope } : {}),

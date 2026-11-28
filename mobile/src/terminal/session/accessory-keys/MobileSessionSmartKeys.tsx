@@ -7,8 +7,8 @@ import type {
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'
+import { TERMINAL_KEY_HIT_SLOP, terminalDockStylesSheet } from './terminal-dock-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 function smartKeyWord(t: Translate, name: AgentSmartKeyName): string {
   switch (name) {
@@ -59,7 +59,7 @@ export function MobileSessionSmartKeys({
   onPressIn: (key: AgentSmartKey) => void
   onPress: (key: AgentSmartKey, event: GestureResponderEvent) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(terminalDockStylesSheet)
   const t = useMobileTranslation()
   return (
     <>

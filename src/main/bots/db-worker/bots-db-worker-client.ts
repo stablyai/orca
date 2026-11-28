@@ -1,5 +1,5 @@
 // The runtime's one bots DB worker: started on first use, released when idle. A crash fails the calls
-// it caught with items_unavailable; the next call starts a new worker. Bot stores reach their SQL only through it.
+// it caught (items' with items_unavailable); the next call starts a new worker. Bot stores reach their SQL only through it.
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
@@ -13,6 +13,7 @@ import type {
 import { BOT_ITEM_ERROR_CODES, type BotItemErrorCode } from '../../../shared/bots/bot-items'
 import { BotItemError } from '../bot-item-error'
 import { BOT_ITEMS_OPS, type BotItemsCallWrap, type BotItemsRemote } from '../bot-items-ops'
+import { BOT_WORK_OPS, type BotWorkRemote } from '../bot-work-ops'
 import type {
   BotsDbStoreName,
   BotsDbWorkerRequest,
@@ -60,7 +61,8 @@ export class BotsDbWorkerClient {
       },
       // A timed-out transaction can still be inside SQLite; never start a second worker beside it.
       awaitRetirement: true,
-      createUnavailableError: (message) => unavailable(message),
+      // Plain here: call() gives items' failures their retry advice, and no other store's.
+      createUnavailableError: (message) => new Error(message),
       describeTimeout: (ms) => `the bots DB worker timed out after ${ms}ms`,
       describeExit: (code) => `the bots DB worker exited with code ${code}`,
       describeCrashLoop: (lastError) => `the bots DB worker crashed repeatedly: ${lastError}`,
@@ -74,9 +76,12 @@ export class BotsDbWorkerClient {
     try {
       response = await this.queue.dispatch((id) => ({ id, store, path, op, args }), this.timeoutMs)
     } catch (error) {
-      throw error instanceof BotItemError
-        ? error
-        : unavailable(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      if (store !== 'items') {
+        // Items' retry advice names an items write; any other store's failure says only what failed.
+        throw new Error(`The bots DB worker didn't answer ${store}.${op}: ${message}`)
+      }
+      throw error instanceof BotItemError ? error : unavailable(message)
     }
     if (response.ok) {
       return response.value
@@ -97,6 +102,15 @@ export class BotsDbWorkerClient {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each op forwards its own arguments to the store method of that name, whose return value the worker answers unchanged.
     return remote as unknown as BotItemsRemote
+  }
+
+  /** The work store in `path`, every call answered by the worker. */
+  work(path: string): BotWorkRemote {
+    const remote = Object.fromEntries(
+      BOT_WORK_OPS.map((op) => [op, (...args: unknown[]) => this.call('work', path, op, args)])
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each op forwards its own arguments to the store method of that name, whose return value the worker answers unchanged.
+    return remote as unknown as BotWorkRemote
   }
 
   dispose(): void {

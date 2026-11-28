@@ -14,6 +14,7 @@ import {
 } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
   getStructuredAgentSessionTabsInWorkspace,
+  structuredTabsShowingConversation,
   type StructuredTab
 } from './structured-agent-session-tabs'
 import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
@@ -108,10 +109,7 @@ function installStatusProjection(): () => void {
     if (!current(input)) {
       return
     }
-    const latestDirectory =
-      member.hostKey === 'local'
-        ? member.group?.feed.getSnapshot().get(tab.entityId)?.launchDirectory
-        : undefined
+    const latestDirectory = member.group?.feed.getSnapshot().get(tab.entityId)?.launchDirectory
     if (latestDirectory !== directory) {
       return
     }
@@ -223,7 +221,7 @@ function installStatusProjection(): () => void {
             ? (getStructuredAgentSessionLaunchFailedAt(tab.entityId) ?? tab.createdAt)
             : null,
         sleptAt: group ? group.feed.getSessionSleepState(tab.entityId) : null,
-        directory: member.hostKey === 'local' ? summary?.launchDirectory : undefined
+        directory: summary?.launchDirectory
       }
       // Launch ticks and full host ticks carry every member; skip the unchanged ones.
       if (!sameCapturedInput(burst.peek(member) ?? member.captured, input)) {
@@ -314,7 +312,11 @@ function installStatusProjection(): () => void {
         const listed = [...changes.workspaceIds].flatMap((workspaceId) => [
           ...getStructuredAgentSessionTabsInWorkspace(source, workspaceId)
         ])
-        retiring.push(...membership.reconcileTabs(listed, changes.tabIds, placeTab))
+        retiring.push(
+          ...membership.reconcileTabs(listed, changes.tabIds, placeTab, (paneKey) =>
+            structuredTabsShowingConversation(source, paneKey)
+          )
+        )
         tabs = null
       } else {
         retiring.push(...reconcileFromSnapshot(source, placeTab))

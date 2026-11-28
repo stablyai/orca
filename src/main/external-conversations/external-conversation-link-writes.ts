@@ -23,7 +23,10 @@ export function writeLinkFact(
   fact:
     | Pick<ExternalConversationLink, 'place'>
     | Pick<ExternalConversationLink, 'lastTurn'>
-    | Pick<ExternalConversationLink, 'adoptedTurn'>,
+    | Pick<ExternalConversationLink, 'adoptedTurn'>
+    | Pick<ExternalConversationLink, 'muted' | 'leaveLine'>
+    | Pick<ExternalConversationLink, 'leaveLine'>
+    | Pick<ExternalConversationLink, 'threadStatus'>,
   workspace?: AgentPaneWorkspace
 ): boolean {
   const kept = workspace && readLinks(store, workspace).find((link) => sameConversation(link, key))
@@ -33,15 +36,46 @@ export function writeLinkFact(
     !next ||
     (next.place === linked.link.place &&
       next.lastTurn === linked.link.lastTurn &&
-      next.adoptedTurn === linked.link.adoptedTurn)
+      next.adoptedTurn === linked.link.adoptedTurn &&
+      next.muted === linked.link.muted &&
+      next.leaveLine === linked.link.leaveLine &&
+      JSON.stringify(next.threadStatus) === JSON.stringify(linked.link.threadStatus))
   ) {
     return false
   }
   if (next.adoptedTurn === undefined) {
     delete next.adoptedTurn
   }
+  if (next.muted === undefined) {
+    delete next.muted
+  }
+  if (next.leaveLine === undefined) {
+    delete next.leaveLine
+  }
+  if (next.threadStatus === undefined) {
+    delete next.threadStatus
+  }
   writeLink(store, linked.workspace, next)
   return true
+}
+
+/** A bot thread's bot and whether someone muted it there; `not_bot` for another chat's link, null
+ *  when it has none here. */
+export function readThreadMute(
+  store: ExternalConversationLinkStore,
+  key: ConversationKey
+): { botId: string; muted: boolean; leaveLine?: number } | 'not_bot' | null {
+  const link = findLink(store, key)?.link
+  if (!link) {
+    return null
+  }
+  return link.bot?.kind === 'bot'
+    ? {
+        botId: link.bot.botId,
+        muted: link.muted === true,
+        ...(link.leaveLine !== undefined ? { leaveLine: link.leaveLine } : {})
+      }
+    : 'not_bot'
 }
 
 /** Marks a bot thread seen at its chat's first open, wherever it is opened; false when no unseen
@@ -108,6 +142,9 @@ export function writeChatLink(
     // Held replies wait on these posts, so both move together.
     ...(kept?.mirrorPosts ? { mirrorPosts: kept.mirrorPosts } : {}),
     ...(kept?.mirrorHeld ? { mirrorHeld: kept.mirrorHeld } : {}),
+    ...(kept?.muted ? { muted: kept.muted } : {}),
+    ...(kept?.leaveLine !== undefined ? { leaveLine: kept.leaveLine } : {}),
+    ...(kept?.threadStatus ? { threadStatus: kept.threadStatus } : {}),
     ...(title ? { title } : {}),
     ...(seenAt !== undefined ? { seenAt } : {})
   }

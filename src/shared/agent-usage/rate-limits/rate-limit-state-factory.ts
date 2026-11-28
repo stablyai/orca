@@ -5,10 +5,8 @@ export function createEmptyRateLimitState(overrides: Partial<RateLimitState> = {
   return {
     claude: null,
     codex: null,
-    gemini: null,
     opencodeGo: null,
     kimi: null,
-    antigravity: null,
     minimax: null,
     grok: null,
     cursor: null,
@@ -24,7 +22,6 @@ export function createEmptyRateLimitState(overrides: Partial<RateLimitState> = {
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: [],
-    antigravityAccounts: [],
     ...overrides
   }
 }

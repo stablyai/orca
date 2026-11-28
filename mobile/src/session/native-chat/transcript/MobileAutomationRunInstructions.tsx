@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { SayAutomationRun } from '../../../../../src/shared/automations/automation-run-row-words'
 import { typography } from '../../../theme/mobile-theme'
+import { stylesSheet as markdownStylesSheet } from '../../../components/markdown/mobile-markdown-styles'
 import { MobileNativeChatMarkdown } from './message-content/MobileNativeChatMarkdown'
 import { useMobileNativeChatDisclosure } from './viewport/mobile-native-chat-disclosure-store'
-import { CHAT_PROSE_SCALE, scaledType } from './messages/mobile-native-chat-message-styles'
-import { styles } from './mobile-automation-run-row-styles'
+import { scaledType } from './messages/mobile-native-chat-message-styles'
+import { stylesSheet } from './mobile-automation-run-row-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 const FOLDED_LINES = 4
 
@@ -21,20 +23,23 @@ export function MobileAutomationRunInstructions({
   fontScale: number
   say: SayAutomationRun
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+  const markdownStyles = useThemedStyles(markdownStylesSheet)
   const [whole, setWhole] = useMobileNativeChatDisclosure(
     `automation-run-instructions:${messageId}`,
     false
   )
   // The unclamped text's height, measured off-screen: onTextLayout differs per platform and is absent on web.
   const [overflows, setOverflows] = useState(false)
-  const prose = scaledType(typography.bodySize, fontScale * CHAT_PROSE_SCALE, 6)
+  // The details' size: part of the row, not a chat reply.
+  const prose = scaledType(typography.metaSize, fontScale)
   return (
     <View>
       {whole ? (
         <MobileNativeChatMarkdown
           content={instructions}
           rangeSelectable
-          textScale={CHAT_PROSE_SCALE * fontScale}
+          textScale={prose.fontSize / markdownStyles.paragraph.fontSize}
         />
       ) : (
         <View>

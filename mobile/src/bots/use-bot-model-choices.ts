@@ -9,6 +9,7 @@ import {
   agentPickerModels
 } from '../../../src/shared/agent-launch/picker/agent-launch-picker-catalog'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
+import { keptSetupCatalog } from '../../../src/shared/agent-launch/picker/agent-launch-kept-setup-catalog'
 import type { BotLaunch } from '../../../src/shared/bots/bot-launch'
 import { folderWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
 import { listedModelDescribing } from '../../../src/shared/agent-session/options/model-catalog/structured-agent-session-listed-model'
@@ -95,7 +96,7 @@ export function useBotModelChoices(
   }
   const entry = {
     agent,
-    catalog: host.catalog,
+    catalog: keptSetupCatalog(agent, host.catalog),
     defaultSurface: 'chat' as const,
     coherentCatalog: true,
     terminal: {}

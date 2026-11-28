@@ -2,6 +2,8 @@ import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../../../shared/worktree/types'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
+import { decodeTrimmedUtf8Buffer, isSafeRefName, parsePackedRefsBuffer } from './packed-refs-parser'
 import {
   FULL_HEAD_IDENTITY_SCOPE,
   headIdentityEntryKey,
@@ -51,47 +53,26 @@ type Unreadable = typeof UNREADABLE
 
 async function readTrimmedFile(path: string): Promise<string | null | Unreadable> {
   try {
-    return (await readFile(path, 'utf8')).trim()
+    return decodeTrimmedUtf8Buffer(await readFile(path))
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : UNREADABLE
   }
 }
 
 async function readPackedRefs(commonDirPath: string): Promise<Map<string, string> | Unreadable> {
-  const refs = new Map<string, string>()
-  const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'))
-  if (content === UNREADABLE) {
-    return UNREADABLE
+  try {
+    return parsePackedRefsBuffer(await readFile(join(commonDirPath, 'packed-refs')))
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? new Map() : UNREADABLE
   }
-  if (content === null) {
-    return refs
-  }
-  for (const line of content.split('\n')) {
-    if (!line || line.startsWith('#') || line.startsWith('^')) {
-      continue
-    }
-    const separator = line.indexOf(' ')
-    if (separator <= 0) {
-      continue
-    }
-    refs.set(line.slice(separator + 1).trim(), line.slice(0, separator))
-  }
-  return refs
-}
-
-// Repo-authored ref names must reject Windows separators/drive syntax before joining filesystem paths.
-function isSafeRefName(ref: string): boolean {
-  if (ref.length === 0 || ref.includes('\\') || ref.includes(':')) {
-    return false
-  }
-  return !ref.split('/').some((part) => part === '..' || part === '')
 }
 
 // Only SHA-1/SHA-256 object IDs may leave this reader, bounding malformed-repo output.
 const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
+// Detach from large packed-refs buffers so cached OIDs do not pin megabytes in V8.
 function asObjectId(value: string | null | undefined): string | null {
-  return value != null && OBJECT_ID_PATTERN.test(value) ? value : null
+  return value != null && OBJECT_ID_PATTERN.test(value) ? ownRetainedString(value) : null
 }
 
 async function resolveRefToOid(

@@ -1,4 +1,5 @@
 import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
+import type { ProviderCheckSummary } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
@@ -20,7 +21,11 @@ import { githubPRStackExecutionScope } from '../github-exec-scope'
 const MAX_ENTRIES = 256
 
 type PRChecksReadStart = { startedAt: number; sequence: number }
-export type PRChecksRead = { start: PRChecksReadStart; checks: PRCheckDetail[] }
+export type PRChecksObservation = {
+  checks: PRCheckDetail[]
+  summary?: { headSha: string; value: ProviderCheckSummary }
+}
+export type PRChecksRead = { start: PRChecksReadStart; observation: PRChecksObservation }
 
 const lastReads = new Map<string, PRChecksRead>()
 let readSequence = 0
@@ -82,7 +87,7 @@ const overlaps = new Map<string, PRChecksOverlap>()
 export async function producePRChecks(
   resource: string,
   ownsKey: () => boolean,
-  readChecks: () => Promise<PRCheckDetail[]>,
+  readChecks: () => Promise<PRChecksObservation>,
   successor: () => Promise<PRChecksRead> | undefined
 ): Promise<PRChecksRead> {
   readSequence += 1
@@ -100,7 +105,7 @@ export async function producePRChecks(
     let own: PRChecksRead | undefined
     let failure: unknown
     try {
-      own = { start, checks: await readChecks() }
+      own = { start, observation: await readChecks() }
     } catch (error) {
       failure = error
     }
@@ -137,9 +142,9 @@ export async function producePRChecks(
 }
 
 /** What a caller of `read` receives: a read that started later and already settled is newer. */
-export function latestPRChecks(key: string, read: PRChecksRead): PRCheckDetail[] {
+export function latestPRChecks(key: string, read: PRChecksRead): PRChecksObservation {
   const latest = lastReads.get(key)
-  return latest && latest.start.sequence > read.start.sequence ? latest.checks : read.checks
+  return (latest && latest.start.sequence > read.start.sequence ? latest : read).observation
 }
 
 /** With a slower host cadence, a client's timed checks read reuses this host's last full read of the
@@ -148,7 +153,7 @@ export function latestPRChecks(key: string, read: PRChecksRead): PRCheckDetail[]
 export function readPacedPRChecks(
   key: string,
   cadence: PRAutoRefreshCadence
-): PRCheckDetail[] | null {
+): PRChecksObservation | null {
   if (cadence === 'default') {
     return null
   }
@@ -164,5 +169,5 @@ export function readPacedPRChecks(
   if (interval !== null && Date.now() - entry.start.startedAt >= interval) {
     return null
   }
-  return entry.checks
+  return entry.observation
 }

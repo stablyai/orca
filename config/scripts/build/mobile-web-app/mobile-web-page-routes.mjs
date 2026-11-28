@@ -3,8 +3,10 @@
 // Builder owns declarations and manifest checks MobileWebBundleRouteSchema. Haptics census derives required token from every reachable seam.
 // Every route offers the device store; without it (an older shell) the page keeps its data in memory only.
 const DEVICE_STORE_GRANT = 'native.store.rows'
+// Every route lists relayed servers; with this a page hides those the phone pairs with directly.
+const DIRECT_PAIRINGS_GRANT = 'native.pairings.installations'
 
-export const MOBILE_WEB_PAGE_ROUTES = [
+const DECLARED_PAGE_ROUTES = [
   // Home needs navigate/storage for session hops and app pins; shared protocol-wall Update action needs externalLink. Wide ownsHostArea permits sidebar.
   // New bot's import copies the message for the old bot; Shared links' Copy link writes and From a link's Paste reads.
   {
@@ -30,13 +32,21 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/automations',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    // A run's Copy run ID writes the clipboard; an older shell reports it couldn't copy.
+    optionalGrants: [DEVICE_STORE_GRANT, 'native.clipboard.write']
   },
   // Accounts needs navigate/storage/externalLink for Back/shared layout wall; haptics census requires seam grant.
   {
     pathname: '/h/[hostId]/accounts',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
     optionalGrants: [DEVICE_STORE_GRANT]
+  },
+  // MCP servers needs navigate/storage for Back and the shared layout wall, externalLink for a server's sign-in page.
+  // A sign-in link too long for an older shell is copied instead; without the clipboard the page says it couldn't.
+  {
+    pathname: '/h/[hostId]/mcp',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    optionalGrants: [DEVICE_STORE_GRANT, 'native.clipboard.write']
   },
   // Create Workspace overlay needs navigate to close/open session; shared form/layout supply other grants.
   {
@@ -49,11 +59,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/files/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    // Older shells cannot open PDFs; the preview asks for an app update instead.
+    // Older shells cannot open PDFs; the preview asks for an app update instead. Without native.file.share the row sheet has no Share.
     // Match preview grants for in-document navigation; older shells render inert HTML links.
     optionalGrants: [
       'externalNavigation',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       DEVICE_STORE_GRANT
     ]
@@ -65,6 +76,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     optionalGrants: [
       'externalNavigation',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       DEVICE_STORE_GRANT
     ]
@@ -82,6 +94,31 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/review/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
+  },
+  // A group room: Back and its item hops navigate, Copy writes the clipboard, + picks photos and the mic dictates (all three media and audio verbs, as a chat's).
+  // The mic's optional grants match the session's: without native.speech.act the computer transcribes, without native.a11y.announce the page's live region speaks.
+  {
+    pathname: '/h/[hostId]/group/[groupId]',
+    grants: [
+      'navigate',
+      'storage',
+      'externalLink',
+      'haptics',
+      'native.clipboard.write',
+      'native.media.pick',
+      'native.media.read',
+      'native.media.release',
+      'native.audio.start',
+      'native.audio.read',
+      'native.audio.stop'
+    ],
+    optionalGrants: [
+      'externalNavigation',
+      'native.image.act',
+      'native.speech.act',
+      'native.a11y.announce',
+      DEVICE_STORE_GRANT
+    ]
   },
   // Session alone needs media/audio/screencast grants: native clipboard read/write, navigation/storage/external links/haptics come from actual closure callers.
   // Media pick/read/release are all-or-none; partial set can start handle upload it cannot finish. Audio start/read/stop likewise must permit closing mic; device owns wake lock.
@@ -104,16 +141,23 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks.
+    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; the docked Files has no Share without native.file.share; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks; without native.link.open a link counts as opened once the shell takes it.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       'native.speech.act',
       'native.a11y.announce',
+      'native.link.open',
       'terminalKeyRail',
       DEVICE_STORE_GRANT
     ]
   }
 ]
+
+export const MOBILE_WEB_PAGE_ROUTES = DECLARED_PAGE_ROUTES.map((route) => ({
+  ...route,
+  optionalGrants: [...(route.optionalGrants ?? []), DIRECT_PAIRINGS_GRANT]
+}))

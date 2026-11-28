@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
+import type { BotOnHost } from '@/lib/bot-hosts'
 import { openBotAutomation } from './bot-automation-open'
 import { BotItemNumberColumn } from './items/BotItemNumberColumn'
 import { BotRowHoverCard } from './BotPanelRow'
@@ -179,14 +180,17 @@ export function actionFor(t: Translate, action: string, title: string): string {
   return t('bots.needs.actionFor', '{{action}}: {{title}}', { action, title })
 }
 
+/** An automation a sign-in stopped, stamped with its bot's host: a group lists several hosts' runs. */
+export type StoppedForSignIn = BotAutomationRow & BotOnHost
+
 /** An automation a sign-in stopped: listed beside the connector needs as context, never counted. */
 export const StoppedForSignInRow = memo(function StoppedForSignInRow({
   row
 }: {
-  row: BotAutomationRow
+  row: StoppedForSignIn
 }): React.JSX.Element {
   const t = useTranslate()
-  const { automation, latestRunId } = row
+  const { automation, latestRunId, hostId } = row
   return (
     <NeedRow
       kind="stopped"
@@ -194,7 +198,7 @@ export const StoppedForSignInRow = memo(function StoppedForSignInRow({
       detail={t('bots.needs.runSignIn', 'Couldn’t run until you sign in.')}
       action={{
         label: t('bots.needs.openRun', 'Open run'),
-        onOpen: () => openBotAutomation(automation.id, latestRunId ?? null)
+        onOpen: () => openBotAutomation(hostId, automation.id, latestRunId ?? null)
       }}
     />
   )

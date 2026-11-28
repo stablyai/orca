@@ -13,6 +13,7 @@ import type { ReportFollowUpAction } from '../../../../../../shared/orchestratio
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
   'answer_sender_snapshot',
+  'reply_to',
   'read',
   'sequence',
   'sender_pane_key',
@@ -39,6 +40,7 @@ export function exposeMessages(messages: MessageRow[]): MailboxMessageReceipt[] 
 
 /** The one shape a consuming check returns, and the receipt its take commits. */
 export function deliveryReceipt(args: {
+  db?: OrchestrationDb
   mailbox: { runId: string; dispatchId?: string }
   batch: MailboxDeliveryBatch | undefined
   acknowledged: string | undefined
@@ -56,6 +58,7 @@ export function deliveryReceipt(args: {
       response.formatted = batch.messages
         .map((message, index) =>
           formatMessageBanner(message, {
+            peerMail: args.db,
             followUp: saved.messages[index]?.follow_up
           })
         )
@@ -77,7 +80,12 @@ export function deliveryReceipt(args: {
     cancelled: false,
     connectionLost: false,
     ...(args.format
-      ? { formatted: batch?.messages.map(formatMessageBanner).join('\n\n') ?? '' }
+      ? {
+          formatted:
+            batch?.messages
+              .map((message) => formatMessageBanner(message, { peerMail: args.db }))
+              .join('\n\n') ?? ''
+        }
       : {})
   }
 }
@@ -142,7 +150,9 @@ export function withReplyFollowUps<T>(
     ...(formatted
       ? {
           formatted: rows
-            .flatMap(({ row, followUp }) => (row ? [formatMessageBanner(row, { followUp })] : []))
+            .flatMap(({ row, followUp }) =>
+              row ? [formatMessageBanner(row, { peerMail: db, followUp })] : []
+            )
             .join('\n\n')
         }
       : {})
@@ -202,6 +212,7 @@ export async function withReportItems<T>(
               return row
                 ? [
                     formatMessageBanner(row, {
+                      peerMail: db,
                       followUp: message.follow_up,
                       reportItem: items.get(message.id)
                     })

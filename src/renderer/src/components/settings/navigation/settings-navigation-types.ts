@@ -44,6 +44,7 @@ const SETTINGS_NAV_TARGETS = [
   'experimental',
   'plugins',
   'agents',
+  'mcp-servers',
   'orchestration',
   'artifacts',
   'session-history',
@@ -89,9 +90,11 @@ export type SettingsNavigationTarget = {
   hostId?: ExecutionHostId
   /** Host to select in the page-level Host picker; the project-host `hostId` does not move it. */
   hostScope?: RuntimeClientTarget
-  /** With pane `bots`, the bot whose page opens. */
+  /** With pane `bots`, the bot whose page opens; with `mcp-servers`, the server's. */
   sectionId?: string
   intent?: (typeof SETTINGS_NAV_INTENTS)[number]
+  /** Move keyboard focus to the subsection's first control once it is revealed. */
+  focusFirstControl?: boolean
 }
 
 function isRuntimeClientTarget(value: unknown): value is RuntimeClientTarget {
@@ -120,7 +123,8 @@ export function isSettingsNavigationTarget(value: unknown): value is SettingsNav
     (target.hostScope === undefined || isRuntimeClientTarget(target.hostScope)) &&
     (target.sectionId === undefined || typeof target.sectionId === 'string') &&
     (target.intent === undefined ||
-      (typeof target.intent === 'string' && SETTINGS_NAV_INTENT_SET.has(target.intent)))
+      (typeof target.intent === 'string' && SETTINGS_NAV_INTENT_SET.has(target.intent))) &&
+    (target.focusFirstControl === undefined || typeof target.focusFirstControl === 'boolean')
   )
 }
 

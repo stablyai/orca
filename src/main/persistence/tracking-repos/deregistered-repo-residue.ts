@@ -73,23 +73,39 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
   }
 
   // Retain bounded presets/name registries; reissuing retired names could collide with old agent state.
-  for (const worktreeId of Object.keys(state.worktreeMeta)) {
-    addWorktreeId(worktreeId)
+  for (const worktreeId in state.worktreeMeta) {
+    if (Object.hasOwn(state.worktreeMeta, worktreeId)) {
+      addWorktreeId(worktreeId)
+    }
   }
-  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
-    addWorktreeId(getWorktreeIdFromHostIdentity(alias))
+  if (state.worktreeIdentityAliases) {
+    for (const alias in state.worktreeIdentityAliases) {
+      if (Object.hasOwn(state.worktreeIdentityAliases, alias)) {
+        addWorktreeId(getWorktreeIdFromHostIdentity(alias))
+      }
+    }
   }
-  for (const [childId, lineage] of Object.entries(state.worktreeLineageById)) {
+  for (const childId in state.worktreeLineageById) {
+    if (!Object.hasOwn(state.worktreeLineageById, childId)) {
+      continue
+    }
     addWorktreeId(childId)
-    addWorktreeId(lineage.parentWorktreeId)
+    addWorktreeId(state.worktreeLineageById[childId].parentWorktreeId)
   }
-  for (const [childKey, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
+  for (const childKey in state.workspaceLineageByChildKey) {
+    if (!Object.hasOwn(state.workspaceLineageByChildKey, childKey)) {
+      continue
+    }
     addOwnerKey(childKey)
-    addOwnerKey(lineage.parentWorkspaceKey)
+    addOwnerKey(state.workspaceLineageByChildKey[childKey].parentWorkspaceKey)
   }
   // Never the cross-store parent: its repo id belongs to another store.
-  for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
-    addOwnerKey(childKey)
+  if (state.crossStoreLineageByChildKey) {
+    for (const childKey in state.crossStoreLineageByChildKey) {
+      if (Object.hasOwn(state.crossStoreLineageByChildKey, childKey)) {
+        addOwnerKey(childKey)
+      }
+    }
   }
   for (const selections of Object.values(state.mobileClientTabSelectionsByDeviceId ?? {})) {
     for (const worktreeId of Object.keys(selections)) {

@@ -60,12 +60,22 @@ export class MobileMediaHostOutdatedError extends Error {
   }
 }
 
+// Typed so the shell can name the limit to the page; retrying cannot help.
+export class MobileMediaTooLargeError extends Error {
+  constructor() {
+    super('Files larger than 256 MB cannot be previewed on mobile')
+    this.name = 'MobileMediaTooLargeError'
+  }
+}
+
 export async function downloadMobileFileMedia(
   client: MobileFilePreviewRpcSender,
-  media: MobileFileMedia,
+  media: Pick<MobileFileMedia, 'worktreeId' | 'relativePath'>,
   sink: MobileMediaSink,
   signal: AbortSignal,
-  onProgress: (bytes: number, total: number) => void
+  onProgress: (bytes: number, total: number) => void,
+  /** A file being shared may be empty; a preview has nothing to play then. */
+  download: { allowEmpty?: boolean } = {}
 ): Promise<string> {
   const params = { worktree: `id:${media.worktreeId}`, relativePath: media.relativePath }
   const options = { failWhenDisconnected: true, timeoutMs: 30_000 }
@@ -80,11 +90,11 @@ export async function downloadMobileFileMedia(
     }
     const stat = statRead.interpret(statReply)
     checkDownloadActive(signal)
-    if (stat.isDirectory || stat.size === 0) {
+    if (stat.isDirectory || (stat.size === 0 && !download.allowEmpty)) {
       throw new Error('This file has no playable media')
     }
     if (stat.size > MOBILE_MEDIA_MAX_BYTES) {
-      throw new Error('Files larger than 256 MB cannot be previewed on mobile')
+      throw new MobileMediaTooLargeError()
     }
     let offset = 0
     while (offset < stat.size) {

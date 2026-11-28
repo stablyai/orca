@@ -9,7 +9,13 @@ import type { HostProfile } from '../../host-catalog/host-profile'
 import { directPathForEndpoint } from '../relay/mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
 import { watchHostRevocation } from './host-revocation-watch'
+import {
+  setHostPairingRefused,
+  setHostReachesOffLan
+} from '../../host-descriptors/direct-pairing-installations'
+import { isTailscaleEndpoint } from '../../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import { createUndialableDirectClient, skipsDirectEndpoint } from './undialable-direct-endpoint'
+import { readvertiseOnPageChange } from './mobile-runtime-capability-negotiation'
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
   // Keep app-visible RPC/subscription identity stable while replacing physical sockets.
@@ -17,13 +23,14 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   const logical = createStableLogicalRpcClient(
     Platform.OS !== 'web' && skipsDirectEndpoint(host)
       ? createUndialableDirectClient()
-      : connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+      : connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog, hostId: host.id }),
     directPathForEndpoint(host.endpoint)
   )
   if (Platform.OS === 'web') {
     return logical
   }
 
+  setHostReachesOffLan(host.id, host.relay !== undefined || isTailscaleEndpoint(host.endpoint))
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
   endpointLifecycle.setForeground(AppState.currentState === 'active')
   const appStateSubscription = AppState.addEventListener('change', (state) => {
@@ -31,10 +38,12 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   })
   // A definite revocation (K6): cached screens go at once and stay gone until the desktop accepts this
   // phone again; drafts stay until the host is removed.
+  const stopPageCapabilities = readvertiseOnPageChange(host.id, logical)
   const stopRevocationWipe = watchHostRevocation(logical, (revoked) => {
     const store = processDeviceStore()
     store.fenceHostCache(host.id, revoked)
     setKeptBotsRevoked(host.id, revoked)
+    setHostPairingRefused(host.id, revoked)
     if (revoked) {
       void store.wipeHost(host.id, ['cache']).catch(() => undefined)
     }
@@ -42,6 +51,7 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   const closeLogical = logical.close
   logical.close = () => {
     stopRevocationWipe()
+    stopPageCapabilities()
     appStateSubscription.remove()
     endpointLifecycle.stop()
     closeLogical()

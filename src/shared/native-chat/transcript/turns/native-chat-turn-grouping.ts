@@ -1,3 +1,7 @@
+import {
+  noteRevisedInPlace,
+  revisedInPlace
+} from '../../../agent-session/view/revised-in-place-lists'
 // Share desktop/mobile turn ownership, bar placement and row order.
 
 import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
@@ -188,4 +192,46 @@ export function nativeChatRowsInDrawOrder<T>(
   drawOrder: readonly number[] | null
 ): readonly T[] {
   return drawOrder === null ? rows : drawOrder.map((index) => rows[index]!)
+}
+
+// Per reordered list: the order it was drawn in, what that gave, and each row's drawn place.
+const drawnRows = new WeakMap<
+  readonly object[],
+  { drawOrder: readonly number[]; drawn: readonly object[]; placeOf: readonly number[] }
+>()
+
+/** `nativeChatRowsInDrawOrder` for a list a streaming reply revises in place: a revision of a list
+ *  already reordered the same way replaces only its revised rows, and stays linked to it. */
+export function nativeChatRevisedRowsInDrawOrder<T extends object>(
+  rows: readonly T[],
+  drawOrder: readonly number[] | null
+): readonly T[] {
+  if (drawOrder === null) {
+    return rows
+  }
+  const revision = revisedInPlace(rows)
+  const prior = revision && drawnRows.get(revision.from)
+  let drawn: T[]
+  let placeOf: readonly number[]
+  if (revision && prior?.drawOrder === drawOrder) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only reorders of one row type are cached.
+    drawn = (prior.drawn as readonly T[]).slice()
+    placeOf = prior.placeOf
+    const positions: number[] = []
+    for (const index of revision.at) {
+      const place = placeOf[index]!
+      drawn[place] = rows[index]!
+      positions.push(place)
+    }
+    noteRevisedInPlace(drawn, prior.drawn, positions)
+  } else {
+    drawn = drawOrder.map((index) => rows[index]!)
+    const places: number[] = []
+    drawOrder.forEach((index, place) => {
+      places[index] = place
+    })
+    placeOf = places
+  }
+  drawnRows.set(rows, { drawOrder, drawn, placeOf })
+  return drawn
 }

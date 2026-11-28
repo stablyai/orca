@@ -1,7 +1,6 @@
 // `orca bot work list`: the work a bot started, one line each, from its work record and orchestration.
 import type { ConnectorSource } from '../connectors/external-conversation-link'
 import { CONNECTOR_SOURCE_NAMES } from '../connectors/external-conversation-link'
-import type { CheckStatus } from '../github/pull-requests/pull-request-types'
 import type { BotWorkPullRequest } from './bot-work-pull-request'
 import type { OrchestrationSessionWorkerState } from '../orchestration-session-workers'
 
@@ -15,13 +14,16 @@ export type BotWorkerSummary = {
   state: OrchestrationSessionWorkerState | null
   /** Its Dispatch is open but its agent waits, on its coordinator or an answer. */
   idle?: boolean
+  /** Passive live progress note recorded via `orchestration task-update --note` while working. */
+  progressNote?: string | null
   dispatchId: string
   workspace: string | null
   /** The paired server it runs on. */
   server: string | null
   pr: BotWorkPullRequest | null
   startedAt: number | null
-  /** Where the turn that started it was asked: Orca itself, or a connector's conversation. */
+  /** Where the turn that started it was asked: Orca itself (titled when it was one of the bot's
+   *  chats), or a connector's conversation. */
   source: { source: ConnectorSource | 'app'; title: string | null }
 }
 
@@ -41,24 +43,9 @@ const STATE_WORDS: Record<OrchestrationSessionWorkerState, string> = {
   unverifiable: 'out of contact'
 }
 
-const CHECK_WORDS: Record<CheckStatus, string> = {
-  pending: 'CI running',
-  success: 'CI green',
-  failure: 'CI failing',
-  neutral: 'no CI'
-}
-
+// The PR's link only: its state and checks are a cached read that goes stale, so GitHub is the source.
 function prWords(pr: BotWorkPullRequest): string {
-  if (pr.state === 'merged' || pr.state === 'closed') {
-    return `PR #${pr.number} ${pr.state}`
-  }
-  const review =
-    pr.review === 'APPROVED'
-      ? 'approved'
-      : pr.review === 'CHANGES_REQUESTED'
-        ? 'changes requested'
-        : 'waiting on review'
-  return `PR #${pr.number}${pr.state === 'draft' ? ' (draft)' : ''}: ${CHECK_WORDS[pr.checks]}, ${review}`
+  return `PR #${pr.number} ${pr.url}`
 }
 
 function age(startedAt: number, now: number): string {
@@ -73,13 +60,15 @@ function age(startedAt: number, now: number): string {
 export function formatBotWorkerSummary(item: BotWorkerSummary, now: number): string {
   const who = `${item.title}${item.agent ? ` (${item.agent})` : ''}`
   const where = [item.workspace, item.server].filter(Boolean).join(' on ')
+  const titled = item.source.title ? ` "${item.source.title}"` : ''
   const from =
     item.source.source === 'app'
-      ? 'from Orca'
-      : `from ${CONNECTOR_SOURCE_NAMES[item.source.source]}${item.source.title ? ` "${item.source.title}"` : ''}`
+      ? `from Orca${titled}`
+      : `from ${CONNECTOR_SOURCE_NAMES[item.source.source]}${titled}`
   return [
     `${item.id} ${who}`,
     item.idle ? 'idle' : item.state ? STATE_WORDS[item.state] : 'state unknown',
+    ...(item.state === 'working' && item.progressNote ? [item.progressNote] : []),
     ...(where ? [where] : []),
     ...(item.pr ? [prWords(item.pr)] : []),
     ...(item.startedAt !== null ? [age(item.startedAt, now)] : []),

@@ -107,7 +107,7 @@ export function useWorkspaceStatusRowDrag(args: {
           worktreeIds: dragSession.reorderDraggedIds,
           status,
           dropIndex: statusDrop.dropIndex,
-          groups: ctx.worktreeDragGroups
+          groups: ctx.getWorktreeDragGroups()
         })
         clearWorktreeDrag()
         return

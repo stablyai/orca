@@ -11,7 +11,7 @@ import type { CodexAccountUsageRead } from '../../../rate-limits/providers/codex
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from '../delivery/structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { StructuredAgentSessionAdapterPermission } from './structured-agent-session-adapter-permission'
+import type { StructuredAgentSessionAdapterControls } from './structured-agent-session-adapter-account'
 import type {
   AgentSessionRewindFork,
   AgentSessionRewindSupport
@@ -36,10 +36,7 @@ import type { StructuredAgentSessionAtRestCommands } from '../options/structured
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type {
-  AgentSessionCloseObserver,
-  StructuredAgentSessionAdapterStop
-} from './structured-agent-session-adapter-stop'
+import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
@@ -71,6 +68,11 @@ export type AgentSessionAcquisition = {
   acquisitionGeneration: string
   /** The account home this child launched under, when its launch follows the selection. */
   accountHome?: AgentSessionAccountHome
+  /** The home a chat with no conversation yet moved to at this launch, which it keeps. */
+  movedAccountHome?: AgentSessionAccountHome
+  /** Which saved account this child launched on, when the home alone can't say (see
+   *  `launchAccountKey`). */
+  accountKey?: string
 }
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
@@ -96,6 +98,8 @@ export type AgentSessionDispatchOutcome =
   | ({
       state: 'accepted'
       providerIdentity: AgentJournalItemIdentity
+      /** The running turn it joined, which another send opened. */
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
     } & AgentSessionRanOptionsEvidence)
   /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery. */
   | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
@@ -129,6 +133,8 @@ export type StructuredAgentSessionEndedEvent = {
   observedAt?: number
   /** Failed startup proves none of its handed-over work ran. */
   startupUnanswered?: true
+  /** A kept agent that had ended before this acquisition reattached it: no send reached it. */
+  endedBeforeAcquire?: true
 }
 
 /** Readiness never waits for optional option reports. */
@@ -178,7 +184,7 @@ export type StructuredAgentSessionSetOptionInput = {
   signal?: AbortSignal
 }
 
-type AdapterControls = StructuredAgentSessionAdapterStop & StructuredAgentSessionAdapterPermission
+type AdapterControls = StructuredAgentSessionAdapterControls
 
 export type StructuredAgentSessionAdapter = AdapterControls & {
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
@@ -271,6 +277,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
+  /** Narrow declared steering to the live acquisition's negotiated support. */
+  steeringMode?(sessionId: string): 'inject' | 'queue' | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */
   requiresModelTransitionRestart?(input: {
     sessionId: string
@@ -288,6 +296,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
+  /** This acquisition reattached a kept agent that had already ended; it only replays its output. */
+  endedBeforeAcquire?(sessionId: string, acquisitionGeneration: string): boolean
   /** This exact acquisition's ending before the host committed it ready, as the adapter reads it. */
   startupEnding?(
     sessionId: string,

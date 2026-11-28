@@ -1,7 +1,8 @@
 import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './provider-buffer-capture'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../wait/terminal-interactive-probe-budget'
-import type { RuntimeTerminalProjection } from './terminal-projection'
+import type { RuntimeTerminalProjection } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { buildPreview } from './tail/terminal-tail-state'
+import { MAX_PREVIEW_LINES } from './tail/terminal-tail-limits'
 import type {
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
@@ -10,7 +11,7 @@ import {
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './provider-snapshot-budget'
-import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
+import { projectTerminalVisibleLines } from '../../../daemon/emulation/terminal-screen-projection'
 import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import { readScreenClearingBlockedTail } from '../wait/blocked-tail-screen-clear'
@@ -36,6 +37,19 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       projection = await this.readRendererVisibleSnapshotLines(ptyId)
     }
     return projection.lines.length > 0 ? buildPreview(projection.lines, '') : preview
+  }
+
+  /** The byte tail cannot follow an alternate-screen TUI's absolute cursor moves, so summarize its painted grid. */
+  protected alternateScreenGridPreview(ptyId: string | null, preview: string): string {
+    const emulator = this.readWholeScreenModel(ptyId)?.emulator
+    // Why raw rows, not the read projection: it blanks a draft, so a typed prompt would read as empty.
+    // The row cap bounds a near-empty screen painted with spaces, where each blank row is a full read.
+    return emulator?.isAlternateScreen
+      ? buildPreview(
+          emulator.getBottomVisibleLines(MAX_PREVIEW_LINES, 4 * MAX_PREVIEW_LINES),
+          ''
+        ) || preview
+      : preview
   }
 
   protected async readVisibleTerminalState(
@@ -107,7 +121,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
 
     const { snapshot, late } = await this.awaitProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: 0 },
+      { scrollbackRows: 0, visibleProjection: true },
       { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
     )
     if (late && this.ptyLifecycleGenerationById.get(ptyId) === generation) {
@@ -144,7 +158,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
         return liveState
       }
     }
-    const projection = await this.parseVisibleSnapshot(snapshot)
+    const projection = snapshot.visibleProjection ?? (await this.parseVisibleSnapshot(snapshot))
     if (
       this.getPtyLifecycleGeneration(ptyId) !== generation ||
       this.getPtyOutputSequence(ptyId) > snapshot.seq

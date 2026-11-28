@@ -19,6 +19,7 @@ type RuntimeAddServerDialogProps = {
   onNameChange: (value: string) => void
   onAccessLinkChange: (value: string) => void
   onClose: () => void
+  onCloseAutoFocus: (event: Event) => void
   onSubmit: (allowLoopback: boolean) => void
 }
 
@@ -31,6 +32,7 @@ export function RuntimeAddServerDialog({
   onNameChange,
   onAccessLinkChange,
   onClose,
+  onCloseAutoFocus,
   onSubmit
 }: RuntimeAddServerDialogProps): React.JSX.Element {
   const t = useTranslate()
@@ -44,7 +46,7 @@ export function RuntimeAddServerDialog({
         }
       }}
     >
-      <DialogContent scrollable>
+      <DialogContent scrollable onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>
             {t('auto.components.settings.serverList.addTitle', 'Add server')}

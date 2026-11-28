@@ -2,7 +2,7 @@ import { JournalSqlBackgroundMaintenance } from './journal-sql-background-mainte
 import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
-import type { JournalSqlConversions } from './journal-sql-conversions'
+import type { JournalBackgroundConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 
 /**
@@ -12,7 +12,7 @@ import type { JournalSqlActivity } from './journal-sql-activity'
 export function createJournalSqlMaintenance(
   writer: Pick<JournalSqlOwner, 'maintain'>,
   readers: JournalSqlReaderPool,
-  conversions: Pick<JournalSqlConversions, 'ensure' | 'compareLegacyChats'>,
+  conversions: JournalBackgroundConversions,
   activity: JournalSqlActivity,
   options: {
     onMaintenanceError: (error: unknown, sessionId?: string) => void

@@ -68,6 +68,7 @@ const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
   },
   { ...textPair('--host-badge', '--host-badge-foreground'), over: '--worktree-sidebar' },
   textPair('--tab-active', '--tab-active-foreground'),
+  textPair('--tab-active', '--tab-unfocused-active-foreground'),
   textPair('--tab-inactive', '--tab-inactive-foreground'),
   // Hovered inactive tabs take the active text color.
   textPair('--tab-inactive', '--tab-active-foreground'),
@@ -119,6 +120,8 @@ const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
     ['--chat-inline-code', '--chat-user-message']
   ].map((under) => chatPair('--chat-selection', '--chat-selection-foreground', undefined, under)),
   { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
+  // The accent fill's label: derived from the accent when omitted, so only an explicit one can fail.
+  { ...textPair('--text-link', '--theme-accent-foreground'), drop: ['--theme-accent-foreground'] },
   {
     ...textPair('--editor-selection', '--foreground'),
     drop: ['--editor-selection'],
@@ -142,6 +145,7 @@ export const RINGS: readonly (readonly [string, string])[] = [
   ['--sidebar-ring', '--sidebar'],
   ['--worktree-sidebar-ring', '--worktree-sidebar'],
   ['--tab-active-indicator', '--tab-active'],
+  ['--tab-unfocused-active-foreground', '--tab-active'],
   // The same line marks the active right sidebar tool.
   ['--tab-active-indicator', '--sidebar']
 ]

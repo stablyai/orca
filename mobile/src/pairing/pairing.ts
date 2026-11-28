@@ -1,4 +1,3 @@
-import '../host-catalog/host-profile'
 import {
   PairingOfferSchema,
   type PairingOffer

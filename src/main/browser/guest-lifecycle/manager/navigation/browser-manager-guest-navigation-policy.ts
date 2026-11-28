@@ -1,5 +1,6 @@
 import {
   normalizeBrowserNavigationUrl,
+  redactKagiSessionToken,
   toSecureCertificateEndpoint
 } from '../../../../../shared/browser/navigation/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-main-frame-navigation'
@@ -178,7 +179,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (browserNavigationLeavesFaviconOrigin(publishedUrl, url)) {
         this.remoteTabFaviconUrlByGuestId.delete(guest.id)
       }
-      publishedUrl = guest.getURL()
+      publishedUrl = redactKagiSessionToken(guest.getURL())
       publishedHistory = readHistory()
       this.pendingNavigationByGuestId.delete(guest.id)
       this.settleUserAgentDemand(guest)
@@ -197,7 +198,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (!isMainFrame) {
         return
       }
-      const address = guest.getURL()
+      const address = redactKagiSessionToken(guest.getURL())
       const history = readHistory()
       // replaceState reports here even when the address stays the same.
       if (address !== publishedUrl || history !== publishedHistory) {
@@ -210,7 +211,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     // Renderer webviews keep their own icon. An offscreen page's icon arriving publishes; later
     // swaps (animated or status icons) ride the page's next publish instead of one per frame.
     const faviconUpdatedHandler = (_event: Electron.Event, favicons: string[]): void => {
-      if (!this.offscreenGuestIds.has(guest.id)) {
+      if (!this.isListedAsServerPage(guest.id)) {
         return
       }
       const next = remoteTabFaviconUrl(pickDisplayableFaviconUrl(favicons))
@@ -227,7 +228,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
 
     // Offscreen pages have no renderer; titles parse after commit and loads finish later.
     const offscreenStateChangedHandler = (): void => {
-      if (this.offscreenGuestIds.has(guest.id)) {
+      if (this.isListedAsServerPage(guest.id)) {
         this.offscreenGuestStateNotices.schedule(String(guest.id))
       }
     }

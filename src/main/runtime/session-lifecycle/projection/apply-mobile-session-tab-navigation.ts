@@ -3,6 +3,8 @@ import { selectMobileSessionTab } from '../../session-tabs/layout/mobile-session
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/restoration/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
+import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
+import type { ServerPagePopupPresentation } from '../../../browser/guest-lifecycle/popups/browser-popup-ownership'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
@@ -32,22 +34,48 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     ...args: Parameters<MobileSessionPreservation['isHeadlessMobileSessionPublication']>
   ): ReturnType<MobileSessionPreservation['isHeadlessMobileSessionPublication']>
 
+  protected abstract markHeadlessBrowserSessionTabActive(
+    worktreeId: string | undefined,
+    browserPageId: string,
+    options: BrowserSessionTabSelectionOptions
+  ): Promise<void>
+
+  /** Moves only the paired client whose click opened a server page's popup, as with a link it opens. */
+  async showServerPagePopupToClient(popup: ServerPagePopupPresentation): Promise<void> {
+    await this.markHeadlessBrowserSessionTabActive(popup.worktreeId, popup.browserPageId, {
+      focusesHost: false,
+      caller: { clientNavigationId: popup.pairedDeviceId, navigation: 'caller', follows: true }
+    })
+  }
+
   protected applyMobileSessionTabNavigation(
     snapshot: RuntimeMobileSessionTabsResult,
     activeTabId: string,
     navigation: RuntimeNavigationTarget,
     clientNavigationId?: string,
     /** The caller asked for nothing itself (a host action on its behalf), so it must be told to follow. */
-    callerFollows = false
+    callerFollows = false,
+    /** Only listeners now showing this top-level tab follow; the caller always does. */
+    showingTabId?: string
   ): RuntimeMobileSessionTabsResult {
     const deliver = this.createMobileSessionTabsDelivery()
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
       // Follow is live intent; reconnecting devices must not inherit stale navigation.
+      // Showing a tab means looking at this workspace now, not having last left it there.
+      const listeners =
+        showingTabId === undefined
+          ? [...this.mobileSessionTabListeners]
+          : this.selectMobileSessionTabsListeners(snapshot.worktree)
       const ids = new Set(
-        [...this.mobileSessionTabListeners]
+        listeners
           .map((subscription) => subscription.clientNavigationId)
           .filter((id): id is string => Boolean(id))
+          .filter(
+            (id) =>
+              showingTabId === undefined ||
+              this.clientSessionTabSelections.shownTopLevelTabId(snapshot, id) === showingTabId
+          )
       )
       if (clientNavigationId) {
         ids.add(clientNavigationId)
@@ -112,6 +140,10 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     }
     this.applyMobileSessionTabNavigation(snapshot, tab.id, 'caller', clientNavigationId)
     return true
+  }
+
+  reopenClosedMobileSessionTab(worktreeId: string, tabId: string): void {
+    this.clientSessionTabSelections.reopenForAllClients(worktreeId, tabId)
   }
 
   async reopenMobileSessionTabForClient(

@@ -8,6 +8,8 @@ export const CODEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   handleTransport: CODEX_STRUCTURED_HANDLE_NAMESPACE.transport,
   accountHomeVariable: 'CODEX_HOME',
   managedRuntime: () => managedAgentCli('codex').available(),
+  // A resumed thread keeps the developer instructions it started with.
+  instructionsEachStart: false,
   capabilities: {
     // A thread with legacy, unpaginated history narrows this to unsupported once it runs.
     rewind: true,

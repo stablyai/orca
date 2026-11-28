@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
+import { hasOutboundCoordinatorReport } from '../../db/messages/dispatch-outbound-coordinator-report'
 import { rejectedReportInTurn } from '../../db/messages/rejected-worker-report'
 import type {
   DispatchContextRow,
@@ -11,6 +12,8 @@ import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transacti
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { describeApprovalClosed } from './worker-approval-text'
 import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
+import type { AgentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
+import type { UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 
 export type WorkerTurnStopReason =
   | 'finished'
@@ -21,6 +24,10 @@ export type WorkerTurnStopReason =
   | 'start-unconfirmed'
   | 'start-blocked'
   | 'never-ready'
+  /** The start failed before its worker ran, so nothing of it was lost. */
+  | 'start-failed'
+  /** The turn ended while background tasks the worker started still run: passive presence, not a stop alert. */
+  | 'background-wait'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
@@ -28,6 +35,8 @@ export type WorkerTurnStop = {
   reason: WorkerTurnStopReason
   /** Coordinator mail the worker had taken when the stop was seen; mail it takes later is its next turn's. */
   mailTaken?: number
+  /** Highest sequence among coordinator messages consumed when the stop was seen. */
+  latestCoordinatorSequence?: number
   lastOutput: string | undefined
   /** For `needs-input`: the turn ended asking for a reply, which a message answers; else a prompt does. */
   awaitsReply?: boolean
@@ -35,7 +44,9 @@ export type WorkerTurnStop = {
   approval?: WorkerApprovalPayload
   /** When the stopping turn began, on this host's clock; absent when unknown, which mutes nothing. */
   turnStartedAt?: number
-  /** Why the worker went away, for an `exited` or `lost` stop. */
+  /** Highest message (or relay) sequence before the stopping turn began; rejects prior-turn reports in the same second. */
+  turnStartedAfterSequence?: number
+  /** Why the worker went away, for an `exited`, `lost` or `start-failed` stop. */
   cause?: string
   /** An exited chat: mail starts it again, keeping its history. */
   restartsOnMail?: true
@@ -48,17 +59,40 @@ export type WorkerTurnStop = {
   blockedStart?: { screen: string; readyBy: number }
   /** For `start-unconfirmed`: where the brief waits, which decides how to check it. */
   startSurface?: 'terminal' | 'chat'
+  /** For `start-unconfirmed`: when the brief and its Enter went in, and what the terminal showed since. */
+  startEvidence?: UnconfirmedStartEvidence
   /** How its going away settled the Dispatch; absent while the Dispatch stays open. */
   settled?: 'failed' | 'circuit_broken'
   /** A chat request that failed, reported in the chat's own error words. */
   requestError?: WorkerRequestError
+  /** For `background-wait`: when the turn ended, what its background tasks run, and the pane whose
+   *  row showed it (absent on a paired server's relayed copy). */
+  backgroundWait?: AgentBackgroundWait & { paneKey?: string; chat?: true }
 }
+
+/** What the report of a rest, as opposed to a worker gone, carries. */
+export type WorkerRestFact =
+  | 'from'
+  | 'lastOutput'
+  | 'awaitsReply'
+  | 'approval'
+  | 'turnStartedAt'
+  | 'turnStartedAfterSequence'
+  | 'mailTaken'
+  | 'latestCoordinatorSequence'
+  | 'requestError'
+  | 'startSurface'
+  | 'startEvidence'
+  | 'blockedStart'
+  | 'backgroundWait'
 
 export type WorkerRequestError = {
   text: string
   detail?: string
   /** The shared failure kind, when the failure was typed. */
   kind?: string
+  /** A usage limit's reset and, when Orca continues the worker by itself, when (epoch ms). */
+  usageLimit?: { resetsAt?: number; continuesAt?: number; continues?: boolean }
   /** A terminal's failure, held back like its other rests while it waits for mail; a chat's is not. */
   heldByWaits?: true
   /** What the coordinator's mail carries about the failed request. */
@@ -78,29 +112,46 @@ export type WorkerTurnStopReportDeps = {
   isChatMailbox?: (mailbox: string) => boolean
   /** Whether the user lets coordinator agents allow this machine's workers' prompts; unknown reads as no. */
   coordinatorApprovals?: () => boolean
+  /** A chat whose turn ended while its own background tasks run: its background waits own that rest. */
+  chatWaitsOnBackground?: (sessionId: string) => boolean
+  /** A person stopped this chat's background work at or after `since`. */
+  backgroundStopRequestedSince?: (sessionId: string, since: number) => boolean
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
   return target.kind === 'local' ? target.dispatch.id : target.attachment.dispatch_id
 }
 
-/** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate.
- *  A failed request a chat showed never is. */
+/** Waiting on mail or a live background task, or a clean finish that already reported or rests on its
+ *  own question, rejected report or helpers, is deliberate. A failed request a chat showed never is. */
 export function isDeliberateRest(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
-  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'requestError'>,
+  stop: Pick<
+    WorkerTurnStop,
+    | 'reason'
+    | 'turnStartedAt'
+    | 'turnStartedAfterSequence'
+    | 'mailTaken'
+    | 'latestCoordinatorSequence'
+    | 'requestError'
+    | 'backgroundWait'
+  >,
   deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
   if (stop.requestError && !stop.requestError.heldByWaits) {
     return false
   }
+  if (stop.reason === 'background-wait') {
+    return true
+  }
   return (
     deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
     (stop.reason === 'finished' &&
       (db.awaitsAnswerToLatestQuestion(dispatchId) ||
         rejectedReportInTurn(db, dispatchId, stop.turnStartedAt) ||
+        hasOutboundCoordinatorReport(db, target, stop) ||
         (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId))))
   )
 }
@@ -120,7 +171,11 @@ export function sendWorkerReport(
     ? 'Worker is waiting for permission'
     : stop.requestError?.kind === 'usageLimitReached'
       ? 'Worker hit its usage limit'
-      : WORKER_STOP_SUBJECTS[stop.reason]
+      : stop.startEvidence?.mailNotice
+        ? "Worker's mailbox notice may not have been submitted"
+        : stop.startEvidence?.continuePrompt
+          ? "Worker's continue prompt may not have been submitted"
+          : WORKER_STOP_SUBJECTS[stop.reason]
   const payload = {
     dispatchId,
     handle: stop.from,
@@ -239,12 +294,37 @@ export function relayWorkerMail(
   return true
 }
 
+const FAILED_LEAD_FENCE_PREFIX = 'failed-lead:'
+
+/** Names a lead turn that failed under live children by its end: a restart that remints the process id,
+ *  a prompt in between, or the later all-clear is the same failure, under one stable report id. */
+export function failedLeadTurnFence(since: number): string {
+  return `${FAILED_LEAD_FENCE_PREFIX}${since}`
+}
+
+export function isFailedLeadTurnFence(fence: string | null): fence is string {
+  return fence?.startsWith(FAILED_LEAD_FENCE_PREFIX) === true
+}
+
 /** A stable message id: writing the same report twice is a no-op. */
 export function stopReportId(dispatchId: string, stopKey: string): string {
   return `msg_stop_${createHash('sha256')
     .update(JSON.stringify([dispatchId, stopKey]))
     .digest('hex')
     .slice(0, 24)}`
+}
+
+/** One stable id per rest: writing it twice, here or at a Run home, is a no-op. */
+export function presenceReportId(dispatchId: string, generation: number): string {
+  return `msg_rest_${createHash('sha256')
+    .update(JSON.stringify([dispatchId, generation]))
+    .digest('hex')
+    .slice(0, 24)}`
+}
+
+/** Approvals open and close on their own, so each keeps one report whatever the worker does meanwhile. */
+export function approvalReportId(dispatchId: string, approvalId: string): string {
+  return stopReportId(dispatchId, `approval:${approvalId}`)
 }
 
 /** The one closing line for a reported approval; the same stable id makes a second closer a no-op. */

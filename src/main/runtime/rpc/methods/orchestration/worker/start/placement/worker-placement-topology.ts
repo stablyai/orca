@@ -2,6 +2,12 @@ import type { RuntimeTerminalCreate } from '../../../../../../../../shared/termi
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { CoordinatorChatPermission } from '../worker-chat-permission'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
+import {
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import { createStructuredWorkerSession } from '../../../structured-workers/orchestration-structured-worker-session'
@@ -23,6 +29,8 @@ export type WorkerEffect = {
   hookFound?: boolean
   startupPolicy?: string
   terminalId?: string
+  /** A structured worker's chat session, kept so a restart that cuts its start can close it. */
+  sessionId?: string
   surface?: 'visible' | 'background'
   warning?: string
 }
@@ -94,11 +102,25 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
+  parentPermission: CoordinatorChatPermission | undefined
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const selection = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const support = agentChatPermissionModes(args.agent)
+  const { parentPermission } = args
+  const inheritedMode =
+    parentPermission?.mode === 'own' && parentPermission.agent !== args.agent
+      ? 'ask'
+      : parentPermission?.mode
+  const options =
+    support && inheritedMode !== undefined
+      ? {
+          ...selection,
+          [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: savedChatPermissionMode(support, inheritedMode)
+        }
+      : selection
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,
@@ -111,6 +133,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     role: 'agent',
     action: 'created',
     id: created.identity.handle,
+    sessionId: created.identity.sessionId,
     surface: 'background'
   })
   return created
@@ -167,7 +190,8 @@ export function monitorWorkerSetup(args: {
           effect.kind === 'setup' ? { ...effect, state: setupState } : effect
         )
       })
-      if (!evidence.changed) {
+      // Why: success needs no action and worker-show already reads setup_state; only failure wakes.
+      if (!evidence.changed || setupState === 'succeeded') {
         return
       }
       const dispatch = args.db.getDispatchContextById(args.dispatchId)
@@ -175,9 +199,9 @@ export function monitorWorkerSetup(args: {
         runId: args.runId,
         from: `dispatch:${args.dispatchId}`,
         to: dispatch ? dispatchReportMailbox(args.db, dispatch) : `run:${args.runId}`,
-        subject: `Setup ${setupState} for worker ${args.dispatchId}`,
+        subject: `Setup failed for worker ${args.dispatchId}`,
         type: 'status',
-        priority: setupState === 'failed' ? 'high' : 'normal',
+        priority: 'high',
         payload: JSON.stringify({
           dispatchId: args.dispatchId,
           setupState,
@@ -189,17 +213,12 @@ export function monitorWorkerSetup(args: {
     .catch(() => undefined)
 }
 
-export function isUnknownWorkerStartOutcome(error: unknown, stage: string): boolean {
-  const code =
-    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : ''
-  if (code === 'operation_unknown') {
-    return true
-  }
-  if (stage !== 'worktree_create') {
-    return false
-  }
-  const message = error instanceof Error ? error.message : String(error)
-  return /connection|disconnect|timed?\s*out|runtime changed|outcome unknown/i.test(message)
+/** Only an explicit unknown is one: a local start runs in this process, so its errors are known failures. */
+export function isUnknownWorkerStartOutcome(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'operation_unknown'
+  )
 }

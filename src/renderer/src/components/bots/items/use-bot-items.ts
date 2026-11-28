@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
+import { BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { botItemStatusFields } from '../../../../../shared/bots/bot-item-status-fields'
+import { botHostTakes } from '../bot-host-capability'
 import type { Bot } from '../../../../../shared/bot-types'
 import type {
   BotItem,
@@ -20,7 +23,12 @@ import type { BotChangeKind } from '../../../../../shared/bots/bot-change-scope'
 import { botItemsNoticeParts } from '../../../../../shared/bots/bot-items-notice-parts'
 import { BotReadMoreFailed } from '../../../../../shared/bots/bot-read-more-failed'
 import { addBotReadAsk, botReadLoadAsk, type BotReadAsk } from '../bot-host-read-asks'
-import { createBotHostRead, useBotHostRead, type BotHostReadState } from '../use-bot-host-read'
+import {
+  createBotHostRead,
+  useBotHostRead,
+  type BotHostRead,
+  type BotHostReadState
+} from '../use-bot-host-read'
 import { useBotHostReadState } from '../use-bot-host-read-state'
 
 export type BotItemsRead = BotItemsListRead
@@ -29,6 +37,9 @@ export type BotItemsRead = BotItemsListRead
 const ITEMS_MIN_READ_GAP_MS = 500
 
 const ITEMS_KINDS: readonly BotChangeKind[] = ['items', 'workers']
+
+/** Bots whose last Items list stays after their tabs close. */
+export const KEPT_ITEM_LISTS = 20
 
 /** Rows need no description, done means or close note: the opened item reads its own. */
 const SUMMARY = { summary: true }
@@ -44,18 +55,27 @@ function listCall(bot: BotRef, chatIds: readonly string[] | null): BotItemsListC
     })
 }
 
-const itemsRead = createBotHostRead<BotItemsRead>(
+const itemsRead: BotHostRead<BotItemsRead> = createBotHostRead<BotItemsRead>(
   'bots.items.owner.list',
   (result: BotItemsRead) => result,
   'Failed to read bot items:',
   ITEMS_KINDS,
   ITEMS_MIN_READ_GAP_MS,
-  false,
+  // Reopening shows the last list at once while it re-reads (a big bot's read takes seconds), for the
+  // bots read most recently.
+  KEPT_ITEM_LISTS,
   {
     partsOf: (scope, botId) => botItemsNoticeParts(scope, botId),
     maxParts: BOT_ITEM_LIMITS.listPageMax,
+    // The first read after a reopen builds on the kept list, whose deeper pages missed the notices while
+    // it was closed: it reads every loaded page again, not only once the first page moves.
     load: (bot, previous, ask, show, live, waiting) =>
-      loadBotItemsList(listCall(bot, null), previous, ask, { show, live, waiting })
+      loadBotItemsList(listCall(bot, null), previous, ask, {
+        show,
+        live,
+        waiting,
+        pageUnmoved: !itemsRead.landed(botRefKey(bot))
+      })
   }
 )
 
@@ -69,45 +89,17 @@ export function useBotItems(bot: Bot | null): {
   state: BotHostReadState
   /** The latest re-read failed; `read` is the last good one. */
   refreshFailed: boolean
+  /** A read landed since this tab opened; until then `read` may be the bot's kept list. */
+  landed: boolean
   retry: () => void
 } {
   const read = useBotHostRead(itemsRead, bot)
   return { read, ...useBotHostReadState(itemsRead, bot) }
 }
 
-/** The item as the open Items tab last read it, without subscribing; null while no tab holds a read. */
+/** The item as an Items tab last read it, without subscribing; null until one has. */
 export function botItemLastRead(bot: BotRef, uid: string): BotItem | null {
   return itemsRead.snapshot(botRefKey(bot))?.items.find((item) => item.uid === uid) ?? null
-}
-
-/** The seen mark as the list opened, without moving it: rows changed since keep their dot while it
- *  stays open. A group's list reads its members' marks this way; only a bot's own tab moves them. */
-export function useBotItemsSeenMark(read: BotItemsRead | null): string | null {
-  const [atOpen, setAtOpen] = useState<string | null>(null)
-  const seen = read?.seenEventId ?? null
-  if (atOpen === null && seen !== null) {
-    setAtOpen(seen)
-  }
-  return atOpen
-}
-
-/** The seen mark as the tab opened (`useBotItemsSeenMark`). Opening moves the bot's mark, once the
- *  first read has said where it was. */
-export function useBotItemsSeenAtOpen(bot: Bot, read: BotItemsRead | null): string | null {
-  const atOpen = useBotItemsSeenMark(read)
-  const sent = useRef(false)
-  const seen = read?.seenEventId ?? null
-  const { hostId, id } = bot
-  useEffect(() => {
-    if (seen === null || sent.current) {
-      return
-    }
-    sent.current = true
-    void callBotRpc({ hostId }, 'bots.items.owner.opened', { botId: id }).catch((error: unknown) =>
-      console.warn('[bots] items: marking the tab opened failed', error)
-    )
-  }, [hostId, id, seen])
-  return atOpen
 }
 
 /** The read's chat scope: one chat as `chatId`, which every host takes; several as `chatIds`, which a host
@@ -257,7 +249,8 @@ export function commentOnBotItem(
   requestId?: string,
   questionId?: string,
   plain = false,
-  skills: readonly BotItemCommentSkill[] = []
+  skills: readonly BotItemCommentSkill[] = [],
+  skipped: readonly number[] = []
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.comment', {
     item: uid,
@@ -267,7 +260,8 @@ export function commentOnBotItem(
     ...(requestId ? { requestId } : {}),
     ...(questionId ? { questionId } : {}),
     ...(plain ? { plain } : {}),
-    ...(skills.length > 0 ? { skills } : {})
+    ...(skills.length > 0 ? { skills } : {}),
+    ...(skipped.length > 0 ? { skipped } : {})
   })
 }
 
@@ -288,17 +282,17 @@ export function botItemsByBot<I extends Pick<BotItem, 'uid'>>(
   return [...groups.values()]
 }
 
-/** One status for any number of items: one mail per chat, so one turn for the bot. */
+/** One status for any number of items: one mail per chat, so one turn for the bot. `note`: Cancel's
+ *  reason, or what Waiting waits on. */
 export function setBotItemsStatus(
   bot: BotRef,
   uids: readonly string[],
   status: BotItemStatus,
-  reason?: string
+  note?: string
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.status', {
     items: uids,
-    status,
-    ...(reason ? { reason } : {})
+    ...botItemStatusFields(status, note, botHostTakes(bot, BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY))
   })
 }
 

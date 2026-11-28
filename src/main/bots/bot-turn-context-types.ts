@@ -22,3 +22,5 @@ export type BotFirstRun = {
   /** A turn there ended that the owner started. */
   ownerTurnEnded: (botId: string, sessionId: string) => void
 }
+
+export type Held = string | null | undefined

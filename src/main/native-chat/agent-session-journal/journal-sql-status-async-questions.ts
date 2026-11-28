@@ -23,6 +23,11 @@ export function readJournalSqlOpenAsyncQuestion(
   const submissions: AgentJournalSubmission[] = []
   let before: JournalStatusPosition | undefined
   for (const candidate of state.select({ kind: 'async-question-candidates', floor })) {
+    const question = state.displayed(candidate.item.itemId)
+    // Skip prose rows that only mention the tool name before querying person messages after them.
+    if (!question || !newestOpenStructuredAgentSessionAsyncQuestion([question], [])) {
+      continue
+    }
     const after = candidate.position
     // Oldest first: a question is usually answered right after it, ahead of any agent traffic.
     const segment: AgentJournalRenderItem[] = []
@@ -53,9 +58,7 @@ export function readJournalSqlOpenAsyncQuestion(
     }
     later = [...segment, ...later]
     before = after
-    const question = state.displayed(candidate.item.itemId)
-    const open =
-      question && newestOpenStructuredAgentSessionAsyncQuestion([question, ...later], submissions)
+    const open = newestOpenStructuredAgentSessionAsyncQuestion([question, ...later], submissions)
     if (open) {
       return open
     }

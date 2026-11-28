@@ -35,20 +35,25 @@ export async function sendAgentActivity(
   client: RpcClient,
   paneKeys: string[],
   change: AgentActivityChange,
-  options?: SendRequestOptions
+  options?: SendRequestOptions & { upToTimestamp?: number }
 ): Promise<void> {
+  const { upToTimestamp, ...requestOptions } = options ?? {}
   for (let start = 0; start < paneKeys.length; start += PANE_KEYS_PER_REQUEST) {
     const chunk = paneKeys.slice(start, start + PANE_KEYS_PER_REQUEST)
     if ('cleared' in change) {
       agentActivityClearWrite.interpret(
-        await agentActivityClearWrite.request(client, { paneKeys: chunk }, options)
+        await agentActivityClearWrite.request(client, { paneKeys: chunk }, requestOptions)
       )
     } else {
       agentActivitySetReadWrite.interpret(
         await agentActivitySetReadWrite.request(
           client,
-          { paneKeys: chunk, read: !change.unread },
-          options
+          {
+            paneKeys: chunk,
+            read: !change.unread,
+            ...(!change.unread && upToTimestamp !== undefined ? { upToTimestamp } : {})
+          },
+          requestOptions
         )
       )
     }

@@ -18,12 +18,15 @@ export class MainDaemonAttachments {
   private running = 0
   // Endpoint losses per session while main owes it a re-attach; a count so a loss mid-attach is noticed.
   private readonly endpointLosses = new Map<string, number>()
+  // performance.now() when a re-attach became pending; a retry after a further loss keeps it.
+  private readonly reattachStartedAt = new Map<string, number>()
 
   constructor(private readonly deps: MainDaemonAttachmentDependencies) {}
 
   markSpawnPublished(ptyId: string): void {
     this.attached.add(ptyId)
     this.endpointLosses.delete(ptyId)
+    this.reattachStartedAt.delete(ptyId)
   }
 
   /** Exit or respawn ends the generation whose stream this described. */
@@ -31,6 +34,7 @@ export class MainDaemonAttachments {
     this.attached.delete(ptyId)
     this.attaching.delete(ptyId)
     this.endpointLosses.delete(ptyId)
+    this.reattachStartedAt.delete(ptyId)
   }
 
   isKnownUnattachedLocal(ptyId: string): boolean {
@@ -46,11 +50,23 @@ export class MainDaemonAttachments {
     this.endpointLosses.set(ptyId, (this.endpointLosses.get(ptyId) ?? 0) + 1)
     this.attached.delete(ptyId)
     this.ensure(ptyId)
+    // A loss during an adoption attach makes that attach the pending re-attach.
+    this.stampReattachStart(ptyId)
   }
 
   /** Main's re-attach after an endpoint loss, while in flight; input waits on it instead of being refused. */
   pendingReattach(ptyId: string): Promise<boolean> | undefined {
     return this.endpointLosses.has(ptyId) ? this.attaching.get(ptyId) : undefined
+  }
+
+  /** When the pending re-attach began, so input queued before it still gets the full wait. */
+  reattachPendingSince(ptyId: string): number | undefined {
+    return this.reattachStartedAt.get(ptyId)
+  }
+
+  /** Main's attach of this session, while queued or in flight. */
+  pending(ptyId: string): Promise<boolean> | undefined {
+    return this.attaching.get(ptyId)
   }
 
   /** Inventory proved the session live; attach it, or retry once an in-flight refusal settles. */
@@ -74,6 +90,7 @@ export class MainDaemonAttachments {
     const lossCount = this.endpointLosses.get(ptyId)
     const attempt: Promise<boolean> = this.acquireSlot().then(() => this.attach(ptyId, attempt))
     this.attaching.set(ptyId, attempt)
+    this.stampReattachStart(ptyId)
     void attempt.then((attached) => {
       if (this.attaching.get(ptyId) !== attempt) {
         return
@@ -82,13 +99,20 @@ export class MainDaemonAttachments {
       if (this.endpointLosses.get(ptyId) !== lossCount) {
         // A loss during the attempt can undo the attach it made.
         this.ensure(ptyId)
-        return
-      }
-      if (attached) {
+      } else if (attached) {
         this.attached.add(ptyId)
         this.endpointLosses.delete(ptyId)
       }
+      if (!this.attaching.has(ptyId)) {
+        this.reattachStartedAt.delete(ptyId)
+      }
     })
+  }
+
+  private stampReattachStart(ptyId: string): void {
+    if (this.pendingReattach(ptyId) && !this.reattachStartedAt.has(ptyId)) {
+      this.reattachStartedAt.set(ptyId, performance.now())
+    }
   }
 
   // A lost session needs its stream back even though main still holds its screen.

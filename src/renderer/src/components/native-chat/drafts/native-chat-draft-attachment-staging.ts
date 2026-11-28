@@ -1,7 +1,3 @@
-import {
-  hasNativeChatPendingAttachment,
-  nativeChatPendingAttachmentScope
-} from '../attachments/chips/native-chat-pending-attachment-scopes'
 import { formatNativeChatFileReference } from '../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
@@ -266,17 +262,4 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       }
     }
   }
-}
-
-export function stageNativeChatPendingImage(
-  scope: string,
-  id: string | null,
-  path: string
-): boolean {
-  if (!id || !hasNativeChatPendingAttachment(id)) {
-    releaseBrowserAttachmentFiles([path])
-    return false
-  }
-  stageNativeChatDraftFile(nativeChatPendingAttachmentScope(scope, id), path)
-  return true
 }

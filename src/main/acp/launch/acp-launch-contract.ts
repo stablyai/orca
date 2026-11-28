@@ -15,6 +15,7 @@ import type {
 
 import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
+import type { PublishSharedToolProcessSessionEnv } from '../../runtime/agent-session/environment/shared-tool-process-session-env'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
 import type {
@@ -22,6 +23,31 @@ import type {
   InitializeResponse,
   McpServer
 } from '../generated/acp-protocol.generated'
+
+/** Where preparation left a login several saved accounts share (`AcpLaunchAccount`): `key` is the
+ *  account the launch runs on, `target` the selection it prepared for, `failure` why they differ. */
+export type AcpPreparedLogin = { key: string; target: string; failure?: string }
+/** `foreign`: the launch runs on another home or credential store than the login saved accounts
+ *  swap, so none names its login and no switch moves it. */
+export type AcpPreparedAccount = AcpPreparedLogin | { foreign: true }
+
+/** Opaque saved-account keys, where several share one login. A launch records the account its
+ *  preparation left the login on (`AcpPreparedAccount`), else `current()` as it spawns. */
+export type AcpLaunchAccount = {
+  atLaunch(): Promise<string>
+  /** The selected account; null until known. */
+  current(): string | null
+  /** What a running child should match: the selection, or null while moving to it is known to fail. */
+  target(): string | null
+  /** False for a launch that signs in some other way (a key, gcloud), which no saved account names. */
+  usedBy?(launch: { antigravityChatAuth?: AntigravityChatAuthConfig }): boolean
+  /** A chat's process spawned on `key` (none: on a login no saved account names); `prepared` when
+   *  its preparation said so. */
+  spawned?(
+    process: { onExit(listener: () => void): void },
+    chat: { sessionId: string; key?: string; prepared?: AcpPreparedLogin }
+  ): void
+}
 
 export type AcpLaunchSpec = {
   agent: TuiAgent
@@ -42,9 +68,8 @@ export type AcpLaunchSpec = {
     antigravityChatAuth?: AntigravityChatAuthConfig
   ): string[]
   dialect: AcpDialect
-  /** Initialize's identity for the launched version (null when unknown), for agents that grant
-   *  features by client name; absent sends Orca's. */
-  clientInfo?(version: string | null): Implementation
+  /** Initialize's fixed identity for an agent that needs one; absent sends Orca's. */
+  clientInfo?: Implementation
   loginCommand: readonly string[]
   /** Selects authentication from the execution host's resolved launch inputs. */
   authMethod?(input: {
@@ -55,6 +80,9 @@ export type AcpLaunchSpec = {
   authMethodUnavailableMessage?: string
   /** A valid sign-in output line closes the chat signed out. */
   signIn?: Omit<AcpSignInWatch, 'link'>
+  /** Launches read the account type Orca's Chat saves (its key, gcloud project and settings),
+   *  like the managed server's; set for a host program run on Orca's own home for it. */
+  readsAntigravityChatAuth?: boolean
   account: AcpAccountBinding
   /** Ascending release-line minimums, checked before creation and at every launch. */
   minimumVersions?: readonly string[]
@@ -62,7 +90,8 @@ export type AcpLaunchSpec = {
   versionArgs?: readonly string[]
   /** Searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
-  /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
+  /** Installed only on request, then kept at its pin when it `updatesToPin`; takes precedence over
+   *  PATH and excludes `minimumVersions`. */
   managedRuntime?: ManagedRuntime
   /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
@@ -98,8 +127,9 @@ export type AcpLaunchSpec = {
   transcriptImport: StructuredAgentTranscriptImport | null
   sessionHistory: StructuredAgentSessionHistory
   /** Tools run in a process other chats share, which keeps the environment of the chat that
-   *  started it; such chats carry no caller identity, so Orca's CLI there refuses to guess one. */
-  sharedToolProcess?: true
+   *  started it, so no chat's process carries caller identity. Each session's tools get theirs from
+   *  `publishSessionEnv`; without it, Orca's CLI there refuses to guess one. */
+  sharedToolProcess?: { publishSessionEnv: PublishSharedToolProcessSessionEnv }
   /** Isolate processes whose agent temp files collide. */
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
@@ -114,12 +144,19 @@ export type AcpLaunchSpec = {
     signal?: AbortSignal
   }): Promise<Readonly<Record<string, unknown>> | undefined>
   launchGate?: AcpLaunchGate
+  /** For an agent whose saved accounts swap one login inside one home, so the home can't tell
+   *  which account a child launched on. */
+  launchAccount?: AcpLaunchAccount
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true
+  /** Lets an agent that keeps every session run naming tasks anyway, each on a home of its own in
+   *  `folder`, which Orca removes with everything the agent kept there once the task's process
+   *  exits. Null runs none for this chat. */
+  textTaskHome?(chatHome: AgentSessionAccountHome, folder: string): AcpTextTaskHome | null
   /** A program on the host preferred for new chats; chats whose account home it pins keep it. */
   hostBackend?: AcpHostBackend
-  /** Whether Orca's own copy of this program may run (and be kept updated); absent means it may. */
-  managedCopyAllowed?(settings: ManagedCopySettings): boolean
+  /** Whether Orca may bring an installed `managedRuntime` up to its pin by itself; absent means it may. */
+  managedRuntimeUpdatesAllowed?(settings: ManagedCopySettings): boolean
 }
 
 /** Reads on the host the agent runs on; a missing or unreadable file contributes none. */
@@ -129,7 +166,9 @@ export type AcpOwnMcpServersLoader = (input: {
   version: string | null
 }) => Promise<McpServer[]>
 
-export type ManagedCopySettings = Partial<Pick<GlobalSettings, 'antigravityManagedAgyEnabled'>>
+export type ManagedCopySettings = Partial<
+  Pick<GlobalSettings, 'antigravityServerAutoUpdateEnabled'>
+>
 
 /** What the host backend weighs: the host program a launch would run, and this host's facts. */
 export type AcpHostBackendInput = {
@@ -140,6 +179,9 @@ export type AcpHostBackendInput = {
   homePath: string
   /** Orca's data folder on this host, where the agent's own account lives. */
   stateDirectory: string
+  /** The shell environment before the host program's scrub, for a credential that a launch on
+   *  another home keeps. */
+  shellEnv?: Readonly<Record<string, string>>
   /** The account type Orca's own Chat signs in with, saved on this host. */
   settings: AcpHostBackendSettings
   /** The question comes from someone using the agent, so it may start the program to answer;
@@ -147,27 +189,44 @@ export type AcpHostBackendInput = {
   startsProgram: boolean
 }
 
+/** See `AcpLaunchSpec.textTaskHome`. */
+export type AcpTextTaskHome = {
+  home: AgentSessionAccountHome
+  spec: AcpLaunchSpec
+  /** Read before anything is written to the home; false runs no task, as when the agent could
+   *  ask for a login or would sign in differently than the chat. */
+  admits(launch: {
+    env: Readonly<Record<string, string>>
+    envToDelete: readonly string[]
+    antigravityChatAuth?: AntigravityChatAuthConfig
+  }): Promise<boolean>
+}
+
 export type AcpHostBackend = {
   spec: AcpLaunchSpec
+  /** Whether chats pinned to `home` run the host program (any of its homes). */
   pins(home: AgentSessionAccountHome): boolean
+  /** Whether chats pinned to `home` run on the program's own login, not the saved method. */
+  ownLogin?(home: AgentSessionAccountHome): boolean
+  /** A chat with no conversation yet launches in what `select` picks now, so a sign-in method
+   *  chosen before its first turn applies to it. */
+  followsSelectionBeforeFirstTurn?: true
+  /** The spec a pinned home launches, when the host program runs differently per home (its own
+   *  home, or one Orca owns); absent or null launches `spec`. */
+  specFor?(home: AgentSessionAccountHome): AcpLaunchSpec | null
+  /** Other specs `specFor` may answer, whose model listings the catalog also weighs. */
+  otherSpecs?: readonly AcpLaunchSpec[]
   /** The account home pinning a new chat to `spec`, or null when the host should not run it. It
-   *  may pin a program `input.command` didn't find, which an Install then provides. */
+   *  may pin a program `input.command` didn't find, which the user installs later. */
   select(input: AcpHostBackendInput): Promise<AgentSessionAccountHome | null>
   /** Changes whenever a sign-in that `select` weighs changes, so remembered answers are retired. */
   selectionRevision?(): number
   /** Tells when a fact `select` weighs changes apart from settings and Orca's installs. */
   onSelectionChanged?(listener: () => void): () => void
-  /** Where Orca also keeps its own copy of the host program: whether Install, its status and
-   *  removal act on the outer spec's `managedRuntime` instead of that copy. */
-  installsManagedRuntime?(input: AcpHostBackendInput): Promise<boolean>
 }
 
 /** The settings a host backend weighs; a change to any of them can change its answers. */
-export const ACP_HOST_BACKEND_SETTING_KEYS = [
-  'antigravityChatAuth',
-  'antigravityManagedAgyEnabled',
-  'antigravityGoogleSignIn'
-] as const
+export const ACP_HOST_BACKEND_SETTING_KEYS = ['antigravityChatAuth'] as const
 export type AcpHostBackendSettings = Partial<
   Pick<GlobalSettings, (typeof ACP_HOST_BACKEND_SETTING_KEYS)[number]>
 >

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { toGitLabJobLogExcerptResult } from '../../../shared/source-control/checks/gitlab/gitlab-job-log-excerpt'
 import type { Store } from '../../persistence/loading-store/store'
 import { getJobTrace, retryJob } from '../../gitlab/pipelines/pipeline-job-mutations'
@@ -11,8 +12,8 @@ import {
   repoConnectionId
 } from './gitlab-repo-access'
 
-export function registerGitLabCiJobHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerGitLabCiJobHandlers(store: Store, ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'gitlab:jobTrace',
     async (
       _event,
@@ -35,7 +36,7 @@ export function registerGitLabCiJobHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:retryJob',
     async (
       _event,

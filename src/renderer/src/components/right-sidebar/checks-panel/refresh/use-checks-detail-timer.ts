@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import {
   REVIEW_REFRESH_COOLDOWN_MS,
   subscribePRAutoRefreshCadence,
@@ -9,6 +9,7 @@ import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositori
 import { hostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import type { ChecksDetailPollingPolicy } from '../../../../../../shared/github/checks/checks-detail-polling-policy'
 import type { ChecksPanelPollingInput, ChecksPanelPollingState } from './use-checks-panel-polling'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useChecksDetailTimer({
   model,
@@ -31,13 +32,27 @@ export function useChecksDetailTimer({
     prNumber,
     isPanelVisible,
     setChecks,
+    setChecksLoading,
     setComments,
+    setCommentsLoading,
     pollIntervalRef,
     prevChecksRef
   } = model
+  const isGitLabReview = activeGitLabReview !== null
+  // A new identity always schedules this timer's wake read, which settles what it resets. GitHub
+  // comments have their own read (review data), so only a GitLab read owns comments here.
+  const [readIdentity, setReadIdentity] = useState(requestIdentity)
+  if (readIdentity !== requestIdentity) {
+    setReadIdentity(requestIdentity)
+    setChecks(null)
+    setChecksLoading(false)
+    if (isGitLabReview) {
+      setComments(undefined)
+      setCommentsLoading(false)
+    }
+  }
   const refreshRef = useRef<(() => void) | null>(null)
   const forceNextFetchRef = useRef(false)
-  const isGitLabReview = activeGitLabReview !== null
   const lastIdentityRef = useRef<string | null>(null)
   const lastAttemptAtRef = useRef(-Infinity)
   const nextAttemptAtRef = useRef(-Infinity)
@@ -54,8 +69,6 @@ export function useChecksDetailTimer({
       policyRef.current.reset()
       pollIntervalRef.current = 60_000
       prevChecksRef.current = ''
-      setChecks([])
-      setComments([])
     }
     if (!isPanelVisible || (!isGitLabReview && !prNumber)) {
       wakeNextReadRef.current = true
@@ -129,27 +142,29 @@ export function useChecksDetailTimer({
         // back, the panel opening and a changed aggregate state must read fresh.
         const background = trigger === 'timer' && !shown && !force
         inFlightRef.current = { identity: requestIdentity, token, background }
-        try {
-          await (isGitLabReview
-            ? fetchGitLabDetails(shown ? {} : { background: true })
-            : fetchChecks({
-                force,
-                ...(shown ? { wakeWslDistro: true } : {}),
-                ...(background ? { background: true } : {})
-              }))
-        } finally {
-          if (inFlightRef.current?.token === token) {
-            inFlightRef.current = null
-            if (lastIdentityRef.current === requestIdentity) {
-              if (!background && modelRef.current.isPanelVisible) {
-                wakeNextReadRef.current = false
+        await runWithFinally(
+          () =>
+            isGitLabReview
+              ? fetchGitLabDetails(shown ? {} : { background: true })
+              : fetchChecks({
+                  force,
+                  ...(shown ? { wakeWslDistro: true } : {}),
+                  ...(background ? { background: true } : {})
+                }),
+          () => {
+            if (inFlightRef.current?.token === token) {
+              inFlightRef.current = null
+              if (lastIdentityRef.current === requestIdentity) {
+                if (!background && modelRef.current.isPanelVisible) {
+                  wakeNextReadRef.current = false
+                }
+                const delay = policyDelay()
+                nextAttemptAtRef.current = delay === null ? Infinity : Date.now() + delay
+                refreshRef.current?.()
               }
-              const delay = policyDelay()
-              nextAttemptAtRef.current = delay === null ? Infinity : Date.now() + delay
-              refreshRef.current?.()
             }
           }
-        }
+        )
       },
       getDelayMs: () => {
         const delay = policyDelay()
@@ -207,9 +222,7 @@ export function useChecksDetailTimer({
     isGitLabReview,
     prNumber,
     pollIntervalRef,
-    prevChecksRef,
-    setChecks,
-    setComments
+    prevChecksRef
   ])
 
   const aggregatePending = (activeGitLabReview?.status ?? pr?.checksStatus) === 'pending'

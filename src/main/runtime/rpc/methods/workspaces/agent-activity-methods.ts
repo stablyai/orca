@@ -1,7 +1,10 @@
 import { defineMethod } from '../../core'
 import {
+  AGENT_ACTIVITY_ORCHESTRATION_METHOD,
   AgentActivityClearParams,
-  AgentActivitySetReadParams
+  AgentActivityOrchestrationParams,
+  AgentActivitySetReadParams,
+  type AgentActivityOrchestrationResult
 } from '../../../../../shared/rpc-contract/agent-activity/agent-activity-params'
 
 // Desktop Agents-list read and clear for paired clients; the next worktree.ps already reflects them.
@@ -13,7 +16,10 @@ export const AGENT_ACTIVITY_METHODS = [
     handler: async (params, { runtime }) => {
       await runtime.applyAgentPaneActivity({
         kind: params.read ? 'read' : 'unread',
-        paneKeys: params.paneKeys
+        paneKeys: params.paneKeys,
+        ...(params.read && params.upToTimestamp !== undefined
+          ? { upToTimestamp: params.upToTimestamp }
+          : {})
       })
       return { applied: true }
     }
@@ -26,5 +32,13 @@ export const AGENT_ACTIVITY_METHODS = [
       await runtime.applyAgentPaneActivity({ kind: 'clear', paneKeys: params.paneKeys })
       return { applied: true }
     }
+  }),
+  // Paired desktops nest this host's workers by these; their own graph reply knows only their own Dispatches.
+  defineMethod({
+    name: AGENT_ACTIVITY_ORCHESTRATION_METHOD,
+    permission: 'workspace',
+    params: AgentActivityOrchestrationParams,
+    handler: async (params, { runtime }): Promise<AgentActivityOrchestrationResult> =>
+      runtime.readAgentOrchestrationSince(params.sinceRevision)
   })
 ]

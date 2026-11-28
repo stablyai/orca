@@ -1,4 +1,5 @@
 import { app, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
@@ -7,8 +8,10 @@ import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/ru
 import { uploadExternalPathsToAgentSessionAttachments } from './agent-session-attachment-upload'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 
-export function registerAgentSessionAttachmentUploadHandlers(): void {
-  ipcMain.handle(
+export function registerAgentSessionAttachmentUploadHandlers(
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'fs:uploadPathsToAgentSessionAttachments',
     async (
       event,

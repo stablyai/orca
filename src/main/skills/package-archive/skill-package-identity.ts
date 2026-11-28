@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
-import { lstat, open, opendir } from 'node:fs/promises'
+import { lstat, open } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
+import { openDirectory } from '../../../shared/open-directory'
 
 export type SkillBundleFileIdentity = {
   path: string
@@ -184,9 +185,11 @@ export async function observeSkillPackage(
 export async function checkSkillPackageShape(
   packageRoot: string,
   limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS,
-  skipDirectory?: (absolutePath: string) => Promise<boolean>
+  skipDirectory?: (absolutePath: string) => Promise<boolean>,
+  signal?: AbortSignal
 ): Promise<void> {
   await walkSkillPackage(packageRoot, limits, {
+    signal,
     platform: process.platform,
     inferShebangExecutables: false,
     skipDirectory,
@@ -222,7 +225,7 @@ async function walkSkillPackage(
     if (signal?.aborted) {
       throw new Error('skill-install-cancelled')
     }
-    const directoryHandle = await opendir(directory)
+    const directoryHandle = await openDirectory(directory)
     const entries: Dirent[] = []
     try {
       for (;;) {

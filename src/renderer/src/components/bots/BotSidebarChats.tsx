@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -12,7 +12,10 @@ import {
   chatFoldSummary,
   type BotChatTreeChat
 } from '../../../../shared/bots/bot-chat-tree'
-import { botSidebarListedChats } from '../../../../shared/bots/bot-sidebar-chat-groups'
+import {
+  botLiveWorkspaceIds,
+  botSidebarListedChats
+} from '../../../../shared/bots/bot-sidebar-chat-groups'
 import {
   botSidebarWorkerPagingLabel,
   buildBotSidebarTree,
@@ -31,26 +34,43 @@ import {
   collectVisibleBotWorkerWorktrees,
   setBotSidebarCycleWorkers
 } from './bot-sidebar-cycle-entries'
+import { BotSidebarOlderToggle } from './BotSidebarOlderChats'
+import {
+  useBotHomeFrontTab,
+  useBotSidebarOlderChats,
+  useListHold
+} from './use-bot-sidebar-older-chats'
 
-/** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by indent. */
+/** Not a chat id: chat ids are session ids. */
+const OLDER_TOGGLE_KEY = '\u0000older-toggle'
+
+/** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by
+ *  indent; settled ones a day old fold under one "Show N older" link. */
 export function BotSidebarChats({
   bot,
   tree,
   workspaces,
+  allWorkspaces,
   lineageChildrenByParentIdentity,
   activeLine,
   steps,
   onStep,
+  showOlder,
+  onToggleOlder,
   onOpen
 }: {
   bot: Bot
   tree: BotChatTree
   /** The bot's lines in Smart order, sleeping ones already left out. */
   workspaces: readonly Worktree[]
+  /** Every line, sleeping ones too: attention under a hidden line still keeps its chat listed. */
+  allWorkspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
   steps: Readonly<Record<string, number>>
   onStep: (chatId: string, steps: number) => void
+  showOlder: boolean
+  onToggleOlder: () => void
   onOpen: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -76,20 +96,6 @@ export function BotSidebarChats({
   }, [chats, listed, workspaceChats, workspaces, folds, steps, activeLine])
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const entryKey = botSidebarEntryKey(bot)
-  useLayoutEffect(() => {
-    const visibleRoots = [
-      ...view.chats.flatMap((chatView) => (chatView.open ? chatView.lines : [])),
-      ...view.stray
-    ]
-    setBotSidebarCycleWorkers(
-      entryKey,
-      collectVisibleBotWorkerWorktrees(
-        visibleRoots,
-        lineageChildrenByParentIdentity,
-        collapsedGroups
-      )
-    )
-  }, [entryKey, view.chats, view.stray, lineageChildrenByParentIdentity, collapsedGroups])
   // A reveal of a worker line under a folded chat opens that chat, once per request.
   const reveal = useBotsRevealRequest(entryKey)
   const revealWorker = reveal?.target.hostDown ? undefined : reveal?.target.worker
@@ -109,6 +115,96 @@ export function BotSidebarChats({
       setBotChatFold(bot.hostId, bot.id, foldedHolder, 'open')
     }
   }, [revealNonce, foldedHolder, setBotChatFold, bot.hostId, bot.id])
+  const { held, ref: holdRef, handlers: holdHandlers } = useListHold()
+  const front = useBotHomeFrontTab(bot.folderWorkspaceId)
+  // The older chat whose row (or portaled menu, through React's tree) holds focus, so Hide can take
+  // focus first; checked against the chats listed as older now, so a row that lifted out never counts.
+  const focusedOlderChat = useRef<string | null>(null)
+  const olderChatIds = useRef<ReadonlySet<string>>(new Set())
+  const setOlderFocused = useCallback((chatId: string | null) => {
+    focusedOlderChat.current = chatId
+  }, [])
+  const liveLineIds = useMemo(() => botLiveWorkspaceIds(chats), [chats])
+  const revealHeld = useMemo(
+    () =>
+      reveal && !reveal.target.hostDown
+        ? {
+            chatId: reveal.target.chatId,
+            lineIds: revealWorker
+              ? [revealWorker.id, ...revealWorker.ancestors.map((line) => line.id)]
+              : []
+          }
+        : null,
+    [reveal, revealWorker]
+  )
+  const { recent, older } = useBotSidebarOlderChats({
+    bot,
+    entryKey: botSidebarEntryKey(bot),
+    views: view.chats,
+    readChats: chats,
+    workspaces: allWorkspaces,
+    workspaceChats,
+    lineageChildrenByParentIdentity,
+    liveLineIds,
+    activeLineId: activeLine?.id ?? null,
+    reveal: revealHeld,
+    front,
+    fresh: tree.state === 'ready' && tree.landed && !tree.refreshFailed && !tree.changeUnread,
+    held
+  })
+  useLayoutEffect(() => {
+    const visibleRoots = [
+      ...recent.flatMap((chatView) => (chatView.open ? chatView.lines : [])),
+      ...view.stray
+    ]
+    setBotSidebarCycleWorkers(
+      entryKey,
+      collectVisibleBotWorkerWorktrees(
+        visibleRoots,
+        lineageChildrenByParentIdentity,
+        collapsedGroups
+      )
+    )
+  }, [entryKey, recent, view.stray, lineageChildrenByParentIdentity, collapsedGroups])
+  useLayoutEffect(() => {
+    const ids = new Set(older.map((chatView) => chatView.chat.chatId))
+    // A chat that leaves the older list no longer counts as a focused older row, even if it folds again.
+    if (focusedOlderChat.current !== null && !ids.has(focusedOlderChat.current)) {
+      focusedOlderChat.current = null
+    }
+    olderChatIds.current = ids
+  }, [older])
+  // Focus is in one of this list's older rows: its own DOM, or a portal its row opened while it is still
+  // listed as older. Another bot's list, an outside input or a lifted row never counts.
+  const olderFocused = useCallback((): boolean => {
+    const active = document.activeElement
+    if (!active || active === document.body) {
+      return false
+    }
+    const owned = [
+      ...(holdRef.current?.querySelectorAll('[data-bot-sidebar-older-chat]') ?? [])
+    ].some((row) => row.contains(active))
+    const chatId = focusedOlderChat.current
+    return owned || (chatId !== null && olderChatIds.current.has(chatId))
+  }, [holdRef])
+  // The toggle unmounting while it had focus (fewer than two left to fold) hands focus to the last chat
+  // row; focus anywhere else is left alone.
+  const toggleLeftWithFocus = useRef(false)
+  const markToggleLeftWithFocus = useCallback(() => {
+    toggleLeftWithFocus.current = true
+  }, [])
+  useLayoutEffect(() => {
+    if (!toggleLeftWithFocus.current) {
+      return
+    }
+    toggleLeftWithFocus.current = false
+    if (document.activeElement === null || document.activeElement === document.body) {
+      const rows = [
+        ...(holdRef.current?.querySelectorAll<HTMLElement>('[data-bot-sidebar-chat]') ?? [])
+      ]
+      rows.at(-1)?.focus()
+    }
+  }, [older.length, holdRef])
   const notes = useMemo(() => {
     const labels = new Map<string, string>()
     for (const [worktreeId, note] of view.notes) {
@@ -122,19 +218,44 @@ export function BotSidebarChats({
     return labels
   }, [view.notes, t])
 
+  const chatRow = (chatView: BotSidebarChatView<Worktree>, folded: boolean): React.JSX.Element => (
+    <BotSidebarChat
+      key={chatView.chat.chatId}
+      bot={bot}
+      // Listed under "Hide older", a chat is its row alone: its workspace cards (and their reads) stay
+      // unmounted until it is opened or lifts back up.
+      view={folded ? olderRowView(chatView) : chatView}
+      folded={folded}
+      onOlderFocus={setOlderFocused}
+      notes={notes}
+      lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
+      onStep={(next) => onStep(chatView.chat.chatId, next)}
+      onOpen={onOpen}
+    />
+  )
+  // One keyed list, toggle included, so a chat moving between recent and older keeps its row (focus,
+  // open menu) instead of mounting again under another parent.
+  const rows = [
+    ...recent.map((chatView) => chatRow(chatView, false)),
+    ...(older.length > 0
+      ? [
+          <BotSidebarOlderToggle
+            key={OLDER_TOGGLE_KEY}
+            count={older.length}
+            open={showOlder}
+            onToggle={onToggleOlder}
+            onRemovedWithFocus={markToggleLeftWithFocus}
+            olderFocused={olderFocused}
+          />
+        ]
+      : []),
+    ...(older.length > 0 && showOlder ? older.map((chatView) => chatRow(chatView, true)) : [])
+  ]
+
   return (
-    <>
-      {view.chats.map((chatView) => (
-        <BotSidebarChat
-          key={chatView.chat.chatId}
-          bot={bot}
-          view={chatView}
-          notes={notes}
-          lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => onStep(chatView.chat.chatId, next)}
-          onOpen={onOpen}
-        />
-      ))}
+    // `contents`, so the rows stay the parent's flex children; it only watches the pointer and focus.
+    <div ref={holdRef} className="contents" {...holdHandlers}>
+      {rows}
       {view.stray.length > 0 ? (
         <AttachedWorktreeCards
           roots={view.stray}
@@ -145,8 +266,21 @@ export function BotSidebarChats({
           onOpen={onOpen}
         />
       ) : null}
-    </>
+    </div>
   )
+}
+
+/** An older chat's row with nothing under it: no fold, no workspace lines, its time at the edge. */
+function olderRowView(chatView: BotSidebarChatView<Worktree>): BotSidebarChatView<Worktree> {
+  const at = chatView.chat.lastActiveAt
+  return {
+    ...chatView,
+    foldable: false,
+    open: false,
+    lines: [],
+    paging: null,
+    trailing: at > 0 ? { kind: 'time', at } : null
+  }
 }
 
 function chatTitle(t: ReturnType<typeof useTranslate>, chat: BotChatTreeChat): string {
@@ -165,6 +299,8 @@ function trailingText(t: Translate, trailing: BotSidebarChatTrailing | null): st
 function BotSidebarChat({
   bot,
   view,
+  folded,
+  onOlderFocus,
   notes,
   lineageChildrenByParentIdentity,
   onStep,
@@ -172,6 +308,10 @@ function BotSidebarChat({
 }: {
   bot: Bot
   view: BotSidebarChatView<Worktree>
+  /** Listed under "Hide older". */
+  folded: boolean
+  /** The row's chat id when focus enters a listed older row (or its menu), null when it leaves. */
+  onOlderFocus: (chatId: string | null) => void
   notes: ReadonlyMap<string, string>
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   onStep: (steps: number) => void
@@ -200,7 +340,12 @@ function BotSidebarChat({
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div
+      className="flex flex-col gap-1"
+      data-bot-sidebar-older-chat={folded ? '' : undefined}
+      onFocus={folded ? () => onOlderFocus(chat.chatId) : undefined}
+      onBlur={folded ? () => onOlderFocus(null) : undefined}
+    >
       <BotChatContextMenu bot={bot} chat={chat} onOpen={() => pressRow({ detail: 1 })}>
         {/* Its label names the slot's kind and state; pr-0.5 puts the chevron on the bot chevron's edge. */}
         <div

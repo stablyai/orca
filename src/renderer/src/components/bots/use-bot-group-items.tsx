@@ -4,11 +4,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotItem } from '../../../../shared/bots/bot-items'
-import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import {
   botItemsByDispatch,
-  botNeedChat,
-  filterBotNeeds,
   groupBotsItems,
   botItemsClosedInTimeOrder,
   type BotItemFilter,
@@ -19,7 +16,9 @@ import { botAutomationCardRows, botNextRun } from './bot-automation-card'
 import { useBotActivity } from './use-bot-activity'
 import { useBotNeedsYouCount, useBotNow, type BotNeedView } from './use-bot-now'
 import type { BotHostReadState } from './use-bot-host-read'
-import { useBotItems, useBotItemsSeenMark } from './items/use-bot-items'
+import type { StoppedForSignIn } from './BotNeedRow'
+import { useBotItems } from './items/use-bot-items'
+import { useBotItemsSeenMark } from './items/use-bot-items-seen-mark'
 import {
   useBotItemsShownList,
   type BotItemsClosedPage,
@@ -36,9 +35,9 @@ type MemberRead = {
   /** Null until its first read says where its seen mark was; its rows wait for it. */
   seenEventId: string | null
   list: BotItemsShownList
-  /** Its asks in the filter's chats, keys made unique across members. */
+  /** Its asks, keys made unique across members. */
   needs: readonly BotNeedView[]
-  stoppedForSignIn: readonly BotAutomationRow[]
+  stoppedForSignIn: readonly StoppedForSignIn[]
   /** Its whole Needs you count, as its own Items tab badge says it. */
   needsYou: number
   working: number
@@ -54,14 +53,14 @@ const MemberReader = memo(function MemberReader({
   report
 }: {
   bot: Bot
-  /** The chat scope and Needs you only; which bots show is the merge's choice. */
+  /** Needs you only; which bots show is the merge's choice. */
   filter: BotItemFilter
   now: number
   report: (botId: string, read: MemberRead | null) => void
 }): null {
   const items = useBotItems(bot)
   const read = items.read
-  const seenEventId = useBotItemsSeenMark(read)
+  const seenEventId = useBotItemsSeenMark(bot, read, items.landed)
   const list = useBotItemsShownList(bot, read, filter, now, seenEventId ?? '')
   const botNow = useBotNow(bot)
   const needsYou = useBotNeedsYouCount(bot, botNow)
@@ -71,22 +70,23 @@ const MemberReader = memo(function MemberReader({
     () => botNextRun(botAutomationCardRows(bot, activity, now))?.nextAt ?? null,
     [bot, activity, now]
   )
-  const allItems = read?.items
-  const needs = useMemo(() => {
-    const byDispatch = botItemsByDispatch(allItems ?? [])
-    const itemOf = (dispatchId: string) => byDispatch.get(dispatchId) ?? null
-    return filterBotNeeds(botNow.needs, filter, (need) =>
-      botNeedChat(need, bot.chatSessionId ?? null, itemOf)
-    ).map((need) => ({ ...need, key: `${bot.id}:${need.key}` }))
-  }, [allItems, botNow.needs, filter, bot.id, bot.chatSessionId])
+  const needs = useMemo(
+    () => botNow.needs.map((need) => ({ ...need, key: `${bot.id}:${need.key}` })),
+    [botNow.needs, bot.id]
+  )
   const stoppedForSignIn = useMemo(
     () =>
-      filter.chatIds === null
-        ? botNow.stoppedForSignIn.map((row) => ({ ...row, key: `${bot.id}:${row.key}` }))
-        : [],
-    [filter.chatIds, botNow.stoppedForSignIn, bot.id]
+      botNow.stoppedForSignIn.map((row) => ({
+        ...row,
+        key: `${bot.id}:${row.key}`,
+        hostId: bot.hostId
+      })),
+    [botNow.stoppedForSignIn, bot.id, bot.hostId]
   )
-  const { state, retry } = items
+  const { retry } = items
+  // A kept list whose first refresh since opening failed counts as failed, so the group offers Retry as it
+  // did when nothing was kept.
+  const state = items.refreshFailed && !items.landed ? 'failed' : items.state
   const { working } = botNow
   // The list's parts, not the object the hook builds each render, so a report goes up only on change.
   const { read: listRead, items: listItems, shown, groups, staleDays } = list
@@ -157,17 +157,6 @@ const MemberReader = memo(function MemberReader({
   return null
 })
 
-/** What the shown members need outside the list's chats: their whole Needs you less what it lists.
- *  Nothing until every scoped read has landed, or the whole count would show as outside meanwhile. */
-export function botGroupNeedsYouOutside(counts: {
-  scoped: boolean
-  loaded: boolean
-  whole: number
-  shown: number
-}): number {
-  return counts.scoped && counts.loaded ? Math.max(0, counts.whole - counts.shown) : 0
-}
-
 // Each read's seen marks by bot id, built the first time a list asks (so not while an item is open).
 const seenIndexes = new WeakMap<readonly MemberRead[], Map<string, string | null>>()
 function seenIndexOf(reads: readonly MemberRead[]): Map<string, string | null> {
@@ -206,15 +195,13 @@ export type BotGroupItems = {
   /** Loaded items, the filter's bots only; Needs you only applied. */
   shown: readonly BotItem[]
   needs: readonly BotNeedView[]
-  stoppedForSignIn: readonly BotAutomationRow[]
+  stoppedForSignIn: readonly StoppedForSignIn[]
   itemOf: (dispatchId: string) => BotItem | null
   needBot: (need: BotNeedView) => Bot
   botOf: (item: BotItem) => Bot
   /** The open item's bot; null for an item no read holds yet. */
   botOfUid: (uid: string) => Bot | null
   seenOf: (item: BotItem) => string
-  /** Needs you's rows the shown bots have outside the filter's chats; 0 until the scoped reads land. */
-  outside: number
   /** Whole-member counts, unfiltered: the header and the tab badge. */
   needsYou: number
   working: number
@@ -243,10 +230,10 @@ export function useBotGroupItems(
       return next
     })
   }, [])
-  // The members read the chat scope and Needs you only; the bot filter picks among them below.
+  // The members read all their work; the bot filter picks among them below.
   const memberFilter = useMemo(
-    () => ({ chatIds: filter.chatIds, botIds: null, needsYou: filter.needsYou }),
-    [filter.chatIds, filter.needsYou]
+    () => ({ chatIds: null, botIds: null, needsYou: filter.needsYou }),
+    [filter.needsYou]
   )
   const readers = members.map((bot) => (
     <MemberReader key={bot.id} bot={bot} filter={memberFilter} now={now} report={report} />
@@ -326,11 +313,7 @@ export function useBotGroupItems(
     const byDispatch = botItemsByDispatch(reads.flatMap((read) => read.list.read?.items ?? []))
     return (dispatchId: string) => byDispatch.get(dispatchId) ?? null
   }, [reads])
-  const failed = shownReads.find(
-    (read) => read.state === 'failed' || (filter.chatIds !== null && read.list.chatRead.failed)
-  )
-  const shownNeedsYou = needs.length + groups.needs_you.length
-  const shownWhole = shownReads.reduce((sum, read) => sum + read.needsYou, 0)
+  const failed = shownReads.find((read) => read.state === 'failed')
   const next = reads.reduce<{ bot: Bot; at: number } | null>(
     (soonest, read) =>
       read.nextAt !== null && (soonest === null || read.nextAt < soonest.at)
@@ -343,14 +326,10 @@ export function useBotGroupItems(
       new Map(
         reads.map((read) => [
           read.bot.id,
-          read.list.items.filter(
-            (item) =>
-              isOpenBotItemStatus(item.status) &&
-              (filter.chatIds === null || filter.chatIds.includes(item.chat.id))
-          ).length
+          read.list.items.filter((item) => isOpenBotItemStatus(item.status)).length
         ])
       ),
-    [reads, filter.chatIds]
+    [reads]
   )
   return {
     readers,
@@ -361,11 +340,7 @@ export function useBotGroupItems(
       closedEnded: shownReads.every((read) => read.list.closedEnded)
     },
     ready,
-    failedRetry: failed
-      ? filter.chatIds !== null && failed.list.chatRead.failed
-        ? failed.list.chatRead.retry
-        : failed.retry
-      : null,
+    failedRetry: failed?.retry ?? null,
     reads,
     shown: useMemo(() => shownReads.flatMap((read) => read.list.shown), [shownReads]),
     needs,
@@ -382,13 +357,6 @@ export function useBotGroupItems(
       return botByUid.get(uid) ?? (owner ? (botById.get(owner) ?? null) : null)
     },
     seenOf,
-    // Only a list of some chats leaves asks out; the whole-bot count minus what it shows.
-    outside: botGroupNeedsYouOutside({
-      scoped: filter.chatIds !== null,
-      loaded: ready,
-      whole: shownWhole,
-      shown: shownNeedsYou
-    }),
     needsYou: reads.reduce((sum, read) => sum + read.needsYou, 0),
     working: reads.reduce((sum, read) => sum + read.working, 0),
     next,

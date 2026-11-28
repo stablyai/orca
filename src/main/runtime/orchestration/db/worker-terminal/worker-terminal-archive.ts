@@ -135,9 +135,11 @@ export function hasWorkerTerminalArchive(this: OrchestrationDb, dispatchId: stri
   )
 }
 
+/** `owner`, when given, fences the write to that dispatch's custody: a transferred row is left alone. */
 export function settleWorkerTerminalRelease(
   this: OrchestrationDb,
-  resourceId: string
+  resourceId: string,
+  owner?: string
 ): WorkerTerminalResourceRow {
   this.db
     .prepare(
@@ -145,39 +147,44 @@ export function settleWorkerTerminalRelease(
        SET release_state = 'released', ownership_state = 'released',
            release_completed_at = datetime('now'), release_error = NULL,
            updated_at = datetime('now')
-       WHERE id = ? AND release_state IN ('requested', 'releasing', 'unknown')`
+       WHERE id = ? AND release_state IN ('requested', 'releasing', 'unknown')
+         AND (? IS NULL OR owner_dispatch_id = ?)`
     )
-    .run(resourceId)
+    .run(resourceId, owner ?? null, owner ?? null)
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
 export function markWorkerTerminalReleaseUnknown(
   this: OrchestrationDb,
   resourceId: string,
-  reason: string
+  reason: string,
+  owner?: string
 ): WorkerTerminalResourceRow {
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
        SET release_state = 'unknown', release_error = ?, updated_at = datetime('now')
-       WHERE id = ? AND release_state IN ('requested', 'releasing')`
+       WHERE id = ? AND release_state IN ('requested', 'releasing')
+         AND (? IS NULL OR owner_dispatch_id = ?)`
     )
-    .run(reason, resourceId)
+    .run(reason, resourceId, owner ?? null, owner ?? null)
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
 export function revertWorkerTerminalReleaseToRetained(
   this: OrchestrationDb,
   resourceId: string,
-  reason: WorkerTerminalRetainedReason
+  reason: WorkerTerminalRetainedReason,
+  owner?: string
 ): WorkerTerminalResourceRow {
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
        SET release_state = 'retained', retained_reason = ?, updated_at = datetime('now')
-       WHERE id = ? AND release_state IN ('requested', 'releasing')`
+       WHERE id = ? AND release_state IN ('requested', 'releasing')
+         AND (? IS NULL OR owner_dispatch_id = ?)`
     )
-    .run(reason, resourceId)
+    .run(reason, resourceId, owner ?? null, owner ?? null)
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 

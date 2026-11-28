@@ -4,18 +4,17 @@ import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-nam
 import { Fragment, memo, useCallback, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
-import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
-import { AgentSpinner, agentStatusColors } from './presentation/AgentSpinner'
+import { AgentSpinner, type AgentSpinnerStatus } from './presentation/AgentSpinner'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { mobileBotAvatarSource } from '../bots/host-bot-row-facts'
 import { SwipeRowActions } from '../components/list/SwipeRowActions'
-import { HOME_ROW_TEXT_INSET, homeListStyles } from '../home/home-list-styles'
+import { HOME_ROW_TEXT_INSET, homeListStylesSheet } from '../home/home-list-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerMediumImpact } from '../platform/haptics/haptics'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../host-catalog/host-profile'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import {
@@ -33,11 +32,11 @@ import { agentStatusGroup, type AgentListRow } from './agent-list-rows'
 import { agentListPreview } from './agent-list-row-text'
 
 // The Home rollup glyph is the list's size; this maps a per-agent state onto its palette.
-const GLYPH_STATUS: Record<AgentDotState, WorktreeStatus> = {
+const GLYPH_STATUS: Record<AgentDotState, AgentSpinnerStatus> = {
   working: 'working',
   monitoring: 'monitoring',
-  blocked: 'permission',
-  waiting: 'permission',
+  blocked: 'blocked',
+  waiting: 'waiting',
   permission: 'permission',
   failed: 'failed',
   done: 'done',
@@ -74,7 +73,9 @@ export function MobileAgentListRows(props: {
   idleKey?: string
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   // Disclosures live in a module cache so they survive remounts; this only redraws after a toggle.
   const [, setRevision] = useState(0)
   const toggle = useCallback((key: string) => {
@@ -158,7 +159,9 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   onToggleWorkers: (key: string) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const { row } = props
   const { agent } = row.entry
   const desktop = useHostDisplay(props.host).title
@@ -166,14 +169,15 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const group = row.stale ? null : agentStatusGroup(row.dotState)
   const preview = agentListPreview(agent, group, title)
   const needsYou = group === 'needs-you'
-  const stateWord = needsYou ? agentStateLabel(row.dotState) : ''
+  const stateWord = needsYou ? agentStateLabel(row.dotState, t) : ''
+  const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState, t) : stateWord
   const place = [
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
     props.nameDesktop ? desktop : null
   ]
     .filter(Boolean)
     .join(' · ')
-  const time = row.timeAt > 0 ? formatTimeAgo(row.timeAt, props.now) : ''
+  const time = row.timeAt > 0 ? formatTimeAgo(row.timeAt, props.now, t) : ''
   const workerCount = row.workers.length
   const workersLabel =
     workerCount === 1
@@ -238,9 +242,9 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={[
-            row.forked ? mobileForkAccessibleName(title) : title,
+            row.forked ? mobileForkAccessibleName(title, t) : title,
             unread ? t('agents.list.unread', 'Unread') : null,
-            stateWord || null,
+            spokenState || null,
             preview || null,
             place,
             time,
@@ -272,7 +276,13 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
           onLongPress={longPress}
           delayLongPress={400}
         >
-          <View style={[homeListStyles.status, row.stale && homeListStyles.rowDisabled]}>
+          <View
+            style={[homeListStyles.status, row.stale && homeListStyles.rowDisabled]}
+            accessible={false}
+            aria-hidden
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
             <AgentSpinner status={GLYPH_STATUS[row.dotState]} />
           </View>
           <View style={[styles.text, row.stale && homeListStyles.rowDisabled]}>
@@ -285,7 +295,9 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
             {stateWord || preview ? (
               <Text style={styles.preview} numberOfLines={2}>
                 {stateWord ? (
-                  <Text style={[styles.stateWord, { color: agentStatusColors().permission }]}>
+                  <Text
+                    style={row.dotState === 'failed' ? styles.stateFailed : styles.stateNeedsYou}
+                  >
                     {stateWord}
                   </Text>
                 ) : null}
@@ -334,16 +346,17 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   )
 }, areStructurallyEqual)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   text: { flex: 1, minWidth: 0, paddingTop: 9, paddingBottom: 10, paddingRight: 14, gap: 3 },
   titleLine: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
   // Opaque so a swipe's actions stay hidden until the row slides off them.
   row: { backgroundColor: colors.bgPanel },
-  title: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 20, color: colors.textPrimary },
+  title: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 20, color: colors.textPrimary },
   titleUnread: { fontWeight: '600' },
   time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   preview: { fontSize: 14, lineHeight: 19, color: colors.textSecondary },
-  stateWord: { fontWeight: '600' },
+  stateNeedsYou: { color: colors.agentQuestionText, fontWeight: '600' },
+  stateFailed: { color: colors.statusRed, fontWeight: '600' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   place: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },

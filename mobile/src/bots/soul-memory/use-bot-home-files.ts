@@ -1,6 +1,7 @@
 // Files in a bot's home folder (SOUL.md, MEMORY.md, memory/), read on the bot's host as the desktop's
 // Settings reads them, and again with the route's reads; a failed re-read keeps what was showing.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { BOT_MEMORY_ARCHIVE } from '../../../../src/shared/bots/bot-memory-archive'
 import { isConfirmedFileNotFoundError } from '../../../../src/shared/file-write/file-write-disk-precondition'
 import { folderWorkspaceKey } from '../../../../src/shared/workspace/identity/workspace-scope'
 import { fileDirectoryRead } from '../../files/explorer/mobile-file-explorer-operations'
@@ -8,9 +9,6 @@ import { fileTabTextRead } from '../../files/session-documents/mobile-file-tab-d
 import { isHostNotConnectedError } from '../../query/host-query-errors'
 import { hostReadClient } from '../../query/host-read-client'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-
-/** Where tidy-ups move old lines; listed apart from the topics. */
-export const BOT_MEMORY_ARCHIVE = 'archive.md'
 
 export type BotHomeFileRead =
   | { status: 'loading' }

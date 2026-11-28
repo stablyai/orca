@@ -1,3 +1,4 @@
+import { dropInheritedNiceBoost } from '@orca/process-host/native-process-spawn'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import {
   spawnShellWithFallback,
@@ -18,7 +19,12 @@ export async function loadLocalPtyRuntimeSpawn(): Promise<LocalPtySpawn> {
   })
   const ptySpawn: typeof pty.spawn = (file, args, options) => {
     assertWslDistroAllowed(file, args)
-    return pty.spawn(file, args, options)
+    const spawned = pty.spawn(file, args, options)
+    // Linux-only; see native-pty-spawn.ts (#51055).
+    if (process.platform === 'linux') {
+      dropInheritedNiceBoost(spawned.pid)
+    }
+    return spawned
   }
   return (params) => spawnShellWithFallback({ ...params, ptySpawn })
 }

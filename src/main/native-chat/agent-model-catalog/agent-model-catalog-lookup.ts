@@ -54,6 +54,9 @@ export function createAgentModelCatalogLookup(
         return undefined
       }
       const refresh = refreshes.join(found.key, found.launch)
+      if (params.relist && !params.savedOnly) {
+        refresh.relist()
+      }
       refresh.hold(operation)
       refresh.want(
         usesModelSpecificAcpEfforts(params.agent)

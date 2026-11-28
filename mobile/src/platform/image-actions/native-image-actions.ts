@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { File as FsFile, type Directory, type FileHandle } from 'expo-file-system'
 import { useFocusEffect, useNavigation } from 'expo-router'
-import { saveImageToPhotos, shareImage } from '../../../modules/orca-mobile-web-shell/src/index'
+import { saveImageToPhotos, shareFile } from '../../../modules/orca-mobile-web-shell/src/index'
 import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
@@ -17,6 +17,7 @@ import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge
 import { decodeCanonicalBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 import { mobileFileExtensionForMime } from '../media-picking/mobile-picked-file-name'
 import { freshCacheFolder } from '../media-picking/native-media-device'
+import { recomputeOn } from '../../hooks/recompute-on'
 
 type Staged = { folder: Directory; file: FsFile; handle: FileHandle; byteLength: number }
 
@@ -119,7 +120,7 @@ function createNativeImageActions(isFocused: () => boolean) {
     } else if (operation === 'save') {
       await saveImageToPhotos(sharedUri(file), mime)
     } else {
-      await shareImage(sharedUri(file), mime)
+      await shareFile(sharedUri(file), mime)
     }
   }
 
@@ -145,7 +146,7 @@ export function useNativeImageActions(
 ): (params: unknown) => Promise<unknown> {
   const navigation = useNavigation()
   const actions = useMemo(
-    () => createNativeImageActions(navigation.isFocused),
+    () => recomputeOn([sessionId], () => createNativeImageActions(navigation.isFocused)),
     // A new page session is a new document; it must not inherit a half-staged image.
     [navigation, sessionId]
   )

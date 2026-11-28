@@ -180,6 +180,25 @@ function readOnFocus(bot: BotRef): void {
   }
 }
 
+/** The bot's Slack state, read fresh when shown and on returns to Orca, never followed: for names. */
+export function useBotSlackSnapshot(bot: BotRef | null): BotSlackView {
+  return useShownBotSlack(useStableBotRefOrNull(bot))
+}
+
+function useShownBotSlack(ref: BotRef | null): BotSlackView {
+  const view = useSyncExternalStore(subscribe, () => (ref ? readBotSlack(ref) : LOADING))
+  useEffect(() => {
+    if (!ref) {
+      return
+    }
+    void readOnShow(ref)
+    const onFocus = (): void => readOnFocus(ref)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [ref])
+  return view
+}
+
 // The bot's ref, kept while its host and id stay the same, so effects follow the bot, not each re-read.
 function useStableBotRefOrNull(bot: BotRef | null): BotRef | null {
   const hostId = bot?.hostId
@@ -198,19 +217,10 @@ export function useBotSlack(
   returnUrl: string | null = null
 ): BotSlackView {
   const ref = useStableBotRefOrNull(bot)
-  const view = useSyncExternalStore(subscribe, () => (ref ? readBotSlack(ref) : LOADING))
+  const view = useShownBotSlack(ref)
   const following =
     awaitInstall ||
     (view.status === 'ready' && [view.slack, ...(view.slack.teams ?? [])].some(awaitsInstall))
-  useEffect(() => {
-    if (!ref) {
-      return
-    }
-    void readOnShow(ref)
-    const onFocus = (): void => readOnFocus(ref)
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [ref])
   useEffect(
     () => (ref && following ? follow(ref, returnUrl) : undefined),
     [ref, following, returnUrl]

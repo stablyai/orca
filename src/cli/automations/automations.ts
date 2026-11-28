@@ -37,13 +37,13 @@ import { getExplicitTarget } from './automation-target-flags'
 import {
   getEnabledFlag,
   getOptionalProviderFlag,
-  getPrecheckFlag,
   getProviderFlag,
   getReuseSessionFlag,
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
 import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
+import { getPrecheckFlag, readPrecheckFlags, resolvePrecheck } from './automation-precheck-flag'
 import { assertAutomationFieldsSupported } from './automation-host-support'
 import { assertAutomationSetupMode, getAutomationSetupFlag } from './automation-setup-flag'
 import { getTimezoneFlags } from './automation-timezone-flag'
@@ -67,6 +67,7 @@ import {
 } from './automation-event-triggers-cli'
 import { callerChat } from './automation-caller-chat'
 import { getOnceFlags } from './automation-once-flag'
+import { watchPrCreateFlags } from './automation-watch-pr'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -126,6 +127,9 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const once = getOnceFlags(flags)
     const schedule = getCreateScheduleFlag(flags, on, once)
     const bot = await getBotTargetFlags(flags, client, on, schedule, once)
+    if (!bot && flags.has('item')) {
+      throw new RuntimeClientError('invalid_argument', "--item goes with --bot: a bot's own item")
+    }
     if (bot) {
       const saved = await createBotAutomation(client, flags, bot, schedule, on, once)
       printSavedAutomation(saved, json, on)
@@ -168,6 +172,16 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     })
     printAutomationResult(result, json, formatAutomationShow)
   },
+  // The same create, with the rules and deadline a pull request watch stands for.
+  'automations watch-pr': async (context) => {
+    const selector = getOptionalStringFlag(context.flags, 'bot')
+    if (!selector) {
+      throw new RuntimeClientError('invalid_argument', 'watch-pr needs --bot <name>')
+    }
+    const { githubCiFinished } = await findBot(context.client, selector)
+    const flags = watchPrCreateFlags(context.flags, Date.now(), githubCiFinished === true)
+    await AUTOMATION_HANDLERS['automations create']({ ...context, flags })
+  },
   'automations edit': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
     const target = await getExplicitTarget(flags, cwd, client)
@@ -179,10 +193,10 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const sourceContext = getSourceContextFlag(flags)
     const id = getRequiredStringFlag(flags, 'id')
     // Built before the owner read so a contradictory flag still fails without a runtime call.
+    const precheckFlags = readPrecheckFlags(flags)
     const updates = {
       name: getOptionalStringFlag(flags, 'name'),
       prompt: getOptionalStringFlag(flags, 'prompt'),
-      precheck: getPrecheckFlag(flags),
       agentId: getOptionalProviderFlag(flags),
       extraAgentArgs: getExtraAgentArgsFlag(flags),
       ...(setupDecision !== undefined ? { setupDecision } : {}),
@@ -205,6 +219,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       client,
       id
     )
+    const precheck = resolvePrecheck(precheckFlags, current.precheck)
     assertAutomationSetupMode(
       setupDecision,
       updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
@@ -223,7 +238,11 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...(destination ? { destination } : {}),
       // A setup choice that relies on the current mode must not land after a switch to existing.
       ...(setupDecision && !updates.workspaceMode ? { expectedWorkspaceMode: 'new_per_run' } : {}),
-      updates: bot ? { ...updates, bot } : updates,
+      updates: {
+        ...updates,
+        ...(precheck !== undefined ? { precheck } : {}),
+        ...(bot ? { bot } : {})
+      },
       ...callerChat()
     })
     printSavedAutomation(result, json, on, current)

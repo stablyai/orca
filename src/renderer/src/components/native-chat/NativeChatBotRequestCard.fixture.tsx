@@ -79,3 +79,33 @@ export const requestsOpen = defineFixture({
 })
 
 export const requestsNarrow = defineFixture({ width: 340, setup, render: () => <Requests /> })
+
+// Asks to an agent on a paired computer: one named, one whose name never reached this host.
+const pairedNamed: BotRequestCard = {
+  ...asked,
+  messageId: 'mail-paired-named',
+  client: { installationId: 'inst-studio', computer: 'Studio Mac' }
+}
+const pairedUnnamed: BotRequestCard = {
+  ...asked,
+  messageId: 'mail-paired-unnamed',
+  client: { installationId: 'inst-unnamed', computer: '' }
+}
+
+export const pairedComputerAsks = defineFixture({
+  width: 600,
+  setup,
+  render: () => (
+    <div className="flex flex-col gap-1 bg-chat-pane p-4">
+      {[pairedNamed, pairedUnnamed].map((card, index) => (
+        <NativeChatBotRequestCard
+          key={card.messageId}
+          card={card}
+          cardId={`paired-${index}`}
+          timestamp={FIXTURE_AT + index * 60_000}
+          fallback={card.subject}
+        />
+      ))}
+    </div>
+  )
+})

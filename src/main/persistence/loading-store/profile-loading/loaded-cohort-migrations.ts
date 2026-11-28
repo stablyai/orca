@@ -36,6 +36,14 @@ export class LoadedCohortMigrationOperations {
         }
       }
     }
+    if (typeof state.settings?.nativeChatMarkNewMessages !== 'boolean') {
+      this.runtime.loadNeedsSave = true
+      // Why not a default: writers that spread defaults into saved settings would turn existing profiles off.
+      state = {
+        ...state,
+        settings: { ...state.settings, nativeChatMarkNewMessages: existingProfile }
+      }
+    }
     if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
       this.runtime.loadNeedsSave = true
       // Why every profile: settings.json is global, so even a fresh profile must not restyle Claude Code unasked.
@@ -128,6 +136,19 @@ export class LoadedCohortMigrationOperations {
     }
     this.runtime.loadNeedsSave = true
     return { ...state, settings: { ...state.settings, experimentalNewWorktreeCardStyle: false } }
+  }
+
+  /** App rail defaults on for new profiles; profiles saved before without a choice keep it off. */
+  keepAppRailOffForExistingProfiles(state: PersistedState, savedProfile: unknown): PersistedState {
+    if (!isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)) {
+      return state
+    }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.experimentalAppRail === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, experimentalAppRail: false } }
   }
 
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {

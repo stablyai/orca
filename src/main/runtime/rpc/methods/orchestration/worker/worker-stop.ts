@@ -1,3 +1,4 @@
+import { afterWorkerStartWait } from './start/readiness/worker-start-waits'
 import { isWorkerAwaitingAgent } from '../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
@@ -12,6 +13,7 @@ import type {
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
 import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
+import { closeStoppedWorkerTerminals } from './release/worker-bound-terminal-close'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineOrchestrationMethod({
@@ -30,14 +32,13 @@ export function stopWorkerAndHelpers(
   dispatchId: string,
   mutation: StopMutation
 ): Promise<WorkerStopReceipt> {
-  return dedupeWorkerStop(runtime, dispatchId, async () =>
-    withStoppedHelpers(
-      runtime,
-      dispatchId,
-      mutation,
-      await stopSingleWorker(runtime, dispatchId, mutation)
-    )
-  )
+  return dedupeWorkerStop(runtime, dispatchId, async () => {
+    const stopped = await stopSingleWorker(runtime, dispatchId, mutation)
+    if (stopped.state === 'stopped' && !stopped.alreadySettled) {
+      await closeStoppedWorkerTerminals(runtime, runtime.getOrchestrationDb(), dispatchId)
+    }
+    return withStoppedHelpers(runtime, dispatchId, mutation, stopped)
+  })
 }
 
 /** Runs after the creator's fence commits, so a helper started later was refused, or is stopped when its start finishes. */
@@ -150,6 +151,10 @@ export async function stopHelperAfterStart(
   const db = runtime.getOrchestrationDb()
   const creator = db.getDispatchContextById(dispatchId)?.creator_dispatch_id
   if (!creator || !db.isWorkerStopRequested(creator)) {
+    // A start still waiting on its agent hands over later, maybe after its creator's stop listed it.
+    afterWorkerStartWait(dispatchId, 'helper-stop', () => {
+      void stopHelperAfterStart(runtime, startReceipt, mutation)
+    })
     return
   }
   // A start that already settled is skipped by the single stop; its helpers still stop.

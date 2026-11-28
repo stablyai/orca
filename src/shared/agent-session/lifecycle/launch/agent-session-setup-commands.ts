@@ -89,7 +89,6 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     installCommand: 'curl -fsSL https://mimo.xiaomi.com/install | bash',
     windowsInstallScript: 'https://mimo.xiaomi.com/install.ps1'
   },
-  { agent: 'gemini', loginCommand: ['gemini'], slashCommand: '/auth' },
   {
     agent: 'droid',
     loginCommand: ['droid'],
@@ -106,12 +105,29 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     windowsInstallScript:
       'https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1'
   },
-  // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
+  // `cline auth` signs in to Cline or connects another provider.
+  { agent: 'cline', loginCommand: ['cline', 'auth'], installCommand: 'npm install -g cline' },
+  {
+    agent: 'devin',
+    loginCommand: ['devin', 'auth', 'login'],
+    remoteLoginCommand: ['devin', 'auth', 'login', '--force-manual-token-flow'],
+    installCommand: 'curl -fsSL https://cli.devin.ai/install.sh | bash',
+    windowsInstallScript: 'https://cli.devin.ai/install.ps1'
+  },
+  {
+    agent: 'codebuddy',
+    loginCommand: ['codebuddy'],
+    slashCommand: '/login',
+    installCommand: 'npm install -g @tencent-ai/codebuddy-code'
+  },
+  // An `agy` login signs in only chats on agy's own home (`system`); Orca's homes keep their own.
   {
     agent: 'antigravity',
     loginCommand: [],
     systemLoginCommand: ['agy'],
-    loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+    loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
+    installCommand: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    windowsInstallScript: 'https://antigravity.google/cli/install.ps1'
   }
 ] as const
 

@@ -1,6 +1,6 @@
 // What New bot asks the chosen computer: its agent choices, and its Orca account.
 import * as z from 'zod'
-import { BOT_AGENTS, type BotAgent } from '../../../src/shared/bot-types'
+import { BOT_AGENTS, BOT_NEW_AGENT_PRIORITY, type BotAgent } from '../../../src/shared/bot-types'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
@@ -13,22 +13,39 @@ const botAgentChoicesRead = bindDeferredRpcOperation(
     barrier: 'after-caller-barrier',
     read: rpcResultVariant(
       'bot-agent-choices',
-      z.looseObject({ agents: z.array(z.string()) }).transform(({ agents }) =>
-        // A newer host's agent this build can't name or draw is left out.
-        BOT_AGENTS.filter((agent) => agents.includes(agent))
-      )
+      z
+        .looseObject({ agents: z.array(z.string()), defaultAgent: z.unknown().optional() })
+        .transform(({ agents, defaultAgent }) => {
+          // A newer host's agent this build can't name or draw is left out.
+          const known = BOT_AGENTS.filter((agent) => agents.includes(agent))
+          // An older host sends no default: pick as the host's New bot does, not by display order.
+          const picked =
+            known.find((agent) => agent === defaultAgent) ??
+            BOT_NEW_AGENT_PRIORITY.find((agent) => known.includes(agent))
+          return { agents: known, defaultAgent: picked }
+        })
     )
   })
 )
 
+export type NewBotAgentChoices = {
+  agents: BotAgent[]
+  /** The agent the host's own New bot picks first; an older host's is inferred the same way. */
+  defaultAgent?: BotAgent
+}
+
 /** The agents the host's own New bot offers there. A host that can't say (an older build, a failed
  *  read) keeps every agent, as the desktop keeps a failed check choosable. */
-export async function readBotAgentChoices(client: RpcClient): Promise<BotAgent[]> {
+export async function readNewBotAgentChoices(client: RpcClient): Promise<NewBotAgentChoices> {
   try {
     return botAgentChoicesRead.interpret(await botAgentChoicesRead.request(client))
   } catch {
-    return [...BOT_AGENTS]
+    return { agents: [...BOT_AGENTS] }
   }
+}
+
+export async function readBotAgentChoices(client: RpcClient): Promise<BotAgent[]> {
+  return (await readNewBotAgentChoices(client)).agents
 }
 
 const orcaAccountStatusRead = bindDeferredRpcOperation(

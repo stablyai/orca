@@ -14,10 +14,15 @@ export type SimulatorKeyPress = {
 }
 
 // Synced simulators take the physical key; unsynced ones keep a US layout, so the character picks its US key.
+// `printableAsText`: the simulator's layout is unknown (a paired server's), so characters go as text.
 export function simulatorKeyFrames(
   press: SimulatorKeyPress,
-  physicalKeys: boolean
+  physicalKeys: boolean,
+  printableAsText = false
 ): ServeSimKeyboardFrame[] | null {
+  if (printableAsText && isPrintable(press.key)) {
+    return null
+  }
   if (physicalKeys) {
     return buildServeSimKeyboardFramesForCode(press.code, {
       alt: press.alt,

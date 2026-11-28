@@ -37,26 +37,41 @@ export function askAcceptsEmptyAnswer(
   return input?.allowEmpty === true && question?.options.length === 0
 }
 
-/** Proceed advances, or submits on the last question; an empty final Skip dismisses, while empty Enter keeps the prompt. */
+/** Proceed advances, or submits on the last question; an empty final Skip dismisses, while empty Enter keeps the prompt.
+ * A required question still unanswered (`waitsForAnswer`) stays put, unless nothing at all is answered on the last step. */
 export function askConfirmAction(args: {
   isLast: boolean
   anyAnswered: boolean
   fromKeyboard?: boolean
+  waitsForAnswer?: boolean
 }): 'proceed' | 'cancel' | 'stay' {
+  if (args.waitsForAnswer && (!args.isLast || args.anyAnswered)) {
+    return 'stay'
+  }
   if (!args.isLast || args.anyAnswered) {
     return 'proceed'
   }
   return args.fromKeyboard ? 'stay' : 'cancel'
 }
 
-/** The last step says Submit whenever any answer will be sent, even if its own question was skipped. */
+/** Where a submit goes instead of sending: the first required question left unanswered, or -1. */
+export function askUnansweredRequired(
+  questions: readonly Pick<AskQuestion, 'required'>[],
+  answered: (index: number) => boolean
+): number {
+  return questions.findIndex((question, index) => question.required === true && !answered(index))
+}
+
+/** The last step says Submit whenever any answer will be sent, even if its own question was skipped;
+ * it says Next when its press returns to an earlier required question instead (`returnsToRequired`). */
 export function askConfirmLabel(
   currentAnswered: boolean,
   isLast: boolean,
-  anyAnswered: boolean
+  anyAnswered: boolean,
+  returnsToRequired = false
 ): 'submit' | 'next' | 'skip' {
   if (isLast) {
-    return anyAnswered ? 'submit' : 'skip'
+    return anyAnswered ? (returnsToRequired ? 'next' : 'submit') : 'skip'
   }
   return currentAnswered ? 'next' : 'skip'
 }

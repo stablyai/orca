@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { agentSessionRecordStoreHostServing } from '../../runtime/agent-session/records/agent-session-record-store-serving'
 import { isHostShuttingDown } from '../quit/host-shutdown-state'
 import { mainProcessState as state } from '../main-process-state'
 import { provideManagedAgentDetection } from '../../runtime/rpc/methods/host-management/managed-copy-detection'
@@ -14,11 +15,11 @@ let windowFence: Promise<unknown> = Promise.resolve()
 
 /** Serve boots the saved-chat writer now; desktop waits for the first-window fence, so window creation keeps the disk. */
 export function beginChatJournalStartup(
-  runtime: Pick<OrcaRuntimeService, 'beginStructuredAgentSessionStartupOpen' | 'requireStore'>,
+  runtime: Pick<OrcaRuntimeService, 'beginStructuredAgentSessionStartupOpen'>,
   serveMode: boolean
 ): void {
   // Detection counts Orca's copies from launch, before the release reclaim in chatJournalHostServing.
-  provideManagedAgentDetection(runtime)
+  provideManagedAgentDetection()
   if (serveMode) {
     runtime.beginStructuredAgentSessionStartupOpen(serving.promise)
     return
@@ -42,7 +43,7 @@ export function chatJournalHostServing(): void {
     .catch(() => {})
     .then(() => {
       if (state.core.runtime) {
-        state.core.runtime.startPullRequestWatches({ admit: true })
+        agentSessionRecordStoreHostServing(state.core.runtime)
         reclaimManagedRuntimeReleasesAtLaunch(state.core.runtime)
         startManagedRuntimeAutoUpdates()
       }

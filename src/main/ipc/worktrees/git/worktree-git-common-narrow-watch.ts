@@ -10,6 +10,7 @@ import type {
 } from '../creation/worktree-base-directory-poller'
 import { createSingleFlight } from './single-flight-promise'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
+import { onRepoActivity } from './worktree-activity-signal'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { createNativeUpgradePoll } from './worktree-git-common-native-upgrade-poll'
 
@@ -24,8 +25,9 @@ export async function startGitCommonNarrowWatch(
   onFullScan?: () => void,
   onWatchError?: (error: Error) => void,
   // Overflow proves lost events and must bypass the transient watcher-error cooldown.
-  onOverflow?: () => void
-): Promise<WorktreeBaseSubscription> {
+  onOverflow?: () => void,
+  getRepos: () => ReadonlyMap<string, unknown> = () => target.repos
+): Promise<WorktreeBaseSubscription & { syncRepos: () => void }> {
   const worktreesDir = join(target.path, 'worktrees')
   const watcherOptions = platform === 'win32' ? { backend: 'windows' as const } : {}
   let disposed = false
@@ -51,7 +53,9 @@ export async function startGitCommonNarrowWatch(
       }
       armExistencePoll()
     },
-    onEvents
+    onEvents,
+    subscribeRepoActivity: onRepoActivity,
+    getRepoIds: () => getRepos().keys()
   })
 
   const stopExistencePoll = (): void => {
@@ -300,6 +304,7 @@ export async function startGitCommonNarrowWatch(
   await reconciliation.ensureStarted()
 
   return {
+    syncRepos: () => reconciliation.syncRepoIds(),
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()

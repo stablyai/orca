@@ -9,6 +9,7 @@ import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import type { WorkspaceReferenceDetailsMap } from '../review/workspace-reference-details'
 import type { Bot } from '../../../../../../shared/bot-types'
+import type { AutoNameFailure } from '../identity/use-auto-name-failure'
 
 export type WorktreeCardIssueDisplay =
   | IssueInfo
@@ -61,6 +62,8 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   workspaceTitle?: string
   identityOrder?: 'workspace-first' | 'branch-first'
   workspaceTitleRenameDisabled?: boolean
+  /** Its own section under the identity; shown in whichever card the row has. */
+  autoNameFailure?: AutoNameFailure | null
   detailsAfter?: React.ReactNode
   openDelay?: number
   closeDelay?: number

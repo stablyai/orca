@@ -1,7 +1,7 @@
 // Generating an avatar with an image-capable agent the user already has installed and signed in.
 
 /** Agents whose CLI can save a generated image without a prompt, in preference order. */
-export const AVATAR_IMAGE_AGENTS = ['codex', 'grok', 'antigravity'] as const
+export const AVATAR_IMAGE_AGENTS = ['codex', 'grok'] as const
 export type AvatarImageAgent = (typeof AVATAR_IMAGE_AGENTS)[number]
 
 export type AvatarImageAgentStatus = { agent: AvatarImageAgent; status: 'ready' | 'signed-out' }
@@ -11,7 +11,6 @@ export type AvatarGenerationCapability = { agents: AvatarImageAgentStatus[] }
 
 export type AvatarGenerationFailure =
   | 'unavailable'
-  | 'real-person'
   | 'signed-out'
   | 'usage-limit'
   | 'no-image'

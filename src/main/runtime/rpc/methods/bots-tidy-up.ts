@@ -6,12 +6,10 @@ import {
   BotTidyUpUndo
 } from '../../../../shared/rpc-contract/bots-look-around-params'
 import { botHomeFolder } from '../../../bots/bot-home'
-import {
-  failedLooksInARow,
-  LOOK_FAILURES_TO_TURN_OFF
-} from '../../../bots/bot-look-around-failures'
 import { tidyUpState } from '../../../bots/bot-memory-tidy-up'
+import { tidyUpTurnedOff } from '../../../bots/bot-memory-tidy-up-failures'
 import { runtimeTidyUpRunner } from '../../../bots/bot-memory-tidy-up-runtime'
+import { botRunFailure } from '../../../bots/bot-run-failure-code'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 
 function botById(context: RpcContext, botId: string) {
@@ -42,15 +40,16 @@ export function botTidyUpView(context: RpcContext, botId: string): BotTidyUpView
     }
     undone = known === true
   }
+  const error = lastRun?.endedAt !== undefined ? (lastRun.error ?? null) : null
+  const turnedOff = tidyUpTurnedOff(state, bot)
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,
     running: lastRun !== undefined && lastRun.endedAt === undefined,
-    turnedOff:
-      !setting.on && failedLooksInARow(state) >= LOOK_FAILURES_TO_TURN_OFF
-        ? (lastRun?.error ?? null)
-        : null,
-    error: lastRun?.endedAt !== undefined ? (lastRun.error ?? null) : null
+    turnedOff,
+    ...(turnedOff ? { turnedOffFailure: botRunFailure(turnedOff) } : {}),
+    error,
+    ...(error ? { failure: botRunFailure(error) } : {})
   }
 }
 

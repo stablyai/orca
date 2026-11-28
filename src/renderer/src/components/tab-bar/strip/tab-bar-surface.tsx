@@ -1,17 +1,12 @@
 import React from 'react'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ProjectedAgentMenuItems } from '../../agent/launch-menu/AgentMenuItems'
-import { OpenAgentSettingsMenuItem } from '../../agent/launch-menu/OpenAgentSettingsMenuItem'
-import { TabBarAgentPickerEntry } from '../create-entry/TabBarAgentPickerEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
@@ -25,17 +20,38 @@ import type { TabBarItemActions } from '../model/use-tab-bar-item-actions'
 import { renderTabBarItems } from '../model/tab-bar-item-surface'
 import { WindowedTabStrip } from './WindowedTabStrip'
 import type { TabStripSegment } from './tab-strip-window'
-import { TabBarStaticCreateMenu } from '../create-menu/tab-bar-static-create-menu'
-import { NewTabMenuContent } from '../menu-fit/NewTabMenuContent'
 import ClientHostedBrowserTabRows from '../browser-tabs/ClientHostedBrowserTabRows'
-import { BotNewChatMenuItems } from '../../bots/BotNewChatMenuItems'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
-import { BotGroupNewThreadMenuItems } from '../../bots/BotGroupNewThreadMenuItems'
-import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
-import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
+import type { TabBarNewTabMenuContentProps } from '../create-menu/TabBarNewTabMenuContent'
+import { PinnedHomeTabSlot } from './PinnedHomeTabSlot'
+import {
+  newTabButtonHideClassName,
+  type RenderedTabStrip,
+  stripSizeClassName
+} from './rendered-tab-strip'
 
-const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
+const LazyTabBarNewTabMenuContent = lazyWithRetry(
+  () =>
+    import('../create-menu/TabBarNewTabMenuContent').then((module) => ({
+      default: module.TabBarNewTabMenuContent
+    })),
+  { reloadKey: 'tab-bar-new-tab-menu-content' }
+)
+
+function TabBarNewTabMenuContentHost(
+  menuProps: TabBarNewTabMenuContentProps
+): React.JSX.Element | null {
+  const hasOpened = useLatchedOpen(menuProps.createMenu.newTabMenuOpen)
+  if (!hasOpened) {
+    return null
+  }
+  return (
+    <React.Suspense fallback={null}>
+      <LazyTabBarNewTabMenuContent {...menuProps} />
+    </React.Suspense>
+  )
+}
 
 export function renderTabBarSurface(
   {
@@ -43,6 +59,7 @@ export function renderTabBarSurface(
     runtime,
     createMenu,
     itemProjection,
+    strip,
     tabStripNavigation,
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
@@ -55,6 +72,8 @@ export function renderTabBarSurface(
     runtime: TabBarRuntimeModel
     createMenu: TabBarCreateMenuController
     itemProjection: TabBarItemProjection
+    /** What renders: a pinned bot Home in its own slot, then the scrolling strip's tabs. */
+    strip: RenderedTabStrip
     tabStripNavigation: ReturnType<typeof useTabStripOverflowNavigation>
     tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
     activeClientHostedBrowserRowId: string | null
@@ -67,43 +86,17 @@ export function renderTabBarSurface(
   },
   t: Translate = translate
 ): React.JSX.Element {
+  const { worktreeId, tabStripChrome = 'default' } = props
+  const { resolvedGroupId } = runtime
+  const { newTabMenuOpen, setNewTabMenuOpen } = createMenu
+  const { activeVisibleTabId } = itemProjection
   const {
-    worktreeId,
-    terminalOnly = false,
-    showAgentLaunchItems = true,
-    onNewTerminalTab,
-    onOpenEntry,
-    tabStripChrome = 'default'
-  } = props
-  const {
-    resolvedGroupId,
-    mobileEmulatorEnabled,
-    managedBrowserCreationEnabled,
-    mobileEmulatorCreationEnabled,
-    workspaceHasSimulatorTab,
-    showMobileEmulatorIntroCallout,
-    windowsTerminalCapabilities,
-    defaultWindowsPowerShellImplementation
-  } = runtime
-  const {
-    agentMenu,
-    agentPickerInventory,
-    selectPickerAgent,
-    launchAgentRow,
-    newTabMenuOpen,
-    setNewTabMenuOpen,
-    setCreateMenuQuery,
-    createMenuOptions,
-    windowsShellEntries,
-    handleSelectCreateMenuOption,
-    launchAgentFromNewTabEntry,
-    runPendingNewTabMenuFocusAfterClose,
-    queueNewActiveTerminalFocusAfterNewTabMenuClose,
-    queueFocusAfterNewTabMenuClose,
-    showStaticCreateMenuItems
-  } = createMenu
-  const { orderedItems, dropIndicatorByVisibleId, sortableIds, activeVisibleTabId } = itemProjection
-  const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
+    orderedItems,
+    sortableIds,
+    dropIndicatorByVisibleId,
+    clientHostedBrowserRows,
+    pinnedCount
+  } = strip
   const {
     tabStripRef,
     tabStripOverflowState,
@@ -113,7 +106,10 @@ export function renderTabBarSurface(
   } = tabStripNavigation
   const singleTab = orderedItems.length + clientHostedBrowserRows.length === 1
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
-  const renderItems = (segments: readonly TabStripSegment[]): React.ReactNode[] =>
+  const renderItems = (
+    segments: readonly TabStripSegment[],
+    itemOffset = pinnedCount
+  ): React.ReactNode[] =>
     renderTabBarItems({
       items: orderedItems,
       props,
@@ -122,12 +118,21 @@ export function renderTabBarSurface(
       dropIndicatorByVisibleId,
       includeTopTabBorder,
       activeClientHostedBrowserRowId,
-      segments
+      segments,
+      itemOffset
     })
 
-  const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
     <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+      {pinnedCount > 0 ? (
+        <PinnedHomeTabSlot
+          sortableIds={strip.pinnedSortableIds}
+          singleTab={singleTab}
+          withStrip={strip.stripHasTabs}
+        >
+          {renderItems([{ kind: 'tabs', start: 0, end: pinnedCount }], 0)}
+        </PinnedHomeTabSlot>
+      ) : null}
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -164,9 +169,7 @@ export function renderTabBarSurface(
           <div
             data-single-tab={singleTab ? '' : undefined}
             // Why: tabs are the only drag source, so a narrow pane clips the "+" before the last tab sliver.
-            className={`group/tab-strip relative flex min-h-0 w-max max-w-full shrink ${
-              hasTabs ? 'min-w-10' : 'min-w-0'
-            }`}
+            className={`group/tab-strip relative flex min-h-0 w-max max-w-full ${stripSizeClassName(strip)}`}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
             <div
@@ -235,11 +238,11 @@ export function renderTabBarSurface(
         modal={false}
       >
         <DropdownMenuTrigger asChild>
-          {/* Why: below 86px (40 tab floor + 36 "+" + 8 action padding + 2 sub-pixel slack) "+" would only clip; hide it whole so Tab never lands on it. Empty groups keep it. */}
+          {/* Why: "+" hides whole rather than clip, so Tab never lands on it (rendered-tab-strip.ts). */}
           <button
-            className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${
-              hasTabs ? '@max-[86px]/tab-strip:hidden' : ''
-            }`}
+            className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${newTabButtonHideClassName(
+              strip
+            )}`}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             aria-label={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
@@ -248,87 +251,15 @@ export function renderTabBarSurface(
             <Plus className="w-3.5 h-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <NewTabMenuContent
-          align="start"
-          sideOffset={6}
-          className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
-          onCloseAutoFocus={(event) => {
-            // Why: Radix restores focus to the "+" trigger on close, stealing it from the freshly-mounted terminal.
-            event.preventDefault()
-            runPendingNewTabMenuFocusAfterClose()
-            advanceAgentSessionsTourPastNewTab()
-          }}
-        >
-          {!terminalOnly && onOpenEntry ? (
-            <>
-              <TabBarAgentPickerEntry
-                inventory={agentPickerInventory}
-                terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                excludedTabId={
-                  activeClientHostedBrowserRowId === null ? itemProjection.activeUnifiedTabId : null
-                }
-                menuOpen={newTabMenuOpen}
-                menuOptions={createMenuOptions}
-                // A bot's or group's home offers its agents only through its chats, above.
-                hideAgents={bot !== null || botGroup !== null}
-                onLaunchAgentOption={launchAgentFromNewTabEntry}
-                onOpenDefaultTerminal={() => {
-                  queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                  onNewTerminalTab()
-                }}
-                onOpenEntry={onOpenEntry}
-                onQueryChange={setCreateMenuQuery}
-                onQueueSwitchFocus={queueFocusAfterNewTabMenuClose}
-                onSelectMenuOption={handleSelectCreateMenuOption}
-                onDidOpenEntry={() => setNewTabMenuOpen(false)}
-              />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator className="my-0 mb-1.5" /> : null}
-            </>
-          ) : null}
-          {bot && !terminalOnly ? <BotNewChatMenuItems bot={bot} model={agentMenu} /> : null}
-          {botGroup && !terminalOnly ? (
-            <>
-              <BotGroupNewThreadMenuItems group={botGroup} />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
-            </>
-          ) : null}
-          {showStaticCreateMenuItems ? (
-            <TabBarStaticCreateMenu
-              props={props}
-              groupId={resolvedGroupId}
-              terminalOnly={terminalOnly}
-              mobileEmulatorEnabled={mobileEmulatorEnabled}
-              managedBrowserCreationEnabled={managedBrowserCreationEnabled}
-              mobileEmulatorCreationEnabled={mobileEmulatorCreationEnabled}
-              workspaceHasSimulatorTab={workspaceHasSimulatorTab}
-              showMobileEmulatorIntroCallout={showMobileEmulatorIntroCallout}
-              windowsShellEntries={windowsShellEntries}
-              defaultWindowsPowerShellImplementation={defaultWindowsPowerShellImplementation}
-              pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
-              queueNewActiveTerminalFocusAfterNewTabMenuClose={
-                queueNewActiveTerminalFocusAfterNewTabMenuClose
-              }
-            />
-          ) : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems && !botGroup ? (
-            <>
-              <DropdownMenuSeparator />
-              {bot ? (
-                <OpenAgentSettingsMenuItem variant="create" />
-              ) : (
-                <ProjectedAgentMenuItems
-                  model={agentMenu}
-                  pickerInventory={agentPickerInventory}
-                  onSelectPickerAgent={selectPickerAgent}
-                  hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
-                  runLaunch={launchAgentRow}
-                />
-              )}
-            </>
-          ) : null}
-        </NewTabMenuContent>
+        <TabBarNewTabMenuContentHost
+          props={props}
+          runtime={runtime}
+          createMenu={createMenu}
+          itemProjection={itemProjection}
+          activeClientHostedBrowserRowId={activeClientHostedBrowserRowId}
+          bot={bot}
+          botGroup={botGroup}
+        />
       </DropdownMenu>
     </div>
   )

@@ -2,6 +2,8 @@
 
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import {
@@ -15,8 +17,10 @@ import {
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import { antigravityTakesSystemPrompt } from '../acp/launch/acp-instructions'
 
-/** First release verified with Orca chats; it also leaves the chat's folder untouched. */
-export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
+/** The oldest agy shown to run a chat on a home it is given (`--gemini-dir`) and to ignore an
+ *  inherited GEMINI_API_KEY unless its own settings pick a key provider (checked on 1.5.5, 1.5.13
+ *  and 1.5.16), so Orca passes the key through untouched. */
+export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.5'
 /** agy keeps its sign-in and conversations here and ignores GEMINI_HOME, so this only pins the chat. */
 const AGY_HOME_FOLDER = '.gemini'
 /** Approves tools, not plans; the check launches with it, so a build without it stays managed. */
@@ -47,6 +51,23 @@ export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse):
 /** The account home of chats pinned to the host's agy and its own sign-in. */
 export function antigravityHostAccountHome(homePath: string): AgentSessionAccountHome {
   return { variable: 'GEMINI_HOME', path: join(homePath, AGY_HOME_FOLDER) }
+}
+
+/** The catalogs listed with the host's agy login: under `launchHome`, or each home Orca itself
+ *  resolves it from. */
+export function antigravityHostCatalogFingerprints(launchHome?: string): string[] {
+  const homes = new Set(
+    (launchHome ? [launchHome] : [homedir(), process.env.HOME, process.env.USERPROFILE]).filter(
+      Boolean
+    )
+  )
+  return [...homes].map((home) =>
+    agentModelCatalogFingerprint({
+      agent: 'antigravity',
+      accountHome: antigravityHostAccountHome(home!),
+      wslDistro: null
+    })
+  )
 }
 
 /** Managed chats pin `<userData>/antigravity-chat`, so only this folder name selects the host's agy. */
@@ -240,5 +261,32 @@ export async function agyUsesApiKey(homePath: string): Promise<boolean> {
   } catch {
     // Settings agy may read differently than JSON.parse could select a provider.
     return true
+  }
+}
+
+/** Whether agy's own settings leave it on personal Google sign-in: no model provider and no other
+ *  auth type. Settings JSON.parse can't read count as something else. */
+export async function agySignsInWithPersonalGoogle(homePath: string): Promise<boolean> {
+  const text = await readFile(
+    join(homePath, AGY_HOME_FOLDER, 'antigravity-cli', 'settings.json'),
+    'utf8'
+  ).catch((error: NodeJS.ErrnoException) => (error.code === 'ENOENT' ? null : undefined))
+  // Missing: agy's defaults. Unreadable: unknown, so not the same sign-in.
+  if (text === null || text === undefined) {
+    return text === null
+  }
+  try {
+    const settings: unknown = JSON.parse(text)
+    if (typeof settings !== 'object' || settings === null) {
+      return false
+    }
+    const auth = 'auth' in settings ? settings.auth : undefined
+    const type = typeof auth === 'object' && auth !== null && 'type' in auth ? auth.type : undefined
+    return (
+      !('modelProvider' in settings && settings.modelProvider) &&
+      (auth === undefined || type === undefined || type === 'oauth-personal')
+    )
+  } catch {
+    return false
   }
 }

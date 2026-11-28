@@ -6,6 +6,8 @@ import {
 } from '../../../../../../shared/sidebar-list/sorting/smart-attention'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 
+const ATTENTION_CLASSES = [1, 2, 3, 4] as const
+
 export function readProjectionAttention(
   data: AgentStatusProjectionState,
   worktreeId: string,
@@ -17,11 +19,11 @@ export function readProjectionAttention(
     return IDLE
   }
   let attention = IDLE
-  for (const cls of [1, 2, 3, 4] as const) {
-    if (b.attention[cls - 1].size) {
+  for (let i = 0; i < ATTENTION_CLASSES.length; i += 1) {
+    if (b.attention[i].size) {
       attention = {
-        cls,
-        attentionTimestamp: -b.attention[cls - 1].next
+        cls: ATTENTION_CLASSES[i],
+        attentionTimestamp: -b.attention[i].next
       }
       break
     }
@@ -49,15 +51,14 @@ export function readProjectionMobileSnapshots(
 ): ReadonlyMap<string, ReadonlyMap<string, AgentStatusEntry>> {
   for (const [owner, keys] of data.mobileKeys) {
     if (!data.mobileOutputs.has(owner)) {
-      data.mobileOutputs.set(
-        owner,
-        new Map(
-          [...keys].flatMap((key) => {
-            const row = statuses.get(key)
-            return row ? [[key, row] as const] : []
-          })
-        )
-      )
+      const snapshot = new Map<string, AgentStatusEntry>()
+      for (const key of keys) {
+        const row = statuses.get(key)
+        if (row) {
+          snapshot.set(key, row)
+        }
+      }
+      data.mobileOutputs.set(owner, snapshot)
     }
   }
   return data.mobileOutputs

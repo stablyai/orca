@@ -3,6 +3,10 @@ export const MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY = 'managed-runtime.insta
 // Why separate: a host that installs may predate managedRuntime.remove.
 export const MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY = 'managed-runtime.remove.v1' as const
 
+/** Orca no longer installs agy, which users install themselves, so an older host's offer to
+ *  install it is read as agy missing. */
+export const managedRuntimeRetired = (agent: string): boolean => agent === 'antigravity'
+
 export type ManagedRuntimeOperation = {
   id: string
   kind: 'install' | 'remove'

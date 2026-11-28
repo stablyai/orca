@@ -11,7 +11,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { UnfoldVertical } from 'lucide-react-native'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   DIFF_LINE_ID_PREFIX,
@@ -25,13 +25,13 @@ import {
   buildMobileDiffReviewRows,
   type MobileDiffReviewRow
 } from '../diff-state/mobile-diff-review-rows'
-import { colors } from '../../../theme/mobile-theme'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStylesSheet } from './mobile-diff-review-screen-styles'
 import type { MobileDiffReviewThread } from '../diff-actions/mobile-diff-review-github'
-import type { PRCommentCardActions } from '../pull-request/comments/PRCommentCard'
-import { CommentGroupView } from '../pull-request/comments/PRCommentsSection'
+import { MobileDiffReviewThreadRow } from './MobileDiffReviewThreadRow'
+import type { PrThreadActions } from '../pull-request/comments/PrThreadRow'
 import { useNow } from '../../../hooks/use-now'
 import { triggerSelection } from '../../../platform/haptics/haptics'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 const NO_OPENED_LINES: ReadonlySet<number> = new Set()
 
@@ -65,7 +65,8 @@ export function MobileDiffReviewLines({
   selectedRange,
   scrollToLine,
   onScrolledToLine,
-  onPickLines,
+  onSelectLines,
+  onOpenThread,
   onEditNote
 }: {
   lines: ReviewDiffLine[]
@@ -73,16 +74,18 @@ export function MobileDiffReviewLines({
   commentsByLine: ReadonlyMap<number, DiffComment[]>
   staleCommentIds: ReadonlySet<string>
   threadsByLine: ReadonlyMap<number, readonly MobileDiffReviewThread[]>
-  threadActions: PRCommentCardActions | undefined
-  /** The lines the open note sheet is about, kept highlighted under it. */
+  threadActions: PrThreadActions | undefined
+  /** The picked lines, or those the open comment sheet is about. */
   selectedRange: LineRange | null
   scrollToLine: number | null
   onScrolledToLine: () => void
-  /** Absent where lines take no notes, e.g. a past commit's files. */
-  onPickLines?: (range: LineRange) => void
+  /** Absent where lines take no notes, e.g. a past commit's files. Null clears the pick. */
+  onSelectLines?: (range: LineRange | null) => void
+  onOpenThread: (threadId: string, focusReply: boolean) => void
   onEditNote: (comment: DiffComment) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const now = useNow(60_000, threadsByLine.size > 0)
   // Opened folds are line indexes into this load; a reload with new lines starts folded again.
@@ -212,7 +215,7 @@ export function MobileDiffReviewLines({
     return Number.isInteger(line) ? line : null
   }
   const pick = Gesture.Pan()
-    .enabled(onPickLines !== undefined)
+    .enabled(onSelectLines !== undefined)
     .activateAfterLongPress(RANGE_PICK_LONG_PRESS_MS)
     .shouldCancelWhenOutside(false)
     .runOnJS(true)
@@ -242,22 +245,33 @@ export function MobileDiffReviewLines({
       }
       // A cancelled drag (the browser took the touch, say) picks nothing.
       if (picked && success) {
-        onPickLines?.({
+        onSelectLines?.({
           startLine: Math.min(picked.anchor, picked.line),
           line: Math.max(picked.anchor, picked.line)
         })
       }
     })
-  // Stable, so a drag step re-renders only the rows whose highlight changed.
+  // A tap picks one line, and a tap inside the pick clears it. Through a ref, so a drag step
+  // re-renders only the rows whose highlight changed.
+  const selectedRef = useRef(selectedRange)
+  useEffect(() => {
+    selectedRef.current = selectedRange
+  }, [selectedRange])
   const pickOneLine = useCallback(
     (line: number) => {
       if (pickConsumedTapRef.current) {
         pickConsumedTapRef.current = false
         return
       }
-      onPickLines?.({ startLine: line, line })
+      const current = selectedRef.current
+      if (current && line >= current.startLine && line <= current.line) {
+        onSelectLines?.(null)
+        return
+      }
+      triggerSelection()
+      onSelectLines?.({ startLine: line, line })
     },
-    [onPickLines]
+    [onSelectLines]
   )
   const highlighted: LineRange | null = dragRange
     ? {
@@ -332,8 +346,13 @@ export function MobileDiffReviewLines({
                   </View>
                 </Pressable>
               ) : row.kind === 'thread' ? (
-                <View style={[styles.threadRow, viewportRow]}>
-                  <CommentGroupView group={row.thread} actions={threadActions} now={now} />
+                <View style={viewportRow}>
+                  <MobileDiffReviewThreadRow
+                    thread={row.thread}
+                    actions={threadActions}
+                    now={now}
+                    onOpenThread={(focusReply) => onOpenThread(row.thread.threadId, focusReply)}
+                  />
                 </View>
               ) : (
                 <MobileDiffReviewLine
@@ -348,7 +367,7 @@ export function MobileDiffReviewLines({
                     row.line.newLineNumber >= highlighted.startLine &&
                     row.line.newLineNumber <= highlighted.line
                   }
-                  {...(onPickLines ? { onAddNote: pickOneLine } : {})}
+                  {...(onSelectLines ? { onSelectLine: pickOneLine } : {})}
                   onEditNote={onEditNote}
                 />
               )}

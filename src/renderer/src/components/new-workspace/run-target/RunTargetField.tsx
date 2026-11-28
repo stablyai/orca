@@ -21,11 +21,13 @@ export default function RunTargetField({
   committed,
   isRecipe,
   hostId,
+  icon,
   label,
   detail,
   listId,
   hasArmedRow,
   inputRef,
+  errorId,
   onKeyDown,
   truncateMiddle = false
 }: {
@@ -38,17 +40,24 @@ export default function RunTargetField({
   committed: boolean
   isRecipe: boolean
   hostId: ExecutionHostId | null
+  /** The picked row's own icon, e.g. a WSL distro's penguin; else the host's. */
+  icon?: React.ReactNode
   label: string
   detail: string
   listId: string
   hasArmedRow: boolean
   inputRef: React.RefObject<HTMLInputElement | null>
+  errorId?: string
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
   /** A long label loses its middle rather than its end. */
   truncateMiddle?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  // Opening the list ends a tooltip, so closing it (Escape) doesn't bring the tooltip back unasked.
+  if (open && tooltipOpen) {
+    setTooltipOpen(false)
+  }
   // The visible name is drawn over the search input and hidden from assistive tech, so the committed
   // target is its description: it holds whatever is typed or highlighted, until a row is picked.
   const committedId = useId()
@@ -62,12 +71,17 @@ export default function RunTargetField({
               inputRef.current?.focus()
               onOpenRequest()
             }}
-            className={COMBOBOX_FIELD_SHELL}
+            className={cn(
+              COMBOBOX_FIELD_SHELL,
+              'has-aria-invalid:border-destructive has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:ring-destructive/40'
+            )}
           >
             <span className="flex w-4 shrink-0 items-center justify-center">
               {committed ? (
                 isRecipe ? (
                   <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : icon ? (
+                  icon
                 ) : hostId ? (
                   <HostRowIcon hostId={hostId} />
                 ) : null
@@ -91,7 +105,10 @@ export default function RunTargetField({
                 aria-controls={listId}
                 aria-autocomplete="list"
                 aria-activedescendant={open && hasArmedRow ? `${listId}-armed` : undefined}
-                aria-describedby={label ? committedId : undefined}
+                aria-invalid={errorId ? true : undefined}
+                aria-describedby={
+                  [label ? committedId : undefined, errorId].filter(Boolean).join(' ') || undefined
+                }
                 value={query}
                 placeholder={
                   committed
@@ -99,7 +116,7 @@ export default function RunTargetField({
                     : t('auto.components.NewWorkspaceComposerCard.chooseRunTarget', 'Choose target')
                 }
                 onChange={(event) => onQueryChange(event.target.value)}
-                onFocus={onOpenRequest}
+                onFocus={errorId ? undefined : onOpenRequest}
                 onKeyDown={onKeyDown}
                 className={cn(
                   'w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground',

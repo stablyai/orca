@@ -24,9 +24,7 @@ export function renderResourceUsagePopoverHeader(
     <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
       <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
         <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
-        <span className="truncate">
-          {t('auto.components.status.bar.StatusBar.d1e1a7a6bf', 'Resource Manager')}
-        </span>
+        <span className="truncate">{t('resourceManager.resources', 'Resources')}</span>
       </div>
 
       <div className="flex items-center gap-0.5">
@@ -172,7 +170,10 @@ export function renderResourceUsageSummary(
 ): React.JSX.Element {
   const labels = resourceOwnerLabels(t)
   const widths = barWidths(ownerSplit)
-  const privateLabel = t('resourceManager.owner.privateBytes', 'Committed by Orca and terminals')
+  const privateLabel = t(
+    'resourceManager.owner.privateBytes',
+    'Committed by Orca, agents and terminals'
+  )
   return (
     <div className="shrink-0 border-b border-border px-3 pt-2 pb-1.5 text-xs tabular-nums">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">

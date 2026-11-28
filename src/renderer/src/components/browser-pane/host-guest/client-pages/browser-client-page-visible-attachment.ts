@@ -26,6 +26,24 @@ export function findBrowserClientRetainedPageForAttachment(
   return undefined
 }
 
+// Why newest: a profile switch keeps the old generation attached until its retire arrives.
+export function findNewestAttachedBrowserClientRetainedPage(
+  pages: Map<string, RetainedPage>,
+  browserPageId: string
+): RetainedPage | null {
+  let newest: RetainedPage | null = null
+  for (const page of pages.values()) {
+    if (
+      page.status === 'attached' &&
+      page.identity.browserPageId === browserPageId &&
+      (!newest || page.identity.pageHostGeneration > newest.identity.pageHostGeneration)
+    ) {
+      newest = page
+    }
+  }
+  return newest
+}
+
 export function attachBrowserClientRetainedPage(
   page: RetainedPage | undefined,
   pages: Map<string, RetainedPage>,

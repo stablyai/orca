@@ -19,7 +19,6 @@ function Row(): React.JSX.Element {
       <SourceControlActionRecipeRow
         actionId="fixChecks"
         selectedAgent="claude"
-        defaultTuiAgent="claude"
         draftValue={draft}
         baseValue={draft}
         isSavingTemplate={false}

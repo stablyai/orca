@@ -11,13 +11,19 @@ import {
   NOTIFICATION_SOUND_MIME_BY_EXTENSION
 } from './notification-sound-selection'
 import { isNotificationFocusActive } from '../../notifications/notification-focus-state'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 
-export function registerNotificationSoundHandlers(store: Store): void {
+export function registerNotificationSoundHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   // Return paths so preload caching avoids repeat 10MB sound transfers.
-  ipcMain.removeHandler('notifications:resolveSoundPath')
-  ipcMain.handle(
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('notifications:resolveSoundPath')
+  }
+  ipc.handle(
     'notifications:resolveSoundPath',
     async (_event, options?: { force?: boolean }): Promise<NotificationSoundPathResult> => {
       // Custom audio bypasses OS notification muting; explicit previews bypass this gate.
@@ -36,8 +42,10 @@ export function registerNotificationSoundHandlers(store: Store): void {
     }
   )
 
-  ipcMain.removeHandler('notifications:loadSound')
-  ipcMain.handle('notifications:loadSound', async (): Promise<NotificationSoundDataResult> => {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('notifications:loadSound')
+  }
+  ipc.handle('notifications:loadSound', async (): Promise<NotificationSoundDataResult> => {
     const selectedSound = getSelectedNotificationSoundPath(store.getSettings().notifications)
     if (!selectedSound.path) {
       return { ok: false, reason: selectedSound.reason ?? 'missing-path' }

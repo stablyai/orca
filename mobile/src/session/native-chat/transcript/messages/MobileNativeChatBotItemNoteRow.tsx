@@ -23,16 +23,13 @@ import { BotChatOpenContext, BotItemOpenContext } from '../../../../bots/bot-ite
 import { MobileBotItemStatusIcon } from '../../../../bots/items/MobileBotItemStatusIcon'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { Prose } from '../message-content/MobileNativeChatProse'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
-import {
-  MobileNativeChatActivityJoinContext,
-  mobileNativeChatActivityJoinMargins
-} from './mobile-native-chat-activity-join'
-import { scaledType, styles as messageStyles } from './mobile-native-chat-message-styles'
+import { MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP } from './mobile-native-chat-activity-join'
+import { scaledType, stylesSheet } from './mobile-native-chat-message-styles'
 
 /** Chips a bulk line shows before "+N more", as on the desktop. */
 const CHIPS_SHOWN = 3
@@ -52,6 +49,7 @@ function ItemChip({
   fontScale: number
   open: ((itemUid: string) => void) | null
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
   const body = (
     <>
@@ -92,6 +90,8 @@ function ChatChip({
   chat: BotItemNoteLineChat
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
   const open = useContext(BotChatOpenContext)
   const body = (
@@ -129,6 +129,7 @@ function Lead({
   type: ReturnType<typeof scaledType>
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesThemedSheet)
   const { chat } = line
   const before = chat ? chat.after : line.lead
   const words = [before, line.link?.name, line.link?.after].filter(Boolean).join(' ')
@@ -161,7 +162,8 @@ function QuietLine({
   line: BotItemNoteLine & { kind: 'line' }
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
   const open = useContext(BotItemOpenContext)
   const [allChips, setAllChips] = useState(false)
@@ -234,13 +236,15 @@ function CommentLine({
   fontScale: number
   belowAnother: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const messageStyles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
   const open = useContext(BotItemOpenContext)
   // The comment's images go with its mail, so the [Image #N] its send wrote go, as on desktop.
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
-    // A message, so a row gap below what the note drew above it, not the lines' 2 pt.
+    // A message, so a row gap below what the note drew above it, not the lines' 3 pt.
     <View style={[messageStyles.userBubble, styles.comment, belowAnother && styles.belowAnother]}>
       <View style={styles.commentOn}>
         <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
@@ -267,11 +271,10 @@ export function MobileNativeChatBotItemNoteRow({
   rowId: string
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
-  const join = useContext(MobileNativeChatActivityJoinContext)
-  const edges = mobileNativeChatActivityJoinMargins(join, spacing.xs)
   return (
-    <View style={[styles.row, edges]} testID={mobileNativeChatRowId(rowId)}>
+    <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
       {noteLines(note, t).map((line, index) =>
         line.kind === 'comment' ? (
           <CommentLine
@@ -309,11 +312,11 @@ export function mobileNativeChatBotItemRow(
   return isBotItemMail(message) || folded ? <View testID={mobileNativeChatRowId(rowId)} /> : null
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesThemedSheet = themedStyleSheet((colors) => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
-    gap: spacing.xxs
+    gap: MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP
   },
   line: {
     flexDirection: 'row',
@@ -385,7 +388,7 @@ const styles = themedStyleSheet(() => ({
     gap: spacing.xs
   },
   // With the lines' gap, the 12 pt a note row (4) and a message row (8) leave between them.
-  belowAnother: { marginTop: spacing.md - spacing.xxs },
+  belowAnother: { marginTop: spacing.md - MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP },
   commentOn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -6,9 +6,7 @@ import {
   type AiTextActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
-  CUSTOM_AGENT_ID,
   type CustomAgentId,
-  getCommitMessageAgentCapability,
   isCustomAgentId,
   listCommitMessageAgentCapabilities
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -71,43 +69,8 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
   )
 }))
 
-const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
-
-const AGENT_ARGS_PLACEHOLDER_OVERRIDES: Partial<Record<TuiAgent, string>> = {
-  antigravity: '--effort low',
-  // Short, reviewable Source Control prompts default to the mini model.
-  codex: '--model gpt-5.4-mini',
-  copilot: '--model gpt-5.4-mini',
-  omp: '--model <provider/model>'
-}
-
-const MODEL_FLAG_BY_AGENT: Partial<Record<TuiAgent, string>> = {
-  amp: '--mode'
-}
-
-export function getSourceControlAgentArgsPlaceholder(
-  agentId: TuiAgent | CustomAgentId | null | undefined
-): string {
-  if (!agentId) {
-    return FALLBACK_AGENT_ARGS_PLACEHOLDER
-  }
-
-  if (agentId === CUSTOM_AGENT_ID) {
-    return '--flag value'
-  }
-
-  const override = AGENT_ARGS_PLACEHOLDER_OVERRIDES[agentId]
-  if (override) {
-    return override
-  }
-
-  const capability = getCommitMessageAgentCapability(agentId)
-  if (!capability) {
-    return '--model <model>'
-  }
-
-  return `${MODEL_FLAG_BY_AGENT[agentId] ?? '--model'} ${capability.defaultModelId}`
-}
+// The model picker owns the model, so the example names no model that could differ from what runs.
+export const SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER = '--flag value'
 
 // Only text generators can run these actions; retain unsupported saved selections for visibility.
 export function getAgentCatalogForAction(

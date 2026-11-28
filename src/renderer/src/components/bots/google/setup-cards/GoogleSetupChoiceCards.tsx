@@ -1,6 +1,7 @@
 // The setup's choice cards: how to do it, which Google account, which services. A click records the
 // answer and tells the bot without a chat message; the card locks and shows a receipt instead.
-import React, { useState } from 'react'
+import type React from 'react'
+import { useNativeChatViewState } from '@/components/native-chat/pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { NativeChatCardActions } from '@/components/native-chat/NativeChatCardFrame'
@@ -15,7 +16,8 @@ import {
 import type { GoogleServiceChoice } from '../../../../../../shared/google/google-scopes'
 import {
   googleSetupAnsweredServices,
-  googleSetupChoiceChangeable
+  googleSetupChoiceChangeable,
+  googleSetupChoiceLocked
 } from '../../../../../../shared/google/google-setup-card-view'
 import { importGoogleApp } from '../google-connect-client'
 import { GoogleServicePicker } from '../GoogleServicePicker'
@@ -34,9 +36,17 @@ import {
 } from './google-setup-card-copy'
 import { answerGoogleSetup } from './google-setup-run-store'
 
-function useAnswer(bot: BotRef, card: GoogleSetupCard) {
-  const [reopened, setReopened] = useState(false)
-  const [busy, setBusy] = useState(false)
+// Kept with the chat tab, so a released chat returns with a card as the owner left it, an answer still sending included.
+const KEPT_SETUP_CHOICES = 16
+
+function useAnswer(bot: BotRef, card: GoogleSetupCard, runId: string) {
+  const [reopened, setReopened] = useNativeChatViewState(
+    `google-setup:${runId}:${card}:reopened`,
+    false,
+    KEPT_SETUP_CHOICES
+  )
+  // Not in the newest-few group: an answer in flight is never dropped, and settling deletes it.
+  const [busy, setBusy] = useNativeChatViewState(`google-setup-busy:${runId}:${card}`, false)
   const answer = async (values: string[]): Promise<void> => {
     setBusy(true)
     try {
@@ -63,14 +73,17 @@ export function GoogleSetupPathCard({
   run: GoogleSetupRun
 }): React.JSX.Element {
   const t = useTranslate()
-  const { reopened, reopen, busy, answer } = useAnswer(bot, 'path')
+  const { reopened, reopen, busy, answer } = useAnswer(bot, 'path', run.id)
   const answered = run.answers.path?.values[0]
   const chosen = GOOGLE_SETUP_MODES.find((mode) => mode === answered)
-  const locked = answered !== undefined && !reopened
-  const file = useGoogleClientFile(async (text) => {
-    await importGoogleApp(botTarget(bot), text)
-    await answer(['import'])
-  })
+  const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
+  const file = useGoogleClientFile(
+    async (text) => {
+      await importGoogleApp(botTarget(bot), text)
+      await answer(['import'])
+    },
+    { memoryKey: `choice:${run.id}` }
+  )
   const receipt = (): string => {
     if (answered === 'not-now') {
       return t('bots.googleSetup.receipt.dismissed', '✓ Dismissed')
@@ -136,7 +149,7 @@ export function GoogleSetupPathCard({
           </p>
         ) : null}
       </GoogleSetupCardFrame>
-      {locked ? (
+      {locked && answered !== undefined ? (
         <GoogleSetupReceipt
           text={receipt()}
           onChange={googleSetupChoiceChangeable(run) ? reopen : undefined}
@@ -156,9 +169,9 @@ export function GoogleSetupAccountCard({
   run: GoogleSetupRun
 }): React.JSX.Element {
   const t = useTranslate()
-  const { reopened, reopen, busy, answer } = useAnswer(bot, 'account')
+  const { reopened, reopen, busy, answer } = useAnswer(bot, 'account', run.id)
   const answered = run.answers.account?.values[0]
-  const locked = answered !== undefined && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
   return (
     <div>
       <GoogleSetupCardFrame heading={t('bots.googleSetup.progress.heading', 'Setting up Google')}>
@@ -214,10 +227,15 @@ export function GoogleSetupServicesCard({
   run: GoogleSetupRun
 }): React.JSX.Element {
   const t = useTranslate()
-  const { reopened, reopen, busy, answer } = useAnswer(bot, 'services')
+  const { reopened, reopen, busy, answer } = useAnswer(bot, 'services', run.id)
   const answered = googleSetupAnsweredServices(run)
-  const locked = answered !== null && !reopened
-  const [picked, setPicked] = useState<GoogleServiceChoice[]>(answered ?? ['gmail'])
+  const locked = googleSetupChoiceLocked(run, answered !== null, reopened)
+  const [kept, setPicked] = useNativeChatViewState<GoogleServiceChoice[] | null>(
+    `google-setup:${run.id}:services:picked`,
+    null,
+    KEPT_SETUP_CHOICES
+  )
+  const picked = kept ?? answered ?? ['gmail']
   const shown = locked && answered ? answered : picked
   return (
     <div>

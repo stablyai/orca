@@ -11,10 +11,10 @@ import { isWslDistroRunning } from '../../../wsl/discovery/wsl-background-distro
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
-  syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
+import { syncWslCodexConfigInDistro } from '../../../codex/configuration/settings/wsl-codex-config-sync'
 import { codexHookService } from '../../../codex/hooks/installation/hook-service'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
@@ -214,38 +214,29 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return home ? this.joinWslPath(home, '.codex') : null
   }
 
-  protected finishWslLaunchPreparation(
-    target: CodexAccountSelectionTarget,
-    homePath: string | null
-  ): void {
-    this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-  }
-
-  protected syncWslConfigAndGlobalInstructionsForLaunch(
+  /** Syncs settings and instructions inside the distro (one helper run) before Codex spawns. */
+  protected async syncWslConfigAndGlobalInstructionsForLaunch(
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
-  ): void {
-    if (!runtimeHomePath) {
+  ): Promise<void> {
+    const runtimeHome = runtimeHomePath ? parseWslUncPath(runtimeHomePath) : null
+    if (!runtimeHomePath || !runtimeHome) {
       return
     }
-    const distro =
-      parseWslUncPath(runtimeHomePath)?.distro || target.wslDistro?.trim() || getDefaultWslDistro()
+    const distro = runtimeHome.distro || target.wslDistro?.trim() || getDefaultWslDistro()
     if (!distro) {
       return
     }
     const systemHomePath = this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
-    if (!systemHomePath || systemHomePath === runtimeHomePath) {
+    const systemHome = systemHomePath ? parseWslUncPath(systemHomePath) : null
+    if (!systemHome || systemHome.linuxPath === runtimeHome.linuxPath) {
       return
     }
-    // Distro-local homes need the guest user's instructions, which host resource mirroring cannot supply.
-    syncCodexGlobalInstructionsIntoManagedHome({
-      systemHomePath,
-      managedHomePath: runtimeHomePath
-    })
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath,
-      systemHomePath,
-      systemConfigDir: toLinuxPath(systemHomePath)
+    await syncWslCodexConfigInDistro({
+      distro,
+      linuxSystemHome: systemHome.linuxPath,
+      homes: [{ runtimeHomePath, linuxRuntimeHome: runtimeHome.linuxPath }],
+      forLaunch: true
     })
   }
 

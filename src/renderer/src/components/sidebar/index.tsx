@@ -32,7 +32,6 @@ import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from '../repo/toolchain/LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from '../maintenance/terminal-daemon/SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/StalledTerminalDaemonBanner'
-import { SidebarBotsSection } from '@/components/bots/SidebarBotsSection'
 import { SidebarBotsSplit, SidebarProjectsListSlot } from './SidebarBotsSplit'
 import { SidebarContentViewport } from './SidebarContentViewport'
 import { SidebarSectionDragOverlay } from './SidebarSectionDragOverlay'
@@ -40,12 +39,22 @@ import { PROJECTS_SECTION_GROUP_KEY } from '../../../../shared/sidebar-list/sect
 import { useBotsEnabled } from '@/lib/bot-catalog'
 import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
 import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCardsIntroNotice'
-import { WORKSPACE_LIST_REGION_ID } from '@/components/app-rail/app-rail-layout'
+import {
+  selectRailPageHidesWorkspaceList,
+  selectWorkspaceListOpen,
+  WORKSPACE_LIST_REGION_ID
+} from '@/components/app-rail/app-rail-layout'
+import { useRailPageListFocusRelease } from '@/components/app-rail/rail-page-list-focus-loss'
 import { setWorkspaceListRegionPresent } from '@/components/app-rail/workspace-list-region-presence'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
+const SidebarBotsSection = lazyWithRetry(() =>
+  import('@/components/bots/SidebarBotsSection').then((module) => ({
+    default: module.SidebarBotsSection
+  }))
+)
 
 const WorktreeMetaDialog = lazyWithRetry(
   () => import('./workspace-card/metadata/WorktreeMetaDialog')
@@ -102,7 +111,13 @@ function Sidebar({
   worktreeScrollOffsetRef,
   worktreeScrollAnchorRef
 }: SidebarProps): React.JSX.Element {
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  // Whether the list shows: collapsed on a rail page (rail on) while the saved choice stays.
+  const sidebarOpen = useAppStore(selectWorkspaceListOpen)
+  // Why the saved choice: a rail page only hides the rows (zero width, inert), so their drafts, open dialogs, sort
+  // session and smart-sort latch survive the visit; only the user's own collapse unmounts them.
+  const rowsMounted = useAppStore((s) => s.sidebarOpen)
+  const hiddenByRailPage = useAppStore(selectRailPageHidesWorkspaceList)
+  useRailPageListFocusRelease(hiddenByRailPage)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
@@ -226,7 +241,9 @@ function Sidebar({
       projectsCollapsed={projectsCollapsed}
       projectsFirst={projectsFirst}
     >
-      <SidebarBotsSection onOpenBot={closeWorkspaceBoard} reorderable />
+      <React.Suspense fallback={null}>
+        <SidebarBotsSection onOpenBot={closeWorkspaceBoard} reorderable />
+      </React.Suspense>
     </SidebarBotsSplit>
   ) : null
   const projectsSection = (
@@ -297,9 +314,12 @@ function Sidebar({
           id={WORKSPACE_LIST_REGION_ID}
           className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden"
           style={leftSidebarStyle}
+          // Hidden rows stay mounted but out of the tab order, pointer and accessibility tree.
+          inert={hiddenByRailPage || undefined}
+          aria-hidden={hiddenByRailPage || undefined}
           {...dropHandlers}
         >
-          {sidebarOpen && (
+          {rowsMounted && (
             <>
               <DndContext
                 sensors={sidebarSectionDragSensors}

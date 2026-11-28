@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import type {
   BrowserTabInfo,
   BrowserTabListResult
@@ -72,7 +73,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     }
   }
 
-  private readonly isAgentUsingPage = (browserPageId: string): boolean =>
+  readonly isAgentUsingPage = (browserPageId: string): boolean =>
     this.browserManager.isAgentUsingPage(browserPageId)
 
   private routedPage(key: string | undefined): string | null {
@@ -115,11 +116,11 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       if (!wc) {
         return null
       }
-      return {
+      return redactBrowserMetadata({
         browserPageId: target.browserPageId,
         url: wc.getURL() ?? '',
         title: wc.getTitle() ?? ''
-      }
+      })
     } catch {
       return null
     }
@@ -131,6 +132,17 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     browserPageId: string
   ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
     return this.browserManager.getBrowserPageNavigationState(browserPageId)
+  }
+  /** A server page's sound and agent flags, which its session row carries only when set. */
+  getPageRowFields(browserPageId: string): {
+    audible?: true
+    audioMuted?: true
+    agentDriving?: true
+  } {
+    return {
+      ...this.browserManager.getBrowserPageAudioRowFields(browserPageId),
+      ...(this.isAgentUsingPage(browserPageId) && { agentDriving: true as const })
+    }
   }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.selectForPerson(webContentsId, worktreeId)
@@ -182,18 +194,20 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       const openerBrowserPageId = popupOpeners.get(tabId)
       const loadError = this.browserManager.getBrowserPageLoadError(tabId)
       const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
-      result.push({
-        browserPageId: tabId,
-        profileId: this.browserManager.getSessionProfileIdForTab(tabId) ?? 'default',
-        index: index++,
-        // Failed pages report chrome-error:// instead of the requested URL.
-        url: loadError?.validatedUrl ?? wc.getURL() ?? '',
-        title: wc.getTitle() ?? '',
-        active: tabId === routedPageId,
-        loadError,
-        certificateFailure,
-        ...(openerBrowserPageId ? { openerBrowserPageId } : {})
-      })
+      result.push(
+        redactBrowserMetadata({
+          browserPageId: tabId,
+          profileId: this.browserManager.getSessionProfileIdForTab(tabId) ?? 'default',
+          index: index++,
+          // Failed pages report chrome-error:// instead of the requested URL.
+          url: loadError?.validatedUrl ?? wc.getURL() ?? '',
+          title: wc.getTitle() ?? '',
+          active: tabId === routedPageId,
+          loadError,
+          certificateFailure,
+          ...(openerBrowserPageId ? { openerBrowserPageId } : {})
+        })
+      )
     }
     // Infer an active tab for display without changing command routing.
     if (routedPageId === null && firstLiveWcId !== null && result.length > 0) {

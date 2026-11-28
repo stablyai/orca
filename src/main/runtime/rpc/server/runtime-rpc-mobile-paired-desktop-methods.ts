@@ -15,12 +15,14 @@ export const PAIRED_DESKTOP_METHODS = [
   'notifications.unregisterPush',
   'notifications.unsubscribe',
   'pairing.getEndpoints',
+  'pairing.getDirectEndpoints',
   'pairing.provisionRelay',
   'pairing.registerDeviceKey',
   'pairing.exchangeTicket',
   // The configured servers the desktop shows, and their workspace lists as it last fetched them.
   'mobileRelay.hosts.list',
   'mobileRelay.hosts.worktrees',
+  'mobileRelay.hosts.unwatchRows',
   // The sidebar's Project grouping inputs, as the desktop window last published them.
   'mobileRelay.projectSections',
   'speech.dictation.cancel',
@@ -49,6 +51,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'accounts.selectClaude',
   'accounts.selectCodex',
   'accounts.selectCodexForTarget',
+  // OpenCode and Devin profiles, listed in the same accounts.list snapshot.
+  'accounts.selectData',
   'accounts.subscribe',
   'accounts.unsubscribe',
   'github.project.addIssueCommentBySlug',

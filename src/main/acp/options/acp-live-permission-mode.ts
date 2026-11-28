@@ -15,6 +15,8 @@ type LivePermissionSession = Pick<
 const modeWrites = new WeakMap<LivePermissionSession, Promise<void>>()
 // Agents with an unanswered mode write: it may still land, so their mode stays unknown until a restart.
 const unansweredModes = new WeakSet<object>()
+// Kept agents that refused a mode write: their mode changes only by a restart from then on.
+const refusedModes = new WeakSet<object>()
 
 /** The choice the agent runs under now: Orca's own for requests it answers, else the agent's
  *  reported session mode; null when that mode is none of Orca's. */
@@ -32,6 +34,26 @@ export function acpRunningPermission(
   }
   const reported = session.options.reportedPermissionMode(session.permissionModes)
   return isAgentChatPermissionMode(reported) ? reported : null
+}
+
+/** A kept agent the transition can switch to `mode` live (a write before the send), not by a restart. */
+export function acpKeptModeTakesLive(
+  session: LivePermissionSession,
+  mode: AgentChatPermissionChoice
+): boolean {
+  const { kept } = session.connection
+  if (
+    !kept ||
+    kept.agentExited ||
+    mode === 'own' ||
+    unansweredModes.has(session) ||
+    refusedModes.has(session)
+  ) {
+    return false
+  }
+  return session.spec.permissionModeConfig
+    ? session.permissionModes?.[mode] !== undefined
+    : !session.launchArgsGrantFullAccess
 }
 
 /** Settles once every mode write already asked of this chat has been answered or given up. */
@@ -80,6 +102,8 @@ async function writeAcpSessionMode(
       // Only the agent's refusal proves the mode held; otherwise the next send restarts the agent.
       if (!(error instanceof AcpAgentError)) {
         unansweredModes.add(session)
+      } else if (session.connection.kept) {
+        refusedModes.add(session)
       }
       throw error
     })

@@ -111,15 +111,15 @@ export function useStructuredAgentSessionsStarting(
   return useMemo(() => new Set(key ? key.split('\n') : []), [key])
 }
 
-/** Whether the host says this chat runs a program the host already has; an older host never does. */
-export function useStructuredAgentSessionHostProgram(
+/** Whether the host says this chat runs on its program's own login; an older host never does. */
+export function useStructuredAgentSessionOwnLogin(
   sessionId: string,
   target: RuntimeClientTarget
 ): boolean {
   const { feed, subscribe } = useSessionFeed(sessionId, target)
   return useSyncExternalStore(
     subscribe,
-    () => feed.getSnapshot().get(sessionId)?.hostProgram === true,
+    () => feed.getSnapshot().get(sessionId)?.ownLogin === true,
     () => false
   )
 }

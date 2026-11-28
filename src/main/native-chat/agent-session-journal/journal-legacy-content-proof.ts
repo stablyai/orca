@@ -23,6 +23,8 @@ export type LegacySessionHold = {
    * store already holds the same.
    */
   original?: LegacyOriginal
+  /** Already converted here before the proof reached it; for reporting only. */
+  ready?: boolean
 }
 
 /**
@@ -81,6 +83,7 @@ export function legacySessionHold(
     }
     return {
       convert: true,
+      ready: converted,
       original: queueDiffers ? originalVersion(source, sessionId, true) : undefined
     }
   }
@@ -100,6 +103,7 @@ export function legacySessionHold(
   // A chat not converted yet takes its queue from the original as it is now when it converts.
   return {
     convert: true,
+    ready: converted,
     original:
       queueDiffers || personEditsDiffer(source, store, sessionId)
         ? originalVersion(source, sessionId, queueDiffers)

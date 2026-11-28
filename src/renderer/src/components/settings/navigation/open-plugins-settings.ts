@@ -14,3 +14,12 @@ export function openPluginsSettings(): void {
 export function togglePluginsSettings(): void {
   navigateToPluginsSettings('toggle')
 }
+
+/** Settings > Plugins only switches panes; the rail's Plugins page opens Settings first. */
+export function openShortcutsSettingsFromPlugins(fromRailPage: boolean): void {
+  const state = useAppStore.getState()
+  state.openSettingsTarget({ pane: 'shortcuts', repoId: null })
+  if (fromRailPage) {
+    state.openSettingsPage()
+  }
+}

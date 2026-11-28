@@ -2,6 +2,7 @@ import type { OrchestrationPartyLocationResult } from '../../../../shared/orches
 import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { resolveOrchestrationParty } from './orchestration-party'
+import { getRemoteDispatch } from '../db/remote-owned/remote-dispatch-records'
 import { OrchestrationError } from '../orchestration-error'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
@@ -64,7 +65,7 @@ function locateTerminal(
   return { location: null, lost: 'terminal' }
 }
 
-/** Resolve assignee pane, handle or remote attachment; absence at a federated Run home never proves worker exit. */
+/** Resolve assignee pane, handle, remote attachment or placed worker; absence at a federated Run home never proves worker exit. */
 function locateDispatchAssignee(
   dispatchId: string,
   deps: PartyLocationDeps
@@ -78,21 +79,31 @@ function locateDispatchAssignee(
   const handle =
     (paneKey ? deps.terminalHandleForPaneKey(paneKey) : null) ??
     dispatch?.assignee_handle ??
-    remote?.terminal_handle
+    remote?.terminal_handle ??
+    (dispatch ? startingWorkerHandle(dispatchId, deps.db) : null)
   if (handle && !handle.startsWith('dispatch:')) {
     return locateOrchestrationParty(handle, deps)
   }
   // A worker started on a paired server has no assignee here; its terminal is that server's.
   const federated = dispatch ? deps.db?.getFederatedDispatch(dispatchId) : undefined
-  return federated?.remote_terminal_handle
-    ? {
-        location: {
-          kind: 'terminal',
-          handle: federated.remote_terminal_handle,
-          environmentId: federated.environment_id
-        }
+  if (federated?.remote_terminal_handle) {
+    return {
+      location: {
+        kind: 'terminal',
+        handle: federated.remote_terminal_handle,
+        environmentId: federated.environment_id
       }
-    : { location: null }
+    }
+  }
+  // One a paired server owns is recorded here without its location: only that server knows it.
+  const owned = !dispatch && !remote && deps.db ? getRemoteDispatch(deps.db, dispatchId) : undefined
+  return owned ? { location: null, pairedServer: owned.environment_id } : { location: null }
+}
+
+/** A starting worker gets its assignee only at hand-over; its placed terminal or chat is recorded first. */
+function startingWorkerHandle(dispatchId: string, db: OrchestrationDb | null): string | null {
+  const worker = db?.getWorkerDispatch(dispatchId)
+  return worker?.state === 'starting' ? worker.agent_terminal_handle : null
 }
 
 function locateSession(

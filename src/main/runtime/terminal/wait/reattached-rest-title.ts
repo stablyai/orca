@@ -4,7 +4,7 @@ import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-st
 import {
   isCurrentCommandStatus,
   type TerminalCommandPaintRecord
-} from '../input/terminal-command-paint'
+} from '../input/terminal-command-paint-record'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 
 /** A read that proved nothing (a slow or failed owner) is tried again after this, while quiet. */

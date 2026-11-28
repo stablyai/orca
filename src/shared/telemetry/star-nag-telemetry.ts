@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 export const STAR_NAG_OUTCOMES = [
   'shown',
@@ -29,10 +30,10 @@ export const STAR_NAG_PROMPT_SOURCES = [
 export const STAR_NAG_PROMPT_MODES = ['gh', 'web'] as const
 export const STAR_NAG_AGENT_BUCKETS = ['0-34', '35-69', '70-139', '140-279', '280+'] as const
 
-export const starNagOutcomeSchema = z.enum(STAR_NAG_OUTCOMES)
-export const starNagPromptSourceSchema = z.enum(STAR_NAG_PROMPT_SOURCES)
-export const starNagPromptModeSchema = z.enum(STAR_NAG_PROMPT_MODES)
-export const starNagAgentBucketSchema = z.enum(STAR_NAG_AGENT_BUCKETS)
+export const starNagOutcomeSchema = lazyZodSchema(() => z.enum(STAR_NAG_OUTCOMES))
+export const starNagPromptSourceSchema = lazyZodSchema(() => z.enum(STAR_NAG_PROMPT_SOURCES))
+export const starNagPromptModeSchema = lazyZodSchema(() => z.enum(STAR_NAG_PROMPT_MODES))
+export const starNagAgentBucketSchema = lazyZodSchema(() => z.enum(STAR_NAG_AGENT_BUCKETS))
 
 export type StarNagOutcome = z.infer<typeof starNagOutcomeSchema>
 export type StarNagPromptSource = z.infer<typeof starNagPromptSourceSchema>

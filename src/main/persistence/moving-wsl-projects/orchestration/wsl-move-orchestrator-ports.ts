@@ -11,6 +11,21 @@ import type {
 } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMovedDistroVerdict } from './wsl-move-orchestrator-external-transitions'
 
+/** The sidecar's read; `unreadable` may hide a decline, so nothing moves on its own or saves. */
+export type WslMoveOrchestratorLoad =
+  | { kind: 'missing' }
+  | {
+      kind: 'readable'
+      records: Map<string, WslMoveOrchestratorRecord>
+      unknownKeys: ReadonlySet<string>
+      /** An unparseable file was set aside and the distros it may have declined are not listed yet. */
+      holdDistrosOnceListed?: boolean
+    }
+  | { kind: 'unreadable' }
+
+/** `droppingLostHold`: the answer may drop a `stateLost` hold, so only proven-local drives count. */
+export type WslMoveInUseCheck = { droppingLostHold?: boolean }
+
 export type WslMoveHostReadiness = 'ready' | 'not-running' | 'unverifiable' | 'failed'
 
 /** The newest finished move of a distro, as R38's check needs it. */
@@ -32,7 +47,7 @@ export type WslMoveOrchestratorPorts = {
   /** E11: the user's Remove of the distro's host has not proven its server stopped. */
   hostRemovalPending: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro has a WSL host record or bridge projects; a distro with neither is pruned. */
-  isDistroInUse: (distro: string) => boolean | Promise<boolean>
+  isDistroInUse: (distro: string, check?: WslMoveInUseCheck) => boolean | Promise<boolean>
   /** Whether the distro still has a WSL host record; never connects. */
   hasHost: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro's host connection is ready now; never connects. Gates timer steps. */
@@ -60,8 +75,14 @@ export type WslMoveOrchestratorPorts = {
     distro: string,
     unsavedWorkspaceIds: readonly string[]
   ) => Promise<WslMoveUseLocallyResult>
-  load: () => Map<string, WslMoveOrchestratorRecord>
-  save: (records: ReadonlyMap<string, WslMoveOrchestratorRecord>) => void
+  load: () => WslMoveOrchestratorLoad
+  /** Throws on failure; never called before a load succeeded. */
+  save: (
+    records: ReadonlyMap<string, WslMoveOrchestratorRecord>,
+    holdDistrosOnceListed?: boolean
+  ) => void
+  /** The distros installed now (the WSL registry); null when it cannot be read. */
+  listKnownDistros: () => Promise<readonly string[] | null>
   /** Returns the cancel. */
   schedule: (delayMs: number, run: () => void) => () => void
   /** One row per state change; `cause` is the preview or result behind it. */

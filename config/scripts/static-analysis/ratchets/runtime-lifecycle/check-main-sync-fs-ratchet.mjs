@@ -72,9 +72,12 @@ export function countSyncFsCalls(rel, source) {
   return collector.collectUses(rel, source).count
 }
 
-export async function collectMainSyncFsCounts(root = process.cwd()) {
+export async function collectMainSyncFsCounts(root = process.cwd(), sources = undefined) {
   const counts = new Map()
-  for (const [rel, source] of await readEventLoopSources(root, SCAN_ROOTS)) {
+  for (const [rel, source] of sources ?? (await readEventLoopSources(root))) {
+    if (!SCAN_ROOTS.some((scope) => rel.startsWith(`${scope}/`))) {
+      continue
+    }
     const count = countSyncFsCalls(rel, source)
     if (count > 0) {
       counts.set(rel, count)
@@ -83,8 +86,8 @@ export async function collectMainSyncFsCounts(root = process.cwd()) {
   return counts
 }
 
-export async function main(root = process.cwd(), arg = undefined) {
-  const counts = await collectMainSyncFsCounts(root)
+export async function main(root = process.cwd(), arg = undefined, sources = undefined) {
+  const counts = await collectMainSyncFsCounts(root, sources)
   return runCountRatchet(
     {
       name: 'main-sync-fs',

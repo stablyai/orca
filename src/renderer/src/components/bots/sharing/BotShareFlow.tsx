@@ -42,7 +42,7 @@ export function BotShareFlow({
   ...props
 }: BotShareFlowProps & { link?: BotShareLink | null; shareId?: string }): React.JSX.Element {
   const signedOut = useOrcaCloudSignedOut()
-  const linkState = useBotShareLink(props.bot.id, link, signedOut, shareId)
+  const linkState = useBotShareLink(props.bot, link, signedOut, shareId)
   return <BotSharePreview {...props} linkState={linkState} />
 }
 
@@ -162,7 +162,7 @@ function ShareBody({
         !retried &&
         (result.code === BOT_SHARE_ERRORS.expired || result.code === BOT_SHARE_ERRORS.prepareAgain)
       ) {
-        const rebuilt = await state.select({}, shown.bot.setupNote ?? '')
+        const rebuilt = await state.select({}, { setupNote: shown.bot.setupNote ?? '' })
         if (rebuilt) {
           if (rebuilt.botDigest !== shown.botDigest) {
             setPhase({ kind: 'idle' })
@@ -213,7 +213,7 @@ function ShareBody({
     }
     setPhase({ kind: 'stopping' })
     setError(null)
-    const result = await settleBotShare(stopBotShare(link.shareId, bot.id))
+    const result = await settleBotShare(stopBotShare(link.shareId, bot))
     if (!result.ok) {
       setPhase({ kind: 'confirmStop' })
       setError({ message: result.error, moved: false })

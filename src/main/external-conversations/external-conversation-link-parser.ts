@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { NATIVE_CHAT_AGENTS } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import {
   CONNECTOR_SOURCES,
@@ -7,49 +8,81 @@ import {
   type ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
 
-// A terminal pane's link from an older Orca has no session and is skipped.
-const ExternalConversationLinkSchema = z.object({
-  source: z.enum(CONNECTOR_SOURCES),
-  externalId: z.string(),
-  sessionId: z.string().min(1),
-  agent: z.enum(NATIVE_CHAT_AGENTS),
-  paneKey: z.string(),
-  bot: z.object({ kind: z.enum(['bot', 'bot-chat']), botId: z.string().min(1) }).optional(),
-  title: z.string().optional(),
-  place: z.string().optional(),
-  lastTurn: z.enum(['conversation', 'orca']).optional(),
-  adoptedTurn: z.object({ itemId: z.string().min(1), at: z.number().positive() }).optional(),
-  seenAt: z.number().nullable().optional(),
-  // Mirror facts read loosely: a malformed one is dropped alone, never the link.
-  opener: z
-    .object({
-      role: z.enum(['owner', 'member']),
-      name: z.string().max(200).optional(),
-      dm: z.literal(true).optional()
-    })
-    .optional()
-    .catch(undefined),
-  mirror: z.boolean().optional().catch(undefined),
-  mirrorBlocked: z.enum(SLACK_MIRROR_BLOCKS).optional().catch(undefined),
-  mirrorPosts: z
-    .record(
-      z.string(),
-      z.object({
-        state: z.enum(SLACK_MIRROR_POST_STATES),
+// Built inside the lazy link schema, so it costs nothing until a link is read.
+function threadStatusSchema() {
+  return z.object({
+    seq: z.number().int().nonnegative(),
+    day: z.string().max(10),
+    dayCount: z.number().int().nonnegative(),
+    armed: z
+      .object({
         at: z.number(),
-        error: z.string().max(64).optional()
+        turnEndAt: z.number(),
+        lastLineAt: z.number(),
+        lastBotAt: z.number(),
+        dueStep: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+        lines: z.number().int().nonnegative().optional()
       })
-    )
-    .optional()
-    .catch(undefined),
-  mirrorChosen: z.literal(true).optional().catch(undefined),
-  mirrorExternal: z.boolean().optional().catch(undefined),
-  mirrorHeld: z
-    .array(z.object({ event: z.unknown(), waiting: z.array(z.string()) }))
-    .optional()
-    .catch(undefined),
-  createdAt: z.number()
-})
+      .optional(),
+    pending: z
+      .object({
+        replyId: z.string().min(1).max(128),
+        text: z.string().max(500),
+        at: z.number(),
+        stop: z.boolean()
+      })
+      .optional()
+  })
+}
+
+// A terminal pane's link from an older Orca has no session and is skipped.
+const ExternalConversationLinkSchema = lazyZodSchema(() =>
+  z.object({
+    source: z.enum(CONNECTOR_SOURCES),
+    externalId: z.string(),
+    sessionId: z.string().min(1),
+    agent: z.enum(NATIVE_CHAT_AGENTS),
+    paneKey: z.string(),
+    bot: z.object({ kind: z.enum(['bot', 'bot-chat']), botId: z.string().min(1) }).optional(),
+    title: z.string().optional(),
+    place: z.string().optional(),
+    lastTurn: z.enum(['conversation', 'orca']).optional(),
+    adoptedTurn: z.object({ itemId: z.string().min(1), at: z.number().positive() }).optional(),
+    seenAt: z.number().nullable().optional(),
+    // Mirror facts read loosely: a malformed one is dropped alone, never the link.
+    opener: z
+      .object({
+        role: z.enum(['owner', 'member']),
+        name: z.string().max(200).optional(),
+        dm: z.literal(true).optional()
+      })
+      .optional()
+      .catch(undefined),
+    mirror: z.boolean().optional().catch(undefined),
+    mirrorBlocked: z.enum(SLACK_MIRROR_BLOCKS).optional().catch(undefined),
+    mirrorPosts: z
+      .record(
+        z.string(),
+        z.object({
+          state: z.enum(SLACK_MIRROR_POST_STATES),
+          at: z.number(),
+          error: z.string().max(64).optional()
+        })
+      )
+      .optional()
+      .catch(undefined),
+    mirrorChosen: z.literal(true).optional().catch(undefined),
+    mirrorExternal: z.boolean().optional().catch(undefined),
+    mirrorHeld: z
+      .array(z.object({ event: z.unknown(), waiting: z.array(z.string()) }))
+      .optional()
+      .catch(undefined),
+    muted: z.literal(true).optional().catch(undefined),
+    leaveLine: z.number().optional().catch(undefined),
+    threadStatus: threadStatusSchema().optional().catch(undefined),
+    createdAt: z.number()
+  })
+)
 
 // Cache only objects freshly constructed by ExternalConversationLinkSchema so raw caller inputs always validate.
 const parsedLinkObjects = new WeakMap<object, ExternalConversationLink>()

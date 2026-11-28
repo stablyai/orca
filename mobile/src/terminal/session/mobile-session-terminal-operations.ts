@@ -28,8 +28,6 @@ export const sessionTerminalListRead = bindDeferredRpcOperation(
   })
 )
 
-import '../quick-commands/mobile-quick-command-operations'
-
 // Keep chat writes distinct from query/accessory responders: losing a reply here means unknown delivery and forbids automatic retry.
 export const nativeChatTerminalWrite = bindDeferredRpcOperation(
   defineRpcOperation({

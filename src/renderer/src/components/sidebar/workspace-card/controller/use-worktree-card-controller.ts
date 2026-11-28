@@ -1,5 +1,6 @@
+import { useCallback } from 'react'
 import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-details'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getReadonlyWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from '../../workspace-actions/deletion/workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
@@ -11,15 +12,16 @@ import { useWorktreeCardLinkedDetails } from '../details/use-worktree-card-linke
 import { useWorktreeCardReviewDetails } from '../details/use-worktree-card-review-details'
 import { useWorktreeCardSecondaryDetails } from '../details/use-worktree-card-secondary-details'
 import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-actions'
+import { useAutoNameFailure } from '../identity/use-auto-name-failure'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
-  const { worktree, repo, compactLine } = props
-  const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine })
+  const { worktree, repo, compactLine, renameRowKey } = props
+  const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine, renameRowKey })
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,
     settings: foundation.settings,
-    projectGroups: foundation.projectGroups,
+    hasProjectGroups: foundation.hasProjectGroups,
     cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle
   })
@@ -50,6 +52,23 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus : showPR
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
+  const { closeHover } = detailsHoverControl
+  const { setTitleRenaming: setFoundationTitleRenaming } = foundation
+  // The details hover stays mounted (held shut) while renaming; close it so it can't reopen when the rename ends.
+  const setTitleRenaming = useCallback(
+    (renaming: boolean) => {
+      if (renaming) {
+        closeHover()
+      }
+      setFoundationTitleRenaming(renaming)
+    },
+    [closeHover, setFoundationTitleRenaming]
+  )
+  const autoNameFailure = useAutoNameFailure({
+    worktreeId: worktree.id,
+    executionHostId: worktree.hostId,
+    error: worktree.firstAgentMessageRenameError || undefined
+  })
   const referenceDetails = useWorkspaceReferenceDetails(
     worktree,
     repo,
@@ -57,7 +76,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     hoverDetailsOpen
   )
   const reviewChecks = summarizeWorkspaceReviewChecks(
-    getWorkspaceAttachments(worktree),
+    getReadonlyWorkspaceAttachments(worktree),
     referenceDetails
   )
 
@@ -121,7 +140,6 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     onCardDragEnd: props.onCardDragEnd,
     onContextMenuSelect: props.onContextMenuSelect,
     folderWorkspaceId: review.folderWorkspaceId,
-    setShowRenameErrorDialog: foundation.setShowRenameErrorDialog,
     isDeleting: linked.isDeleting,
     showDeleteQuickAction
   })
@@ -165,7 +183,9 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     ...foundation,
     ...review,
     ...linked,
+    setTitleRenaming,
     detailsHoverControl,
+    autoNameFailure,
     referenceDetails,
     reviewChecks,
     showStatus,

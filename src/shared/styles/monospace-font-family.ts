@@ -1,4 +1,5 @@
 import { isPluginFontFamilyName } from '../plugins/contributions/plugin-font-contribution'
+import { buildFontFamilyList, prepareFontFallbacks, splitFontFamilyList } from './font-family-list'
 
 export const BUNDLED_SYMBOLS_FONT_FAMILY = 'Orca Nerd Font Symbols'
 
@@ -20,17 +21,22 @@ const FALLBACK_FONTS = [
   'monospace'
 ] as const
 
+const FALLBACKS = prepareFontFallbacks(FALLBACK_FONTS)
+
 export function buildFontFamily(fontFamily: string): string {
-  const trimmed = fontFamily.trim()
-  const parts = trimmed ? [`"${trimmed}"`] : []
-  const lowerParts = parts.map((p) => p.toLowerCase())
+  const families = splitFontFamilyList(fontFamily)
+  if (families.length > 1) {
+    return buildFontFamilyList(families, FALLBACKS)
+  }
+  // Why: a single family is quoted as typed, keyword or not, and drops each fallback its name contains.
+  const family = families[0] ?? ''
+  const parts = family ? [`"${family}"`] : []
+  const lowerFamily = family.toLowerCase()
   // Why: a plugin family such as "Menlo (acme.fonts)" is never a fallback, so it must keep all of them.
-  const isPluginFamily = isPluginFontFamilyName(trimmed)
-  for (const fallback of FALLBACK_FONTS) {
-    const lower = fallback.toLowerCase()
-    if (isPluginFamily || !lowerParts.some((p) => p.includes(lower))) {
-      // Generic keywords like "monospace" are unquoted; named fonts are quoted.
-      parts.push(fallback === 'monospace' ? fallback : `"${fallback}"`)
+  const isPluginFamily = isPluginFontFamilyName(family)
+  for (const fallback of FALLBACKS) {
+    if (isPluginFamily || !lowerFamily.includes(fallback.lower)) {
+      parts.push(fallback.quoted)
     }
   }
   return parts.join(', ')

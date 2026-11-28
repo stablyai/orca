@@ -87,8 +87,15 @@ export function agentPinsAccountHome(
 }
 
 /** The account a chat's runtime at `fence` launched under; a chat that follows the selection
- *  moves on, so its founding `accountHome` no longer says where it ran. */
-export type AgentSessionLaunchedAccount = { fence: number; accountHome: AgentSessionAccountHome }
+ *  moves on, so its founding `accountHome` no longer says where it ran. `accountId` names the
+ *  saved account where one home holds several (agy swaps its one login); older builds ignore it. */
+export type AgentSessionLaunchedAccount = {
+  fence: number
+  accountHome: AgentSessionAccountHome
+  accountId?: string
+}
+
+const MAX_LAUNCHED_ACCOUNT_ID_CHARS = 200
 
 export function isOptionalAgentSessionLaunchedAccount(
   value: unknown
@@ -102,7 +109,10 @@ export function isOptionalAgentSessionLaunchedAccount(
       Number.isSafeInteger(value.fence) &&
       value.fence > 0 &&
       'accountHome' in value &&
-      isAgentSessionAccountHome(value.accountHome))
+      isAgentSessionAccountHome(value.accountHome) &&
+      (!('accountId' in value) ||
+        value.accountId === undefined ||
+        isBoundedAccountString(value.accountId, MAX_LAUNCHED_ACCOUNT_ID_CHARS)))
   )
 }
 

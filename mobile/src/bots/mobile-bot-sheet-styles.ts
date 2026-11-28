@@ -1,8 +1,8 @@
 import { themedStyleSheet } from '../theme/themed-styles'
-import { colors, feedback, spacing } from '../theme/mobile-theme'
+import { feedback, spacing } from '../theme/mobile-theme'
 
 // Only what the option rows lack; rows, groups and labels are in mobile-bot-option-styles.
-export const sheetStyles = themedStyleSheet(() => ({
+export const sheetStylesSheet = themedStyleSheet((colors) => ({
   textButton: {
     minHeight: 32,
     justifyContent: 'center',
@@ -13,11 +13,5 @@ export const sheetStyles = themedStyleSheet(() => ({
     fontSize: 13,
     color: colors.textSecondary
   },
-  // Monochrome emphasis: red is kept for destructive confirms.
-  alert: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginTop: 2
-  }
+  textButtonAccent: { fontWeight: '500', color: colors.accentBlue }
 }))

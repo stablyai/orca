@@ -11,6 +11,7 @@ export function BotPanelSectionHeader({
   bodyId,
   summary,
   actions,
+  actionsShown = false,
   live
 }: {
   title: string
@@ -20,6 +21,8 @@ export function BotPanelSectionHeader({
   summary?: React.ReactNode
   /** Idle controls at the end, shown on hover or focus. */
   actions?: React.ReactNode
+  /** Shows the idle controls anyway, so focus can move to one. */
+  actionsShown?: boolean
   /** Controls at the end that always show, such as a live spinner. */
   live?: React.ReactNode
 }): React.JSX.Element {
@@ -65,7 +68,12 @@ export function BotPanelSectionHeader({
       {actions || live ? (
         <span className="relative ml-auto flex shrink-0 items-center gap-0.5">
           {actions ? (
-            <span className="invisible flex items-center gap-0.5 group-hover/section:visible group-focus-within/section:visible">
+            <span
+              className={cn(
+                'flex items-center gap-0.5 group-hover/section:visible group-focus-within/section:visible',
+                actionsShown ? 'visible' : 'invisible'
+              )}
+            >
               {actions}
             </span>
           ) : null}
@@ -81,6 +89,7 @@ export function BotPanelSection({
   fold,
   summary,
   actions,
+  actionsShown,
   live,
   folded,
   className,
@@ -91,6 +100,7 @@ export function BotPanelSection({
   fold?: BotPanelFold
   summary?: React.ReactNode
   actions?: React.ReactNode
+  actionsShown?: boolean
   live?: React.ReactNode
   /** What stays listed under the header while folded. */
   folded?: React.ReactNode
@@ -108,6 +118,7 @@ export function BotPanelSection({
         bodyId={bodyId}
         summary={summary}
         actions={actions}
+        actionsShown={actionsShown}
         live={live}
       />
       {open ? (

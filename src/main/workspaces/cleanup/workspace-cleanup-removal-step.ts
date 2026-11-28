@@ -18,6 +18,10 @@ import {
   collectWorkspaceCleanupWorkspaces,
   type WorkspaceCleanupWorkspace
 } from './workspace-cleanup-run-evidence'
+import {
+  readPairedFolderChildren,
+  type PairedFolderChildren
+} from './workspace-cleanup-paired-folder-children'
 import { readWorkspaceCleanupTerminalActivity } from './workspace-cleanup-terminal-activity'
 import { keptRunOutcome } from './workspace-cleanup-run-summary'
 
@@ -68,7 +72,8 @@ async function decideWorkspaceCleanup(
 export async function decideWorkspaceCleanups(
   runtime: OrcaRuntimeService,
   workspaces: readonly WorkspaceCleanupWorkspace[],
-  now: number
+  now: number,
+  options?: { readPairedFolderChildren?: () => Promise<PairedFolderChildren> }
 ): Promise<WorkspaceCleanupEvaluation[]> {
   const verdicts: WorkspaceCleanupFolderVerdict[] = []
   for (const workspace of workspaces) {
@@ -78,54 +83,56 @@ export async function decideWorkspaceCleanups(
       evaluation: await decideWorkspaceCleanup(runtime, workspace, now)
     })
   }
-  return keepFolderWorkspaceSiblings(verdicts)
+  const evaluations = keepFolderWorkspaceSiblings(verdicts)
+  const candidateLocalFolders = new Set<string>()
+  for (let i = 0; i < workspaces.length; i++) {
+    const folderKey = workspaces[i].localFolderKey
+    if (folderKey && evaluations[i].action !== 'keep') {
+      candidateLocalFolders.add(folderKey)
+    }
+  }
+  if (candidateLocalFolders.size === 0 || workspaces.length === 0) {
+    return evaluations
+  }
+  const readPaired = options?.readPairedFolderChildren ?? workspaces[0].readPairedFolderChildren
+  const heldFolders = await workspaces[0].findPairedHeldFolders(candidateLocalFolders, readPaired)
+  if (heldFolders.size === 0) {
+    return evaluations
+  }
+  return evaluations.map((evaluation, index) => {
+    const folderKey = workspaces[index].localFolderKey
+    return evaluation.action !== 'keep' && folderKey && heldFolders.has(folderKey)
+      ? { action: 'keep', cause: 'folder-workspace-sibling', reason: evaluation.reason }
+      : evaluation
+  })
 }
 
 function describeRemovalError(error: unknown): string {
   return errorMessage(error).split(/\r?\n/)[0] || 'Removal failed.'
 }
 
-type RemovalOutcome = Pick<
+export type RemovalOutcome = Pick<
   WorkspaceCleanupRunRow,
   'outcome' | 'reason' | 'keepCause' | 'waiting' | 'keptOnRecheck' | 'branchKept' | 'error'
 >
 
-/** Re-reads every piece of evidence, its folder siblings' too, right before removing one workspace;
- * removal itself goes through the lifecycle queue. */
-export async function removeWorkspaceForCleanup(args: {
-  runtime: OrcaRuntimeService
-  store: RuntimeStore
-  globalRules: () => WorkspaceCleanupRules
+export type CleanupRemovalTarget<TRef> = {
   workspace: WorkspaceCleanupWorkspace
-  now: () => number
+  ref: TRef
+  reason: NonNullable<WorkspaceCleanupRunRow['reason']>
+}
+
+async function deleteCheckedWorkspace(
+  runtime: OrcaRuntimeService,
+  workspace: WorkspaceCleanupWorkspace,
+  recheck: Extract<WorkspaceCleanupEvaluation, { action: 'delete' | 'archive' }>,
   signal?: AbortSignal
-}): Promise<RemovalOutcome> {
-  const { runtime, store, workspace } = args
+): Promise<RemovalOutcome> {
+  if (signal?.aborted) {
+    return { outcome: 'failed', error: 'Cleanup stopped before removing this workspace.' }
+  }
   const selector = selectorFor(workspace)
   try {
-    // Earlier removals in this run took time: decide on what is true now, not what the scan saw.
-    // A folder member is re-read with its folder as listed now: a sibling added here since holds it
-    // too. Paired servers' members are as the scan read them; they're asked once per run.
-    const [fresh, ...siblings] = await collectWorkspaceCleanupWorkspaces({
-      store,
-      runtime,
-      globalRules: args.globalRules(),
-      now: args.now(),
-      worktreeId: workspace.ref.worktreeId,
-      withFolderSiblings: workspace.folderSiblings.length > 0,
-      readPairedFolderChildren: workspace.readPairedFolderChildren,
-      signal: args.signal
-    })
-    if (!fresh) {
-      return { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
-    }
-    const [recheck] = await decideWorkspaceCleanups(runtime, [fresh, ...siblings], args.now())
-    if (recheck.action === 'keep') {
-      return { ...keptRunOutcome(recheck), keptOnRecheck: true }
-    }
-    if (args.signal?.aborted) {
-      return { outcome: 'failed', error: 'Cleanup stopped before removing this workspace.' }
-    }
     // Only reachable once WORKSPACE_ARCHIVE_SUPPORTED is on; archive keeps the branch and the row.
     if (recheck.action === 'archive') {
       const hostId = workspace.ref.executionHostId
@@ -151,4 +158,99 @@ export async function removeWorkspaceForCleanup(args: {
   } catch (error) {
     return { outcome: 'failed', error: describeRemovalError(error) }
   }
+}
+
+type FolderRecheckResult =
+  | { kind: 'failed'; error: string }
+  | { kind: 'checked'; allGoing: boolean; byId: Map<string, WorkspaceCleanupEvaluation> }
+
+/** Re-checks independent workspaces one at a time and each local folder group once (with a fresh
+ * paired-server read), while strictly preserving the caller's deepest-path-first removal order. */
+export async function removeWorkspacesForCleanup<TRef>(args: {
+  runtime: OrcaRuntimeService
+  store: RuntimeStore
+  globalRules: () => WorkspaceCleanupRules
+  removals: readonly CleanupRemovalTarget<TRef>[]
+  now: () => number
+  signal?: AbortSignal
+}): Promise<
+  { ref: TRef; reason: NonNullable<WorkspaceCleanupRunRow['reason']>; outcome: RemovalOutcome }[]
+> {
+  const { runtime, store, removals, signal } = args
+  const expectedIdsByFolder = new Map<string, string[]>()
+  for (const { workspace } of removals) {
+    const folderKey = workspace.localFolderKey
+    if (folderKey) {
+      const ids = expectedIdsByFolder.get(folderKey) ?? []
+      ids.push(workspace.ref.worktreeId)
+      expectedIdsByFolder.set(folderKey, ids)
+    }
+  }
+  const folderRechecks = new Map<string, FolderRecheckResult>()
+  const results: {
+    ref: TRef
+    reason: NonNullable<WorkspaceCleanupRunRow['reason']>
+    outcome: RemovalOutcome
+  }[] = []
+  for (const { workspace, ref, reason } of removals) {
+    if (signal?.aborted) {
+      break
+    }
+    const folderKey = workspace.localFolderKey
+    let check = folderKey ? folderRechecks.get(folderKey) : undefined
+    if (!check) {
+      try {
+        const fresh = await collectWorkspaceCleanupWorkspaces({
+          store,
+          runtime,
+          globalRules: args.globalRules(),
+          now: args.now(),
+          ...(folderKey
+            ? { folderKey }
+            : { worktreeId: workspace.ref.worktreeId, withFolderSiblings: false }),
+          // Always re-read connected paired servers before removal so newly attached members hold the folder.
+          readPairedFolderChildren: () => readPairedFolderChildren(runtime),
+          signal
+        })
+        const evaluations = await decideWorkspaceCleanups(runtime, fresh, args.now())
+        const byId = new Map<string, WorkspaceCleanupEvaluation>()
+        for (let i = 0; i < fresh.length; i++) {
+          byId.set(fresh[i].ref.worktreeId, evaluations[i])
+        }
+        const expectedIds = folderKey
+          ? (expectedIdsByFolder.get(folderKey) ?? [])
+          : [workspace.ref.worktreeId]
+        const allGoing =
+          fresh.length > 0 &&
+          evaluations.every((entry) => entry.action !== 'keep') &&
+          expectedIds.every((id) => {
+            const entry = byId.get(id)
+            return entry !== undefined && entry.action !== 'keep'
+          })
+        check = { kind: 'checked', allGoing, byId }
+      } catch (error) {
+        check = { kind: 'failed', error: describeRemovalError(error) }
+      }
+      if (folderKey) {
+        folderRechecks.set(folderKey, check)
+      }
+    }
+    if (check.kind === 'failed') {
+      results.push({ ref, reason, outcome: { outcome: 'failed', error: check.error } })
+      continue
+    }
+    const entry = check.byId.get(workspace.ref.worktreeId)
+    if (!check.allGoing || !entry || entry.action === 'keep') {
+      const outcome: RemovalOutcome = !entry
+        ? { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
+        : entry.action === 'keep'
+          ? { ...keptRunOutcome(entry), keptOnRecheck: true }
+          : { outcome: 'kept', keepCause: 'folder-workspace-sibling', keptOnRecheck: true }
+      results.push({ ref, reason, outcome })
+      continue
+    }
+    const outcome = await deleteCheckedWorkspace(runtime, workspace, entry, signal)
+    results.push({ ref, reason, outcome })
+  }
+  return results
 }

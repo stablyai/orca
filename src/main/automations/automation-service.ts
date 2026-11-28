@@ -20,6 +20,7 @@ import {
 import { writeAutomationRunUsage } from './run-history/run-usage-collection'
 import type * as Launch from './launch/automation-launch'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
+import { createCoalescingKeyedRunner } from '../../shared/concurrency/coalescing-keyed-runner'
 import { clearAutomationDispatchTokens } from './ownership/dispatch-tokens'
 import {
   AutomationRunCompletionWatcher,
@@ -54,7 +55,7 @@ export class AutomationService {
   private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
-  private evaluating = false
+  private readonly duePasses = createCoalescingKeyedRunner<void>()
   private stopped = false
   private dispatchGeneration = 0
   private readonly claudeUsage: AutomationUsageClient | null
@@ -76,7 +77,7 @@ export class AutomationService {
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
-  readonly wakeGate = new AutomationWakeGate(() => this.store)
+  readonly wakeGate = new AutomationWakeGate()
 
   constructor(
     store: Store,
@@ -90,6 +91,7 @@ export class AutomationService {
       onRunRefused?: (automation: Automation, error: string) => void
       chatDispatcher?: Launch.AutomationLauncher
       terminalObserver?: AutomationRunTerminalObserver
+      isHostQuitting?: () => boolean
       onAutomationsChanged?: PublishAutomationsChanged
       runTerminalRetention?: (service: AutomationService) => RunTerminalRetention
     } = {}
@@ -110,7 +112,8 @@ export class AutomationService {
           observer: opts.terminalObserver,
           readRun: (automationId, runId) =>
             this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId) ?? null,
-          markDispatchResult: (result) => this.markDispatchResult(result)
+          markDispatchResult: (result) => this.markDispatchResult(result),
+          isHostQuitting: opts.isHostQuitting
         })
       : null
     this.runTerminalRetention = opts.runTerminalRetention?.(this) ?? null
@@ -237,38 +240,35 @@ export class AutomationService {
     })
   }
 
-  private async evaluateDueRuns(): Promise<void> {
-    // A run started in a dark wake is cut off by the next sleep.
-    if (this.evaluating || this.stopped || !this.wakeGate.admits(this.store, this.tickMs)) {
-      return
-    }
-    this.evaluating = true
-    const generation = this.dispatchGeneration
-    if (this.availableLauncher()) {
-      this.completionWatcher?.markTerminalSurfaceReady()
-    }
-    try {
+  /** A tick during a pass queues one more pass at that tick's time; later ticks replace it, so a pass spanning two or more ticks catches up only the newest one. */
+  private evaluateDueRuns(): Promise<void> {
+    const now = Date.now()
+    return this.duePasses('due', 'due', async () => {
+      // A run started in a dark wake is cut off by the next sleep.
+      if (this.stopped || !this.wakeGate.admits(this.store)) {
+        return
+      }
+      const generation = this.dispatchGeneration
+      if (this.availableLauncher()) {
+        this.completionWatcher?.markTerminalSurfaceReady()
+      }
       await runDueAutomations({
-        ctx: this.triggerRunContext(),
-        now: Date.now(),
+        ctx: this.triggerRunContext(this.wakeGate.takeDelayMs(now, this.tickMs)),
+        now,
         isActive: () => !this.stopped && generation === this.dispatchGeneration,
         captureTarget: (listed) =>
           captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
       })
-    } finally {
-      this.evaluating = false
-      this.wakeGate.clear()
-    }
+    }).catch((error: unknown) => console.error('[automations] scheduler pass failed', error))
   }
 
   /** Captures the dispatch generation, so a stop() while it waits cancels the launch. */
-  private triggerRunContext(): AutomationTriggerRunContext {
+  private triggerRunContext(wakeGateDelayMs = 0): AutomationTriggerRunContext {
     const generation = this.dispatchGeneration
     return {
       store: this.store,
       runs: this.runs,
-      tickMs: this.tickMs,
-      wakeGate: this.wakeGate,
+      wakeGateDelayMs,
       inLane: (automationId, operation) => this.runInAutomationLane(automationId, operation),
       describeRefusal: (target) => {
         const canDispatch = canDispatchTo(

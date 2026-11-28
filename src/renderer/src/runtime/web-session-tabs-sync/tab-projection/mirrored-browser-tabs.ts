@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../../shared/browser/browser-metadata-redaction'
 import {
   browserInitializationPresentation,
   browserInitializationReceiptCurrent,
@@ -26,7 +27,7 @@ import { sameStringArray } from '../snapshots/state-equality-core'
 import { collectLayoutGroupIds } from '../placement/tab-group-layout-tree'
 import { buildBrowserUnifiedTab } from './tab-builders'
 import { isReadyBrowserTab } from './terminal-surfaces'
-import { isBrowserPageOfAnotherHost } from '../identity/mirror-row-ownership'
+import { createAnotherHostBrowserTabMatcher } from '../identity/mirror-row-ownership'
 
 export function findBrowserWorkspaceForRemotePage(
   state: WebSessionTabsSyncState,
@@ -39,7 +40,12 @@ export function findBrowserWorkspaceForRemotePage(
     const pages = state.browserPagesByWorkspace[workspace.id] ?? []
     for (const page of pages) {
       const handle = state.remoteBrowserPageHandlesByPageId[page.id]
-      if (handle?.environmentId === environmentId && handle.remotePageId === remotePageId) {
+      // A relaunch restores streamed pages without a handle; their saved server page id still names this row.
+      const identity = handle ?? {
+        environmentId: page.browserRuntimeEnvironmentId,
+        remotePageId: page.remoteBrowserPageId
+      }
+      if (identity.environmentId === environmentId && identity.remotePageId === remotePageId) {
         return {
           workspace,
           page,
@@ -52,28 +58,6 @@ export function findBrowserWorkspaceForRemotePage(
     }
   }
   return null
-}
-
-/** A row naming our own or a live peer's page is an echo from a server we serve, not its tab (#38136). */
-function namesTabOfAnotherHost(
-  state: WebSessionTabsSyncState,
-  worktreeId: string,
-  environmentId: string,
-  tab: RuntimeMobileSessionBrowserTab
-): boolean {
-  const workspaces = state.browserTabsByWorktree[worktreeId] ?? []
-  const page = workspaces
-    .flatMap((workspace) => state.browserPagesByWorkspace[workspace.id] ?? [])
-    .find((candidate) => candidate.id === tab.browserPageId)
-  if (page) {
-    return isBrowserPageOfAnotherHost(state, page, environmentId)
-  }
-  return (
-    workspaces.some((workspace) => workspace.id === tab.browserWorkspaceId) &&
-    (state.browserPagesByWorkspace[tab.browserWorkspaceId] ?? []).some((candidate) =>
-      isBrowserPageOfAnotherHost(state, candidate, environmentId)
-    )
-  )
 }
 
 export function browserWorkspaceHasRemoteEnvironmentPage(
@@ -193,6 +177,7 @@ export function buildMirroredBrowserTabs(
   const clientGroupIds = new Set(
     (state.groupsByWorktree[snapshot.worktree] ?? []).map((group) => group.id)
   )
+  let namesTabOfAnotherHost: ReturnType<typeof createAnotherHostBrowserTabMatcher> | undefined
   return snapshot.tabs.filter(isReadyBrowserTab).flatMap((tab, index) => {
     const existing = findBrowserWorkspaceForRemotePage(
       state,
@@ -200,8 +185,15 @@ export function buildMirroredBrowserTabs(
       environmentId,
       tab.browserPageId
     )
-    if (!existing && namesTabOfAnotherHost(state, snapshot.worktree, environmentId, tab)) {
-      return []
+    if (!existing) {
+      namesTabOfAnotherHost ??= createAnotherHostBrowserTabMatcher(
+        state,
+        snapshot.worktree,
+        environmentId
+      )
+      if (namesTabOfAnotherHost(tab)) {
+        return []
+      }
     }
     const workspaceId = existing?.workspace.id ?? tab.browserWorkspaceId
     const pageId = existing?.page.id ?? tab.browserPageId
@@ -243,7 +235,7 @@ export function buildMirroredBrowserTabs(
           reconciliation?.handle.placement
         )
     )
-    const nextPage: BrowserPage = {
+    const nextPage: BrowserPage = redactBrowserMetadata({
       id: pageId,
       workspaceId,
       worktreeId: snapshot.worktree,
@@ -261,7 +253,7 @@ export function buildMirroredBrowserTabs(
       createdAt,
       browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
-    }
+    })
     // Reuse requires workspaceId equality or removed-workspace cleanup misses the retained page list.
     const page = existing && browserPageEqual(existing.page, nextPage) ? existing.page : nextPage
     const existingPageIds = existing?.workspace.pageIds
@@ -291,6 +283,9 @@ export function buildMirroredBrowserTabs(
       previousPage: existing?.page,
       preservesLoading,
       certificateFailure: tab.certificateFailure ?? null,
+      audible: tab.audible === true,
+      audioMuted: tab.audioMuted === true,
+      agentDriving: tab.agentDriving === true,
       remotePageId: tab.browserPageId,
       initializationPresentation: presentation,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),

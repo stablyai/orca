@@ -13,6 +13,13 @@ export const getChatNamingSearchEntry = createLocalizedCatalog((): SettingsSearc
   keywords: [
     ...translateSearchKeyword('settings.chat.names.enable', 'Name chats automatically'),
     ...translateSearchKeyword('settings.chat.names.searchAgent', 'agent'),
+    ...translateSearchKeyword(
+      'settings.chat.names.antigravity',
+      'Generate chat titles with Antigravity'
+    ),
     ...translateSearchKeyword('settings.chat.names.searchTemplate', 'command template')
   ]
 }))
+
+/** The chat-name recipe row inside the Advanced disclosure, where the naming agent is chosen. */
+export const CHAT_NAME_AGENT_SECTION_ID = 'chat-names-agent'

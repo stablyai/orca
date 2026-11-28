@@ -39,8 +39,12 @@ import {
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import { promptPlan } from './structured-agent-session-prompt-plan'
+import { noteBackgroundStopRequested } from '../termination/background-stop-requests'
 import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
-import { admitStructuredAgentSessionSend } from '../delivery/structured-agent-session-send-admission'
+import {
+  admitStructuredAgentSessionSend,
+  type StructuredSendAdmissionParams
+} from '../delivery/structured-agent-session-send-admission'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
 import {
@@ -68,13 +72,13 @@ export function sendStructuredAgentSessionTurn(
     queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>
-    usageLimitContinuationOfTurnItemId?: string
     /** Client send RPCs set origin=client for recovery; host mail/continuations/launch sends omit it. */
     userSend?: true
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
     beforeRun?: () => void | Promise<void>
-  } & Parameters<typeof sendTellingAdmitted>[2],
+  } & Parameters<typeof sendTellingAdmitted>[2] &
+    Pick<StructuredSendAdmissionParams, 'expectedContinuationLaunch'>,
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
@@ -138,6 +142,7 @@ export function cancelStructuredAgentSessionTurn(
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   if (params.scope) {
     const { sessionId } = params.envelope
+    noteBackgroundStopRequested(sessionId)
     return mutateStructuredAgentSession(
       context,
       caller,

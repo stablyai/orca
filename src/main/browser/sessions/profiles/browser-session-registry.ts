@@ -13,37 +13,34 @@ import type {
   BrowserSessionProfileScope
 } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
-  applyPendingBrowserCookieImports,
-  clearPendingBrowserCookieImport
-} from '../../cookies/staging/browser-session-cookie-staging'
-import {
   BROWSER_SESSION_META_FILE_NAME,
+  didReadBrowserSessionMeta,
   forgetBrowserSessionProfileMeta,
   getCachedBrowserExtensionEnabledIds,
   loadBrowserSessionMeta,
   persistBrowserSessionMeta,
   type BrowserSessionMeta
 } from './browser-session-meta-store'
-import { installBrowserSessionPartitionPolicies } from '../partition-policies/browser-session-partition-policies'
+import {
+  installBrowserSessionPartitionPolicies,
+  restoreBrowserSessionPartitionPolicies
+} from '../partition-policies/browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
-import { inspectRetiredBrowserSessionProfileUserAgentModes } from '../../identity/mode/browser-retired-profile-identity-inspection'
+import { BrowserSessionProfileMap } from './browser-session-profile-map'
+import { recordRetiredBrowserSessionProfileUserAgentMigration } from '../../identity/mode/browser-retired-profile-identity-inspection'
 import {
   clearBrowserRoutePartitionPolicies,
   installBrowserRoutePartitionPolicies
 } from '../../routing/sessions/browser-session-route-policies'
 import {
-  retireDeletedBrowserSessionProfile,
-  retireFailedBrowserSessionProfile
-} from './browser-session-profile-retirement'
-import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
-import { markBrowserIdentityMigrationNoticePending } from '../../identity/mode/browser-identity-mode-store'
-import { forgetBrowserProfileOwnedStores } from './browser-profile-owned-stores'
-import {
   attachBrowserExtensionsToProfileSession,
   getBrowserExtensionSessionForProfile
 } from '../../extensions/profile-sessions/browser-extension-session-loader'
+import {
+  browserExtensionRouteSessionProfile as routeSessionProfile,
+  browserExtensionSourceProfileId as sourceProfileId
+} from '../../extensions/profile-sessions/browser-extension-route-profiles'
 import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
-import { trackBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -56,7 +53,7 @@ export type BrowserSessionRegistryProfileOptions = {
 // This registry supplies the partition allowlist used by will-attach-webview.
 
 class BrowserSessionRegistry {
-  private readonly profiles = new Map<string, BrowserSessionProfile>()
+  private readonly profiles = new BrowserSessionProfileMap()
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
   private defaultPartition = ORCA_BROWSER_PARTITION
@@ -77,13 +74,12 @@ class BrowserSessionRegistry {
   }
 
   private resetDefaultProfile(): void {
-    const persisted = this.loadPersistedSource()
     this.profiles.set('default', {
       id: 'default',
       scope: 'default',
       partition: this.defaultPartition,
       label: 'Default',
-      source: persisted
+      source: this.loadPersistedMeta().defaultSource
     })
   }
 
@@ -93,60 +89,42 @@ class BrowserSessionRegistry {
     )
   }
 
-  private loadPersistedSource(): BrowserSessionProfile['source'] {
-    return this.loadPersistedMeta().defaultSource
-  }
-
   private persistMeta(updates: Partial<BrowserSessionMeta>): void {
     persistBrowserSessionMeta(() => this.metadataPath, this.defaultPartition, updates)
   }
 
   private persistProfiles(): void {
-    const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
-    this.persistMeta({ profiles: nonDefault })
+    this.persistMeta({ profiles: [...this.profiles.values()].filter((p) => p.id !== 'default') })
   }
 
   private loadPersistedMeta(): BrowserSessionMeta {
     return loadBrowserSessionMeta(() => this.metadataPath, this.defaultPartition)
   }
 
-  // Restore profiles and their policies before any webview loads.
-  initializeBrowserSessionsFromPersistedState(): void {
+  // Restore profiles and their policies before any webview loads; false when the saved profiles could not be read.
+  initializeBrowserSessionsFromPersistedState(): boolean {
     const meta = this.loadPersistedMeta()
-    const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
-      meta.profiles,
-      this.activeOrcaProfileId
-    )
-    if (migration.noticePending) {
-      // Migration bookkeeping must not block session startup.
-      void markBrowserIdentityMigrationNoticePending(
-        getCanonicalUserDataPath(),
-        migration.degraded
-      ).catch((error) => console.error('[browser-identity] Migration notice failed:', error))
-    }
+    recordRetiredBrowserSessionProfileUserAgentMigration(meta.profiles, this.activeOrcaProfileId)
     if (meta.defaultSource) {
       const current = this.profiles.get('default')
       if (current && current.source === null) {
         this.profiles.set('default', { ...current, source: meta.defaultSource })
       }
     }
-    if (meta.profiles.length > 0) {
-      this.hydrateFromPersisted(meta.profiles)
-    }
+    const hydrated = this.hydrateFromPersisted(meta.profiles)
 
     // Hydration skips the default profile, so install its policies separately.
-    const defaultProfile = this.getDefaultProfile()
-    void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
-      console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
-    })
+    restoreBrowserSessionPartitionPolicies(this.getDefaultProfile())
+    return hydrated && didReadBrowserSessionMeta(this.metadataPath)
   }
 
   /**
    * Starts a profile's extensions when it gets a page or Settings acts on them, never at launch, and
-   * they stop once it has none. Only local browser profiles (no route, SSH or doc preview) run them.
+   * they stop once it has none. A local profile, or an SSH or This-device page's session running a
+   * local profile's extensions; never a doc preview.
    */
   attachExtensions(profileId: string): void {
-    const profile = this.profiles.get(profileId)
+    const profile = this.profiles.get(profileId) ?? routeSessionProfile(profileId)
     // Why these first: the enabled list is read from disk, and this runs for every new tab.
     if (
       profile &&
@@ -157,7 +135,9 @@ class BrowserSessionRegistry {
     }
   }
 
-  getEnabledExtensionIds(profileId: string): string[] {
+  /** A remote page's session uses its local profile's list. */
+  getEnabledExtensionIds(pageProfileId: string): string[] {
+    const profileId = sourceProfileId(pageProfileId)
     const cached = getCachedBrowserExtensionEnabledIds(this.metadataPath, profileId)
     return cached ?? this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
   }
@@ -167,7 +147,7 @@ class BrowserSessionRegistry {
   }
 
   getPinnedExtensionIds(profileId: string): string[] {
-    return this.loadPersistedMeta().pinnedExtensionIdsByProfileId[profileId] ?? []
+    return this.loadPersistedMeta().pinnedExtensionIdsByProfileId[sourceProfileId(profileId)] ?? []
   }
 
   updatePinnedExtensionIds(update: ExtensionIdListUpdate): void {
@@ -178,16 +158,25 @@ class BrowserSessionRegistry {
     this.persistMeta({ [key]: update(this.loadPersistedMeta()[key]) })
   }
 
-  applyPendingCookieImport(): void {
-    applyPendingBrowserCookieImports({
+  async applyPendingCookieImport(): Promise<void> {
+    try {
+      if (Object.keys(this.loadPersistedMeta().pendingCookieImports).length === 0) {
+        return
+      }
+    } catch {
+      return
+    }
+    const staging = await import('../../cookies/staging/browser-session-cookie-staging')
+    staging.applyPendingBrowserCookieImports({
       resolveMetadataPath: () => this.metadataPath,
       defaultPartition: this.defaultPartition,
       activeOrcaProfileId: this.activeOrcaProfileId
     })
   }
 
-  clearPendingCookieImport(partition: string): void {
-    clearPendingBrowserCookieImport({
+  async clearPendingCookieImport(partition: string): Promise<void> {
+    const staging = await import('../../cookies/staging/browser-session-cookie-staging')
+    staging.clearPendingBrowserCookieImport({
       resolveMetadataPath: () => this.metadataPath,
       defaultPartition: this.defaultPartition,
       partition
@@ -215,14 +204,11 @@ class BrowserSessionRegistry {
 
   /** The local browser profile a partition belongs to; tabs attach only in these. */
   profileIdForPartition(partition: string): string | null {
-    return this.listProfiles().find((p) => p.partition === partition)?.id ?? null
+    return this.profiles.idForPartition(partition)
   }
 
   resolvePartition(profileId: string | null | undefined): string {
-    if (!profileId) {
-      return this.defaultPartition
-    }
-    return this.profiles.get(profileId)?.partition ?? this.defaultPartition
+    return this.resolveKnownPartition(profileId) ?? this.defaultPartition
   }
 
   resolveKnownPartition(profileId: string | null | undefined): string | null {
@@ -233,11 +219,8 @@ class BrowserSessionRegistry {
   }
 
   setupRoutePartitionPolicies(partition: string, browserProfileId: string): Promise<void> {
-    const profile = this.profiles.get(browserProfileId)
-    if (!profile) {
-      throw new Error('browser_route_partition_profile_unavailable')
-    }
-    return installBrowserRoutePartitionPolicies(profile, partition)
+    this.requireRouteBrowserProfile(browserProfileId)
+    return installBrowserRoutePartitionPolicies(this.profiles.get(browserProfileId)!, partition)
   }
 
   requireRouteBrowserProfile(browserProfileId: string): void {
@@ -265,12 +248,18 @@ class BrowserSessionRegistry {
     try {
       await installBrowserSessionPartitionPolicies(profile)
     } catch (error) {
-      await retireFailedBrowserSessionProfile(partition, session.fromPartition(partition))
+      const retirement = await import('./browser-session-profile-retirement')
+      await retirement.retireFailedBrowserSessionProfile(
+        partition,
+        session.fromPartition(partition)
+      )
       throw error
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
-    trackBrowserSessionCookies(profile)
+    void import('../../cookies/session-restore/browser-session-cookie-restore')
+      .then(({ trackBrowserSessionCookies }) => trackBrowserSessionCookies(profile))
+      .catch(() => {})
     this.onProfilesChanged?.()
     return profile
   }
@@ -296,7 +285,11 @@ class BrowserSessionRegistry {
 
   async deleteProfile(profileId: string): Promise<boolean> {
     const profile = this.profiles.get(profileId)
-    if (!profile || profile.scope === 'default' || !forgetBrowserProfileOwnedStores(profileId)) {
+    if (
+      !profile ||
+      profile.scope === 'default' ||
+      !(await import('./browser-profile-owned-stores')).forgetBrowserProfileOwnedStores(profileId)
+    ) {
       return false
     }
     this.profiles.delete(profileId)
@@ -305,47 +298,54 @@ class BrowserSessionRegistry {
     this.persistMeta(
       forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
     )
-    await retireDeletedBrowserSessionProfile(profile, () => this.onProfileDeleted?.(profileId))
+    const retirement = await import('./browser-session-profile-retirement')
+    await retirement.retireDeletedBrowserSessionProfile(profile, () =>
+      this.onProfileDeleted?.(profileId)
+    )
     return true
   }
 
-  async clearDefaultSessionCookies(): Promise<boolean> {
+  /** Clears every cookie in one profile's own jar; false for an unknown profile or a failed clear. */
+  async clearProfileSessionCookies(profileId: string): Promise<boolean> {
+    const profile = this.profiles.get(profileId)
+    if (!profile) {
+      return false
+    }
     try {
       // Clear import metadata first so quitting during storage cleanup cannot leave a stale source badge.
-      const defaultProfile = this.profiles.get('default')
-      if (defaultProfile) {
-        this.profiles.set('default', { ...defaultProfile, source: null })
-      }
+      this.profiles.set(profileId, { ...profile, source: null })
       const meta = this.loadPersistedMeta()
       const pendingCookieImports = { ...meta.pendingCookieImports }
-      delete pendingCookieImports[this.defaultPartition]
+      delete pendingCookieImports[profile.partition]
       this.persistMeta({
-        defaultSource: null,
-        pendingCookieDbPath: null,
+        ...(profileId === 'default'
+          ? { defaultSource: null, pendingCookieDbPath: null }
+          : { profiles: [...this.profiles.values()].filter((p) => p.id !== 'default') }),
         pendingCookieImports
       })
       this.onProfilesChanged?.()
 
-      const sess = session.fromPartition(this.defaultPartition)
-      await sess.clearStorageData({ storages: ['cookies'] })
+      const { clearBrowserCookieJar } =
+        await import('../../cookies/session-restore/browser-session-cookie-clear')
+      await clearBrowserCookieJar(session.fromPartition(profile.partition))
       return true
     } catch {
       return false
     }
   }
 
-  hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
-    for (const profile of profiles) {
-      if (!isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)) {
-        continue
-      }
+  /** False when it rejected an entry: a profile on disk the registry lacks, not a deleted one. */
+  hydrateFromPersisted(profiles: BrowserSessionProfile[]): boolean {
+    const valid = profiles.filter((profile) =>
+      isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)
+    )
+    for (const profile of valid) {
       this.profiles.set(profile.id, profile)
       if (profile.partition !== this.defaultPartition) {
-        void installBrowserSessionPartitionPolicies(profile).catch(() => {
-          console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
-        })
+        restoreBrowserSessionPartitionPolicies(profile)
       }
     }
+    return valid.length === profiles.length
   }
 }
 

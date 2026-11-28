@@ -1,6 +1,15 @@
 import { agentListPreview } from '../../agents/agent-list-row-text'
 import { agentStatusGroup } from '../../agents/agent-list-rows'
-import { translate } from '../../i18n/mobile-i18n'
+import { AGENT_LIST_STATUS_RANK } from '../../../../src/shared/agent-status/presentation/agent-list-status'
+import {
+  agentToolDisplayName,
+  agentToolPreviewInput
+} from '../../../../src/shared/agent-status/presentation/agent-tool-preview'
+import { parseAskFromStatus } from '../../../../src/shared/native-chat/input/native-chat-ask'
+import { parseNativeChatApprovalEnvelope } from '../../../../src/shared/native-chat/input/approvals/native-chat-approval-envelope'
+import { isAskUserQuestionTool } from '../../../../src/shared/agent-status/lifecycle/agent-question-answered-intent'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../src/shared/native-chat/input/questions/codex-async-question-input'
+import type { Translate } from '../../i18n/mobile-i18n'
 import {
   getMobileSessionTabTitle,
   getMobileTerminalTabHostAgentIdentity,
@@ -30,10 +39,25 @@ export type MobileSessionTabSummary = {
 
 /** A row of the all-tabs sheet: the summary plus what only the open sheet shows. */
 export type MobileSessionTabRow = MobileSessionTabSummary & {
-  /** The second line: the state, then what the tab is doing or showing. */
-  detail: string
+  /** The agent's state, drawn in its colour before the content; empty with no live state. */
+  stateWord: string
+  /** What the tab is doing or showing; empty when the title already says it. */
+  content: string
   timeAt: number | null
 }
+
+/** One desktop tab in the all-tabs sheet: a lone tab, or a split whose panes the phone lists one by one. */
+export type MobileSessionTabEntry<T extends MobileSessionTabSummary> =
+  | { kind: 'tab'; key: string; tab: T }
+  | {
+      kind: 'split'
+      key: string
+      panes: T[]
+      /** The most urgent pane's state and section. */
+      dotState: AgentDotState | undefined
+      group: MobileSessionTabGroup
+      unread: boolean
+    }
 
 /** A chat tab the host marked as a fork; its title is drawn after the fork mark. */
 export function isForkedChatTab(tab: MobileSessionTab): boolean {
@@ -85,57 +109,173 @@ function tabContent(
   }
 }
 
-function tabKindLabel(tab: MobileSessionTab): string {
+export function mobileSessionTabKindLabel(tab: MobileSessionTab, t: Translate): string {
   switch (tab.type) {
     case 'browser':
-      return translate('session.tabRows.browser', 'Browser')
+      return t('session.tabRows.browser', 'Browser')
     case 'markdown':
-      return translate('session.tabRows.markdown', 'Markdown note')
+      return t('session.tabRows.markdown', 'Markdown note')
     case 'file':
-      return translate('session.tabRows.file', 'File')
+      return t('session.tabRows.file', 'File')
     case 'agent-session':
-      return translate('session.tabRows.chat', 'Chat')
+      return t('session.tabRows.chat', 'Chat')
     case 'terminal':
-      return translate('session.tabRows.terminal', 'Terminal')
+      return t('session.tabRows.terminal', 'Terminal')
   }
+}
+
+type HostTerminals = readonly { handle: string; agentIdentity?: string }[]
+
+function tabAgentId(tab: MobileSessionTab, hostAgentIdentity: string | undefined): string | null {
+  return tab.type === 'agent-session'
+    ? tab.agent
+    : tab.type === 'terminal'
+      ? resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
+      : null
+}
+
+/** The agent whose icon marks the tab; null draws the tab kind's icon. */
+export function mobileSessionTabAgentId(
+  tab: MobileSessionTab,
+  terminals: HostTerminals
+): string | null {
+  return tabAgentId(tab, getMobileTerminalTabHostAgentIdentity(tab, terminals))
 }
 
 export function buildMobileSessionTabSummary(
   tab: MobileSessionTab,
-  terminals: readonly { handle: string; agentIdentity?: string }[],
-  now: number
+  terminals: HostTerminals,
+  now: number,
+  t: Translate
 ): MobileSessionTabSummary {
   const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
   const dotState = mobileSessionTabDotState(tab, now)
   return {
     tab,
-    title: getMobileSessionTabTitle(tab, hostAgentIdentity),
-    agentId:
-      tab.type === 'agent-session'
-        ? tab.agent
-        : tab.type === 'terminal'
-          ? resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
-          : null,
+    title: getMobileSessionTabTitle(tab, t, hostAgentIdentity),
+    agentId: tabAgentId(tab, hostAgentIdentity),
     dotState,
     group: tabGroup(dotState),
     unread: (tab.type === 'terminal' || tab.type === 'agent-session') && tab.unread === true
   }
 }
 
-// Why: the preview scans each agent's last message, so only the open sheet pays for it (STA-15103).
-export function buildMobileSessionTabRow(summary: MobileSessionTabSummary): MobileSessionTabRow {
+// A path keeps its end in view, as the sidebar's rows do.
+export const isPathTitle = (title: string) => /[\\/]/.test(title)
+
+const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
+
+// Question tools wait for an answer, not a permission; Copilot reports its ask_user as blocked.
+const isQuestionTool = (toolName: string | undefined) =>
+  isAskUserQuestionTool(toolName) ||
+  toolName === CODEX_ASYNC_QUESTION_TOOL ||
+  toolName?.replaceAll(/[^a-z]/gi, '').toLowerCase() === 'askuser'
+
+/**
+ * What a waiting agent wants, as its ask card puts it: the question, or the tool it needs allowed.
+ * Null when the host sent neither (older hosts), so the row keeps its usual preview. A tab's status
+ * and a workspace's agent row both carry these fields.
+ */
+export function mobileAgentAskLine(
+  status: { interactivePrompt?: string; toolName?: string | null; toolInput?: string | null },
+  dotState: AgentDotState | undefined,
+  t: Translate
+): { stateWord: string; content: string } | null {
+  const { interactivePrompt } = status
+  const toolName = status.toolName ?? undefined
+  const question = parseAskFromStatus(interactivePrompt, toolName)?.questions[0]?.question
+  if (question) {
+    return { stateWord: t('session.tabRows.asks', 'Asks'), content: oneLine(question) }
+  }
+  // Claude reports a permission request as waiting, with the approval in its prompt.
+  const approval = parseNativeChatApprovalEnvelope(interactivePrompt)
+  if (approval) {
+    return {
+      stateWord: t('session.tabRows.allowTool', 'Allow {{tool}}?', {
+        tool: agentToolDisplayName(approval.tool)
+      }),
+      content: oneLine(approval.summary ?? agentToolPreviewInput(status, false))
+    }
+  }
+  // Only a permission wait asks to allow its tool; a question tool without its prompt keeps the preview.
+  const tool = agentToolDisplayName(toolName)
+  if (!tool || isQuestionTool(toolName) || (dotState !== 'blocked' && dotState !== 'permission')) {
+    return null
+  }
+  return {
+    stateWord: t('session.tabRows.allowTool', 'Allow {{tool}}?', { tool }),
+    content: oneLine(agentToolPreviewInput(status, false))
+  }
+}
+
+// Why: the preview scans each agent's last message, so only a waiting agent's row (the one line the
+// sidebar draws) pays for it, and only while the sidebar shows (STA-15103).
+export function buildMobileSessionTabRow(
+  summary: MobileSessionTabSummary,
+  t: Translate
+): MobileSessionTabRow {
   const { tab, title, dotState } = summary
-  const stateWord = dotState && dotState !== 'idle' ? agentStateLabel(dotState) : ''
-  const content = tabContent(tab, title, dotState)
+  const ask =
+    summary.group === 'needs-you' && tab.type === 'terminal' && tab.agentStatus
+      ? mobileAgentAskLine(tab.agentStatus, dotState, t)
+      : null
+  const stateWord =
+    ask?.stateWord ?? (dotState && dotState !== 'idle' ? agentStateLabel(dotState, t) : '')
+  const content =
+    ask?.content ?? (summary.group === 'needs-you' ? tabContent(tab, title, dotState) : '')
   const timeAt =
     tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed
       ? agentRowTimeAt(tab.agentStatus)
       : tab.type === 'agent-session' && tab.chatStatus
         ? tab.chatStatus.updatedAt
         : null
-  return {
-    ...summary,
-    detail: [stateWord, content].filter(Boolean).join(' · ') || tabKindLabel(tab),
-    timeAt
+  return { ...summary, stateWord, content, timeAt }
+}
+
+// The phone gets one tab per split pane; panes of one desktop tab share its id as parentTabId.
+function desktopTabKey(tab: MobileSessionTab): string {
+  return tab.type === 'terminal' ? (tab.parentTabId ?? tab.id) : tab.id
+}
+
+/** How many tabs the desktop shows: a split counts once, however many panes it has. */
+export function countMobileSessionDesktopTabs(tabs: readonly { tab: MobileSessionTab }[]): number {
+  return new Set(tabs.map((row) => desktopTabKey(row.tab))).size
+}
+
+function mostUrgent(states: readonly (AgentDotState | undefined)[]): AgentDotState | undefined {
+  return states.reduce<AgentDotState | undefined>(
+    (best, state) =>
+      state && (!best || AGENT_LIST_STATUS_RANK[state] < AGENT_LIST_STATUS_RANK[best])
+        ? state
+        : best,
+    undefined
+  )
+}
+
+/** Folds each split's panes into one entry at its first pane's place, in tab order. */
+export function groupMobileSessionSplitTabs<T extends MobileSessionTabSummary>(
+  tabs: readonly T[]
+): MobileSessionTabEntry<T>[] {
+  const panesByKey = new Map<string, T[]>()
+  for (const row of tabs) {
+    const key = desktopTabKey(row.tab)
+    panesByKey.set(key, [...(panesByKey.get(key) ?? []), row])
   }
+  const entries: MobileSessionTabEntry<T>[] = []
+  for (const [key, panes] of panesByKey) {
+    if (panes.length === 1) {
+      entries.push({ kind: 'tab', key: panes[0].tab.id, tab: panes[0] })
+      continue
+    }
+    const dotState = mostUrgent(panes.map((pane) => pane.dotState))
+    entries.push({
+      kind: 'split',
+      key,
+      panes,
+      dotState,
+      group: tabGroup(dotState),
+      unread: panes.some((pane) => pane.unread)
+    })
+  }
+  return entries
 }

@@ -4,6 +4,7 @@ import {
   prunePinnedLocalImageCache,
   unpinLocalImageCacheKey
 } from './local-image-cache-pinning'
+import { isCommittedAgentSessionAttachmentPath } from '../../../../../shared/agent-session/agent-session-attachments'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
 // Bound retained encoded image payload separately from the reusable entry target.
@@ -46,6 +47,26 @@ function pruneImageCache(): void {
       URL.revokeObjectURL(url)
     }
   }
+}
+
+/** Whether `cacheLocalImageBlob` would admit this many bytes now, evicting every unpinned entry if it
+ *  had to: lets a reader refuse a photo-sized payload before spending time decoding it. */
+export function localImageBlobFits(key: string, byteLength: number): boolean {
+  if (byteLength > BLOB_URL_CACHE_MAX_BYTES) {
+    return false
+  }
+  let pinnedBytes = 0
+  let pinnedEntries = 0
+  for (const candidate of blobUrlCache.keys()) {
+    if (candidate !== key && isLocalImageCacheKeyPinned(candidate)) {
+      pinnedBytes += blobUrlCacheBytes.get(candidate) ?? 0
+      pinnedEntries += 1
+    }
+  }
+  return (
+    pinnedBytes + byteLength <= BLOB_URL_CACHE_MAX_BYTES &&
+    (pinnedEntries + 1 <= BLOB_URL_CACHE_MAX_SIZE || isLocalImageCacheKeyPinned(key))
+  )
 }
 
 export function cacheLocalImageBlob(key: string, url: string, byteLength: number): boolean {
@@ -125,11 +146,25 @@ function scheduleBlobUrlRevocation(urls: string[]): void {
   pendingBlobUrlRevocationTimer = setTimeout(revokePendingBlobUrls, 30_000)
 }
 
+/** Committed chat attachments never change, so a re-read on focus would only download them again. */
+export function isImmutableLocalImageCacheKey(key: string): boolean {
+  return isCommittedAgentSessionAttachmentPath(key.slice(key.lastIndexOf('\0') + 1))
+}
+
 export function invalidateLocalImageCache(): void {
-  const staleUrls = Array.from(blobUrlCache.values())
-  blobUrlCache.clear()
-  blobUrlCacheBytes.clear()
-  inFlightBlobUrlLoads.clear()
+  const staleUrls: string[] = []
+  for (const [key, url] of blobUrlCache) {
+    if (!isImmutableLocalImageCacheKey(key)) {
+      staleUrls.push(url)
+      blobUrlCache.delete(key)
+      blobUrlCacheBytes.delete(key)
+    }
+  }
+  for (const key of inFlightBlobUrlLoads.keys()) {
+    if (!isImmutableLocalImageCacheKey(key)) {
+      inFlightBlobUrlLoads.delete(key)
+    }
+  }
   cacheGeneration += 1
   for (const listener of cacheListeners) {
     listener()

@@ -148,8 +148,6 @@ function removeOrphanOverlayIfUnpaired(hostId: string): Promise<void> {
   })
 }
 
-import '../host-descriptors/host-descriptor-persistence'
-
 export class RelayRoutingHostRemovedError extends Error {}
 
 // Persist learned relay routing only; pairing/Edit Host retain authority over host rows and tokens.
@@ -302,10 +300,12 @@ export async function updateHostNameAndEndpoint(
     if (index === -1) {
       throw new Error('Host not found')
     }
-    let updated: StoredHostProfile = {
-      ...hosts[index]!,
-      ...(updates.endpoint !== undefined ? { endpoint: updates.endpoint } : {})
-    }
+    const current = hosts[index]!
+    let updated: StoredHostProfile =
+      updates.endpoint === undefined
+        ? current
+        : // A typed endpoint is the user's, even if it matches the saved one; the desktop never rewrites it.
+          { ...current, endpoint: updates.endpoint, directEndpointOrigin: 'manual' }
     if (updates.personalName !== undefined) {
       updated = withPersonalName(updated, updates.personalName, hosts)
     }

@@ -2,13 +2,19 @@
 import type { Bot } from '../../shared/bot-types'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 
+/** The bot whose home holds this place, if any. */
+export function botOfHome<B extends Pick<Bot, 'folderWorkspaceId'>>(
+  bots: { list: () => readonly B[] } | undefined,
+  place: { workspaceId: string } | undefined
+): B | undefined {
+  return place
+    ? bots?.list().find((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === place.workspaceId)
+    : undefined
+}
+
 export function isInBotHome(
   bots: { list: () => readonly Pick<Bot, 'folderWorkspaceId'>[] } | undefined,
   place: { workspaceId: string } | undefined
 ): boolean {
-  return (
-    place !== undefined &&
-    (bots?.list().some((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === place.workspaceId) ??
-      false)
-  )
+  return botOfHome(bots, place) !== undefined
 }

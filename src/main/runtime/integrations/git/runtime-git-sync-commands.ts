@@ -3,7 +3,14 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
 } from '../../../../shared/git/remotes/git-fork-sync'
-import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
+import type {
+  GitAbortOperationRequest,
+  ContinueRebaseAction,
+  ContinueRebaseRequest,
+  ContinueRebaseResult,
+  GitUpstreamStatus,
+  RebaseFromBaseResult
+} from '../../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { materializeWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
@@ -39,16 +46,44 @@ export class RuntimeGitSyncCommands {
     return { provider, pushTarget: materialized }
   }
 
-  async abortRuntimeGitMerge(worktreeSelector: string): Promise<{ ok: true }> {
+  async abortRuntimeGitMerge(
+    worktreeSelector: string,
+    request?: GitAbortOperationRequest
+  ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    await requireRuntimeGitProvider(target).abortMerge(target.worktree.path)
+    await requireRuntimeGitProvider(target).abortMerge(target.worktree.path, request)
     return { ok: true }
   }
 
-  async abortRuntimeGitRebase(worktreeSelector: string): Promise<{ ok: true }> {
+  async abortRuntimeGitRebase(
+    worktreeSelector: string,
+    request?: GitAbortOperationRequest
+  ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    await requireRuntimeGitProvider(target).abortRebase(target.worktree.path)
+    await requireRuntimeGitProvider(target).abortRebase(target.worktree.path, request)
     return { ok: true }
+  }
+
+  async continueRuntimeGitRebase(
+    worktreeSelector: string,
+    action: ContinueRebaseAction = 'continue',
+    request: ContinueRebaseRequest = {}
+  ): Promise<ContinueRebaseResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    // inspect is sent by an effect no user asked for: never start a stopped WSL distro. Continue is a user act.
+    if (action === 'inspect') {
+      await assertRuntimeReadWslDistroRunning(target, localGitOptionsForTarget(target).wslDistro)
+    }
+    return requireRuntimeGitProvider(target).continueRebase(target.worktree.path, action, request)
+  }
+
+  async readRuntimeGitRebaseAutoStash(worktreeSelector: string): Promise<{ autoStash: boolean }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    // A read no user mutation asked for: never start a stopped WSL distro.
+    await assertRuntimeReadWslDistroRunning(target, localGitOptionsForTarget(target).wslDistro)
+    return {
+      autoStash: await requireRuntimeGitProvider(target).readRebaseAutoStash(target.worktree.path)
+    }
   }
 
   async getRuntimeGitUpstreamStatus(
@@ -102,10 +137,16 @@ export class RuntimeGitSyncCommands {
     return { ok: true }
   }
 
-  async rebaseRuntimeGitFromBase(worktreeSelector: string, baseRef: string): Promise<{ ok: true }> {
+  async rebaseRuntimeGitFromBase(
+    worktreeSelector: string,
+    baseRef: string
+  ): Promise<{ ok: true } & RebaseFromBaseResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    await requireRuntimeGitProvider(target).rebaseFromBase(target.worktree.path, baseRef)
-    return { ok: true }
+    const result = await requireRuntimeGitProvider(target).rebaseFromBase(
+      target.worktree.path,
+      baseRef
+    )
+    return { ok: true, ...result }
   }
 
   async pushRuntimeGit(
@@ -155,12 +196,17 @@ export class RuntimeGitSyncCommands {
     return requireRuntimeGitProvider(target).applyCommit(target.worktree.path, operation, commitId)
   }
 
-  async sequencerAbortRuntimeGit(worktreeSelector: string, operation: GitCommitAction) {
+  async sequencerAbortRuntimeGit(
+    worktreeSelector: string,
+    operation: GitCommitAction,
+    request?: GitAbortOperationRequest
+  ) {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     await requireRuntimeGitProvider(target).recoverSequencer(
       target.worktree.path,
       operation,
-      'abort'
+      'abort',
+      request
     )
     return { ok: true }
   }

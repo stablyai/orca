@@ -1,7 +1,6 @@
 // A bot row's second line: what needs the owner, else what the bot is doing or did last across its
 // own chats and threads, else what it waits for; a wait is passive and can last days, so it never hides activity.
 // The desktop sidebar and the phone's Bots list both pick it here, each reading its own agent rows.
-import { structuredAgentSessionStatusPaneKey } from '../agent-session/view/structured-agent-session-tab'
 import {
   CONNECTOR_SOURCE_NAMES,
   type ConnectorSource,
@@ -10,6 +9,7 @@ import {
 import type { BotListWait } from './bot-list-waits'
 import { newestBotActivity } from './bot-row-activity'
 import type { BotWorkspaceLiveCounts } from './bot-sidebar-workspaces'
+import { chatPaneKey } from '../agent-session/view/chat-pane-address'
 
 /** Where a turn is: a thread's service and place as people name it, or (no service) a side chat's title. */
 export type BotRowPlace = { source: ConnectorSource | null; label: string }
@@ -93,9 +93,7 @@ export function selectBotRowLine<R>(
   if (input.paused) {
     return { kind: 'paused' }
   }
-  const chatPaneKey = input.chatSessionId
-    ? structuredAgentSessionStatusPaneKey(input.chatSessionId)
-    : null
+  const chatKey = input.chatSessionId ? chatPaneKey(input.chatSessionId) : null
   const linkByPaneKey = new Map(input.links.map((link) => [link.paneKey, link]))
   const sideChatByPaneKey = new Map((input.chats ?? []).map((chat) => [chat.paneKey, chat]))
   const candidates: { row: R; place: BotRowPlace | null }[] = []
@@ -107,7 +105,7 @@ export function selectBotRowLine<R>(
     const paneKey = read.paneKey(row)
     const link = linkByPaneKey.get(paneKey)
     const sideChat = sideChatByPaneKey.get(paneKey)
-    if (paneKey === chatPaneKey) {
+    if (paneKey === chatKey) {
       // First, so Home Chat wins a tie.
       candidates.unshift({ row, place: null })
     } else if (link) {
@@ -173,8 +171,15 @@ const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
 /** How a wait's deadline reads: "2:14 AM" today, "Fri 5 PM" within the week, "Nov 14, 5 PM"
  *  further; minutes only off the hour. Each app formats with its own locale. */
 export function botWaitTimeFormat(at: number, now: number): Intl.DateTimeFormatOptions {
-  const time = new Date(at).getMinutes() === 0 ? { hour: 'numeric' as const } : CLOCK
-  if (new Date(at).toDateString() === new Date(now).toDateString()) {
+  const date = new Date(at)
+  // A reminder set to the second keeps its seconds; a whole hour stays short ("5 PM").
+  const time =
+    date.getSeconds() !== 0
+      ? { ...CLOCK, second: '2-digit' as const }
+      : date.getMinutes() === 0
+        ? { hour: 'numeric' as const }
+        : CLOCK
+  if (date.toDateString() === new Date(now).toDateString()) {
     return time
   }
   return Math.abs(at - now) < 6 * DAY_MS

@@ -2,6 +2,7 @@ import type { DnrEngine } from '../engine'
 import { readableDnrRules } from '../rule-compilation/rule-schema'
 import type { DnrRule, DnrRulesetSource } from '../rule-compilation/rule-types'
 import {
+  DnrApiError,
   DNR_API_CONSTANTS,
   DNR_ERRORS,
   DNR_MAX_DISABLED_STATIC_RULES,
@@ -32,8 +33,6 @@ export type DnrExtensionRulesHost = {
   /** Rules changed: refresh request-path flags and caches. */
   changed: () => void
 }
-
-export class DnrApiError extends Error {}
 
 type ScopedRules = { rules: DnrRule[]; built: DnrBuiltRuleset | null }
 

@@ -19,7 +19,6 @@ const AGENT_HOOK_SOURCES = [
   'qoder-cn',
   'qwen-code',
   'codebuddy',
-  'gemini',
   'antigravity',
   'amp',
   'opencode',

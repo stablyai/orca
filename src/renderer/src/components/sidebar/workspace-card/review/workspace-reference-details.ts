@@ -34,6 +34,8 @@ export type WorkspaceReferenceDetailsMap = Readonly<
 >
 export type WorkspaceReferenceRequest = {
   admissionTier?: 'interactive' | 'status' | 'background'
+  /** A refresh timer's read: no use of an idle WSL host. */
+  background?: boolean
   knownProvider?: HostedReviewProvider
   key: string
   item: WorkspaceAttachment

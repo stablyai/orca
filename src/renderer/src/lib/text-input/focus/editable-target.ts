@@ -8,8 +8,9 @@ export function isNativeChatPaneTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[data-native-chat-root]') !== null
 }
 
-// Hidden textareas that stand for terminal or emulator focus, not a text field the user edits.
-export const INPUT_PROXY_SELECTOR = '.xterm-helper-textarea, [data-emulator-keyboard-proxy]'
+// Hidden textareas that stand for terminal, emulator or streamed-page focus, not a text field the user edits.
+export const BROWSER_KEYBOARD_PROXY_SELECTOR = '[data-browser-keyboard-proxy]'
+export const INPUT_PROXY_SELECTOR = `.xterm-helper-textarea, [data-emulator-keyboard-proxy], ${BROWSER_KEYBOARD_PROXY_SELECTOR}`
 
 // Share the capture-listener guard so app/onboarding shortcuts cannot hijack active text edits.
 export function isEditableTarget(target: EventTarget | null): boolean {

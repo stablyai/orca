@@ -1,7 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
-import type { StoreSetArgs } from '../../../diagnostics/react-commit-cascade-write-probe'
 import { createAgentConversationCapacityIndex } from './agent-conversation-capacity-index'
+
+type StorePartial =
+  | AppState
+  | Partial<AppState>
+  | ((state: AppState) => AppState | Partial<AppState>)
 
 export function withAgentConversationRetention(
   createState: StateCreator<AppState, [], []>
@@ -23,20 +27,46 @@ export function withAgentConversationRetention(
         throw error
       }
     }
-    const wrap =
-      (write: typeof set): typeof set =>
-      (...args: StoreSetArgs<AppState>): void => {
-        if (args[1] === true) {
-          const [partial] = args
+    const wrap = (write: typeof set): typeof set => {
+      const wrapped = (partial: StorePartial, replace?: boolean): void => {
+        if (replace === true) {
+          if (typeof partial !== 'function') {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace=true overload passes a complete AppState.
+            const fullPartial = partial as AppState
+            const current = get()
+            if (
+              fullPartial.agentConversationsByPaneKey === current.agentConversationsByPaneKey &&
+              fullPartial.terminalLayoutsByTabId === current.terminalLayoutsByTabId &&
+              index.matches(current)
+            ) {
+              write(fullPartial, true)
+              return
+            }
+          }
           write((state) => {
-            const requested = typeof partial === 'function' ? partial(state) : partial
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace=true overload requires a complete AppState.
+            const requested = (typeof partial === 'function' ? partial(state) : partial) as AppState
+            if (
+              requested.agentConversationsByPaneKey === state.agentConversationsByPaneKey &&
+              requested.terminalLayoutsByTabId === state.terminalLayoutsByTabId &&
+              index.matches(state)
+            ) {
+              return requested
+            }
             const entries = cap(requested, state)
             return entries === requested.agentConversationsByPaneKey
               ? requested
               : { ...requested, agentConversationsByPaneKey: entries }
           }, true)
         } else {
-          const [partial] = args
+          if (
+            typeof partial !== 'function' &&
+            !Object.hasOwn(partial, 'agentConversationsByPaneKey') &&
+            !Object.hasOwn(partial, 'terminalLayoutsByTabId')
+          ) {
+            write(partial, false)
+            return
+          }
           write((state) => {
             const requested = typeof partial === 'function' ? partial(state) : partial
             if (
@@ -55,6 +85,9 @@ export function withAgentConversationRetention(
           })
         }
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: named parameters implement both Zustand setState overloads without rest-args allocation.
+      return wrapped as typeof set
+    }
     api.setState = wrap(api.setState)
     const initial = createState(wrap(set), get, api)
     const entries = index.cap(initial.agentConversationsByPaneKey, initial.terminalLayoutsByTabId)

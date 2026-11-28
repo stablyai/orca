@@ -7,15 +7,14 @@ import {
 } from '../hooks/mobile-dictation-meter'
 import { useNow } from '../hooks/use-now'
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
-import { colors, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 type MeterProps = { readonly meter: MobileDictationMeter }
 
 // Reduce Motion holds the level at rest; clipping still tints.
 function useMeterEnergy(meter: MobileDictationMeter): { energy: number; isClipping: boolean } {
-  useMobileColorScheme()
   const { level, isClipping } = useMobileDictationMeterState(meter)
   return { energy: useReducedMotionEnabled() === false ? level : 0, isClipping }
 }
@@ -25,6 +24,8 @@ export const MobileDictationGrapes = memo(function MobileDictationGrapes({
   meter,
   dotSize
 }: MeterProps & { dotSize: number }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { energy, isClipping } = useMeterEnergy(meter)
   return (
     <View
@@ -65,13 +66,13 @@ export function useMobileDictationElapsed(meter: MobileDictationMeter): {
 }
 
 export function MobileDictationTimer({ elapsedSeconds }: { readonly elapsedSeconds: number }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const minutes = Math.floor(elapsedSeconds / 60)
   const seconds = String(elapsedSeconds % 60).padStart(2, '0')
   return <Text style={styles.timer}>{`${minutes}:${seconds}`}</Text>
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   grapes: {
     flexDirection: 'row',
     alignItems: 'center',
