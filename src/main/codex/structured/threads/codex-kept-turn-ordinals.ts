@@ -1,7 +1,10 @@
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { jsonObject } from '../../../../shared/json-stream/json-value-property'
 import { codexNonMessageIdentity, type CodexThreadItem } from '../items/codex-thread-item-identity'
@@ -213,4 +216,44 @@ export function settleKeptCodexHelperTurns(
     notify('turn/completed', { threadId, turn: { id: turnId, status, items: [], ...ended } })
   }
   translator.flush()
+}
+
+/** The Codex thread a saved item row came from, read from its key; null when it names none. */
+function codexRowThreadId(itemId: string): string | null {
+  const identity = parseAgentJournalItemKey(itemId)
+  if (identity?.provider === 'codex') {
+    return identity.threadId
+  }
+  const id = identity?.provider === 'orca' ? identity.clientMessageId : ''
+  if (id.startsWith('codex-item:')) {
+    return id.slice('codex-item:'.length).split(':')[0] || null
+  }
+  if (id.startsWith('codex-history-item:')) {
+    try {
+      const parts: unknown = JSON.parse(id.slice('codex-history-item:'.length))
+      return Array.isArray(parts) && typeof parts[1] === 'string' ? parts[1] : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/**
+ * Helper threads whose saved tool row still runs: on a shared server, one may have ended while no
+ * app was attached, and its end replays nowhere, so the reopen reads it from Codex too.
+ */
+export async function savedRunningCodexHelperThreads(
+  reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'visitItems'> | undefined,
+  primaryThreadId: string
+): Promise<string[]> {
+  const threads = new Set<string>()
+  await reads?.visitItems({ kinds: ['tool-call'] }, (itemId, _sequence, body) => {
+    const threadId =
+      body.kind === 'tool-call' && body.state === 'running' && codexRowThreadId(itemId)
+    if (threadId && threadId !== primaryThreadId) {
+      threads.add(threadId)
+    }
+  })
+  return [...threads]
 }

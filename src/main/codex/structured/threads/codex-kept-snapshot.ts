@@ -20,6 +20,7 @@ import {
 } from '../items/codex-collab-agent-tool-call'
 import {
   keptCodexThreadIds,
+  savedRunningCodexHelperThreads,
   seedCarriedKeptCodexCommands,
   seedKeptCodexCommandOutput,
   type KeptCodexSpawn,
@@ -293,14 +294,22 @@ export async function openKeptCodexState(input: {
   translator: CodexJournalTranslator
   chatKey: string
   threadId: string
-  journal: { reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'itemBody'> } | null
+  journal: {
+    reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'itemBody' | 'visitItems'>
+  } | null
   timeoutMs: number
   onError: (threadId: string, error: unknown) => void
 }): Promise<KeptCodexSnapshot> {
   const { connection, translator, journal } = input
   const snapshot = await readKeptCodexSnapshot({
     ...input,
-    carriedThreadIds: keptCodexThreadIds(connection.relay),
+    carriedThreadIds: [
+      ...keptCodexThreadIds(connection.relay),
+      // A shared server carries no thread ids: helpers saved as running are read from Codex.
+      ...(connection.relay?.rebuilt === true
+        ? await savedRunningCodexHelperThreads(journal?.reads, input.threadId).catch(() => [])
+        : [])
+    ],
     ownServer: connection.relay?.ownServer === true
   }).catch(async (error: unknown) => {
     input.onError(input.threadId, error)
