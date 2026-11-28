@@ -8,8 +8,11 @@ import {
   EyeOff,
   Moon,
   Pin,
-  PinOff
+  PinOff,
+  Smartphone
 } from 'lucide-react-native'
+import { DELEGATED_PHONE_SERVER_OFFER_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/pairing/delegated-phone-server-offer-contract'
+import { useServerOwnPairingRequest } from './server-own-pairing'
 import { buildWorktreeNavigationActions } from '../../agent-history/worktree-navigation-actions'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -47,6 +50,7 @@ export function useWorkspaceRowMenuActions(args: {
     connState,
     menuOpen: row !== null
   })
+  const ownPairingRequest = useServerOwnPairingRequest(row?.worktreeId ?? null)
   if (!row) {
     return []
   }
@@ -57,6 +61,13 @@ export function useWorkspaceRowMenuActions(args: {
   const serverUnreachable =
     server.server !== null && (server.routeHost === null || server.server.state !== 'connected')
   const isFolder = folderIdOfSelector(row.worktreeId) !== undefined
+  const serverOwnPairing = serverOwnPairingAction({
+    controller,
+    server,
+    close,
+    t,
+    request: ownPairingRequest
+  })
   const navigation = buildWorktreeNavigationActions({
     hostId,
     worktreeId: row.worktreeId,
@@ -166,6 +177,7 @@ export function useWorkspaceRowMenuActions(args: {
       icon: Edit3,
       onPress: () => onRename(row)
     },
+    ...serverOwnPairing,
     // A server row's columns are that server's own, which the desktop does not relay to the phone yet.
     ...(status === null
       ? []
@@ -212,4 +224,58 @@ export function useWorkspaceRowMenuActions(args: {
         ])
   ]
   return isFolder ? menu.filter((action) => !GIT_WORKTREE_ONLY_ACTIONS.has(action.id ?? '')) : menu
+}
+
+// A server the desktop relays can pair this phone itself, so the phone keeps reaching it while the
+// desktop sleeps. Offered only by servers that mint such pairings; an older desktop says to update.
+function serverOwnPairingAction(args: {
+  controller: HostScreenController
+  server: ReturnType<typeof useWorkspaceServer>
+  close: () => void
+  t: ReturnType<typeof useMobileTranslation>
+  request: ReturnType<typeof useServerOwnPairingRequest>
+}): ActionSheetAction[] {
+  const { controller, server, close, t, request } = args
+  const target = server.server
+  if (
+    !target?.client ||
+    target.state !== 'connected' ||
+    !target.gates.hostCapabilities.includes(DELEGATED_PHONE_SERVER_OFFER_RUNTIME_CAPABILITY)
+  ) {
+    return []
+  }
+  const serverClient = target.client
+  const serverName = target.name ?? t('hostScreen.serverOwnPairing.thisServer', 'this server')
+  const desktopName = controller.state.hostName
+  return [
+    {
+      id: 'keepServerReachable',
+      group: 'change',
+      label: t(
+        'hostScreen.serverOwnPairing.keepReachable',
+        'Keep reachable when {{desktop}} sleeps',
+        { desktop: desktopName }
+      ),
+      icon: Smartphone,
+      navigates: true,
+      // Minting can wait on the server's Relay; the sheet stays up until it answers.
+      loading: request.pending,
+      skipAutoClose: true,
+      onPress: () => {
+        if (request.pending) {
+          return
+        }
+        request.start({ serverClient, serverName, desktopName, t }, (answer) => {
+          close()
+          if (answer.kind === 'pair') {
+            controller.actions.navigateFromHostList(
+              `/pair-confirm?code=${encodeURIComponent(answer.code)}`
+            )
+          } else {
+            controller.state.setActionError(answer.message)
+          }
+        })
+      }
+    }
+  ]
 }

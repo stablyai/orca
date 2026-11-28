@@ -990,6 +990,12 @@
     },
     "identity": {
       "hostNotFound": "Host not found"
+    },
+    "serverOwnPairing": {
+      "updateDesktop": "Update Orca on {{desktop}} to keep {{server}} reachable.",
+      "failed": "Could not reach {{server}}. Try again while {{desktop}} is awake.",
+      "thisServer": "this server",
+      "keepReachable": "Keep reachable when {{desktop}} sleeps"
     }
   },
   "webShell": {
