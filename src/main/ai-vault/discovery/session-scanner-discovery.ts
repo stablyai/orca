@@ -54,6 +54,7 @@ export async function discoverFiles(args: {
   filePredicate?: (path: string) => boolean
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
+  excludeFile?: (file: Omit<FileWithMtime, 'modifiedAt'>, signal?: AbortSignal) => Promise<boolean>
   // Sees each listing the walk already made, so callers can read layout without another readdir.
   onDirectoryEntries?: (dirPath: string, entries: readonly Dirent[]) => void
   // A scoped scan walks every file this agent has, not only the newest `limit`.
@@ -65,14 +66,17 @@ export async function discoverFiles(args: {
   const scopeFiles: FileWithMtime[] | undefined = args.keepScopeFiles ? [] : undefined
   let refusedSidecar = false
   let paths: string[] = []
-  let pending: Promise<SessionFileObservation[]> | null = null
+  let pending: Promise<(SessionFileObservation | null)[]> | null = null
   const native = !isWslUncPath(args.rootDir)
   const source = { close: (): void => undefined }
 
-  function consume(observations: readonly SessionFileObservation[]): void {
+  function consume(observations: readonly (SessionFileObservation | null)[]): void {
     // A stat the cancel cut short is not an unreadable file; never record it.
     throwIfAiVaultScanCancelled(args.signal)
     for (const observation of observations) {
+      if (!observation) {
+        continue
+      }
       if ('issue' in observation) {
         recordSessionScanIssue(args.issues, {
           agent: args.agent,
@@ -133,7 +137,7 @@ export async function discoverFiles(args: {
     })
   }
 
-  async function readBatch(batch: readonly string[]): Promise<SessionFileObservation[]> {
+  async function readBatch(batch: readonly string[]): Promise<(SessionFileObservation | null)[]> {
     const groups: string[][] = []
     const groupSize = Math.ceil(batch.length / NATIVE_DISCOVERY_CONCURRENCY)
     for (let index = 0; index < batch.length; index += groupSize) {
@@ -141,7 +145,7 @@ export async function discoverFiles(args: {
     }
     const observations = await mapWithConcurrency(groups, NATIVE_DISCOVERY_CONCURRENCY, (group) =>
       withNativeDiscoverySlot(async () => {
-        const files: SessionFileObservation[] = []
+        const files: (SessionFileObservation | null)[] = []
         // Break without rejecting an unawaited batch; consume propagates cancellation when it is awaited.
         for (const path of group) {
           if (args.signal?.aborted) {
@@ -158,14 +162,18 @@ export async function discoverFiles(args: {
   // Sidecars can change without their transcript, so agents with one always restat.
   const statCache = args.contentDependencyPath ? undefined : args.statCache
 
-  async function observe(path: string): Promise<SessionFileObservation> {
+  async function observe(path: string): Promise<SessionFileObservation | null> {
     const reused = statCache?.reusable(path)
-    if (reused) {
-      return reused
+    const observation =
+      reused ?? (await observeSessionFile(path, args.contentDependencyPath, args.signal))
+    if (!reused) {
+      statCache?.observed(path, 'file' in observation ? observation : null)
     }
-    const observation = await observeSessionFile(path, args.contentDependencyPath, args.signal)
-    statCache?.observed(path, 'file' in observation ? observation : null)
-    return observation
+    return 'file' in observation &&
+      args.excludeFile &&
+      (await args.excludeFile(observation.file, args.signal))
+      ? null
+      : observation
   }
 
   async function readDirectory(path: string): Promise<Dirent[]> {

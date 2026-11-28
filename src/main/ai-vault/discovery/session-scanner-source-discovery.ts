@@ -14,11 +14,13 @@ import { normalizedWslHomeDirs, realDirAliases } from './session-scanner-roots'
 import { configureOpenCodeWslReaders } from '../scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
 import { scopeOnlyScan, scopeWalksAgentFiles } from '../scope/session-scope-cwd'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../session-scanner-types'
+import { isClaudeSessionArchived } from '../scanners/claude/session-scanner-claude-archive'
 
 export async function discoverAiVaultSessionSources(args: {
   options: AiVaultScanOptions
   limitPerAgent: number
   issues: AiVaultScanIssue[]
+  excludeArchivedClaude?: boolean
 }): Promise<SessionFileDiscovery[]> {
   const { options, limitPerAgent, issues } = args
   if (options.wslOpenCodeReaders) {
@@ -44,7 +46,8 @@ export async function discoverAiVaultSessionSources(args: {
                 options,
                 wslHomeDirs,
                 limitPerAgent,
-                issues
+                issues,
+                args.excludeArchivedClaude === true
               )
             ]
           : []
@@ -60,7 +63,8 @@ async function agentDiscoveries(
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[],
   limit: number,
-  issues: AiVaultScanIssue[]
+  issues: AiVaultScanIssue[],
+  excludeArchivedClaude: boolean
 ): Promise<SessionFileDiscovery[]> {
   const declaredRootDirs = source.rootDirs(options, wslHomeDirs)
   const aliases = source.dedupeRealRootDirs ? await realDirAliases(declaredRootDirs) : null
@@ -83,6 +87,8 @@ async function agentDiscoveries(
       filePredicate: source.filePredicate,
       contentDependencyPath: source.contentDependencyPath,
       directoryPredicate: source.directoryPredicate,
+      excludeFile:
+        agent === 'claude' && excludeArchivedClaude ? isClaudeSessionArchived : undefined,
       keepScopeFiles: scopeWalksAgentFiles(agent, options.scopePaths),
       statCache: options.statCache,
       signal: options.signal

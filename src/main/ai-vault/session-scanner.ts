@@ -70,7 +70,8 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         const discoveries = await discoverAiVaultSessionSources({
           options,
           limitPerAgent,
-          issues
+          issues,
+          excludeArchivedClaude: true
         })
         throwIfAiVaultScanCancelled(options.signal)
 
