@@ -53,6 +53,7 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private var sequence = 0
   private var pending: Command?
   private var tracking = false
+  private var invokingForQA = false
   private let actions: Set<String> = ["open", "settings", "updates", "quit-completely", "quit"]
 
   func applicationDidFinishLaunching(_ notification: Notification) { emit(["type": "ready"]) }
@@ -126,9 +127,12 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   @objc private func selected(_ item: NSMenuItem) {
     guard item.isEnabled, let action = item.representedObject as? String, actions.contains(action) else { return }
-    // The click went to the helper, so it brings Orca forward (macOS 14 cooperative activation needs the clicked app).
-    if action != "quit", action != "quit-completely", let parent = NSRunningApplication(processIdentifier: getppid()) {
+    // The click went to the helper, so it hands activation to Orca (macOS 14 cooperative activation).
+    // QA-hook invocations carry no user click and must not take focus.
+    if !invokingForQA, action != "quit", action != "quit-completely",
+      let parent = NSRunningApplication(processIdentifier: getppid()) {
       if #available(macOS 14.0, *) {
+        NSApp.yieldActivation(to: parent)
         parent.activate(from: NSRunningApplication.current, options: [])
       } else {
         parent.activate(options: [.activateIgnoringOtherApps])
@@ -148,7 +152,9 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
     guard let menu = statusItem?.menu else { emit(["type": "qa", "error": "No installed menu"]); return }
     if command.operation == "invoke", let action = command.action,
       let index = menu.items.firstIndex(where: { ($0.representedObject as? String) == action && $0.isEnabled }) {
+      invokingForQA = true
       menu.performActionForItem(at: index)
+      invokingForQA = false
       emit(["type": "qa", "invoked": action])
     } else if command.operation == "tracking" {
       // This proves run-loop delivery, not a displayed menu or physical click.
