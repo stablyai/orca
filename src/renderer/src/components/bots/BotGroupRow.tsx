@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { callBotRpc } from '@/lib/bot-hosts'
-import { Trash2, Users } from 'lucide-react'
+import { ChevronRight, FolderInput, FolderPlus, Trash2, Users } from 'lucide-react'
+import { cn } from '@/lib/class-names'
+import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
@@ -12,7 +14,6 @@ import { openBotGroup } from '@/lib/bot-group-catalog'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { BotAvatar } from './BotAvatar'
 import { botRowLineAge, BotHoverLatestLine, BotRowLineView } from './BotRowActivityLine'
@@ -23,6 +24,8 @@ import { BotSidebarRow } from './BotSidebarRow'
 import { botErrorMessage } from './bot-presentation'
 import { botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
 import { BotGroupFaces } from './BotGroupFaces'
+import { FOLD_TOGGLE_CLASS } from './BotChatRowControls'
+import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 
 const createBotGroupStatusSelector = () =>
   createAgentStatusEpochSelector((state: AppState, group: Pick<BotGroup, 'members' | 'threads'>) =>
@@ -37,6 +40,10 @@ export function BotGroupRow({
   isActive,
   onOpen,
   onManageMembers,
+  onMove,
+  onCreateChild,
+  expanded,
+  onToggle,
   onDelete,
   dragHandle = false
 }: {
@@ -47,6 +54,10 @@ export function BotGroupRow({
   isActive: boolean
   onOpen: () => void
   onManageMembers: () => void
+  onMove: () => void
+  onCreateChild?: () => void
+  expanded?: boolean
+  onToggle: () => void
   onDelete: () => void
   dragHandle?: boolean
 }): React.JSX.Element {
@@ -65,18 +76,44 @@ export function BotGroupRow({
     <BotSidebarRow
       avatar={
         <BotGroupFaces
-          faces={botGroupFaces(members, (bot) => bot.id)}
+          faces={botGroupFaces(members, botSidebarEntryKey)}
           className="size-8"
           slot={32}
         />
       }
       name={group.name}
       workspaceId={workspaceId}
-      hostId={LOCAL_EXECUTION_HOST_ID}
+      hostId={group.hostId}
       status={status}
       isUnread={home.isUnread}
       isActive={isActive}
       dragHandle={dragHandle}
+      expanded={expanded}
+      trailing={
+        expanded === undefined ? null : (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={
+              expanded
+                ? t('bots.chats.fold', 'Fold {{name}}', { name: group.name })
+                : t('bots.chats.unfold', 'Unfold {{name}}', { name: group.name })
+            }
+            className={cn(
+              FOLD_TOGGLE_CLASS,
+              'min-w-8 self-stretch gap-0.5 focus-visible:ring-2 focus-visible:ring-inset'
+            )}
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggle()
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            {status === 'working' ? <StatusIndicator status="working" showTooltip={false} /> : null}
+            <ChevronRight className={cn('size-3.5', expanded && 'rotate-90')} />
+          </button>
+        )
+      }
       onOpen={() => {
         void openBotGroup(group)
           .then(onOpen)
@@ -103,10 +140,20 @@ export function BotGroupRow({
         />
       )}
       menuItems={
-        <ContextMenuItem onSelect={onManageMembers}>
-          <Users className="size-3.5" />
-          {t('bots.groups.manageMembersMenu', 'Manage members…')}
-        </ContextMenuItem>
+        <>
+          <ContextMenuItem onSelect={onManageMembers}>
+            <Users className="size-3.5" />
+            {t('bots.groups.manageMembersMenu', 'Manage members…')}
+          </ContextMenuItem>
+          <ContextMenuItem disabled={!onCreateChild} onSelect={onCreateChild}>
+            <FolderPlus className="size-3.5" />
+            {t('bots.groups.newSubgroup', 'New subgroup…')}
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={onMove}>
+            <FolderInput className="size-3.5" />
+            {t('bots.groups.moveGroupMenu', 'Move group…')}
+          </ContextMenuItem>
+        </>
       }
       menuFooter={
         <>
@@ -138,7 +185,10 @@ function BotGroupHoverDetails({
       </div>
       <div className="flex flex-col gap-1.5">
         {members.map((bot) => (
-          <div key={bot.id} className="flex items-center gap-2 text-xs text-foreground">
+          <div
+            key={botSidebarEntryKey(bot)}
+            className="flex items-center gap-2 text-xs text-foreground"
+          >
             <BotAvatar bot={bot} className="size-5 rounded text-2xs" />
             <span className="min-w-0 truncate">{bot.name}</span>
           </div>

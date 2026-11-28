@@ -45,6 +45,7 @@ type BotRowProps = {
   dragHandle?: boolean
   beginRename?: boolean
   onBeginRenameConsumed?: () => void
+  onMoveToFolder?: () => void
 }
 
 export function BotRow({
@@ -55,7 +56,8 @@ export function BotRow({
   fold = null,
   dragHandle = false,
   beginRename = false,
-  onBeginRenameConsumed
+  onBeginRenameConsumed,
+  onMoveToFolder
 }: BotRowProps): React.JSX.Element {
   const t = useTranslate()
   const details = useBotRowDetails(bot, home)
@@ -145,7 +147,9 @@ export function BotRow({
           onOpenHome={() => openBotHomePanelFromSidebar(bot, onOpen)}
         />
       )}
-      menuItems={<BotRowMenuItems bot={bot} home={home} offline={offline} />}
+      menuItems={
+        <BotRowMenuItems bot={bot} home={home} offline={offline} onMoveToFolder={onMoveToFolder} />
+      }
       menuFooter={<BotRowMenuFooter bot={bot} offline={offline} />}
     />
   )

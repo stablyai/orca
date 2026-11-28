@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import {
@@ -7,7 +8,7 @@ import {
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 
 /** A row's key across hosts: ids are random per host, so the same id on two hosts is two rows. */
-export function botSidebarEntryKey(owner: Pick<Bot | BotGroup, 'hostId' | 'id'>): string {
+export function botSidebarEntryKey(owner: { hostId: ExecutionHostId; id: string }): string {
   return `${owner.hostId}/${owner.id}`
 }
 

@@ -1,5 +1,6 @@
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import { normalizeSidebarBotsHeight } from '../../../../../shared/sidebar-bots-height'
+import { normalizeBotSidebarFolderState } from '../../../../../shared/bots/bot-sidebar-folders'
 import { normalizeBotSidebarView } from '../../../../../shared/bots/bot-sidebar-view'
 import { normalizeBotChatFolds } from '../../../../../shared/bots/bot-chat-tree'
 import type { UISlice } from './ui-slice-contract'
@@ -14,6 +15,7 @@ export function hydrateBotSidebarState(
   UISlice,
   | 'hideBotCreatedWorkspaces'
   | 'botSidebarView'
+  | 'botSidebarFolders'
   | 'botChatFolds'
   | 'sidebarBotsHeight'
   | 'sidebarProjectsFirst'
@@ -21,6 +23,7 @@ export function hydrateBotSidebarState(
   return {
     hideBotCreatedWorkspaces: ui.hideBotCreatedWorkspaces !== false,
     botSidebarView: normalizeBotSidebarView(ui.botSidebarView),
+    botSidebarFolders: normalizeBotSidebarFolderState(ui.botSidebarFolders),
     botChatFolds: normalizeBotChatFolds(ui.botChatFolds),
     sidebarBotsHeight: normalizeSidebarBotsHeight(ui.sidebarBotsHeight),
     sidebarProjectsFirst: ui.sidebarProjectsFirst === true

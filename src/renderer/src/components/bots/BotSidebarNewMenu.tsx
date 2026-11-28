@@ -1,5 +1,13 @@
 import React from 'react'
-import { Bot as BotIcon, Download, LayoutTemplate, Link2, Plus, Users } from 'lucide-react'
+import {
+  Bot as BotIcon,
+  Download,
+  FolderPlus,
+  LayoutTemplate,
+  Link2,
+  Plus,
+  Users
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -25,7 +33,8 @@ export function BotSidebarNewMenu({
   canCreateGroup,
   onNewBot,
   onImport,
-  onNewGroup
+  onNewGroup,
+  onNewFolder
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -33,10 +42,11 @@ export function BotSidebarNewMenu({
   onNewBot: () => void
   onImport: () => void
   onNewGroup: () => void
+  onNewFolder: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const newBotLabel = t('bots.section.newBot', 'New bot')
-  const newLabel = t('bots.section.new', 'New bot or group')
+  const newLabel = t('bots.section.new', 'New bot, group, or folder')
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <Tooltip>
@@ -110,6 +120,13 @@ export function BotSidebarNewMenu({
           <span className={BOT_MENU_ROW}>
             <Users className="size-3.5" />
             {t('bots.groups.newGroup', 'New group')}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onNewFolder}>
+          <span className={BOT_MENU_ROW}>
+            <FolderPlus className="size-3.5" />
+            {t('bots.folders.createTitle', 'New folder')}
           </span>
         </DropdownMenuItem>
       </DropdownMenuContent>

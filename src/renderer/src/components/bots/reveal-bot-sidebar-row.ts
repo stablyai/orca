@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { readBotsEnabled } from '@/lib/bot-catalog'
+import { unfoldBotSidebarEntry } from './unfold-bot-sidebar-folders'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
 
 const READY_DEADLINE_MS = 500
@@ -30,7 +31,7 @@ function findListedRow(
 }
 
 /**
- * Unfolds Bots if folded, then scrolls the entry's row into the list's view.
+ * Unfolds the entry's path, then scrolls its row into the list's view.
  * Checks `isCurrent` before unfolding and before scrolling or focusing. Returns a cancel.
  */
 export function revealBotSidebarRow({
@@ -61,10 +62,7 @@ export function revealBotSidebarRow({
   if (!isCurrent()) {
     return cancel
   }
-  const store = useAppStore.getState()
-  if (store.collapsedGroups.has(BOTS_GROUP_KEY)) {
-    store.toggleCollapsedGroup(BOTS_GROUP_KEY)
-  }
+  unfoldBotSidebarEntry(sidebarKey)
   let retries = defer ? 1 : 0
   let seekDeadline: number | null = null
   const step = (): void => {

@@ -36,6 +36,7 @@ import type { WorkspaceStatusDefinition } from '../worktree/types'
 import type { PersistedAutomationHostFilter } from '../automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from '../remote-runtime/host-catalog/pending-runtime-repo-removal'
 import type { BotSidebarView } from '../bots/bot-sidebar-view'
+import type { BotSidebarFolderState } from '../bots/bot-sidebar-folders'
 
 export type PersistedUIState = {
   gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>
@@ -113,6 +114,7 @@ export type PersistedUIState = {
   hideBotCreatedWorkspaces?: boolean
   /** The Bots section's Bot options. Absent means Manual order, nothing hidden. */
   botSidebarView?: BotSidebarView
+  botSidebarFolders?: BotSidebarFolderState
   /** A bot chat's manual fold in Activity and the sidebar, by `botChatFoldKey`. Absent means none. */
   botChatFolds?: Record<string, BotChatFold>
   /** Agents-view: include child (orchestration-dispatched) agent threads. Absent means off. */

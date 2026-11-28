@@ -15,6 +15,7 @@ import { botErrorMessage } from './bot-presentation'
 import { pruneBotSidebarChildren } from './bot-sidebar-child-presence'
 import { pruneBotSidebarPaging } from './bot-sidebar-paging'
 import { pruneBotSidebarOlderChats } from './use-bot-sidebar-older-chats'
+import { unfoldBotSidebarEntry } from './unfold-bot-sidebar-folders'
 import { revealBotSidebarRow } from './reveal-bot-sidebar-row'
 
 export type BotSidebarSearchState = {
@@ -92,10 +93,7 @@ export function useBotSidebarSearch({
       // Closing takes the field and results away; move focus to the row only if it would go with them.
       const moveFocus = focusIsNowhere() || !!regionRef.current?.contains(document.activeElement)
       flushSync(() => {
-        const { collapsedGroups, toggleCollapsedGroup } = useAppStore.getState()
-        if (collapsedGroups.has(BOTS_GROUP_KEY)) {
-          toggleCollapsedGroup(BOTS_GROUP_KEY)
-        }
+        unfoldBotSidebarEntry(entryId)
         setOpen(false)
       })
       if (!moveFocus) {

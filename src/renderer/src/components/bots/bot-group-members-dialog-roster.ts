@@ -53,11 +53,11 @@ export function withUnlistedMembers(bots: readonly Bot[], group: BotGroup | unde
 }
 
 /** The group's members by host-qualified key, local ones first as saved, then remote ones. */
-export function groupMemberKeys(group: BotGroup): string[] {
+export function groupMemberKeys(group: BotGroup, keyOf = botRefKey): string[] {
   return [
-    ...group.members.map((member) => botRefKey({ hostId: group.hostId, id: member.botId })),
+    ...group.members.map((member) => keyOf({ hostId: group.hostId, id: member.botId })),
     ...(group.remoteMembers ?? []).map((member) =>
-      botRefKey({ hostId: `runtime:${member.environmentId}`, id: member.botId })
+      keyOf({ hostId: `runtime:${member.environmentId}`, id: member.botId })
     )
   ]
 }

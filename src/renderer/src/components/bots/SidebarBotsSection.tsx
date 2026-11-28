@@ -1,10 +1,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { useFloatingProjectGroupHeaderDrag } from '@/components/sidebar/worktree-list/drag/use-floating-project-group-header-drag'
-import {
-  ROOT_PROJECT_GROUP_HEADER_BUCKET,
-  type ProjectGroupHeaderDragItem
-} from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
+import { getProjectGroupHeaderDragBucketKey } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { WorktreeSidebarDropIndicator } from '@/components/sidebar/worktree-list/drag/WorktreeSidebarDropIndicator'
 import { SidebarSectionHeader } from '@/components/sidebar/SidebarSectionHeader'
 import { selectActiveBotGroupRoomId } from '@/lib/bot-group-catalog'
@@ -15,15 +12,11 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/class-names'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
-import {
-  folderWorkspaceKey,
-  getActiveSidebarWorkspaceId
-} from '../../../../shared/workspace/identity/workspace-scope'
-import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
-import { getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
+import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace/identity/workspace-scope'
+import { botSidebarEntryKey, getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
-import { BotSidebarDragFrame, BotSidebarEntry, type BotSidebarEntryDrag } from './BotSidebarEntry'
-import { BotGroupRow } from './BotGroupRow'
+import type { BotSidebarEntryDrag } from './BotSidebarEntry'
+import { BotSidebarTreeEntry } from './BotSidebarTreeEntry'
 import { useBotGroupDelete } from './use-bot-group-delete'
 import { findBotGroupRoom, type BotGroup } from '../../../../shared/bots/bot-group'
 import { BotSidebarNewMenu } from './BotSidebarNewMenu'
@@ -47,6 +40,12 @@ import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
+import { BotFolderDialogs, type BotFolderDialogState } from './BotFolderDialogs'
+import { BotGroupMoveDialog } from './BotGroupMoveDialog'
+import { getBotSidebarGroupFoldKey } from '../../../../shared/bots/bot-sidebar-group-parents'
+import { useBotSidebarFolderRows } from './use-bot-sidebar-folder-rows'
+import { getBotSidebarFolderGroupKey } from '../../../../shared/bots/bot-sidebar-folders'
+import { moveBotGroupInSidebar, unfoldBotSidebarEntry } from './unfold-bot-sidebar-folders'
 
 /** Lists bots from this computer and paired servers in the sidebar. */
 export function SidebarBotsSection({
@@ -70,7 +69,8 @@ export function SidebarBotsSection({
   const groups = useBotGroups()
   const folderWorkspaces = useBotHomeWorkspaces(bots, groups)
   const activeRoomId = useAppStore(selectActiveBotGroupRoomId)
-  const activeGroupId = activeRoomId ? findBotGroupRoom(groups, activeRoomId)?.group.id : null
+  const activeGroup = activeRoomId ? findBotGroupRoom(groups, activeRoomId)?.group : undefined
+  const activeGroupId = activeGroup ? botSidebarEntryKey(activeGroup) : null
   const deleteGroup = useBotGroupDelete()
   const [newBotOpen, setNewBotOpen] = useState(false)
   const [newMenuOpen, setNewMenuOpen] = useState(false)
@@ -79,7 +79,15 @@ export function SidebarBotsSection({
     setNewBotOpen(true)
   }
   const [importOpen, setImportOpen] = useState(false)
-  const [editingGroup, setEditingGroup] = useState<BotGroup | 'new' | null>(null)
+  const [editingGroup, setEditingGroup] = useState<BotGroup | { parentKey: string | null } | null>(
+    null
+  )
+  const subgroupParent =
+    editingGroup && 'parentKey' in editingGroup
+      ? groups.find((group) => botSidebarEntryKey(group) === editingGroup.parentKey)
+      : undefined
+  const [movingGroup, setMovingGroup] = useState<BotGroup | null>(null)
+  const [folderDialog, setFolderDialog] = useState<BotFolderDialogState | null>(null)
   const [pendingRenameKey, setPendingRenameKey] = useState<string | null>(null)
   // Bots and groups share one list and one order; the folded header shows bots only.
   const savedEntries = useMemo(
@@ -87,6 +95,17 @@ export function SidebarBotsSection({
     [bots, groups, folderWorkspaces]
   )
   const entries = useBotSidebarArrangement(savedEntries)
+  const { treeRows, botIdsByBucket, dragItemById, memberKeysByGroup, groupsByMember, hasFolders } =
+    useBotSidebarFolderRows(entries, groups)
+  const membersByGroup = useMemo(() => {
+    const byKey = new Map(bots.map((bot) => [botSidebarEntryKey(bot), bot]))
+    return new Map(
+      [...memberKeysByGroup].map(([groupId, keys]) => [
+        groupId,
+        keys.flatMap((key) => byKey.get(key) ?? [])
+      ])
+    )
+  }, [bots, memberKeysByGroup])
   const listRef = useRef<HTMLDivElement>(null)
   // Search shows the list in place and nothing drags while it is open. Its toggle lives only in the
   // unfolded header, so a search always starts unfolded.
@@ -109,25 +128,6 @@ export function SidebarBotsSection({
   const collapseAll = useBotCollapseAll(entries, savedEntries)
   const facts = useBotPreviewFacts(rows)
   const preview = summarizeBotPreview(facts)
-  // Bots reorder through the project-group header drag: one root bucket, each bot's order saved on its host.
-  const botIdsByBucket = useMemo(
-    () => new Map([[ROOT_PROJECT_GROUP_HEADER_BUCKET, entries.map(({ id }) => id)]]),
-    [entries]
-  )
-  const dragItemById = useMemo(
-    () =>
-      new Map<string, ProjectGroupHeaderDragItem>(
-        // An entry never placed takes no order, so the first drop writes one for every entry.
-        entries.map((entry) => [
-          entry.id,
-          {
-            parentGroupId: null,
-            tabOrder: (entry.kind === 'bot' ? entry.bot : entry.group).sidebarOrder ?? -1
-          }
-        ])
-      ),
-    [entries]
-  )
   const commitOrder = useCallback(
     (id: string, sidebarOrder: number) => {
       const entry = entries.find((candidate) => candidate.id === id)
@@ -155,17 +155,12 @@ export function SidebarBotsSection({
     onCommitProjectGroupTabOrder: commitOrder,
     getScrollContainer: () => listRef.current
   })
-  const listShown = !collapsed && entries.length > 0
+  const listShown = !collapsed && treeRows.length > 0
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
-  const handleRenameFromPreview = useCallback(
-    (entryKey: string) => {
-      setPendingRenameKey(entryKey)
-      if (useAppStore.getState().collapsedGroups.has(BOTS_GROUP_KEY)) {
-        toggleCollapsedGroup(BOTS_GROUP_KEY)
-      }
-    },
-    [toggleCollapsedGroup]
-  )
+  const handleRenameFromPreview = useCallback((entryKey: string) => {
+    setPendingRenameKey(entryKey)
+    unfoldBotSidebarEntry(entryKey)
+  }, [])
   if (pendingRenameKey !== null && !entries.some((entry) => entry.id === pendingRenameKey)) {
     setPendingRenameKey(null)
   }
@@ -240,7 +235,8 @@ export function SidebarBotsSection({
                 canCreateGroup={bots.length >= 2}
                 onNewBot={openNewBot}
                 onImport={() => setImportOpen(true)}
-                onNewGroup={() => setEditingGroup('new')}
+                onNewGroup={() => setEditingGroup({ parentKey: null })}
+                onNewFolder={() => setFolderDialog({ type: 'create', parentId: null })}
               />
             </>
           )
@@ -264,61 +260,67 @@ export function SidebarBotsSection({
             data-bot-sidebar-list=""
             className={cn(
               'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain [overflow-anchor:none]',
-              entries.length > 0 && 'pb-1 px-1',
+              treeRows.length > 0 && 'pb-1 px-1',
               collapsed && 'hidden'
             )}
           >
             {/* A room kept after its last bot went still lists, so it can be opened or deleted. */}
-            {savedEntries.length > 0 && entries.length === 0 ? (
+            {savedEntries.length > 0 && treeRows.length === 0 ? (
               collapsed ? null : (
                 <div className="px-4 text-xs text-muted-foreground">
                   {t('bots.options.allHidden', 'All bots are paused and hidden.')}
                 </div>
               )
-            ) : entries.length === 0 ? (
+            ) : treeRows.length === 0 ? (
               collapsed ? null : (
                 <SidebarBotsEmptyState onNewBot={openNewBot} />
               )
             ) : collapsed ? null : (
               <>
                 <BotSidebarVirtualRows
-                  entries={entries}
+                  entries={treeRows}
                   draggingId={drag.state.draggingGroupId}
                   revealId={pendingRenameKey ?? reveal.request?.target.entryKey}
-                  renderEntry={(entry, index) => {
-                    const entryDrag: BotSidebarEntryDrag | undefined = draggable
-                      ? {
-                          index,
-                          dragging: drag.state.draggingGroupId === entry.id,
-                          settling: drag.state.draggingGroupId !== null,
-                          offset: drag.state.previewOffsetsById?.get(entry.id) ?? 0,
-                          onPointerDown: (event) => drag.onHandlePointerDown(event, entry.id)
-                        }
-                      : undefined
-                    return entry.kind === 'group' ? (
-                      <BotSidebarDragFrame id={entry.id} drag={entryDrag}>
-                        <BotGroupRow
-                          group={entry.group}
-                          home={entry.home}
-                          members={botGroupMemberBots(entry.group, bots)}
-                          isActive={activeGroupId === entry.group.id}
-                          onOpen={onOpenBot}
-                          onManageMembers={() => setEditingGroup(entry.group)}
-                          onDelete={() => void deleteGroup(entry.group)}
-                          dragHandle={draggable}
-                        />
-                      </BotSidebarDragFrame>
-                    ) : (
-                      <BotSidebarEntry
-                        bot={entry.bot}
-                        home={entry.home}
-                        isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
-                        onOpen={onOpenBot}
+                  renderEntry={(row) => {
+                    const entryDrag: BotSidebarEntryDrag | undefined =
+                      draggable && row.kind === 'entry'
+                        ? {
+                            bucket: getProjectGroupHeaderDragBucketKey({
+                              parentGroupId: row.parentId
+                            }),
+                            index: row.bucketIndex,
+                            dragging: drag.state.draggingGroupId === row.id,
+                            settling: drag.state.draggingGroupId !== null,
+                            offset: drag.state.previewOffsetsById?.get(row.id) ?? 0,
+                            onPointerDown: (event) => drag.onHandlePointerDown(event, row.id)
+                          }
+                        : undefined
+                    return (
+                      <BotSidebarTreeEntry
+                        row={row}
                         drag={entryDrag}
-                        beginRename={pendingRenameKey === entry.id}
-                        onBeginRenameConsumed={() =>
-                          setPendingRenameKey((current) => (current === entry.id ? null : current))
+                        onOpen={onOpenBot}
+                        onFolderAction={setFolderDialog}
+                        onToggleFolder={(id) =>
+                          toggleCollapsedGroup(getBotSidebarFolderGroupKey(id))
                         }
+                        onToggleGroup={(id) => toggleCollapsedGroup(getBotSidebarGroupFoldKey(id))}
+                        onCreateSubgroup={
+                          bots.length >= 2
+                            ? (parentKey) => setEditingGroup({ parentKey })
+                            : undefined
+                        }
+                        onManageMembers={setEditingGroup}
+                        onMoveGroup={setMovingGroup}
+                        onDeleteGroup={(group) => void deleteGroup(group)}
+                        membersByGroup={membersByGroup}
+                        activeGroupId={activeGroupId}
+                        activeWorkspaceId={activeWorkspaceId}
+                        pendingRenameKey={pendingRenameKey}
+                        onRenameConsumed={(id) =>
+                          setPendingRenameKey((current) => (current === id ? null : current))
+                        }
+                        canMoveBot={hasFolders || groupsByMember.has(row.id)}
                       />
                     )
                   }}
@@ -342,9 +344,26 @@ export function SidebarBotsSection({
       {importOpen ? (
         <LazyImportBotDialog open={importOpen} onOpenChange={setImportOpen} onCreated={onOpenBot} />
       ) : null}
+      {folderDialog ? (
+        <BotFolderDialogs state={folderDialog} onClose={() => setFolderDialog(null)} />
+      ) : null}
+      {movingGroup ? (
+        <BotGroupMoveDialog
+          group={movingGroup}
+          groups={groups}
+          onClose={() => setMovingGroup(null)}
+        />
+      ) : null}
       {editingGroup ? (
         <LazyBotGroupMembersDialog
-          group={editingGroup === 'new' ? undefined : editingGroup}
+          group={'parentKey' in editingGroup ? undefined : editingGroup}
+          subgroup={
+            subgroupParent && {
+              parentName: subgroupParent.name,
+              onCreated: (group) =>
+                moveBotGroupInSidebar(botSidebarEntryKey(group), botSidebarEntryKey(subgroupParent))
+            }
+          }
           onClose={() => setEditingGroup(null)}
         />
       ) : null}

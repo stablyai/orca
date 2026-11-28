@@ -20,7 +20,6 @@ import {
   capBotWorkspaceLines,
   countLiveBotWorkspaces
 } from '../../../../shared/bots/bot-sidebar-workspaces'
-import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { BotRow } from './BotRow'
 import { BotSidebarChats } from './BotSidebarChats'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
@@ -45,6 +44,7 @@ const BOT_WORKSPACE_LINE_INDENT_NEW_CARD_STYLE = 27
 /** A bot's row with the workspaces its workers made, one Compact line each under the bot's avatar. */
 /** The Bots section's reorder, which measures each entry, workspaces included, by these attributes. */
 export type BotSidebarEntryDrag = {
+  bucket: string
   index: number
   dragging: boolean
   /** Some bot is dragging, so rows slide to their drop offsets. */
@@ -61,7 +61,8 @@ export function BotSidebarEntry({
   onOpen,
   drag,
   beginRename = false,
-  onBeginRenameConsumed
+  onBeginRenameConsumed,
+  onMoveToFolder
 }: {
   bot: Bot
   home: FolderWorkspace
@@ -70,6 +71,7 @@ export function BotSidebarEntry({
   drag?: BotSidebarEntryDrag
   beginRename?: boolean
   onBeginRenameConsumed?: () => void
+  onMoveToFolder?: () => void
 }): React.JSX.Element {
   // A disconnected server's row keeps its place in a drag but can't start one: nothing can save it.
   const offline = useBotHostOffline(bot.hostId)
@@ -146,6 +148,7 @@ export function BotSidebarEntry({
         dragHandle={drag !== undefined && !offline}
         beginRename={beginRename}
         onBeginRenameConsumed={onBeginRenameConsumed}
+        onMoveToFolder={onMoveToFolder}
         // A down host's bot is its row alone, so it has nothing to fold.
         fold={
           offline
@@ -340,7 +343,7 @@ export function BotSidebarDragFrame({
       data-bot-sidebar-entry={id}
       data-project-group-header-id={drag ? id : undefined}
       data-project-group-header-index={drag?.index}
-      data-project-group-header-bucket={drag ? ROOT_PROJECT_GROUP_HEADER_BUCKET : undefined}
+      data-project-group-header-bucket={drag?.bucket}
       onPointerDown={drag?.onPointerDown}
     >
       {/* Only the content slides, so the drag keeps measuring the frame where it stands. */}
