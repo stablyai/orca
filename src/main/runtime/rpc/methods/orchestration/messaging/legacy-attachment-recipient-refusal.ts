@@ -35,7 +35,7 @@ export function legacyAttachmentRefusal(
       }
     : {
         code: 'dispatch_inactive',
-        message: `${terminalHandle} is starting or finishing a Task for another Orca.`
+        message: `${terminalHandle} is starting or finishing a Task for another Orca; mail can't reach it there. Message that Task's coordinator.`
       }
 }
 

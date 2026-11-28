@@ -46,6 +46,10 @@ import { answersRequest, askedInConversation, botRequestSender } from './bot-req
 import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import {
+  isLegacyAttachmentRefusal,
+  legacyAttachmentError
+} from './legacy-attachment-recipient-refusal'
 
 type SendParamsInput = Pick<
   z.infer<typeof SendParams>,
@@ -259,7 +263,9 @@ async function admitBotRequestMail(
             senderRunId: args.senderRunId
           })
     if (!recipient.ok) {
-      throw new OrchestrationError(recipient.code, recipient.message)
+      throw isLegacyAttachmentRefusal(recipient)
+        ? legacyAttachmentError(recipient, 'Nothing was sent.')
+        : new OrchestrationError(recipient.code, recipient.message)
     }
     // The bot may have been paused or removed while the Chat was found.
     check()

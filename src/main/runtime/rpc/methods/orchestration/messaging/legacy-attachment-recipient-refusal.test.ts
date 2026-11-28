@@ -12,6 +12,7 @@ const LEGACY = 'term_legacy'
 const PLAIN = 'term_plain'
 const LEGACY_PANE = 'tab_legacy:33333333-3333-4333-8333-333333333333'
 const PLAIN_PANE = 'tab_plain:44444444-4444-4444-8444-444444444444'
+const FORMER_PANE = 'tab_former:55555555-5555-4555-8555-555555555555'
 const DISPATCH = 'ctx_legacy_home'
 const WORKTREE = 'repo::shared'
 const REFUSED = { effectsApplied: false }
@@ -72,7 +73,7 @@ describe('mail to a terminal working another Orca Task', () => {
   const send = (to: string) =>
     harness.call('orchestration.send', { from: 'term_coord', to, subject: 'hi', body: 'b' }, ctx)
 
-  it('refuses a point send before write, by live pane and by retained handle', async () => {
+  it('refuses a point send before write, by live pane and by retained handle, until it settles', async () => {
     setup()
     attachLegacy()
     await expect(send(LEGACY)).rejects.toMatchObject({
@@ -83,13 +84,23 @@ describe('mail to a terminal working another Orca Task', () => {
     delete livePanes[LEGACY]
     await expect(send(LEGACY)).rejects.toMatchObject({ code: 'capability_unsupported' })
     expect(mailTo(LEGACY)).toEqual({ n: 0 })
+
+    livePanes[LEGACY] = LEGACY_PANE
+    db.settleRemoteAttachmentInRelayTransaction(DISPATCH, 'succeeded')
+    await expect(send(LEGACY)).resolves.toMatchObject({ message: { to_handle: LEGACY } })
   })
 
-  it('refuses a point send while the attachment is still starting', async () => {
+  it('refuses a point send while the attachment is starting, behind a local Dispatch', async () => {
     setup()
     attachLegacy(false)
     await expect(send(LEGACY)).rejects.toMatchObject({ code: 'dispatch_inactive', data: REFUSED })
     expect(mailTo(LEGACY)).toEqual({ n: 0 })
+
+    const task = db.createTask({ spec: 'local work' })
+    const dispatch = createRootDispatch(db, task.id, LEGACY, LEGACY_PANE)
+    await expect(send(LEGACY)).resolves.toMatchObject({
+      message: { to_handle: `dispatch:${dispatch.id}` }
+    })
   })
 
   it('keeps other group deliveries, reports the refused member, and refuses an all-refused group', async () => {
@@ -126,12 +137,8 @@ describe('mail to a terminal working another Orca Task', () => {
     expect(mailTo(LEGACY)).toEqual({ n: 0 })
   })
 
-  it('refuses a reply to such a terminal, including one attached while the reply awaited', async () => {
-    setup()
-    const reply = (id: string) =>
-      harness.call('orchestration.reply', { id, from: 'term_coord', body: 'answer' }, ctx)
-    const question = db.insertMessage({ from: LEGACY, to: 'term_coord', subject: 'q', body: '?' })
-    // Attach only once routing has resolved the recipient, before the reply is stored.
+  /** Attach the worker once routing has resolved the reply's recipient, before the reply is stored. */
+  function attachWhileReplyAwaits(): void {
     let resolved = false
     const owners = db.getActiveDispatchMailboxOwners.bind(db)
     vi.spyOn(db, 'getActiveDispatchMailboxOwners').mockImplementation((handle, paneKey) => {
@@ -145,6 +152,14 @@ describe('mail to a terminal working another Orca Task', () => {
       }
       return identity(handle, paneKey)
     })
+  }
+  const reply = (id: string) =>
+    harness.call('orchestration.reply', { id, from: 'term_coord', body: 'answer' }, ctx)
+
+  it('refuses a reply to such a terminal, including one attached while the reply awaited', async () => {
+    setup()
+    const question = db.insertMessage({ from: LEGACY, to: 'term_coord', subject: 'q', body: '?' })
+    attachWhileReplyAwaits()
     await expect(reply(question.id)).rejects.toMatchObject({
       code: 'capability_unsupported',
       message: expect.stringContaining('No reply was sent.'),
@@ -156,61 +171,63 @@ describe('mail to a terminal working another Orca Task', () => {
     expect(db.getMessageById(question.id)?.read).toBeFalsy()
   })
 
-  describe('controls', () => {
-    it('keeps refusing a paired caller that names --on for a worker start', async () => {
-      setup()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the access check reads only kind and peerRun.
-      const peer = {
-        kind: 'peer',
-        peerRun: { run_id: 'run-home', home_label: 'Home Orca' }
-      } as unknown as RpcContext['orchestrationCaller']
-      await expect(
-        harness.call(
-          'orchestration.workerStart',
-          { spec: 'work', on: 'other-server', from: 'term_coord' },
-          { ...ctx, orchestrationCaller: peer }
-        )
-      ).rejects.toMatchObject({ code: 'forbidden', data: REFUSED })
+  it('refuses a reply routed to the sender\'s former Run once it attached while the reply awaited', async () => {
+    setup()
+    const former = db.createRun({
+      objective: 'Former Run',
+      coordinatorHandle: LEGACY,
+      coordinatorPaneKey: FORMER_PANE
     })
+    const question = db.insertMessage({ from: LEGACY, to: 'term_coord', subject: 'q', body: '?' })
+    attachWhileReplyAwaits()
+    await expect(reply(question.id)).rejects.toMatchObject({
+      code: 'capability_unsupported',
+      data: REFUSED
+    })
+    expect(mailTo(`run:${former.id}`)).toEqual({ n: 0 })
+    expect(db.getMessageById(question.id)?.read).toBeFalsy()
+  })
 
-    it('keeps the --on receiver refusal with nothing stored', async () => {
-      setup()
-      attachLegacy()
-      await expect(
-        storePeerMailForAgent(
-          runtime,
-          {
-            conversationId: 'conv_1',
-            messageId: 'msg_peer_1',
-            senderLabel: 'Other Orca',
-            subject: 'hi',
-            to: LEGACY,
-            body: 'b',
-            peerFingerprint: 'peer_fp',
-            senderSnapshot: undefined
-          },
-          () => null
-        )
-      ).rejects.toMatchObject({ data: REFUSED })
-      expect(mailTo(LEGACY)).toEqual({ n: 0 })
+  it('refuses --on peer mail with the shared code, nothing stored', async () => {
+    setup()
+    attachLegacy()
+    await expect(
+      storePeerMailForAgent(
+        runtime,
+        {
+          conversationId: 'conv_1',
+          messageId: 'msg_peer_1',
+          senderLabel: 'Other Orca',
+          subject: 'hi',
+          to: LEGACY,
+          body: 'b',
+          peerFingerprint: 'peer_fp',
+          senderSnapshot: undefined
+        },
+        () => null
+      )
+    ).rejects.toMatchObject({
+      code: 'capability_unsupported',
+      message: expect.stringContaining('Nothing was delivered.'),
+      data: REFUSED
     })
+    expect(mailTo(LEGACY)).toEqual({ n: 0 })
+  })
 
-    it('keeps a local Dispatch on the same pane ahead of the attachment', async () => {
-      setup()
-      attachLegacy()
-      const task = db.createTask({ spec: 'local work' })
-      const dispatch = createRootDispatch(db, task.id, LEGACY, LEGACY_PANE)
-      await expect(send(LEGACY)).resolves.toMatchObject({
-        message: { to_handle: `dispatch:${dispatch.id}` }
-      })
-    })
-
-    it('delivers to the retained terminal once its attachment settled', async () => {
-      setup()
-      attachLegacy()
-      db.settleRemoteAttachmentInRelayTransaction(DISPATCH, 'succeeded')
-      await expect(send(LEGACY)).resolves.toMatchObject({ message: { to_handle: LEGACY } })
-      expect(mailTo(LEGACY)).toEqual({ n: 1 })
-    })
+  // Regression guard: main already refuses this in the shared access check.
+  it('keeps refusing a paired caller that names --on for a worker start', async () => {
+    setup()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the access check reads only kind and peerRun.
+    const peer = {
+      kind: 'peer',
+      peerRun: { run_id: 'run-home', home_label: 'Home Orca' }
+    } as unknown as RpcContext['orchestrationCaller']
+    await expect(
+      harness.call(
+        'orchestration.workerStart',
+        { spec: 'work', on: 'other-server', from: 'term_coord' },
+        { ...ctx, orchestrationCaller: peer }
+      )
+    ).rejects.toMatchObject({ code: 'forbidden', data: REFUSED })
   })
 })

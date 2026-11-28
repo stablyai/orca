@@ -250,6 +250,8 @@ export function resolveBareOrchestrationRecipient(params: {
   /** `resolveTerminalAgentRecipient(handle)`, awaited first; omit only where the handle cannot
    *  name a terminal agent. */
   terminalRecipient?: TerminalAgentRecipient
+  /** For mail coming home to this Orca's own sender, whose routing this refusal must not change. */
+  keepLegacyAttachedRouting?: true
 }): BareRecipientResolution {
   const { runtime, db } = params
   const sessionStore = readAgentSessionRecordStore()
@@ -276,7 +278,9 @@ export function resolveBareOrchestrationRecipient(params: {
           : [],
     dispatches,
     legacyAttachment: () =>
-      legacyAttachedRecipient(db, params.handle, party.terminalHandle, paneKey),
+      params.keepLegacyAttachedRouting
+        ? undefined
+        : legacyAttachedRecipient(db, params.handle, party.terminalHandle, paneKey),
     ownerRunIds: () => db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner),
     fallback: () => {
       if (session) {

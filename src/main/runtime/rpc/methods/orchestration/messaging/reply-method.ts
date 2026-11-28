@@ -1,5 +1,9 @@
 import { acceptedAnswerSender } from '../../../../orchestration/mailbox/senders/accepted-answer-sender'
-import { resolveTerminalAgentRecipient } from './session-recipient'
+import { resolveTerminalAgentRecipient, type TerminalAgentRecipient } from './session-recipient'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
@@ -27,7 +31,10 @@ import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orche
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
-import { refuseLegacyAttachedRecipient } from './legacy-attachment-recipient-refusal'
+import {
+  isLegacyAttachmentRefusal,
+  legacyAttachmentError
+} from './legacy-attachment-recipient-refusal'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
@@ -177,8 +184,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
     )?.id
     // The answer's record and its mail commit together, so a crash between them can't keep one alone.
     const reply = runLifecycleWriteTransaction(db.db, 'reply_with_answer', () => {
-      // The answer turn awaited: the recipient may have taken another Orca's Task meanwhile.
-      refuseLegacyAttachedRecipient(runtime, db, recipient.to, 'No reply was sent.')
+      refuseNewlyLegacyAttachedSender(runtime, db, original, terminalRecipient)
       const stored = db.insertMessage({
         from: replyFrom,
         senderDispatchId,
@@ -208,3 +214,26 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
     )
   }
 })
+
+// The answer turn awaited: a bare sender may have taken another Orca's Task meanwhile, whatever it routed to.
+function refuseNewlyLegacyAttachedSender(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  original: MessageRow,
+  terminalRecipient: TerminalAgentRecipient
+): void {
+  const from = original.from_handle
+  if (from.startsWith('run:') || from.startsWith('dispatch:')) {
+    return
+  }
+  const current = resolveBareOrchestrationRecipient({
+    runtime,
+    db,
+    handle: from,
+    senderRunId: original.run_id,
+    terminalRecipient
+  })
+  if (!current.ok && isLegacyAttachmentRefusal(current)) {
+    throw legacyAttachmentError(current, 'No reply was sent.')
+  }
+}

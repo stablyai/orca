@@ -20,7 +20,12 @@ export function storePeerReply(
 ): MessageRow | undefined {
   const handle = peerMailLocalRecipient(runtime, conversation)
   // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
-  const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
+  const recipient = resolveBareOrchestrationRecipient({
+    runtime,
+    db,
+    handle,
+    keepLegacyAttachedRouting: true
+  })
   const { from, body, ...carried } = presentImportedPeerItem({ kind: 'peer_mail', ...payload })
   const stored = db.insertPeerMailMessage({
     conversationId: conversation.conversation_id,
