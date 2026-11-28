@@ -4,7 +4,11 @@ import type { HostAccountSignInStatus } from './host-account-sign-in-types'
 
 class Lost extends Error {}
 
-const prompt = { url: 'https://auth.openai.com/codex/device', userCode: 'K7QX-9PLM', needsCode: false }
+const prompt = {
+  url: 'https://auth.openai.com/codex/device',
+  userCode: 'K7QX-9PLM',
+  needsCode: false
+}
 const status = (revision: number, phase: HostAccountSignInStatus['phase']) => ({
   flowId: 'flow-1',
   provider: 'codex' as const,
