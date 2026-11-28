@@ -109,6 +109,7 @@ function rehypeChatMath(
                     'max-w-full',
                     'overflow-x-auto',
                     'overflow-y-clip',
+                    'px-[0.1em]',
                     'py-px'
                   ]
                 })
