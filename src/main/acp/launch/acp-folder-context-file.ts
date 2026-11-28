@@ -56,17 +56,17 @@ export async function writeFolderContextFile(
   path: string,
   agentName: string,
   text: string
-): Promise<void> {
+): Promise<boolean> {
   const realCwd = await realpath(cwd).catch(() => cwd)
   const folders = dirname(path)
     .split(/[\\/]/)
     .filter((segment) => segment && segment !== '.')
   // A linked folder on the way would carry the bot's instructions somewhere else.
   if ((await realFolderUnderRoot(cwd, realCwd, folders)) === 'other') {
-    return
+    return false
   }
   const target = join(realCwd, path)
-  await replaceWhileUnchanged(
+  return replaceWhileUnchanged(
     target,
     async () => {
       const info = await lstat(target).catch(() => null)
@@ -126,27 +126,28 @@ const UPDATE_PASSES = 3
 /** Puts `next(current)` in place of `target` (null deletes it) only while the file still holds the
  *  text it was made from, so a save landing meanwhile is never replaced; the next pass starts from
  *  that save. `read` returns null for no file and undefined for a file to leave alone; `next`
- *  returns undefined when there is nothing to change. The result is
+ *  returns undefined when there is nothing to change. False when the file was left alone. The result is
  *  readable only by this host's user, since it carries the bot's instructions. */
 async function replaceWhileUnchanged(
   target: string,
   read: () => Promise<string | null | undefined>,
   next: (current: string | null) => string | null | undefined
-): Promise<void> {
+): Promise<boolean> {
   for (let pass = 0; pass < UPDATE_PASSES; pass++) {
     const current = await read()
     if (current === undefined) {
-      return
+      return false
     }
     // Rewritten even when equal, so a file made readable by others again goes back to 0600.
     const content = next(current)
     if (content === undefined) {
-      return
+      return true
     }
     if (await publishIfUnchanged(target, current, content)) {
-      return
+      return true
     }
   }
+  return false
 }
 
 /** False, changing nothing, when `target` no longer holds `expected`. The file never goes missing

@@ -41,7 +41,8 @@ export const BOT_AGENTS = [
   'qwen-code',
   'cline',
   'devin',
-  'codebuddy'
+  'codebuddy',
+  'muse'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** A new bot's automatic agent, by priority: Antigravity is listed right after Codex for display only. */
