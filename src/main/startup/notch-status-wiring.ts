@@ -185,3 +185,15 @@ export function installNotchStatus(options: { openMainWindow: () => Promise<Brow
   app.on('browser-window-focus', () => setNotchExpanded(false))
   installNotchQuitHandlers()
 }
+
+/** First macOS presence once the main window is up: the menu-bar icon, then the notch. */
+export function startMacSystemPresence(
+  settings: { showMenuBarIcon?: boolean; showNotchStatus?: boolean },
+  syncMenuBarIcon: (visible: boolean) => unknown,
+  onMenuBarIconCreated?: () => void
+): void {
+  if (syncMenuBarIcon(settings.showMenuBarIcon !== false)) {
+    onMenuBarIconCreated?.()
+  }
+  syncNotchStatus(settings.showNotchStatus === true)
+}
