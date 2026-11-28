@@ -2,6 +2,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import { readMessageSenderDispatch } from '../../../../orchestration/db/messages/message-sender-dispatch'
 import type { SendRecipientWarning } from './recipient-routing'
+import { localOrchestrationCliCommand } from '../../../../orchestration/workers/launch/orchestration-cli-command'
 
 /** Warns, without blocking, when the sender wrote again after the message being answered and the
  *  replier has not answered that newer mail yet. Newer mail counts on the same thread, or anywhere
@@ -53,6 +54,6 @@ export function supersededReplyWarning(
   return {
     code: 'superseded_reply',
     recipient: original.from_handle,
-    message: `${newer.id} from ${original.from_handle} ${where} is newer than the message you answered; read it with \`orca orchestration inbox --terminal ${original.to_handle} --limit ${newer.rows_since} --full\`, and send a correction if your reply no longer fits.`
+    message: `${newer.id} from ${original.from_handle} ${where} is newer than the message you answered; read it with \`${localOrchestrationCliCommand()} orchestration inbox --terminal ${original.to_handle} --limit ${newer.rows_since} --full\`, and send a correction if your reply no longer fits.`
   }
 }
