@@ -28808,7 +28808,8 @@
         "sending": "Wird gesendet…",
         "changeAnswer": "{{question}}: {{answer}}. Antwort ändern",
         "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Bilder aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige.",
-        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige."
+        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige.",
+        "suggested": "Vorgeschlagen"
       },
       "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden",
       "wait": {

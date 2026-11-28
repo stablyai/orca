@@ -29521,7 +29521,8 @@
         "sending": "Enviando…",
         "changeAnswer": "{{question}}: {{answer}}. Cambiar respuesta",
         "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} imágenes. Envía primero las respuestas guardadas hasta ahora o quita algunas.",
-        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Envía primero las respuestas guardadas hasta ahora o quita algunas."
+        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Envía primero las respuestas guardadas hasta ahora o quita algunas.",
+        "suggested": "Sugerida"
       },
       "readMoreClosedFailed": "No se pudieron leer más elementos cerrados",
       "wait": {

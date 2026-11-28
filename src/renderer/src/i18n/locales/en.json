@@ -30825,6 +30825,7 @@
       "ask": {
         "notSentYet": "not sent yet",
         "recommended": "Recommended",
+        "suggested": "Suggested",
         "other": "Other…",
         "yourAnswer": "Your answer…",
         "otherLabel": "Other answer",

@@ -28734,6 +28734,7 @@
       "ask": {
         "notSentYet": "尚未发送",
         "recommended": "推荐",
+        "suggested": "建议",
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
         "skipped": "已跳过",
