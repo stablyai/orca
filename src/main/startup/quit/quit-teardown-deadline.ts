@@ -67,8 +67,18 @@ export async function finishQuitTeardown(input: {
   closeWorkerStores: () => Promise<unknown>
   workerStoreDeadlineMs: number
   shutdownDiagnostics: () => Promise<unknown>
-}): Promise<void> {
-  const pendingTeardowns = await settleTeardownWithinDeadline(input.teardowns, input.deadlineMs)
+}): Promise<{ teardownsFulfilled: boolean }> {
+  const rejected = new Set<string>()
+  const pendingTeardowns = await settleTeardownWithinDeadline(
+    input.teardowns.map(({ name, promise }) => ({
+      name,
+      promise: promise.catch((error: unknown) => {
+        rejected.add(name)
+        throw error
+      })
+    })),
+    input.deadlineMs
+  )
   if (pendingTeardowns.length > 0) {
     console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
   }
@@ -82,6 +92,8 @@ export async function finishQuitTeardown(input: {
   ])
   // Telemetry must never prevent app.quit().
   await input.shutdownDiagnostics().catch(() => {})
+  // A rejected or unsettled teardown may have left a writer behind.
+  return { teardownsFulfilled: pendingTeardowns.length === 0 && rejected.size === 0 }
 }
 
 export type SettledWithinMs<T> =

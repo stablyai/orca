@@ -12,6 +12,7 @@ import {
   BOT_OFFER_DISMISS_ANSWER,
   type BotOfferAnswerUpdate
 } from '../../../../shared/bots/bot-offer-answers'
+import { isLostHostAnswer } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { botHostTakes } from '../bots/bot-host-capability'
 import { botErrorMessage } from '../bots/bot-presentation'
 import { NativeChatCardActions } from './NativeChatCardFrame'
@@ -45,7 +46,8 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
   ): Promise<void> => {
     const ops = {
       update: (offerAnswer: BotOfferAnswerUpdate) => updateBot(ref, { offerAnswer }),
-      send: tell
+      send: tell,
+      deliveryUnknown: isLostHostAnswer
     }
     const outcome = await (
       again && update.sent

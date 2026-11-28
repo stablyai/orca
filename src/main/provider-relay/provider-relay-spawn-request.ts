@@ -11,7 +11,8 @@ import { resolveProviderExecPath } from '../provider-process/provider-exec-path'
 export function providerRelaySpawnSpec(
   launch: ProviderProcessLaunch,
   client: DaemonClient,
-  appVersion: ProviderRelaySpawnSpec['appVersion']
+  appVersion: ProviderRelaySpawnSpec['appVersion'],
+  { inheritedEnv }: { inheritedEnv?: Record<string, string> } = {}
 ): ProviderRelaySpawnSpec | null {
   const identity = client.getDaemonIdentity()
   // A daemon kept from another bundle relays too, when it speaks the relay protocol.
@@ -22,7 +23,10 @@ export function providerRelaySpawnSpec(
     return null
   }
   const env: Record<string, string> = {}
-  const resolved = resolveProviderChildEnv(launch, processEnvWithoutAgentSession(process.platform))
+  const resolved = resolveProviderChildEnv(
+    launch,
+    inheritedEnv ?? processEnvWithoutAgentSession(process.platform)
+  )
   for (const [key, value] of Object.entries(resolved)) {
     if (value !== undefined) {
       env[key] = value

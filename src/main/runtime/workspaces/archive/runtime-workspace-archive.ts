@@ -10,20 +10,11 @@ import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/re
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
-import { resolveWorktreeRemovalRoute } from '../../../workspaces/removal/worktree-removal-execution-host-route'
-import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import { findPendingWorktreeRemovalConflict } from '../../../workspaces/removal/worktree-removal-table'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 import { getExplicitWorktreeIdSelector } from '../catalog/runtime-worktree-selection'
-import { prepareRuntimeLocalWorktreeSetup } from '../creation/runtime-local-worktree-setup'
 import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 import { RuntimeNestedWorktreeRemoval } from '../removal/runtime-nested-worktree-removal'
-import {
-  markWorktreeCheckoutArchived,
-  recreateArchivedCheckout,
-  resolveArchivableCheckout,
-  unmarkArchiveIfCheckoutRemains
-} from './workspace-archive-checkout'
 
 export type ArchiveManagedWorktreeResult = {
   worktreeId: string
@@ -66,6 +57,11 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
     const requiredHostId = parseExecutionHostId(options.hostId)?.id
     const target = await this.resolveWorktreeRemovalTarget(worktreeSelector, requiredHostId)
     return this.exclusiveArchiveOperation(target.id, async () => {
+      const {
+        markWorktreeCheckoutArchived,
+        resolveArchivableCheckout,
+        unmarkArchiveIfCheckoutRemains
+      } = await import('./workspace-archive-checkout')
       const { hostId } = await resolveArchivableCheckout(store, target, requiredHostId)
       let warning: string | undefined
       try {
@@ -119,6 +115,17 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
     options: { hostId?: string; setupDecision?: SetupDecision }
   ): Promise<RestoreArchivedWorktreeResult> {
     const store = this.requireStore()
+    const [
+      { resolveWorktreeRemovalRepoOwner },
+      { resolveWorktreeRemovalRoute },
+      { recreateArchivedCheckout },
+      { prepareRuntimeLocalWorktreeSetup }
+    ] = await Promise.all([
+      import('../../../workspaces/removal/worktree-removal-repo-owner'),
+      import('../../../workspaces/removal/worktree-removal-execution-host-route'),
+      import('./workspace-archive-checkout'),
+      import('../creation/runtime-local-worktree-setup')
+    ])
     const owner = resolveWorktreeRemovalRepoOwner(
       store,
       repoId,

@@ -17,13 +17,6 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
-import { inspectGitRepoAccessAsync } from '../../git/repositories/discovery/repo-detection'
-import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'
-import {
-  createNestedProjectGroupResolver,
-  resolveNestedRepoSelection
-} from '../../project-groups/nested-repo-import'
-import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
 
@@ -48,6 +41,7 @@ export class RuntimeNestedRepoImport {
     }
     await refuseWslHostWindowsDrivePath(path)
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
+    const { scanNestedRepos } = await import('../../project-groups/nested-repo-discovery')
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
   }
 
@@ -66,6 +60,17 @@ export class RuntimeNestedRepoImport {
     if (!isAbsolute(args.parentPath)) {
       throw new Error('Project path must be an absolute path')
     }
+    const [
+      { scanNestedRepos },
+      { createNestedProjectGroupResolver, resolveNestedRepoSelection },
+      { createNestedRepoImportTargetResolver },
+      { inspectGitRepoAccessAsync }
+    ] = await Promise.all([
+      import('../../project-groups/nested-repo-discovery'),
+      import('../../project-groups/nested-repo-import'),
+      import('../../project-groups/nested-repo-import-target'),
+      import('../../git/repositories/discovery/repo-detection')
+    ])
     const scan = await scanNestedRepos({ path: args.parentPath, options: { timeoutMs: 15_000 } })
     const selection = resolveNestedRepoSelection({ scan, projectPaths: args.projectPaths })
     const groupResolver = createNestedProjectGroupResolver({

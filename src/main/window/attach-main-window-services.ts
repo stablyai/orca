@@ -83,6 +83,7 @@ export async function attachMainWindowServices(
     onBeforeUpdateQuit?: () => void | Promise<void>
     onBeforeUpdateQuitFailure?: PreQuitCleanupFailureMode
     updateInstallMode?: UpdateInstallMode
+    isServeMode?: boolean
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
 ): Promise<void> {

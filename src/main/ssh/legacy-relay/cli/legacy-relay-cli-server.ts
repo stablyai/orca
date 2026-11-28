@@ -12,8 +12,6 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/orchestration
 import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { RpcResponse } from '../../../runtime/rpc/core'
-import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../../runtime/rpc/methods/rpc-method-registry'
 import {
   assertLegacyRelayCliScope,
   resolveLegacyRelayCliCaller,
@@ -33,6 +31,8 @@ import {
   cappedInboxLimit,
   cappedWait,
   isExactLegacyRelayCliReplay,
+  legacyRelayCliDispatcherFor,
+  loadLegacyRelayOrchestrationMethods,
   runLegacyRelayCliCall
 } from './legacy-relay-cli-call-limits'
 import { formatLegacyRelayCliResult, isRecord } from './legacy-relay-cli-output'
@@ -69,22 +69,6 @@ type LegacyRelayCliServerDeps = {
   /** The per-host switch, read on every call so turning it off applies to the next command. */
   remoteCliControl: () => boolean
   livePane: (paneKey: string) => LegacyRelayLivePane | null
-}
-
-const dispatchers = new WeakMap<OrcaRuntimeService, RpcDispatcher>()
-
-function dispatcherFor(runtime: OrcaRuntimeService): RpcDispatcher {
-  let dispatcher = dispatchers.get(runtime)
-  if (!dispatcher) {
-    dispatcher = new RpcDispatcher({
-      runtime,
-      // Restrict registration too, so upstream scope bugs cannot invoke unrelated methods.
-      methods: ALL_RPC_METHODS.filter((method) => METHODS.has(method.name)),
-      callerScope: { kind: 'runtime-paired', grants: [] }
-    })
-    dispatchers.set(runtime, dispatcher)
-  }
-  return dispatcher
 }
 
 function stringRecord(value: unknown): Record<string, string> {
@@ -196,6 +180,7 @@ async function dispatchAsCaller(
   call: LegacyRelayCliCall,
   requestId: string
 ): Promise<RpcResponse> {
+  const methods = await loadLegacyRelayOrchestrationMethods()
   // Attach verified identity because the runtime no longer hosts this legacy terminal.
   const authority = runtime.registerOrchestrationCompatibilitySshAttachment(
     deps.targetId,
@@ -208,11 +193,11 @@ async function dispatchAsCaller(
   )
   try {
     // Only exact committed mutations replay after assignment changes; all other calls remain scoped.
-    const exactReplay = isExactLegacyRelayCliReplay(runtime, fingerprint, requestId, call)
+    const exactReplay = isExactLegacyRelayCliReplay(runtime, fingerprint, requestId, call, methods)
     const db = runtime.getOrchestrationDb()
     assertLegacyRelayCliScope(db, caller, call, deps.livePane, exactReplay)
     const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN?.trim()
-    return await dispatcherFor(runtime).dispatch(
+    return await legacyRelayCliDispatcherFor(runtime, methods, METHODS).dispatch(
       {
         id: `legacy-relay-cli-${requestId}`,
         authToken: 'legacy-relay-cli',

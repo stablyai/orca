@@ -42,3 +42,16 @@ export const DiffCommentSchema = lazyZodSchema(() =>
     side: z.literal('modified')
   })
 )
+
+export const DiffCommentDeliverySnapshotSchema = lazyZodSchema(() =>
+  DiffCommentSchema.pick({
+    id: true,
+    body: true,
+    filePath: true,
+    lineNumber: true,
+    startLine: true,
+    selectedText: true,
+    source: true,
+    updatedAt: true
+  })
+)

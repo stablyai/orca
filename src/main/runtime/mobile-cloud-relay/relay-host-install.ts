@@ -5,7 +5,7 @@ import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca
 import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { RELAY_HOST_CLOSE_REASON } from '../../../shared/remote-runtime/relay/relay-host-close-reason'
 import type { MobileRelayStatusPublisher } from '../../../shared/remote-runtime/relay/mobile-relay-status'
-import { DesktopRelayService } from './desktop-relay-service'
+import type { DesktopRelayService } from './desktop-relay-service'
 import { createDesktopRelayServiceInstaller } from './desktop-relay-service-installer'
 
 export type RelayHostOptions = {
@@ -41,17 +41,19 @@ export function installRelayHost(options: RelayHostOptions): RelayHost {
     runtimeRpc: options.runtimeRpc,
     whenNetworkReady: options.whenNetworkReady,
     isFenced: options.isFenced,
-    create: () => {
+    create: async () => {
       const cloudAuth = getOrcaCloudAuthConfig()
-      return cloudAuth.configured
-        ? new DesktopRelayService({
-            authConfig: cloudAuth.config,
-            userDataPath: options.userDataPath,
-            appVersion: options.appVersion,
-            runtimeRpc: options.runtimeRpc,
-            onStatus: options.onStatus
-          })
-        : null
+      if (!cloudAuth.configured) {
+        return null
+      }
+      const { DesktopRelayService } = await import('./desktop-relay-service')
+      return new DesktopRelayService({
+        authConfig: cloudAuth.config,
+        userDataPath: options.userDataPath,
+        appVersion: options.appVersion,
+        runtimeRpc: options.runtimeRpc,
+        onStatus: options.onStatus
+      })
     },
     onInstalled: (installed) => {
       service = installed

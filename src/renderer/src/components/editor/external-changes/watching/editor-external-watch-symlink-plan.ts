@@ -2,14 +2,15 @@ import { normalizeRuntimePathForComparison } from '../../../../../../shared/file
 import { coveringAncestors } from './editor-external-watch-symlink-coverage'
 import { bumpCounted, type Counted } from './editor-external-watch-counted-routes'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import {
   acquireWatchRoot,
+  localWatchRoot,
   releaseWatchRoot,
   retryFailedWatchRoot,
   revalidateWatchRoot,
   watchRootStatus,
-  type HeldWatchRoots,
-  type WatchRootArgs
+  type HeldWatchRoots
 } from './editor-external-watch-local-roots'
 
 type Candidate = { path: string; key: string }
@@ -57,17 +58,20 @@ export class SymlinkWatchPlan {
     private readonly isOpen: (key: string) => boolean,
     private readonly onWatchError: (target: EditorExternalWatchTarget, error: unknown) => void,
     /** Called when no folder wants a watch on this path any more. */
-    private readonly onUnwanted: (key: string) => void
+    private readonly onUnwanted: (key: string) => void,
+    /** Receives the events a watch it released had queued for this window; they route like that watch's own payloads. */
+    private readonly onHandOver: (payload: FsChangedPayload) => void
   ) {}
 
-  /** Workspaces whose tabs a payload from one of these folder watches belongs to. */
-  targetsFor(key: string): EditorExternalWatchTarget[] {
-    const targets = this.roots.has(key) ? this.routes.get(key) : undefined
+  /** Workspaces whose tabs a payload from one of these folder watches belongs to; `unheld` when nothing here holds it now. */
+  targetsFor(key: string, unheld: boolean): EditorExternalWatchTarget[] {
+    // Why unheld: only a watch released here sends for a path nothing holds, and its last events may land after release.
+    const targets = unheld || this.roots.has(key) ? this.routes.get(key) : undefined
     return targets ? [...targets.values()].map((entry) => entry.value) : []
   }
 
-  hasRoots(): boolean {
-    return this.roots.size > 0
+  hasRoutes(): boolean {
+    return this.routes.size > 0
   }
 
   /** Whether a folder chose this path's watch, so closing that folder changes a choice. */
@@ -176,7 +180,7 @@ export class SymlinkWatchPlan {
     if (path === undefined) {
       return this.failed.has(key) ? 'failed' : undefined
     }
-    return watchRootStatus(heldWatchRoots, toWatchRoot(path))
+    return watchRootStatus(heldWatchRoots, localWatchRoot(path))
   }
 
   /** Re-plans these folders, then the folders sharing any watch whose wanted state flipped, then releases what nothing needs. */
@@ -282,7 +286,7 @@ export class SymlinkWatchPlan {
     evenIfWorking: boolean,
     heldWatchRoots: HeldWatchRoots
   ): void {
-    const root = toWatchRoot(path)
+    const root = localWatchRoot(path)
     const onError = (error: unknown): void => this.onWatchError(owner, error)
     const asked =
       this.status(key, heldWatchRoots) === 'failed'
@@ -319,7 +323,7 @@ export class SymlinkWatchPlan {
     // Why: a fresh request makes any earlier failure note stale; the held status speaks for it now.
     this.failed.delete(key)
     const generation = this.generation
-    const root = toWatchRoot(path)
+    const root = localWatchRoot(path)
     const onError = (error: unknown): void => this.onWatchError(owner, error)
     const shared = watchRootStatus(heldWatchRoots, root) !== undefined
     const installed = acquireWatchRoot(heldWatchRoots, root, onError)
@@ -339,7 +343,7 @@ export class SymlinkWatchPlan {
       return
     }
     // Why only while open: closing the folder is what forgets a failure, so a closed one would never be retried.
-    if (this.isOpen(key) && watchRootStatus(heldWatchRoots, toWatchRoot(path)) === 'failed') {
+    if (this.isOpen(key) && watchRootStatus(heldWatchRoots, localWatchRoot(path)) === 'failed') {
       this.failed.add(key)
     }
     this.roots.delete(key)
@@ -347,10 +351,6 @@ export class SymlinkWatchPlan {
       folder.pinnedTo = undefined
     }
     this.pins.delete(key)
-    releaseWatchRoot(heldWatchRoots, toWatchRoot(path))
+    releaseWatchRoot(heldWatchRoots, localWatchRoot(path), this.onHandOver)
   }
-}
-
-function toWatchRoot(path: string): WatchRootArgs {
-  return { worktreePath: path, connectionId: undefined }
 }

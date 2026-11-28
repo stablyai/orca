@@ -1,38 +1,26 @@
 import React from 'react'
-import { useWorkspaceReferenceLinkActions } from '../review/use-workspace-reference-link-actions'
-import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import { WorktreeCardLinkedItemsSection } from '../review/WorktreeCardLinkedItemsSection'
-import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { Pencil, StickyNote } from 'lucide-react'
-import { SelectedTextCopyMenu } from '@/components/clipboard/SelectedTextCopyMenu'
+import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import '../../workspace-actions/context-menu/WorktreeContextMenu'
-import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '../../workspace-actions/context-menu/worktree-context-menu-policy'
-import {
-  WorktreeCardDetailSection,
-  WorktreeCardDetailSectionContent
-} from './WorktreeCardDetailSection'
-import { DetailHeader, MetadataActionIcon } from '../metadata/WorktreeCardMetadataControls'
 import { hasComment, hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
-import { WorktreeCardLinkedReviewActions } from '../review/WorktreeCardReviewActions'
 import type { WorktreeCardDetailsHoverProps } from '../metadata/worktree-card-meta-types'
-import { useTranslate } from '@/i18n/use-translate'
-import { WorktreeCardReviewDetailSection } from '../review/WorktreeCardReviewDetailSection'
-import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
-import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailSection'
-import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
-import { WorktreeCardOriginDetailSections } from './WorktreeCardBotDetailSection'
-import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
-import { WorktreeCardAutoNameFailureSection } from './WorktreeCardAutoNameFailureSection'
-import {
-  CommentMarkdownAsync,
-  preloadCommentMarkdown
-} from '../../../comment-markdown/comment-markdown-lazy'
+import { preloadCommentMarkdown } from '../../../comment-markdown/comment-markdown-lazy'
 import { useActivityThreadHoverCardIntent } from '@/components/activity/thread-preview/activity-thread-hover-card-intent'
+import type * as WorktreeCardHoverContentModule from './WorktreeCardHoverContent'
 
-const COMMENT_MARKDOWN_CLASS_NAME =
-  'text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1'
+const loadWorktreeCardHoverContent = (): Promise<typeof WorktreeCardHoverContentModule> =>
+  import('./WorktreeCardHoverContent')
+
+const LazyWorktreeCardHoverContent = lazyWithRetry(
+  () =>
+    loadWorktreeCardHoverContent().then((module) => ({
+      default: module.WorktreeCardHoverContent
+    })),
+  { reloadKey: 'worktree-card-hover-content' }
+)
 
 export function WorktreeCardDetailsHover({
   workspace,
@@ -68,20 +56,9 @@ export function WorktreeCardDetailsHover({
   onOpenAutomationRun,
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
-  const t = useTranslate()
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
   const detailsHoverControl = hoverControl ?? internalHoverControl
-  const {
-    hoverOpen,
-    contextMenuOpen,
-    reviewMenuOpen,
-    handleHoverOpenChange,
-    handleIssueMenuOpenChange,
-    handleReviewMenuOpenChange,
-    closeHover
-  } = detailsHoverControl
-  const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
-    useWorkspaceReferenceLinkActions(workspace?.id, detailsHoverControl)
+  const { hoverOpen, contextMenuOpen, handleHoverOpenChange } = detailsHoverControl
   const [workspaceTitleEditing, setWorkspaceTitleEditing] = React.useState(false)
   const pendingWorkspaceTitleCloseRef = React.useRef(false)
   const handleWorkspaceTitleEditingChange = React.useCallback(
@@ -112,24 +89,13 @@ export function WorktreeCardDetailsHover({
     onOpenChange: handleEffectiveHoverOpenChange,
     openDelay
   })
-  const dismissAndRun = React.useCallback(
-    (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
-      closeHover()
-      handler?.(event)
-    },
-    [closeHover]
-  )
-  const taskActions = getWorktreeCardTaskActions(closeHover, {
-    onEditIssue,
-    onOpenGitHubIssueInOrca,
-    onOpenIssueInBrowser,
-    onOpenLinearIssueInOrca
-  })
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
   const attachments = getWorkspaceAttachments(workspace ?? {})
   const showAttachmentCollection =
     attachments.length > 1 ||
     (attachments.length === 1 && !issue && !linearIssue && !jiraIssue && !review)
+  const effectiveOpen = workspaceTitleEditing || (!contextMenuOpen && hoverOpen)
+  const hasOpenedHover = useLatchedOpen(effectiveOpen)
 
   if (
     !showIdentityHeader &&
@@ -153,19 +119,17 @@ export function WorktreeCardDetailsHover({
 
   return (
     <HoverCard
-      open={workspaceTitleEditing || (!contextMenuOpen && hoverOpen)}
+      open={effectiveOpen}
       onOpenChange={hoverIntent.onOpenChange}
       openDelay={0}
       closeDelay={closeDelay}
     >
-      <span className="contents" onClick={(event) => event.stopPropagation()}>
-        <LinkActionPopover {...linkActionPopoverProps} />
-      </span>
       <HoverCardTrigger
         asChild
         {...hoverIntent.triggerHandlers}
         onPointerEnter={(event) => {
           hoverIntent.triggerHandlers.onPointerEnter(event)
+          void loadWorktreeCardHoverContent().catch(() => {})
           if (hasComment(comment)) {
             preloadCommentMarkdown()
           }
@@ -173,121 +137,43 @@ export function WorktreeCardDetailsHover({
       >
         {children}
       </HoverCardTrigger>
-      <HoverCardContent
-        side="right"
-        align="start"
-        sideOffset={8}
-        variant="workspace-details"
-        {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-        onAuxClickCapture={onAuxClickCapture}
-      >
-        <SelectedTextCopyMenu className="space-y-3">
-          {showIdentityHeader && (
-            <WorktreeCardHoverIdentityHeader
-              branchName={branchName}
-              workspaceTitle={workspaceTitle}
-              identityOrder={identityOrder}
-              workspaceTitleRenameDisabled={workspaceTitleRenameDisabled}
-              onRenameWorkspaceTitle={onRenameWorkspaceTitle}
-              onWorkspaceTitleEditingChange={handleWorkspaceTitleEditingChange}
-            />
-          )}
-
-          {autoNameFailure ? (
-            <WorktreeCardAutoNameFailureSection failure={autoNameFailure} />
-          ) : null}
-
-          {!showAttachmentCollection ? (
-            <>
-              <WorktreeCardReviewDetailSection
-                review={review}
-                onManageLinks={onManageLinks ? dismissAndRun(onManageLinks) : undefined}
-                reviewMenuOpen={reviewMenuOpen}
-                onReviewMenuOpenChange={handleReviewMenuOpenChange}
-                onOpenReviewInOrca={onOpenReviewInOrca}
-                onOpenLink={onOpenLink}
-                onUnlinkReview={onUnlinkReview}
-                closeHover={closeHover}
-              />
-
-              <WorktreeCardTaskDetailSection
-                issue={issue}
-                linearIssue={linearIssue}
-                jiraIssue={jiraIssue}
-                actions={taskActions}
-                onMenuOpenChange={handleIssueMenuOpenChange}
-                onOpenLink={onOpenLink}
-                onManageLinks={onManageLinks ? dismissAndRun(onManageLinks) : undefined}
-              />
-            </>
-          ) : null}
-          <WorktreeCardLinkedItemsSection
+      {hasOpenedHover ? (
+        <React.Suspense fallback={null}>
+          <LazyWorktreeCardHoverContent
             workspace={workspace}
             referenceDetails={referenceDetails}
-            review={review}
+            onManageLinks={onManageLinks}
             issue={issue}
             linearIssue={linearIssue}
             jiraIssue={jiraIssue}
-            showItems={showAttachmentCollection}
-            onManage={onManageLinks ? dismissAndRun(onManageLinks) : undefined}
-            onOpen={onOpenLink}
-            taskMenu={{ actions: taskActions, onOpenChange: handleIssueMenuOpenChange }}
-            renderReviewActions={(item, live) => (
-              <WorktreeCardLinkedReviewActions
-                item={item}
-                review={live}
-                onOpenChange={handleReviewMenuOpenChange}
-                onOpenInOrca={onOpenReviewInOrca}
-                onUnlink={onUnlinkReview}
-                closeHover={closeHover}
-              />
-            )}
+            review={review}
+            comment={comment}
+            automationProvenance={automationProvenance}
+            cliProvenance={cliProvenance}
+            bot={bot}
+            branchName={branchName}
+            workspaceTitle={workspaceTitle}
+            identityOrder={identityOrder}
+            workspaceTitleRenameDisabled={workspaceTitleRenameDisabled}
+            autoNameFailure={autoNameFailure}
+            detailsAfter={detailsAfter}
+            onRenameWorkspaceTitle={onRenameWorkspaceTitle}
+            onWorkspaceTitleEditingChange={handleWorkspaceTitleEditingChange}
+            onEditIssue={onEditIssue}
+            onEditComment={onEditComment}
+            onOpenGitHubIssueInOrca={onOpenGitHubIssueInOrca}
+            onOpenIssueInBrowser={onOpenIssueInBrowser}
+            onOpenLinearIssueInOrca={onOpenLinearIssueInOrca}
+            onOpenReviewInOrca={onOpenReviewInOrca}
+            onUnlinkReview={onUnlinkReview}
+            onOpenAutomation={onOpenAutomation}
+            onOpenAutomationRun={onOpenAutomationRun}
+            detailsHoverControl={detailsHoverControl}
+            showIdentityHeader={showIdentityHeader}
+            showAttachmentCollection={showAttachmentCollection}
           />
-
-          {automationProvenance && (
-            <WorktreeCardAutomationDetailSection
-              provenance={automationProvenance}
-              onOpenAutomation={onOpenAutomation ? dismissAndRun(onOpenAutomation) : undefined}
-              onOpenAutomationRun={
-                onOpenAutomationRun ? dismissAndRun(onOpenAutomationRun) : undefined
-              }
-            />
-          )}
-
-          <WorktreeCardOriginDetailSections bot={bot} cliProvenance={cliProvenance} />
-
-          {hasComment(comment) && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<StickyNote className="size-3 text-muted-foreground" />}
-                label={t('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
-                actions={
-                  onEditComment ? (
-                    <MetadataActionIcon
-                      label={t('auto.components.sidebar.WorktreeCardMeta.c7fa72ead0', 'Edit notes')}
-                      onClick={onEditComment}
-                    >
-                      <Pencil className="size-3" />
-                    </MetadataActionIcon>
-                  ) : null
-                }
-              />
-              <WorktreeCardDetailSectionContent className="space-y-2">
-                <CommentMarkdownAsync
-                  content={comment ?? ''}
-                  className={COMMENT_MARKDOWN_CLASS_NAME}
-                  // Mirrors remark-breaks so the fallback keeps the note's line count.
-                  fallbackClassName="whitespace-pre-wrap"
-                />
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
-
-          {detailsAfter}
-        </SelectedTextCopyMenu>
-      </HoverCardContent>
+        </React.Suspense>
+      ) : null}
     </HoverCard>
   )
 }
