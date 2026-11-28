@@ -19950,8 +19950,7 @@
           "more": "更多成品操作"
         },
         "ArtifactCollection": {
-          "loadMore": "載入更多",
-          "noMatches": "沒有符合項"
+          "loadMore": "載入更多"
         },
         "ArtifactDetailHeader": {
           "publicLink": "任何取得此連結的人都能檢視",

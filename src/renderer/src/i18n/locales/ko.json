@@ -19789,8 +19789,7 @@
           "more": "더 많은 아티팩트 작업"
         },
         "ArtifactCollection": {
-          "loadMore": "더 로드하기",
-          "noMatches": "일치하는 항목 없음"
+          "loadMore": "더 로드하기"
         },
         "ArtifactDetailHeader": {
           "publicLink": "이 링크가 있는 사람은 누구나 볼 수 있습니다.",

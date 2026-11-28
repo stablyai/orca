@@ -19641,8 +19641,7 @@
           "more": "Mais ações do artefato"
         },
         "ArtifactCollection": {
-          "loadMore": "Carregar mais",
-          "noMatches": "Nenhuma correspondência"
+          "loadMore": "Carregar mais"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Qualquer pessoa com este link pode visualizá-lo",

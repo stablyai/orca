@@ -20524,8 +20524,7 @@
           "more": "Daha fazla artifact işlemi"
         },
         "ArtifactCollection": {
-          "loadMore": "Daha fazla yükle",
-          "noMatches": "Eşleşme yok"
+          "loadMore": "Daha fazla yükle"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Bu bağlantıya sahip olan herkes görüntüleyebilir",

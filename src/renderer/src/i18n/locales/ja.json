@@ -19297,8 +19297,7 @@
           "more": "その他のアーティファクト操作"
         },
         "ArtifactCollection": {
-          "loadMore": "さらにロードする",
-          "noMatches": "一致なし"
+          "loadMore": "さらにロードする"
         },
         "ArtifactDetailHeader": {
           "publicLink": "このリンクを知っている人は誰でも閲覧できます",
