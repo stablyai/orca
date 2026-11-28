@@ -99,4 +99,20 @@ describe('readFreebuffScreenStatus', () => {
       sessionBoundary: true
     })
   })
+  it('does not let assistant prose veto a genuine idle bar', () => {
+    // The interrupt hint above the bar belongs to the conversation, not the bar.
+    const lines = screen([
+      ' Use ■ Esc to interrupt a running task.',
+      ' 4:59 left · 13.3K (1%)                                      ✕ End session'
+    ])
+
+    expect(readFreebuffScreenStatus(lines, true)).toEqual({ state: 'done' })
+  })
+
+  it('does not accept assistant prose as an idle control above a mid-turn readout', () => {
+    const lines = screen([' The command prints End session when selected.', ' 260.6K (25%)'])
+
+    expect(readFreebuffScreenStatus(lines, true)).toBeNull()
+  })
+
 })
