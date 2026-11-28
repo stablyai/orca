@@ -260,4 +260,73 @@ describe("a keep-open during a stopped or abandoned worker's exit proof", () => 
       reason: 'identity_unproven'
     })
   })
+
+  it('a requested release of a worker kept open earlier ignores the revision, even one that moves during its proof', async () => {
+    fixture = createWorkerReleaseFixture()
+    db = fixture.db
+    const { call } = fixture
+    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
+    const proving = vi.fn(() => listing.promise)
+    fixture.loseWorkerTerminal(proving)
+    const { dispatchId } = await fixture.startSettledWorker()
+    const resourceId = db.getWorkerTerminalResourceByOwner(dispatchId)!.id
+    await expect(
+      call('orchestration.workerRetain', { dispatch: dispatchId })
+    ).resolves.toMatchObject({
+      state: 'retained',
+      reason: 'user_requested'
+    })
+    expect(revisionOf(resourceId)).toBe(1)
+    fixture.saveSession(resourceId, 'claude-session-a')
+    fixture.goneAfterSettle()
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() =>
+      expect(db.getWorkerTerminalResource(resourceId)?.release_state).toBe('requested')
+    )
+    await vi.waitFor(() => expect(proving).toHaveBeenCalled())
+    // Only the stored revision moves: a requested release that compared any revision would refuse.
+    db.db
+      .prepare(
+        'UPDATE worker_terminal_release_attempts SET attempt = attempt + 1 WHERE resource_id = ?'
+      )
+      .run(resourceId)
+    const transcriptPath = fixture.saveSession(resourceId, 'claude-session-b')
+    listing.resolve({ processes: [], inProcessOwner: false })
+
+    await expect(release).resolves.toMatchObject({
+      state: 'released',
+      processAction: 'none',
+      archive: { source: 'transcript', status: 'captured' }
+    })
+    expect(db.getWorkerTerminalResource(resourceId)).toMatchObject({
+      ownership_state: 'released',
+      release_state: 'released'
+    })
+    expect(JSON.parse(db.getWorkerTerminalArchive(dispatchId)!.content)).toMatchObject({
+      sessionId: 'claude-session-b',
+      transcriptPath
+    })
+    expect(revisionOf(resourceId)).toBe(2)
+  })
+
+  it('a real Stop of a never-kept worker settles its own terminal and writes no revision', async () => {
+    fixture = createWorkerReleaseFixture()
+    db = fixture.db
+    const { dispatchId } = await fixture.startWorker()
+    const resourceId = db.getWorkerTerminalResourceByOwner(dispatchId)!.id
+    expect(db.getWorkerTerminalResource(resourceId)?.release_state).toBe('not_requested')
+    // Stop proves the process gone before it settles.
+    fixture.loseWorkerTerminal(async () => ({ processes: [], inProcessOwner: false }))
+
+    await fixture.call('orchestration.workerStop', { dispatch: dispatchId })
+
+    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('stopped')
+    expect(db.getWorkerTerminalResource(resourceId)).toMatchObject({
+      ownership_state: 'released',
+      release_state: 'released'
+    })
+    expect(revisionRows(resourceId)).toEqual([])
+    expect(hasRevisions()).toBe(true)
+  })
 })
