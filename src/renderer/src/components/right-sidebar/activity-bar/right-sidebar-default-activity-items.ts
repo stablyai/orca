@@ -84,7 +84,7 @@ export function getDefaultRightSidebarActivityItems({
       title: t('bots.chats.title', 'Chats'),
       shortcut: '',
       botPageOnly: true,
-      labeledTab: isBot
+      labeledTab: showsHomeTab
     },
     {
       id: 'vault',

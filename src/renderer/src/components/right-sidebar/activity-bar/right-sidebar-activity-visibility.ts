@@ -25,8 +25,7 @@ export function getVisibleRightSidebarActivityItems(
   }: RightSidebarActivityVisibilityState
 ): ActivityBarItem[] {
   if (isGroupHome) {
-    // A group's page keeps its Items; its folder panels are always empty.
-    return items.filter((item) => item.botOnly)
+    return items.filter((item) => item.botOnly || item.id === 'bot-chats')
   }
   if (isBot) {
     // A bot's own tabs lead; Files comes last.
