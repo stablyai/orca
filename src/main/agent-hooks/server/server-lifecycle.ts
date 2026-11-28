@@ -260,7 +260,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStat
     this.clearModelWaits()
     this.programStatusFacetRepublishes.clear()
     this.clearAllTranscriptPolls()
-    this.claudeOwedNotificationExpiry.clearAll()
+    this.leaseExpiry.clearAll()
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
