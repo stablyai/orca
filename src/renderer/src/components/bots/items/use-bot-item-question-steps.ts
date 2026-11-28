@@ -1,7 +1,7 @@
 // An ask of several questions, all on one card: a quick reply, or the box's Enter on the line its
-// "Replying to" names, picks the line's answer and sends nothing (a picked line reopened is open to
-// it too, its Enter replacing the pick); Send posts the picks as one
-// comment, so the agent wakes once. Picks are held on this device
+// "Replying to" names, picks the line's answer (a picked line reopened is open to it too, its Enter
+// replacing the pick); the pick that fills the last open line posts them all as one comment, as
+// chat's question card submits on its last answer, and Send posts a partial set, so the agent wakes once. Picks are held on this device
 // (the comment box's draft store, so a reload keeps them) until the host has the comment: one the host
 // refused for a newer question stays to recover. A held answer keeps the files and skills it was
 // sent with (src/shared/bots/bot-item-held-answers). Box words with no line named post at once and
@@ -202,13 +202,29 @@ export function useBotItemQuestionSteps(
     skipped?: readonly number[]
   ): void =>
     send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
+  // Held until the last open line has an answer: then every answer goes, the held copy kept to recover.
+  // What the card shows is what goes: a folded line counts as answered, while the line shown open to
+  // change, or one the box's unsent words name, waits for its new answer (only the box's own Enter,
+  // `fromBox`, uses those words up).
+  const holdOrSend = (index: number, answer: BotItemHeldAnswer, fromBox = false): void => {
+    hold(stored(index, answer))
+    const next = picks.map((pick, at) => (at === index ? answer : pick))
+    const drafting = boxEmpty || target.hidden ? null : target.line?.id
+    const settled = (at: number): boolean =>
+      (at === index || at !== reopened) &&
+      ((fromBox && at === index) || drafting !== `${askId}:${at}`)
+    if (lines.every((at) => next[at] && settled(at))) {
+      post(botItemHeldAnswersComment(shape, next))
+    }
+  }
   const pick = useLatestHandler((index: number, words: string) => {
     if (lines.includes(index)) {
       if (index === reopened) {
         setReopenedAt(null)
       }
-      if (!botItemHeldAnswerIsReply(held[index], words)) {
-        hold(stored(index, botItemHeldAnswer(words)))
+      // Its pick again on a reopened line keeps it, and settles the line as a new answer would.
+      if (!botItemHeldAnswerIsReply(held[index], words) || index === reopened) {
+        holdOrSend(index, botItemHeldAnswer(words))
       }
     }
   })
@@ -279,10 +295,13 @@ export function useBotItemQuestionSteps(
       }
       target.release()
       if (answering) {
-        // Words, files and skills alike wait like a pick: the line folds to them, the box names the
-        // next open line, and Send posts them with the rest.
-        hold(stored(line, answer))
-        setReopenedAt(null)
+        // Words, files and skills alike count as a pick: the line folds to them and the box names the
+        // next open line, or, on the last open line, they all go.
+        holdOrSend(line, answer, true)
+        // Another line reopened still waits for its own new answer.
+        if (line === reopened) {
+          setReopenedAt(null)
+        }
       } else if (picks.some(Boolean)) {
         // The picks name their lines; the words ride along answering none.
         post(botItemHeldAnswersComment(shape, picks, answer))

@@ -168,5 +168,10 @@
     "file": "src/main/runtime/rpc/methods/orchestration/worker/start/readiness/worker-start-structured-setup-gate.test.ts",
     "test": "waits for setup on a terminal the window adopted before the wait began",
     "row": "D1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "unhandled": "Runtime graph publisher belongs to a superseded renderer generation",
+    "row": "B1"
   }
 ]

@@ -3,6 +3,7 @@ import {
   isRepoOnCatalogHost
 } from '../../../shared/execution-host/execution-host'
 import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
+import { projectGroupIdFromRepoId } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
@@ -26,6 +27,7 @@ import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hook
 
 type RuntimeRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {
   resolveRepo: (selector: string) => Promise<TRepo>
+  resolveProjectGroupOwner?: (groupId: string) => WorkspaceHookOwner | null
   readCreateSourceHooks: (
     repo: TRepo,
     source: SetupHooksCreateSource
@@ -39,7 +41,35 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
     repoSelector: string,
     options: { createSource?: SetupHooksCreateSource } = {}
   ) {
+    const groupId = projectGroupIdFromRepoId(
+      repoSelector.startsWith('id:') ? repoSelector.slice(3) : repoSelector
+    )
+    if (groupId && this.deps.resolveProjectGroupOwner) {
+      const owner = this.deps.resolveProjectGroupOwner(groupId)
+      if (!owner) {
+        return {
+          hasHooksFile: false,
+          hooks: null,
+          setupRunPolicy: 'ask' as const,
+          source: null,
+          archiveTrust: null
+        }
+      }
+      return this.readRepoHooks(owner, options)
+    }
     const repo = await this.deps.resolveRepo(repoSelector)
+    return this.readRepoHooks(repo, options, (source) =>
+      this.deps.readCreateSourceHooks(repo, source)
+    )
+  }
+
+  private async readRepoHooks(
+    repo: WorkspaceHookOwner,
+    options: { createSource?: SetupHooksCreateSource },
+    readCreateSourceHooks?: (
+      source: SetupHooksCreateSource
+    ) => Promise<{ hooks: OrcaHooks | null } | undefined>
+  ) {
     const connectionId = getRepoDialableSshTargetId(repo)
     // Why: an `ssh:` repo is not served here, nor a folder another host owns; neither reports hooks.
     if (connectionId || (isFolderRepo(repo) && !isRepoOnCatalogHost(repo))) {
@@ -53,9 +83,10 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
     const hasFile = hasHooksFile(repo.path)
     const hooks = getEffectiveHooks(repo)
     // A create's setup prompt shows the orca.yaml of the ref it checks out; unreadable falls back to the checkout.
-    const created = options.createSource
-      ? await this.deps.readCreateSourceHooks(repo, options.createSource)
-      : undefined
+    const created =
+      readCreateSourceHooks && options.createSource
+        ? await readCreateSourceHooks(options.createSource)
+        : undefined
     const sharedHooks = created
       ? created.hooks
       : scopeHooksToRepoKind(repo, hasFile ? loadHooks(repo.path) : null)

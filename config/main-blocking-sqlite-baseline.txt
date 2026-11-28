@@ -1,6 +1,6 @@
 # Legacy synchronous sqlite uses per file; counts may only go DOWN.
 # Worker/utility entries and modules only they import are exempt; anything event-loop code imports stays guarded.
-10 src/main/ai-vault-search/storage/session-search-message-rows.ts
+5 src/main/ai-vault-search/storage/session-search-message-rows.ts
 13 src/main/ai-vault-search/storage/session-search-schema.ts
 20 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 2 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: probe and prune the few other-version cache files; not Electron main

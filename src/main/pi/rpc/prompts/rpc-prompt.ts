@@ -30,7 +30,7 @@ const PEER_DEFAULTS = resolveJsonlRpcPeerOptions()
 const MAX_TEXT_WIRE_BYTES = PEER_DEFAULTS.maxLineBytes - 1
 // Pi before 1.5.1 sends mid-turn images unshrunk: keep each under Anthropic's 5 MB of base64 and
 // the message to what one ordinary line held before.
-const UNSHRUNK_IMAGE_LIMITS: ImageLimits = {
+export const PI_UNSHRUNK_IMAGE_LIMITS: ImageLimits = {
   image: (5 * 1024 * 1024 * 3) / 4,
   total: (PEER_DEFAULTS.maxLineBytes * 3) / 4
 }
@@ -110,7 +110,7 @@ export async function preparePiRpcPrompt(
   body: AgentJournalMessageItem,
   piShrinksImages: boolean
 ): Promise<PiRpcPrompt> {
-  const limits = piShrinksImages ? SHRUNK_IMAGE_LIMITS : UNSHRUNK_IMAGE_LIMITS
+  const limits = piShrinksImages ? SHRUNK_IMAGE_LIMITS : PI_UNSHRUNK_IMAGE_LIMITS
   if (body.role !== 'user') {
     throw new Error('Pi prompt must be a user message')
   }

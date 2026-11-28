@@ -308,9 +308,10 @@ export function hasTerminalComposerPlaceholder(
     return false
   }
   // Why: the IME overlay redraws the row from the cursor without cell attributes, so a dim tail turns white.
+  // Exclude boxed composers whose right border sits in rawAfterCursor and may be dim.
   const onlyDimAfterCursor = !context.afterCursor.trim() || isCaretOverDimSuggestion(context)
   return (
-    (onlyDimAfterCursor && readTerminalComposerTypedText(context) !== null) ||
+    (onlyDimAfterCursor && detectTerminalComposer(context, true) !== null) ||
     detectTerminalComposer(context)?.placeholder === true
   )
 }

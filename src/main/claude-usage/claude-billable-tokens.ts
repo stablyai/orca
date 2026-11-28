@@ -61,7 +61,13 @@ export function addLongContext(
     return
   }
   const next = addTokenTotals(target.longContext ?? NO_TOKENS, share, sign)
-  if (Object.values(next).every((value) => value === 0)) {
+  if (
+    next.inputTokens === 0 &&
+    next.outputTokens === 0 &&
+    next.cacheReadTokens === 0 &&
+    next.cacheWriteTokens === 0 &&
+    next.cacheWrite1hTokens === 0
+  ) {
     delete target.longContext
   } else {
     target.longContext = next

@@ -6,6 +6,8 @@ import type {
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { ProviderSegment } from './StatusBarProviderSegment'
 import { UsageUnitLabel } from './usage-unit-label'
+import { UsageOverflowChip } from './usage-overflow-chip'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 
 const NOW = Date.now()
 const HOUR = 60 * 60_000
@@ -84,3 +86,34 @@ function levelsFixture(mode: StatusBarUsageMode) {
 
 export const detailed = levelsFixture('verbose')
 export const compact = levelsFixture('compact')
+
+// Why: the unit label must sit at the same 11px as the bar's other text in every locale.
+function barFixture(uiLanguage: 'en' | 'zh', width: number) {
+  const rows = [providersAt(73).slice(0, 1), providersAt(73)]
+  return defineFixture({
+    width,
+    store: { settings: { ...getDefaultSettings('/tmp'), uiLanguage } },
+    render: () => (
+      <div className="flex flex-col gap-2 bg-background p-2">
+        {rows.map((providers) => (
+          <div
+            key={providers.length}
+            className="flex h-6 items-center gap-3.5 overflow-clip whitespace-nowrap border-t border-border px-3 text-xs"
+          >
+            <UsageUnitLabel display="used" compact />
+            {providers.map((p) => (
+              <ProviderSegment key={p.provider} p={p} compact display="used" mode="compact" />
+            ))}
+            {providers.length > 1 ? (
+              <UsageOverflowChip hidden={providers.slice(2)} providerCount={4} display="used" />
+            ) : null}
+          </div>
+        ))}
+      </div>
+    )
+  })
+}
+
+export const barEnglish = barFixture('en', 360)
+export const barChinese = barFixture('zh', 360)
+export const barChineseNarrow = barFixture('zh', 200)
