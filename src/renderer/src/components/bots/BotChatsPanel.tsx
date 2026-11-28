@@ -36,6 +36,8 @@ import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotChatsSkeleton } from './BotChatsSkeleton'
 import { BotChatsPersonFilter } from './BotChatsPersonFilter'
+import { useViewedTabList, viewTabList } from './teammate-tabs/viewed-tab-list'
+import { pickOfViewedList, viewedListOfPick } from './teammate-tabs/tab-list-people'
 import { botChatPeople, type BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
@@ -80,12 +82,17 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const offline = useBotHostOffline(bot.hostId)
   const people = useMemo(() => botChatPeople(bot), [bot])
   const [pickState, setPick] = useState<BotChatPersonPick>(EVERYONE)
+  const homeKey = folderWorkspaceKey(bot.folderWorkspaceId)
+  // Showing someone's tabs in the Home shows their chats here: one view, either way in.
+  const viewed = useViewedTabList(homeKey)
+  const viewedPick = viewed ? pickOfViewedList(viewed.person, people) : null
   // A teammate no longer shared with drops the pick back to everyone.
   const pick =
-    pickState.kind === 'person' &&
+    viewedPick ??
+    (pickState.kind === 'person' &&
     !people.some((person) => person.accountId === pickState.person.accountId)
       ? EVERYONE
-      : pickState
+      : pickState)
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])
   // Its home's chats and runs, and each listed worker's own workspace.
   const stopWorkspaces = useMemo(
@@ -178,6 +185,7 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
                 onPick={(next) => {
                   setPick(next)
                   setSteps(0)
+                  viewTabList(homeKey, viewedListOfPick(bot, next))
                 }}
               />
             ) : null}

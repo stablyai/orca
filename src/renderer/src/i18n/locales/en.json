@@ -31024,6 +31024,23 @@
       "stopSharing": "Stop sharing…",
       "allYourLinks": "All your links",
       "alreadyUpToDate": "The link is already up to date"
+    },
+    "teammateTabs": {
+      "showing": "Showing {{name}}’s tabs",
+      "control": "Whose tabs",
+      "yours": "Your tabs",
+      "search": "Search people",
+      "theirs": "{{name}}’s tabs",
+      "back": "Back to your tabs",
+      "rowEntry": "View teammate’s tabs",
+      "terminalStarting": "This terminal is starting.",
+      "fileReading": "Reading {{path}}…",
+      "fileUnreadable": "Could not read {{path}}.",
+      "browserElsewhere": "Open on {{name}}’s computer",
+      "closeTab": "Close {{title}}",
+      "close": "Close",
+      "unavailable": "Their tabs can’t be read right now.",
+      "empty": "{{name}} has no tabs open here."
     }
   },
   "plugins": {

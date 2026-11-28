@@ -1,5 +1,6 @@
 import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
+import { ViewTeammateTabsMenuItem } from './teammate-tabs/ViewTeammateTabsMenuItem'
 import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
@@ -156,6 +157,9 @@ export function BotRow({
             onOpenHome={() => openBotHomePanelFromSidebar(bot, onOpen)}
           />
         )}
+        menuLead={
+          <ViewTeammateTabsMenuItem bot={bot} openHome={() => openBotFromSidebar(bot, onOpen)} />
+        }
         menuItems={
           shared ? null : (
             <>

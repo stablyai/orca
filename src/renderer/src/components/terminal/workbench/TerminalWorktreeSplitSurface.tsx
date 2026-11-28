@@ -15,6 +15,7 @@ import { layoutHoldsOnlyOverlayViews } from './released-layout-eligibility'
 import { useIsQuickCommandEditorOpen } from '../../tab-bar/quick-commands/quick-command-editor-presence'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
+import { ViewedTabListOverlay } from '../../bots/teammate-tabs/ViewedTabListOverlay'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
@@ -110,6 +111,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         })}
         mountEmulatorOverlay={isVisible || !hasPendingBackgroundMounts}
       />
+      {isVisible ? <ViewedTabListOverlay worktreeId={worktreeId} /> : null}
     </div>
   )
 })
