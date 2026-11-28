@@ -20,7 +20,12 @@ import { useChecksPanelBranchActions } from './review-actions/use-checks-panel-b
 import { useChecksPanelCreateReview } from './review-actions/use-checks-panel-create-review'
 import { ChecksPanelEmptyContent } from './presentation/empty-content'
 import { ChecksPanelActiveContent } from './presentation/active-content'
+import { ChecksPanelLoadingAnnouncement } from './presentation/checks-panel-loading-announcement'
+import { getChecksPanelRefreshErrorBannerLine } from '../hosted-review/provider-actions/github-refresh-error-copy'
+import { useTranslate } from '@/i18n/use-translate'
+
 export default function ChecksPanel(): React.JSX.Element {
+  const t = useTranslate()
   const baseModel = useChecksPanelControllerState()
   const contextModel = Object.assign(baseModel, useChecksPanelContextState(baseModel))
   const reviewModel = Object.assign(contextModel, useChecksPanelReviewState(contextModel))
@@ -59,9 +64,44 @@ export default function ChecksPanel(): React.JSX.Element {
   )
   const model = Object.assign(branchActionsModel, useChecksPanelCreateReview(branchActionsModel))
 
-  if (!model.activeWorktree || model.isFolder || !model.activeReview) {
-    return <ChecksPanelEmptyContent model={model} />
-  }
-
-  return <ChecksPanelActiveContent model={model} />
+  const showActive = Boolean(model.activeWorktree && !model.isFolder && model.activeReview)
+  // A classified GitHub failure says more than a manual one, so it wins; one banner either way.
+  const refreshError =
+    (model.activeReview?.provider === 'github' && model.prRefreshState?.status === 'error'
+      ? getChecksPanelRefreshErrorBannerLine(model.prRefreshState.errorType, t)
+      : null) ?? model.manualRefreshError
+  const canReadDetails = Boolean(model.repo && (model.prNumber || model.activeGitLabReview))
+  const canShowLoading =
+    showActive &&
+    model.isPanelVisible &&
+    canReadDetails &&
+    Boolean(model.stateRequestKey) &&
+    !refreshError
+  const coldChecks =
+    canShowLoading && !model.checksLoaded && !model.gitLabPipelineCheck && !model.checksError
+  const commentsError =
+    model.commentsError ??
+    (model.commentsUnavailable && !model.commentsLoading
+      ? t('checksPanel.commentsUnavailable', 'Could not load comments.')
+      : null)
+  const coldComments = canShowLoading && !model.commentsLoaded && !commentsError
+  return (
+    <>
+      <ChecksPanelLoadingAnnouncement
+        loading={coldChecks || coldComments}
+        reviewKey={model.stateRequestKey}
+      />
+      {showActive ? (
+        <ChecksPanelActiveContent
+          model={model}
+          refreshError={refreshError}
+          coldChecks={coldChecks}
+          coldComments={coldComments}
+          commentsError={commentsError}
+        />
+      ) : (
+        <ChecksPanelEmptyContent model={model} />
+      )}
+    </>
+  )
 }

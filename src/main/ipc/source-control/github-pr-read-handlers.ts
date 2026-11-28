@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { GitHubReactionContent } from '../../../shared/github/comments/comment-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
@@ -16,8 +17,11 @@ import {
   readGitHubRepoUnlessWslStopped
 } from './github-repo-routing'
 
-export function registerGitHubPRReadHandlers(store: Store): void {
-  ipcMain.handle('gh:repoSlug', (_event, args: { repoPath: string }) => {
+export function registerGitHubPRReadHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('gh:repoSlug', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
     const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
     return localGitOptions
@@ -27,7 +31,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       : getRepoSlug(repo.path, getGitHubRepoConnectionId(repo))
   })
 
-  ipcMain.handle('gh:repoUpstream', (_event, args: { repoPath: string }) => {
+  ipc.handle('gh:repoUpstream', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
     const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
     return localGitOptions
@@ -37,7 +41,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       : getRepoUpstream(repo.path, getGitHubRepoConnectionId(repo))
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:prChecks',
     (
       _event,
@@ -74,7 +78,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:prCheckDetails',
     (
       _event,
@@ -105,7 +109,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:prComments',
     (
       _event,
@@ -129,7 +133,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:setPRCommentReaction',
     (
       _event,
@@ -159,7 +163,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:resolveReviewThread',
     async (
       _event,

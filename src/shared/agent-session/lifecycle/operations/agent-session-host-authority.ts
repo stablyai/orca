@@ -10,6 +10,7 @@ import { isTerminalLeafId } from '../../../workspace-layout/stable-pane-id'
 import { isValidTerminalTabId } from '../../../workspace-layout/terminal-surfaces/terminal-tab-id'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type { SpawnIntent } from '../../../terminal/pty/admission/spawn-admission-contract'
+import type { TerminalOscColorQueryReplyColors } from '../../../terminal/protocol/queries/terminal-osc-color-reply'
 
 export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_identity_required',
@@ -120,6 +121,10 @@ export type RuntimeEnsureAgentSessionRequest =
       spawnIntent?: SpawnIntent
       /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
       accountEnv?: Record<string, string>
+      /** The launching client's terminal theme, pinned to this PTY's OSC 10/11 answers. */
+      terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+      /** The creator's palette and cursor for hidden OSC 4/12 and ?996n replies. */
+      terminalViewAttributes?: unknown
     }
 
 export type RuntimeEnsureAgentSessionResult = {
@@ -146,6 +151,10 @@ export type RuntimeCreateAgentSessionRequest = {
   viewMode?: 'terminal' | 'chat'
   /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
   accountEnv?: Record<string, string>
+  /** The launching client's terminal theme, pinned to this PTY's OSC 10/11 answers. */
+  terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  /** The creator's palette and cursor for hidden OSC 4/12 and ?996n replies. */
+  terminalViewAttributes?: unknown
 }
 
 export type RuntimeCreateAgentSessionResult = {

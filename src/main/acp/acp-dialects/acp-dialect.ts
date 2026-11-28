@@ -14,6 +14,7 @@ import type {
 } from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../transport/acp-errors'
+import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AvailableCommand,
@@ -111,7 +112,10 @@ export type AcpDialectNotification =
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
       failureDetail?: string
       /** Replaces the update that reported it. */
-      failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit' | 'notSignedIn'>
+      failure?: Pick<
+        AcpTurnEnding,
+        'stopReason' | 'failureDetail' | 'failureFrame' | 'usageLimit' | 'notSignedIn'
+      >
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
@@ -127,6 +131,9 @@ export type AcpTurnEnding = {
   at: number
   durationMs?: number
   failureDetail?: string
+  /** The agent's own failure line, verbatim, kept under Details when `failureDetail` is a shorter
+   *  sentence drawn from it. */
+  failureFrame?: string
   notSignedIn?: boolean
   /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
   modelNotSelected?: boolean
@@ -156,6 +163,8 @@ export type AcpListedChatModel = {
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  /** The session steering extension can join a prompt without cancelling it. */
+  sessionSteering?: (initialized: InitializeResponse) => boolean
   /** Effort replaces part of the native composite model selection. */
   effortChangesModel?: true
   subagentStop?: {
@@ -200,6 +209,8 @@ export type AcpDialect = {
   modelEfforts?(model: ModelInfo): AcpAdvertisedEfforts
   /** Efforts of a listed model family that `models` advertises only as per-effort variants. */
   familyEfforts?(family: string, models: readonly ModelInfo[]): AcpAdvertisedEfforts | undefined
+  /** A saved model id the chat lists as another row and effort, e.g. a family's level id. */
+  listedSelection?: StructuredAgentListedSelection
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
   /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
@@ -211,6 +222,9 @@ export type AcpDialect = {
   /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
   elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
+  /** Requests `settleRequest` always answers alike, by method: a kept agent's daemon answers these
+   *  while no app is attached, so its work never waits on one. */
+  detachedReplies?: Readonly<Record<string, unknown>>
   /** A retry of a failed model call this update announces; null when the agent says retrying is over. */
   providerRetry?(update: SessionUpdate): AgentSessionProviderRetry | null | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
@@ -230,6 +244,8 @@ export type AcpDialect = {
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** Context tokens left after a compaction, as its reply states them. */
+  compactedContextTokens?(reply: string): number | undefined
   /** The agent's own compaction report, read as the standard `compaction_update`. */
   compactionUpdate?(update: SessionUpdate): CompactionUpdate | undefined
   /** The agent's own command for /compact. */

@@ -5,6 +5,7 @@ import type { BrowserClientFileChannelTransport } from './browser-client-file-ch
 import type { BrowserClientUploadStaging } from './browser-client-upload-staging'
 import {
   fetchBrowserClientUploadFiles,
+  fileChannelUploadChunkReader,
   readBrowserClientUploadPaths
 } from './browser-client-upload-transfer'
 
@@ -22,8 +23,10 @@ export async function executeBrowserClientUploadCommand(options: {
   }
   const remotePaths = readBrowserClientUploadPaths(options.params)
   const files = await fetchBrowserClientUploadFiles({
-    request: (method, params) => fileChannel.request(method, params),
-    event: options.event,
+    readChunk: fileChannelUploadChunkReader(
+      (method, params) => fileChannel.request(method, params),
+      options.event
+    ),
     remotePaths
   })
   const staged = await staging.stage({

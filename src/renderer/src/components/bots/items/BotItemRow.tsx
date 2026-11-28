@@ -1,12 +1,11 @@
-// Hover or keyboard focus swaps the age for Done, Snooze, and More on open items.
+// Hover or keyboard focus swaps the age for Done, Snooze, and Cancel on open items.
 import { memo, useId } from 'react'
-import { Check, CircleCheck, CircleSlash, Clock, MoreHorizontal } from 'lucide-react'
+import { Check, Clock, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useMenuPointerExitClose } from '@/components/ui/menu-pointer-exit-close'
@@ -87,7 +86,10 @@ const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   question: (a, b) =>
     a.question?.eventId === b.question?.eventId &&
     Object.keys(a.question ?? {}).join() === Object.keys(b.question ?? {}).join(),
+  // Read by the item's own view; the row never shows it.
+  waitingAsk: skipped,
   closeNote: (a, b) => a.closeNote === b.closeNote,
+  wait: (a, b) => a.wait?.text === b.wait?.text && a.wait?.at === b.wait?.at,
   links: (a, b) => itemLive(a) === itemLive(b),
   version: (a, b) => a.version === b.version,
   lastEventId: (a, b) => a.lastEventId === b.lastEventId,
@@ -150,8 +152,11 @@ function BotItemRowView({
   const closed = item.status === 'done' || item.status === 'canceled'
   const doneLabel = t('bots.items.row.done', 'Done')
   const snoozeLabel = t('bots.items.snooze.menu', 'Snooze')
-  // Needs you's question shows in the row's hover card; the row stays one line like the others.
+  const cancelLabel = t('bots.items.row.cancel', 'Cancel')
+  // Needs you's question, or what Waiting waits on, shows in the row's hover card; the row stays one
+  // line like the others.
   const question = !stale && !snoozed && item.status === 'needs_you' ? item.question : null
+  const wait = !snoozed && item.status === 'waiting' ? item.wait : null
   const questionId = useId()
   const checkbox = selecting || selected
   const { rowRef, triggerRef, ...menu } = useMenuPointerExitClose<
@@ -185,14 +190,23 @@ function BotItemRowView({
       </span>
       {face ? <BotItemRowFace bot={face} /> : null}
       <BotRowHoverCard
-        card={question ? <BotItemQuestionCard title={item.title} question={question} /> : null}
+        card={
+          question ? (
+            <BotItemQuestionCard title={item.title} question={question} />
+          ) : wait ? (
+            <>
+              <p className="font-medium text-foreground">{item.title}</p>
+              <p className="mt-1 text-muted-foreground">{wait.text}</p>
+            </>
+          ) : null
+        }
       >
         <button
           type="button"
           data-bot-item-open=""
           tabIndex={tabbable ? undefined : -1}
-          title={question ? undefined : item.title}
-          aria-describedby={question ? questionId : undefined}
+          title={question || wait ? undefined : item.title}
+          aria-describedby={question || wait ? questionId : undefined}
           className="min-w-0 flex-1 cursor-pointer rounded-sm text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onClick={() => onAction(item, { kind: 'open' })}
         >
@@ -242,9 +256,9 @@ function BotItemRowView({
           </span>
         </button>
       </BotRowHoverCard>
-      {question ? (
+      {question || wait ? (
         <span id={questionId} hidden>
-          {question.text}
+          {question ? question.text : wait?.text}
         </span>
       ) : null}
       {closed ? null : (
@@ -271,10 +285,10 @@ function BotItemRowView({
               {doneLabel}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenu>
+          <DropdownMenu open={menu.open} onOpenChange={menu.onOpenChange}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild ref={triggerRef} {...menu.triggerProps}>
                   <Button
                     variant="ghost-on-accent"
                     size="icon-xs"
@@ -289,33 +303,26 @@ function BotItemRowView({
                 {snoozeLabel}
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" {...menu.contentProps}>
               <BotItemSnoozeMenuItems items={[item]} snoozing={snoozing} inSubmenu={false} />
             </DropdownMenuContent>
           </DropdownMenu>
-          <DropdownMenu open={menu.open} onOpenChange={menu.onOpenChange}>
-            <DropdownMenuTrigger asChild ref={triggerRef} {...menu.triggerProps}>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button
                 variant="ghost-on-accent"
                 size="icon-xs"
-                aria-label={t('bots.items.row.more', 'More')}
+                aria-label={cancelLabel}
                 tabIndex={tabbable ? undefined : -1}
+                onClick={() => onAction(item, { kind: 'cancel' })}
               >
-                <MoreHorizontal className="size-3.5" />
+                <X className="size-3.5" />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" {...menu.contentProps}>
-              <DropdownMenuItem onSelect={() => onAction(item, { kind: 'done' })}>
-                <CircleCheck />
-                {t('bots.items.menu.done', 'Done')}
-              </DropdownMenuItem>
-              <BotItemSnoozeMenuItems items={[item]} snoozing={snoozing} />
-              <DropdownMenuItem onSelect={() => onAction(item, { kind: 'cancel' })}>
-                <CircleSlash />
-                {t('bots.items.menu.cancel', 'Cancel…')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {cancelLabel}
+            </TooltipContent>
+          </Tooltip>
         </span>
       )}
     </div>

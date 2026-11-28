@@ -19,7 +19,8 @@ import {
   type LinkableChat
 } from './external-conversation-chat-delivery'
 import { cancelConversation } from './external-conversation-cancel'
-import { ConversationChain } from './external-conversation-chain'
+import { resumeRefusal } from './external-conversation-resume'
+import { ConversationChain, type QueuedWork } from './external-conversation-chain'
 import { GoneChats } from './external-conversation-gone-chats'
 import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
 import { conversationOwnsTurn } from './external-conversation-chat-turns'
@@ -48,6 +49,7 @@ import {
   type Delivery
 } from './external-conversation-types'
 
+import { fetchAskerImages } from './connector-asker-images'
 import { recordAdmittedTurn, recordLastTurn } from './external-conversation-last-turn'
 export type { ExternalConversationSeamDeps } from './external-conversation-host'
 
@@ -56,6 +58,9 @@ export class ExternalConversationSeam {
   private readonly abort = new AbortController()
   readonly signal = this.abort.signal
   private readonly chain = new ConversationChain(this.abort.signal)
+  /** Runs `work` in the conversation's queue after its deliveries; a Stop settles it or aborts it. */
+  readonly queued = (key: ConversationKey, work?: QueuedWork): Promise<Delivery> =>
+    this.chain.after(conversationId(key), work)
   private readonly linked = new Map<string, { key: ConversationKey; worktreeId: string }>()
   private readonly chatDeliveries = new ChatDeliveries((...link) => this.linkChat(...link))
   /** Built by the first watcher, so an unwatched seam subscribes to nothing. */
@@ -113,17 +118,14 @@ export class ExternalConversationSeam {
     const seam = { ...this.deps, chain: this.chain }
     const args = turnId === undefined ? [] : [turnId]
     // A Stop bound to a turn never lands on a later one.
-    const turnIsCurrent = () => turnId === undefined || this.currentTurn(key) === turnId
+    const turnIsCurrent = () =>
+      turnId === undefined ||
+      this.replyTarget(findLink(this.deps.store, key)?.link.paneKey ?? '')?.turnId === turnId
     return this.deps.receipts.run(key, id, 'connector.cancel', args, async () =>
       turnIsCurrent()
         ? cancelConversation(host, seam, key, this.abort.signal, turnIsCurrent)
         : refused('turn_not_running')
     )
-  }
-
-  private currentTurn(key: ConversationKey): number | null {
-    const linked = findLink(this.deps.store, key)
-    return (linked && this.replyTarget(linked.link.paneKey)?.turnId) ?? null
   }
 
   /** Whether a chat's current or next turn is a connector's delivery, not its owner's. */
@@ -179,7 +181,7 @@ export class ExternalConversationSeam {
     })
     this.chatDeliveries.stopFollowing()
     const release = this.events.watch(listener)
-    this.deps.slackMirror?.()?.flushHeld()
+    this.deps.watched?.()
     return release
   }
 
@@ -305,13 +307,8 @@ export class ExternalConversationSeam {
     signal: AbortSignal
   ): Promise<Delivery> {
     this.linked.set(conversationId(key), { key, worktreeId: chat.worktreeId })
-    // A bot's request may list images; they go with its words, so the agent sees them at once.
-    const images =
-      chat.bot && message.asker && this.deps.askerImages
-        ? await this.deps
-            .askerImages({ botId: chat.bot.botId, conversation: key, asker: message.asker, signal })
-            .catch(() => [])
-        : []
+    // A bot's request (and any carried follow-ups) may list images; they go with its words.
+    const images = await fetchAskerImages(this.deps.askerImages, chat, key, message, signal)
     const delivered = await this.chatDeliveries.deliver(host.chat, key, chat, {
       ...message,
       signal,
@@ -341,6 +338,9 @@ export class ExternalConversationSeam {
     const chat = link.bot
       ? await botChatFor(this.deps.store, host.bots, key, link.bot)
       : linkedChat(workspace.worktreeId, link)
-    return 'outcome' in chat ? chat : this.deliverToChat(host, key, chat, message, signal)
+    return 'outcome' in chat
+      ? chat
+      : ((await resumeRefusal(message, host.chat, chat.sessionId, { workspace, link })) ??
+          this.deliverToChat(host, key, chat, message, signal))
   }
 }

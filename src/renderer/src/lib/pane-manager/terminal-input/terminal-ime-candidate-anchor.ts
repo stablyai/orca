@@ -8,9 +8,10 @@ type ImeAnchorCellMetrics = {
   rows: number
 }
 
-// The prompt row only stays valid while the parked cursor and viewport stay put.
+// The prompt anchor only stays valid while the parked cursor, viewport, and every row at or below it stay put.
 type CursorAgentPromptCache = {
   row: number
+  column: number
   cursorY: number
   baseY: number
   cols: number
@@ -86,17 +87,25 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
   }
 
-  const resolveAnchor = (): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
+  const resolveAnchor = (
+    reusePromptCache: boolean
+  ): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
     const buf = terminal.buffer.active
-    // Renders repeat while composing; a bottom-up prompt scan per render is too slow on large grids.
-    const promptRow =
+    // Renders above the cached prompt row cannot move it or add a newer prompt below it.
+    if (
+      reusePromptCache &&
       promptCache &&
       promptCache.cursorY === buf.cursorY &&
       promptCache.baseY === buf.baseY &&
       promptCache.cols === terminal.cols &&
-      promptCache.rows === terminal.rows
-        ? promptCache.row
-        : undefined
+      promptCache.rows === terminal.rows &&
+      buf.cursorX === 0
+    ) {
+      return {
+        anchor: { row: promptCache.row, column: promptCache.column },
+        isCursorAgent: true
+      }
+    }
     // Cursor Agent leaves the public cursor on a blank row; anchor IME to its rendered prompt instead.
     const cursorAgentAnchor = resolveCursorAgentImeAnchor({
       buffer: buf,
@@ -104,13 +113,13 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       cols: terminal.cols,
       cursorX: buf.cursorX,
       cursorY: buf.cursorY,
-      knownCursorAgent: cursorAgentSeen,
-      promptRow
+      knownCursorAgent: cursorAgentSeen
     })
     cursorAgentSeen ||= cursorAgentAnchor !== null
     promptCache = cursorAgentAnchor
       ? {
           row: cursorAgentAnchor.row,
+          column: cursorAgentAnchor.column,
           cursorY: buf.cursorY,
           baseY: buf.baseY,
           cols: terminal.cols,
@@ -126,7 +135,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
   }
 
-  const handler = (event?: Event): void => {
+  const handler = (event?: Event, reusePromptCache = false): void => {
     if (!screenElement) {
       return
     }
@@ -143,7 +152,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     if (!cells) {
       return
     }
-    const { anchor, isCursorAgent } = resolveAnchor()
+    const { anchor, isCursorAgent } = resolveAnchor(reusePromptCache)
     applyAnchor(anchor.row, anchor.column, cells, isCursorAgent)
     // xterm repositions in setTimeout(0); correct after its timer, coalescing bursts.
     if (!isCursorAgent) {
@@ -178,12 +187,13 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     promptCache = null
   }
 
-  const reapplyAfterRender = (): void => {
+  const reapplyAfterRender = (range: { start: number; end: number }): void => {
     if (!compositionView?.classList.contains('active') || !textarea.isConnected) {
       stopFollowingRenders()
       return
     }
-    handler()
+    const reusePromptCache = promptCache !== null && range.end < promptCache.row
+    handler(undefined, reusePromptCache)
   }
 
   const element = terminal.element

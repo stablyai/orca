@@ -44,7 +44,7 @@ function cronWallDateMatches(
   }
   const dayOfMonthMatches = rule.daysOfMonth.has(wall.day)
   const dayOfWeekMatches = rule.daysOfWeek.has(wall.weekday)
-  // Dialect rule; the flags are lexical (`isCronDayFieldRestricted`), not set sizes.
+  // Dialect rule; the flags are lexical (`isCronFieldRestricted`), not set sizes.
   if (rule.dayOfMonthRestricted && rule.dayOfWeekRestricted) {
     return dayOfMonthMatches || dayOfWeekMatches
   }

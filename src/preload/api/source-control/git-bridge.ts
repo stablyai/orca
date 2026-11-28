@@ -8,7 +8,15 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
 } from '../../../shared/git/remotes/git-fork-sync'
-import type { GitStagingArea, GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
+import type {
+  GitAbortOperationRequest,
+  ContinueRebaseAction,
+  ContinueRebaseRequest,
+  ContinueRebaseResult,
+  GitStagingArea,
+  RebaseFromBaseResult,
+  GitUpstreamStatus
+} from '../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../shared/source-control/listing/source-control-entry-actions'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
@@ -19,6 +27,8 @@ import type {
   GitHistoryResult
 } from '../../../shared/git/history/git-history-types'
 import type { PreloadApi } from '../../api-types'
+
+type AbortArgs = { worktreePath: string; connectionId?: string } & GitAbortOperationRequest
 
 export const gitApi = {
   status: (args: {
@@ -79,10 +89,17 @@ export const gitApi = {
     ipcRenderer.invoke('git:conflictOperation', args),
   mutationInFlight: (args: { worktreePath: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:mutationInFlight', args),
-  abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('git:abortMerge', args),
-  abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('git:abortRebase', args),
+  abortMerge: (args: AbortArgs): Promise<void> => ipcRenderer.invoke('git:abortMerge', args),
+  abortRebase: (args: AbortArgs): Promise<void> => ipcRenderer.invoke('git:abortRebase', args),
+  continueRebase: (
+    args: {
+      worktreePath: string
+      connectionId?: string
+      action?: ContinueRebaseAction
+    } & ContinueRebaseRequest
+  ): Promise<ContinueRebaseResult> => ipcRenderer.invoke('git:continueRebase', args),
+  rebaseAutoStash: (args: { worktreePath: string; connectionId?: string }): Promise<boolean> =>
+    ipcRenderer.invoke('git:rebaseAutoStash', args),
   diff: (args: {
     worktreePath: string
     filePath: string
@@ -136,7 +153,7 @@ export const gitApi = {
     worktreePath: string
     baseRef: string
     connectionId?: string
-  }): Promise<void> => ipcRenderer.invoke('git:rebaseFromBase', args),
+  }): Promise<RebaseFromBaseResult> => ipcRenderer.invoke('git:rebaseFromBase', args),
   branchDiff: (args: {
     worktreePath: string
     compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
@@ -175,11 +192,13 @@ export const gitApi = {
     commitId: string
     connectionId?: string
   }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:revert', args),
-  sequencerAbort: (args: {
-    worktreePath: string
-    operation: GitCommitAction
-    connectionId?: string
-  }): Promise<void> => ipcRenderer.invoke('git:sequencerAbort', args),
+  sequencerAbort: (
+    args: {
+      worktreePath: string
+      operation: GitCommitAction
+      connectionId?: string
+    } & GitAbortOperationRequest
+  ): Promise<void> => ipcRenderer.invoke('git:sequencerAbort', args),
   sequencerContinue: (args: {
     worktreePath: string
     operation: GitCommitAction

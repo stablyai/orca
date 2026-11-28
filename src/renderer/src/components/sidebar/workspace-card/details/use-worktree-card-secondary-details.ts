@@ -3,12 +3,14 @@ import type { WorkspaceAttachment } from '../../../../../../shared/worktree/type
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { buildWorkspaceAttachmentEdits } from '../metadata/worktree-attachment-editing'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import {
+  getWorkspaceAttachments,
+  hasWorkspaceAttachments
+} from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
-import { translate } from '@/i18n/i18n'
-import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
+import { openLinkedUrlInWorkspaceBrowser } from './worktree-card-linked-url-open'
 import './WorktreeCardMeta'
 import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { usePromptCacheCountdownStartedAt } from '../activity/CacheTimer'
@@ -120,19 +122,7 @@ export function useWorktreeCardSecondaryDetails({
     [hoverReview, openTaskPage, repo]
   )
   const openLinkedUrlInBrowser = useCallback(
-    (url: string): void => {
-      void openWorkspaceBrowserTab({
-        workspaceId: worktree.id,
-        url,
-        intent: { kind: 'url' }
-      }).catch((error: unknown) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
-        )
-      })
-    },
+    (url: string): void => void openLinkedUrlInWorkspaceBrowser(worktree.id, url),
     [worktree.id]
   )
   const handleOpenIssueInBrowser = openLinkedUrlInBrowser
@@ -220,7 +210,7 @@ export function useWorktreeCardSecondaryDetails({
   // The experimental card draws the PR in its status lane; Classic lists it with the other details.
   const reviewInStatusLane = newCardStyle
   const hasDetails =
-    getWorkspaceAttachments(worktree).length > 0 ||
+    hasWorkspaceAttachments(worktree) ||
     hasWorktreeCardDetails({
       issue: metaIssue,
       linearIssue: metaLinearIssue,

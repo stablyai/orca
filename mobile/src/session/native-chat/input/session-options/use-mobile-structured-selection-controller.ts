@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { recomputeOn } from '../../../../hooks/recompute-on'
 import { createStructuredSessionSelectionController } from '../../../../../../src/shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import { persistMobileStructuredOptionPicks } from './mobile-native-chat-session-option-persistence'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
@@ -14,27 +15,31 @@ export function useMobileStructuredSelectionController(args: {
   const clientGeneration = useSyncExternalStore(client?.onStateChange ?? (() => () => {}), () =>
     client?.getGeneration?.()
   )
-  const scope = useMemo(() => {
-    let attached = true
-    const controller = createStructuredSessionSelectionController(
-      (picks) => {
-        if (agent) {
-          void persistMobileStructuredOptionPicks({ client, agent, picks })
+  const scope = useMemo(
+    () =>
+      recomputeOn([sessionId], () => {
+        let attached = true
+        const controller = createStructuredSessionSelectionController(
+          (picks) => {
+            if (agent) {
+              void persistMobileStructuredOptionPicks({ client, agent, picks })
+            }
+          },
+          () => attached
+        )
+        return {
+          controller,
+          attach: () => {
+            attached = true
+          },
+          detach: () => {
+            attached = false
+            controller.abandon()
+          }
         }
-      },
-      () => attached
-    )
-    return {
-      controller,
-      attach: () => {
-        attached = true
-      },
-      detach: () => {
-        attached = false
-        controller.abandon()
-      }
-    }
-  }, [agent, client, sessionId])
+      }),
+    [agent, client, sessionId]
+  )
   const { controller } = scope
   useEffect(() => {
     scope.attach()

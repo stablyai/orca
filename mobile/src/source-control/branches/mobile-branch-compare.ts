@@ -1,5 +1,5 @@
 import { compareFileNames } from '../../../../src/shared/file-listing/file-name-sort'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import type {
   MobileGitBranchChangeEntry,
   MobileGitBranchCompareSummary
@@ -13,7 +13,8 @@ export type MobileBranchCompareSection<
 }
 
 export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchChangeEntry>(
-  entries: readonly TEntry[]
+  entries: readonly TEntry[],
+  t: Translate
 ): MobileBranchCompareSection<TEntry> | null {
   if (entries.length === 0) {
     return null
@@ -21,7 +22,7 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
   const data = [...entries]
   data.sort((a, b) => compareFileNames(a.path, b.path))
   return {
-    title: translate('sourceControl.branchCompare.sectionTitle', 'Committed on Branch'),
+    title: t('sourceControl.branchCompare.sectionTitle', 'Committed on Branch'),
     data
   }
 }

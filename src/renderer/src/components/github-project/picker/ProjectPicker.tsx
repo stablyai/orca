@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHubProjectOwnerType,
   GitHubProjectSettings,
@@ -60,6 +61,7 @@ export default function ProjectPicker({
 }: Props): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const projectSettings = useMemo(
     () => settings?.githubProjects ?? EMPTY_PROJECT_SETTINGS,
@@ -251,7 +253,7 @@ export default function ProjectPicker({
   )
   const buttonLabel = activeProject
     ? `${activeProject.owner} / ${activeProject.title ?? `#${activeProject.number}`}`
-    : 'Choose a project'
+    : t('projectViews.picker.chooseProject', 'Choose a project')
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

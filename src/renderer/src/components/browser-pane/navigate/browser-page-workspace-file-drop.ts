@@ -114,8 +114,8 @@ function resolveDropTarget(
   }
 }
 
-/** Client guests refuse file:// documents, so only remote workspace files open there. */
-export function useClientPageWorkspaceFileDrop(
+/** Client guests refuse file:// documents and streamed pages run on another machine, so only remote workspace files open there. */
+export function useWorkspaceDocPageFileDrop(
   browserPageId: string,
   worktreeId: string,
   viewportRef: RefObject<HTMLDivElement | null>

@@ -216,6 +216,10 @@ export function fitInteractivePrompt(
     parsed === undefined
       ? truncatePreservingSurrogates(prompt, limit)
       : JSON.stringify(compactInteractivePromptValue(parsed, limit))
+  // Nothing fits when even the shortest cut does not (e.g. OMP's `html` form, which never shortens).
+  if (!fits(promptAtLimit(1))) {
+    return null
+  }
   let low = 1
   let high = prompt.length
   let fitted: string | null = null
@@ -274,6 +278,23 @@ export function normalizeOptionalMultilineField(
 }
 
 /** Keep a lead turn's end time only on the gated `working` row and that turn's later all-clear `done`. */
+/** A held turn names at most this many of its background commands, each a one-line preview. */
+export const AGENT_STATUS_BACKGROUND_COMMANDS_MAX = 4
+
+/** The commands of a turn held open by its background shells, as one-line previews; only a working row has any. */
+export function normalizeBackgroundCommandsField(
+  value: unknown,
+  state: string
+): string[] | undefined {
+  if (state !== 'working' || !Array.isArray(value)) {
+    return undefined
+  }
+  const commands = value
+    .slice(0, AGENT_STATUS_BACKGROUND_COMMANDS_MAX)
+    .flatMap((command) => normalizeOptionalField(command, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ?? [])
+  return commands.length > 0 ? commands : undefined
+}
+
 export function normalizeTurnCompletedAtField(value: unknown, state: string): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined

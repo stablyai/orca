@@ -2,18 +2,10 @@
 
 import { BrowserWindow, ipcMain } from 'electron'
 import { consumeConsentMutationToken } from '../telemetry/burst-cap'
-import {
-  assignBrowserExtensionsBanner,
-  initBrowserExtensionsBanner
-} from '../telemetry/browser-extensions-banner'
 import type { BrowserExtensionsBannerAssignmentReply } from '../../shared/browser/extensions/browser-extensions-banner'
 import { isTrustedBrowserRenderer } from './browser/browser-renderer-trust'
-import {
-  hasTrackedAgentDashboardActiveToday,
-  persistBannerAcknowledgeWithoutEmitting,
-  setOptIn,
-  track
-} from '../telemetry/client'
+import { hasTrackedAgentDashboardActiveToday } from '../telemetry/agent-dashboard-active-days'
+import { persistBannerAcknowledgeWithoutEmitting, setOptIn, track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
@@ -27,15 +19,19 @@ import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property
 
 // Derive consent provenance synchronously from pre-mutation settings.
 let storeRef: Store | null = null
+let bannerInitializedStore: Store | null = null
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'agent_dashboard_enabled',
-  'agent_token_usage',
+  'agent_token_usage_daily',
+  'native_chat_picker_accepts_daily',
   'browser_extension_installed',
   'browser_extension_used',
   'browser_extensions_banner_assigned',
   'app_starred_orca',
   'codex_history_move_status',
+  'codex_legacy_history_import',
+  'legacy_journal_retirement',
   'daemon_adopted',
   'daemon_async_io_health',
   'daemon_audit_eligibility',
@@ -76,14 +72,22 @@ function deriveOptInVia(store: Store, incomingOptedIn: boolean): OptInVia {
 
 export function registerTelemetryHandlers(store: Store): void {
   storeRef = store
-  initBrowserExtensionsBanner(store)
+  bannerInitializedStore = null
 
   ipcMain.handle(
     'telemetry:assignBrowserExtensionsBanner',
-    (event): Promise<BrowserExtensionsBannerAssignmentReply> =>
-      isTrustedBrowserRenderer(event.sender)
-        ? assignBrowserExtensionsBanner()
-        : Promise.resolve({ status: 'not_ready' })
+    async (event): Promise<BrowserExtensionsBannerAssignmentReply> => {
+      if (!isTrustedBrowserRenderer(event.sender) || !storeRef) {
+        return { status: 'not_ready' }
+      }
+      const { assignBrowserExtensionsBanner, initBrowserExtensionsBanner } =
+        await import('../telemetry/browser-extensions-banner')
+      if (bannerInitializedStore !== storeRef) {
+        bannerInitializedStore = storeRef
+        initBrowserExtensionsBanner(storeRef)
+      }
+      return assignBrowserExtensionsBanner()
+    }
   )
 
   ipcMain.handle('telemetry:track', (event, name: unknown, props: unknown): boolean => {

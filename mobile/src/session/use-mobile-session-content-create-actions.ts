@@ -1,4 +1,5 @@
-import { normalizeBrowserUrl } from '../browser/pane-view/browser-url'
+import { isBlankBrowserUrl, normalizeBrowserUrl } from '../browser/pane-view/browser-url'
+import { markNewBrowserTabForAddressFocus } from '../browser/pane-view/new-browser-tab-address-focus'
 import { translate } from '../i18n/mobile-i18n'
 import { captureMobileFileMutationOwnership } from '../files/mutation-ownership/mobile-file-mutation-ownership'
 import {
@@ -10,7 +11,10 @@ import { sourceFileOpenRun } from '../files/session-documents/mobile-source-file
 import { sessionBrowserTabCreate } from '../browser/tab-navigation/mobile-session-browser-operations'
 import { sessionMarkdownNoteCreate } from '../files/session-documents/mobile-markdown-tab-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
-import type { MobileBrowserNavigationMethod } from './tabs/MobileBrowserTabActionSheet'
+import type {
+  MobileBrowserNavigationMethod,
+  MobileBrowserNavigationOptions
+} from './tabs/MobileBrowserTabActionSheet'
 import { isFileExistsErrorMessage } from '../files/mutation-ownership/file-exists-error'
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/creation/use-mobile-session-terminal-create-actions'
@@ -145,6 +149,10 @@ export function useMobileSessionContentCreateActions(
       // Poll briefly for async host registration before focusing the new browser tab.
       if (created.browserPageId) {
         pendingBrowserFocusPageIdRef.current = created.browserPageId
+        // A blank tab has nothing to show yet, so its address field takes the first tap's place.
+        if (isBlankBrowserUrl(url)) {
+          markNewBrowserTabForAddressFocus(created.browserPageId)
+        }
       }
       void fetchSessionTabs()
       scheduleDelayedAction(() => void fetchPendingBrowserSessionTabs(), 400)
@@ -169,7 +177,8 @@ export function useMobileSessionContentCreateActions(
 
   async function handleBrowserNavigationCommand(
     tab: Extract<MobileSessionTab, { type: 'browser' }>,
-    method: MobileBrowserNavigationMethod
+    method: MobileBrowserNavigationMethod,
+    options?: MobileBrowserNavigationOptions
   ) {
     if (!client || !tab.browserPageId) {
       showToast(
@@ -187,7 +196,8 @@ export function useMobileSessionContentCreateActions(
         client,
         {
           worktree: `id:${worktreeId}`,
-          page: tab.browserPageId
+          page: tab.browserPageId,
+          ...(options?.ignoreCache ? { ignoreCache: true } : {})
         },
         { timeoutMs: 15_000 }
       )

@@ -37,12 +37,13 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['bot', 'list'],
-    summary: 'List the bots on this computer, what each is for, and the address that reaches it',
+    summary: 'List the bots you can reach, what each is for, and the address that reaches it',
     usage: 'orca bot list [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
       ...BOT_NOTES,
-      "What each is for is the first paragraph of its SOUL.md. `orca orchestration send --to bot:<name>` mails that bot's Chat."
+      "What each is for is the first paragraph of its SOUL.md. `orca orchestration send --to bot:<name>` mails that bot's Chat.",
+      "It also lists paired servers' bots (`--on <server>`) and, on a paired server, its connected paired computers with the bots each lets this Orca ask (`--on-client <computer>`)."
     ]
   },
   {
@@ -94,15 +95,26 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     path: ['bot', 'reply'],
     summary: 'Answer, as this bot, in the issue, pull request or thread that woke this run',
     usage:
-      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--choice <label>]... [--react <emoji>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'text', 'text-file', 'note', 'file', 'choice', 'react'],
+      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--choice <label>]... [--react <emoji>] [--json]\n       orca bot reply --leave-thread [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'text',
+      'text-file',
+      'note',
+      'file',
+      'choice',
+      'react',
+      'leave-thread'
+    ],
+    booleanFlags: ['leave-thread'],
     repeatableFlags: ['note', 'file', 'choice'],
     notes: [
-      'For a progress note, a question, line notes or an emoji before your final message, which Orca posts there for you. Anywhere else, use `gh`, `orca linear` or `orca slack`.',
+      'For a progress note, a question or line notes before your final message, which Orca posts there for you. Anywhere else, use `gh`, `orca linear` or `orca slack`.',
       'On a pull request, each --note posts as an inline review note (up to 30) with --text as the review, and your final message is then not posted; elsewhere notes follow the text as path:line lines.',
       `--file attaches a file (up to ${CONNECTOR_REPLY_MAX_FILES} files, each up to what Slack takes) in the Slack thread that woke you. Repeat it to send several, and put their words in the same call's --text: they post together as one message. GitHub and Linear take no files: link to it instead.`,
       `--choice puts a button under your --text in the Slack thread that woke you (up to ${CONNECTOR_REPLY_MAX_CHOICES}, each up to ${CONNECTOR_REPLY_CHOICE_MAX_CHARS} characters). Repeat it for each option. When someone who can ask you presses one, it comes back to you as their next message in the thread, with the label as its text; the first press is the answer and the buttons close. GitHub and Linear take no buttons.`,
-      '--react puts an emoji (👀 ✅, or :shortcode:) on the message that woke you.',
+      'In a Slack thread, Orca manages the reactions on the message that woke you, so never add 👀 or ✅ yourself. Use `--react` only when a reaction such as 👍 is your whole response, and then make your final message only NO_REPLY.',
+      '--leave-thread stops Orca waking you in the Slack thread that woke you, until someone @mentions you there. Only you and only that thread; Orca posts the confirmation. Use it alone, when the person asking wants you to leave.',
       TEXT_FILE,
       `In Slack: ${SLACK_MENTION} ${SLACK_MARKDOWN}`
     ]
@@ -117,7 +129,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       "Run it from a bot's chat. GitHub and Linear act as the bot's owner (gh, orca linear); Slack is the bot itself (orca slack). A service that isn't signed in prints the one line to tell its owner.",
       "Lists each workspace the bot is in (and each Linear workspace's teams) as refs for automations.",
-      '--offer shows the owner a Connect card in this chat; --workspace names a workspace or org they asked for that is not listed. Already connected: it says so and shows no card. Signed out of Orca: a connector the bot has, or webhook, shows a Sign in line instead.'
+      '--offer shows the owner a Connect card in this chat; when the turn answers a Slack, Linear or GitHub thread, the answer says what to tell the owner there (on Slack, a line that gets an Open in Orca link). --workspace names a workspace or org they asked for that is not listed. Already connected: it says so and shows no card. Signed out of Orca: a connector the bot has, or webhook, shows a Sign in line instead.'
     ]
   },
   {
@@ -202,7 +214,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['bot', 'work', 'list'],
     hidden: true,
-    summary: 'List the work a bot started: each worker, its state, PR and CI, age and source',
+    summary: 'List the work a bot started: each worker, its state, PR link, age and source',
     usage: 'orca bot work list [--bot <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'bot'],
     notes: ['Run from a bot’s chat it lists that bot’s work.']
@@ -233,6 +245,8 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
       'every-day',
       'focus'
     ],
+    // Global --focus is a boolean; here it takes text, so `--focus "a b"` and `--focus ""` work.
+    valueFlags: ['focus'],
     notes: [
       'Run from a bot’s chat it changes that bot; the chat shows what changed.',
       '--focus "" clears it, so the bot looks for anything waiting on its owner.'

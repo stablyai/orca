@@ -30,21 +30,6 @@ export function actsForOwner(askers: readonly BotRequestAsker[]): boolean {
   )
 }
 
-/** Whether two records act for the same people: both the owner, or both one same teammate. */
-export function sameActsFor(a: readonly BotRequestAsker[], b: readonly BotRequestAsker[]): boolean {
-  if (actsForOwner(a) || actsForOwner(b)) {
-    return actsForOwner(a) && actsForOwner(b)
-  }
-  const people = (askers: readonly BotRequestAsker[]) =>
-    new Set(
-      distinctAskers(askers).flatMap((asker) =>
-        asker.kind === 'person' ? [`${asker.source}:${asker.userId}`] : []
-      )
-    )
-  const [mine, theirs] = [people(a), people(b)]
-  return mine.size === 1 && theirs.size === 1 && [...mine][0] === [...theirs][0]
-}
-
 /** Whom a chat acts for as the cloud keeps it on its thread: its owner, or one teammate; several
  *  people record nothing, which the cloud reads as the owner only. */
 export function threadActsFor(

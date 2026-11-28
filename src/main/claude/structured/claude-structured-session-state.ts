@@ -7,12 +7,14 @@ import type {
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalAnsweredTurnIdentity } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
 } from '../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
+import type { ClaudeLiveFullAccess } from './permissions/claude-structured-inbound-control'
 import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
@@ -49,6 +51,8 @@ export type ClaudeLateDispatchOutcome =
   | {
       clientMessageId: string
       providerIdentity: AgentJournalItemIdentity
+      /** The running turn it joined, which another send opened. */
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
     }
   /** `unrun`: the CLI reported it removed the send without running it. */
   | ({ clientMessageId: string; state: 'rejected'; unrun?: true } & AgentJournalDispatchRejection)
@@ -159,6 +163,12 @@ export type ClaudeSession = {
   appliedInputOptions: Map<string, string>
   /** What Orca put on this process's command line, and the mode it opened in; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
+  /** The chat was saved in Plan when this process was acquired. */
+  savedPlan?: boolean
+  /** A kept agent's mode for its next message: picked since it launched, or never written yet. */
+  keptModeOwed?: string
+  /** The number of the chat's latest live pick (`claude-permission-picks`); none before one. */
+  permissionPick?: number
   firstRootInit?: { permissionMode: string | null }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
@@ -182,6 +192,8 @@ export type ClaudeSession = {
   autoUnsettled?: ClaudeAutoUnsettled
   /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
   orderedPermissionMode?: (() => string | null | undefined) | null
+  /** This process's auto-approval, told each live pick. */
+  liveFullAccess?: ClaudeLiveFullAccess
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
   /** Rechecks this child's CLI support; absent where the launch had no flag support to ask. */

@@ -27,6 +27,15 @@ import {
   setTerminalWebglAddonLoadHandlers
 } from './terminal-webgl-addon-loader'
 import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
+import {
+  handleTerminalWebglAtlasPage,
+  noteTerminalWebglAtlasChange,
+  trackTerminalWebglAtlasPane,
+  untrackTerminalWebglAtlasPane
+} from './terminal-webgl-atlas-memory-rebuild'
+import { requestAtlasChangeIntegrityCheck } from './terminal-webgl-atlas-change-hints'
+import { verifyPaneWebglAtlasIntegrity } from './terminal-webgl-atlas-integrity'
+import { detachHiddenDomRenderer } from './terminal-hidden-dom-renderer'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -118,14 +127,23 @@ export function disposeWebgl(
 ): void {
   cancelPendingWebglRefresh(pane)
   panesAwaitingWebglAddon.delete(pane)
-  if (!pane.webglAddon) {
+  untrackTerminalWebglAtlasPane(pane)
+  const hadWebgl = Boolean(pane.webglAddon)
+  if (pane.webglAddon) {
+    releaseXtermWebglContext(pane.webglAddon)
+    try {
+      pane.webglAddon.dispose()
+    } catch {}
+    pane.webglAddon = null
+  }
+  if (pane.webglAttachmentDeferred) {
+    // Disposing WebGL falls xterm back to DomRenderer (793 CSS rules per hidden pane); detach while hidden.
+    detachHiddenDomRenderer(pane.terminal)
     return
   }
-  releaseXtermWebglContext(pane.webglAddon)
-  try {
-    pane.webglAddon.dispose()
-  } catch {}
-  pane.webglAddon = null
+  if (!hadWebgl) {
+    return
+  }
   if (options?.refreshDimensions) {
     // Refit after teardown because DOM/WebGL cell metrics differ; otherwise Linux scrollbars desync and reflow jitters.
     pane.pendingWebglRefreshRafId = requestAnimationFrame(() => {
@@ -276,8 +294,14 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
     })
+    addon.onAddTextureAtlasCanvas((page) => handleTerminalWebglAtlasPage(page, pane))
+    addon.onChangeTextureAtlas(() => {
+      noteTerminalWebglAtlasChange(pane)
+      requestAtlasChangeIntegrityCheck(pane, addon)
+    })
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
+    trackTerminalWebglAtlasPane(pane)
     const canvas = getXtermWebglCanvas(addon)
     if (canvas) {
       // Why: panes of a hidden worktree surface keep their backing so switching worktrees never pays a reallocation.
@@ -295,9 +319,13 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     }
     pane.webglAttachFailedSinceRecovery = true
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
+    untrackTerminalWebglAtlasPane(pane)
     try {
       webglAddon?.dispose()
     } catch {}
     pane.webglAddon = null
+    return
   }
+  // Outside the try: a new renderer uploads the whole shared atlas, and a failed check must not latch DOM.
+  verifyPaneWebglAtlasIntegrity(pane, 'attach')
 }

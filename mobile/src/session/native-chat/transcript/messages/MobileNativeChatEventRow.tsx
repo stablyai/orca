@@ -2,15 +2,9 @@ import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight, X } from 'lucide-react-native'
 import { AGENT_WORKING_COLOR, WorkingRing } from '../../../../agents/presentation/AgentStateDot'
-import {
-  colors,
-  getMobileColorScheme,
-  radii,
-  spacing,
-  typography
-} from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
 import { useMobileNativeChatMessageTimeLabel } from './MobileNativeChatMessageTime'
 import { scaledType } from './mobile-native-chat-message-styles'
@@ -19,6 +13,11 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 const ROW_SIZE = 13
 const ROW_LEADING = 7
 const ICON = 14
+
+/** The row words' type, for a part drawn beside them such as an action that reads as words. */
+export function mobileNativeChatEventRowType(fontScale: number) {
+  return scaledType(ROW_SIZE, fontScale, ROW_LEADING)
+}
 
 export type MobileNativeChatEventBadge = 'running' | 'failed'
 
@@ -30,7 +29,8 @@ function MobileNativeChatEventIcon({
   children: ReactNode
   badge?: MobileNativeChatEventBadge | null
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   return (
     <View style={styles.mark}>
       {children}
@@ -65,14 +65,15 @@ export function MobileNativeChatEventRow({
   disclosureKey,
   fontScale,
   onLongPress,
-  wordsLines = 2,
+  wordsLines = 1,
+  subtitle,
   testID
 }: {
   icon: ReactNode
   /** Its state on the mark; VoiceOver hears it with the row's words. */
   badge?: MobileNativeChatEventBadge | null
-  /** The row's words: the name in primary text, the rest muted. */
-  children: ReactNode
+  /** The row's words: the name in primary text, the rest muted; given whether its details are open. */
+  children: ReactNode | ((open: boolean) => ReactNode)
   /** The words as plain text: the row button's name, with the time. */
   label: string
   /** Right after the words, such as an open button. */
@@ -85,9 +86,12 @@ export function MobileNativeChatEventRow({
   onLongPress?: () => void
   /** Lines the words may take; 0 lets a summary whose facts must all show wrap freely. */
   wordsLines?: number
+  /** A second line under the words, always shown; the action then sits at the row's end. */
+  subtitle?: ReactNode
   testID?: string
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const state =
     badge === 'running'
@@ -98,7 +102,7 @@ export function MobileNativeChatEventRow({
   const [open, setOpen] = useMobileNativeChatDisclosure(disclosureKey, false)
   const time = useMobileNativeChatMessageTimeLabel(timestamp)
   const toggles = details !== undefined && details !== null && details !== false
-  const type = scaledType(ROW_SIZE, fontScale, ROW_LEADING)
+  const type = mobileNativeChatEventRowType(fontScale)
   const line = { height: type.lineHeight }
   return (
     <View testID={testID}>
@@ -122,17 +126,26 @@ export function MobileNativeChatEventRow({
         >
           <MobileNativeChatEventIcon badge={badge}>{icon}</MobileNativeChatEventIcon>
         </View>
-        <Text
-          pointerEvents={toggles ? 'none' : 'auto'}
-          numberOfLines={wordsLines}
-          style={[styles.words, type]}
-        >
-          {children}
-        </Text>
-        {action ? <View style={[styles.action, line]}>{action}</View> : null}
-        <View pointerEvents="none" style={styles.spacer} />
+        {/* box-none keeps a subtitle's own buttons tappable over the row's button. */}
+        <View pointerEvents="box-none" style={subtitle ? styles.stack : styles.wordsBox}>
+          <Text
+            pointerEvents={toggles ? 'none' : 'auto'}
+            numberOfLines={wordsLines}
+            style={[styles.words, type]}
+          >
+            {typeof children === 'function' ? children(toggles && open) : children}
+          </Text>
+          {subtitle}
+        </View>
+        {action ? (
+          <View style={subtitle ? styles.trailing : [styles.action, line]}>{action}</View>
+        ) : null}
+        {subtitle ? null : <View pointerEvents="none" style={styles.spacer} />}
         {toggles ? (
-          <View pointerEvents="none" style={[styles.icon, line, open && styles.chevronOpen]}>
+          <View
+            pointerEvents="none"
+            style={[styles.icon, subtitle ? styles.trailing : line, open && styles.chevronOpen]}
+          >
             <ChevronRight size={ICON} color={colors.textMuted} strokeWidth={2} />
           </View>
         ) : null}
@@ -152,11 +165,11 @@ export function MobileNativeChatEventRow({
 
 /** The name in a row's words. */
 export function MobileNativeChatEventName({ children }: { children: ReactNode }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return <Text style={styles.name}>{children}</Text>
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     position: 'relative',
     flexDirection: 'row',
@@ -174,7 +187,11 @@ const styles = themedStyleSheet(() => ({
   pressed: { backgroundColor: colors.translucentFill },
   icon: { flexShrink: 0, justifyContent: 'center' },
   chevronOpen: { transform: [{ rotate: '90deg' }] },
-  words: { flexShrink: 1, minWidth: 0, color: colors.textMuted },
+  wordsBox: { flexShrink: 1, minWidth: 0 },
+  stack: { flex: 1, minWidth: 0 },
+  words: { color: colors.textMuted },
+  // Centred on the words and their subtitle, past the stack's minimum gap.
+  trailing: { flexShrink: 0, alignSelf: 'center', marginLeft: spacing.xxs },
   name: { color: colors.textPrimary },
   action: { flexShrink: 0, justifyContent: 'center' },
   spacer: { flex: 1, minWidth: spacing.sm },
@@ -189,8 +206,8 @@ const styles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm,
     gap: spacing.xs,
     borderRadius: radii.tile,
-    // The quietest fill each scheme has, as the desktop's comment fill.
-    backgroundColor: getMobileColorScheme() === 'dark' ? colors.bgPanel : colors.bgRaised
+    // The quietest fill that still reads on the chat canvas, as the desktop's comment fill.
+    backgroundColor: colors.bgRaised
   },
   mark: { width: ICON, height: ICON, alignItems: 'center', justifyContent: 'center' },
   badge: {
@@ -202,7 +219,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.chatCanvas
   },
   spinner: { width: 7, height: 7, borderRadius: radii.pill, borderWidth: 1.5 },
   failed: {

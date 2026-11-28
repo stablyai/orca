@@ -22,10 +22,10 @@ import {
 import { createSessionOptionAppliers } from './native-chat-session-option-apply'
 import {
   buildNativeChatSessionOptionSnapshot,
-  resolveEffectiveNativeChatModelId,
   withTrackedNativeChatModel,
   type NativeChatSessionOptionMode
 } from './native-chat-session-option-snapshot'
+import { adoptNativeChatValuesWithoutModel } from './native-chat-session-option-values-without-model'
 import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-dispatch'
 
 type PersistSelection = (args: {
@@ -118,19 +118,11 @@ export function createNativeChatPtySessionOptions(
     clearNativeChatSessionModel(record)
   }
 
-  /** Resolve at commit so discovery replaces untracked seed guesses with the model the CLI actually used. */
   const setTrackedValue = (
     optionId: string,
     value: SessionOptionValue,
     source: 'applied' | 'dispatched'
-  ): string | null =>
-    setTrackedSessionOption(
-      record,
-      optionId,
-      value,
-      source,
-      resolveEffectiveNativeChatModelId(catalog, activeModels(), record)
-    )
+  ): string | null => setTrackedSessionOption(record, optionId, value, source)
 
   /** Persist only listed, selected or discovered ids; authoritative omissions prove retirement. Recheck after awaits to avoid fatal -m flags. */
   const modelIsAdoptableAsLaunchDefault = (modelId: string): boolean => {
@@ -196,7 +188,8 @@ export function createNativeChatPtySessionOptions(
       const targetModel = typeof values.model === 'string' ? values.model : record.model?.value
       const reported = { ...carriedValues(record, values, forNewModel), ...values }
       const offered = offeredValues(activeModels(), targetModel, reported)
-      if (applyNativeChatReportedSessionOptions(record, offered)) {
+      const changed = applyNativeChatReportedSessionOptions(record, offered)
+      if (adoptOfferedValuesWithoutModel(record, activeModels(), offered.model) || changed) {
         publish()
       }
     },
@@ -229,6 +222,20 @@ function carriedValues(
 
 function isUserChoice(source: SessionOptionValueSource | undefined): boolean {
   return source === 'applied' || source === 'dispatched'
+}
+
+function adoptOfferedValuesWithoutModel(
+  record: NativeChatSessionOptionRecord,
+  models: readonly CatalogModel[],
+  modelId: SessionOptionValue | undefined
+): boolean {
+  const slot = record.valuesWithoutModel
+  if (!slot || typeof modelId !== 'string' || !modelId) {
+    return false
+  }
+  const slotValues = Object.fromEntries(Object.entries(slot).map(([id, { value }]) => [id, value]))
+  const offeredIds = Object.keys(offeredValues(models, modelId, slotValues))
+  return adoptNativeChatValuesWithoutModel(record, modelId, offeredIds)
 }
 
 /** Keeps the reported values the receiving model offers; a hook can name a model the user already

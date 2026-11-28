@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
+import { recomputeOn } from '../../../hooks/recompute-on'
 import { StyleSheet, View } from 'react-native'
 import {
   buildNativeChatVisualDocument,
@@ -6,7 +7,7 @@ import {
   newNativeChatVisualChannel
 } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-shell'
 import type { MobileNativeChatVisualHostMode } from './mobile-native-chat-visual-host-document'
-import { MOBILE_NATIVE_CHAT_VISUAL_THEME } from './mobile-native-chat-visual-theme'
+import { mobileNativeChatVisualTheme } from './mobile-native-chat-visual-theme'
 import {
   MOBILE_NATIVE_CHAT_VISUAL_FRAME_PATH,
   mobileNativeChatVisualDocumentMessage
@@ -47,12 +48,12 @@ function ScriptedVisualFrame({ html, title }: { html: string; title: string }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const loadedRef = useRef(false)
   // One channel per visual; the document is built at handoff so it paints in the current theme.
-  const channel = useMemo(() => newNativeChatVisualChannel(), [html])
+  const channel = useMemo(() => recomputeOn([html], () => newNativeChatVisualChannel()), [html])
 
   useEffect(() => {
     if (loadedRef.current) {
       frameRef.current?.contentWindow?.postMessage(
-        nativeChatVisualThemeMessage(MOBILE_NATIVE_CHAT_VISUAL_THEME, channel),
+        nativeChatVisualThemeMessage(mobileNativeChatVisualTheme(colorScheme), channel),
         '*'
       )
     }
@@ -73,7 +74,7 @@ function ScriptedVisualFrame({ html, title }: { html: string; title: string }) {
         const document = buildNativeChatVisualDocument({
           html,
           channel,
-          theme: MOBILE_NATIVE_CHAT_VISUAL_THEME
+          theme: mobileNativeChatVisualTheme(colorScheme)
         })
         frameRef.current?.contentWindow?.postMessage(
           mobileNativeChatVisualDocumentMessage(document, title),
@@ -92,7 +93,7 @@ function SealedVisualFrame({ html, title }: { html: string; title: string }) {
       buildNativeChatVisualDocument({
         html,
         channel: 'sealed',
-        theme: MOBILE_NATIVE_CHAT_VISUAL_THEME
+        theme: mobileNativeChatVisualTheme(colorScheme)
       }),
     // Sealed frames run no script, so a scheme rebuild loses no state.
     [html, colorScheme]

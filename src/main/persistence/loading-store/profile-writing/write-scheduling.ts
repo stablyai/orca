@@ -21,6 +21,22 @@ export type StateWriteOptions = {
     workspace: { worktreeId: string; sshHostId: ExecutionHostId | null }
     externalConversations: unknown
   }
+  /** Set only when the write leaves every workspace's unread and archived flags unchanged. */
+  preservesUnreadState?: boolean
+}
+
+type UnreadFlags = { isUnread?: boolean; isArchived?: boolean }
+
+/** Marks a one-record write that kept its unread and archived flags; a missing record had neither. */
+export function withUnreadStateHint(
+  options: StateWriteOptions | undefined,
+  previous: UnreadFlags | undefined,
+  next: UnreadFlags
+): StateWriteOptions | undefined {
+  return Boolean(previous?.isUnread) === Boolean(next.isUnread) &&
+    Boolean(previous?.isArchived) === Boolean(next.isArchived)
+    ? { ...options, preservesUnreadState: true }
+    : options
 }
 
 export function workspaceLinkWriteOptions(

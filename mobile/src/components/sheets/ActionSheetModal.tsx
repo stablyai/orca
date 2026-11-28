@@ -1,9 +1,9 @@
 import { useRef, type ReactNode } from 'react'
-import { ActivityIndicator, View, Text } from 'react-native'
+import { ActivityIndicator, Pressable, View, Text } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from '../list/ListGroup'
 
@@ -19,6 +19,10 @@ export type ActionSheetAction = {
   status?: string
   /** Marks the choice that is current, as a trailing check. */
   checked?: boolean
+  /** Opens another screen or sheet: a trailing chevron. */
+  navigates?: boolean
+  /** Actions sharing a group sit in one rounded group, the groups in order of first use. */
+  group?: string
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -32,7 +36,13 @@ type Props = {
   /** What a screen reader hears for a title that is not plain text. */
   titleAccessibilityLabel?: string
   message?: string
+  /** Names the subject with its icon: drawn in a tile, with the title large and the message under it. */
+  headerIcon?: ReactNode
+  /** Puts destructive actions in their own group below the rest. */
+  groupDestructive?: boolean
   actions: ActionSheetAction[]
+  /** A centred Cancel row in its own group, for a question that must offer a way out. */
+  cancelLabel?: string
   onClose: () => void
   /** Runs once the sheet has slid away, after any closeBeforePress action. */
   onAfterClose?: () => void
@@ -52,9 +62,12 @@ type ContentProps = {
   title?: ReactNode
   titleAccessibilityLabel?: string
   message?: string
+  headerIcon?: ReactNode
+  groupDestructive?: boolean
   /** Drawn between the header and the actions. */
   children?: ReactNode
   actions: ActionSheetAction[]
+  cancelLabel?: string
   onClose?: () => void
 }
 
@@ -62,68 +75,134 @@ export function ActionSheetContent({
   title,
   titleAccessibilityLabel,
   message,
+  headerIcon,
+  groupDestructive = false,
   children,
   actions,
+  cancelLabel,
   onClose
 }: ContentProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const groups = (
+    actions.some((action) => action.group !== undefined)
+      ? groupActions(actions)
+      : groupDestructive
+        ? [
+            { key: 'actions', actions: actions.filter((action) => !action.destructive) },
+            { key: 'destructive', actions: actions.filter((action) => action.destructive) }
+          ]
+        : [{ key: 'actions', actions }]
+  ).filter((group) => group.actions.length > 0)
   return (
     <>
-      {(title || message) && (
-        <View style={styles.header}>
-          {title ? (
-            <Text
-              style={styles.title}
-              numberOfLines={1}
-              accessibilityLabel={titleAccessibilityLabel}
-            >
-              {title}
-            </Text>
-          ) : null}
-          {message ? <Text style={styles.message}>{message}</Text> : null}
+      {headerIcon ? (
+        <View style={[styles.header, styles.subjectHeader]}>
+          <View style={styles.subjectTile}>{headerIcon}</View>
+          <View style={styles.subjectText}>
+            {title ? (
+              <Text
+                style={styles.subjectTitle}
+                numberOfLines={1}
+                accessibilityRole="header"
+                accessibilityLabel={titleAccessibilityLabel}
+              >
+                {title}
+              </Text>
+            ) : null}
+            {message ? (
+              <Text style={styles.subjectMessage} numberOfLines={1}>
+                {message}
+              </Text>
+            ) : null}
+          </View>
         </View>
+      ) : (
+        (title || message) && (
+          <View style={styles.header}>
+            {title ? (
+              <Text
+                style={styles.title}
+                numberOfLines={1}
+                accessibilityLabel={titleAccessibilityLabel}
+              >
+                {title}
+              </Text>
+            ) : null}
+            {message ? <Text style={styles.message}>{message}</Text> : null}
+          </View>
+        )
       )}
 
       {children}
 
-      <ListGroup separatorInset={LIST_LEADING_INSET}>
-        {actions.map((action) => {
-          const Icon = iconForAction(action.label, action.destructive, action.icon)
-          return (
-            <ListRow
-              key={action.id ?? action.label}
-              title={action.label}
-              subtitle={action.hint}
-              value={action.status}
-              leading={
-                action.renderIcon?.() ?? (
-                  <Icon
-                    size={16}
-                    color={action.destructive ? colors.statusRed : colors.textSecondary}
-                  />
-                )
-              }
-              accessory={
-                action.loading ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : undefined
-              }
-              selected={action.checked ? true : undefined}
-              destructive={action.destructive}
-              disabled={action.disabled}
-              busy={action.loading}
-              onPress={() => {
-                action.onPress()
-                if (!action.skipAutoClose && onClose) {
-                  onClose()
+      {groups.map((group, index) => (
+        <ListGroup
+          key={group.key}
+          separatorInset={LIST_LEADING_INSET}
+          style={index > 0 ? styles.laterGroup : undefined}
+        >
+          {group.actions.map((action) => {
+            const Icon = iconForAction(action.label, action.destructive, action.icon)
+            return (
+              <ListRow
+                key={action.id ?? action.label}
+                title={action.label}
+                subtitle={action.hint}
+                value={action.status}
+                leading={
+                  action.renderIcon?.() ?? (
+                    <Icon
+                      size={16}
+                      color={action.destructive ? colors.statusRed : colors.textSecondary}
+                    />
+                  )
                 }
-              }}
-            />
-          )
-        })}
-      </ListGroup>
+                accessory={
+                  action.loading ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  ) : undefined
+                }
+                selected={action.checked ? true : undefined}
+                navigates={action.navigates}
+                destructive={action.destructive}
+                disabled={action.disabled}
+                busy={action.loading}
+                onPress={() => {
+                  action.onPress()
+                  if (!action.skipAutoClose && onClose) {
+                    onClose()
+                  }
+                }}
+              />
+            )
+          })}
+        </ListGroup>
+      ))}
+      {cancelLabel && onClose ? (
+        <ListGroup style={groups.length > 0 ? styles.laterGroup : undefined}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onClose}
+            style={({ pressed }) => [styles.cancelRow, pressed && styles.cancelPressed]}
+          >
+            <Text style={styles.cancelLabel}>{cancelLabel}</Text>
+          </Pressable>
+        </ListGroup>
+      ) : null}
     </>
   )
+}
+
+function groupActions(
+  actions: readonly ActionSheetAction[]
+): { key: string; actions: ActionSheetAction[] }[] {
+  const groups = new Map<string, ActionSheetAction[]>()
+  for (const action of actions) {
+    const key = action.group ?? ''
+    groups.set(key, [...(groups.get(key) ?? []), action])
+  }
+  return [...groups].map(([key, grouped]) => ({ key: key || 'actions', actions: grouped }))
 }
 
 export function ActionSheetModal({
@@ -131,7 +210,10 @@ export function ActionSheetModal({
   title,
   titleAccessibilityLabel,
   message,
+  headerIcon,
+  groupDestructive,
   actions,
+  cancelLabel,
   onClose,
   onAfterClose
 }: Props) {
@@ -164,14 +246,17 @@ export function ActionSheetModal({
         title={title}
         titleAccessibilityLabel={titleAccessibilityLabel}
         message={message}
+        headerIcon={headerIcon}
+        groupDestructive={groupDestructive}
         actions={sequencedActions}
+        cancelLabel={cancelLabel}
         onClose={onClose}
       />
     </BottomDrawer>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   header: {
     paddingHorizontal: LIST_ROW_PADDING,
     paddingBottom: spacing.sm
@@ -185,5 +270,27 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     color: colors.textMuted,
     marginTop: 2
-  }
+  },
+  subjectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingBottom: spacing.md
+  },
+  subjectTile: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.tile,
+    backgroundColor: colors.translucentFill,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  subjectText: { flex: 1, minWidth: 0, gap: 2 },
+  subjectTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  subjectMessage: { fontSize: 13, color: colors.textSecondary },
+  laterGroup: { marginTop: spacing.md },
+  // A ListRow's 48 pt and 15 pt title, centred: the row answers the sheet rather than naming a thing.
+  cancelRow: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  cancelPressed: { backgroundColor: colors.translucentFill },
+  cancelLabel: { fontSize: 15, color: colors.textPrimary }
 }))

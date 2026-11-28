@@ -57,7 +57,8 @@ export type ConversationEvent =
   | (ConversationPane & { kind: 'turn-started'; at: number; deliveryId?: string })
   | (ConversationPane & {
       kind: 'turn-ended'
-      /** The ended turn's turn-started `at`; null when its start predates this watch. */
+      /** The ended turn's turn-started `at`; null when its start predates this watch. The cloud ends
+       *  its open turn when that is no newer, so a restart's end can name this start as a fence. */
       turnId: number | null
       /** Host verdict; null means none was recorded. */
       stopReason: AgentTurnOutcome | null
@@ -184,7 +185,10 @@ export class ConversationEvents {
           console.warn('[connector] could not keep an adopted turn on its link', error)
         }
       },
-      turnEnded: (paneKey) => this.shown.forgetPane(paneKey)
+      turnEnded: (paneKey) => {
+        this.shown.forgetPane(paneKey)
+        this.activity.forget(paneKey)
+      }
     })
   }
 
@@ -204,6 +208,8 @@ export class ConversationEvents {
     this.listeners.add(listener)
     // Subscribe before reading the snapshot to avoid losing intervening changes.
     const snapshot = this.snapshot()
+    // Chats closed or unlinked while nothing watched leave no turn dates behind.
+    this.chats.dates.retain(new Set(snapshot.conversations.map(({ paneKey }) => paneKey)))
     this.answered.saw(snapshot)
     listener(snapshot)
     this.chats.workers.watched(snapshot.conversations)
@@ -228,6 +234,8 @@ export class ConversationEvents {
   /** A link dropped because its chat is gone. */
   unlinked({ workspace, link }: LinkedConversation): void {
     this.shown.forgetConversation(link)
+    this.chats.dates.forget(link.paneKey)
+    this.activity.forget(link.paneKey)
     this.emit({ kind: 'unlinked', ...conversationPane(link, workspace.worktreeId) })
   }
 
@@ -286,7 +294,7 @@ export class ConversationEvents {
         const entry: ConversationSnapshot['conversations'][number] = {
           ...conversationPane(link, workspace.worktreeId),
           agent: link.agent,
-          working: hears && conversationWorking(row),
+          working: hears && this.chats.dates.leadWorking(link.paneKey, row),
           prompt,
           turnId: hears ? this.chats.adopt(link.paneKey) : null,
           activeAt: Math.max(link.createdAt, row?.receivedAt ?? 0),
@@ -300,14 +308,7 @@ export class ConversationEvents {
           }
         }
         if (prompt) {
-          setPromptPublication(
-            entry,
-            this.shown.offer(
-              link,
-              prompt.promptId,
-              live ? () => this.deps.promptCursor?.(link, prompt.promptId) : undefined
-            )
-          )
+          this.publishPrompt(entry, link, prompt.promptId, live !== null)
         }
         return entry
       })
@@ -334,6 +335,16 @@ export class ConversationEvents {
     return true
   }
 
+  private publishPrompt(
+    target: Parameters<typeof setPromptPublication>[0],
+    link: ExternalConversationLink,
+    promptId: string,
+    withCursor: boolean
+  ): void {
+    const cursor = withCursor ? () => this.deps.promptCursor?.(link, promptId) : undefined
+    setPromptPublication(target, this.shown.offer(link, promptId, cursor))
+  }
+
   private emit(event: ConversationEvent): void {
     this.answered.saw(event)
     if (event.kind === 'prompt') {
@@ -342,13 +353,7 @@ export class ConversationEvents {
       } else {
         const linked = this.linkedFor(event.paneKey)
         if (linked) {
-          const promptId = event.prompt.promptId
-          setPromptPublication(
-            event,
-            this.shown.offer(linked.link, promptId, () =>
-              this.deps.promptCursor?.(linked.link, promptId)
-            )
-          )
+          this.publishPrompt(event, linked.link, event.prompt.promptId, true)
         }
       }
     }

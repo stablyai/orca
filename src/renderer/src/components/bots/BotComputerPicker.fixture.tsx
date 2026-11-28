@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -40,6 +40,14 @@ function choice(hosts: BotCreateHost[]): BotCreateHostChoice {
     otherAccountOf: (hostId: ExecutionHostId) =>
       hostId === 'runtime:g16' ? 'team@acme.dev' : null,
     setListing: () => {},
+    wslSetup: {
+      state: { phase: 'idle' },
+      start: () => {},
+      retry: () => {},
+      cancel: () => {},
+      finish: () => {}
+    },
+    busy: false,
     reset: () => {}
   }
 }

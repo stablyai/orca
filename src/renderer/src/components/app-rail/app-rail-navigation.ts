@@ -3,6 +3,7 @@ import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
 import { leaveSettingsThen } from '@/components/settings/page/settings-leave-guard'
 import { isLiveEntry, isViewEntry } from '@/store/slices/ui/workspace-navigation-history'
+import { selectRailPageHidesWorkspaceList } from './app-rail-layout'
 
 type PageCloseActions = Pick<
   UISlice,
@@ -14,6 +15,7 @@ type PageCloseActions = Pick<
   | 'closeActivityPage'
   | 'closeSpacePage'
   | 'closeMobilePage'
+  | 'closePluginsPage'
 >
 
 /** The store API the rail navigates through (the real `useAppStore`, or a fake in tests). */
@@ -30,7 +32,8 @@ const CLOSE_PAGE: Record<Exclude<UISlice['activeView'], 'terminal'>, keyof PageC
   settings: 'closeSettingsPage',
   activity: 'closeActivityPage',
   space: 'closeSpacePage',
-  mobile: 'closeMobilePage'
+  mobile: 'closeMobilePage',
+  plugins: 'closePluginsPage'
 }
 
 /** Nearest earlier entry that is a live workspace (folder workspaces included), never a page view. */
@@ -91,6 +94,26 @@ export function activateWorkspacesRailItem(store: RailNavigationStore): void {
   if (!getState().sidebarOpen) {
     getState().setSidebarOpen(true)
   }
+}
+
+/**
+ * On a rail page (rail on), commands about the workspace list (the sidebar toggle, Cmd+B, the Agent Dashboard and the
+ * Workspace Board) go to Workspaces with the list showing, then run `action`. Returns false anywhere else, so the
+ * caller does what it always did. The store writes land before `action`, so a board or drawer it opens commits with
+ * the list already showing and never sees the collapsed list close it.
+ */
+export function showWorkspaceListThen(store: RailNavigationStore, action?: () => void): boolean {
+  if (!selectRailPageHidesWorkspaceList(store.getState())) {
+    return false
+  }
+  activateWorkspacesRailItem(store)
+  action?.()
+  return true
+}
+
+/** A rail page is hiding the (still mounted) workspace list: the list's own shortcuts must not act on hidden rows. */
+export function listHiddenByRailPage(): boolean {
+  return selectRailPageHidesWorkspaceList(useAppStore.getState())
 }
 
 /** Every rail exit from Settings goes through Settings' discard check; Cancel leaves everything as it was. */

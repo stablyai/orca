@@ -1,17 +1,20 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import { piRpcUsageSchema } from './rpc-protocol'
 import type { PiRpcModel } from './options/rpc-model-schema'
 
-const statsSchema = z.object({
-  contextUsage: z
-    .object({
-      tokens: z.number().nonnegative().nullable().optional(),
-      contextWindow: z.number().positive(),
-      percent: z.number().nullable().optional()
-    })
-    .optional()
-})
+const statsSchema = lazyZodSchema(() =>
+  z.object({
+    contextUsage: z
+      .object({
+        tokens: z.number().nonnegative().nullable().optional(),
+        contextWindow: z.number().positive(),
+        percent: z.number().nullable().optional()
+      })
+      .optional()
+  })
+)
 
 export class PiRpcContextUsage {
   private model?: PiRpcModel

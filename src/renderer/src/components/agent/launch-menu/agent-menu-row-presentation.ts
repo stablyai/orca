@@ -34,6 +34,11 @@ export function chatUnavailableLabel(
         'auto.components.tab.bar.QuickLaunchButton.chatNotOnWindows',
         'No chat on Windows yet'
       )
+    case 'too-old':
+      return t(
+        'auto.components.tab.bar.QuickLaunchButton.chatUpdateRequired',
+        'Update CLI for chat'
+      )
   }
 }
 

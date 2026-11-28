@@ -4,6 +4,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { cn } from '@/lib/class-names'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import type { WorkspaceCleanupReport } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { Button } from '../../ui/button'
@@ -139,7 +140,7 @@ export function WorkspaceCleanupAutomaticSection({
       newRun ? formatLastRun(newRun, readAt, t) : null,
       running && !announcement.running ? runningText : null
     ].filter((part): part is string => part !== null)
-    const text = parts.length > 0 ? parts.join(' ') : null
+    const text = parts.length > 0 ? joinSentences(parts) : null
     setAnnouncement({
       running,
       runId,
@@ -172,7 +173,8 @@ export function WorkspaceCleanupAutomaticSection({
 
   const title = (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="whitespace-nowrap">
+      {/* Wraps between words: at the 600px window a localized title is wider than the pane. */}
+      <span className="min-w-0 [overflow-wrap:anywhere]">
         {t('components.settings.workspaceCleanup.automatic.title', 'Automatic cleanup')}
       </span>
       <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 text-[11.5px] font-medium leading-5 text-muted-foreground">
@@ -190,9 +192,19 @@ export function WorkspaceCleanupAutomaticSection({
     </span>
   )
   const description =
-    details.length > 0 ? <span className="tabular-nums">{details.join(' ')}</span> : null
+    // A run error can carry a long unbroken token; break it rather than overflow the pane.
+    details.length > 0 ? (
+      <span className="tabular-nums [overflow-wrap:anywhere]">{joinSentences(details)}</span>
+    ) : null
   const action = anyRuleOn ? (
-    <Button variant="outline" size="sm" disabled={running} onClick={onCleanUpNow}>
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={running}
+      onClick={onCleanUpNow}
+      // A localized label can be wider than the narrowest pane; wrap it inside the button instead.
+      className="h-auto min-h-8 max-w-full whitespace-normal text-left"
+    >
       {running ? (
         <>
           <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />

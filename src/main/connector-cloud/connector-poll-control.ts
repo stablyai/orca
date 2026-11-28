@@ -20,6 +20,24 @@ export function connectorRehelloSpreadMs(random: () => number): number {
   return random() * CONNECTOR_REHELLO_SPREAD_MS
 }
 
+// How often a wait on a client's state checks it again.
+const UNTIL_CHECK_MS = 250
+
+/** Resolves once `done` holds after the hello in flight (`saying`) lands, or once `signal` aborts. */
+export async function waitUntil(
+  done: () => boolean,
+  saying: () => Promise<unknown>,
+  signal: AbortSignal
+): Promise<void> {
+  while (!signal.aborted) {
+    await saying().catch(() => null)
+    if (done()) {
+      return
+    }
+    await delayUnlessAborted(UNTIL_CHECK_MS, signal)
+  }
+}
+
 /** A 409's re-hello spread, which a change to say (`cut`) ends early so it reaches the cloud at once. */
 export class ConnectorRehelloSpread {
   private cutting: AbortController | null = null

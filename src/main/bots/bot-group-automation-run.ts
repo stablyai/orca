@@ -5,6 +5,7 @@ import type { Bot } from '../../shared/bot-types'
 import type { BotGroupMessage } from '../../shared/bots/bot-group'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { botGroupMessageSummary } from './bot-group-attachments'
+import { botGroupRoomTitle } from './bot-group-member-chat-names'
 import type { BotRunFields } from './bot-chat-session'
 import { deliverTurn } from './bot-group-delivery'
 import type { BotGroupRuntime } from './bot-group-runtime'
@@ -25,10 +26,7 @@ export function botGroupRoomChat(
   if (found?.member.botId !== bot.id) {
     return null
   }
-  const thread = found.threadId
-    ? found.group.threads?.find((entry) => entry.id === found.threadId)
-    : undefined
-  return { title: thread?.title ?? found.group.name, sessionId }
+  return { title: botGroupRoomTitle(found.group, found.threadId), sessionId }
 }
 
 /** Posts the run's prompt in the room `sessionId` belongs to and starts its member's turn on it;
@@ -59,7 +57,8 @@ export async function sendBotGroupAutomationRun(
         room,
         threadId,
         groups.runtime.bots.list(),
-        [bot.id]
+        [bot.id],
+        () => run?.messageId
       )
       const stored = groups.store.append(
         {
@@ -84,7 +83,7 @@ export async function sendBotGroupAutomationRun(
       return stored
     }
   )
-  groups.changed()
+  groups.changed(message.groupId)
   const [turn] = message.turns
   const fingerprint = turn ? await deliverTurn(groups, message, turn, run) : undefined
   if (!turn || fingerprint === undefined) {

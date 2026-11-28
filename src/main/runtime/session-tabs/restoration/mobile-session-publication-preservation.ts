@@ -12,7 +12,10 @@ import { getMobileSessionSnapshotTabIdentityKeys } from '../../session-lifecycle
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { isHeadlessBuiltPublication } from '../publication/mobile-session-snapshot-equality'
 import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
-import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import type {
+  ClientHostedBrowserRow,
+  ClientHostedBrowserRowsEvent
+} from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   protected abstract getListedBrowserTabsByPageId(
@@ -194,6 +197,11 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
   /** Serves a hydrating host renderer; the publisher counts this as a delivery, not a read. */
   listClientHostedBrowserRows(): ClientHostedBrowserRowsEvent[] {
     return this.clientHostedBrowserRows.deliverHydrationSnapshot()
+  }
+
+  /** The row this server's window shows for a client-placed page; phones name its desktop from it. */
+  describeClientHostedBrowserPage(browserPageId: string): ClientHostedBrowserRow | undefined {
+    return this.clientHostedBrowserRows.row(browserPageId)
   }
 
   protected notifyMobileSessionTabsRemoved(worktreeId: string): void {

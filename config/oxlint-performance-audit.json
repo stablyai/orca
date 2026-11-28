@@ -18,6 +18,10 @@
     {
       "name": "quadratic-buffer-concat",
       "specifier": "../config/oxlint-plugins/quadratic-buffer-concat.mjs"
+    },
+    {
+      "name": "zod-prefer-lazy-schema",
+      "specifier": "../config/oxlint-plugins/zod-prefer-lazy-schema.mjs"
     }
   ],
   "rules": {
@@ -27,6 +31,7 @@
     "app-store-performance/no-fresh-selector-result": "warn",
     "app-store-performance/no-nested-fresh-under-shallow": "warn",
     "quadratic-buffer-concat/no-loop-carried-concat": "warn",
+    "zod-prefer-lazy-schema/prefer-lazy-schema": "warn",
     "eslint/no-await-in-loop": "warn",
     "oxc/no-map-spread": "warn",
     "unicorn/prefer-set-has": "warn",

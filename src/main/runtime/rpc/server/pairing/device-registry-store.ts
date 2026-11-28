@@ -16,6 +16,8 @@ export class DeviceRegistryStore {
   protected registryUnreadable = false
   /** Parse failures prevent authoritative absence/revocation verdicts. */
   protected registryDoubtful = false
+  /** This launch's read lost rows, so its list misses devices that still exist. */
+  private registryLostRows = false
   private corruptFilePending = false
   protected pendingLastSeenFlush: NodeJS.Timeout | null = null
   private readonly writer: DeviceRegistryWriter
@@ -32,7 +34,13 @@ export class DeviceRegistryStore {
     this.load()
   }
 
-  /** Fires when a save or an adopted external edit adds, removes, relabels or flips usesLegacyE2EE on a listed phone; lastSeen-only changes stay silent. */
+  /** False when this launch's read failed or lost rows: the list is not the paired devices.
+   *  An old quarantined copy alone doesn't count; it stays until someone removes it. */
+  isReadable(): boolean {
+    return !this.registryUnreadable && !this.registryLostRows
+  }
+
+  /** Fires when a save or an adopted external edit changes a listed phone or runtime grant. */
   setOnPairedDevicesChanged(listener: (() => void) | null): void {
     this.onPairedDevicesChanged = listener
   }
@@ -64,7 +72,6 @@ export class DeviceRegistryStore {
       const adopted = this.writer.adoptExternalEdits(this.devices, options)
       if (adopted) {
         this.devices = adopted
-        // Another process removed or added a phone; open lists refetch as they do after a save.
         this.publishPairedDevicesChange(adopted)
       }
     }
@@ -74,6 +81,7 @@ export class DeviceRegistryStore {
     const read = this.writer.read()
     this.registryUnreadable = read.unreadable
     this.registryDoubtful = read.doubtful
+    this.registryLostRows = read.lostRows
     this.corruptFilePending = read.corruptFilePending
     this.devices = withoutEphemeralRows(read.devices)
     // Session-only browser keys died with the prior host; remove their registry rows.
@@ -141,6 +149,12 @@ export class DeviceRegistryStore {
 // Leaves out lastSeenAt: reconnect bookkeeping saves must not push a renderer refetch.
 function pairedDevicesKeyOf(devices: readonly DeviceEntry[]): string {
   return JSON.stringify(
-    devices.filter(isPairedMobileDevice).map((d) => [d.deviceId, d.name, usesLegacyE2EE(d)])
+    devices
+      .filter((device) => device.scope === 'runtime' || isPairedMobileDevice(device))
+      .map((device) =>
+        device.scope === 'runtime'
+          ? device.deviceId
+          : [device.deviceId, device.name, usesLegacyE2EE(device)]
+      )
   )
 }

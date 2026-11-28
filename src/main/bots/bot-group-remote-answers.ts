@@ -142,7 +142,7 @@ export function collectRemoteAnswers(
 }
 
 /** The bot's own answer, which carries the question's id; a notice carries none. */
-function isBotAnswer(row: MessageRow, requestId: string): boolean {
+export function isBotAnswer(row: Pick<MessageRow, 'payload'>, requestId: string): boolean {
   if (!row.payload) {
     return false
   }
@@ -194,7 +194,7 @@ export function remoteRoomMailArrived(groups: BotGroupRuntime, groupId: string):
       .prepare('SELECT id, thread_id FROM messages WHERE to_handle = ? AND read = 0')
       .all(botGroupRoomMailAddress(groupId))
     if (rows.length === 0) {
-      groups.changed()
+      groups.changed(groupId)
       return
     }
     if (!db.db.prepare('SELECT 1 FROM bot_groups WHERE id = ?').get(groupId)) {
@@ -231,7 +231,7 @@ export function remoteRoomMailArrived(groups: BotGroupRuntime, groupId: string):
   } catch (error) {
     console.warn('[bot-groups] could not read a remote member answer', error)
   }
-  groups.changed()
+  groups.changed(groupId)
 }
 
 /** At startup: settle room mail that arrived while this build wasn't running, as if it had just

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { useNow } from '@/lib/window-activity/use-now'
 import { toast } from 'sonner'
 import { botTarget } from '@/lib/bot-hosts'
@@ -40,7 +41,8 @@ function WaitActions({
   const activity = useBotActivity(bot)
   const exists = activity.automations.some((row) => row.automation.id === automationId)
   const waiting = activity.waits?.some((row) => row.automation.id === automationId)
-  const [busy, setBusy] = useState(false)
+  // Kept with the chat tab: a row released mid-cancel returns still cancelling.
+  const [busy, setBusy] = useNativeChatViewGuard(`wait-cancel:${automationId}`, false)
   if (!exists && !waiting) {
     return null
   }
@@ -116,7 +118,7 @@ function WaitRow({
         {once && state.kind === 'waiting' ? (
           <>
             <h4 className={ROW_HEADING}>{say('thenLine')}</h4>
-            <div className={ROW_NOTE}>{waitRowThen(once, wording)}</div>
+            <div className={ROW_NOTE}>{waitRowThen(automation, once, wording)}</div>
           </>
         ) : null}
         {bot ? (
@@ -138,6 +140,7 @@ export function NativeChatWaitRow({
   automation,
   once,
   ended,
+  endedOn,
   timestamp
 }: {
   messageId: string
@@ -145,6 +148,8 @@ export function NativeChatWaitRow({
   once: AutomationOnce
   /** How it ended, when its run or card is in this chat. */
   ended?: WaitEnding
+  /** The rules it had when it ended, which an edit may have changed. */
+  endedOn?: BotAutomationFacts['on']
   timestamp: number | null
 }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
@@ -161,7 +166,12 @@ export function NativeChatWaitRow({
       once={once}
       state={
         waitRowState(
-          { automationSaved: { automation }, savedWaitEnded: ended, timestamp },
+          {
+            automationSaved: { automation },
+            savedWaitEnded: ended,
+            savedWaitEndedOn: endedOn,
+            timestamp
+          },
           bot?.cancelledWaits,
           now,
           host

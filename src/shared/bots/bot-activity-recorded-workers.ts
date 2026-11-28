@@ -6,7 +6,7 @@ import {
 } from '../orchestration-session-workers'
 import type { AgentDotState } from '../agent-dot-state'
 import { agentRowDotState } from '../agent-row-dot-state'
-import { structuredAgentSessionStatusPaneKey } from '../agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../agent-session/view/chat-pane-address'
 import type {
   BotActivityInput,
   BotActivityOrigin,
@@ -99,12 +99,7 @@ export function recordedWorkersByDispatch(
     ]),
     ...input.runs.flatMap((run): [string, BotActivityOrigin | undefined][] =>
       run.chatSessionId
-        ? [
-            [
-              run.chatSessionId,
-              originByPaneKey.get(structuredAgentSessionStatusPaneKey(run.chatSessionId))
-            ]
-          ]
+        ? [[run.chatSessionId, originByPaneKey.get(chatPaneKey(run.chatSessionId))]]
         : []
     ),
     ...input.links.flatMap((link): [string, BotActivityOrigin | undefined][] =>

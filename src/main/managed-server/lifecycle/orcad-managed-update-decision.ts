@@ -2,7 +2,9 @@ import {
   compareAppVersions,
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
+import type { OrcadManagedPastLiveTerminals } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
+import type { OrcadUpdateForce } from '../activation/orcad-update-plan'
 import {
   refuseOrcadHostDowngrade,
   type OrcadHostVersionRefusal
@@ -62,6 +64,22 @@ export function planOrcadUpdateForIntent(
   }
   const { rolledBackFrom: _retried, ...record } = input.record
   return planManagedOrcadAutoUpdate({ ...input, record, failedBefore: false })
+}
+
+/** Full force over an uncounted census ends terminals orcad runs itself, so it needs a confirmation, never a bare force. */
+export function managedOrcadUpdateForce(input: {
+  force?: boolean
+  pastLiveTerminals?: OrcadManagedPastLiveTerminals
+  /** The caller confirmed terminals orcad runs itself end, as CLI `--force --yes` does. */
+  endInProcessTerminals?: boolean
+}): OrcadUpdateForce | undefined {
+  if (input.pastLiveTerminals) {
+    return input.pastLiveTerminals.uncounted ? true : 'live-terminals'
+  }
+  if (!input.force) {
+    return input.force
+  }
+  return input.endInProcessTerminals === true ? true : 'live-terminals'
 }
 
 export function admitOrcadRecordForIntent(

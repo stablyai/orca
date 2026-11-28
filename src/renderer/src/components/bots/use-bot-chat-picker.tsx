@@ -9,7 +9,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotChatRow } from '../../../../shared/bots/bot-chat-row'
 import type { BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
-import { botMentionToken } from '../../../../shared/bots/bot-mention-context'
+import { botMentionOffersChat, botMentionToken } from '../../../../shared/bots/bot-mention-context'
 import { BOTS_CHAT_MENTIONS_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -32,7 +32,6 @@ import {
   type BotMentionChatsRead
 } from './bot-mention-chats-read'
 import { useBotOwnChatTree } from './use-bot-chat-tree'
-import { isBotGroupMemberSession } from '../../../../shared/bots/bot-group'
 import { useBotHostLabel } from './use-bot-host-label'
 
 /** Whether the computer the chat's agent runs on reads chat picks; an unknown one doesn't. */
@@ -221,11 +220,7 @@ function mailableChats(
   self: boolean,
   t: Translate
 ): NativeChatMentionChat[] {
-  const mailable = new Map(
-    rows
-      .filter((row) => !row.closed && !row.self && !isBotGroupMemberSession(row.id))
-      .map((row) => [row.id, row])
-  )
+  const mailable = new Map(rows.filter(botMentionOffersChat).map((row) => [row.id, row]))
   const listed = tree.filter((chat) => !chat.run && mailable.has(chat.chatId))
   const listedIds = new Set(listed.map((chat) => chat.chatId))
   // Not in the panel's read yet (a chat that just started): after, newest first.

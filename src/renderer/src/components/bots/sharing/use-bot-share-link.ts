@@ -1,6 +1,7 @@
 // The bot's one live link as the Share dialog reads it: from the caller, or read from Orca Cloud.
 import { useCallback, useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import type { BotRef } from '@/lib/bot-hosts'
 import {
   botShareStatusOf,
   type BotOwnedShare,
@@ -52,11 +53,12 @@ export type LinkRead =
 
 /** The bot's live link, read from Orca Cloud when the caller doesn't know it. */
 export function useBotShareLink(
-  botId: string,
+  bot: BotRef,
   known: BotShareLink | null | undefined,
   signedOut: boolean,
   shareId?: string
 ): { read: LinkRead; setLink: (link: BotShareLink | null) => void; reread: () => void } {
+  const { hostId, id: botId } = bot
   const [read, setRead] = useState<LinkRead>(
     signedOut || known === undefined ? { kind: 'loading' } : { kind: 'read', link: known }
   )
@@ -68,7 +70,7 @@ export function useBotShareLink(
     }
     let live = true
     setRead({ kind: 'loading' })
-    listBotShares(botId).then(
+    listBotShares({ hostId, id: botId }).then(
       (shares) => {
         if (!live) {
           return
@@ -105,7 +107,7 @@ export function useBotShareLink(
     return () => {
       live = false
     }
-  }, [botId, selectedShareId, version, signedOut])
+  }, [hostId, botId, selectedShareId, version, signedOut])
   return {
     read: signedOut ? { kind: 'signIn' } : read,
     setLink: useCallback((link) => setRead({ kind: 'read', link }), []),

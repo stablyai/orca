@@ -25,7 +25,8 @@ import { RUNTIME_SERVER_REPLACED_STATUS_CODE } from '../../../shared/remote-runt
 /** Unreachable proves no identity; unpaired is a refusal sealed by the pinned server key. */
 export type OrcadTunnelIdentity =
   | { verdict: 'verified' }
-  | { verdict: 'foreign' | 'unreachable' | 'unpaired'; detail: string }
+  /** `sealed`: the pinned key's handshake itself refused (close 4001/4003), not a guess from an odd answer. */
+  | { verdict: 'foreign' | 'unreachable' | 'unpaired'; detail: string; sealed?: true }
 
 export const ORCAD_IDENTITY_MISMATCH_CODE = 'orcad_identity_mismatch'
 
@@ -37,18 +38,27 @@ export class OrcadManagedIdentityError extends Error {
   private constructor(
     readonly kind: OrcadIdentityMismatchKind,
     explanation: string,
-    detail: string
+    detail: string,
+    /** A sealed refusal, not a catch-all `foreign` answer a restart can produce. */
+    readonly sealed = false,
+    /** A pinned WSL host's server now holds another key; already WSL-worded, never wrapped twice. */
+    readonly wslHostKeyChanged = false
   ) {
     super(`${ORCAD_IDENTITY_MISMATCH_CODE}: ${explanation}: ${detail}`)
     this.name = 'OrcadManagedIdentityError'
   }
 
-  static foreignPort(remotePort: number, detail: string): OrcadManagedIdentityError {
+  static foreignPort(
+    remotePort: number,
+    detail: string,
+    sealed = false
+  ): OrcadManagedIdentityError {
     return new OrcadManagedIdentityError(
       'foreign-port',
       `the server on remote port ${remotePort} is not this host’s Orca server ` +
         '(another Orca may be using that port)',
-      detail
+      detail,
+      sealed
     )
   }
 
@@ -71,6 +81,47 @@ export class OrcadManagedIdentityError extends Error {
       detail
     )
   }
+
+  /** A WSL host's distro serves another key under its own account (#49180); keeps the refusal's kind. */
+  static wslHostServer(
+    distro: string,
+    refused: OrcadManagedIdentityError
+  ): OrcadManagedIdentityError {
+    if (refused.wslHostKeyChanged) {
+      return refused
+    }
+    const detail = refused.message.replace(`${ORCAD_IDENTITY_MISMATCH_CODE}: `, '')
+    return new OrcadManagedIdentityError(
+      refused.kind,
+      wslHostServerExplanation(distro),
+      detail,
+      refused.sealed
+    )
+  }
+
+  /** A pinned WSL host refused by a server whose account holds another key: sealed, it ends retries. */
+  static wslHostKeyChanged(distro: string, detail: string): OrcadManagedIdentityError {
+    return new OrcadManagedIdentityError(
+      'foreign-port',
+      wslHostServerExplanation(distro),
+      detail,
+      true,
+      true
+    )
+  }
+}
+
+function wslHostServerExplanation(distro: string): string {
+  return (
+    `the Orca server in ${distro} is not the one this desktop paired with (it was ` +
+    'reinstalled or its identity was reset), so reconnecting won’t restore access. Remove ' +
+    'the WSL host and add it again'
+  )
+}
+
+/** The refusal `wslHostKeyChanged` builds: this host's paired server no longer exists. */
+export function isWslHostKeyChangedRefusal(error: unknown): error is OrcadManagedIdentityError {
+  return error instanceof OrcadManagedIdentityError && error.wslHostKeyChanged
 }
 
 /** Status code of a refusal automatic retries can't clear (the pairing must change); null otherwise. */
@@ -101,7 +152,7 @@ export function orcadIdentityRefusal(
 ): Error {
   return identity.verdict === 'unpaired'
     ? new OrcadManagedPairingRejectedError(identity.detail)
-    : OrcadManagedIdentityError.foreignPort(remotePort, identity.detail)
+    : OrcadManagedIdentityError.foreignPort(remotePort, identity.detail, identity.sealed === true)
 }
 
 // Key rejection closes the socket instead of returning a status reply.
@@ -118,7 +169,7 @@ export function classifyOrcadTunnelIdentityFailure(error: unknown): OrcadTunnelI
     return { verdict: 'unpaired', detail }
   }
   if (error instanceof RemoteRuntimeClientError && FOREIGN_CLOSE_CODES.has(error.closeCode ?? 0)) {
-    return { verdict: 'foreign', detail }
+    return { verdict: 'foreign', detail, sealed: true }
   }
   return isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))
     ? { verdict: 'unreachable', detail }

@@ -6,6 +6,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { PluginService } from '../plugin-service'
 import type { PluginConsentRequest } from '../../../shared/plugins/approval/plugin-consent-request'
 import { verifyDeclarativePluginContent } from '../artifacts/plugin-declarative-content-integrity'
+import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
 
 // Desktop and headless writes share qualified-key consent; capability or worker-tier expansion requires reapproval.
 
@@ -16,6 +17,7 @@ export async function applyPluginConsent(input: {
   pluginKey: PluginConsentRequest['pluginKey']
   reviewedFingerprint: PluginConsentRequest['reviewedFingerprint']
   decision: PluginConsentRequest['decision']
+  teamRequirementStillApplies?: () => boolean
 }): Promise<void> {
   const { store, pluginService, pluginKey } = input
   const plugin = pluginService.findValidPlugin(pluginKey)
@@ -31,12 +33,17 @@ export async function applyPluginConsent(input: {
     // prove every declarative byte is still reviewable before enabling it.
     await verifyDeclarativePluginContent(plugin)
   }
+  if (input.teamRequirementStillApplies?.() === false) {
+    return
+  }
   const settings = store.getSettings()
   const disabled = new Set(normalizePluginIdList(settings.disabledPlugins))
   const consents = normalizePluginConsents(settings.pluginConsents)
   if (input.decision === 'approve') {
     consents[pluginKey] = plugin.consentFingerprint
-    disabled.delete(pluginKey)
+    if (!input.teamRequirementStillApplies) {
+      disabled.delete(pluginKey)
+    }
   } else {
     disabled.add(pluginKey)
   }
@@ -80,6 +87,20 @@ export async function applyPluginEnablement(input: {
   const plugin = pluginService.findValidPlugin(pluginKey)
   if (!plugin) {
     throw new Error(`cannot change enablement for unknown plugin ${pluginKey}`)
+  }
+  const required = isRequiredTeamPluginInstall(plugin.teamPolicyInstall)
+  if (!enabled && required) {
+    throw new Error('This plugin is required by your team.')
+  }
+  if (enabled && required && pluginService.activationState(plugin) === 'approved') {
+    if (
+      pluginService.workerState(pluginKey).state === 'errored' ||
+      pluginService.activationError(pluginKey)
+    ) {
+      await pluginService.deactivatePlugin(pluginKey)
+      await pluginService.reconcileActivationState()
+    }
+    return
   }
   const settings = store.getSettings()
   const disabled = new Set(normalizePluginIdList(settings.disabledPlugins))

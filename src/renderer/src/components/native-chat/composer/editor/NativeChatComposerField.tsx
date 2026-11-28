@@ -79,7 +79,8 @@ export function NativeChatComposerField({
   goalMode,
   agent,
   launchPrompt,
-  workspaceFooter
+  workspaceFooter,
+  sideChat
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
@@ -170,7 +171,8 @@ export function NativeChatComposerField({
     }
     if (imeEnterGesture.isComposing()) {
       // Remember async send clears during composition so sent text cannot leak into the next message; other drafts still yield to IME.
-      droppedDraftClearRef.current ||= draft === '' && textarea.value !== ''
+      droppedDraftClearRef.current =
+        droppedDraftClearRef.current || (draft === '' && textarea.value !== '')
       return
     }
     droppedDraftClearRef.current = false
@@ -184,6 +186,7 @@ export function NativeChatComposerField({
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
+  const card = useRef<HTMLDivElement>(null)
 
   return (
     <div
@@ -220,6 +223,7 @@ export function NativeChatComposerField({
             className="mb-1.5"
           />
           <div
+            ref={card}
             data-native-chat-dock-pinned={launch ? undefined : ''}
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
@@ -255,6 +259,7 @@ export function NativeChatComposerField({
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
+              sideChat={sideChat}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onBlur={editorBlur}

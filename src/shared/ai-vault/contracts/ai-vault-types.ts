@@ -13,7 +13,6 @@ export const AI_VAULT_AGENTS = [
   'omp',
   'prime-agent',
   'cursor',
-  'gemini',
   'antigravity',
   'rovo',
   'copilot',
@@ -76,7 +75,6 @@ export const AI_VAULT_AGENT_LABELS = {
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
   cursor: 'Cursor',
-  gemini: 'Gemini',
   antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
@@ -268,6 +266,8 @@ export type AiVaultListResult = {
   /** Requires the caller to reuse the exact previously received body. */
   unchanged?: true
   sessions: AiVaultSession[]
+  /** Scanned rows the host's listing hid (deleted chats, a chat's other conversations): depth checks still count them. */
+  hiddenRowCount?: number
   issues: AiVaultScanIssue[]
   scannedAt: string
   /** Set only by the desktop IPC boundary: this scan was superseded, so its empty body means "nothing to apply". */

@@ -115,18 +115,25 @@ export function googleProblems(account: GoogleAccountView): GoogleReadinessRow[]
   return googleReadinessRows(account).filter((row) => row.readiness.state !== 'ready')
 }
 
-/** The account's headline: connected, ended, or how many things to fix. */
-export function googleAccountHeadline(account: GoogleAccountView): string {
-  if (account.status === 'reconnect') {
-    return translate('bots.google.headline.ended', 'Google access ended. Reconnect.')
-  }
-  const problems = googleProblems(account).length
-  return problems === 0
-    ? translate('bots.google.headline.connected', 'Google is connected')
-    : translate('bots.google.headline.toFix', 'Almost there: {{count}} things to fix', {
-        count: problems,
-        defaultValue_one: 'Almost there: 1 thing to fix'
+/** A Settings row's one line for its first problem, e.g. "Calendar not allowed". */
+export function googleRowProblem({ label, readiness }: GoogleReadinessRow): string {
+  switch (readiness.state) {
+    case 'needs-permission':
+      return translate('bots.google.row.notAllowed', '{{service}} not allowed', { service: label })
+    case 'api-disabled':
+      return translate('bots.google.row.apiOff', '{{service}} turned off in Google Cloud', {
+        service: label
       })
+    case 'blocked-by-admin':
+      return translate('bots.google.row.adminBlocked', '{{service}} blocked by your admin', {
+        service: label
+      })
+    case 'ready':
+    case 'error':
+      return translate('bots.google.row.error', '{{service}} couldn’t be checked', {
+        service: label
+      })
+  }
 }
 
 /** What a company admin pastes to their Workspace admin to trust the app. */
@@ -249,4 +256,31 @@ export function googleStepNotes(
 export function googleKeyRefusalHeadline(message: string): string {
   const howTo = message.indexOf(' In Google Cloud Console,')
   return howTo > 0 ? message.slice(0, howTo) : message
+}
+
+/** Why this window's Google sign-in stopped, as its error says it. */
+export function googleSignInRunError(
+  why: 'cancelled' | 'failed' | 'noAccount' | 'alreadyRunning' | 'notWaiting'
+): string {
+  switch (why) {
+    case 'cancelled':
+      return translate('bots.google.signInRun.cancelled', 'The Google sign-in was cancelled.')
+    case 'failed':
+      return translate('bots.google.signInRun.failed', 'The Google sign-in failed. Try again.')
+    case 'noAccount':
+      return translate(
+        'bots.google.signInRun.noAccount',
+        'Google signed in, but the host sent no account.'
+      )
+    case 'alreadyRunning':
+      return translate(
+        'bots.google.signInRun.alreadyRunning',
+        'A Google sign-in is already running. Finish or cancel it first.'
+      )
+    case 'notWaiting':
+      return translate(
+        'bots.google.signInRun.notWaiting',
+        'No Google sign-in is waiting. Start again.'
+      )
+  }
 }

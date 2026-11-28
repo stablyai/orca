@@ -2,13 +2,12 @@ import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from '../protocol/daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
-import { SessionProducerPause } from './session-producer-pause'
+import { SessionProducerPause, type StreamStallHandler } from './session-producer-pause'
 import { SessionFocusReport } from './session-focus-report'
 import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import { SessionProcessInspection } from './session-process-inspection'
-import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID } from 'node:crypto'
@@ -62,9 +61,7 @@ export class Session extends SessionProcessInspection {
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
 
-    this.shellReady = createSessionShellReady(opts, this.output, (data) =>
-      this.startupIngress.accept(data)
-    )
+    this.shellReady = createSessionShellReady(opts, this.output, this)
 
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
@@ -75,7 +72,7 @@ export class Session extends SessionProcessInspection {
     })
     try {
       this.subprocess.onData((data) => {
-        this._outputChunks += 1
+        this.noteOutput()
         if (!this._disposed) {
           this.shellReady.ingestSubprocessData(data)
         }
@@ -131,17 +128,13 @@ export class Session extends SessionProcessInspection {
     return this.subprocess.pid
   }
 
-  /** A PTY job result of unavailable does not prove child exit. */
-  terminateOwnedTree(): JobTerminationOutcome {
-    return this.subprocess.terminateOwnedTree()
-  }
-
   write(data: string): void {
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.shellReady.observeTypedInput(data)
-      this.subprocess.write(data)
+      this.producerPause.noteInput(data)
+      this.writeInput(data)
     }
   }
 
@@ -159,7 +152,7 @@ export class Session extends SessionProcessInspection {
   /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
   writeStartupCommand(data: string): void {
     if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
-      this.subprocess.write(data)
+      this.writeInput(data)
     }
   }
 
@@ -173,11 +166,10 @@ export class Session extends SessionProcessInspection {
   }
 
   /** Apply PTY backpressure with separate lost-resume and stream-stall protection. */
-  pauseProducer(source?: 'stream', onStreamStall?: () => void): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
-    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating, onStreamStall)
+  pauseProducer(source?: 'stream', onStall?: StreamStallHandler) {
+    const exited = this._state === 'exited' || this._disposed
+    const canPause = this.termination.streamPauseAnswer(this.hasAttachedClients)
+    return exited ? 'exited' : this.producerPause.pause(source, canPause, onStall)
   }
 
   resumeProducer(source?: 'stream'): void {
@@ -203,26 +195,34 @@ export class Session extends SessionProcessInspection {
   }
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
-    return this.output.attachClient(client)
+    const firstViewer = !this.output.hasAttachedClients
+    const token = this.output.attachClient(client)
+    this.producerPause.noteViewerAttached(firstViewer)
+    return token
   }
 
   detachClient(token: symbol): void {
     this.output.detachClient(token)
     // With no viewer left to resume the producer, release its pause eagerly.
     if (!this.output.hasAttachedClients) {
-      this.producerPause.release({ resume: true })
+      this.producerPause.release({ resume: true, reason: 'released' })
       this.reportFocusLost()
     }
   }
 
   detachAllClients(): void {
     this.output.clearClients()
-    this.producerPause.release({ resume: true })
+    this.producerPause.release({ resume: true, reason: 'released' })
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
     return this.output.getSnapshot(opts)
+  }
+
+  getVisibleProjection() {
+    this.startupIngress.snapshotBarrier()
+    return this.output.getVisibleProjection()
   }
 
   getPartialEscapeTailAnsi(): string {
@@ -322,7 +322,7 @@ export class Session extends SessionProcessInspection {
     }
     this._disposed = true
     this.output.markDisposed()
-    this.producerPause.release({ resume: true })
+    this.producerPause.release({ resume: true, reason: 'exited' })
     this.termination.cancelForceKillFallback()
     this.shellReady.dispose()
     this.termination.disposeSubprocessHandle()
@@ -353,7 +353,7 @@ export class Session extends SessionProcessInspection {
     this._state = 'exited'
     this.termination.clearTerminating()
     // The child is reaped; clear pause timers without resuming its handle.
-    this.producerPause.release({ resume: false })
+    this.producerPause.release({ resume: false, reason: 'exited' })
 
     this.termination.cancelForceKillFallback()
     this.shellReady.clearReadyTimer()

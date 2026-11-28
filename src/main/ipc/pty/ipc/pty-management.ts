@@ -115,18 +115,22 @@ export async function confirmNoDaemonSessionsRemain(): Promise<boolean> {
   return false
 }
 
-export function registerDaemonManagementHandlers(): void {
-  ipcMain.removeHandler('pty:management:listSessions')
-  ipcMain.removeHandler('pty:management:killAll')
-  ipcMain.removeHandler('pty:management:killOne')
-  ipcMain.removeHandler('pty:management:restart')
-  ipcMain.removeHandler('pty:management:macTccAttribution')
-  ipcMain.removeHandler('pty:management:resetFolderAccess')
-  ipcMain.removeHandler('pty:management:severedDaemon')
-  ipcMain.removeHandler('pty:management:restartSeveredDaemon')
-  ipcMain.removeHandler('pty:management:asyncIoHealth')
+export function registerDaemonManagementHandlers(
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
+): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('pty:management:listSessions')
+    ipcMain.removeHandler('pty:management:killAll')
+    ipcMain.removeHandler('pty:management:killOne')
+    ipcMain.removeHandler('pty:management:restart')
+    ipcMain.removeHandler('pty:management:macTccAttribution')
+    ipcMain.removeHandler('pty:management:resetFolderAccess')
+    ipcMain.removeHandler('pty:management:severedDaemon')
+    ipcMain.removeHandler('pty:management:restartSeveredDaemon')
+    ipcMain.removeHandler('pty:management:asyncIoHealth')
+  }
 
-  ipcMain.handle('pty:management:asyncIoHealth', async (): Promise<DaemonAsyncIoStatus> => {
+  ipc.handle('pty:management:asyncIoHealth', async (): Promise<DaemonAsyncIoStatus> => {
     const provider = getDaemonProvider()
     if (!provider) {
       return { state: 'unverifiable' }
@@ -145,10 +149,10 @@ export function registerDaemonManagementHandlers(): void {
   })
 
   // Live terminals may outlast deleted AppImage runtime files; offer verified restart recovery.
-  ipcMain.handle('pty:management:severedDaemon', async () => ({
+  ipc.handle('pty:management:severedDaemon', async () => ({
     severed: await readSeveredDaemonStatus().catch(() => null)
   }))
-  ipcMain.handle(
+  ipc.handle(
     'pty:management:restartSeveredDaemon',
     async (_event, args: unknown): Promise<SeveredDaemonRestartResult> => {
       const expected = parseSeveredDaemonIncarnation(args)
@@ -160,7 +164,7 @@ export function registerDaemonManagementHandlers(): void {
   )
 
   // The focus-time poll carries macOS attribution and folder-access evidence (STA-3491, STA-7948).
-  ipcMain.handle(
+  ipc.handle(
     'pty:management:macTccAttribution',
     async (): Promise<{
       health: MacDaemonTccAttributionHealth
@@ -178,7 +182,7 @@ export function registerDaemonManagementHandlers(): void {
   )
 
   // Clearing TCC state and prompting require an explicit user action; keep them out of polling.
-  ipcMain.handle(
+  ipc.handle(
     'pty:management:resetFolderAccess',
     async (): Promise<DaemonFolderAccessResetResult> => {
       try {
@@ -189,7 +193,7 @@ export function registerDaemonManagementHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'pty:management:listSessions',
     async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
       const sessions = await collectSessions(getDaemonAdapters())
@@ -198,7 +202,7 @@ export function registerDaemonManagementHandlers(): void {
   )
 
   // Stop sessions across current and legacy adapters while leaving daemon processes alive.
-  ipcMain.handle(
+  ipc.handle(
     'pty:management:killAll',
     async (): Promise<{
       killedCount: number
@@ -267,7 +271,7 @@ export function registerDaemonManagementHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'pty:management:killOne',
     async (_event, args: { sessionId: string }): Promise<{ success: boolean }> => {
       if (typeof args?.sessionId !== 'string' || args.sessionId.length === 0) {
@@ -292,7 +296,7 @@ export function registerDaemonManagementHandlers(): void {
     }
   )
 
-  ipcMain.handle('pty:management:restart', async (): Promise<{ success: boolean }> => {
+  ipc.handle('pty:management:restart', async (): Promise<{ success: boolean }> => {
     try {
       await restartDaemon()
       return { success: true }

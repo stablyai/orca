@@ -17,6 +17,7 @@ import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge
 import { decodeCanonicalBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 import { mobileFileExtensionForMime } from '../media-picking/mobile-picked-file-name'
 import { freshCacheFolder } from '../media-picking/native-media-device'
+import { recomputeOn } from '../../hooks/recompute-on'
 
 type Staged = { folder: Directory; file: FsFile; handle: FileHandle; byteLength: number }
 
@@ -145,7 +146,7 @@ export function useNativeImageActions(
 ): (params: unknown) => Promise<unknown> {
   const navigation = useNavigation()
   const actions = useMemo(
-    () => createNativeImageActions(navigation.isFocused),
+    () => recomputeOn([sessionId], () => createNativeImageActions(navigation.isFocused)),
     // A new page session is a new document; it must not inherit a half-staged image.
     [navigation, sessionId]
   )

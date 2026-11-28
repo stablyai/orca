@@ -38,6 +38,8 @@ export type AppApi = {
   relaunch: () => Promise<void>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */
   restart: () => Promise<void>
+  /** Ordinary user quit, like the app menu Quit; close guards may cancel it. */
+  quit: () => Promise<void>
   /** Main classifies teardown before Electron emits process-gone events. */
   reload: () => Promise<void>
   stageBeforeUnloadSync: (args: {

@@ -101,12 +101,14 @@ export function botGitHubCalls(hostId: ExecutionHostId) {
 
 export function connectorTripCalls(hostId: ExecutionHostId, source: ConnectorConnectSource) {
   return {
-    /** The page to open once the host listens for its return. */
-    start: (switchAccount: boolean) =>
-      call<{ tripId: string; authorizeUrl: string }>(hostId, 'bots.connect.start', {
-        source,
-        switchAccount
-      }),
+    /** The page to open once the host listens for its return; `addAccess` comes back from a host
+     *  that has it. */
+    start: (switchAccount: boolean, addAccess?: { workspace?: string }) =>
+      call<{ tripId: string; authorizeUrl: string; addAccess?: true }>(
+        hostId,
+        'bots.connect.start',
+        { source, switchAccount, ...(addAccess ? { addAccess } : {}) }
+      ),
     /** One slice of waiting for the trip's end. */
     wait: (tripId: string): Promise<ConnectorTripWait> =>
       callRuntimeRpc<ConnectorTripWait>(

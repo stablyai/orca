@@ -142,6 +142,8 @@ export function resolveSourceControlPrimaryActionDecision(
     return unpublishedAction
   }
 
+  // After an Orca rebase the remote holds old copies; Sync or Pull would merge them back.
+  const pullSuppressed = inputs.suppressPullAfterRebase === true
   if (upstreamStatus.ahead > 0 && upstreamStatus.behind > 0) {
     if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
       return {
@@ -154,27 +156,27 @@ export function resolveSourceControlPrimaryActionDecision(
         requiresForceWithLease: true
       }
     }
-    return {
-      kind: 'sync',
-      labelIntent: 'sync',
-      titleIntent: 'sync_counts',
-      disabled: false,
-      ahead: upstreamStatus.ahead,
-      behind: upstreamStatus.behind
+    if (!pullSuppressed) {
+      return {
+        kind: 'sync',
+        labelIntent: 'sync',
+        titleIntent: 'sync_counts',
+        disabled: false,
+        ahead: upstreamStatus.ahead,
+        behind: upstreamStatus.behind
+      }
     }
-  }
-
-  if (upstreamStatus.behind > 0) {
-    return {
-      kind: 'pull',
-      labelIntent: 'pull',
-      titleIntent: 'pull_count',
-      disabled: false,
-      count: upstreamStatus.behind
+  } else if (upstreamStatus.behind > 0) {
+    if (!pullSuppressed) {
+      return {
+        kind: 'pull',
+        labelIntent: 'pull',
+        titleIntent: 'pull_count',
+        disabled: false,
+        count: upstreamStatus.behind
+      }
     }
-  }
-
-  if (upstreamStatus.ahead > 0) {
+  } else if (upstreamStatus.ahead > 0) {
     return {
       kind: 'push',
       labelIntent: 'push',
@@ -196,7 +198,11 @@ export function resolveSourceControlPrimaryActionDecision(
   return {
     kind: 'commit',
     labelIntent: 'commit',
-    titleIntent: hasUnstagedChanges ? 'stage_file_to_commit' : 'nothing_to_commit_up_to_date',
+    titleIntent: hasUnstagedChanges
+      ? 'stage_file_to_commit'
+      : pullSuppressed
+        ? 'nothing_to_commit'
+        : 'nothing_to_commit_up_to_date',
     disabled: true
   }
 }
@@ -222,6 +228,26 @@ export function resolveSourceControlCommitAreaPrimaryActionDecision(
     hostedReviewCreation: null,
     isPrIntentInFlight: false
   }) as SourceControlCommitAreaPrimaryActionDecision
+}
+
+/** Desktop commit area: once nothing is left to commit, push or pull, the next step is opening the review. */
+export function resolveSourceControlDesktopCommitAreaPrimaryActionDecision(
+  inputs: SourceControlPrimaryActionDecisionInputs
+): SourceControlPrimaryActionDecision {
+  const decision = resolveSourceControlCommitAreaPrimaryActionDecision(inputs)
+  if (
+    decision.titleIntent === 'nothing_to_commit_up_to_date' &&
+    inputs.hostedReviewCreation?.canCreate === true &&
+    !inputs.isPrIntentInFlight
+  ) {
+    return {
+      kind: 'create_pr',
+      labelIntent: 'create_pr',
+      titleIntent: 'create_review',
+      disabled: false
+    }
+  }
+  return decision
 }
 
 function resolveCreatePrIntentDecision(

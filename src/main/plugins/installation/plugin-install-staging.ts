@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { cp, mkdir, rm } from 'node:fs/promises'
+import { mkdir, realpath, rm } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import {
   PLUGIN_MANIFEST_FILENAME,
@@ -29,6 +29,7 @@ import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
 import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 import { readPluginLockfile } from './plugin-install-lockfile-store'
+import { copyPath } from '../../../shared/copy-path'
 
 export type PluginInstallResult =
   | {
@@ -204,8 +205,9 @@ export async function installStagedPluginTree(input: {
       await rm(stagedVersionDir, { recursive: true, force: true })
       await mkdir(pluginDir, { recursive: true })
       // Rehash the copy before publication because the source may change during copying.
-      const stagingRoot = resolve(input.stagingDir)
-      await cp(stagingRoot, stagedVersionDir, {
+      // Why: verbatimSymlinks copies a linked root as a link (EPERM on Windows, symlinked install on POSIX).
+      const stagingRoot = await realpath(input.stagingDir).catch(() => resolve(input.stagingDir))
+      await copyPath(stagingRoot, stagedVersionDir, {
         recursive: true,
         verbatimSymlinks: true,
         // Exclude source-control metadata before copying so repository size cannot bypass install limits.

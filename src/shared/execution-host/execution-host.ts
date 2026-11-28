@@ -92,50 +92,79 @@ export function isOwnedSshTargetId(targetId: string | null | undefined): boolean
   )
 }
 
+const LOCAL_PARSED_EXECUTION_HOST: ParsedExecutionHost = Object.freeze({
+  kind: 'local',
+  id: LOCAL_EXECUTION_HOST_ID
+})
+const PARSED_EXECUTION_HOST_CACHE_LIMIT = 256
+const parsedExecutionHostCache = new Map<string, ParsedExecutionHost>()
+
+function parsePrefixedExecutionHost(normalized: string): ParsedExecutionHost | null {
+  const isSsh = normalized.startsWith('ssh:')
+  if (!isSsh && !normalized.startsWith('runtime:')) {
+    return null
+  }
+  const encoded = normalized.slice(isSsh ? 4 : 8)
+  // An unencoded | would rebind composeWorktreeHostIdentity’s first-delimiter alias to another host.
+  if (!encoded || encoded.includes('|')) {
+    return null
+  }
+  try {
+    const decoded = decodeURIComponent(encoded)
+    if (!decoded) {
+      return null
+    }
+    return Object.freeze(
+      isSsh
+        ? { kind: 'ssh', id: `ssh:${encoded}` as const, targetId: decoded }
+        : { kind: 'runtime', id: `runtime:${encoded}` as const, environmentId: decoded }
+    )
+  } catch {
+    return null
+  }
+}
+
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
+  if (value === LOCAL_EXECUTION_HOST_ID) {
+    return LOCAL_PARSED_EXECUTION_HOST
+  }
+  if (typeof value !== 'string') {
+    return null
+  }
+  const exactCached = parsedExecutionHostCache.get(value)
+  if (exactCached) {
+    return exactCached
+  }
   const normalized = normalizeHostPart(value)
   if (!normalized) {
     return null
   }
   if (normalized === LOCAL_EXECUTION_HOST_ID) {
-    return { kind: 'local', id: LOCAL_EXECUTION_HOST_ID }
+    return LOCAL_PARSED_EXECUTION_HOST
   }
-  if (normalized.startsWith('ssh:')) {
-    const encoded = normalized.slice('ssh:'.length)
-    if (!encoded) {
-      return null
-    }
-    // An unencoded | would rebind composeWorktreeHostIdentity’s first-delimiter alias to another host.
-    if (encoded.includes('|')) {
-      return null
-    }
-    try {
-      const targetId = decodeURIComponent(encoded)
-      return targetId ? { kind: 'ssh', id: `ssh:${encoded}`, targetId } : null
-    } catch {
-      return null
+  const cached = normalized !== value ? parsedExecutionHostCache.get(normalized) : undefined
+  if (cached) {
+    return cached
+  }
+  const parsed = parsePrefixedExecutionHost(normalized)
+  if (!parsed) {
+    return null
+  }
+  if (parsedExecutionHostCache.size >= PARSED_EXECUTION_HOST_CACHE_LIMIT) {
+    const oldest = parsedExecutionHostCache.keys().next().value
+    if (oldest !== undefined) {
+      parsedExecutionHostCache.delete(oldest)
     }
   }
-  if (normalized.startsWith('runtime:')) {
-    const encoded = normalized.slice('runtime:'.length)
-    if (!encoded) {
-      return null
-    }
-    if (encoded.includes('|')) {
-      return null
-    }
-    try {
-      const environmentId = decodeURIComponent(encoded)
-      return environmentId ? { kind: 'runtime', id: `runtime:${encoded}`, environmentId } : null
-    } catch {
-      return null
-    }
-  }
-  return null
+  parsedExecutionHostCache.set(normalized, parsed)
+  return parsed
 }
 
 /** Re-encodes the decoded target so equivalent spellings (e.g. `runtime:wsl:x` and `runtime:wsl%3Ax`) match catalog ids. */
 export function canonicalExecutionHostId(value: string | null | undefined): ExecutionHostId | null {
+  if (value === LOCAL_EXECUTION_HOST_ID) {
+    return LOCAL_EXECUTION_HOST_ID
+  }
   const parsed = parseExecutionHostId(value)
   if (parsed?.kind === 'ssh') {
     return toSshExecutionHostId(parsed.targetId)

@@ -141,6 +141,8 @@ export type TuiIdleEvaluationInput = {
   readAgentRuleVerdict: () => AgentStateVerdict | null
   /** Whether an overlay on the agent's screen refuses input; null with no rule or no screen. */
   readScreenInputVeto: () => boolean | null
+  /** Reused-pane waits only: Claude's caught-up composer, painted by the running command, holds no text. */
+  readReusableComposer?: () => boolean
   /** Whether the tail rests at a screen where a human must sign in (agy's login menu). */
   readProgramSignInWaitScreen: () => boolean
   /** When the PTY's own current title was observed; null when it has none or no clock. */
@@ -222,10 +224,15 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
     if (Date.now() < blockedAt) {
       return { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
     }
-    // Why the screen: a slow saved-credential sign-in spins under the same blocked:auth (#44603).
-    return input.readProgramSignInWaitScreen()
-      ? { kind: 'blocked', reason: 'agent-sign-in-prompt' }
-      : { kind: 'pending', quietForeground: 'closed' }
+    const signInAgent =
+      input.agent ??
+      (input.record.lastOscTitle
+        ? resolveTerminalTitlePolicyAgentType(input.record.lastOscTitle)
+        : null)
+    // Why scoped to agy: only agy's slow saved-credential sign-in spins under blocked:auth (#44603).
+    return signInAgent === 'antigravity' && !input.readProgramSignInWaitScreen()
+      ? { kind: 'pending', quietForeground: 'closed' }
+      : { kind: 'blocked', reason: 'agent-sign-in-prompt' }
   }
   // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
   if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {
@@ -307,6 +314,10 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       input.readCommandPainted
     )
   ) {
+    return READY_WEAK
+  }
+  // A reused Claude can take a brief at its empty composer while its title still names the wrapper.
+  if (input.record.lastAgentStatus === null && input.readReusableComposer?.()) {
     return READY_WEAK
   }
   return {

@@ -89,7 +89,6 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     installCommand: 'curl -fsSL https://mimo.xiaomi.com/install | bash',
     windowsInstallScript: 'https://mimo.xiaomi.com/install.ps1'
   },
-  { agent: 'gemini', loginCommand: ['gemini'], slashCommand: '/auth' },
   {
     agent: 'droid',
     loginCommand: ['droid'],
@@ -114,6 +113,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     remoteLoginCommand: ['devin', 'auth', 'login', '--force-manual-token-flow'],
     installCommand: 'curl -fsSL https://cli.devin.ai/install.sh | bash',
     windowsInstallScript: 'https://cli.devin.ai/install.ps1'
+  },
+  {
+    agent: 'codebuddy',
+    loginCommand: ['codebuddy'],
+    slashCommand: '/login',
+    installCommand: 'npm install -g @tencent-ai/codebuddy-code'
   },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {

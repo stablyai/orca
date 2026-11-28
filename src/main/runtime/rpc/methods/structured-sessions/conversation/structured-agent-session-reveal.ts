@@ -188,7 +188,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
                 : 'agent_session_operation_unknown',
             message: removed
               ? 'This workspace is no longer available.'
-              : 'The structured agent session is not available yet. Retry in a moment.',
+              : "Couldn't open this chat.",
             ...(removed && !effects && error.workspaceKind
               ? {
                   details: {

@@ -1,5 +1,4 @@
 import {
-  createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison
 } from '../../file-access/cross-platform-path'
@@ -11,26 +10,25 @@ import type {
   WorktreeVisibilitySourcePreferences,
   WorktreeVisibilityDefaults
 } from '../../repository/repo-types'
+import {
+  BUILT_IN_WORKTREE_VISIBILITY_SOURCES,
+  createWorktreeVisibilitySourceMatcher,
+  hasBuiltInWorktreeVisibilityCandidate,
+  type WorktreeVisibilitySourceMatch,
+  type WorktreeVisibilitySourceMatcher
+} from './visibility-source-matcher'
+
+export {
+  BUILT_IN_WORKTREE_VISIBILITY_SOURCES,
+  createWorktreeVisibilitySourceMatcher,
+  hasBuiltInWorktreeVisibilityCandidate,
+  type WorktreeVisibilitySourceMatch,
+  type WorktreeVisibilitySourceMatcher
+}
 
 export const MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES = 32
 const MAX_SOURCE_ID_LENGTH = 128
 const MAX_SOURCE_PATH_LENGTH = 4096
-
-export const BUILT_IN_WORKTREE_VISIBILITY_SOURCES: readonly {
-  id: BuiltInWorktreeVisibilitySourceId
-  relativeRootSegments: readonly string[]
-}[] = [
-  { id: 'claude', relativeRootSegments: ['.claude', 'worktrees'] },
-  { id: 'gsd', relativeRootSegments: ['.gsd-workspaces'] }
-]
-
-export type WorktreeVisibilitySourceMatch =
-  | { kind: 'built-in'; id: BuiltInWorktreeVisibilitySourceId }
-  | { kind: 'custom'; id: string }
-
-export type WorktreeVisibilitySourceMatcher = (
-  worktreePath: string
-) => WorktreeVisibilitySourceMatch | null
 
 function isValidSourceId(value: string): boolean {
   return value.length > 0 && value.length <= MAX_SOURCE_ID_LENGTH && /^[A-Za-z0-9_-]+$/.test(value)
@@ -121,68 +119,6 @@ export function normalizeWorktreeVisibilitySourcePreferences(
   }
 }
 
-function createDescendantMatcher(rootPath: string): (normalizedCandidate: string) => boolean {
-  const matchesInsideOrEqual = createNormalizedPathInsideOrEqualMatcher(rootPath)
-  const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
-  return (normalizedCandidate) =>
-    normalizedCandidate !== normalizedRoot && matchesInsideOrEqual(normalizedCandidate)
-}
-
-/** Resolve configured bases through resolveConfiguredWorktreeBasePaths first; raw dot segments would prevent an explicit base superseding a scratch root. */
-export function createWorktreeVisibilitySourceMatcher(
-  checkoutPaths: readonly string[],
-  customSources: readonly CustomWorktreeVisibilitySource[],
-  configuredWorktreeBasePaths: readonly string[]
-): WorktreeVisibilitySourceMatcher {
-  const checkoutPathKeys = new Set(checkoutPaths.map(normalizeRuntimePathForComparison))
-  const customMatchers = customSources.map(({ id, rootPath }) => ({
-    id,
-    matches: createDescendantMatcher(rootPath)
-  }))
-  const configuredBases = configuredWorktreeBasePaths.map((basePath) => ({
-    key: normalizeRuntimePathForComparison(basePath),
-    contains: createNormalizedPathInsideOrEqualMatcher(basePath)
-  }))
-  // Only a base at/inside the matched root exempts it; an ancestor such as . or .. does not (#9388).
-  const isSupersededByConfiguredBase = (sourceRootKey: string, candidateKey: string): boolean =>
-    configuredBases.some(
-      (base) =>
-        base.contains(candidateKey) &&
-        (base.key === sourceRootKey || base.key.startsWith(`${sourceRootKey}/`))
-    )
-  return (worktreePath) => {
-    const normalizedCandidate = normalizeRuntimePathForComparison(worktreePath)
-    const segments = normalizedCandidate.split('/')
-    for (const source of BUILT_IN_WORKTREE_VISIBILITY_SOURCES) {
-      const prefix = source.relativeRootSegments
-      for (let index = 0; index + prefix.length < segments.length; index += 1) {
-        if (!prefix.every((segment, offset) => segments[index + offset] === segment)) {
-          continue
-        }
-        const checkoutPath = segments.slice(0, index).join('/')
-        const checkoutPathKey = /^[a-z]:$/i.test(checkoutPath)
-          ? `${checkoutPath}/`
-          : checkoutPath || '/'
-        if (
-          checkoutPathKeys.has(checkoutPathKey) &&
-          !isSupersededByConfiguredBase(
-            segments.slice(0, index + prefix.length).join('/'),
-            normalizedCandidate
-          )
-        ) {
-          return { kind: 'built-in', id: source.id }
-        }
-      }
-    }
-    for (const source of customMatchers) {
-      if (source.matches(normalizedCandidate)) {
-        return { kind: 'custom', id: source.id }
-      }
-    }
-    return null
-  }
-}
-
 export function effectiveBuiltInWorktreeSourceVisibility(
   repo: Pick<Repo, 'agentWorktreeVisibility' | 'worktreeVisibilitySourcePreferences'>,
   sourceId: BuiltInWorktreeVisibilitySourceId,
@@ -258,10 +194,22 @@ export function resolveCustomWorktreeVisibilitySources(
   repo: Pick<Repo, 'customWorktreeVisibilitySources'>,
   defaults?: WorktreeVisibilityDefaults
 ): CustomWorktreeVisibilitySource[] {
+  const hasRepoSources =
+    Array.isArray(repo.customWorktreeVisibilitySources) &&
+    repo.customWorktreeVisibilitySources.length > 0
+  const hasDefaultSources =
+    Array.isArray(defaults?.customSources) && defaults.customSources.length > 0
+  if (!hasRepoSources && !hasDefaultSources) {
+    return []
+  }
   return (
     normalizeCustomWorktreeVisibilitySources([
-      ...(normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []),
-      ...(normalizeCustomWorktreeVisibilitySources(defaults?.customSources) ?? [])
+      ...(hasRepoSources
+        ? (normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? [])
+        : []),
+      ...(hasDefaultSources
+        ? (normalizeCustomWorktreeVisibilitySources(defaults?.customSources) ?? [])
+        : [])
     ]) ?? []
   )
 }

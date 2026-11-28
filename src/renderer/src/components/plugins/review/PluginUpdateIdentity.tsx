@@ -49,8 +49,14 @@ export function PluginUpdatePublisher({
     manifest: preview.manifest,
     types: null
   })
-  if (preview.official) {
-    return <PluginPublisherBadge official publisher={publisher} />
+  if (preview.official || preview.managedByTeams) {
+    return (
+      <PluginPublisherBadge
+        official={preview.official}
+        publisher={publisher}
+        managedByTeams={preview.managedByTeams}
+      />
+    )
   }
   const label = `${t('auto.components.settings.PluginNotOfficialWarning.community', 'Community plugin')}${publisher ? ` · ${publisher}` : ''}`
   // Why plain: a community plugin that runs no code (a theme, say) has nothing to trust it with.

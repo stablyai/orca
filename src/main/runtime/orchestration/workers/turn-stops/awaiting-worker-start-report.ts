@@ -4,10 +4,19 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { WorkerDispatchRow } from '../../db/orchestration-records'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import { observeWorker } from './worker-presence-report'
-import { settleRestartCutWorkerStart } from '../../db/worker-dispatch/restart-cut-worker-start'
+import {
+  chatStartBeforeBrief,
+  settleRestartCutWorkerStart
+} from '../../db/worker-dispatch/restart-cut-worker-start'
 import { isWorkerAwaitingAgent } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
+import { reportFailedWorkerStart } from './failed-worker-start-report'
+import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
+import {
+  closeStructuredAgentSessionChild,
+  type StructuredSessionSurfaceRuntime
+} from '../../../agent-session/lifecycle/structured-agent-session-close'
 
-const START_BLOCKED_FENCE = 'start-blocked'
+export const START_BLOCKED_FENCE = 'start-blocked'
 
 const BLOCKED_SCREENS: Record<RuntimeTerminalWaitBlockedReason, string> = {
   'codex-update-prompt': 'an update prompt',
@@ -116,20 +125,100 @@ export function reportNeverReadyWorkerStart(
 export function settleRestartCutStart(
   db: OrchestrationDb,
   dispatchId: string,
-  runtime: Pick<OrcaRuntimeService, 'getRuntimeId' | 'notifyMessageArrived'>
+  runtime: Pick<OrcaRuntimeService, 'getRuntimeId' | 'notifyMessageArrived'> &
+    Partial<StructuredChatCloseRuntime>
 ): WorkerDispatchRow | undefined {
   const worker = db.getWorkerDispatch(dispatchId)
   const runtimeId = runtime.getRuntimeId()
+  const cut = worker?.state === 'starting' && worker.runtime_epoch !== runtimeId
+  // Older writers could submit while still at authority_attached.
+  const chatBeforeBrief = cut && chatStartBeforeBrief(worker)
+  if (
+    cut &&
+    (!worker.agent_terminal_handle || chatBeforeBrief) &&
+    !db.getFederatedDispatch(dispatchId)
+  ) {
+    return reportFailedWorkerStart(
+      db,
+      worker,
+      (handle, type) => runtime.notifyMessageArrived(handle, type),
+      chatBeforeBrief
+        ? "Orca restarted after attaching the worker's chat and before sending this task's brief."
+        : 'Orca restarted before this worker had a terminal or chat, so its agent never started.'
+    )
+  }
   if (!worker || !isWorkerAwaitingAgent(worker) || worker.runtime_epoch === runtimeId) {
     return settleRestartCutWorkerStart(db, dispatchId, runtimeId)
   }
   const failed = db.failWorkerStart(
     dispatchId,
     'agent_readiness',
-    'Orca restarted while it waited for its agent, so it never typed its brief.'
+    worker.setup_state === 'running'
+      ? 'Orca restarted while its Setup was still running, so it never sent its brief.'
+      : 'Orca restarted while it waited for its agent, so it never typed its brief.'
   )
+  closeCutStructuredWorkerSession(worker, runtime)
   reportNeverReadyWorkerStart(db, failed, undefined, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )
   return failed
+}
+
+/** A cut structured start's chat would wait idle with no task: close it, as a failed start does. */
+function closeCutStructuredWorkerSession(
+  worker: WorkerDispatchRow,
+  runtime: Partial<StructuredChatCloseRuntime>
+): void {
+  if (!isStructuredWorkerHandle(worker.agent_terminal_handle) || !canCloseStructuredChat(runtime)) {
+    return
+  }
+  const sessionId = structuredWorkerSessionId(worker.effects)
+  if (!sessionId) {
+    return
+  }
+  void runtime
+    .ensureStructuredAgentSessionHost()
+    .then(() => closeStructuredAgentSessionChild(sessionId, { runtime }))
+    .then((outcome) => {
+      if (!outcome.stopped) {
+        console.warn('[orchestration] a restart-cut worker chat stayed open', sessionId, outcome)
+      }
+    })
+    .catch((error: unknown) => {
+      console.warn('[orchestration] closing a restart-cut worker chat failed', sessionId, error)
+    })
+}
+
+type StructuredChatCloseRuntime = Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'> &
+  StructuredSessionSurfaceRuntime
+
+function canCloseStructuredChat(
+  runtime: Partial<StructuredChatCloseRuntime>
+): runtime is StructuredChatCloseRuntime {
+  return (
+    typeof runtime.ensureStructuredAgentSessionHost === 'function' &&
+    typeof runtime.retireStructuredAgentSessionTabFromSnapshot === 'function'
+  )
+}
+
+function structuredWorkerSessionId(effects: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(effects)
+    if (!Array.isArray(parsed)) {
+      return undefined
+    }
+    for (const effect of parsed) {
+      if (
+        typeof effect === 'object' &&
+        effect !== null &&
+        'sessionId' in effect &&
+        typeof effect.sessionId === 'string'
+      ) {
+        return effect.sessionId
+      }
+    }
+  } catch {
+    // Unreadable effects name no session; the start still fails.
+  }
+  return undefined
 }

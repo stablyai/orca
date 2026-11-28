@@ -8,6 +8,7 @@ import {
 } from '../../shared/concurrency/abort-signal-reason'
 import { mapSettledWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type { Repo } from '../../shared/repository/repo-types'
 import { splitWorktreeId, worktreeIdentityKey } from '../../shared/worktree/id'
@@ -186,7 +187,10 @@ async function hydrateLocalPtyRegistry(
       ptyId: info.sessionId,
       worktreeId,
       sessionId: info.sessionId,
+      // Unmounted, so no pane owns it yet: pane-matching consumers keep seeing null.
       paneKey: null,
+      // Lets the Resource Manager name the row by its tab and classify it before the pane mounts.
+      ...(info.paneKey && parsePaneKey(info.paneKey) ? { restoredPaneKey: info.paneKey } : {}),
       pid:
         typeof info.pid === 'number' && Number.isFinite(info.pid) && info.pid > 0 ? info.pid : null
     })

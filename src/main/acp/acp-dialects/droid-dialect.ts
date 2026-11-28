@@ -1,12 +1,13 @@
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
+import { droidToolSubagents } from './droid-subagents'
 
 const SHELL_EXIT_LINE = /(?:^|\n)\[Process exited with code (-?\d+)\]$/u
 const SHELL_FAILURE_LINE = /^Error: Command failed \(exit code: -?\d+\)(?:\n|$)/u
 const SHELL_SILENT_SUCCESS = 'Command completed successfully'
 
 // Execute's result is one string: output, then an exit line; a failure also opens with an error line.
-function shellResult(output: string): { stdout: string; exitCode: number } | null {
+export function droidShellResult(output: string): { stdout: string; exitCode: number } | null {
   const exit = SHELL_EXIT_LINE.exec(output)
   if (!exit) {
     return null
@@ -25,7 +26,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   const output = update.rawOutput
   const shell =
     typeof output === 'string' && (update.status === 'completed' || update.status === 'failed')
-      ? shellResult(output)
+      ? droidShellResult(output)
       : null
   if (!shell) {
     return update
@@ -47,6 +48,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 export const DROID_ACP_DIALECT: AcpDialect = {
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
+  toolSubagents: droidToolSubagents,
   // Droid's commands are all skills: its own, the user's and the project's.
   skillDescription: ({ description }) => description
 }

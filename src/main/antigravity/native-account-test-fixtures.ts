@@ -42,8 +42,12 @@ export function refreshedWithoutIdToken(generation: number, refreshToken = 'refr
   })
 }
 
-export function harness(initial: string | null = credential('a')) {
+/** `keychain`: agy's login sits where reading it may raise a dialog, as in the macOS keychain;
+ *  its fingerprint changes with every write. */
+export function harness(initial: string | null = credential('a'), { keychain = false } = {}) {
   let native = initial
+  let revision = 0
+  let signInHeld = false
   let vault: AntigravityAccountVault = { accounts: [], selectedAccountId: null }
   const store: AntigravityAccountStore = {
     read: vi.fn(async () => structuredClone(vault)),
@@ -58,7 +62,17 @@ export function harness(initial: string | null = credential('a')) {
         throw new Error('native conflict')
       }
       native = contents
-    })
+      revision++
+    }),
+    ...(keychain
+      ? {
+          readWithoutPrompt: vi.fn(async () =>
+            native
+              ? { fingerprint: `revision-${revision}`, stableFrom: 0, settled: true }
+              : { credential: null }
+          )
+        }
+      : {})
   }
   const lookupIdentity = vi.fn<(accessToken: string) => Promise<AntigravityCredentialIdentity>>(
     async () => {
@@ -69,9 +83,15 @@ export function harness(initial: string | null = credential('a')) {
     store,
     backend,
     lookupIdentity,
-    service: new AntigravityAccountService(store, backend, Date.now, lookupIdentity),
+    service: new AntigravityAccountService(store, backend, Date.now, lookupIdentity, {
+      signInHoldsLogin: () => signInHeld
+    }),
+    setSignInHeld: (held: boolean) => {
+      signInHeld = held
+    },
     setNative: (contents: string | null) => {
       native = contents
+      revision++
     },
     getNative: () => native,
     getVault: () => structuredClone(vault)

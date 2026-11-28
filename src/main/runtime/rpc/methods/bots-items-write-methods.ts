@@ -9,14 +9,26 @@ import {
 } from '../../../../shared/rpc-contract/bots-items-params'
 
 import { botItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
-import { linksOutsideLinkedChains } from '../../../bots/bot-item-dispatch-facts'
+import {
+  dispatchStarterBotId,
+  linksOutsideLinkedChains
+} from '../../../bots/bot-item-dispatch-facts'
 import { defineMethod } from '../core'
 import { addItem } from './bots-items-add'
 import { admitBotItemFiles } from './bots-items-bot-files'
 import { BotItemError } from '../../../bots/bot-item-error'
-import { assertBotItemSetInput } from '../../../bots/bot-items-edits'
-import { assertBotItemOwnerWrite } from '../../../bots/bot-items-tables'
+import { assertBotItemSetInput, assertBotItemVersion } from '../../../bots/bot-items-edits'
+import { assertBotItemAttach, assertBotItemOwnerWrite } from '../../../bots/bot-items-tables'
+import {
+  assertBotItemLinkRoom,
+  linkWords,
+  type BotItemLinkInput
+} from '../../../bots/bot-items-input'
+import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import type { Bot } from '../../../../shared/bot-types'
 import { commentAsMaker } from './bots-items-maker-comment'
+import { runtimeChatHost } from '../../../external-conversations/external-conversation-chat'
+import { closingChatActsFor } from './bots-items-close-acts-for'
 import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
 
 const ADD = defineMethod({
@@ -34,15 +46,16 @@ const SET = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const { title, description, doneMeans, status, note, reason } = params
+    const { expectedVersion, title, description, doneMeans, status, note, reason } = params
     let { comment, ask } = params
     if (params.files?.length && !comment?.trim() && !ask) {
       throw new BotItemError('invalid_argument', '--file goes with --comment. Nothing was posted.')
     }
-    if (params.files?.length) {
-      // What the write would refuse anyway is refused before any file is copied and claimed.
+    if (params.files?.length || expectedVersion !== undefined) {
+      // Refuse stale writes before admitting files. The transaction checks again.
       assertBotItemSetInput({ title, description, doneMeans, status, note, reason, comment, ask })
       assertBotItemOwnerWrite(item, writer.actor, status)
+      assertBotItemVersion(item, expectedVersion)
     }
     // With an ask, the files go under its own context; its comment is the host's rendering of it.
     const words = ask ? (ask.context ?? '') : (comment ?? '')
@@ -53,12 +66,38 @@ const SET = defineMethod({
       comment = attached.text
     }
     const images = attached.images.length > 0 ? attached.images : undefined
-    const changes = { title, description, doneMeans, status, note, reason, comment, ask, images }
+    // Asked by the item's own thread chat while its thread's turn ran, the owner's answer, mailed to
+    // that chat, goes back to that thread. Home Chat, which the bot's direct messages share with its
+    // owner in Orca, keeps it in Orca, as does an ask about another chat's item.
+    const asked =
+      ask &&
+      writer.source.kind === 'thread' &&
+      writer.actor.chatId === item.chatId &&
+      context.runtime
+        .getExternalConversationSeam()
+        ?.conversationTurn(runtimeChatHost(context.runtime), writer.sessionId)
+        ? { askedInConversation: writer.sessionId }
+        : {}
+    const closing = status === 'done' || status === 'canceled'
+    const changes = {
+      ...(closing ? { closedFor: await closingChatActsFor(context, writer) } : {}),
+      expectedVersion,
+      title,
+      description,
+      doneMeans,
+      status,
+      note,
+      reason,
+      comment,
+      ask,
+      images,
+      ...asked
+    }
     const defined = Object.fromEntries(
       Object.entries(changes).filter(([, value]) => value !== undefined)
     )
     const outcome = await store.set(item.uid, defined, writer.actor)
-    const result = await writeResult(context.runtime, outcome, writer)
+    const result = await writeResult(context, outcome, writer)
     // A tip back to the bot when its ask may be hard to read; the ask is already posted as written.
     const advice =
       status === 'needs_you' && result.eventId !== null ? botItemAskAdvice({ comment, ask }) : null
@@ -82,7 +121,7 @@ const COMMENT = defineMethod({
       item.ownerBotId !== writer.bot.id && item.madeBy?.botId === writer.bot.id
         ? await commentAsMaker(context, writer, item, text, images)
         : await store.comment(item.uid, text, writer.actor, images)
-    return writeResult(context.runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -94,8 +133,9 @@ const DONE = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const outcome = await store.close(item.uid, 'done', params.note, writer.actor)
-    return writeResult(context.runtime, outcome, writer)
+    const actsFor = await closingChatActsFor(context, writer)
+    const outcome = await store.close(item.uid, 'done', params.note, writer.actor, actsFor)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -107,8 +147,9 @@ const CANCEL = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const outcome = await store.close(item.uid, 'canceled', params.reason, writer.actor)
-    return writeResult(context.runtime, outcome, writer)
+    const actsFor = await closingChatActsFor(context, writer)
+    const outcome = await store.close(item.uid, 'canceled', params.reason, writer.actor, actsFor)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -120,15 +161,39 @@ const LINK = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
+    const db = context.runtime.getOrchestrationDb()
+    const requested = params.refs.map(parseItemLink)
+    const startedBy: Record<string, string | null> =
+      item.ownerBotId === writer.bot.id
+        ? {}
+        : startersOf(db, requested, context.runtime.bots.list())
+    // Every worker named is checked, one already linked too, so a mixed call fails whole.
+    assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
     // A step of a follow-up chain the item already links is that worker again: no second link.
-    const links = linksOutsideLinkedChains(
-      context.runtime.getOrchestrationDb(),
-      await store.links(item.uid),
-      params.refs.map(parseItemLink)
-    )
-    const outcome = await store.link(item.uid, links, writer.actor)
-    return writeResult(context.runtime, outcome, writer)
+    const held = await store.links(item.uid)
+    const links = linksOutsideLinkedChains(db, held, requested)
+    if (params.check) {
+      // The write's own bound, so nothing is created that can't link.
+      const fresh = links.filter((l) => !held.some((h) => h.kind === l.kind && h.ref === l.ref))
+      assertBotItemLinkRoom(held.length, new Set(fresh.map(linkWords)).size)
+      return null
+    }
+    const outcome = await store.link(item.uid, links, writer.actor, startedBy)
+    return writeResult(context, outcome, writer)
   }
 })
+
+/** Who started each worker named, read only for a link to someone else's item. */
+function startersOf(
+  db: OrchestrationDb,
+  links: readonly BotItemLinkInput[],
+  bots: readonly Bot[]
+): Record<string, string | null> {
+  return Object.fromEntries(
+    links.flatMap((link) =>
+      link.kind === 'dispatch' ? [[link.ref, dispatchStarterBotId(db, link.ref, bots)]] : []
+    )
+  )
+}
 
 export const BOT_ITEMS_WRITE_METHODS = [ADD, SET, COMMENT, DONE, CANCEL, LINK]

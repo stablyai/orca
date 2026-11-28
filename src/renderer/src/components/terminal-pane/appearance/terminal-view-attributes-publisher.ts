@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../../../../shared/settings/global-setti
 import type { TerminalColorSchemeMode } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import {
   terminalColorSchemeReport,
+  terminalViewColorQueryReplyColors,
   type TerminalViewAttributes,
   type TerminalViewRgb
 } from '../../../../../shared/terminal/protocol/queries/terminal-view-attributes'
@@ -206,6 +207,15 @@ let lastPublishedSnapshot: string | null = null
 let lastPublishedAttributes: TerminalViewAttributes | null = null
 type PublishedAttributesListener = (attributes: TerminalViewAttributes) => void
 const publishedAttributesListeners = new Set<PublishedAttributesListener>()
+
+/** OSC 10/11 colours of this window's published theme; undefined before the first publish. */
+export function publishedTerminalColorQueryReplyColors():
+  | TerminalOscColorQueryReplyColors
+  | undefined {
+  return lastPublishedAttributes
+    ? terminalViewColorQueryReplyColors(lastPublishedAttributes)
+    : undefined
+}
 
 /** Hears every published change, starting with the current one if any. */
 export function subscribeToPublishedTerminalViewAttributes(

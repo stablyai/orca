@@ -8,7 +8,8 @@ import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
 import { useBotUsageLimitStopIndex } from './use-bot-usage-limit-stops'
-import { UsageLimitStopMark, usageLimitStopText } from './BotUsageLimitMark'
+import { UsageLimitStopMark } from './BotUsageLimitMark'
+import { usageLimitStopText } from '../../../../shared/bots/bot-usage-limit-stop'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   CHAT_TREE_CAPS,
@@ -139,7 +140,7 @@ function ChatRowLive({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | n
 
 const META = 'flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground tabular-nums'
 
-/** The preview line's end while workers wait or run: "N waiting" with the waiting dot and "N running"
+/** The preview line's end while workers wait or run: "N needs you" with its dot and "N running"
  *  with its spinner (their glyphs alone when narrow), and how many stopped on a usage limit. */
 function ChatRowWork({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | null {
   const t = useTranslate()
@@ -157,7 +158,7 @@ function ChatRowWork({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | n
       (worker) => chat.running.includes(worker) && worker.state !== 'unreachable'
     ).length
   if (waiting + running + stopped.length > 0) {
-    const waitingLabel = t('bots.chats.waitingCount', '{{count}} waiting', { count: waiting })
+    const waitingLabel = t('bots.chats.needsYouCount', '{{count}} needs you', { count: waiting })
     const runningLabel = t('bots.chats.runningCount', '{{count}} running', { count: running })
     return (
       <span className="flex shrink-0 items-center gap-2">

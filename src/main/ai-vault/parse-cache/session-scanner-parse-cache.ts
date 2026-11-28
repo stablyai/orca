@@ -11,7 +11,6 @@ import { createDroidSessionResumeState } from '../scanners/droid/session-scanner
 import { createMessageGraphSessionResumeState } from '../scanners/session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from '../scanners/claude/session-scanner-primary-parsers'
 import { createCodebuddySessionResumeState } from '../scanners/codebuddy/session-scanner-codebuddy-parser'
-import { createGeminiJsonlSessionResumeState } from '../scanners/gemini/session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from '../scanners/copilot/session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from '../scanners/cursor/session-scanner-cursor-parser'
 import { countSubagentTranscripts } from '../scanners/claude/session-scanner-subagent-transcripts'
@@ -31,6 +30,7 @@ import {
   mergeSkippedTranscriptRecords,
   type SkippedTranscriptRecord
 } from '../transcripts/session-transcript-record-budget'
+import { isCursorAcpSessionStorePath } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import {
   enrichSessionFromSidecar,
   reuseUnchangedSidecarSession,
@@ -59,7 +59,9 @@ function resumableStateFactoryFor(
       return (messages) =>
         createCodexSessionResumeState(candidate.file, candidate.codexHome, messages)
     case 'cursor':
-      return (messages) => createCursorSessionResumeState(candidate.file, messages)
+      return isCursorAcpSessionStorePath(candidate.file.path)
+        ? null
+        : (messages) => createCursorSessionResumeState(candidate.file, messages)
     case 'copilot':
       return (messages) => createCopilotSessionResumeState(candidate.file, messages)
     case 'droid':
@@ -71,10 +73,6 @@ function resumableStateFactoryFor(
       const agent = candidate.agent
       return (messages) => createMessageGraphSessionResumeState(agent, candidate.file, messages)
     }
-    case 'gemini':
-      return candidate.file.path.endsWith('.jsonl')
-        ? (messages) => createGeminiJsonlSessionResumeState(candidate.file, messages)
-        : null
     case 'antigravity':
       return (messages) => createAntigravitySessionResumeState(candidate.file, messages)
     case 'devin':

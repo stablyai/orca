@@ -13,6 +13,7 @@ import type { PersistedUIState } from '../../../../../shared/orca-profiles/persi
 import { isWorkspaceHostScope } from '../../../../../shared/orcad-migration/orcad-migration-client-state-value-validation'
 import { defineMethod, type RpcContext } from '../../core'
 import { keepSessionPicksOnBot } from '../../../../bots/bot-session-option-picks'
+import { assertTeamAllowsBots, botsBlockedByTeam } from '../../../../bots/bot-team-policy'
 import { withoutSendCheckedEffortPicks } from '../../../../native-chat/agent-session-wire/options/send-checked-effort-picks'
 import { isHostOwnPhone } from '../../callers/host-own-phone'
 import {
@@ -24,6 +25,7 @@ import {
   FeatureInteractionIdParam,
   UiUpdate
 } from '../../../../../shared/rpc-contract/client-ui/client-ui-params'
+import { UiSetWorkspaceNotificationMuted } from '../../../../../shared/rpc-contract/client-ui/client-ui-notification-mute-params'
 // Keep schema/PersistedUIState parity assertions in the typecheck graph so drift fails before reaching paired clients.
 
 import { TerminalQuickCommandsUpdate } from '../../../../../shared/rpc-contract/terminal/terminal-quick-command-params'
@@ -97,15 +99,24 @@ export const CLIENT_UI_METHODS = [
     name: 'settings.get',
     permission: 'workspace',
     params: null,
-    handler: (_params, { runtime }) => ({ settings: runtime.getClientSettings() })
+    handler: (_params, { runtime }) => ({
+      settings: runtime.getClientSettings(),
+      ...(botsBlockedByTeam() ? { botsBlockedByTeam: true } : {})
+    })
   }),
   defineMethod({
     name: 'settings.update',
     permission: 'settings-write',
     params: SettingsUpdate,
-    handler: async (params, { runtime }) => ({
-      settings: await runtime.updateClientSettings(params)
-    })
+    handler: async (params, { runtime }) => {
+      if (params.botsEnabled !== undefined) {
+        assertTeamAllowsBots()
+      }
+      return {
+        settings: await runtime.updateClientSettings(params),
+        ...(botsBlockedByTeam() ? { botsBlockedByTeam: true } : {})
+      }
+    }
   }),
   defineMethod({
     name: 'settings.getTerminalQuickCommands',
@@ -185,6 +196,25 @@ export const CLIENT_UI_METHODS = [
         ...ownPhoneFilter
       } as Partial<PersistedUIState>
       return { ui: uiForCaller(context.runtime.updateUIState(updates), context) }
+    }
+  }),
+  defineMethod({
+    name: 'ui.setWorkspaceNotificationMuted',
+    permission: 'workspace',
+    params: UiSetWorkspaceNotificationMuted,
+    handler: ({ worktreeId, muted }, context) => {
+      const next = { ...context.runtime.getUIState().notificationsMutedByWorktree }
+      if (muted) {
+        next[worktreeId] = true
+      } else {
+        delete next[worktreeId]
+      }
+      return {
+        ui: uiForCaller(
+          context.runtime.updateUIState({ notificationsMutedByWorktree: next }),
+          context
+        )
+      }
     }
   }),
   defineMethod({

@@ -4,7 +4,6 @@ import { once } from 'node:events'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
@@ -12,7 +11,8 @@ import { runProcess } from '@orca/process-host'
 
 const piRoot = resolve(process.argv[2] || '')
 assert.ok(process.argv[2], 'Pass an installed pi-coding-agent package directory')
-const scratch = await mkdtemp(join(tmpdir(), 'orca-pi-owner-'))
+// Inside the repo's node_modules, so the bundle's external packages (zod) resolve from the repo.
+const scratch = await mkdtemp(join(process.cwd(), 'node_modules', '.orca-pi-owner-'))
 const received = []
 const server = createServer(async (request, response) => {
   let body = ''

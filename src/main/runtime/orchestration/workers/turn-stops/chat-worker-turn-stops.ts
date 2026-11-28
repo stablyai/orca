@@ -2,7 +2,12 @@ import type { AgentSessionStatusSummary } from '../../../../../shared/agent-sess
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
-import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
+import { readCoordinatorMailSnapshot } from '../../db/messages/dispatch-read-mail'
+import {
+  readMaxMessageSequence,
+  readWorkingTurnAfterSequence,
+  readWorkingTurnStartedAt
+} from '../../db/worker-presence/worker-presence-store'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { observeWorker, type WorkerRest } from './worker-presence-report'
 import {
@@ -64,6 +69,8 @@ export function chatWorkerTurnStopReporter(
   const generations = new Map<string, number>()
   // A turn begins after its session's previous turn completed; a prompt arrives mid-turn and bounds nothing.
   const previousCompletionAt = new Map<string, number>()
+  const previousCompletionSequence = new Map<string, number>()
+  const inFlightAfterSequence = new Map<string, number>()
   const lifetime = new AbortController()
   const timers = new Set<() => void>()
   const schedule = (run: () => void, delayMs: number): void => {
@@ -111,23 +118,53 @@ export function chatWorkerTurnStopReporter(
       // Any later edge, even one not reported (a failed or cancelled turn), supersedes a pending stop.
       const generation = (generations.get(sessionId) ?? 0) + 1
       generations.set(sessionId, generation)
-      const turnStartedAt = previousCompletionAt.get(sessionId)
-      if (event.type === 'completion') {
-        previousCompletionAt.set(sessionId, now())
-      }
+      const previousTurnEndedAt = previousCompletionAt.get(sessionId)
+      const prevSeq = previousCompletionSequence.get(sessionId)
+      const db = deps.getDb()
       const stop = chatStop(event)
-      const db = stop ? deps.getDb() : null
-      if (!stop || !db) {
-        return
-      }
       // The Dispatch a stop belongs to is one open when it was seen.
       // Mail taken after the turn ended belongs to the next turn, though it lands before this report.
-      const seen = new Map(
-        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => [
-          dispatch.id,
-          readCoordinatorMailCount(db, dispatch.id)
-        ])
-      )
+      const seen =
+        stop && db
+          ? new Map(
+              chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => {
+                const key = `${stop.sessionId}:${dispatch.id}`
+                const workingSeq =
+                  inFlightAfterSequence.get(key) ?? readWorkingTurnAfterSequence(db, dispatch.id)
+                const turnStartedAfterSequence =
+                  prevSeq !== undefined && workingSeq !== undefined
+                    ? Math.max(prevSeq, workingSeq)
+                    : (prevSeq ?? workingSeq)
+                if (event.type === 'prompt' && turnStartedAfterSequence !== undefined) {
+                  inFlightAfterSequence.set(key, turnStartedAfterSequence)
+                }
+                const turnStartedAt =
+                  previousTurnEndedAt ?? readWorkingTurnStartedAt(db, dispatch.id)
+                return [
+                  dispatch.id,
+                  {
+                    ...readCoordinatorMailSnapshot(db, dispatch.id),
+                    ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
+                    ...(turnStartedAfterSequence !== undefined ? { turnStartedAfterSequence } : {})
+                  }
+                ]
+              })
+            )
+          : null
+      if (event.type === 'completion') {
+        previousCompletionAt.set(sessionId, now())
+        if (db) {
+          previousCompletionSequence.set(sessionId, readMaxMessageSequence(db))
+        }
+        for (const key of inFlightAfterSequence.keys()) {
+          if (key.startsWith(`${sessionId}:`)) {
+            inFlightAfterSequence.delete(key)
+          }
+        }
+      }
+      if (!stop || !db || !seen) {
+        return
+      }
       let approval: AgentJournalApprovalItem | null = null
       const deliver = (): void => {
         try {
@@ -140,7 +177,9 @@ export function chatWorkerTurnStopReporter(
           if (
             generations.get(stop.sessionId) !== generation ||
             !current ||
-            status?.status === 'working'
+            status?.status === 'working' ||
+            // A turn its own background tasks hold open is a wait, which those waits record.
+            (stop.reason === 'finished' && deps.chatWaitsOnBackground?.(stop.sessionId) === true)
           ) {
             return
           }
@@ -180,11 +219,10 @@ export function chatWorkerTurnStopReporter(
                 rest: {
                   from,
                   reason: stop.reason,
-                  mailTaken: seen.get(dispatch.id),
+                  // Unknown when no prior turn or working edge bounded this turn: a duplicate alert beats hiding a stall.
+                  ...seen.get(dispatch.id),
                   // The payload names the prompt; the agent's prose before it adds nothing.
                   lastOutput: payload ? undefined : status?.lastAssistantMessage,
-                  // Unknown for a session's first turn seen here: a duplicate alert beats hiding a stall.
-                  turnStartedAt,
                   ...(stop.awaitsReply ? { awaitsReply: true } : {}),
                   ...(payload ? { approval: payload } : {})
                 }
@@ -244,6 +282,8 @@ export function chatWorkerTurnStopReporter(
       }
       generations.clear()
       previousCompletionAt.clear()
+      previousCompletionSequence.clear()
+      inFlightAfterSequence.clear()
     }
   }
 }
@@ -253,7 +293,8 @@ export function chatWorkerTurnStopReporter(
 export function observeChatWorkerWorking(sessionId: string, deps: WorkerTurnStopReportDeps): void {
   try {
     const db = deps.getDb()
-    if (!db) {
+    // A chat its background tasks hold working has not started a turn.
+    if (!db || deps.chatWaitsOnBackground?.(sessionId) === true) {
       return
     }
     for (const { dispatch } of chatWorkerDispatches(sessionId, db)) {

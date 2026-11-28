@@ -14,6 +14,12 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import {
+  BRANCH_PULL_REQUEST_PAGE_SIZE,
+  isStaleCompletedPullRequest,
+  selectAzureDevOpsBranchPullRequest,
+  type AzureDevOpsBranchLookupOptions
+} from './branch-pull-request-selection'
+import {
   azureDevOpsTokenConfigured,
   getAzureDevOpsAuthConfig,
   normalizeAzureDevOpsApiBaseUrl,
@@ -75,11 +81,12 @@ async function getPullRequestStatuses(
   repoIdOrName: string,
   pr: RawAzureDevOpsPullRequest
 ): Promise<{ statuses: RawAzureDevOpsStatus[]; complete: boolean }> {
-  const read = async (path: string) => {
+  const read = async (path: string, searchParams?: Record<string, string>) => {
     let hasMore = false
     const raw = await requestAzureDevOpsJson<
       RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }
     >(repo, path, {
+      searchParams,
       onResponse: (response) => {
         hasMore = Boolean(response.headers.get('x-ms-continuationtoken'))
       }
@@ -100,7 +107,10 @@ async function getPullRequestStatuses(
   if (!commitId) {
     return { statuses: pr.statuses ?? [], complete: false }
   }
-  const commitStatuses = await read(`${root}/commits/${encodePathSegment(commitId)}/statuses`)
+  const commitStatuses = await read(`${root}/commits/${encodePathSegment(commitId)}/statuses`, {
+    // Commit status history includes superseded attempts for the same check context.
+    latestOnly: 'true'
+  })
   return {
     statuses: commitStatuses.statuses,
     complete: prStatuses.complete && commitStatuses.complete
@@ -120,25 +130,6 @@ async function normalizePullRequest(
     webBaseUrl,
     complete ? summarizeAzureDevOpsStatuses(statuses) : undefined
   )
-}
-
-function sortPullRequestsForBranch(
-  left: RawAzureDevOpsPullRequest,
-  right: RawAzureDevOpsPullRequest
-): number {
-  const leftStatus = left.status?.trim().toLowerCase()
-  const rightStatus = right.status?.trim().toLowerCase()
-  const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
-  // Newer abandoned PRs must not hide usable branch reviews.
-  if (abandonedOrder !== 0) {
-    return abandonedOrder
-  }
-  const leftTime = Date.parse(left.closedDate ?? left.creationDate ?? '') || 0
-  const rightTime = Date.parse(right.closedDate ?? right.creationDate ?? '') || 0
-  if (leftTime !== rightTime) {
-    return rightTime - leftTime
-  }
-  return Number(rightStatus === 'active') - Number(leftStatus === 'active')
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
@@ -210,7 +201,7 @@ export async function getAzureDevOpsPullRequestForBranch(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {},
+  options: AzureDevOpsBranchLookupOptions = {},
   throwOnFailure = false
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
@@ -228,21 +219,28 @@ export async function getAzureDevOpsPullRequestForBranch(
     return null
   }
 
+  const pullRequestsPath = `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests`
   if (branchName) {
-    const list = await requestAzureDevOpsJson<{ value?: RawAzureDevOpsPullRequest[] }>(
-      repo,
-      `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests`,
-      {
-        searchParams: {
-          'searchCriteria.sourceRefName': `refs/heads/${branchName}`,
-          'searchCriteria.status': 'all',
-          $top: 10
-        }
-      },
-      throwOnFailure
-    )
-    const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
+    const listBranchPullRequests = async (
+      status: 'all' | 'active'
+    ): Promise<RawAzureDevOpsPullRequest[]> => {
+      const list = await requestAzureDevOpsJson<{ value?: RawAzureDevOpsPullRequest[] }>(
+        repo,
+        pullRequestsPath,
+        {
+          searchParams: {
+            'searchCriteria.sourceRefName': `refs/heads/${branchName}`,
+            'searchCriteria.status': status,
+            $top: BRANCH_PULL_REQUEST_PAGE_SIZE
+          }
+        },
+        throwOnFailure
+      )
+      return list?.value ?? []
+    }
+    const raw = await selectAzureDevOpsBranchPullRequest(listBranchPullRequests)
     if (raw) {
+      const localGitOptions = getHostedReviewLocalGitOptions(options)
       const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
         state: mapAzureDevOpsPullRequestState(raw),
         reviewNumber: raw.pullRequestId ?? null,
@@ -250,9 +248,22 @@ export async function getAzureDevOpsPullRequestForBranch(
         branchName,
         repoPath,
         connectionId,
-        localGitOptions: getHostedReviewLocalGitOptions(options)
+        localGitOptions
       })
-      if (!hideOnDefaultBranch) {
+      if (
+        !hideOnDefaultBranch &&
+        !(await isStaleCompletedPullRequest({
+          raw,
+          linkedPRNumber,
+          repo,
+          pullRequestsPath,
+          repoPath,
+          connectionId,
+          localGitOptions,
+          currentHeadOid: options.currentHeadOid,
+          userRefresh: options.userRefresh
+        }))
+      ) {
         return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
       }
     }
@@ -263,9 +274,7 @@ export async function getAzureDevOpsPullRequestForBranch(
   }
   const raw = await requestAzureDevOpsJson<RawAzureDevOpsPullRequest>(
     repo,
-    `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
-      String(linkedPRNumber)
-    )}`,
+    `${pullRequestsPath}/${encodePathSegment(String(linkedPRNumber))}`,
     {},
     throwOnFailure
   )
@@ -278,7 +287,7 @@ export function getAzureDevOpsPullRequestForBranchOrThrow(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: AzureDevOpsBranchLookupOptions = {}
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   return getAzureDevOpsPullRequestForBranch(
     repoPath,

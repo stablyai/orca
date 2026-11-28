@@ -9,7 +9,7 @@ import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/r
 import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/mirror-terminal-orphan-recovery'
 import {
   isSessionTabsListAllResult,
-  recordReceivedWebSessionTabsSnapshot,
+  recordReceivedWebSessionTabsSnapshots,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from '../tracking/tracking'
 import { decideWebSessionTabsSnapshot } from '../tracking/tracking-decisions'
@@ -85,14 +85,10 @@ export function loadInitialWebSessionTabs({
       for (const snapshot of result.snapshots) {
         recordBrowserInitializationReceipt(environmentId, snapshot, requestReceivedFrame, delivery)
       }
-      const receivedFrames = result.snapshots.map((snapshot) =>
-        recordReceivedWebSessionTabsSnapshot(
-          environmentId,
-          snapshot,
-          requestReceivedFrame,
-          runtimeId,
-          'bootstrap'
-        )
+      const receivedFrames = recordReceivedWebSessionTabsSnapshots(
+        environmentId,
+        result.snapshots,
+        { receivedFrame: requestReceivedFrame, runtimeId, source: 'bootstrap' }
       )
       applyReceivedAgentSenderPublications(environmentId, result.snapshots, runtimeId)
       const recovered = await Promise.all(
@@ -144,7 +140,8 @@ export function loadInitialWebSessionTabs({
             freshSnapshots,
             environmentId,
             undefined,
-            changedAgentPaneKeys
+            changedAgentPaneKeys,
+            { requestReceivedFrame }
           ),
         {
           frames: applicable.map((snapshot, index) => ({

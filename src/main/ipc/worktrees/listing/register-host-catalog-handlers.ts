@@ -12,7 +12,10 @@ import type {
 import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  getRepoIdFromWorktreeId
+} from '../../../../shared/worktree/id'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspaces/cleanup/workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspaces/space-analysis/workspace-space-analysis-snapshot'
@@ -21,7 +24,7 @@ import {
   buildDisconnectedDetectedWorktrees,
   buildFolderDetectedWorktrees
 } from './folder-workspace-catalog'
-import { isFolderWorkspaceIdForRepo } from '../folder-workspace-model'
+import { getFolderWorkspaceRootId } from '../folder-workspace-model'
 import {
   createSshWorktreeMetaIndexForRepo,
   listDisconnectedSshWorktrees
@@ -66,9 +69,18 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
       })
       // Folder instance suffixes require the folder builder rather than Git path synthesis.
       if (isFolderRepo(repo)) {
-        const folderWorkspaceIds = Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) =>
-          isFolderWorkspaceIdForRepo(repo, worktreeId)
-        )
+        const rootId = getFolderWorkspaceRootId(repo)
+        const instancePrefix = `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
+        const folderWorkspaceIds: string[] = []
+        const allWorktreeMeta = store.getAllWorktreeMeta()
+        for (const worktreeId in allWorktreeMeta) {
+          if (
+            (worktreeId === rootId || worktreeId.startsWith(instancePrefix)) &&
+            Object.hasOwn(allWorktreeMeta, worktreeId)
+          ) {
+            folderWorkspaceIds.push(worktreeId)
+          }
+        }
         return hasConflictingStoredWorktreeOwner(store, repo, folderWorkspaceIds)
           ? rejected()
           : complete(
@@ -79,7 +91,7 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
               )
             )
       }
-      const hostMeta = readAllWorktreeMetaForHost(store, requestedExecutionHostId)
+      const hostMeta = readAllWorktreeMetaForHost(store, requestedExecutionHostId, repo.id)
       const metaIndex = createSshWorktreeMetaIndexForRepo(hostMeta, repo.id)
       return complete(
         buildDisconnectedDetectedWorktrees(

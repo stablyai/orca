@@ -44,6 +44,8 @@ export type MobileDesktopRelayCallOptions = {
 export type MobileDesktopRelayHosts = {
   /** Last-known server statuses and SSH targets identifying their underlying hosts. */
   list: () => MobileDesktopRelayListing | Promise<MobileDesktopRelayListing>
+  /** Every saved server, a WSL host this desktop has not started too. */
+  configuredIds?: () => Promise<readonly string[]>
   /** Null when the id names no configured server; a phone-supplied endpoint is never used. */
   /** `openingMethod`: the request that needs the server, which may wake a recipe VM behind it. */
   resolve: (
@@ -83,7 +85,12 @@ export type MobileDesktopRelayHosts = {
   watchChanges: (
     host: Pick<MobileDesktopRelayHost, 'environmentId'>,
     expected: NonNullable<MobileDesktopRelayCallOptions['expected']>,
-    callbacks: { onChange: (change: { catalog: boolean }) => void; onClose: () => void }
+    callbacks: {
+      onChange: (change: { catalog: boolean }) => void
+      /** An agent row changed: worktreeRowsChanged or agentListChanged. */
+      onRowsChanged?: () => void
+      onClose: () => void
+    }
   ) => MobileDesktopRelayHostWatch | Promise<MobileDesktopRelayHostWatch>
 }
 

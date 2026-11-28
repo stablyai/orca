@@ -1,119 +1,137 @@
-// An ask of several questions, one line at a time: a quick reply or the box's Enter answers the line
-// it is on, and the step moves to the first open line. Quick replies are held on this device (the
-// comment box's draft store, so a reload keeps them) and post as one comment when the last line is
-// answered, so the agent wakes once, or when the owner sends them sooner. Words sent from the box post
-// at once, as any send does, and any other comment sent sooner posts the held answers with it, so none
-// is left only on this device.
-import { useCallback, useMemo, useState } from 'react'
+// An ask of several questions, all on one card: a quick reply, or the box's Enter on the line its
+// "Replying to" names, picks the line's answer (a picked line reopened is open to it too, its Enter
+// replacing the pick); the pick that fills the last open line posts them all as one comment, as
+// chat's question card submits on its last answer, and Send posts a partial set, so the agent wakes once. Picks are held on this device
+// (the comment box's draft store, so a reload keeps them) until the host has the comment: one the host
+// refused for a newer question stays to recover. A held answer keeps the files and skills it was
+// sent with (src/shared/bots/bot-item-held-answers). Box words with no line named post at once and
+// take the picks along. What each send answers is kept on its pending entry
+// (`intent`), so its lines show as sent and can't be sent twice, whatever its words.
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../../shared/bot-types'
 import type {
   BotItem,
   BotItemCommentSkill,
   BotItemEvent
 } from '../../../../../shared/bots/bot-items'
+import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
+import { botItemAnswerWords } from '../../../../../shared/bots/bot-item-answer-lines'
 import {
-  botItemQuestionLine,
-  type BotItemQuestionShape
-} from '../../../../../shared/bots/bot-item-ask'
+  botItemHeldAnswer,
+  botItemHeldAnswerIsReply,
+  botItemHeldAnswersComment,
+  botItemHeldAnswersOverLimit,
+  type BotItemHeldAnswer,
+  type BotItemHeldAnswersLimit,
+  type BotItemHeldComment
+} from '../../../../../shared/bots/bot-item-held-answers'
 import {
-  botItemAnswersText,
-  botItemAnswerWords,
-  botItemNamedAnswers
-} from '../../../../../shared/bots/bot-item-answer-lines'
-import {
+  botItemAskLine,
   botItemWaitingAsk,
   botItemWaitingLine,
   type BotItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
-import type { BotItemPendingComment } from '../../../../../shared/bots/bot-item-pending-comments'
-import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
+import {
+  botItemWaitsOnNoQuestion,
+  createBotItemReplyTargetHook,
+  type BotItemReplyMarkState
+} from '../../../../../shared/bots/bot-item-reply-target'
+import type {
+  BotItemPendingComment,
+  BotItemPendingIntent
+} from '../../../../../shared/bots/bot-item-pending-comments'
+import { botItemSentAnswers } from '../../../../../shared/bots/bot-item-sent-answers'
+import { botItemCommentDraftScope, botItemReplyTargetDrafts } from './bot-item-comment-draft'
+import { botItemHeldAnswersScope, useBotItemHeldAnswers } from './bot-item-held-answers'
+import {
+  readNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraft
+} from '../../native-chat/drafts/native-chat-composer-draft-store'
 
-const NOT_COMPOSING = (): boolean => false
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
 
-export function botItemHeldAnswersScope(bot: Bot, itemUid: string, askId: string): string {
-  return `bot-item-answers:${botRefKey(bot)}:${itemUid}:${askId}`
-}
-
-/** An ask's answers held on this device, per question line, stored as the comment they post as. */
-export function useBotItemHeldAnswers(
-  scopeKey: string,
-  shape: BotItemQuestionShape
-): { held: (string | null)[]; hold: (answers: readonly (string | null)[]) => void } {
-  const { draft, setDraft } = useNativeChatDraft(scopeKey, NOT_COMPOSING)
-  const held = useMemo(() => botItemNamedAnswers(shape, draft), [shape, draft])
-  const hold = useCallback(
-    (answers: readonly (string | null)[]) => setDraft(botItemAnswersText(shape, answers)),
-    [setDraft, shape]
-  )
-  return { held, hold }
-}
+const useBotItemReplyTarget = createBotItemReplyTargetHook(
+  { useCallback, useLayoutEffect, useRef, useSyncExternalStore },
+  botItemReplyTargetDrafts
+)
 
 export type BotItemQuestionSteps = {
   askId: string
   shape: BotItemQuestionShape
-  /** Per line, the answer held here until the set posts. */
-  held: readonly (string | null)[]
-  /** The line shown, by its index in the ask. */
-  current: number
-  /** The lines to step through: those no comment answered yet, or only by order while held here. */
+  /** Per line, the answer picked here and not sent yet; only on lines still open to a pick. */
+  picks: readonly (BotItemHeldAnswer | null)[]
+  /** The lines still open to a pick: no comment answered them, and no send of them is on its way. */
   lines: readonly number[]
-  go: (index: number) => void
-  /** A quick reply: held until the last line is answered. */
-  answer: (index: number, words: string) => void
-  /** How many open lines hold an answer here, not sent yet. */
-  heldCount: number
-  /** Send now: the held answers post as one comment; the other lines stay open. */
-  sendHeld: () => void
+  /** A quick reply: picks it, or swaps it for the line's other pick; picked again, it stays. */
+  pick: (index: number, words: string) => void
+  /** Editing a line in the comment box takes it over: its pick goes, and the box answers it. */
+  bind: (index: number) => void
+  /** The picked line shown open to change: the box answers it, its pick kept until a new answer. */
+  reopened: number | null
+  /** Reopen a picked line; its pick again, or the box's Enter, folds it back. */
+  reopen: (index: number) => void
+  /** Send: the picks post as one comment. `empty`: none picked; `none`: no line is open. */
+  send: () => 'sent' | 'empty' | 'none'
+  /** No line open, and a send of them on its way (not failed): Send reads as sending until the read. */
+  sending: boolean
 }
 
 export type BotItemQuickReplyActions = {
   send: (text: string) => void
   edit: (text: string) => void
-  /** Into the box as a comment of its own, answering no line: answers held for an earlier ask. */
-  recover: (text: string) => void
+  /** A held answer back into the box, its files and skills too, to change and hold again; `plain`:
+   *  answers held for an earlier ask, as a comment of its own answering no line. True once the box's
+   *  draft is saved, when the held copy may go. */
+  restore: (answer: BotItemHeldAnswer, plain?: boolean) => boolean
   /** Type your answer: the comment box takes focus, glowing once. */
   type: () => void
-  /** The waiting ask of several questions, one line at a time. */
+  /** The waiting ask of several questions, all its lines at once. */
   steps?: BotItemQuestionSteps | null
-  /** Answers just posted as one comment. */
-  sent?: BotItemSentAnswers | null
+  /** Per ask, the answers of its sends on their way, by line. */
+  sent?: ReadonlyMap<string, readonly (string | null)[]>
 }
-
-/** Answers just posted as one comment: shown on their lines until the host's read has the comment. */
-export type BotItemSentAnswers = { askId: string; text: string; answers: (string | null)[] }
 
 export function useBotItemQuestionSteps(
   bot: Bot,
   item: BotItem,
   events: readonly BotItemEvent[],
   /** `questionId`: the ask the text answers, so a reply that lands after a new question is refused;
-   *  `plain`: it answers none. */
+   *  `plain`: it answers none; `intent`: what it answers, kept on this device. */
   send: (
     text: string,
     paths?: readonly string[],
     questionId?: string,
     plain?: boolean,
-    skills?: readonly BotItemCommentSkill[]
+    skills?: readonly BotItemCommentSkill[],
+    skipped?: readonly number[],
+    intent?: BotItemPendingIntent
   ) => void,
-  pending: readonly BotItemPendingComment[]
+  pending: readonly BotItemPendingComment[],
+  /** The item's Activity is read: until then a question may be there unseen. */
+  eventsRead = false
 ): {
   steps: BotItemQuestionSteps | null
-  sent: BotItemSentAnswers | null
+  sent: ReadonlyMap<string, readonly (string | null)[]>
   /** A quick reply of one question, posted at once as it always has. */
   quick: (text: string) => void
   /** The comment box's send: it answers only the question its "Replying to" names; with none named
-   *  (its × closed), the comment answers nothing. */
+   *  (its × closed), the comment answers nothing. A limit the held answers would pass together
+   *  refuses it, and the box keeps it. */
   fromBox: (
     text: string,
     paths: readonly string[],
     replyingTo: string | null,
     skills?: readonly BotItemCommentSkill[]
-  ) => void
-  /** What the comment box replies to: with several questions, the line the step is on. */
+  ) => BotItemHeldAnswersLimit | null
+  /** The box's next draft answers no line: recovered answers of an earlier ask, a comment of its own. */
+  answerNone: () => void
+  /** Type your answer, or a quick reply's edit, on a one-question ask: the box answers it, its words too. */
+  answerWaiting: () => void
+  /** What the comment box replies to: the line named when its draft started (shared with the phone). */
   waitingLine: BotItemWaitingLine | null
+  /** Its "Replying to" closed (×) on that line, kept with the draft (shared with the phone). */
+  replyMark: BotItemReplyMarkState
 } {
   // As cheap as the box's own waiting-line read, on each render.
   const asked = botItemWaitingAsk(item, events)
@@ -122,104 +140,221 @@ export function useBotItemQuestionSteps(
   const shape = waiting?.shape ?? NO_ASK
   // One question, or one in prose: the box names it until its × closes.
   const oneLine = waiting ? null : botItemWaitingLine(item, events)
-  const { held, hold } = useBotItemHeldAnswers(botItemHeldAnswersScope(bot, item.uid, askId), shape)
-  const [chosen, setChosen] = useState<{ askId: string; index: number } | null>(null)
-  const [sent, setSent] = useState<BotItemSentAnswers | null>(null)
-  // A plain comment read by order took a line whose answer is held here: the held answer stands.
-  const lines = shape.decisions.flatMap((_, index) =>
-    !waiting?.answers[index] || (waiting.byOrder[index] && held[index]) ? [index] : []
+  const heldScope = botItemHeldAnswersScope(bot, item.uid, askId)
+  const { held, hold } = useBotItemHeldAnswers(heldScope, shape)
+  const sent = botItemSentAnswers(pending)
+  const sending = (waiting && sent.get(askId)) || null
+  const skipping = pending.find(
+    (entry) => entry.intent?.askId === askId && !entry.failed && entry.skipped?.length
+  )?.skipped
+  const boxScope = botItemCommentDraftScope(bot, item.uid)
+  const subscribeBox = useCallback(
+    (listener: () => void) => subscribeToNativeChatComposerDraft(boxScope, listener),
+    [boxScope]
   )
-  const firstOpen = lines.find((index) => !held[index]) ?? lines[0] ?? 0
-  const current =
-    chosen && chosen.askId === askId && lines.includes(chosen.index) ? chosen.index : firstOpen
-  // A line another client answered meanwhile keeps that answer; its held one is dropped.
-  const kept = shape.decisions.map((_, at) => (lines.includes(at) ? (held[at] ?? null) : null))
+  // Words or an attachment alike start a draft.
+  const boxEmpty = useSyncExternalStore(subscribeBox, () => {
+    const box = readNativeChatComposerDraft(boxScope)
+    return box.text.trim() === '' && box.images.length === 0
+  })
+  // Open to a pick: no comment answered it (a plain comment read by order gives way to a pick), and
+  // no send of it is on its way.
+  const lines = shape.decisions.flatMap((_, index) =>
+    (!waiting?.answers[index] || (waiting.byOrder[index] && held[index])) &&
+    !sending?.[index] &&
+    !skipping?.includes(index)
+      ? [index]
+      : []
+  )
+  // A line another client answered meanwhile keeps that answer; its pick is dropped.
+  const picks = shape.decisions.map((_, at) => (lines.includes(at) ? (held[at] ?? null) : null))
+  const [reopenedAt, setReopenedAt] = useState<{ askId: string; index: number } | null>(null)
+  const reopened = reopenedAt?.askId === askId && picks[reopenedAt.index] ? reopenedAt.index : null
+  const eligible = (index: number): boolean =>
+    lines.includes(index) && (!picks[index] || index === reopened)
+  // The line the box's draft answers, taken when its first words arrived (typed, pasted, dictated or
+  // restored alike: the box's draft store says). A one-question ask's line goes once its answer is
+  // on its way.
+  const open = waiting
+    ? lines.filter(eligible).map((index) => botItemAskLine(askId, shape, index))
+    : oneLine && !pending.some((entry) => !entry.failed && entry.intent?.askId === oneLine.eventId)
+      ? [oneLine]
+      : []
+  // A draft started on a picked line stays its answer, even once the line folds or the app restarts.
+  const target = useBotItemReplyTarget(
+    boxScope,
+    open,
+    boxEmpty,
+    botItemWaitsOnNoQuestion(item, asked, eventsRead),
+    waiting ? lines.map((index) => botItemAskLine(askId, shape, index)) : []
+  )
+  // Stored picks: a line a comment answered by name loses its pick; one on its way keeps it, to
+  // recover if the host refuses it.
+  const stored = (index: number, answer: BotItemHeldAnswer | null): (BotItemHeldAnswer | null)[] =>
+    shape.decisions.map((_, at) => {
+      if (at === index) {
+        return answer
+      }
+      return waiting?.answers[at] && !waiting.byOrder[at] ? null : (held[at] ?? null)
+    })
   const post = (
-    answers: (string | null)[],
-    text: string,
-    paths: readonly string[],
-    skills?: readonly BotItemCommentSkill[]
-  ): void => {
-    hold([])
-    setSent({ askId, text, answers })
-    send(text, paths, askId, undefined, skills)
-  }
-  // A composer submission sends immediately, even when it carries no files or skills.
-  const settle = (
-    index: number,
-    words: string,
-    fromBoxPaths?: readonly string[],
-    skills?: readonly BotItemCommentSkill[]
-  ): void => {
-    const next = kept.map((held_, at) => (at === index ? words : held_))
-    setChosen(null)
-    if (fromBoxPaths !== undefined || lines.every((at) => next[at])) {
-      post(next, botItemAnswersText(shape, next), fromBoxPaths ?? [], skills)
-      return
+    { text, paths, skills, answers, rideAlongText }: BotItemHeldComment,
+    skipped?: readonly number[]
+  ): void =>
+    send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
+  // Held until the last open line has an answer: then every answer goes, the held copy kept to recover.
+  // What the card shows is what goes: a folded line counts as answered, while the line shown open to
+  // change, or one the box's unsent words name, waits for its new answer (only the box's own Enter,
+  // `fromBox`, uses those words up).
+  const holdOrSend = (index: number, answer: BotItemHeldAnswer, fromBox = false): void => {
+    hold(stored(index, answer))
+    const next = picks.map((pick, at) => (at === index ? answer : pick))
+    const drafting = boxEmpty || target.hidden ? null : target.line?.id
+    const settled = (at: number): boolean =>
+      (at === index || at !== reopened) &&
+      ((fromBox && at === index) || drafting !== `${askId}:${at}`)
+    if (lines.every((at) => next[at] && settled(at))) {
+      post(botItemHeldAnswersComment(shape, next))
     }
-    hold(next)
   }
-  const answer = useLatestHandler((index: number, words: string) => settle(index, words))
+  const pick = useLatestHandler((index: number, words: string) => {
+    if (lines.includes(index)) {
+      if (index === reopened) {
+        setReopenedAt(null)
+      }
+      // Its pick again on a reopened line keeps it, and settles the line as a new answer would.
+      if (!botItemHeldAnswerIsReply(held[index], words) || index === reopened) {
+        holdOrSend(index, botItemHeldAnswer(words))
+      }
+    }
+  })
+  const reopen = useLatestHandler((index: number) => {
+    setReopenedAt({ askId, index })
+    // A draft keeps the line it started on; an empty box names the reopened line, "Replying to" shown.
+    if (boxEmpty) {
+      target.bind(`${askId}:${index}`)
+      target.show()
+    }
+  })
+  const bind = useLatestHandler((index: number) => {
+    setReopenedAt(null)
+    target.bind(`${askId}:${index}`)
+    if (held[index]) {
+      hold(stored(index, null))
+    }
+  })
+  const sendPicks = useLatestHandler((): 'sent' | 'empty' | 'none' => {
+    if (picks.some(Boolean)) {
+      post(
+        botItemHeldAnswersComment(shape, picks),
+        lines.filter((index) => !picks[index])
+      )
+      return 'sent'
+    }
+    return lines.length > 0 ? 'empty' : 'none'
+  })
   const fromBox = useLatestHandler(
     (
       text: string,
       paths: readonly string[],
       replyingTo: string | null,
       skills?: readonly BotItemCommentSkill[]
-    ) => {
+    ): BotItemHeldAnswersLimit | null => {
       if (!waiting) {
-        send(text, paths, undefined, oneLine !== null && replyingTo === null, skills)
-      } else if (replyingTo === `${askId}:${current}`) {
-        settle(current, text, paths, skills)
-      } else {
-        // Held answers name their lines; the comment rides along answering none.
-        const answered = botItemAnswersText(shape, kept)
-        if (answered) {
-          post(kept, `${answered}\n${text}`, paths, skills)
-        } else {
-          send(text, paths, undefined, true, skills)
-        }
+        target.release()
+        // Naming the question it answers, so a reply that lands after the agent asked anew is
+        // refused; else a comment of its own, never left for the host to take as an answer.
+        const questionId =
+          oneLine !== null && replyingTo === oneLine.id ? oneLine.eventId : undefined
+        // Answering the one question: what it answers stays with the send.
+        const intent =
+          questionId !== undefined && asked
+            ? {
+                askId: asked.askId,
+                shape: asked.shape,
+                answers: asked.shape.decisions.map((_, index) =>
+                  botItemAnswerWords(asked.shape, index, { text })
+                )
+              }
+            : questionId !== undefined
+              ? { askId: questionId, shape: NO_ASK, answers: [] }
+              : undefined
+        send(text, paths, questionId, questionId === undefined, skills, undefined, intent)
+        return null
       }
+      const answer = botItemHeldAnswer(text, paths, skills)
+      const line = shape.decisions.findIndex((_, index) => replyingTo === `${askId}:${index}`)
+      // The reply target decides which line the box names; it names only open lines.
+      const answering = line !== -1 && lines.includes(line)
+      // The held answers go as one comment: what one comment can't carry stays in the box.
+      const over = botItemHeldAnswersOverLimit(
+        answering ? picks.map((pick, at) => (at === line ? answer : pick)) : [...picks, answer]
+      )
+      if (over) {
+        return over
+      }
+      target.release()
+      if (answering) {
+        // Words, files and skills alike count as a pick: the line folds to them and the box names the
+        // next open line, or, on the last open line, they all go.
+        holdOrSend(line, answer, true)
+        // Another line reopened still waits for its own new answer.
+        if (line === reopened) {
+          setReopenedAt(null)
+        }
+      } else if (picks.some(Boolean)) {
+        // The picks name their lines; the words ride along answering none.
+        post(botItemHeldAnswersComment(shape, picks, answer))
+      } else {
+        send(text, paths, undefined, true, skills)
+      }
+      return null
     }
   )
-  const go = useLatestHandler((index: number) => setChosen({ askId, index }))
-  const heldCount = kept.filter(Boolean).length
-  const sendHeld = useLatestHandler(() => {
-    const answered = botItemAnswersText(shape, kept)
-    if (answered) {
-      setChosen(null)
-      post(kept, answered, [])
+  const answerNone = useLatestHandler(() => target.none())
+  // Several questions: the line's own edit or Type your answer already bound its line (`steps.bind`).
+  const answerWaiting = useLatestHandler(() => {
+    if (!waiting && open[0]) {
+      target.bind(open[0].id)
     }
   })
   // Read fresh each render, as the waiting ask is.
-  const steps = waiting
-    ? { askId, shape, held, current, lines, go, answer, heldCount, sendHeld }
+  const steps: BotItemQuestionSteps | null = waiting
+    ? {
+        askId,
+        shape,
+        picks,
+        lines,
+        pick,
+        bind,
+        reopened,
+        reopen,
+        send: sendPicks,
+        sending:
+          lines.length === 0 &&
+          pending.some(({ failed, intent }) => !failed && intent?.askId === askId)
+      }
     : null
   const quick = useLatestHandler((text: string) => {
-    if (asked) {
-      const { shape: own } = asked
-      const answers = own.decisions.map((_, index) => botItemAnswerWords(own, index, { text }))
-      setSent({ askId: asked.askId, text, answers })
-    }
-    send(text, [], asked?.askId)
+    const intent = asked
+      ? {
+          askId: asked.askId,
+          shape: asked.shape,
+          answers: asked.shape.decisions.map((_, index) =>
+            botItemAnswerWords(asked.shape, index, { text })
+          )
+        }
+      : undefined
+    send(text, [], asked?.askId, undefined, undefined, undefined, intent)
   })
-  const stepLine = steps?.shape.decisions[steps.current]
   return {
     steps,
-    // Shown on their lines while their comment is on its way; a refused or discarded one shows as itself.
-    sent:
-      sent && pending.some(({ event, failed }) => !failed && event.data.text === sent.text)
-        ? sent
-        : null,
+    sent,
     quick,
     fromBox,
-    waitingLine: stepLine
-      ? {
-          id: `${askId}:${steps.current}`,
-          eventId: askId,
-          line: botItemQuestionLine(stepLine.question),
-          replies: stepLine.replies.length > 0
-        }
-      : oneLine
+    answerNone,
+    answerWaiting,
+    waitingLine: target.line,
+    replyMark: target
   }
 }
