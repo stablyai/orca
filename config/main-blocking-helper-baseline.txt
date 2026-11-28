@@ -562,7 +562,6 @@
 1 src/main/ipc/accounts/cursor-accounts.ts
 1 src/main/ipc/accounts/grok-accounts.ts
 1 src/main/ipc/accounts/lazy-codex-accounts-handlers.ts # codex account handler charge moved from register-core-handlers; module imports on first invoke, never at boot
-3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
 4 src/main/ipc/app.ts
@@ -1092,11 +1091,8 @@
 1 src/main/rate-limits/providers/muse/muse-usage-fetcher.ts
 3 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 1 src/main/rate-limits/providers/opencode-go/opencode-go-usage-source-selection.ts
-4 src/main/rate-limits/providers/zcode/zcode-usage-credentials.ts
-2 src/main/rate-limits/providers/zcode/zcode-usage-fetcher.ts
 1 src/main/rate-limits/service/service-fetch-targets.ts
-1 src/main/rate-limits/service/service-full-cycle-application.ts
-7 src/main/rate-limits/service/service-full-cycle-preparation.ts
+6 src/main/rate-limits/service/service-full-cycle-preparation.ts
 1 src/main/rate-limits/service/service-inactive-accounts.ts
 1 src/main/rate-limits/service/service-muse-usage-fetch.ts
 3 src/main/rate-limits/service/service-provider-cycles.ts
@@ -1216,7 +1212,6 @@
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts
 2 src/main/runtime/rpc/dispatcher.ts
-3 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
 2 src/main/runtime/rpc/methods/bots-tools-owned-sign-in.ts
 12 src/main/runtime/rpc/methods/bots-tools.ts # +1 botOwnTool now reads the credential store in its own file; it always did, through botToolSignInState
 1 src/main/runtime/rpc/methods/bots.ts
@@ -1507,8 +1502,6 @@
 1 src/main/wsl/orcad/wsl-orcad-liveness-wiring.ts
 1 src/main/wsl/orcad/wsl-orcad-pairing-repair.ts
 7 src/main/zcode/hook-service.ts # zcode-app-cli setting.json is read on the same one-shot startup, toggle and uninstall paths as config.json
-3 src/main/zcode/zcode-plan-credential-commands.ts
-3 src/main/zcode/zcode-v2-plan-credentials.ts
 13 src/shared/agent-hook-listener/claude-session-continuation.ts
 2 src/shared/agent-hook-listener/command-code-transcript.ts
 3 src/shared/agent-hook-listener/grok-result-discovery.ts

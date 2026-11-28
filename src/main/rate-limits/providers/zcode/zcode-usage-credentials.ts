@@ -1,9 +1,10 @@
 import { createHmac, randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   readZcodeV2PlanCredential,
   localZcodeCredentialHost,
+  resolveZcodeDataBaseDir,
   type ZcodeCredentialHost
 } from '../../../zcode/zcode-v2-plan-credentials'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -37,10 +38,10 @@ function readMainProvider(model: unknown): string | null {
   const delimiter = name.indexOf('/')
   return delimiter > 0 && delimiter < name.length - 1 ? name.slice(0, delimiter) : null
 }
-function readCredentials(configPath: string): ZcodeUsageCredentials | null {
+async function readCredentials(configPath: string): Promise<ZcodeUsageCredentials | null> {
   let config: Record<string, unknown> | null
   try {
-    config = readRecord(JSON.parse(readFileSync(configPath, 'utf8')))
+    config = readRecord(JSON.parse(await readFile(configPath, 'utf8')))
   } catch {
     return null
   }
@@ -97,16 +98,22 @@ export function resolveUsageCredentials(
   }
 }
 
-export function readZcodeUsageCredentials(
+/** The v2 credential store the reset-credit client reads its JWTs from. */
+export function zcodeCredentialStorePath(options: ZcodeUsageCredentialOptions = {}): string {
+  const host = options.credentialHost ?? localZcodeCredentialHost()
+  return join(resolveZcodeDataBaseDir(host), '.zcode', 'v2', 'credentials.json')
+}
+
+export async function readZcodeUsageCredentials(
   options: ZcodeUsageCredentialOptions = {}
-): ZcodeUsageCredentialRead {
+): Promise<ZcodeUsageCredentialRead> {
   const host = options.credentialHost ?? localZcodeCredentialHost()
   const configPath = options.configPath ?? join(host.home, '.zcode', 'cli', 'config.json')
   // An explicit legacy fixture path never probes the developer's credential store.
   const v2 =
     options.configPath && !options.credentialHost
       ? { status: 'absent' as const }
-      : readZcodeV2PlanCredential(host)
+      : await readZcodeV2PlanCredential(host)
   if (v2.status === 'error') {
     return { status: 'error' }
   }
@@ -116,17 +123,17 @@ export function readZcodeUsageCredentials(
   const credentials =
     v2.status === 'ok'
       ? resolveUsageCredentials(v2.apiKey, v2.baseUrl, v2.identity)
-      : readCredentials(configPath)
+      : await readCredentials(configPath)
   return credentials
     ? { status: 'ok', credentials, source: v2.status === 'ok' ? v2.configPath : configPath }
     : { status: 'unavailable' }
 }
 
-export function hasZcodeCliPlanCredentials(configPath?: string): boolean {
-  return readZcodeUsageCredentials({ configPath }).status === 'ok'
+export async function hasZcodeCliPlanCredentials(configPath?: string): Promise<boolean> {
+  return (await readZcodeUsageCredentials({ configPath })).status === 'ok'
 }
 
-export function isZcodeUsageCredentialCurrent(usage: ProviderRateLimits): boolean {
+export async function isZcodeUsageCredentialCurrent(usage: ProviderRateLimits): Promise<boolean> {
   if (
     !usage.usageMetadata?.authProvenance ||
     !usage.usageMetadata.credentialSource ||
@@ -134,7 +141,7 @@ export function isZcodeUsageCredentialCurrent(usage: ProviderRateLimits): boolea
   ) {
     return true
   }
-  const current = readZcodeUsageCredentials()
+  const current = await readZcodeUsageCredentials()
   return (
     current.status === 'ok' &&
     current.credentials.authProvenance === usage.usageMetadata.authProvenance

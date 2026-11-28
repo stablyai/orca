@@ -13,7 +13,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readZcodeV2PlanCredential, type ZcodeCredentialHost } from './zcode-v2-plan-credentials'
-import { readZcodeUsageCredentials } from '../rate-limits/providers/zcode/zcode-usage-credentials'
+import {
+  readZcodeUsageCredentials,
+  zcodeCredentialStorePath
+} from '../rate-limits/providers/zcode/zcode-usage-credentials'
 import { fetchZcodeRateLimits } from '../rate-limits/providers/zcode/zcode-usage-fetcher'
 
 let dir: string
@@ -42,7 +45,7 @@ function quota() {
     })
   )
 }
-beforeEach(() => {
+beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'orca-zcode-v2-'))
   host = {
     home: dir,
@@ -55,18 +58,18 @@ beforeEach(() => {
     vi.fn(async () => quota())
   )
 })
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals()
   rmSync(dir, { recursive: true, force: true })
 })
 
-describe('upstream-written ZCode v2 stores', () => {
+describe('upstream-written ZCode v2 stores', async () => {
   it.each(['zai', 'bigmodel'])(
     'reads selected %s plan, exact encoded identity key and site without writing',
     async (name) => {
       install(name)
       const before = readFileSync(join(dir, '.zcode', 'v2', 'credentials.json'))
-      expect(readZcodeV2PlanCredential(host)).toMatchObject({
+      expect(await readZcodeV2PlanCredential(host)).toMatchObject({
         status: 'ok',
         apiKey: `synthetic-${name}-key`,
         baseUrl: name === 'zai' ? 'https://api.z.ai' : 'https://open.bigmodel.cn'
@@ -85,6 +88,149 @@ describe('upstream-written ZCode v2 stores', () => {
       ])
     }
   )
+
+  it('reads the active OAuth account when the personal default model is another provider', async () => {
+    const v2 = join(dir, '.zcode', 'v2')
+    mkdirSync(v2, { recursive: true })
+    writeFileSync(
+      join(v2, 'provider_config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        config: {
+          providerOrder: ['openai'],
+          providerConfigRules: {
+            providerRules: [
+              {
+                providerId: 'openai',
+                templateId: 'openai',
+                providerName: 'OpenAI',
+                config: {
+                  group: 'standard-personal',
+                  access: { type: 'api-key', apiKey: 'personal-provider-key' },
+                  api: { baseUrl: 'http://127.0.0.1:8317' },
+                  personalModelIds: [],
+                  modelOrder: ['gpt-5.6-luna']
+                }
+              }
+            ]
+          },
+          modelConfigRules: {
+            providerModelRules: [
+              {
+                providerId: 'account:bigmodel-individual-coding-plan',
+                modelId: 'GLM-5.3',
+                config: { properties: { contextWindow: 131_072 } }
+              }
+            ],
+            manualProviderModelRules: []
+          }
+        }
+      })
+    )
+    writeFileSync(
+      join(v2, 'credentials.json'),
+      JSON.stringify({
+        'oauth:active_provider': 'bigmodel',
+        'oauth:bigmodel:user_info': JSON.stringify({ id: 'oauth-account', username: 'user' }),
+        'account-provider:coding-plan:account:bigmodel-individual-coding-plan:account:oauth-account:api-key':
+          'oauth-plan-key'
+      })
+    )
+
+    expect(await readZcodeV2PlanCredential(host)).toMatchObject({
+      status: 'ok',
+      apiKey: 'oauth-plan-key',
+      baseUrl: 'https://open.bigmodel.cn',
+      identity: JSON.stringify(['bigmodel', 'oauth-account'])
+    })
+  })
+
+  it('does not borrow a standalone key for a different active OAuth account', async () => {
+    install('bigmodel')
+    const path = join(dir, '.zcode', 'v2', 'credentials.json')
+    const credentials = JSON.parse(readFileSync(path, 'utf8'))
+    writeFileSync(
+      path,
+      JSON.stringify({
+        ...credentials,
+        'oauth:active_provider': 'bigmodel',
+        'oauth:bigmodel:user_info': JSON.stringify({ id: 'another-account' })
+      })
+    )
+
+    expect(await readZcodeV2PlanCredential(host)).toEqual({ status: 'unavailable' })
+  })
+
+  it('does not combine quota and reset inventory across a CLI account switch', async () => {
+    const v2 = join(dir, '.zcode', 'v2')
+    mkdirSync(v2, { recursive: true })
+    writeFileSync(
+      join(v2, 'provider_config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        config: {
+          providerOrder: [],
+          providerConfigRules: { providerRules: [] },
+          modelConfigRules: { providerModelRules: [], manualProviderModelRules: [] },
+          defaultModelSelection: {
+            providerId: 'account:bigmodel-individual-coding-plan',
+            modelId: 'GLM-5.3'
+          }
+        }
+      })
+    )
+    const credentialsPath = join(v2, 'credentials.json')
+    const credentials = {
+      'account-provider:account:bigmodel-individual-coding-plan:identity': 'plan-account',
+      'account-provider:coding-plan:account:bigmodel-individual-coding-plan:account:plan-account:api-key':
+        'plan-key',
+      zcodejwttoken: 'jwt',
+      'oauth:bigmodel:access_token': 'maas',
+      'oauth:bigmodel:user_info': JSON.stringify({ id: 'account-a' }),
+      'oauth:active_provider': 'bigmodel'
+    }
+    writeFileSync(credentialsPath, JSON.stringify(credentials))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(quota())
+      .mockImplementationOnce(async () => {
+        writeFileSync(
+          credentialsPath,
+          JSON.stringify({
+            ...credentials,
+            'oauth:bigmodel:user_info': JSON.stringify({ id: 'account-b' })
+          })
+        )
+        return new Response(
+          JSON.stringify({
+            code: 200,
+            data: {
+              available_five_hour_resets: [{ expire_at: 2_000 }],
+              available_week_resets: []
+            }
+          })
+        )
+      })
+
+    const result = await fetchZcodeRateLimits({ credentialHost: host })
+
+    expect(result).toMatchObject({ status: 'unavailable' })
+    expect(result.rateLimitResetCredits).toBeUndefined()
+  })
+
+  it('prefers migrated credentials over a stale legacy account', async () => {
+    legacy()
+    install()
+    const result = await readZcodeUsageCredentials({ credentialHost: host })
+    expect(result).toMatchObject({ status: 'ok', credentials: { apiKey: 'synthetic-zai-key' } })
+  })
+
+  it('keeps legacy support when no personal v2 file exists', async () => {
+    legacy()
+    expect(await readZcodeUsageCredentials({ credentialHost: host })).toMatchObject({
+      status: 'ok',
+      credentials: { apiKey: 'synthetic-legacy-key' }
+    })
+  })
 
   it.each([
     'unsupported',
@@ -135,15 +281,40 @@ describe('upstream-written ZCode v2 stores', () => {
     expect(JSON.stringify(result)).not.toContain('synthetic-legacy-key')
   })
 
-  it('honors custom secret and does not decrypt another host secret', () => {
+  it('honors custom secret and does not decrypt another host secret', async () => {
     install()
-    expect(readZcodeV2PlanCredential(host).status).toBe('ok')
+    expect((await readZcodeV2PlanCredential(host)).status).toBe('ok')
     expect(
-      readZcodeV2PlanCredential({
+      await readZcodeV2PlanCredential({
         ...host,
         env: { ...host.env, ZCODE_CREDENTIAL_SECRET: 'wrong-secret' }
       })
     ).toEqual({ status: 'error' })
+  })
+
+  it('honors the upstream personal config override independently of the credential directory', async () => {
+    install()
+    const selected = join(dir, 'selected.json')
+    cpSync(join(dir, '.zcode', 'v2', 'provider_config.json'), selected)
+    writeFileSync(join(dir, '.zcode', 'v2', 'provider_config.json'), 'invalid-default')
+    expect(
+      await readZcodeV2PlanCredential({
+        ...host,
+        env: { ...host.env, ZCODE_PERSONAL_PROVIDER_CONFIG_FILE: '~/selected.json' }
+      })
+    ).toMatchObject({ status: 'ok', configPath: selected })
+  })
+
+  it('resolves the reset credential store from the same custom data base as quota credentials', async () => {
+    const dataBase = join(dir, 'zcode-data')
+    const customHost = {
+      ...host,
+      env: { ...host.env, ZCODE_DATA_BASE_DIR: '~/zcode-data' }
+    }
+
+    expect(zcodeCredentialStorePath({ credentialHost: customHost })).toBe(
+      join(dataBase, '.zcode', 'v2', 'credentials.json')
+    )
   })
 
   it('accepts upstream plaintext compatibility and rejects header injection without a request', async () => {
@@ -156,7 +327,7 @@ describe('upstream-written ZCode v2 stores', () => {
       path,
       JSON.stringify({ [identityKey]: 'synthetic', [apiKey]: 'synthetic-plain-key' })
     )
-    expect(readZcodeV2PlanCredential(host)).toMatchObject({
+    expect(await readZcodeV2PlanCredential(host)).toMatchObject({
       status: 'ok',
       apiKey: 'synthetic-plain-key'
     })
@@ -168,10 +339,10 @@ describe('upstream-written ZCode v2 stores', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('uses execution-host identity, not data-directory identity, for the fallback cipher', () => {
+  it('uses execution-host identity, not data-directory identity, for the fallback cipher', async () => {
     install('fallback-host')
     const fallback = { ...host, home: '/synthetic/home', env: { ZCODE_DATA_BASE_DIR: dir } }
-    expect(readZcodeV2PlanCredential(fallback)).toMatchObject({
+    expect(await readZcodeV2PlanCredential(fallback)).toMatchObject({
       status: 'ok',
       apiKey: 'synthetic-fallback-host-key'
     })
@@ -180,7 +351,9 @@ describe('upstream-written ZCode v2 stores', () => {
       { platform: 'win32' },
       { username: 'other-user' }
     ]) {
-      expect(readZcodeV2PlanCredential({ ...fallback, ...changed })).toEqual({ status: 'error' })
+      expect(await readZcodeV2PlanCredential({ ...fallback, ...changed })).toEqual({
+        status: 'error'
+      })
     }
   })
 
@@ -208,27 +381,30 @@ describe('upstream-written ZCode v2 stores', () => {
   )
 })
 
-describe('external v2 file boundaries', () => {
+describe('external v2 file boundaries', async () => {
   it.each(['provider_config.json', 'credentials.json'])(
     'refuses oversized %s without legacy fallback',
-    (name) => {
+    async (name) => {
       install()
       legacy()
       const path = join(dir, '.zcode', 'v2', name)
       const record = JSON.parse(readFileSync(path, 'utf8'))
       record['unrelated'] = 'x'.repeat(4 * 1024 * 1024)
       writeFileSync(path, JSON.stringify(record))
-      expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe('error')
+      expect((await readZcodeUsageCredentials({ credentialHost: host })).status).toBe('error')
     }
   )
 
-  it.each(['provider_config.json', 'credentials.json'])('refuses a directory at %s', (name) => {
-    install()
-    const path = join(dir, '.zcode', 'v2', name)
-    rmSync(path)
-    mkdirSync(path)
-    expect(readZcodeV2PlanCredential(host).status).toBe('error')
-  })
+  it.each(['provider_config.json', 'credentials.json'])(
+    'refuses a directory at %s',
+    async (name) => {
+      install()
+      const path = join(dir, '.zcode', 'v2', name)
+      rmSync(path)
+      mkdirSync(path)
+      expect((await readZcodeV2PlanCredential(host)).status).toBe('error')
+    }
+  )
 
   it.skipIf(process.platform === 'win32').each([
     { name: 'provider_config.json', replace: false },
@@ -253,12 +429,12 @@ describe('external v2 file boundaries', () => {
         write: false
       }).outputFiles[0]!.text
       const setup = replace
-        ? `const fs=require('node:fs'),originalStat=fs.statSync;fs.statSync=(path,...args)=>{const evidence=originalStat(path,...args);if(path===${JSON.stringify(path)})fs.renameSync(${JSON.stringify(fifoPath)},path);return evidence};`
+        ? `const fs=require('node:fs'),fsp=require('node:fs/promises'),originalStat=fsp.stat;fsp.stat=async(path,...args)=>{const evidence=await originalStat(path,...args);if(path===${JSON.stringify(path)})fs.renameSync(${JSON.stringify(fifoPath)},path);return evidence};`
         : ''
       const script = join(dir, 'read.cjs')
       writeFileSync(
         script,
-        `${bundle}\n${setup}\nconsole.log(module.exports.readZcodeV2PlanCredential(${JSON.stringify(host)}).status)`
+        `${bundle}\n${setup}\nmodule.exports.readZcodeV2PlanCredential(${JSON.stringify(host)}).then(value=>console.log(value.status))`
       )
       const result = await runProcess({
         program: process.execPath,
@@ -289,7 +465,7 @@ describe('external v2 file boundaries', () => {
       ]
       writeFileSync(path, JSON.stringify(config))
       rmSync(join(dir, '.zcode', 'v2', 'credentials.json'))
-      expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe('unavailable')
+      expect((await readZcodeUsageCredentials({ credentialHost: host })).status).toBe('unavailable')
       expect((await fetchZcodeRateLimits({ credentialHost: host })).status).toBe('unavailable')
       expect(fetch).not.toHaveBeenCalled()
       expect(readFileSync(path, 'utf8')).toBe(JSON.stringify(config))

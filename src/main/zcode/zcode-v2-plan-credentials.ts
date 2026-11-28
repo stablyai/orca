@@ -3,18 +3,21 @@ import { homedir, platform, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
-import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { readSupportedZcodeV2Selection } from './zcode-v2-personal-overlay'
 
 const MAX_V2_FILE_BYTES = 4 * 1024 * 1024
-function readV2File(path: string): string {
-  return readNodeFileSyncWithinLimit(path, MAX_V2_FILE_BYTES, {
-    regularFileOnly: true
-  }).buffer.toString('utf8')
+async function readV2File(path: string): Promise<string> {
+  return (
+    await readNodeFileWithinLimit(path, MAX_V2_FILE_BYTES, {
+      regularFileOnly: true
+    })
+  ).buffer.toString('utf8')
 }
 
 const credentialSchema = lazyZodSchema(() => z.record(z.string(), z.string()))
+const oauthAccountSchema = lazyZodSchema(() => z.looseObject({ id: z.string().trim().min(1) }))
 const sites = new Map([
   ['account:zai-individual-coding-plan', 'zai'],
   ['account:bigmodel-individual-coding-plan', 'bigmodel']
@@ -48,8 +51,15 @@ function userPath(value: string, home: string): string {
   return value.startsWith('~/') ? join(home, value.slice(2)) : resolve(value)
 }
 
+export function resolveZcodeDataBaseDir(host: ZcodeCredentialHost): string {
+  return userPath(host.env.ZCODE_DATA_BASE_DIR ?? host.home, host.home)
+}
+
 // Read-only enc:v1 compatibility with ZCode 29628c9 credential-cipher.ts.
-function decrypt(value: string, host: ZcodeCredentialHost): string {
+export function decryptZcodeV2CredentialValue(
+  value: string,
+  host: ZcodeCredentialHost = localZcodeCredentialHost()
+): string {
   if (!value.startsWith('enc:v1:')) {
     return value
   }
@@ -75,51 +85,117 @@ function decrypt(value: string, host: ZcodeCredentialHost): string {
   ]).toString('utf8')
 }
 
-export function readZcodeV2PlanCredential(
+function readOAuthPlanCredential(
+  store: Record<string, string>,
+  host: ZcodeCredentialHost,
+  configPath: string
+): ZcodeV2PlanCredential | null {
+  const rawFamily = store['oauth:active_provider']
+  if (!rawFamily) {
+    return null
+  }
+  const family = decryptZcodeV2CredentialValue(rawFamily, host).trim()
+  if (family !== 'zai' && family !== 'bigmodel') {
+    return { status: 'unavailable' }
+  }
+  const rawUserInfo = store[`oauth:${family}:user_info`]
+  if (!rawUserInfo) {
+    return { status: 'unavailable' }
+  }
+  const account = oauthAccountSchema.safeParse(
+    JSON.parse(decryptZcodeV2CredentialValue(rawUserInfo, host))
+  )
+  if (!account.success) {
+    return { status: 'unavailable' }
+  }
+  const providerId = `account:${family}-individual-coding-plan`
+  const rawKey =
+    store[
+      `account-provider:coding-plan:${providerId}:account:${encodeURIComponent(account.data.id)}:api-key`
+    ]
+  if (!rawKey) {
+    return { status: 'unavailable' }
+  }
+  const apiKey = decryptZcodeV2CredentialValue(rawKey, host).trim()
+  if (!apiKey || /[\r\n]/.test(apiKey)) {
+    return { status: 'error' }
+  }
+  return {
+    status: 'ok',
+    apiKey,
+    baseUrl: ZCODE_PLAN_SITE_BASE_URLS[family],
+    identity: JSON.stringify([family, account.data.id]),
+    configPath
+  }
+}
+
+export async function readZcodeV2PlanCredential(
   host = localZcodeCredentialHost()
-): ZcodeV2PlanCredential {
-  const base = userPath(host.env.ZCODE_DATA_BASE_DIR ?? host.home, host.home)
+): Promise<ZcodeV2PlanCredential> {
+  const base = resolveZcodeDataBaseDir(host)
   const configPath =
     (host.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE?.trim()
       ? userPath(host.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE.trim(), host.home)
       : '') || join(base, '.zcode', 'v2', 'provider_config.json')
   let rawConfig: string
   try {
-    rawConfig = readV2File(configPath)
+    rawConfig = await readV2File(configPath)
   } catch (error) {
     return {
       status:
         error instanceof Error && 'code' in error && error.code === 'ENOENT' ? 'absent' : 'error'
     }
   }
+  let selection: ReturnType<typeof readSupportedZcodeV2Selection>
   try {
-    const selection = readSupportedZcodeV2Selection(JSON.parse(rawConfig))
-    if (!selection) {
+    selection = readSupportedZcodeV2Selection(JSON.parse(rawConfig))
+  } catch {
+    return { status: 'error' }
+  }
+  if (selection.status === 'unsupported') {
+    return { status: 'unavailable' }
+  }
+  let rawCredentials: string
+  try {
+    rawCredentials = await readV2File(join(base, '.zcode', 'v2', 'credentials.json'))
+  } catch (error) {
+    return {
+      status:
+        error instanceof Error && 'code' in error && error.code === 'ENOENT'
+          ? 'unavailable'
+          : 'error'
+    }
+  }
+  try {
+    const store = credentialSchema.parse(JSON.parse(rawCredentials))
+    const oauth = readOAuthPlanCredential(store, host, configPath)
+    if (oauth) {
+      return oauth
+    }
+    if (!selection.selection) {
       return { status: 'unavailable' }
     }
-    const site = [...sites].find(([provider]) => provider === selection.providerId)?.[1]
+    const selected = selection.selection
+    const site = [...sites].find(([provider]) => provider === selected.providerId)?.[1]
     if (!site) {
       return { status: 'unavailable' }
     }
-    const store = credentialSchema.parse(
-      JSON.parse(readV2File(join(base, '.zcode', 'v2', 'credentials.json')))
-    )
-    const rawIdentity = store[`account-provider:${selection.providerId}:identity`]
+    const rawIdentity = store[`account-provider:${selected.providerId}:identity`]
     if (!rawIdentity) {
       return { status: 'unavailable' }
     }
-    const identity = decrypt(rawIdentity, host).trim()
+    const identity = decryptZcodeV2CredentialValue(rawIdentity, host).trim()
     if (!identity) {
       return { status: 'unavailable' }
     }
     const rawKey =
       store[
-        `account-provider:coding-plan:${selection.providerId}:account:${encodeURIComponent(identity)}:api-key`
+        `account-provider:coding-plan:${selected.providerId}:account:${encodeURIComponent(identity)}:api-key`
       ]
     if (!rawKey) {
       return { status: 'unavailable' }
     }
-    const apiKey = decrypt(rawKey, host).trim()
+    const apiKey = decryptZcodeV2CredentialValue(rawKey, host).trim()
     if (!apiKey || /[\r\n]/.test(apiKey)) {
       return { status: 'error' }
     }
@@ -127,7 +203,7 @@ export function readZcodeV2PlanCredential(
       status: 'ok',
       apiKey,
       baseUrl: ZCODE_PLAN_SITE_BASE_URLS[site],
-      identity: JSON.stringify([selection.providerId, identity]),
+      identity: JSON.stringify([selected.providerId, identity]),
       configPath
     }
   } catch {

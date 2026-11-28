@@ -437,7 +437,6 @@
 4 src/main/rate-limits/providers/cursor/cursor-auth.ts
 2 src/main/rate-limits/providers/grok/grok-auth.ts
 2 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
-1 src/main/rate-limits/providers/zcode/zcode-usage-credentials.ts
 3 src/main/ripgrep/bundled-ripgrep-path.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-attachment-wiring.ts
 8 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
