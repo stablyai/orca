@@ -70,7 +70,17 @@ export function getVisibleLineagePlacement<Row>(
   if (roots.length === 0 || visibleRows.length === 0) {
     return placement
   }
-  if (childrenByParentIdentity.size === 0) {
+  let anyRootHasChildren = false
+  if (childrenByParentIdentity.size > 0) {
+    for (let i = 0; i < roots.length; i += 1) {
+      const rootChildren = childrenByParentIdentity.get(identityOf(roots[i]))
+      if (rootChildren && rootChildren.length > 0) {
+        anyRootHasChildren = true
+        break
+      }
+    }
+  }
+  if (!anyRootHasChildren) {
     const wanted = new Map<string, Row>()
     for (let i = 0; i < roots.length; i += 1) {
       const root = roots[i]
@@ -152,22 +162,24 @@ export function getVisibleLineageAncestorRoots<Row>(
   if (childrenByParentIdentity.size === 0 || visibleRows.length === 0) {
     return EMPTY_DISPLAY_ROOTS
   }
-  const visible = new Set<string>()
   const childrenOfVisibleParents = new Set<string>()
   const visibleParents: Row[] = []
-  for (const row of visibleRows) {
-    const identity = identityOf(row)
-    visible.add(identity)
-    const children = childrenByParentIdentity.get(identity)
+  for (let i = 0; i < visibleRows.length; i += 1) {
+    const row = visibleRows[i]
+    const children = childrenByParentIdentity.get(identityOf(row))
     if (children && children.length > 0) {
       visibleParents.push(row)
-      for (const child of children) {
-        childrenOfVisibleParents.add(identityOf(child))
+      for (let j = 0; j < children.length; j += 1) {
+        childrenOfVisibleParents.add(identityOf(children[j]))
       }
     }
   }
   if (childrenOfVisibleParents.size === 0) {
     return EMPTY_DISPLAY_ROOTS
+  }
+  const visible = new Set<string>()
+  for (let i = 0; i < visibleRows.length; i += 1) {
+    visible.add(identityOf(visibleRows[i]))
   }
   const placement = new Map<string, Row>()
   const seen = new Set<string>()
