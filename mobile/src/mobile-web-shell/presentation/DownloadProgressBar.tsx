@@ -13,13 +13,17 @@ const useNativeDriver = Platform.OS !== 'web'
 export function downloadedMegabytesCaption(
   receivedBytes: number,
   totalBytes: number,
-  t: Translate,
+  t: Translate | undefined,
   locale: string
 ): string {
-  return t('webShell.downloadProgress.megabytes', '{{received}} of {{total}} MB', {
-    received: megabytes(receivedBytes, locale),
-    total: megabytes(totalBytes, locale)
-  })
+  const received = megabytes(receivedBytes, locale)
+  const total = megabytes(totalBytes, locale)
+  return t
+    ? t('webShell.downloadProgress.megabytes', '{{received}} of {{total}} MB', {
+        received,
+        total
+      })
+    : `${received} of ${total} MB`
 }
 
 let megabytesFormat: { locale: string; formatter: Intl.NumberFormat } | null = null

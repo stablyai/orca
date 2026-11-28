@@ -7,9 +7,15 @@ import type {
   MobileWebShellStep
 } from '../session/mobile-web-shell-session-contract'
 import { step } from '../session/mobile-web-shell-session-step'
-import { CHECKING } from '../host-gates/mobile-web-shell-gates'
+import { CHECKING, gateVerdict } from '../host-gates/mobile-web-shell-gates'
 
 const REMOUNT = { kind: 'remount' } as const
+
+function canAutoRefetch(session: MobileWebShellSession): boolean {
+  return (
+    !session.retriedOnce && session.gates !== null && gateVerdict(session.gates).kind === 'open'
+  )
+}
 
 // The session reducer owns flow restarts; recovery only decides when deleting the host cache is warranted.
 export type RefetchAfterDelete = (
@@ -47,13 +53,23 @@ export function reduceShellFailed(
         : step(session, { remountedOnce: true }, [remount])
     }
     case 'document-load-failed':
+      if (!session.pagePainted && session.requestedBuildId !== null && canAutoRefetch(session)) {
+        return refetch(session, session.gates!)
+      }
+      if (!session.pageRemountedOnce) {
+        return step(session, { pageRemountedOnce: true }, [REMOUNT])
+      }
+      if (!session.pagePainted && canAutoRefetch(session)) {
+        return refetch(session, session.gates!)
+      }
+      return step(session, { state: failedState(session, 'document-load-failed') })
     case 'page-fault': {
       if (!session.pageRemountedOnce) {
         return step(session, { pageRemountedOnce: true }, [REMOUNT])
       }
       // Only a painted page proves its bytes render, and only once: an earlier or repeat fault may be a damaged chunk.
       const buildId = session.state.buildId
-      if (reason === 'page-fault' && session.pagePainted && session.pageFaultBuildId !== buildId) {
+      if (session.pagePainted && session.pageFaultBuildId !== buildId) {
         return step(session, {
           state: failedState(session, reason),
           pageFaultBuildId: buildId

@@ -5082,8 +5082,10 @@
       "connectToDownload": "連線至此主機以下載最新版應用程式",
       "documentLoadFailed": "無法開啟已下載的應用程式。",
       "downloadFailed": "無法從此主機下載最新版應用程式。",
-      "downloadProgressFromHost": "來自 {{host}} · {{progress}}",
-      "downloadingLatestApp": "正在下載最新版應用程式",
+      "downloadingLatest": "正在下載最新版本的應用程式",
+      "downloadingFrom": "來自 {{host}} · ",
+      "downloadedMegabytes": "{{received}} / {{total}} MB",
+      "updateFailedNotice": "無法從此主機下載最新版本的應用程式，目前仍顯示上次可用的版本",
       "hostProfileUnreadable": "裝置無法讀取此主機的資料。請重試。",
       "isolationUnavailable": "此裝置的 WebView 版本過舊，無法安全開啟工作區。",
       "isolationUnavailableAndroid": "Orca 需要 Android System WebView 或 Chrome 101 以上版本。請從 Play 商店更新，或在「開發人員選項」>「WebView 實作」中選擇較新的版本。",
@@ -5091,7 +5093,9 @@
       "openingWorkspace": "正在開啟工作區",
       "renderProcessGone": "工作區已停止回應。",
       "statusUnreadable": "無法讀取此主機的狀態。請返回後重新開啟。",
-      "tryAgain": "重試"
+      "tryAgain": "重試",
+      "downloadingLatestApp": "正在下載最新版應用程式",
+      "downloadProgressFromHost": "來自 {{host}} · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "更新 Orca",
