@@ -46,7 +46,7 @@ export function installLocalWebhooks(deps: {
   settings: () => Partial<GlobalSettings>
   onSettingsChanged: (listener: (updates: Partial<GlobalSettings>) => void) => () => void
   automations: () => readonly Automation[]
-  bots: () => readonly Bot[]
+  bots: () => readonly Pick<Bot, 'id'>[]
   /** Local webhooks went on or off, so the hooks and the hello change. */
   modeChanged: () => void
   /** For tests: the wait before a busy port is tried again. */
