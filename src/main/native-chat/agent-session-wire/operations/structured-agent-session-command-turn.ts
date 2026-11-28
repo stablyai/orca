@@ -254,7 +254,10 @@ export function localProviderReceipt(
         fence,
         provider,
         owns: () =>
-          !signal?.aborted && ctx.fence === fence && isCurrent() && ctx.record()?.lease.runtimeFence === fence
+          !signal?.aborted &&
+          ctx.fence === fence &&
+          isCurrent() &&
+          ctx.record()?.lease.runtimeFence === fence
       })
     })
 }

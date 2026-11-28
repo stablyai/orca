@@ -140,7 +140,9 @@ export class AgentSessionProviderReceipts {
       }
     }
     for (const change of commit.publication?.promptDispatches ?? []) {
-      if (attempts.get(change.clientMessageId)?.cursor.sequence === change.previousHandoverSequence) {
+      if (
+        attempts.get(change.clientMessageId)?.cursor.sequence === change.previousHandoverSequence
+      ) {
         attempts.delete(change.clientMessageId)
       }
     }
@@ -160,7 +162,9 @@ export class AgentSessionProviderReceipts {
     }
     const providerReceived =
       event.type === 'batch' ? this.take(subscriber, event.batch.cursor, event.fence) : undefined
-    subscriber.emit(providerReceived && event.type === 'batch' ? { ...event, providerReceived } : event)
+    subscriber.emit(
+      providerReceived && event.type === 'batch' ? { ...event, providerReceived } : event
+    )
     if (event.type === 'batch') {
       this.emitted.set(subscriber, event.batch.cursor)
     } else if (event.type !== 'end') {

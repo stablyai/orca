@@ -39,7 +39,8 @@ it('keeps remote and paired phone frames byte-identical when they ask for local 
   }
   installed.mockResolvedValue({
     sessionAgent: () => 'claude',
-    subscribe: (input: AgentSessionSubscribeInput) => subscribers.open({ ...input, fence: 1, journal })
+    subscribe: (input: AgentSessionSubscribeInput) =>
+      subscribers.open({ ...input, fence: 1, journal })
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stream uses only the registration callback.
   const runtime = {

@@ -43,17 +43,17 @@ export function observeClaudeCommandLifecycle(
     return
   }
   const state = message.state
+  const received = waiter.providerReceived
+  if (
+    received &&
+    (state === 'queued' || state === 'started') &&
+    !waiter.retired &&
+    readClaudeFrameString(message, 'session_id') === session.providerSessionId
+  ) {
+    waiter.providerReceived = undefined
+    withProviderReceipt(() => received(() => session.dispatchWaiters.includes(waiter)))
+  }
   if (state === 'started' || (state === 'queued' && waiter.commandLifecycle !== 'started')) {
-    if (
-      waiter.providerReceived &&
-      waiter.commandLifecycle === undefined &&
-      !waiter.retired &&
-      readClaudeFrameString(message, 'session_id') === session.providerSessionId
-    ) {
-      withProviderReceipt(() =>
-        waiter.providerReceived?.(() => session.dispatchWaiters.includes(waiter))
-      )
-    }
     // Redelivery can emit queued again after started.
     waiter.commandLifecycle = state
   } else if (isTerminalState(state) && waiter.commandLifecycle === 'started') {
