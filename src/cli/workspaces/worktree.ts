@@ -51,7 +51,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-import { getWorktreeReadFlags } from './worktree-unread-flag'
+import { getWorktreePinFlags, getWorktreeReadFlags } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import {
   getOptionalSetupDecision,
@@ -211,6 +211,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     )
     const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
     const readFlags = getWorktreeReadFlags(flags)
+    const pinFlags = getWorktreePinFlags(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
@@ -230,6 +231,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       ...readFlags,
+      ...pinFlags,
       ...parentFields,
       noParent: flags.get('no-parent') === true
     })
