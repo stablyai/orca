@@ -17,6 +17,41 @@ function trimPendingBuffer(
   return Buffer.from(buffer.subarray(buffer.length - maxBytes))
 }
 
+function jpegFrameEnd(buffer: Buffer): number {
+  let offset = JPEG_START.length
+  while (offset < buffer.length) {
+    const markerStart = buffer.indexOf(0xff, offset)
+    if (markerStart === -1) {
+      return -1
+    }
+    let markerOffset = markerStart + 1
+    while (buffer[markerOffset] === 0xff) {
+      markerOffset++
+    }
+    if (markerOffset >= buffer.length) {
+      return -1
+    }
+    const marker = buffer[markerOffset]
+    if (marker === 0xd9) {
+      return markerOffset + 1
+    }
+    if (marker === 0 || marker === 1 || (marker >= 0xd0 && marker <= 0xd8)) {
+      offset = markerOffset + 1
+      continue
+    }
+    if (markerOffset + 2 >= buffer.length) {
+      return -1
+    }
+    const length = buffer.readUInt16BE(markerOffset + 1)
+    if (length < 2) {
+      return -1
+    }
+    // Marker payloads (including quantization tables) may contain unescaped FF D9 bytes.
+    offset = markerOffset + 1 + length
+  }
+  return -1
+}
+
 export function extractJpegFrames(
   pending: Buffer<ArrayBufferLike>,
   chunk: Buffer<ArrayBufferLike>,
@@ -36,12 +71,11 @@ export function extractJpegFrames(
       cursor = cursor.subarray(frameStart)
     }
 
-    const frameEnd = cursor.indexOf(JPEG_END, JPEG_START.length)
-    if (frameEnd === -1) {
+    const nextOffset = jpegFrameEnd(cursor)
+    if (nextOffset === -1) {
       return { frames, pending: trimPendingBuffer(cursor, maxPendingBytes) }
     }
 
-    const nextOffset = frameEnd + JPEG_END.length
     frames.push(cursor.subarray(0, nextOffset))
     cursor = cursor.subarray(nextOffset)
   }
