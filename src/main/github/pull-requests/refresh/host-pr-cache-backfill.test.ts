@@ -155,4 +155,22 @@ describe('host PR cache backfill', () => {
     await expect(hostCache.backfill()).resolves.toBeUndefined()
     warn.mockRestore()
   })
+
+  it('starts no queued read after the caller cancels', async () => {
+    const controller = new AbortController()
+    const readPR = vi.fn(async () => {
+      controller.abort()
+    })
+    const hostCache = createHostPRCache({
+      store: { getGitHubCache: () => ({ pr: {}, issue: {} }), setGitHubCache: vi.fn() },
+      listWorktrees: async () => ({
+        worktrees: ['a', 'b', 'c', 'd'].map((branch) => worktree(branch, 7)),
+        repos: [repo]
+      }),
+      readPR
+    })
+    await hostCache.backfill({ wait: true, signal: controller.signal })
+    // The first read cancels synchronously, so neither worker starts another.
+    expect(readPR).toHaveBeenCalledTimes(1)
+  })
 })

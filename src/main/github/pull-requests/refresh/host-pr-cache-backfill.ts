@@ -133,7 +133,8 @@ export function createHostPRCache(deps: {
   const start = (targets: BackfillTarget[], signal?: AbortSignal): Promise<void> => {
     let next = 0
     const worker = async (): Promise<void> => {
-      while (next < targets.length) {
+      // Cancel stops queued targets; a read already in flight finishes (the shared read takes no signal).
+      while (next < targets.length && !signal?.aborted) {
         const target = targets[next++]
         attemptedAt.set(target.key, now())
         // The read's reply is recorded through `record`; a failure just waits out the TTL.
@@ -170,7 +171,7 @@ export function createHostPRCache(deps: {
         const { targets, pending } = await selectTargets(
           options.worktreeIds ? new Set(options.worktreeIds) : null
         )
-        // Unawaited runs have no caller signal: at most 16 reads may finish after the reply.
+        // In-flight reads always finish; an unawaited run has no signal, so up to 16 may finish after the reply.
         const run = Promise.all([start(targets, options.signal), ...pending]).then(() => undefined)
         if (options.wait) {
           await waitBounded(run, options.signal)
