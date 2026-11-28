@@ -11,6 +11,7 @@ import {
 import { useUsagePercentageDisplay } from './usage-percentage-display-preference'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { UsagePaceTick } from './UsagePaceTick'
 
 import './usage-selectors'
 
@@ -126,16 +127,7 @@ export function UsageBar({
                 ]}
               />
             </View>
-            {paceMarkerPercent != null ? (
-              <View
-                pointerEvents="none"
-                testID="usage-bar-pace-marker"
-                style={[
-                  styles.usagePaceMarker,
-                  { left: `${Math.max(0, Math.min(100, paceMarkerPercent))}%` }
-                ]}
-              />
-            ) : null}
+            {paceMarkerPercent != null ? <UsagePaceTick percent={paceMarkerPercent} /> : null}
           </View>
           {loading ? (
             <ActivityIndicator
@@ -194,16 +186,6 @@ const stylesSheet = themedStyleSheet((colors) => ({
     borderRadius: 3,
     backgroundColor: colors.bgRaised,
     overflow: 'hidden'
-  },
-  // Taller than the track so it reads over any fill colour; centred on its position.
-  usagePaceMarker: {
-    position: 'absolute',
-    top: -3,
-    bottom: -3,
-    width: 2,
-    marginLeft: -1,
-    borderRadius: 1,
-    backgroundColor: colors.textPrimary
   },
   usageFill: {
     height: '100%',

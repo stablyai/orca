@@ -41,7 +41,7 @@ import {
 import { usagePaceColor } from './usage-pace-color'
 import { usageResetLabel } from './usage-reset-label'
 import { useResetCountdownNow } from './use-reset-countdown-now'
-import { computeUsagePace } from './usage-window-pace'
+import { computeUsagePace, usagePaceMarkerPercent } from './usage-window-pace'
 
 type Props = {
   agent: string | null | undefined
@@ -55,6 +55,8 @@ type Reading = {
   readout: ComposerUsageMeterReadout
   /** The bar's fill, by pace like the pop-up. */
   color: string
+  /** Where an even burn would put the wide bar's fill. */
+  paceMarkerPercent: number | null
   length: string
   /** Time left until reset ("3d 2h"), and its largest unit alone ("3d") for a tight row. */
   resetsIn: string
@@ -92,6 +94,7 @@ function useComposerUsageReading(agent: string | null | undefined): Reading | nu
     snapshot,
     readout,
     color: usagePaceColor(computeUsagePace(entry.window, now), readout.used, colors),
+    paceMarkerPercent: usagePaceMarkerPercent(entry.window, now, display),
     length,
     resetsIn: usageResetLabel(entry.window, now),
     resetsInCompact: usageResetLabel(entry.window, now, 'compact'),
@@ -198,6 +201,7 @@ export function ComposerUsageMeter({
           percentLabel={reading.percentLabel}
           readout={reading.readout}
           color={reading.color}
+          paceMarkerPercent={reading.paceMarkerPercent}
           onPress={sheet.open}
         />
       ) : fit.meter ? (
@@ -293,7 +297,12 @@ export function ComposerUsageStrip({
         <Text style={[styles.text, styles.window]} numberOfLines={1}>
           {`${reading.provider} · ${reading.resetsIn}`}
         </Text>
-        <ComposerUsageTrack readout={reading.readout} color={reading.color} />
+        <ComposerUsageTrack
+          readout={reading.readout}
+          color={reading.color}
+          wide
+          paceMarkerPercent={reading.paceMarkerPercent}
+        />
         <Text style={styles.text} numberOfLines={1}>
           {reading.percentLabel}
         </Text>
