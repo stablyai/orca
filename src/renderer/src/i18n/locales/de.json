@@ -26169,11 +26169,7 @@
       "endHint": "Dieses Terminal und seine untergeordneten Prozesse beenden.",
       "claimed": "Dieses Terminal ist jetzt einem Agenten zugeordnet. Vor einem erneuten Versuch aktualisieren.",
       "attached": "Ein Client ist jetzt mit diesem Terminal verbunden. Vor einem erneuten Versuch aktualisieren.",
-      "unverifiableEnd": "Nicht überprüfbar: Der Host konnte das Ergebnis nicht bestätigen. Das Terminal läuft möglicherweise noch.",
-      "selectAll": "Alle Terminals auswählen",
-      "selectAllShort": "Alle auswählen",
-      "endSelected": "Ausgewählte beenden ({{count}})",
-      "selectNamed": "{{terminal}} auswählen"
+      "unverifiableEnd": "Nicht überprüfbar: Der Host konnte das Ergebnis nicht bestätigen. Das Terminal läuft möglicherweise noch."
     },
     "resources": "Ressourcen",
     "ptys": "PTYs",

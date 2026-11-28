@@ -25653,11 +25653,7 @@
       "endHint": "結束此終端機及其子行程。",
       "claimed": "代理程式已接管此終端機。請重新整理後再試。",
       "attached": "已有用戶端連線至此終端機。請重新整理後再試。",
-      "unverifiableEnd": "無法驗證：主機無法確認結果。終端機可能仍在執行。",
-      "selectAll": "選擇所有終端機",
-      "selectAllShort": "選擇全部",
-      "endSelected": "結束所選項目（{{count}}）",
-      "selectNamed": "選擇 {{terminal}}"
+      "unverifiableEnd": "無法驗證：主機無法確認結果。終端機可能仍在執行。"
     },
     "resources": "資源",
     "ptys": "PTY",

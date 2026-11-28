@@ -14,6 +14,7 @@ vi.mock('../../../pty/process-retirement/pty-descendant-termination', () => ({
 }))
 
 function createPlainShellSession(overrides: Partial<Session> = {}): Session {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown reads only these session members.
   return {
     launchAgent: undefined,
     pid: 4242,
@@ -48,7 +49,7 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
       root: { pid: 4242, startedAt: 'root' },
       rootPgid: 4242,
       descendants: [{ pid: 4243, ppid: 4242, pgid: 4243, startedAt: 'worker' }],
-      capturedAtMs: Date.now()
+      capturedAtMs: 1_000
     }
     killWithDescendantSweepMock.mockImplementationOnce(
       async (
@@ -79,7 +80,7 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
       root: { pid: 4242, startedAt: 'root' },
       rootPgid: 4242,
       descendants: [{ pid: 4243, ppid: 4242, pgid: 4243, startedAt: 'worker' }],
-      capturedAtMs: Date.now()
+      capturedAtMs: 1_000
     }
     const stopWorker = vi.fn()
     killWithDescendantSweepMock

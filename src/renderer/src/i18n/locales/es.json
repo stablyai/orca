@@ -25764,11 +25764,7 @@
       "endHint": "Finaliza este terminal y sus procesos secundarios.",
       "claimed": "Un agente ahora posee este terminal. Actualiza antes de volver a intentarlo.",
       "attached": "Un cliente ahora está conectado a este terminal. Actualiza antes de volver a intentarlo.",
-      "unverifiableEnd": "No verificable: el host no pudo confirmar el resultado. Puede que el terminal siga ejecutándose.",
-      "selectAll": "Seleccionar todos los terminales",
-      "selectAllShort": "Seleccionar todo",
-      "endSelected": "Finalizar seleccionados ({{count}})",
-      "selectNamed": "Seleccionar {{terminal}}"
+      "unverifiableEnd": "No verificable: el host no pudo confirmar el resultado. Puede que el terminal siga ejecutándose."
     },
     "resources": "Recursos",
     "ptys": "PTY",

@@ -35,7 +35,10 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './pty/use-resource-pty-actions'
-import { createResourcePtyTabBindingSelector } from './pty/resource-pty-tab-bindings'
+import {
+  createResourcePtyTabBindingSelector,
+  withResourcePtyTabBindings
+} from './pty/resource-pty-tab-bindings'
 import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
 import { trackResourceManagerOpen } from './resource-manager-open-request'
 import { useTranslate } from '@/i18n/use-translate'
@@ -169,13 +172,13 @@ export function useResourceUsageStatusController() {
       workspaceSessionReady
     ]
   )
-  const ptySessionBindings = useMemo<ResourceSessionBindingInputs>(
-    () => ({
-      tabsByWorktree: ptyTabsByWorktree,
-      ptyIdsByTabId,
-      terminalLayoutsByTabId,
-      workspaceSessionReady
-    }),
+  const ptySessionBindings = useMemo(
+    () =>
+      withResourcePtyTabBindings(ptyTabsByWorktree, {
+        ptyIdsByTabId,
+        terminalLayoutsByTabId,
+        workspaceSessionReady
+      }),
     [ptyTabsByWorktree, ptyIdsByTabId, terminalLayoutsByTabId, workspaceSessionReady]
   )
 

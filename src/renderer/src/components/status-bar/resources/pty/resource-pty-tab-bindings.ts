@@ -40,3 +40,11 @@ export function createResourcePtyTabBindingSelector(): (tabs: TabsByWorktree) =>
     return stable
   }
 }
+
+/** Session bindings that read workspace tabs from the PTY-stable selector above. */
+export function withResourcePtyTabBindings(
+  tabsByWorktree: TabsByWorktree,
+  bindings: Omit<ResourceSessionBindingInputs, 'tabsByWorktree'>
+): ResourceSessionBindingInputs {
+  return { ...bindings, tabsByWorktree }
+}

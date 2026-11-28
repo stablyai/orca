@@ -24,6 +24,17 @@ import { useResourcePtyWorkspaceCheck } from './resource-pty-running-work'
 const EMPTY_PTY_ROWS: ReturnType<typeof buildResourcePtyRows> = []
 const subscribeInactive = (): (() => void) => () => {}
 const ptyRowKey = (row: ResourcePtyRow): string => row.identity
+// Built on first lookup so refreshes nobody reads by key skip the map.
+const rowsByKeyCache = new WeakMap<readonly ResourcePtyRow[], Map<string, ResourcePtyRow>>()
+
+function findPtyRow(rows: readonly ResourcePtyRow[], key: string): ResourcePtyRow | undefined {
+  let rowsByKey = rowsByKeyCache.get(rows)
+  if (!rowsByKey) {
+    rowsByKey = new Map(rows.map((row) => [row.identity, row]))
+    rowsByKeyCache.set(rows, rowsByKey)
+  }
+  return rowsByKey.get(key)
+}
 
 export type ResourcePtyEndAllConfirmation = {
   rows: readonly ResourcePtyRow[]
@@ -136,15 +147,7 @@ export function ResourcePtyPanel({
     active ? status.subscribeSelection : subscribeInactive,
     status.getSelectionCheck
   )
-  const findRow = useMemo(() => {
-    let rowsByKey: Map<string, ResourcePtyRow> | undefined
-    return (key: string) => {
-      if (!rowsByKey) {
-        rowsByKey = new Map(rows.map((row) => [row.identity, row]))
-      }
-      return rowsByKey.get(key)
-    }
-  }, [rows])
+  const findRow = useCallback((key: string) => findPtyRow(rows, key), [rows])
   const getRetainedItem = useCallback(
     (key: string) => {
       if (unverifiable) {

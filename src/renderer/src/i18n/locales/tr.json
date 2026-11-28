@@ -26422,11 +26422,7 @@
       "endHint": "Bu terminali ve alt süreçlerini sonlandırın.",
       "claimed": "Bu terminal artık bir ajana ait. Tekrar denemeden önce yenileyin.",
       "attached": "Bu terminale artık bir istemci bağlı. Tekrar denemeden önce yenileyin.",
-      "unverifiableEnd": "Doğrulanamıyor: terminalin çalıştığı makinede sonuç doğrulanamadı. Terminal hâlâ çalışıyor olabilir.",
-      "selectAll": "Tüm terminalleri seç",
-      "selectAllShort": "Tümünü seç",
-      "endSelected": "Seçilenleri sonlandır ({{count}})",
-      "selectNamed": "{{terminal}} terminalini seç"
+      "unverifiableEnd": "Doğrulanamıyor: terminalin çalıştığı makinede sonuç doğrulanamadı. Terminal hâlâ çalışıyor olabilir."
     },
     "resources": "Kaynaklar",
     "ptys": "PTY'ler",

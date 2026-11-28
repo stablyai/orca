@@ -279,7 +279,8 @@ describe('TerminalHost foreground agent exit watch', () => {
     emitOutput('tick\r\n')
     inspectChildProcesses.mockClear()
     await windowsHost.inspectProcess('pane-store', { steadyState: true, jobMembershipOnly: true })
-    expect(inspectChildProcesses).toHaveBeenCalledWith(false, false, true)
+    // A steady poll decides no running work, so it passes no deadline or signal.
+    expect(inspectChildProcesses).toHaveBeenCalledWith(false, false, true, undefined, undefined)
     await windowsHost.dispose()
   })
 })

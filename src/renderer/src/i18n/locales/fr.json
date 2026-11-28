@@ -25754,11 +25754,7 @@
       "endHint": "Termine ce terminal et ses processus enfants.",
       "claimed": "Un agent possède maintenant ce terminal. Actualisez avant de réessayer.",
       "attached": "Un client est maintenant attaché à ce terminal. Actualisez avant de réessayer.",
-      "unverifiableEnd": "Non vérifiable : l’hôte n’a pas pu confirmer le résultat. Le terminal est peut-être encore en cours d’exécution.",
-      "selectAll": "Sélectionner tous les terminaux",
-      "selectAllShort": "Tout sélectionner",
-      "endSelected": "Arrêter les terminaux ({{count}})",
-      "selectNamed": "Sélectionner {{terminal}}"
+      "unverifiableEnd": "Non vérifiable : l’hôte n’a pas pu confirmer le résultat. Le terminal est peut-être encore en cours d’exécution."
     },
     "resources": "Ressources",
     "ptys": "PTY",
