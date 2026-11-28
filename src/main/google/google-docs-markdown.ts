@@ -1,6 +1,8 @@
 // Markdown to Docs edits, for `orca docs append` (the Docs API takes no Markdown): headings, bullet
 // and numbered lists, bold, italic, code and links. Tables and quotes go in as plain lines.
 
+import { createMarkdownFenceTracker } from '../../shared/markdown/markdown-fence-scanner'
+
 type Span = { start: number; end: number; bold?: true; italic?: true; code?: true; link?: string }
 type Paragraph = { start: number; end: number; heading?: number; list?: 'bullet' | 'numbered' }
 
@@ -41,7 +43,7 @@ export function markdownToDocText(markdown: string): MarkdownText {
   const spans: Span[] = []
   const out: string[] = []
   let length = 0
-  let inCode = false
+  const fence = createMarkdownFenceTracker({ closingFenceRules: 'commonmark' })
   // A soft-wrapped line continues the paragraph above it.
   let open = false
   const push = (line: string, style: Omit<Paragraph, 'start' | 'end'> = {}, raw = false) => {
@@ -56,12 +58,13 @@ export function markdownToDocText(markdown: string): MarkdownText {
     }
   }
   for (const line of lines) {
-    if (/^\s*```/.test(line)) {
-      inCode = !inCode
+    const wasInCode = fence.insideFence
+    const fenceLine = fence.consume(line)
+    if (fenceLine && (!wasInCode || !fence.insideFence)) {
       open = false
       continue
     }
-    if (inCode) {
+    if (fence.insideFence) {
       push(line, {}, true)
       continue
     }
