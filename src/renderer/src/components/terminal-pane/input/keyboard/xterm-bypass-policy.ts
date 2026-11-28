@@ -30,6 +30,10 @@ export type XtermBypassOptions = {
 
 export type XtermImeKeyboardOptions = {
   compositionActive: boolean
+  /** True when the active composition text identifies a CJK candidate-window IME. Gates the
+   *  IME-owned-key swallow away from inline IMEs (Vietnamese Telex/VNI), where mid-composition
+   *  Backspace is real editing, not candidate selection (#6494). */
+  isCjkCompositionActive: boolean
   /** Candidate keys remain IME-owned during composition and a short post-compositionend window. */
   candidateKeyGuardActive: boolean
   /** True when the pending-release guard already matched this specific event. */
@@ -97,6 +101,7 @@ export function shouldSuppressTerminalImeKeyboardEvent(
 ): boolean {
   const {
     compositionActive,
+    isCjkCompositionActive,
     candidateKeyGuardActive,
     pendingCandidateKeyReleaseActive,
     isMac,
@@ -126,7 +131,9 @@ export function shouldSuppressTerminalImeKeyboardEvent(
     (event.isComposing === true && !passesIdleComposing229Keydown) ||
     (event.keyCode === 229 &&
       (event.type !== 'keydown' || compositionActive || !passesStandalone229Keydown)) ||
-    (compositionActive && TERMINAL_IME_OWNED_KEYS.has(event.key)) ||
+    (compositionActive &&
+      isCjkCompositionActive &&
+      TERMINAL_IME_OWNED_KEYS.has(event.key)) ||
     suppressCandidateKey
   )
 }

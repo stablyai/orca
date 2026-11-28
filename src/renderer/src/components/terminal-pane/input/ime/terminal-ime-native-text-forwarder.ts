@@ -278,18 +278,25 @@ export function installTerminalImeNativeTextForwarder(args: {
       return
     }
     pendingCommit = null
-    if (event.inputType !== 'insertText') {
+    // Some IMEs commit a claimed press as a replacement, not an insert; their payload rides
+    // dataTransfer instead of data (#6698). Dropping that event swallows the committed glyph.
+    const replacementText =
+      event.inputType === 'insertReplacementText'
+        ? (event.dataTransfer?.getData('text/plain') ?? '')
+        : null
+    if (event.inputType !== 'insertText' && replacementText === null) {
       // Non-text takeover leaves only keyup suppression because this press delivered no text.
       settleCommit(commit, null)
       return
     }
-    if (event.data) {
+    const committedText = event.data ?? replacementText ?? ''
+    if (committedText) {
       // Read mutable flags once at commit so the release matches the press’s negotiation.
       const encoding = encodeImeCommitForKitty(commit.press, args.getKittyKeyboardFlags?.() ?? 0, {
-        committedText: event.data,
+        committedText,
         layoutCharacterForCode: getLayoutCharacterForCode
       })
-      args.sendInput(encoding.report ?? event.data)
+      args.sendInput(encoding.report ?? committedText)
       settleCommit(commit, encoding.release)
     } else {
       settleCommit(commit, null)
@@ -298,7 +305,7 @@ export function installTerminalImeNativeTextForwarder(args: {
     // Clear committed text: macOS reads preceding field contents for double-space period substitution (#11504).
     if (
       event.target instanceof HTMLTextAreaElement &&
-      !(event.data && retainedHangulCommit.retain(event.target, event.data))
+      !(committedText && retainedHangulCommit.retain(event.target, committedText))
     ) {
       event.target.value = ''
     }
