@@ -18,6 +18,7 @@ export function useLayoutOwnerPaneTree(controller: TerminalPaneMountedController
     expandedPaneIdRef,
     isolatedPaneKey,
     managerRef,
+    paneTransportsRef,
     terminalManager,
     persistLayoutSnapshot,
     restoredLayout,
@@ -70,7 +71,8 @@ export function useLayoutOwnerPaneTree(controller: TerminalPaneMountedController
           manager.closePane(paneId)
         }
       },
-      isExpanded: expandedPaneIdRef.current !== null || zoomed
+      isExpanded: expandedPaneIdRef.current !== null || zoomed,
+      isAttached: (paneId) => Boolean(paneTransportsRef.current.get(paneId)?.getPtyId())
     })
     if (changed) {
       persistLayoutSnapshot()
@@ -84,6 +86,7 @@ export function useLayoutOwnerPaneTree(controller: TerminalPaneMountedController
     worktreeId,
     terminalManager,
     managerRef,
+    paneTransportsRef,
     expandedPaneIdRef
   ])
 }
