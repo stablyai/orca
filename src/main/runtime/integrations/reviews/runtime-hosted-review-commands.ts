@@ -63,20 +63,19 @@ export class RuntimeHostedReviewCommands {
 
   async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const options = this.deps.getExecutionOptions(repo)
-    const connectionId = getRepoRoutingConnectionId(repo)
-    return options
-      ? getRepoSlug(repo.path, connectionId, options)
-      : getRepoSlug(repo.path, connectionId)
+    // A nested SSH ID needs its owning runtime. This probe only reads local checkouts.
+    if (getRepoRoutingConnectionId(repo)) {
+      return null
+    }
+    return getRepoSlug(repo.path, null, this.deps.getExecutionOptions(repo))
   }
 
   async getRepoUpstream(repoSelector: string): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const options = this.deps.getExecutionOptions(repo)
-    const connectionId = getRepoRoutingConnectionId(repo)
-    return options
-      ? getRepoUpstream(repo.path, connectionId, options)
-      : getRepoUpstream(repo.path, connectionId)
+    if (getRepoRoutingConnectionId(repo)) {
+      return null
+    }
+    return getRepoUpstream(repo.path, null, this.deps.getExecutionOptions(repo))
   }
 
   async getRepoPRForBranch(
