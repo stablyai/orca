@@ -24,6 +24,7 @@ import {
   ensureJcodeRuntimeDir,
   JCODE_RUNTIME_DIR_ENV_KEY
 } from '../../../../shared/agent-launch/startup/jcode-runtime-dir'
+import { tabListOfPty } from '../../../runtime/session-tabs/person/person-workspace-target'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -120,7 +121,7 @@ export async function prepareRuntimePtySpawn(
     }
     ctx.hostSessionBinding = {
       store: ctx.deps.store,
-      worktreeId: args.paneWorkspaceId ?? args.worktreeId,
+      worktreeId: tabListOfPty({ worktreeId: args.worktreeId, holder: args.holder }),
       tabId: args.tabId,
       leafId: args.leafId,
       ...(args.expectedSourceBinding ? { expectedSourceBinding: args.expectedSourceBinding } : {}),

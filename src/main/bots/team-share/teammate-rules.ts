@@ -27,9 +27,10 @@
 //     placement, exit retirement, the page selection). Every reader that lists or acts on a
 //     workspace's terminals or pages for someone takes that list (`ptyInList`, `pagesOf`); only work
 //     on the workspace itself reads them all. A `homeTabs.ownWorkspace` write there lands in the
-//     teammate's own workspace (`person:`, `resolveTabListTarget`); other `homeTabs.hostList` methods
-//     (incl. stopping, closing or sleeping all of a workspace's terminals) are refused at admission
-//     when they name the teammate's Home.
+//     teammate's own workspace (`person:`, `resolveTabListTarget`). Stopping, closing or sleeping
+//     all of a Home's terminals takes the caller's own list (a sleep keyed, told and recorded as
+//     their own workspace's); other `homeTabs.hostList` methods (incl. sleeping the workspace) are
+//     refused at admission when they name the teammate's Home.
 //     Reads and streams use the device's list (`tabOwnerOf`), or the list a read names
 //     (`viewedTabListOf`): anyone may watch anyone's list in the Home; watching writes nothing, and
 //     closing a tab there names that list's person. The census test checks every write's person source.

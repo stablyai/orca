@@ -37,6 +37,7 @@ import {
   wslMoveProjectRefForWorkspace
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { ownsHostReadMarks } from '../../bots/team-share/teammate-rules'
+import { hostListPty } from '../session-tabs/person/person-workspace-target'
 import type { RpcCallerScope } from '../rpc/callers/rpc-caller-scope'
 
 /**
@@ -75,9 +76,9 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
   readonly terminalUse = new TerminalUseProducer({
     store: () => this.store,
     workspaceOfPty: (ptyId) => {
-      // A paired server's terminal is that server's to record.
+      // A paired server's terminal is that server's to record; a teammate's own is not the owner's use.
       const pty = isRemoteRuntimePtyId(ptyId) ? undefined : this.ptysById.get(ptyId)
-      if (!pty?.worktreeId) {
+      if (!pty?.worktreeId || !hostListPty(pty)) {
         return null
       }
       const hostId = getConnectionExecutionHostId(pty.connectionId)
@@ -106,7 +107,8 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
           this.agentTransitions.noteTerminalSideEffects(event.batch)
         }
       },
-      { consumesTerminalSideEffects: true }
+      // Every list's: the detector feeds orchestration, and splits the owner's feeds itself.
+      { consumesTerminalSideEffects: true, tabLists: 'every' }
     )
     // A Done may re-tier.
     this.onWorkspaceRecordsWritten(() => this.sortStamps.noteRecordsWritten())
@@ -147,7 +149,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
             }
           }
           for (const pty of this.ptysById.values()) {
-            if (pty.worktreeId === worktreeId) {
+            if (pty.worktreeId === worktreeId && hostListPty(pty)) {
               ptyIds.add(pty.ptyId)
             }
           }

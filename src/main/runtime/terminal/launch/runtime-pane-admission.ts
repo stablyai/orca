@@ -21,6 +21,7 @@ import {
   type PaneStartStatuses
 } from '../surface/pane-start-statuses'
 import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
+import { tabListOfPty } from '../../session-tabs/person/person-workspace-target'
 
 type Spawn = NonNullable<RuntimePtyController['spawn']>
 type PaneStartStatusSink = Pick<PaneStartStatuses, 'set' | 'clear'>
@@ -45,7 +46,7 @@ type AdmittedSpawnArgs = Parameters<Spawn>[0] & {
 /** The pane its placement names: a new tab, or a split beside its parent pane. */
 function admissionFor(args: AdmittedSpawnArgs): TerminalPaneAdmission {
   const { tabId, leafId, placement } = args
-  const workspace = args.paneWorkspaceId ?? args.worktreeId
+  const workspace = tabListOfPty(args)
   if (placement?.kind === 'split') {
     const { parentLeafId, direction } = placement
     return {
@@ -92,7 +93,7 @@ function paneStillWritten(
 /** The saved partition the pane's layout is in: the teammates' for their own workspace. */
 function hostIdOf(args: AdmittedSpawnArgs): string | undefined {
   return (
-    personWorkspacePartition(args.paneWorkspaceId ?? '') ??
+    personWorkspacePartition(tabListOfPty(args)) ??
     (args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined)
   )
 }

@@ -102,7 +102,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       persistHostSessionBinding: true,
       ...(pty.holder
         ? {
-            paneWorkspaceId: list,
+            holder: pty.holder,
             sessionId: mintServePtySessionId(workspace.id, randomUUID()),
             isNewSession: true
           }

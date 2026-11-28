@@ -24,6 +24,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
+import { hostListPty } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
@@ -172,7 +173,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
       ...(options.replay ? { replay: true } : {}),
       ...this.resolveTerminalSideEffectAttribution(ptyId)
     }
-    if (this.terminalSideEffectLocalConsumerAvailable) {
+    // The window's own feed carries the host lists' terminals alone (`hostListPty`).
+    if (this.terminalSideEffectLocalConsumerAvailable && hostListPty(this.ptysById.get(ptyId))) {
       try {
         this.onTerminalSideEffects?.(batch)
       } catch (err) {

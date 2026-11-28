@@ -6,11 +6,12 @@
 import type { RpcContext, RpcMethod, RpcStreamingMethod } from '../../runtime/rpc/core'
 import { isStreamingMethod } from '../../runtime/rpc/core'
 import { teammateWorkspaceLists, type TeammateWorkspaceLists } from './teammate-workspace-view'
+import { callerListIn } from '../../runtime/session-tabs/person/person-workspace-target'
 
 type Row = Record<string, unknown>
 type ListScope = {
   /** The answer, kept to the agent's workspaces. */
-  after: (result: unknown, lists: TeammateWorkspaceLists) => unknown
+  after: (result: unknown, lists: TeammateWorkspaceLists, context: RpcContext) => unknown
   /** The page's `limit` param, applied after filtering so the owner's rows never use it up. */
   limited?: string
 }
@@ -87,7 +88,19 @@ const TEAMMATE_LISTS: Readonly<Record<string, ListScope>> = {
       keepRows(result, 'folderWorkspaces', (row) => has(`folder:${text(row.id)}`))
   },
   'projectGroup.list': { after: (result, { set }) => groupsAbove(result, set.groupIds) },
-  'terminal.list': byWorktreeId('terminals', 'terminals'),
+  // In their own Home, a teammate's own list's terminals alone: the owner's are the host list's.
+  'terminal.list': {
+    after: (result, { has }, context) =>
+      keepRows(result, 'terminals', (row) => {
+        const worktreeId = text(row.worktreeId)
+        if (!worktreeId || !has(worktreeId)) {
+          return false
+        }
+        const list = callerListIn(context.runtime.bots.list(), worktreeId, context.callerScope)
+        return list === 'host' || context.runtime.isPtyInList(text(row.ptyId), list)
+      }),
+    limited: 'terminals'
+  },
   'browser.tabList': byWorktreeId('tabs'),
   'agent.list': byWorktreeId('agents'),
   'session.tabs.listAll': {
@@ -130,7 +143,7 @@ export function withTeammateLists<M extends RpcMethod | RpcStreamingMethod>(meth
       isRow(params) && typeof limit === 'number'
         ? { ...params, limit: Number.MAX_SAFE_INTEGER }
         : params
-    const kept = scope.after(await method.handler(widened, context), lists)
+    const kept = scope.after(await method.handler(widened, context), lists, context)
     return typeof limit === 'number' && scope.limited ? firstRows(kept, scope.limited, limit) : kept
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only a unary method's handler is replaced, with one of the same signature.

@@ -23,13 +23,13 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       'exclusive',
       sleepDeadline
     )
-    const { key, fence } = scope
-    // The host's list (a teammate's own terminals are theirs), fenced: a same-id twin's PTYs are
-    // another host's; a cwd guess may be a same-path sibling's (#36716).
+    const { key, fence, list, listWorkspaceId } = scope
+    // The list's own terminals, fenced: a same-id twin's PTYs are another host's; a cwd guess may
+    // be a same-path sibling's (#36716).
     const liveHere = (fresh: ReadonlySet<string>) =>
       withoutCwdGuesses(
         this.ptysById,
-        this.getLivePtyIdsForWorktree(worktree.id, 'host', fresh, fence)
+        this.getLivePtyIdsForWorktree(worktree.id, list, fresh, fence)
       )
     const existingSleepState = this.terminalSleepStateByHostWorktree.get(key)
     if (existingSleepState?.phase === 'sleeping') {
@@ -98,7 +98,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       }
       const liveTerminalHandles = handlesOf(livePtyIds)
       this.terminalSleepStateByHostWorktree.set(key, {
-        worktreeId: worktree.id,
+        worktreeId: listWorkspaceId,
         generation,
         phase: 'stopping',
         ptyIds: [...committedPtyIds].sort(),
@@ -107,7 +107,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       })
       this.emitClientEvent({
         type: 'worktreeTerminalSleepState',
-        worktreeId: worktree.id,
+        worktreeId: listWorkspaceId,
         generation,
         phase: 'started',
         ptyIds: [...livePtyIds].sort(),
@@ -116,7 +116,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       if (committedPtyIds.size > 0) {
         this.emitClientEvent({
           type: 'worktreeTerminalSleepState',
-          worktreeId: worktree.id,
+          worktreeId: listWorkspaceId,
           generation,
           phase: 'committed',
           ptyIds: [...committedPtyIds].sort(),
@@ -126,7 +126,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       if (livePtyIds.size === 0) {
         const terminalHandles = handlesOf(committedPtyIds)
         this.terminalSleepStateByHostWorktree.set(key, {
-          worktreeId: worktree.id,
+          worktreeId: listWorkspaceId,
           generation,
           phase: 'sleeping',
           ptyIds: [...committedPtyIds].sort(),
@@ -137,7 +137,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         return sleptNothing()
       }
       // Why before the stop: a PTY's exit clears its hook rows, and with them the session ids.
-      const resumeCapture = await this.sleepResumeRecords.capture(worktree.id, livePtyIds)
+      const resumeCapture = await this.sleepResumeRecords.capture(listWorkspaceId, livePtyIds)
       const ptyController = this.ptyController
       if (!ptyController?.stopAndWait) {
         throw new Error('terminal_worktree_sleep_unavailable')
@@ -180,7 +180,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       )
       if (!postStopLiveness) {
         this.commitWorktreeTerminalSleepPtys({
-          worktreeId: worktree.id,
+          worktreeId: listWorkspaceId,
           generation,
           ptyIds: successfulStopPtyIds,
           pendingPtyIds,
@@ -188,7 +188,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           terminalHandlesByPtyId
         })
         // Why: the stops were acknowledged and their hook rows are gone; a retry has nothing to capture.
-        await this.sleepResumeRecords.persist(worktree.id, resumeCapture, successfulStopPtyIds)
+        await this.sleepResumeRecords.persist(listWorkspaceId, resumeCapture, successfulStopPtyIds)
         if (failedStopIndex !== -1) {
           const failedStop = stopResults[failedStopIndex]
           throw Object.assign(new Error('terminal_worktree_sleep_failed'), {
@@ -209,18 +209,18 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         (ptyId) => !remainingLivePtyIds.has(ptyId)
       )
       this.commitWorktreeTerminalSleepPtys({
-        worktreeId: worktree.id,
+        worktreeId: listWorkspaceId,
         generation,
         ptyIds: provenStoppedPtyIds,
         pendingPtyIds,
         committedPtyIds,
         terminalHandlesByPtyId
       })
-      await this.sleepResumeRecords.persist(worktree.id, resumeCapture, provenStoppedPtyIds)
+      await this.sleepResumeRecords.persist(listWorkspaceId, resumeCapture, provenStoppedPtyIds)
       if (failedStopIndex !== -1 && remainingLivePtyIds.size > 0) {
         const failedStop = stopResults[failedStopIndex]
         console.error('[runtime] worktree terminal sleep physical stop failed', {
-          worktreeId: worktree.id,
+          worktreeId: listWorkspaceId,
           ptyId: orderedLivePtyIds[failedStopIndex],
           cause: failedStop.status === 'rejected' ? failedStop.reason : 'stop_not_acknowledged'
         })
@@ -242,7 +242,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       }
       const terminalHandles = handlesOf(committedPtyIds)
       this.terminalSleepStateByHostWorktree.set(key, {
-        worktreeId: worktree.id,
+        worktreeId: listWorkspaceId,
         generation,
         phase: 'sleeping',
         ptyIds: [...committedPtyIds].sort(),
@@ -265,7 +265,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         if (cancelledPtyIds.length > 0) {
           this.emitClientEvent({
             type: 'worktreeTerminalSleepState',
-            worktreeId: worktree.id,
+            worktreeId: listWorkspaceId,
             generation,
             phase: 'cancelled',
             ptyIds: cancelledPtyIds,
@@ -275,7 +275,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         if (committedPtyIds.size > 0) {
           const terminalHandles = handlesOf(committedPtyIds)
           this.terminalSleepStateByHostWorktree.set(key, {
-            worktreeId: worktree.id,
+            worktreeId: listWorkspaceId,
             generation,
             phase: 'partial',
             ptyIds: [...committedPtyIds].sort(),

@@ -3,13 +3,11 @@ import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-s
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorktreeTerminalStopOptions } from './worktree-terminal-stop-options'
-import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeTerminalMutationKind } from '../../workspaces/lifecycle/worktree-terminal-mutation-lock'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
@@ -24,9 +22,17 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktree-pty-stop-verdict'
-import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
-import { anySleepKeyNames, hostSleepKey, resolveSleepScope } from './worktree-terminal-sleep-key'
+import {
+  clearClosedWorktreeResumeRecords,
+  clearWorkspaceTerminals
+} from './worktree-sleep-resume-records'
+import {
+  anySleepKeyNames,
+  listSleepWorkspaceId,
+  resolveSleepScope
+} from './worktree-terminal-sleep-key'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
+import type { PtyList } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithResolveTerminalSplitSourceAuthority {
   protected abstract sleepResolvedWorktreeTerminals(
@@ -45,8 +51,11 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
       : { resolvedConnectionId: parsedHost?.kind === 'ssh' ? parsedHost.targetId : null }
   }
 
+  /** `list`: whose terminals. The host's list closes its tabs first; a teammate's are stopped, then
+   *  their saved tabs and resume records dropped from their own workspace. */
   async closeTerminalsForWorktree(
-    worktreeSelector: string
+    worktreeSelector: string,
+    { list = 'host' }: { list?: PtyList } = {}
   ): Promise<RuntimeWorktreeTerminalCloseResult> {
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
@@ -54,11 +63,16 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     const hostFence = this.getWorktreeHostFence(worktree)
 
     return await this.runWorktreeTerminalMutation(worktree.id, async () => {
+      // A teammate's list's records are saved under their own workspace, in the teammates' partition.
+      const listWorkspaceId = listSleepWorkspaceId(worktree.id, list)
       // Clearing a rotated partition can reroute ownership; retain the session host that held tabs when close began.
-      const sessionHostId = this.getWorkspaceSessionHostIdForWorktree(worktree.id)
-      const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`, undefined, {
-        includeAgentSenders: false
-      })
+      const sessionHostId = this.getWorkspaceSessionHostIdForWorktree(listWorkspaceId)
+      const hostTabs =
+        list === 'host'
+          ? await this.listMobileSessionTabs(`id:${worktree.id}`, undefined, {
+              includeAgentSenders: false
+            })
+          : null
       const targetPtyIds = collectWorktreePtyIds(
         // Switch point: main's bound terminals too, registered or not.
         ORCA_LAYOUT_OWNER_IS_MAIN
@@ -67,7 +81,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         this.ptysById,
         worktree.id,
         hostFence,
-        'host',
+        list,
         true
       )
       // Main-bound terminals can survive inventory gaps; only certified exits count them stopped.
@@ -76,18 +90,27 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
           (ptyId) => ORCA_LAYOUT_OWNER_IS_MAIN && mainHoldsTerminal(this, ptyId)
         )
       )
-      const parentTabIds = [
-        ...new Set(
-          snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
-        )
-      ]
-      const closed = await this.closeWorktreeTabsOwingPtyStops(worktree.id, parentTabIds)
-      await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
+      let closed: number | null = null
+      if (hostTabs) {
+        const parentTabIds = [
+          ...new Set(
+            hostTabs.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
+          )
+        ]
+        closed = await this.closeWorktreeTabsOwingPtyStops(worktree.id, parentTabIds)
+        await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
+      }
       const { stopped } = await this.stopTerminalsForWorktree(`id:${worktree.id}`, {
-        list: 'host',
+        list,
         resolvedWorktreeId: worktree.id,
         ...hostFence
       })
+      if (!hostTabs) {
+        // No window closes their tabs: their saved ones, slept ones included, go with their records.
+        await this.commitWorkspaceSessionEdit(sessionHostId, (session) =>
+          clearWorkspaceTerminals(session, listWorkspaceId)
+        )
+      }
       const ptyStop = summarizeWorktreePtyStopVerdict(
         targetPtyIds,
         (ptyId) => this.getPtyLivenessVerdict(ptyId),
@@ -97,7 +120,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
           (this.isSshOwnedPtyId(ptyId) && this.ptysById.has(ptyId))
       )
       return {
-        closed,
+        closed: closed ?? stopped,
         stopped,
         retiredSurfaces: true,
         ...ptyStop
@@ -243,13 +266,14 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     }
   }
 
-  /** With `soleLivePtyId`, stops nothing unless that PTY is the worktree's only live terminal. */
+  /** With `soleLivePtyId`, stops nothing unless that PTY is the worktree's only live terminal.
+   *  `list`: whose terminals (the host list's by default). */
   async sleepTerminalsForWorktree(
     worktreeSelector: string,
-    options: { soleLivePtyId?: string } = {}
+    options: { soleLivePtyId?: string; list?: PtyList } = {}
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
-    const scope = resolveSleepScope(this.store?.getRepos() ?? [], worktree)
+    const scope = resolveSleepScope(this.store?.getRepos() ?? [], worktree, options.list)
     const existing = this.terminalSleepByHostWorktree.get(scope.key)
     if (existing) {
       return await existing
@@ -268,37 +292,6 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         this.terminalSleepByHostWorktree.delete(scope.key)
       }
     }
-  }
-
-  /** `target` is the spawn's own workspace copy: the host whose provider runs it. */
-  async acquireWorktreeTerminalSpawn(
-    target: HostWorktreeTarget | undefined,
-    opts: { refuseSleptWorktree?: boolean } = {}
-  ): Promise<() => void> {
-    if (!target) {
-      return () => {}
-    }
-    const worktreeId = target.id
-    const release = await this.acquireWorktreeTerminalMutation(worktreeId, 'shared')
-    const key = hostSleepKey(target.hostId, worktreeId)
-    const sleepState = this.terminalSleepStateByHostWorktree.get(key)
-    // Why: re-checked under the lock, since a sleep can commit while an automatic spawn waits for it.
-    if (sleepState && opts.refuseSleptWorktree) {
-      release()
-      throw new Error(WORKTREE_TERMINALS_SLEEPING_ERROR)
-    }
-    if (sleepState?.phase === 'sleeping' || sleepState?.phase === 'partial') {
-      this.terminalSleepStateByHostWorktree.delete(key)
-      this.emitClientEvent({
-        type: 'worktreeTerminalSleepState',
-        worktreeId: sleepState.worktreeId,
-        generation: sleepState.generation,
-        phase: 'woken',
-        ptyIds: sleepState.ptyIds,
-        terminalHandles: sleepState.terminalHandles
-      })
-    }
-    return release
   }
 
   /** Whether the host itself has put (or is putting) this worktree's terminals to sleep. */

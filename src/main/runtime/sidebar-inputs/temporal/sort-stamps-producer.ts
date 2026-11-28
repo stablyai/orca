@@ -77,9 +77,9 @@ export class SortStampsProducer {
     )
   }
 
-  /** Follows the detector's panes; subscribe before the detector attaches to its store. */
+  /** Follows the host lists' panes; subscribe before the detector attaches to its store. */
   attachAgentTransitions(transitions: AgentTransitionDetector): () => void {
-    return transitions.subscribe((change) => this.applyPaneChange(change))
+    return transitions.subscribeHostLists((change) => this.applyPaneChange(change))
   }
 
   /** A terminal started by something other than a person opening it. */

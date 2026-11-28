@@ -1,4 +1,3 @@
-import { tabListOfPty } from '../../session-tabs/person/person-workspace-target'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
@@ -89,9 +88,7 @@ export function terminalSpawnOptions({
     ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
     ...(launchOpts.isNewSession ? { isNewSession: true } : {}),
     ...BACKGROUND_TERMINAL_SPAWN_FLAGS,
-    // A teammate's own terminal is a pane of their own workspace, never of the Home it runs in.
-    ...(launchOpts.holder
-      ? { paneWorkspaceId: tabListOfPty({ worktreeId: workspace.id, holder: launchOpts.holder }) }
-      : {})
+    // A teammate's own terminal is a pane of their own workspace (`tabListOfPty`), never the Home's.
+    ...(launchOpts.holder ? { holder: launchOpts.holder } : {})
   }
 }

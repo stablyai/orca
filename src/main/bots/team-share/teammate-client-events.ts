@@ -9,6 +9,7 @@ import {
 } from '../../runtime/workspaces/process-listing/agent-workspace-set'
 import type { BotChangeKind } from '../../../shared/bots/bot-change-scope'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { toWireWorkspaceId } from '../../runtime/session-tabs/person/person-workspace-target'
 
 export const chatWorkspaceOf = (sessionId: string): string | undefined =>
   getStructuredAgentSessionHost()?.deps?.store.getConversation(sessionId)?.location.workspaceId
@@ -59,7 +60,11 @@ export const TEAMMATE_CLIENT_EVENT_DECISIONS: { [T in RuntimeClientEvent['type']
     return worktreeIds?.length === 0 ? null : { ...event, ...(worktreeIds ? { worktreeIds } : {}) }
   },
   pullRequestChanged: byWorkspace((event) => event.worktreeId),
-  worktreeTerminalSleepState: byWorkspace((event) => event.worktreeId),
+  // Only their own list's reach them (the event bus's `tabLists`), naming the Home they address.
+  worktreeTerminalSleepState: (event, sets) => {
+    const wired = { ...event, worktreeId: toWireWorkspaceId(event.worktreeId) }
+    return hasEither(sets, wired.worktreeId) ? wired : null
+  },
   linearLinkedIssueUpdated: byWorkspace((event) => event.worktreeId),
   workspaceMetadataSet: byWorkspace((event) => event.worktreeId),
   terminalSideEffects: byWorkspace((event) => event.batch.worktreeId),

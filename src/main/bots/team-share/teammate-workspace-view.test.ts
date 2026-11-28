@@ -263,10 +263,8 @@ describe('a workspace teammate on a shared agent', () => {
     expect(await listed(TEAMMATE, 'worktree.ps', 'worktrees', 'worktreeId')).toEqual([HOME, WORKER])
     expect(await call(TEAMMATE, 'worktree.ps', {})).toMatchObject({ result: { totalCount: 2 } })
     expect(await listed(OWNER, 'worktree.ps', 'worktrees', 'worktreeId')).toHaveLength(4)
-    expect(await listed(TEAMMATE, 'terminal.list', 'terminals', 'worktreeId')).toEqual([
-      HOME,
-      WORKER
-    ])
+    // The Home's terminal is the owner's: a teammate lists their own list's there.
+    expect(await listed(TEAMMATE, 'terminal.list', 'terminals', 'worktreeId')).toEqual([WORKER])
     expect(await listed(OWNER, 'terminal.list', 'terminals', 'worktreeId')).toEqual([
       HOME,
       WORKER,
@@ -297,6 +295,10 @@ describe('a workspace teammate on a shared agent', () => {
   it('streams only the agent’s workspaces’ events and none of the host’s own', async () => {
     const summarize = (event: z.infer<typeof StreamedEvent>) =>
       `${event.type}:${event.batch?.worktreeId ?? event.worktreeId ?? event.repoId}`
+    // The host's own terminals, each in its workspace's host list.
+    runtime.registerPty('p1', HOME)
+    runtime.registerPty('p2', OWNERS)
+    runtime.registerPty('p3', WORKER)
     const events: RuntimeClientEvent[] = [
       { type: 'worktreesChanged', repoId: 'repo-agent' },
       { type: 'worktreesChanged', repoId: 'repo-owner' },
@@ -310,16 +312,21 @@ describe('a workspace teammate on a shared agent', () => {
         type: 'terminalSideEffects',
         batch: { ptyId: 'p2', seq: 1, facts: [{ kind: 'bell' }], worktreeId: OWNERS }
       },
+      {
+        type: 'terminalSideEffects',
+        batch: { ptyId: 'p3', seq: 1, facts: [{ kind: 'bell' }], worktreeId: WORKER }
+      },
       { type: 'activateWorktree', repoId: 'repo-agent', worktreeId: WORKER },
       { type: 'settingsChanged', keys: ['theme'] },
       { type: 'botsChanged', botIds: ['bot-other'] }
     ]
+    // A terminal in the Home that is not in their own list (the owner's) is not theirs to hear.
     expect((await clientEvents(TEAMMATE, events)).map(summarize)).toEqual([
       'worktreesChanged:repo-agent',
       `pullRequestChanged:${WORKER}`,
-      `terminalSideEffects:${HOME}`
+      `terminalSideEffects:${WORKER}`
     ])
-    expect(await clientEvents(OWNER, events)).toHaveLength(9)
+    expect(await clientEvents(OWNER, events)).toHaveLength(10)
   })
 
   it('keeps a teammate’s Needs you count their own after the owner’s items change', async () => {

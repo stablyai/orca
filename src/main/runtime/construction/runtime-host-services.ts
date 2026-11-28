@@ -363,4 +363,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     this.nativeChatDraftResolutions.snapshot.bind(this.nativeChatDraftResolutions)
 
   protected emitClientEvent = this.clientEvents.emit.bind(this.clientEvents)
+
+  /** Whether a client taking these tab lists hears an event. */
+  clientEventHeard = this.clientEvents.hears.bind(this.clientEvents)
 }

@@ -1750,7 +1750,10 @@
       "session.tabs.subscribe",
       "session.tabs.subscribeAll",
       "session.tabs.unsubscribe",
-      "session.tabs.unsubscribeAll"
+      "session.tabs.unsubscribeAll",
+      "terminal.closeAll",
+      "terminal.sleep",
+      "terminal.stop"
     ],
     "ownWorkspace": [
       "agent.launch",
@@ -1769,9 +1772,6 @@
       "browser.openUrl",
       "session.tabs.closeLifecycle",
       "terminal.adoptOrphans",
-      "terminal.closeAll",
-      "terminal.sleep",
-      "terminal.stop",
       "worktree.sleep"
     ],
     "none": ["session.tabs.terminalShellChoices"]

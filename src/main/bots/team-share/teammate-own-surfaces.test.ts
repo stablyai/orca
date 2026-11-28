@@ -11,6 +11,7 @@ import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-la
 import { getRuntimeBrowserPageRegistry } from '../../runtime/browser/client-pages/runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../../runtime/browser-host/leases/browser-host-lease-registry-instance'
 import { O, rig, settleTeammateRig, type Tabs } from './teammate-tabs.test-support'
+import { openTerminal, startTerminalsOnTheHost } from './teammate-terminals.test-support'
 import {
   browserUnavailableError,
   setRuntimeBrowserCommandsFactory
@@ -34,26 +35,6 @@ afterEach(async () => {
 })
 
 type Rig = Awaited<ReturnType<typeof rig>>
-
-/** The host's terminals start as the desktop's do: each spawn a live process under the id it was
- *  asked for, else one the daemon names in the workspace, recorded as it starts (before it
- *  registers); a kill its exit. */
-function startTerminalsOnTheHost(r: Rig) {
-  r.runtime['graphStatus'] = 'ready'
-  r.runtime.setPtyController({
-    spawn: async ({ sessionId, worktreeId }) => {
-      const id = sessionId ?? `${worktreeId}@@${randomUUID()}`
-      r.runtime.vouchSpawnedTerminal(id)
-      return { id }
-    },
-    write: () => true,
-    kill: (ptyId) => {
-      void r.runtime.onPtyExit(ptyId, 0)
-      return true
-    },
-    getForegroundProcess: async () => null
-  })
-}
 
 /** Pages as a headless host serves them (orcad's client-page commands, no engine of its own). Set
  *  before the runtime starts, which reads it once. */
@@ -88,14 +69,6 @@ function hostPagesOnTheCallersComputer(r: Rig) {
   })
 }
 
-const Terminal = z.object({
-  // Ready to attach: the client streams it by this handle.
-  tab: z.looseObject({ id: z.string(), ptyId: z.string(), terminal: z.string() })
-})
-const openTerminal = async (r: Rig, deviceId: string) =>
-  Terminal.parse(
-    await r.call(deviceId, 'session.tabs.createTerminal', { worktree: `id:${r.workspace}` })
-  ).tab
 const openPage = async (r: Rig, deviceId: string) =>
   z.object({ browserPageId: z.string() }).parse(
     await r.call(deviceId, 'browser.tabCreate', {
@@ -498,25 +471,6 @@ it('never picks a teammate’s computer for a page no one placed, nor asks it to
   // An owner's computer volunteers as before.
   r.stream('owner-desk', 'runtime.clientEvents.subscribe', { browserHostRequests: true })
   await vi.waitFor(() => expect(getBrowserHostRequestRegistry(r.runtime).hasVolunteer()).toBe(true))
-})
-
-it('stops, closes or sleeps only the host’s terminals of a Home, and never for a teammate', async () => {
-  const r = await rig()
-  startTerminalsOnTheHost(r)
-  const worktree = `id:${r.workspace}`
-  const ownersTerminal = await openTerminal(r, 'owner-desk')
-  const matesTerminal = await openTerminal(r, 'mate-desk')
-  await chatTabCommandsSettled()
-  const live = (ptyId: string) => r.runtime['ptysById'].get(ptyId)?.connected === true
-
-  for (const method of ['terminal.stop', 'terminal.closeAll', 'terminal.sleep', 'worktree.sleep']) {
-    expect(await r.send('mate-desk', method, { worktree }), method).toMatchObject({ ok: false })
-  }
-  expect(live(ownersTerminal.ptyId) && live(matesTerminal.ptyId)).toBe(true)
-  await r.call('owner-desk', 'terminal.stop', { worktree })
-  expect(live(ownersTerminal.ptyId)).toBe(false)
-  expect(live(matesTerminal.ptyId)).toBe(true)
-  expect(tabIds(await r.list('mate-desk'))).toEqual([matesTerminal.id])
 })
 
 it('ends a teammate’s terminal that exits on its own in their list alone', async () => {

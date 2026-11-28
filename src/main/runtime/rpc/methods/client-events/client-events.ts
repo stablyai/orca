@@ -22,6 +22,7 @@ import {
   AgentWorkspaceTracker,
   workspaceTeammateOf
 } from '../../../../bots/team-share/agent-workspace-tracker'
+import { callerTakesTabList } from '../../../session-tabs/person/person-workspace-target'
 
 let clientEventSubscriptionSeq = 0
 
@@ -42,6 +43,9 @@ export const CLIENT_EVENT_METHODS = [
         return
       }
       const deliver = tracker ? tracker.orderedClientEvents(emit) : emit
+      // The lists this caller's own tabs are: a teammate's in their agent's Home, else the host's.
+      const tabLists = (list: string) =>
+        callerTakesTabList(runtime.bots.list(), list, ctx.callerScope)
       await new Promise<void>((resolve) => {
         // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
         const unsubscribe = runtime.onClientEvent(
@@ -57,7 +61,7 @@ export const CLIENT_EVENT_METHODS = [
             }
             deliver(event)
           },
-          { consumesTerminalSideEffects: clientKind !== 'mobile' }
+          { consumesTerminalSideEffects: clientKind !== 'mobile', tabLists }
         )
         // The server asks only the owner's computers to host a page no one placed.
         const unregisterHostVolunteer =
@@ -110,7 +114,9 @@ export const CLIENT_EVENT_METHODS = [
 
         // Listen before snapshotting to close the subscribe race and replay sleep state missed during disconnect.
         for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
-          deliver(event)
+          if (runtime.clientEventHeard(event, tabLists)) {
+            deliver(event)
+          }
         }
         for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
           []) {

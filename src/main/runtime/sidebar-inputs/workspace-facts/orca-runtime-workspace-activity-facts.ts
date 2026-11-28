@@ -1,3 +1,5 @@
+import { hostListPty } from '../../session-tabs/person/person-workspace-target'
+import { inHostListPane } from '../../terminal/output/terminal-tab-list-classification'
 import { OrcaRuntimeWithAgentTransitions } from '../../construction/orca-runtime-agent-transitions'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
@@ -19,6 +21,7 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
   readonly workspaceActivityFacts = new WorkspaceActivityFactsProducer({
     readSurfaces: (worktreeId) => this.readWorkspaceSurfaceActivity(worktreeId),
     resolveTabWorktreeId: (tabId) => this.tabs.get(tabId)?.worktreeId,
+    inHostList: (paneKey) => inHostListPane(paneKey, (identity) => this.getStatusTabList(identity)),
     clock: this.sidebarClock
   })
 
@@ -141,7 +144,9 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
     const key = worktreeIdentityKey(worktreeId)
     const owns = (id: string): boolean => id === worktreeId || worktreeIdentityKey(id) === key
     let unverifiable = false
-    for (const surfaces of [this.leaves.values(), this.ptysById.values()]) {
+    // A teammate's own terminal leaves the owner's row as it is.
+    const hostPtys = [...this.ptysById.values()].filter((pty) => hostListPty(pty))
+    for (const surfaces of [this.leaves.values(), hostPtys]) {
       for (const surface of surfaces) {
         if (surface.ptyId === null || !owns(surface.worktreeId)) {
           continue

@@ -76,20 +76,33 @@ export class AgentTransitionDetector {
   private readonly panes = new Map<string, TrackedPane>()
   // The first title for each PTY seeds state rather than reporting a transition.
   private readonly titlePanes = new Map<string, TitlePane>()
-  private readonly listeners = new Set<(change: AgentPaneChange) => void>()
+  /** In subscription order; `true` for a host-lists-only listener. */
+  private readonly listeners = new Map<(change: AgentPaneChange) => void, boolean>()
   private store: AgentTransitionStore | null = null
 
   constructor(
     private readonly deps: {
       resolveTabWorktreeId: (tabId: string) => string | undefined
       subscribeToPtyExit: (ptyId: string, listener: () => void) => () => void
+      /** False for a pane in a teammate's own list in a shared agent's Home. */
+      inHostList: (paneKey: string) => boolean
       now: () => number
     }
   ) {}
 
-  /** Subscribe before attach to receive its initial statuses. */
+  /** Every pane's changes. Subscribe before attach to receive its initial statuses. */
   subscribe(listener: (change: AgentPaneChange) => void): () => void {
-    this.listeners.add(listener)
+    return this.listen(listener, false)
+  }
+
+  /** The host lists' panes alone: the owner's sidebar and notifications, which a teammate's own
+   *  terminal never reaches. */
+  subscribeHostLists(listener: (change: AgentPaneChange) => void): () => void {
+    return this.listen(listener, true)
+  }
+
+  private listen(listener: (change: AgentPaneChange) => void, hostListsOnly: boolean): () => void {
+    this.listeners.set(listener, hostListsOnly)
     return () => {
       this.listeners.delete(listener)
     }
@@ -270,7 +283,11 @@ export class AgentTransitionDetector {
   }
 
   private emit(change: AgentPaneChange): void {
-    for (const listener of this.listeners) {
+    const inHostList = this.deps.inHostList(change.paneKey)
+    for (const [listener, hostListsOnly] of this.listeners) {
+      if (hostListsOnly && !inHostList) {
+        continue
+      }
       try {
         listener(change)
       } catch (error) {
