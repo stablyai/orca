@@ -25,8 +25,8 @@ export class MenuBarRestartPolicy {
       }
     } else if (hung || livedMs < MAX_RETRY_DELAY) {
       // A hang counts however long the helper lived: the scene deadlock can strike at any update.
-      // Wall clock, so a night's sleep between hangs counts.
-      const now = Date.now()
+      // Monotonic, so clock changes can't clear or chain strikes; time asleep doesn't count, which errs toward off.
+      const now = performance.now()
       if (now - this.lastStrikeAt > STRIKE_WINDOW) {
         this.diedAfterStart = 0
         this.delay = 1_000
