@@ -1,7 +1,7 @@
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
-import { buildWindowsHookPowerShellCommand } from '../agent-hooks/installation/commands/windows-hook-command'
-import { wrapWindowsPowerShellEncodedCommand } from '../agent-hooks/installation/commands/windows-powershell-hook-launcher'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
@@ -16,6 +16,8 @@ import { quoteStartupArg } from '../../shared/agent-launch/startup/tui-agent-sta
 import { getCursorHookResponse, type CursorEvent } from './hook-events'
 
 const CURSOR_HOOK_RESPONSE_ENV = 'ORCA_CURSOR_HOOK_RESPONSE'
+// Cursor fires these on nearly every agent event, so each one spawned a PowerShell + conhost.
+const CURSOR_WINDOWS_EVENT_ENV = 'ORCA_CURSOR_HOOK_EVENT'
 
 export function getPosixManagedCommand(scriptPath: string, eventName: CursorEvent): string {
   const response = getCursorHookResponse(eventName)
@@ -26,38 +28,62 @@ export function getPosixManagedCommand(scriptPath: string, eventName: CursorEven
   )
 }
 
+/** One wrapper per event carries Cursor's event name and reply to the shared script. */
+export function getWindowsCursorWrapperScriptPath(eventName: CursorEvent): string {
+  return getSharedManagedScriptPath(`cursor-${eventName}.cmd`)
+}
+
+export function getWindowsCursorWrapperScript(eventName: CursorEvent): string {
+  return [
+    '@echo off',
+    // Preserve literal ! characters in the percent-expanded core path.
+    'setlocal DisableDelayedExpansion',
+    `set "${CURSOR_HOOK_RESPONSE_ENV}=${getCursorHookResponse(eventName)}"`,
+    `set "${CURSOR_WINDOWS_EVENT_ENV}=${eventName}"`,
+    'set "ORCA_CURSOR_HOOK_CORE=%~dp0cursor-hook.cmd"',
+    'if exist "%ORCA_CURSOR_HOOK_CORE%" (',
+    '  call "%ORCA_CURSOR_HOOK_CORE%"',
+    '  exit /b 0',
+    ')',
+    `echo %${CURSOR_HOOK_RESPONSE_ENV}%`,
+    ...buildWindowsHookEnvironmentGuardLines(),
+    'exit /b 0',
+    ''
+  ].join('\r\n')
+}
+
 export function getManagedCommand(scriptPath: string, eventName: CursorEvent): string {
   if (process.platform !== 'win32') {
     // Cursor uses the login shell; wrap the POSIX guard in sh with portable quoting.
     return `/bin/sh -c ${quoteStartupArg(getPosixManagedCommand(scriptPath, eventName), 'posix')}`
   }
-  const response = getCursorHookResponse(eventName)
-  const command = buildWindowsHookPowerShellCommand(
-    scriptPath,
-    { [CURSOR_HOOK_RESPONSE_ENV]: response },
-    { fallbackStdout: response }
-  )
-  // PowerShell 5.1 defaults to the ANSI code page when translating hook stdin.
-  return wrapWindowsPowerShellEncodedCommand(
-    `[Console]::InputEncoding = New-Object System.Text.UTF8Encoding; $OutputEncoding = [Console]::InputEncoding; ${command}`
-  )
+  // Cursor runs a plain command directly: registering the wrapper skips the per-event
+  // PowerShell + conhost flash. Spaced or non-ASCII paths keep the encoded launcher.
+  return wrapWindowsBatchHookCommand(getWindowsCursorWrapperScriptPath(eventName))
+}
+
+export function getWindowsManagedScript(): string {
+  return [
+    '@echo off',
+    'setlocal',
+    // Cursor permission hooks reject empty or invalid stdout (#15462).
+    `if defined ${CURSOR_HOOK_RESPONSE_ENV} (echo %${CURSOR_HOOK_RESPONSE_ENV}%) else (echo {})`,
+    // Refresh endpoints for PTYs that survived an Orca restart.
+    'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+    ...buildWindowsHookEnvironmentGuardLines(),
+    ...buildWindowsGrokReplayGuardLines(),
+    // The wrapper names the event; Cursor's own payload does not carry it as hook_event_name.
+    buildWindowsAgentHookPostCommand('cursor', [
+      `  --data-urlencode "hookEventName=%${CURSOR_WINDOWS_EVENT_ENV}%" ^`
+    ]),
+    'exit /b 0',
+    ''
+  ].join('\r\n')
 }
 
 export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
-    return [
-      '@echo off',
-      'setlocal',
-      // Cursor permission hooks reject empty or invalid stdout (#15462).
-      `if defined ${CURSOR_HOOK_RESPONSE_ENV} (echo %${CURSOR_HOOK_RESPONSE_ENV}%) else (echo {})`,
-      // Refresh endpoints for PTYs that survived an Orca restart.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      ...buildWindowsHookEnvironmentGuardLines(),
-      ...buildWindowsGrokReplayGuardLines(),
-      buildWindowsAgentHookPostCommand('cursor'),
-      'exit /b 0',
-      ''
-    ].join('\r\n')
+    return getWindowsManagedScript()
   }
 
   return [

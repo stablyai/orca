@@ -6,11 +6,8 @@ import {
   wrapRuntimeHomePosixHookCommand
 } from './runtime-home-hook-command'
 import { wrapWindowsBatchHookCommand } from './windows-direct-cmd-hook-command'
-import { buildWindowsHookPowerShellCommand, wrapWindowsHookCommand } from './windows-hook-command'
-import {
-  getWindowsSystem32Path,
-  wrapWindowsPowerShellEncodedCommand
-} from './windows-powershell-hook-launcher'
+import { wrapWindowsHookCommand } from './windows-hook-command'
+import { getWindowsSystem32Path } from './windows-powershell-hook-launcher'
 import { HOOK_PARENT_CAPTURE } from '../scripts/hook-process-capture'
 import { buildCodexHookCommand } from '../../../codex/hooks/definitions/codex-hook-command-form'
 import {
@@ -86,7 +83,7 @@ describe('createManagedCommandMatcher ownership across Orca hook builders', () =
     }
   })
 
-  it('matches Cursor POSIX (portable sh -c quoting) and Windows (UTF-8 PowerShell) hook commands', () => {
+  it('matches Cursor POSIX (portable sh -c quoting) and Windows (per-event wrapper) hook commands', () => {
     const matchesCursor = createManagedCommandMatcher('cursor-hook.sh')
     const posixWrapped = `/bin/sh -c ${quoteStartupArg(
       getCursorPosixManagedCommand(
@@ -95,16 +92,15 @@ describe('createManagedCommandMatcher ownership across Orca hook builders', () =
       ),
       'posix'
     )}`
-    const windowsPs = wrapWindowsPowerShellEncodedCommand(
-      `[Console]::InputEncoding = New-Object System.Text.UTF8Encoding; $OutputEncoding = [Console]::InputEncoding; ${buildWindowsHookPowerShellCommand(
-        'C:\\Users\\Jane Doe\\.orca\\agent-hooks\\cursor-hook.cmd',
-        { ORCA_CURSOR_HOOK_RESPONSE: '{"continue":true}' },
-        { fallbackStdout: '{"continue":true}' }
-      )}`
+    // Windows registers one wrapper per event so no interpreter starts for each Cursor event.
+    const matchesWindowsWrapper = createManagedCommandMatcher('cursor-beforeSubmitPrompt.cmd')
+    const windowsWrapper = wrapWindowsBatchHookCommand(
+      'C:\\Users\\Jane Doe\\.orca\\agent-hooks\\cursor-beforeSubmitPrompt.cmd'
     )
 
     expect(matchesCursor(posixWrapped)).toBe(true)
-    expect(matchesCursor(windowsPs)).toBe(true)
+    expect(matchesWindowsWrapper(windowsWrapper)).toBe(true)
+    expect(matchesWindowsWrapper(posixWrapped)).toBe(false)
   })
 
   it('matches Copilot, Kiro, Claude, and Antigravity managed hook commands', () => {
