@@ -56,9 +56,11 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
+    // Only index discovery arbitrates Antigravity siblings and supplies their workspace metadata.
     // A Cursor ACP session lists by its metadata alone; there is no conversation to index.
     if (
       this.store.acceptingReads === false ||
+      (candidate.agent === 'antigravity' && !start.indexing) ||
       isCursorAcpSessionRow({ agent: candidate.agent, filePath: candidate.file.path })
     ) {
       return null
