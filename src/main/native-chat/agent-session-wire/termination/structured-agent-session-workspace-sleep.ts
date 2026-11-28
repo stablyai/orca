@@ -43,7 +43,12 @@ export function createStructuredAgentSessionWorkspaceSleeper(
     runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
   }
 ) {
-  const sleep = (workspaceId: string, markAsleep?: boolean, admit?: WorkspaceChatStopAdmission) => {
+  const sleep = (
+    workspaceId: string,
+    markAsleep?: boolean,
+    admit?: WorkspaceChatStopAdmission,
+    member?: (sessionId: string) => boolean
+  ) => {
     const host = readHost()
     return sleepStructuredAgentSessionWorkspace(
       {
@@ -59,7 +64,8 @@ export function createStructuredAgentSessionWorkspaceSleeper(
       },
       workspaceId,
       markAsleep,
-      admit
+      admit,
+      member
     )
   }
   /** Chats still being created in a local workspace, which this Sleep would stop too. */
@@ -70,12 +76,14 @@ export function createStructuredAgentSessionWorkspaceSleeper(
 
 type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null
 
-/** Return only this call’s current proven stops; markAsleep marks exactly those receipts. */
+/** Return only this call’s current proven stops; markAsleep marks exactly those receipts. `member`
+ *  keeps the sleep to one tab list's chats (a teammate's own in a shared agent's Home). */
 export async function sleepStructuredAgentSessionWorkspace(
   host: WorkspaceSleepHost,
   workspaceId: string,
   markAsleep = false,
-  admit?: WorkspaceChatStopAdmission
+  admit?: WorkspaceChatStopAdmission,
+  member: (sessionId: string) => boolean = () => true
 ): Promise<AgentSessionWorkspaceSleepResult> {
   let records: ReturnType<StructuredAgentSessionHostDeps['store']['listConversations']>
   try {
@@ -94,7 +102,7 @@ export async function sleepStructuredAgentSessionWorkspace(
     ...records.filter((record) => belongs(record.location)).map((record) => record.sessionId),
     ...host.tasks.pendingMembers(workspaceId, LOCAL_EXECUTION_HOST_ID)
   ])
-  const sessionIds = [...candidates]
+  const sessionIds = [...candidates].filter(member)
   // async converts synchronous close failures to rejections while admitting every close immediately.
   const stops = await Promise.allSettled(
     sessionIds.map(async (sessionId) => {

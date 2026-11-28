@@ -9,11 +9,13 @@ import type { WaitBlockedCheckState } from '../wait/wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
 import { RuntimeSubscriptionRegistry } from '../../client/runtime-subscription-registry'
 import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
-import type {
-  ProviderBufferAcquisition,
-  RuntimeHeadlessTerminal,
-  RuntimePtyTitleTrackerEntry,
-  RuntimeVisibleTerminalState
+import {
+  ptyInList,
+  type PtyList,
+  type ProviderBufferAcquisition,
+  type RuntimeHeadlessTerminal,
+  type RuntimePtyTitleTrackerEntry,
+  type RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -35,6 +37,10 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   getSpawnHostTerminalUsage(handle: string): HostTerminalUsage | undefined {
     const ptyId = this.handles.get(handle)?.ptyId
     return ptyId ? this.ptysById.get(ptyId)?.spawnHostTerminalUsage : undefined
+  }
+  /** Whether a PTY is in `list` (`ptyInList`); a row with no PTY is the host's. */
+  isPtyInList(ptyId: string | null | undefined, list: PtyList): boolean {
+    return ptyInList(ptyId ? this.ptysById.get(ptyId) : undefined, list)
   }
   protected get leaves() {
     return this.terminalIdentity.leaves

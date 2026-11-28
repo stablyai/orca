@@ -263,10 +263,8 @@ describe('a workspace teammate on a shared agent', () => {
     expect(await listed(TEAMMATE, 'worktree.ps', 'worktrees', 'worktreeId')).toEqual([HOME, WORKER])
     expect(await call(TEAMMATE, 'worktree.ps', {})).toMatchObject({ result: { totalCount: 2 } })
     expect(await listed(OWNER, 'worktree.ps', 'worktrees', 'worktreeId')).toHaveLength(4)
-    expect(await listed(TEAMMATE, 'terminal.list', 'terminals', 'worktreeId')).toEqual([
-      HOME,
-      WORKER
-    ])
+    // The Home's terminal is the owner's: a teammate lists their own list's there.
+    expect(await listed(TEAMMATE, 'terminal.list', 'terminals', 'worktreeId')).toEqual([WORKER])
     expect(await listed(OWNER, 'terminal.list', 'terminals', 'worktreeId')).toEqual([
       HOME,
       WORKER,

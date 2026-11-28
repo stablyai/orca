@@ -26,9 +26,9 @@
 //     list or window reads it (the host's snapshot store, pane admission, orphan adoption, restored
 //     placement, exit retirement, the page selection). Every reader that lists or acts on a
 //     workspace's terminals or pages for someone takes that list (`ptyInList`, `pagesOf`); only work
-//     on the workspace itself reads them all. Other `homeTabs.hostList` methods (incl. stopping,
-//     closing or sleeping all of a workspace's terminals) are refused at admission when they name
-//     the teammate's Home.
+//     on the workspace itself reads them all. Stopping or closing all of a Home's terminals takes the
+//     caller's own list; other `homeTabs.hostList` methods (incl. sleeping them) are refused at
+//     admission when they name the teammate's Home.
 //     Reads and streams use the device's list (`tabOwnerOf`), or the list a read names
 //     (`viewedTabListOf`): anyone may watch anyone's list in the Home; watching writes nothing, and
 //     closing a tab there names that list's person. The census test checks every write's person source.

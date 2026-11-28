@@ -2,7 +2,6 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
-import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type {
   AgentPhase,
   AgentTransition
@@ -46,11 +45,9 @@ export type SortStampsSources = {
   store: () => SortStampsStore | null
   /** A WSL move freezes the project; stamps are background bookkeeping it drops. */
   isWriteFenced: (worktreeId: string) => boolean
-  /** Consumes terminal side effects, so the host scans its own bytes for bells. */
-  onClientEvent: (
-    listener: (event: RuntimeClientEvent) => void,
-    options: { consumesTerminalSideEffects: true }
-  ) => () => void
+  /** The host lists' terminal side effects, so the host scans its own bytes for bells; a teammate's
+   *  own terminal is not the owner's news. */
+  onTerminalSideEffects: (listener: (batch: TerminalSideEffectBatch) => void) => () => void
   /** Whether a client is looking at the workspace, or at the pane's tab. */
   isViewing: (worktreeId: string, paneKey: string | null) => boolean
   /** A record's stamps or unread flag changed; clients re-list it. */
@@ -67,19 +64,12 @@ export class SortStampsProducer {
   private readonly panes = new Map<string, TrackedPane>()
 
   constructor(private readonly sources: SortStampsSources) {
-    sources.onClientEvent(
-      (event) => {
-        if (event.type === 'terminalSideEffects') {
-          this.noteTerminalSideEffects(event.batch)
-        }
-      },
-      { consumesTerminalSideEffects: true }
-    )
+    sources.onTerminalSideEffects((batch) => this.noteTerminalSideEffects(batch))
   }
 
-  /** Follows the detector's panes; subscribe before the detector attaches to its store. */
+  /** Follows the host lists' panes; subscribe before the detector attaches to its store. */
   attachAgentTransitions(transitions: AgentTransitionDetector): () => void {
-    return transitions.subscribe((change) => this.applyPaneChange(change))
+    return transitions.subscribeHostLists((change) => this.applyPaneChange(change))
   }
 
   /** A terminal started by something other than a person opening it. */

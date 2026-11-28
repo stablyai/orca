@@ -3,15 +3,21 @@
 import type { Bot } from '../../../../shared/bot-types'
 import {
   isPersonWorkspaceKey,
+  parsePersonWorkspaceKey,
   personWorkspaceKey
 } from '../../../../shared/workspace/identity/person-workspace-key'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   isTeammateTabList,
   tabListTeammate,
-  tabOwnerOf
+  tabOwnerOf,
+  teammateTabListKey
 } from '../../../bots/team-share/teammate-rules'
 import type { RpcCallerScope } from '../../rpc/callers/rpc-caller-scope'
+import type {
+  PtyList,
+  RuntimePtyWorktreeRecord
+} from '../../terminal/records/runtime-terminal-state-records'
 
 /** `home` is the workspace the caller named; `list` is the workspace whose tabs the call reads and writes. */
 export type TabListTarget = { home: string; list: string }
@@ -41,4 +47,33 @@ export function resolveTabListTarget(
     ...tabListTeammate(owner)
   })
   return { home: workspaceId, list }
+}
+
+/** The tab list a PTY is in: its holder's own workspace, else the workspace it runs in. */
+export function tabListOfPty(pty: Pick<RuntimePtyWorktreeRecord, 'holder' | 'worktreeId'>): string {
+  const home = parseWorkspaceKey(pty.worktreeId)
+  return pty.holder && home?.type === 'folder'
+    ? personWorkspaceKey({
+        folderWorkspaceId: home.folderWorkspaceId,
+        ...tabListTeammate(pty.holder)
+      })
+    : pty.worktreeId
+}
+
+/** Whether the owner's window shows a PTY, and so sizes it; a record not yet made is the window's. */
+export function windowShowsPty(
+  pty: Pick<RuntimePtyWorktreeRecord, 'holder' | 'worktreeId'> | undefined
+): boolean {
+  return !pty || windowOwns(tabListOfPty(pty))
+}
+
+/** The PTYs a caller's workspace-wide act takes (`ptyInList`): their own in their agent's Home, the
+ *  host's list's everywhere else. */
+export function callerListIn(
+  agents: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
+  workspaceId: string,
+  scope: RpcCallerScope | undefined
+): PtyList {
+  const person = parsePersonWorkspaceKey(resolveTabListTarget(agents, workspaceId, scope).list)
+  return person ? teammateTabListKey(person) : 'host'
 }

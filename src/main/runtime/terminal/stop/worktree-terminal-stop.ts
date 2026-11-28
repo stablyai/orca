@@ -27,6 +27,7 @@ import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktr
 import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
 import { anySleepKeyNames, hostSleepKey, resolveSleepScope } from './worktree-terminal-sleep-key'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
+import type { PtyList } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithResolveTerminalSplitSourceAuthority {
   protected abstract sleepResolvedWorktreeTerminals(
@@ -45,8 +46,11 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
       : { resolvedConnectionId: parsedHost?.kind === 'ssh' ? parsedHost.targetId : null }
   }
 
+  /** `list`: whose terminals. A teammate's own list holds only running terminals, which leave it as
+   *  they exit, so closing them is stopping them; the host's list closes its tabs first. */
   async closeTerminalsForWorktree(
-    worktreeSelector: string
+    worktreeSelector: string,
+    { list = 'host' }: { list?: PtyList } = {}
   ): Promise<RuntimeWorktreeTerminalCloseResult> {
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
@@ -56,9 +60,12 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     return await this.runWorktreeTerminalMutation(worktree.id, async () => {
       // Clearing a rotated partition can reroute ownership; retain the session host that held tabs when close began.
       const sessionHostId = this.getWorkspaceSessionHostIdForWorktree(worktree.id)
-      const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`, undefined, {
-        includeAgentSenders: false
-      })
+      const hostTabs =
+        list === 'host'
+          ? await this.listMobileSessionTabs(`id:${worktree.id}`, undefined, {
+              includeAgentSenders: false
+            })
+          : null
       const targetPtyIds = collectWorktreePtyIds(
         // Switch point: main's bound terminals too, registered or not.
         ORCA_LAYOUT_OWNER_IS_MAIN
@@ -67,7 +74,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         this.ptysById,
         worktree.id,
         hostFence,
-        'host',
+        list,
         true
       )
       // Main-bound terminals can survive inventory gaps; only certified exits count them stopped.
@@ -78,13 +85,19 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
       )
       const parentTabIds = [
         ...new Set(
-          snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
+          (hostTabs?.tabs ?? []).flatMap((tab) =>
+            tab.type === 'terminal' ? [tab.parentTabId] : []
+          )
         )
       ]
-      const closed = await this.closeWorktreeTabsOwingPtyStops(worktree.id, parentTabIds)
-      await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
+      const closed = hostTabs
+        ? await this.closeWorktreeTabsOwingPtyStops(worktree.id, parentTabIds)
+        : [...targetPtyIds].filter((ptyId) => this.ptysById.get(ptyId)?.connected).length
+      if (hostTabs) {
+        await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
+      }
       const { stopped } = await this.stopTerminalsForWorktree(`id:${worktree.id}`, {
-        list: 'host',
+        list,
         resolvedWorktreeId: worktree.id,
         ...hostFence
       })

@@ -64,7 +64,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     store: () => this.store,
     isWriteFenced: (worktreeId) =>
       isWslMoveProjectBlocked(this.store ?? undefined, wslMoveProjectRefForWorkspace(worktreeId)),
-    onClientEvent: (listener, options) => this.onClientEvent(listener, options),
+    onTerminalSideEffects: (listener) => this.onHostListTerminalSideEffects(listener),
     isViewing: (worktreeId, paneKey) => this.workspaceViewers.isViewing(worktreeId, paneKey),
     onStampsWritten: (worktreeId) => {
       this.invalidateResolvedWorktreeCache()

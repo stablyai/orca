@@ -20,6 +20,7 @@ import { clientSupportsSnapshotCatchUp } from './history/structured-agent-sessio
 import { projectBackgroundTaskHistory } from './history/structured-agent-session-background-task-capability'
 import { projectTurnItemHistory } from './history/structured-agent-session-turn-item-capability'
 import { defineMethod } from '../../core'
+import { callerListIn } from '../../../session-tabs/person/person-workspace-target'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireInstalledStructuredHost as requireInstalledHost,
@@ -133,12 +134,23 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: SleepWorkspaceParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
+      // A teammate sleeps their own list's chats in their agent's Home; the owner sleeps them all.
+      const list = callerListIn(ctx.runtime.bots.list(), params.workspaceId, ctx.callerScope)
+      const member =
+        list === 'host'
+          ? undefined
+          : (sessionId: string) => ctx.runtime.chatTabPerson(sessionId) === list
       if (params.markAsleep) {
-        return (await requireInstalledHost(ctx)).sleepWorkspace(params.workspaceId, true)
+        return (await requireInstalledHost(ctx)).sleepWorkspace(
+          params.workspaceId,
+          true,
+          undefined,
+          member
+        )
       }
       const installed = getStructuredAgentSessionHost()
       if (installed) {
-        return installed.sleepWorkspace(params.workspaceId, params.markAsleep)
+        return installed.sleepWorkspace(params.workspaceId, params.markAsleep, undefined, member)
       }
       let store: Awaited<ReturnType<typeof ctx.runtime.openAgentSessionRecordStore>>
       try {
@@ -146,14 +158,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       } catch (error) {
         const appeared = getStructuredAgentSessionHost()
         if (appeared) {
-          return appeared.sleepWorkspace(params.workspaceId, params.markAsleep)
+          return appeared.sleepWorkspace(params.workspaceId, params.markAsleep, undefined, member)
         }
         console.warn('[agent-session] workspace sleep record inventory unavailable', error)
         return { stoppedSessionIds: [], failures: [{ reason: 'inventory-unavailable' }] }
       }
       const appeared = getStructuredAgentSessionHost()
       if (appeared) {
-        return appeared.sleepWorkspace(params.workspaceId, params.markAsleep)
+        return appeared.sleepWorkspace(params.workspaceId, params.markAsleep, undefined, member)
       }
       try {
         const records = store
@@ -161,7 +173,8 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
           .filter(
             (record) =>
               record.location.workspaceId === params.workspaceId &&
-              record.location.executionHostId === LOCAL_EXECUTION_HOST_ID
+              record.location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+              (member?.(record.sessionId) ?? true)
           )
         const stoppedSessionIds = records
           .filter((record) => record.neverStarted)

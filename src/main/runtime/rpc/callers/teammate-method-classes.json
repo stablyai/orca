@@ -1750,7 +1750,9 @@
       "session.tabs.subscribe",
       "session.tabs.subscribeAll",
       "session.tabs.unsubscribe",
-      "session.tabs.unsubscribeAll"
+      "session.tabs.unsubscribeAll",
+      "terminal.closeAll",
+      "terminal.stop"
     ],
     "hostList": [
       "agent.launch",
@@ -1764,12 +1766,10 @@
       "session.tabs.setTabProps",
       "session.tabs.updatePaneLayout",
       "terminal.adoptOrphans",
-      "terminal.closeAll",
       "terminal.create",
       "terminal.createAgentSession",
       "terminal.ensureAgentSession",
       "terminal.sleep",
-      "terminal.stop",
       "worktree.sleep"
     ],
     "none": ["session.tabs.terminalShellChoices"]

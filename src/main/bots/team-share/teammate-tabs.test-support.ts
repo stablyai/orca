@@ -294,3 +294,34 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
       })
   }
 }
+
+type Rig = Awaited<ReturnType<typeof rig>>
+
+/** The host's terminals start as the desktop's do: each spawn a live process under the id it was
+ *  asked for, else one the daemon names in the workspace, recorded as it starts (before it
+ *  registers); a kill its exit. */
+export function startTerminalsOnTheHost(r: Rig) {
+  r.runtime['graphStatus'] = 'ready'
+  r.runtime.setPtyController({
+    spawn: async ({ sessionId, worktreeId }) => {
+      const id = sessionId ?? `${worktreeId}@@${randomUUID()}`
+      r.runtime.vouchSpawnedTerminal(id)
+      return { id }
+    },
+    write: () => true,
+    kill: (ptyId) => {
+      void r.runtime.onPtyExit(ptyId, 0)
+      return true
+    },
+    getForegroundProcess: async () => null
+  })
+}
+
+const Terminal = z.object({
+  // Ready to attach: the client streams it by this handle.
+  tab: z.looseObject({ id: z.string(), ptyId: z.string(), terminal: z.string() })
+})
+export const openTerminal = async (r: Rig, deviceId: string) =>
+  Terminal.parse(
+    await r.call(deviceId, 'session.tabs.createTerminal', { worktree: `id:${r.workspace}` })
+  ).tab
