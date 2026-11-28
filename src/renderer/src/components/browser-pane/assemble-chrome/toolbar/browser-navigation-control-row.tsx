@@ -47,6 +47,21 @@ export function BrowserNavigationControlRow({
       ref={rowRef}
       className="relative z-10 flex shrink-0 items-center gap-1 border-b border-border/70 bg-background/95 px-2 py-1"
       {...(showTourAnchors ? { 'data-contextual-tour-target': 'browser-toolbar' } : {})}
+      // Why: the toolbar belongs to its page, so side buttons step that page's history like a press
+      // inside it, and preventDefault keeps the window listener from stepping workspace history.
+      onMouseUp={(event) => {
+        if (event.button !== 3 && event.button !== 4) {
+          return
+        }
+        event.preventDefault()
+        if (event.button === 3) {
+          if (controls.canGoBack) {
+            controls.goBack()
+          }
+        } else if (controls.canGoForward) {
+          controls.goForward()
+        }
+      }}
     >
       <Button
         size="icon-xs"

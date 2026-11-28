@@ -110,6 +110,15 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     })
   )
 
+  const stepWorktreeHistory = (direction: 'back' | 'forward'): void => {
+    const store = useAppStore.getState()
+    if (direction === 'back') {
+      runBuiltInOrReplacement('worktree.history.back', () => store.goBackWorktree())
+    } else {
+      runBuiltInOrReplacement('worktree.history.forward', () => store.goForwardWorktree())
+    }
+  }
+
   unsubs.push(
     window.api.ui.onWorktreeHistoryNavigate((direction) => {
       const store = useAppStore.getState()
@@ -117,13 +126,25 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       if (store.activeView !== 'terminal' || !canNavigateWorktreeHistory(store)) {
         return
       }
-      if (direction === 'back') {
-        runBuiltInOrReplacement('worktree.history.back', () => store.goBackWorktree())
-      } else {
-        runBuiltInOrReplacement('worktree.history.forward', () => store.goForwardWorktree())
-      }
+      stepWorktreeHistory(direction)
     })
   )
+
+  // Why bubble phase: browser surfaces (page toolbar, streamed page) claim side buttons for their
+  // own page history with preventDefault first. Presses inside a local page never reach this DOM.
+  const onMouseSideButton = (event: MouseEvent): void => {
+    if (event.defaultPrevented || (event.button !== 3 && event.button !== 4)) {
+      return
+    }
+    // Why: act only where the title-bar ← → arrows show, and leave other presses to the platform.
+    if (!canNavigateWorktreeHistory(useAppStore.getState())) {
+      return
+    }
+    event.preventDefault()
+    stepWorktreeHistory(event.button === 3 ? 'back' : 'forward')
+  }
+  window.addEventListener('mouseup', onMouseSideButton)
+  unsubs.push(() => window.removeEventListener('mouseup', onMouseSideButton))
 
   unsubs.push(
     window.api.ui.onToggleStatusBar(() => {
