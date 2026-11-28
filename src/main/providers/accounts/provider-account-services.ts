@@ -19,6 +19,7 @@ import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/servic
 import { resolveInactiveCodexAccounts } from '../../rate-limits/inactive-codex-accounts'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import { HOST_SYSTEM_DEFAULT_USAGE_IDS } from '../../../shared/agent-accounts/host-system-default-usage'
+import { setAntigravityLoginSwitchedListener } from '../../antigravity/native-account-host'
 import {
   applyAntigravityStatusLineSetting,
   reconcileAntigravityStatusLineAtStartup
@@ -174,6 +175,8 @@ export function createProviderAccountServices(
   if (options.antigravityStatusLine) {
     const enabled = (): boolean => store.getSettings().antigravityStatusLineUsageEnabled === true
     rateLimits.setAntigravityLiveUsageEnabledResolver(enabled)
+    // Readings carry no account identity, so a login restored at launch drops the held one.
+    setAntigravityLoginSwitchedListener(() => rateLimits.clearAntigravityUsage())
     // On refreshes the managed script after an update; off retries a removal that failed earlier.
     void reconcileAntigravityStatusLineAtStartup(enabled(), enabled)
   }

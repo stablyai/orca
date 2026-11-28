@@ -104,6 +104,10 @@ function antigravityOrcaHomeCatalogFingerprints(): string[] {
  *  checks that vouched for it. The catalog of the HOME chats launch with goes once that is known. */
 function forgetAgyLogin(runtime: OrcaRuntimeService): void {
   noteAgyLoginChanged()
+  // Status-line readings carry no account identity, because Orca's account selection lives only in
+  // the encrypted vault with the credentials; so a login change drops the held reading and the
+  // next post from the new login fills it.
+  runtime.getUsageRateLimits()?.clearAntigravityUsage()
   const launchHome = sharedAgyLaunchHome(runtime)
   // Orca's homes list with agy's Google login too (Enterprise, the retired server's chats).
   const own = [...antigravityHostCatalogFingerprints(), ...antigravityOrcaHomeCatalogFingerprints()]

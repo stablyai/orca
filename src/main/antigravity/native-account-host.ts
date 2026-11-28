@@ -13,6 +13,12 @@ import {
 import { antigravitySignInHoldsNativeLogin } from './antigravity-chat-sign-in'
 
 let service: AntigravityAccountService | null = null
+let loginSwitchedListener: (() => void) | null = null
+
+/** Lets the usage service drop a reading when a launch restores another login into agy. */
+export function setAntigravityLoginSwitchedListener(listener: (() => void) | null): void {
+  loginSwitchedListener = listener
+}
 const wslServices = new Map<string, AntigravityAccountService>()
 
 export function getAntigravityAccountVaultPath(wslDistro?: string): string {
@@ -73,7 +79,10 @@ export async function getAntigravityAccountService(
     // Windows launches aren't gated (native-account-launch.ts), so nothing restores there.
     process.platform === 'win32'
       ? undefined
-      : { signInHoldsLogin: antigravitySignInHoldsNativeLogin }
+      : {
+          signInHoldsLogin: antigravitySignInHoldsNativeLogin,
+          onLoginSwitched: () => loginSwitchedListener?.()
+        }
   )
   return service
 }

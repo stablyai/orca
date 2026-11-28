@@ -30,6 +30,8 @@ export type AntigravityCredentialBackend = {
 export type AntigravityLaunchRestore = {
   /** True while Orca's own agy sign-in may have put a login it hasn't saved yet in the slot. */
   signInHoldsLogin: () => boolean
+  /** Called once a launch put the selected account back as agy's login. */
+  onLoginSwitched?: () => void
 }
 
 export class AntigravityAccountService {
@@ -198,6 +200,7 @@ export class AntigravityAccountService {
         throw new Error('Antigravity sign-in is in progress. Finish it, then launch agy again.')
       }
       await this.switchNative(selected, current)
+      this.launchRestore.onLoginSwitched?.()
       // No vault write: both logins are already saved, and another Orca process selecting meanwhile wins.
       if ((await this.store.read()).selectedAccountId !== selected.id) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')

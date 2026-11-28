@@ -33,8 +33,13 @@ vi.mock('../../../../antigravity/native-account-host', () => ({
 }))
 const { ANTIGRAVITY_ACCOUNT_METHODS } = await import('./antigravity-accounts')
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: select reaches the runtime only to show the chat backend, which catches a failed read.
-const context: RpcContext = { runtime: {} as RpcContext['runtime'], caller: { kind: 'local-cli' } }
+const clearAntigravityUsage = vi.fn()
+const usageRateLimits = { clearAntigravityUsage }
+const context: RpcContext = {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: select reaches the runtime only for the chat backend, which catches a failed read, and the usage clear.
+  runtime: { getUsageRateLimits: () => usageRateLimits } as unknown as RpcContext['runtime'],
+  caller: { kind: 'local-cli' }
+}
 const select = eraseRpcMethods(ANTIGRAVITY_ACCOUNT_METHODS).find(
   (method) => method.name === 'accounts.antigravitySelect'
 )!
@@ -64,6 +69,8 @@ it("selecting another host account lists the host agy catalog again and leaves O
   }
   await select.handler({ target: { runtime: 'host' }, accountId: host.b }, context)
   expect([store.shouldRefresh(hostAgy!), store.shouldRefresh('orca-home')]).toEqual([true, false])
+  // A switch also drops the held usage reading, which carries no account identity.
+  expect(clearAntigravityUsage).toHaveBeenCalledTimes(1)
 })
 
 it("selecting a WSL distro's account reads its agy login only as the switch needs", async () => {
@@ -90,7 +97,8 @@ it('a switch lists again a catalog under a launch HOME sharing the login, not on
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: select reads only the settings from the runtime's store.
   const runtime = {
-    requireStore: () => ({ getSettings: () => ({}) })
+    requireStore: () => ({ getSettings: () => ({}) }),
+    getUsageRateLimits: () => usageRateLimits
   } as unknown as RpcContext['runtime']
   if ('stream' in select) {
     throw new Error('select streams')
@@ -114,7 +122,8 @@ it('a switch never waits for the launch environment, and still lists its HOME ag
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: select reads only the settings from the runtime's store.
   const runtime = {
-    requireStore: () => ({ getSettings: () => ({}) })
+    requireStore: () => ({ getSettings: () => ({}) }),
+    getUsageRateLimits: () => usageRateLimits
   } as unknown as RpcContext['runtime']
   if ('stream' in select) {
     throw new Error('select streams')
@@ -146,7 +155,8 @@ it('a switch leaves a launch HOME with its own credential file alone, its listin
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: select reads only the settings from the runtime's store.
   const runtime = {
-    requireStore: () => ({ getSettings: () => ({}) })
+    requireStore: () => ({ getSettings: () => ({}) }),
+    getUsageRateLimits: () => usageRateLimits
   } as unknown as RpcContext['runtime']
   if ('stream' in select) {
     throw new Error('select streams')
@@ -171,7 +181,8 @@ it("a Refresh started after a switch lists the new account, even as the launch H
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: select reads only the settings from the runtime's store.
   const runtime = {
-    requireStore: () => ({ getSettings: () => ({}) })
+    requireStore: () => ({ getSettings: () => ({}) }),
+    getUsageRateLimits: () => usageRateLimits
   } as unknown as RpcContext['runtime']
   if ('stream' in select) {
     throw new Error('select streams')
