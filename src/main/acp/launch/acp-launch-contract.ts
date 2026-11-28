@@ -24,13 +24,25 @@ import type {
   McpServer
 } from '../generated/acp-protocol.generated'
 
-/** Opaque account keys: what a running child should match (null while that is unknown). A launch
- *  records `current()` as it spawns, once `atLaunch` has read it, when `usedBy` its launch. */
+/** Where preparation left a login several saved accounts share (`AcpLaunchAccount`): `key` is the
+ *  account the launch runs on, `target` the selection it prepared for, `failure` why they differ. */
+export type AcpPreparedAccount = { key: string; target: string; failure?: string }
+
+/** Opaque saved-account keys, where several share one login. A launch records the account its
+ *  preparation left the login on (`AcpPreparedAccount`), else `current()` as it spawns. */
 export type AcpLaunchAccount = {
   atLaunch(): Promise<string>
+  /** The selected account; null until known. */
   current(): string | null
+  /** What a running child should match: the selection, or null while moving to it is known to fail. */
+  target(): string | null
   /** False for a launch that signs in some other way (a key, gcloud), which no saved account names. */
   usedBy?(launch: { antigravityChatAuth?: AntigravityChatAuthConfig }): boolean
+  /** A chat's process spawned on `key`; `prepared` when its preparation said so. */
+  spawned?(
+    process: { onExit(listener: () => void): void },
+    chat: { sessionId: string; key: string; prepared?: AcpPreparedAccount }
+  ): void
 }
 
 export type AcpLaunchSpec = {

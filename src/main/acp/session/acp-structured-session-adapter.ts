@@ -208,7 +208,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   settlePermissionTransition = stop.acpPermissionTransition((id) => this.live(id), this.graceMs)
 
-  launchAccountKey = (): string | null => this.deps.spec.launchAccount?.current() ?? null
+  launchAccountKey = (): string | null => this.deps.spec.launchAccount?.target() ?? null
 
   permissionModeRequiresAcquisition: NonNullable<
     SessionAdapter['permissionModeRequiresAcquisition']

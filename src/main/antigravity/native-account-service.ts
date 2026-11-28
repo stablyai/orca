@@ -40,6 +40,8 @@ export class AntigravityAccountService {
   private readonly rewrittenLogins = new AntigravityRewrittenLoginIdentity(
     () => this.lookupIdentity
   )
+  // The login the latest reconcile read; undefined while one reads.
+  private lastLogin: AntigravityNativeCredential | null | undefined
 
   constructor(
     private readonly store: AntigravityAccountStore,
@@ -83,6 +85,17 @@ export class AntigravityAccountService {
   /** Reads only Orca's saved accounts, never agy's login, and waits on no other account work. */
   async readSelection(): Promise<void> {
     await this.store.read()
+  }
+
+  /** The saved account agy's login holds, as far as Orca can tell without a keychain dialog. */
+  async loginHolderWithoutPrompt(): Promise<string | null> {
+    const quiet = await this.backend.readWithoutPrompt?.().catch(() => undefined)
+    const vault = await this.store.read()
+    if (quiet && 'fingerprint' in quiet) {
+      return (await this.logins.known(vault, quiet.fingerprint, false))?.accountId ?? null
+    }
+    const login = quiet ? quiet.credential : this.lastLogin
+    return login ? this.logins.view(vault, login).accountId : null
   }
 
   /** Reads agy's login even where that may raise a keychain dialog; only for an explicit request. */
@@ -170,32 +183,36 @@ export class AntigravityAccountService {
 
   /** `mayPrompt: false` (a chat start) never waits on a keychain dialog: it skips the restore while
    *  other account work runs, reads agy's login only briefly, and not again once that failed. */
+  /** The selected account ('' when none) agy's login was found or put on; null when `quiet` left
+   *  it unread. */
   async prepareForLaunch({
     mayPrompt = true,
     quiet = false
-  }: { mayPrompt?: boolean; quiet?: boolean } = {}): Promise<void> {
+  }: { mayPrompt?: boolean; quiet?: boolean } = {}): Promise<string | null> {
     const early = mayPrompt ? undefined : await this.backend.readWithoutPrompt?.()
-    if (await this.logins.settlesLaunch(early, false)) {
-      return
+    const settled = await this.logins.settlesLaunch(early, false)
+    if (settled !== null) {
+      return settled
     }
     // Nobody asked (`quiet`): a login only a keychain read could name waits for the next launch.
     if (quiet && early && 'fingerprint' in early) {
-      return
+      return null
     }
     if (early && 'fingerprint' in early && (this.logins.briefAccessFailed || this.prompting > 0)) {
       throw new Error(
         "Checking agy's login for the selected account could ask for keychain access, so it was left as it is."
       )
     }
-    const restore = async () => {
+    const restore = async (): Promise<string> => {
       const quiet = await this.backend.readWithoutPrompt?.()
-      if (await this.logins.settlesLaunch(quiet, true)) {
-        return
+      const settled = await this.logins.settlesLaunch(quiet, true)
+      if (settled !== null) {
+        return settled
       }
       const { vault, current } = await this.reconcile(undefined, quiet)
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
       if (!vault.selectedAccountId || (selected && current && this.matches(selected, current))) {
-        return
+        return vault.selectedAccountId ?? ''
       }
       // Each running agy writes its own login back to the one native slot on every token refresh.
       // Exactly one saved account holding it (reconcile just saved it) restores the selection, as
@@ -214,6 +231,7 @@ export class AntigravityAccountService {
       if ((await this.store.read()).selectedAccountId !== selected.id) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
+      return selected.id
     }
     // A chat's keychain calls give up early; one the keychain refused or left unanswered stops the
     // next chats asking, while other refusals (a sign-in in progress) don't.
@@ -252,12 +270,14 @@ export class AntigravityAccountService {
 
   /** `quiet`: what the caller already read without a prompt, so it isn't read twice. */
   private async reconcile(selectedId?: string, quiet?: AntigravityQuietRead) {
+    this.lastLogin = undefined
     const native = await this.logins.read(quiet)
     const current = await this.rewrittenLogins.identify(
       native.current,
       (await this.store.read()).accounts,
       (account, login) => this.matches(account, login)
     )
+    this.lastLogin = current
     this.logins.note(native.fingerprint, current)
     // Re-read after native I/O so a delayed read never restores an older vault.
     const vault = await this.store.read()

@@ -291,7 +291,7 @@ describe('protected Antigravity account snapshots', () => {
     const h = harness()
     const selected = (await h.service.addCurrentAccount()).activeAccountId!
     h.setNative(credential('b', 2))
-    await h.service.addCurrentAccount()
+    const other = (await h.service.addCurrentAccount()).activeAccountId!
     await h.service.selectAccount(selected)
     // An agy still running on b refreshes its token and writes b's login back.
     h.setNative(refreshedWithoutIdToken(3, 'refresh-2'))
@@ -299,8 +299,10 @@ describe('protected Antigravity account snapshots', () => {
     h.setSignInHeld(true)
     await expect(h.service.prepareForLaunch()).rejects.toThrow('sign-in is in progress')
     expect(h.getNative()).toBe(refreshedWithoutIdToken(3, 'refresh-2'))
+    // A chat starting now runs on b, and records b.
+    expect(await h.service.loginHolderWithoutPrompt()).toBe(other)
     h.setSignInHeld(false)
-    await h.service.prepareForLaunch()
+    expect(await h.service.prepareForLaunch()).toBe(selected)
     expect(h.getNative()).toBe(credential('a'))
     expect(h.getVault()).toMatchObject({
       selectedAccountId: selected,

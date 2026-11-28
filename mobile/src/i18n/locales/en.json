@@ -3539,6 +3539,7 @@
       "autoReviewDenied": "{{agent}}'s automatic review denied: {{action}}",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
       "accountSwitch": "Finishing this turn on {{from}}. Your next message uses {{to}}.",
+      "accountNotMoved": "Couldn't move this chat to {{to}}: {{reason}}",
       "modelFallback": "Claude switched models: {{from}} → {{to}}.",
       "forkedFrom": "Forked from",
       "signIn": "Sign in",

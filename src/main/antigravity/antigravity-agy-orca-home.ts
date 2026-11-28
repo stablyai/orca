@@ -105,14 +105,16 @@ function orcaHomeAccount(folderName: string, role: 'chat' | 'naming' = 'chat'): 
       await writeAntigravityChatSettings(home, auth, env, assertCurrent)
       // Google chats here use agy's login too, so they (and their listings) follow the selected
       // account like terminals; naming runs have their own home and leave agy's login alone.
-      if (role === 'chat' && isGoogle(auth.method)) {
-        await restoreSelectedAntigravityAccount(env)
-      }
+      const login =
+        role === 'chat' && isGoogle(auth.method)
+          ? await restoreSelectedAntigravityAccount(env)
+          : undefined
       const copied = await copyAgyLoginIntoOrcaHome(home, user, isGoogle(auth.method))
       // A fresh naming home has no earlier copy to fall back on.
       if (!copied && role === 'naming') {
         throw new Error("agy's login could not be copied into the naming home")
       }
+      return login
     }
   }
 }

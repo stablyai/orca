@@ -7,7 +7,8 @@ import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../../../shared/agent-session/journal/agent-session-turn-notice'
 import {
   AGENT_ACCOUNT_SWITCH_FRAME_KIND,
-  agentAccountSwitchText
+  agentAccountSwitchText,
+  type AgentAccountSwitchNotice
 } from '../../../../../../shared/native-chat/transcript/notices/agent-account-switch-notice'
 
 export const codexFailures = defineFixture({
@@ -122,10 +123,9 @@ export const contextNotes = defineFixture({ width: 600, render: () => <ContextNo
 
 export const contextNotesNarrow = defineFixture({ width: 340, render: () => <ContextNotes /> })
 
-function AccountSwitchNote(): React.JSX.Element {
-  const notice = { from: 'personal@example.com', to: 'work@example.com' }
+function AccountSwitchNote({ notice }: { notice: AgentAccountSwitchNotice }): React.JSX.Element {
   const head = JSON.stringify(notice)
-  // The row the host writes into a chat still running a turn when the account was switched.
+  // The row the host writes into a chat about its saved account.
   const block: NativeChatTextBlock = {
     type: 'text',
     text: agentAccountSwitchText(notice),
@@ -144,4 +144,24 @@ function AccountSwitchNote(): React.JSX.Element {
   )
 }
 
-export const accountSwitch = defineFixture({ width: 600, render: () => <AccountSwitchNote /> })
+// A chat still running a turn when the account was switched.
+export const accountSwitch = defineFixture({
+  width: 600,
+  render: () => (
+    <AccountSwitchNote notice={{ from: 'personal@example.com', to: 'work@example.com' }} />
+  )
+})
+
+// A chat that couldn't start on the selected account.
+export const accountNotMoved = defineFixture({
+  width: 600,
+  render: () => (
+    <AccountSwitchNote
+      notice={{
+        to: 'work@example.com',
+        reason:
+          "Checking agy's login for the selected account could ask for keychain access, so it was left as it is."
+      }}
+    />
+  )
+})

@@ -382,7 +382,7 @@ it("replaces an agent on another saved account at the next send's handover", asy
   expect(chat.child()?.accountKey).toBe('account-b')
 })
 
-it('lets a running turn finish on its saved account and tells the chat which account its next message uses', async () => {
+it('lets a running turn finish on its saved account, and keeps one note in the chat that follows the selection', async () => {
   const chat = await idleChatOnSavedAccount()
   await chat.rig.workingSend()
   chat.rig
@@ -396,18 +396,29 @@ it('lets a running turn finish on its saved account and tells the chat which acc
   const running = chat.child()
   const journal = chat.rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const appended = vi.spyOn(journal, 'appendItem')
-  chat.select('account-b')
-  await moveChatsToSelectedAccount(
-    chat.rig.host,
-    'claude',
-    { current: () => 'account-b', email: (key) => `${key}@example.com` },
-    () => true
-  )
-  expect(chat.child()).toBe(running)
-  const notes = appended.mock.calls
-    .map(([, body]) => body)
-    .flatMap((body) =>
-      body.kind === 'status' ? [readAgentAccountSwitchFrame(body.providerFrame)] : []
+  const removed = vi.spyOn(journal, 'appendTombstone')
+  const select = async (key: string) => {
+    chat.select(key)
+    await moveChatsToSelectedAccount(
+      chat.rig.host,
+      'claude',
+      { target: () => key, email: (account) => `${account}@example.com` },
+      () => true
     )
-  expect(notes).toEqual([{ from: 'account-a@example.com', to: 'account-b@example.com' }])
+  }
+  await select('account-b')
+  await select('account-c')
+  expect(chat.child()).toBe(running)
+  const notes = appended.mock.calls.flatMap(([identity, body]) =>
+    body.kind === 'status' ? [[identity, readAgentAccountSwitchFrame(body.providerFrame)]] : []
+  )
+  expect(notes.map(([, note]) => note)).toEqual([
+    { from: 'account-a@example.com', to: 'account-b@example.com' },
+    { from: 'account-a@example.com', to: 'account-c@example.com' }
+  ])
+  // Revised in place, then gone once the selection is back on the account the turn runs on.
+  expect(notes[1]![0]).toEqual(notes[0]![0])
+  expect(removed).not.toHaveBeenCalled()
+  await select('account-a')
+  expect(removed.mock.calls.map(([identity]) => identity)).toEqual([notes[0]![0]])
 })
