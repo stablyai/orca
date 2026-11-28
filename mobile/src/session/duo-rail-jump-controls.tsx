@@ -9,7 +9,7 @@ import {
   type ReactNode
 } from 'react'
 import { StyleSheet, View, useWindowDimensions, type HostInstance } from 'react-native'
-import type { DuoRailJumpFrames } from '../layout/duo-status-row'
+import type { DuoRailControlFrame, DuoRailJumpFrames } from '../layout/duo-status-row'
 import { useReservedRegions } from '../layout/reserved-regions'
 import { getSideRailStrip } from '../layout/side-rail-strip'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
@@ -139,22 +139,59 @@ export function DuoRailComposerTop({
 
 const stylesHidden = { display: 'none' } as const
 
+function shiftRailFrame(
+  frame: DuoRailControlFrame,
+  originX: number,
+  originY: number
+): DuoRailControlFrame {
+  return { top: frame.top - originY, left: frame.left - originX, size: frame.size }
+}
+
 export function DuoRailJumpOverlay() {
   const ctx = useContext(DuoRailJumpContext)
-  if (ctx?.frames == null || ctx.actions == null) {
-    return null
-  }
+  const { width, height } = useWindowDimensions()
+  const ref = useRef<HostInstance>(null)
+  const [origin, setOrigin] = useState({ x: 0, y: 0 })
+  const measure = useCallback(() => {
+    ref.current?.measureInWindow((x, y, w, h) => {
+      if (w > 0 && h > 0) {
+        setOrigin((prev) =>
+          Math.abs(prev.x - x) < 0.5 && Math.abs(prev.y - y) < 0.5 ? prev : { x, y }
+        )
+      }
+    })
+  }, [])
+  useEffect(() => {
+    measure()
+  }, [measure, width, height, ctx?.frames])
+  const localFrames = useMemo(
+    () =>
+      ctx?.frames == null
+        ? null
+        : {
+            previous: shiftRailFrame(ctx.frames.previous, origin.x, origin.y),
+            latest: shiftRailFrame(ctx.frames.latest, origin.x, origin.y)
+          },
+    [ctx?.frames, origin.x, origin.y]
+  )
   return (
-    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <MobileNativeChatFloatingControls {...ctx.actions} rail={ctx.frames} />
+    // Frames are window coordinates. In Split View this overlay sits inside the session pane.
+    <View
+      ref={ref}
+      collapsable={false}
+      onLayout={measure}
+      pointerEvents="box-none"
+      style={StyleSheet.absoluteFill}
+    >
+      {localFrames != null && ctx?.actions != null ? (
+        <MobileNativeChatFloatingControls {...ctx.actions} rail={localFrames} />
+      ) : null}
     </View>
   )
 }
 
 /** In-transcript controls, unless the session host is drawing them in the rail. */
-export function MobileNativeChatJumpControls(
-  props: JumpActions & { canvasFades?: boolean }
-) {
+export function MobileNativeChatJumpControls(props: JumpActions & { canvasFades?: boolean }) {
   const ctx = useContext(DuoRailJumpContext)
   useEffect(() => {
     ctx?.register({
