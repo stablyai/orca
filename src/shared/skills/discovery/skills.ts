@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import type { DiscoveredSlashCommand } from './custom-slash-commands'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
 
 export type SkillProvider = 'codex' | 'claude' | 'agent-skills'
@@ -49,6 +50,9 @@ export type SkillDiscoveryResult = {
   skills: DiscoveredSkill[]
   sources: SkillDiscoverySource[]
   scannedAt: number
+  /** Claude Code custom slash commands under the scanned workspace/home roots.
+   *  Optional so an older host that never scanned them stays wire compatible. */
+  commands?: DiscoveredSlashCommand[]
 }
 
 export type SkillDiscoveryTarget = {

@@ -17,10 +17,17 @@ import {
 } from '../filesystem/skill-transaction-staging-names'
 import { skillFileMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
 import { bundledSkillNames } from '../../../shared/skills/bundled/bundled-skill-names'
+import type { DiscoveredSlashCommand } from '../../../shared/skills/discovery/custom-slash-commands'
+import { buildCustomSlashCommandRoots } from './custom-slash-command-discovery'
+import {
+  buildWslCustomSlashCommandDiscoveryCommand,
+  parseWslCustomSlashCommandOutput
+} from './custom-slash-command-discovery-wsl'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const WSL_SCAN_TIMEOUT_MS = 10_000
 const WSL_SCAN_MAX_OUTPUT_BYTES = 128 * 1024 * 1024
+const WSL_COMMAND_SCAN_MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 
 export function buildWslSkillDiscoveryCommand(
   roots: readonly SkillScanRoot[],
@@ -144,23 +151,53 @@ export function buildWslSkillDiscoveryCommand(
   return lines.join('\n')
 }
 
-async function executeWslSkillDiscovery(distro: string, script: string): Promise<string> {
+function runWslDiscoveryScan(distro: string, script: string, maxOutputBytes: number) {
   // Process substitution requires Bash; dash rejects it (#14292).
-  const result = await runWslProcess({
+  return runWslProcess({
     distro,
     // 'none': find/base64/head/printf/stat over $HOME roots, no bare tool.
     loginPath: 'none',
     script,
     shell: 'bash',
-
     timeoutMs: WSL_SCAN_TIMEOUT_MS,
-    maxOutputBytes: WSL_SCAN_MAX_OUTPUT_BYTES
+    maxOutputBytes
   })
+}
+
+async function executeWslSkillDiscovery(distro: string, script: string): Promise<string> {
+  const result = await runWslDiscoveryScan(distro, script, WSL_SCAN_MAX_OUTPUT_BYTES)
   // Nonzero/timeout must throw: empty stdout would parse as zero installed skills.
   if (result.code !== 0 || result.timedOut) {
     throw new Error('skill-discovery-wsl-scan-failed')
   }
   return result.stdout
+}
+
+/** Its own wsl.exe call so a stalled or oversized commands tree degrades to no commands
+ *  instead of failing the skill scan that shares the picker. */
+async function discoverCustomSlashCommandsInWsl(args: {
+  distro: string
+  homeDir: string
+  cwd: string
+}): Promise<DiscoveredSlashCommand[]> {
+  const roots = buildCustomSlashCommandRoots({
+    homeDir: args.homeDir,
+    cwd: args.cwd,
+    pathApi: pathPosix
+  })
+  try {
+    const result = await runWslDiscoveryScan(
+      args.distro,
+      buildWslCustomSlashCommandDiscoveryCommand(roots),
+      WSL_COMMAND_SCAN_MAX_OUTPUT_BYTES
+    )
+    if (result.code !== 0 || result.timedOut || result.outputTruncated) {
+      return []
+    }
+    return parseWslCustomSlashCommandOutput(result.stdout, roots)
+  } catch {
+    return []
+  }
 }
 
 type WslSkillDiscoveryArgs = {
@@ -207,9 +244,16 @@ export async function discoverSkillObservationInWsl(
     ...pluginRoots
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   // Keep enumeration, metadata and path identity in the distro; UNC applies Windows casing/symlink rules.
-  const output = await executeWslSkillDiscovery(
-    args.distro,
-    buildWslSkillDiscoveryCommand(roots, args.names)
-  )
-  return readWslSkillDiscoveryObservation(output, roots)
+  const [output, commands] = await Promise.all([
+    executeWslSkillDiscovery(args.distro, buildWslSkillDiscoveryCommand(roots, args.names)),
+    // Named lookups verify installs; only the picker's unnamed scan needs commands.
+    args.cwd && !args.names?.length
+      ? discoverCustomSlashCommandsInWsl({
+          distro: args.distro,
+          homeDir: args.homeDir,
+          cwd: args.cwd
+        })
+      : Promise.resolve([])
+  ])
+  return { ...readWslSkillDiscoveryObservation(output, roots), commands }
 }
