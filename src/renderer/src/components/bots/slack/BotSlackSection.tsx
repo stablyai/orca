@@ -9,15 +9,18 @@ import { BotWhoCanAskInsetList } from '../BotWhoCanAskInsetList'
 import { useBotConnectorPaged } from '../bot-connector-page'
 import { BotConnectorSection } from '../bot-connector-people'
 import { BotSlackPostAs } from './BotSlackPostAs'
+import { BotSlackThreadReplies } from './BotSlackThreadReplies'
 import { useSlackWhoCanAsk } from './use-slack-who-can-ask'
 
 export function BotSlackSection({
   bot,
   slack,
+  threadRepliesSupported = false,
   setupState
 }: {
   bot: Bot
   slack: Extract<ConnectorBotSlackState, { state: 'installed' }>
+  threadRepliesSupported?: boolean
   /** The after-install dialog's install link state: its identity pick applies at once. */
   setupState?: string
 }): React.JSX.Element {
@@ -42,6 +45,9 @@ export function BotSlackSection({
         </p>
       </BotConnectorSection>
       <BotWhoCanAskInsetList bot={bot} service={people} />
+      <BotConnectorSection title={t('bots.slack.threadReplies.title', 'Thread replies')}>
+        <BotSlackThreadReplies bot={bot} supported={threadRepliesSupported} />
+      </BotConnectorSection>
       <BotConnectorSection>
         <BotSlackPostAs
           bot={bot}

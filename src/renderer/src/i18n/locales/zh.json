@@ -30397,6 +30397,13 @@
       "folderNotOwned": "无法验证此 bot 的文件夹"
     },
     "slack": {
+      "threadReplies": {
+        "title": "话题回复",
+        "label": "仅在话题中被提及时回复",
+        "detail": "适用于此机器人连接的所有 Slack 工作区。私信始终会收到回复。关闭后，在已参与的话题中无需提及即可回复。",
+        "unavailable": "当前无法在此 Slack 连接中更改此设置。",
+        "failed": "无法保存。请再次切换开关。"
+      },
       "setup": {
         "checking": "正在检查 Slack…",
         "retry": "重试",

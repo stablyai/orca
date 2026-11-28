@@ -55,8 +55,11 @@ function harness(options: {
   muted?: boolean
   linked?: boolean
   queued?: ThreadMuteDeps['queued']
+  /** The thread's bot answers its threads only when mentioned. */
+  mentionsOnly?: boolean
+  mentionsKnown?: boolean
 }) {
-  const state = { muted: options.muted ?? false, linked: options.linked ?? true }
+  const state = { muted: options.muted ?? false, linked: options.linked ?? true, queued: 0 }
   const turns: { text: string; later: number }[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
   const seam = {
@@ -82,10 +85,13 @@ function harness(options: {
     write: async (_key, next) => {
       state.muted = next
     },
+    mentionsKnown: () => options.mentionsKnown ?? true,
+    mentionsOnly: (botId) => options.mentionsOnly === true && (botId === null || botId === 'bot1'),
     queued:
       options.queued ??
       // As the real queue: the start queued ahead has written the link before this work runs.
       (async (_key, work) => {
+        state.queued += 1
         state.linked = true
         await work?.()
         return undefined
@@ -182,5 +188,89 @@ describe('a wait in the thread queue that a Stop lands on while it runs', () => 
     expect(await waited).toEqual({ outcome: 'refused', reason: 'conversation_cancelled' })
     await stopped
     saved()
+  })
+})
+
+describe('a bot set to answer its threads only when mentioned', () => {
+  const ACCEPTED = { outcome: 'accepted' }
+
+  // Every thread of its takes replies as a left one does, and a mention changes nothing kept.
+  it('takes a mention and its follow-ups as one turn, and nothing else', async () => {
+    const { state, turns, batch, settled } = harness({ mentionsOnly: true })
+    expect(await settled(batch(send('fyi, the build is green')))).toEqual([ACCEPTED])
+    expect(turns).toEqual([])
+    await settled(batch(send('ok, look', { mentioned: true }), send('at the last run')))
+    expect(await settled(batch(send('thanks')))).toEqual([ACCEPTED])
+    await settled(batch(send('hi', { bareMention: true })))
+    expect(turns).toEqual([
+      { text: 'ok, look', later: 1 },
+      { text: 'hi', later: 0 }
+    ])
+    expect(state.muted).toBe(false)
+  })
+
+  it('leaves the request behind a silenced reply batched with its follow-ups', async () => {
+    const { turns, batch, settled } = harness({ mentionsOnly: true })
+    await settled(batch(send('fyi'), send('draft a reply', { mentioned: true }), send('not yet')))
+    expect(turns).toEqual([{ text: 'draft a reply', later: 1 }])
+  })
+
+  // The setting only narrows what the bot would have answered: no mention is turned away for who
+  // wrote it, and its own failed turn's Resume and its DMs are never held.
+  it('takes any mention the cloud marks, a Resume, and every DM', async () => {
+    const { turns, batch, settled } = harness({ mentionsOnly: true })
+    const app = { ...send('deploy failed').asker, app: true }
+    await settled(batch(send('deploy failed', { asker: app, mentioned: true })))
+    await settled(batch(send('retry', { resume: { turnId: 1 } })))
+    const dm = { source: 'slack', externalId: 'T1:D1:D1:U0BOT' }
+    await settled(batch(send('hello', { conversation: dm })))
+    expect(turns.map((turn) => turn.text)).toEqual(['deploy failed', 'retry', 'hello'])
+  })
+
+  it('tells the cloud a silenced reply\u2019s automations were taken', async () => {
+    const { turns, batch, settled } = harness({ mentionsOnly: true })
+    const automations = [
+      {
+        automationId: 'auto-1',
+        triggerId: 't1',
+        botId: 'bot1',
+        event: { key: 'T1:C1', actorId: 'U1', occurredAt: 1_800_000_000_000, text: 'deploy done' }
+      }
+    ]
+    expect(await settled(batch(send('deploy done', { automations })))).toEqual([
+      { ...ACCEPTED, inTurn: true }
+    ])
+    expect(turns).toEqual([])
+  })
+
+  // Another person's reply in the poll that starts the thread has no link to read its bot from yet.
+  it('decides a reply to a thread not linked yet once it is', async () => {
+    const quiet = harness({ mentionsOnly: true, linked: false })
+    expect(await quiet.settled(quiet.batch(send('nice')))).toEqual([ACCEPTED])
+    expect(quiet.turns).toEqual([])
+    // With no such bot here it goes on at once, as it always has.
+    const always = harness({ linked: false })
+    await always.settled(always.batch(send('nice')))
+    expect(always.turns).toEqual([{ text: 'nice', later: 0 }])
+    expect(always.state.queued).toBe(0)
+  })
+
+  it('answers every reply on a cloud known not to mark mentions', async () => {
+    const { turns, batch, settled } = harness({ mentionsOnly: true, mentionsKnown: false })
+    await settled(batch(send('fyi')))
+    expect(turns).toEqual([{ text: 'fyi', later: 0 }])
+  })
+
+  // The thread's own mute decides first: only a person's mention brings the bot back to a thread it
+  // left, and the setting still silences what follows.
+  it('keeps a thread it left muted until a person mentions it', async () => {
+    const { state, turns, batch, settled } = harness({ mentionsOnly: true, muted: true })
+    const app = { ...send('ping').asker, app: true }
+    expect(await settled(batch(send('ping', { asker: app, mentioned: true })))).toEqual([ACCEPTED])
+    expect(state.muted).toBe(true)
+    await settled(batch(send('come back', { mentioned: true })))
+    expect(state.muted).toBe(false)
+    expect(await settled(batch(send('thanks')))).toEqual([ACCEPTED])
+    expect(turns).toEqual([{ text: 'come back', later: 0 }])
   })
 })

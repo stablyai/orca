@@ -184,6 +184,7 @@ function ConnectorsPage(
         banner={props.banner}
         showToast={props.showToast}
         removeMember={(member) => void props.save(memberRemoval(member))}
+        save={props.save}
         onBack={list}
         onSetUp={(teamId) => setPage({ kind: 'slack-setup', teamId, from: page })}
       />
