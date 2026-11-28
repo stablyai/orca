@@ -36,6 +36,7 @@ export function useSourceControlWorktreeOperationState({
   )
   const operationView = useSourceControlStoreView(operationStore)
   const commitMessage = useStore(operationView, (s) => s.draft)
+  const commitMessageHistory = useStore(operationView, (s) => s.commitHistory)
   const commitError = useStore(operationView, (s) => s.commitError)
   const isCommitting = useStore(operationView, (s) => s.isCommitting)
   const isAbortingOperation = useStore(operationView, (s) => s.isAbortingOperation)
@@ -89,6 +90,7 @@ export function useSourceControlWorktreeOperationState({
     activeRemoteActionSequence,
     commitError,
     commitMessage,
+    commitMessageHistory,
     createPrIntentNotice,
     isAbortingOperation,
     isContinuingRebase,

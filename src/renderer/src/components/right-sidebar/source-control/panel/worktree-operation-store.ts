@@ -20,6 +20,7 @@ import type {
 } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from '../sync/action-error'
 import type { CreatePrIntentNotice } from '../commit/commit-area-types'
+import { appendCommitMessageHistory } from '../commit/commit-message-history'
 import {
   createPrIntentCurrentTargetConflictsWithToken,
   type CreatePrIntentCurrentTarget,
@@ -62,6 +63,8 @@ export type RebaseStopInspectFailure = {
 export type WorktreeOperationRecord = {
   readonly draftKey: string
   draft: string
+  /** Newest last; session-only, like the draft. */
+  commitHistory: readonly string[]
   commitError: string | null
   isCommitting: boolean
   isAbortingOperation: boolean
@@ -111,6 +114,7 @@ function createRecord(draftKey: string): WorktreeOperationRecord {
   return {
     draftKey,
     draft: loadSessionCommitDrafts()[draftKey] ?? '',
+    commitHistory: [],
     commitError: null,
     isCommitting: false,
     isAbortingOperation: false,
@@ -238,6 +242,15 @@ export function writeWorktreeCommitDraft(
   store.setState({ draft: next })
   if (store !== UNOWNED_STORE && !retiredStores.has(store)) {
     saveSessionCommitDrafts({ ...loadSessionCommitDrafts(), [draftKey]: next })
+  }
+}
+
+/** Only a landed commit adds a recall stop; failed and cancelled ones never do. */
+export function recordWorktreeCommitMessage(store: WorktreeOperationStore, message: string): void {
+  const history = store.getState().commitHistory
+  const next = appendCommitMessageHistory(history, message)
+  if (next !== history) {
+    store.setState({ commitHistory: next })
   }
 }
 

@@ -30,6 +30,7 @@ function PublishState({
       worktreeId="fixture-workspace"
       groupId={null}
       commitMessage=""
+      commitMessageHistory={[]}
       commitError={null}
       commitFailureRecoveryPrompt={null}
       pushRecovery={null}

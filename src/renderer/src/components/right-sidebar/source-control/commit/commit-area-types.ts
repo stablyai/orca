@@ -23,6 +23,8 @@ export type CommitAreaProps = {
   repoId?: string | null
   launchPlatform?: NodeJS.Platform
   commitMessage: string
+  /** Newest-last commit messages recalled with the arrow keys, for this worktree only. */
+  commitMessageHistory: readonly string[]
   commitError: string | null
   commitFailureRecoveryPrompt: string | null
   pushRecovery: SourceControlPushRecovery | null

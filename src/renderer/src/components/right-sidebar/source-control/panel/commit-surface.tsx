@@ -22,6 +22,7 @@ export function SourceControlCommitSurface({
     commitError,
     commitFailureRecoveryPrompt,
     commitMessage,
+    commitMessageHistory,
     createPrIntentNotice,
     directCreatePrAction,
     dropdownItems,
@@ -139,6 +140,7 @@ export function SourceControlCommitSurface({
       repoId={activeRepo.id}
       launchPlatform={activeSourceControlLaunchPlatform}
       commitMessage={commitMessage}
+      commitMessageHistory={commitMessageHistory}
       commitError={commitError}
       commitFailureRecoveryPrompt={commitFailureRecoveryPrompt}
       pushRecovery={pushRecovery}
