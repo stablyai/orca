@@ -6,6 +6,8 @@ describe('notification reply target decoding', () => {
   it('keeps the original alert when reply fields would exceed the gateway payload budget', () => {
     const target = { type: 'chat', sessionId: 'chat-42' } as const
     expect(notificationReplyFields({ body: 'x'.repeat(2990) }, target)).toEqual({})
+    // The soundless delivery variant adds 14 bytes after reply enrichment.
+    expect(notificationReplyFields({ body: 'x'.repeat(2907) }, target)).toEqual({})
     expect(notificationReplyFields({ body: 'Finished' }, target)).toEqual({
       category: 'orca.reply',
       replyTarget: { type: 'chat', sessionId: 'chat-42' }

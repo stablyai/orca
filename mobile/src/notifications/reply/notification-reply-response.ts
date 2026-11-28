@@ -1,3 +1,4 @@
+import { runKeyedSerializedOperation } from '../../../../src/shared/concurrency/keyed-serialized-operations'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import { NOTIFICATION_REPLY_ACTION } from '../../../../src/shared/notifications/notification-reply'
@@ -22,9 +23,21 @@ import {
 } from '../../bots/items/bot-item-comment-drafts'
 
 const PREFIX = 'orca:notificationReply:'
+const recordQueues = new Map<string, Promise<void>>()
 const active = new Map<string, Promise<boolean>>()
 
 export async function restoreNotificationReplyDraft(data: unknown): Promise<void> {
+  if (
+    data &&
+    typeof data === 'object' &&
+    'replyDraftId' in data &&
+    typeof data.replyDraftId === 'string'
+  ) {
+    await runKeyedSerializedOperation(recordQueues, data.replyDraftId, () => restoreDraft(data))
+  }
+}
+
+async function restoreDraft(data: unknown): Promise<void> {
   if (
     !data ||
     typeof data !== 'object' ||
@@ -58,6 +71,10 @@ export async function restoreNotificationReplyDraft(data: unknown): Promise<void
   const text = saved.text
   if (payload.replyTarget?.type === 'bot-item') {
     returnBotItemCommentDraft(botItemCommentDraftKey(hostId, payload.replyTarget.itemUid), text)
+    await AsyncStorage.setItem(
+      PREFIX + data.replyDraftId,
+      JSON.stringify({ ...saved, restored: true, at: Date.now() })
+    )
     return
   }
   const groupId = payload.replyTarget?.type === 'group' ? payload.replyTarget.groupId : null
@@ -106,7 +123,9 @@ export function handleNotificationReply(
   if (pending) {
     return pending
   }
-  const result = deliver(response, data, text, id).finally(async () => {
+  const result = runKeyedSerializedOperation(recordQueues, id, () =>
+    deliver(response, data, text, id)
+  ).finally(async () => {
     active.delete(id)
     await completeNativeReply(response.notification.request.identifier)
   })
@@ -129,8 +148,15 @@ async function deliver(
   try {
     await sendNotificationReply(data, text, `notification-reply-${id}`)
   } catch (error) {
-    await AsyncStorage.setItem(key, JSON.stringify({ text, state: 'failed', data, at: Date.now() }))
-    await showReplyFailure(data, id, error instanceof Error ? error.message : 'Host unreachable')
+    const failed = {
+      text,
+      state: 'failure-pending',
+      data,
+      at: Date.now(),
+      reason: error instanceof Error ? error.message : 'Host unreachable'
+    }
+    await AsyncStorage.setItem(key, JSON.stringify(failed))
+    await finishReplyFailure(key, id, failed)
     return true
   }
   await AsyncStorage.setItem(key, JSON.stringify({ state: 'sent', at: Date.now() }))
@@ -142,6 +168,7 @@ async function deliver(
 
 async function showReplyFailure(data: unknown, id: string, reason: string): Promise<void> {
   await Notifications.scheduleNotificationAsync({
+    identifier: `notification-reply-failure-${id}`,
     content: {
       title: translate('notifications.reply.failed', 'Reply not sent'),
       body: translate('notifications.reply.failedReason', 'Reply not sent: {{reason}}', { reason }),
@@ -152,36 +179,57 @@ async function showReplyFailure(data: unknown, id: string, reason: string): Prom
   })
 }
 
+async function finishReplyFailure(
+  key: string,
+  id: string,
+  saved: { data: unknown; reason: string }
+): Promise<void> {
+  await showReplyFailure(saved.data, id, saved.reason)
+  await AsyncStorage.setItem(key, JSON.stringify({ ...saved, state: 'failed' }))
+}
+
 export async function recoverInterruptedNotificationReplies(): Promise<void> {
   const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith(PREFIX))
-  for (const [key, raw] of await AsyncStorage.multiGet(keys)) {
-    if (!raw) {
-      continue
-    }
-    let saved: unknown
-    try {
-      saved = JSON.parse(raw)
-    } catch {
-      continue
-    }
-    if (!saved || typeof saved !== 'object' || !('state' in saved)) {
-      continue
-    }
+  for (const key of keys) {
     const id = key.slice(PREFIX.length)
-    if (saved.state === 'sending' && !active.has(id) && 'data' in saved && 'text' in saved) {
-      await AsyncStorage.setItem(key, JSON.stringify({ ...saved, state: 'failed', at: Date.now() }))
-      await showReplyFailure(
-        saved.data,
-        id,
-        'Delivery unconfirmed; check the chat before sending again'
-      )
-    } else if (
-      (saved.state === 'sent' || ('restored' in saved && saved.restored === true)) &&
-      'at' in saved &&
-      typeof saved.at === 'number' &&
-      Date.now() - saved.at > 7 * 24 * 60 * 60 * 1000
-    ) {
-      await AsyncStorage.removeItem(key)
-    }
+    await runKeyedSerializedOperation(recordQueues, id, async () => {
+      const raw = await AsyncStorage.getItem(key)
+      if (!raw) {
+        return
+      }
+      let saved: unknown
+      try {
+        saved = JSON.parse(raw)
+      } catch {
+        return
+      }
+      if (!saved || typeof saved !== 'object' || !('state' in saved)) {
+        return
+      }
+      if (saved.state === 'sending' && 'data' in saved && 'text' in saved) {
+        const pending = {
+          ...saved,
+          state: 'failure-pending',
+          at: Date.now(),
+          reason: 'Delivery unconfirmed; check the chat before sending again'
+        }
+        await AsyncStorage.setItem(key, JSON.stringify(pending))
+        await finishReplyFailure(key, id, pending)
+      } else if (
+        saved.state === 'failure-pending' &&
+        'data' in saved &&
+        'reason' in saved &&
+        typeof saved.reason === 'string'
+      ) {
+        await finishReplyFailure(key, id, { ...saved, data: saved.data, reason: saved.reason })
+      } else if (
+        (saved.state === 'sent' || ('restored' in saved && saved.restored === true)) &&
+        'at' in saved &&
+        typeof saved.at === 'number' &&
+        Date.now() - saved.at > 7 * 24 * 60 * 60 * 1000
+      ) {
+        await AsyncStorage.removeItem(key)
+      }
+    })
   }
 }

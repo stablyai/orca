@@ -212,6 +212,7 @@ export const TerminalSend = lazyZodSchema(() =>
       })
       .optional(),
     requireAgentStatus: z.enum(['sendable']).optional(),
+    requireEmptyDraft: z.literal(true).optional(),
     // A startup-dialog card's choice: refused unless the screen still reads as this card. Older hosts strip it.
     requireStartupDialog: z
       .string()

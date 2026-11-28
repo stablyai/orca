@@ -44,3 +44,18 @@ export function notificationReplyTarget(
     return null
   }
 }
+
+export function captureNotificationReplyTarget(
+  event: MobileNotificationEvent,
+  resolve: ((event: MobileNotificationEvent) => NotificationReplyTarget | null) | undefined,
+  expected?: NotificationReplyTarget | null
+): NotificationReplyTarget | null {
+  try {
+    const target = resolve?.(event) ?? null
+    return expected === undefined || JSON.stringify(target) === JSON.stringify(expected)
+      ? target
+      : null
+  } catch {
+    return null
+  }
+}
