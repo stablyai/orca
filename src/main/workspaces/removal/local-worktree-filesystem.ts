@@ -66,6 +66,8 @@ async function runWslCommand(
   const result = await runProcess({
     program: windowsSystem32Binary('wsl.exe'),
     args: buildWslExecArgs(distro, ['sh', '-c', command]),
+    // wsl.exe writes its own errors as UTF-16 unless asked for UTF-8.
+    env: { ...process.env, WSL_UTF8: '1' },
     cwd,
     timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS
   })
