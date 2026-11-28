@@ -143,7 +143,7 @@ export function useNativeChatFindMatches({
   const matchNodesRef = useRef<ReadonlySet<Node>>(new Set())
   // Kept with the chat tab, so a chat switched back to resumes Next/Previous from the match it left on.
   const keptRef = useNativeChatViewRef<KeptMatch | null>('find-active', null)
-  // Until its row draws, a remount shows what's on screen but keeps waiting for the kept match; a step or new query ends it.
+  // Until its row draws, a remount shows what's on screen without replacing the kept match; a step or new query ends it.
   const resumingRef = useRef(true)
 
   const activate = useCallback(
@@ -185,7 +185,7 @@ export function useNativeChatFindMatches({
       return
     }
     const anchor = anchorRef.current
-    if (!resumingRef.current && !newQuery && matches.length > 0 && anchor?.node.isConnected) {
+    if (!newQuery && matches.length > 0 && anchor?.node.isConnected) {
       activate(matches, survivingMatchIndex(matches, anchor))
       return
     }

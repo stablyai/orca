@@ -39,3 +39,33 @@ it('a returning chat reads at most its restore budget of older pages across ever
   expect(await tryOnce()).toBe('missing')
   expect(pagesRead).toBe(3)
 })
+
+it("a superseded page doesn't spend a return's restore budget", async () => {
+  let loads = 0
+  const jump = renderHook(() =>
+    useNativeChatHistoryJump({
+      step: () => 'page',
+      sessionKey: 'session',
+      isVisible: true,
+      // A reconnect supersedes the first read; the rest apply.
+      loadEarlier: async () => (++loads === 1 ? 'superseded' : 'applied')
+    })
+  )
+  const budget = { pages: NATIVE_CHAT_RESTORE_MAX_PAGES }
+  const results: HistoryJumpResult[] = []
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const before = results.length
+    act(() =>
+      jump.result.current.start({ kind: 'item', id: 'deep', offset: 0, budget }, (settled) =>
+        results.push(settled)
+      )
+    )
+    for (let tick = 0; tick < 50 && results.length === before; tick++) {
+      await act(async () => {
+        await Promise.resolve()
+      })
+    }
+  }
+  expect(results).toEqual(['superseded', 'missing'])
+  expect(loads - 1).toBe(NATIVE_CHAT_RESTORE_MAX_PAGES)
+})

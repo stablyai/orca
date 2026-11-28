@@ -140,7 +140,7 @@ export function NativeChatWaitingTranscriptItems({
           <div
             key={nativeChatSlotKey(slot)}
             data-native-chat-waiting-index={index}
-            data-native-chat-row-key={`waiting:${nativeChatSlotKey(slot)}`}
+            data-native-chat-row-key={nativeChatSlotKey(slot)}
             className={leavesWhole ? 'w-full' : 'flow-root w-full'}
           >
             <NativeChatTranscriptRow

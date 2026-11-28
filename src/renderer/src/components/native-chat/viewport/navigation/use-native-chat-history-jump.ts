@@ -116,6 +116,10 @@ export function useNativeChatHistoryJump({
         if (signal.aborted) {
           return 'aborted'
         }
+        if (result === 'superseded' && budget) {
+          // Nothing was read; the retry gets the page back.
+          budget.pages += 1
+        }
         if (result === 'superseded' || result === 'failed') {
           return result
         }
