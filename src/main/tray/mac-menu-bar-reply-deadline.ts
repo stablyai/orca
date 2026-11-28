@@ -1,11 +1,12 @@
 // Only an outstanding reply (state or an event-driven probe) arms a deadline: no idle timer in either process.
-const REPLY_TIMEOUT = 15_000
+export const REPLY_TIMEOUT = 15_000
 
 /** One pending-reply deadline; paused across system sleep so a sleeping helper isn't killed. */
 export class MenuBarReplyDeadline {
   private timer: ReturnType<typeof setTimeout> | null = null
   private suspended = false
   private onExpire: (() => void) | null = null
+  private timeoutMs = REPLY_TIMEOUT
 
   get armed(): boolean {
     return this.onExpire !== null
@@ -15,8 +16,9 @@ export class MenuBarReplyDeadline {
     return this.suspended
   }
 
-  arm(onExpire: () => void): void {
+  arm(onExpire: () => void, timeoutMs = REPLY_TIMEOUT): void {
     this.onExpire = onExpire
+    this.timeoutMs = timeoutMs
     this.restart()
   }
 
@@ -40,13 +42,16 @@ export class MenuBarReplyDeadline {
   private restart(): void {
     clearTimeout(this.timer ?? undefined)
     this.timer = setTimeout(() => {
-      this.timer = null
-      const expire = this.onExpire
-      if (expire && !this.suspended) {
-        this.onExpire = null
-        expire()
-      }
-    }, REPLY_TIMEOUT)
+      // After a long main-thread stall timers run before I/O: let a reply already in the pipe land first.
+      setImmediate(() => {
+        this.timer = null
+        const expire = this.onExpire
+        if (expire && !this.suspended) {
+          this.onExpire = null
+          expire()
+        }
+      })
+    }, this.timeoutMs)
     this.timer.unref()
   }
 }

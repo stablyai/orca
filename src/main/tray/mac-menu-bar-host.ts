@@ -38,7 +38,15 @@ export function launchMacMenuBarHost(installId: string | null): LaunchMenuBarHos
 }
 
 /** After the helper failed this launch, later hide/show cycles use the in-process icon at once. */
+let fellBack = false
+
+/** The in-process icon's telemetry label: fallback icons stay distinguishable across hide/show. */
+export function inProcessMenuBarHost(): MenuBarHost {
+  return fellBack ? 'in-process-fallback' : 'in-process'
+}
+
 export function markMacMenuBarHelperUnavailable(next: 'in-process' | 'off'): void {
+  fellBack = next === 'in-process'
   launchHost = next
 }
 

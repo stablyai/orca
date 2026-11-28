@@ -10,6 +10,7 @@ import { MacMenuBarTray, waitForMacMenuBarRetirement, type TrayMenuItem } from '
 import type { MenuBarQACommand } from './mac-menu-bar-protocol'
 import {
   awaitMacIconShown,
+  inProcessMenuBarHost,
   launchMacMenuBarHost,
   markMacIconShown,
   markMacMenuBarHelperUnavailable,
@@ -223,7 +224,7 @@ function createNativeTray(image: NativeImage, opts: SystemTrayOptions): Tray {
       safeMenuAction(() => opts.onOpen())
     )
   } else {
-    reportMenuBarHost('in-process')
+    reportMenuBarHost(inProcessMenuBarHost())
     markMacIconShown(true)
   }
   return nativeTray
@@ -243,7 +244,6 @@ function replaceFailedHelperTray(failed: MacMenuBarTray, reason: 'fallback' | 'o
     return
   }
   tray = createNativeTray(baseTrayImage, trayOptions)
-  reportMenuBarHost('in-process-fallback')
   setTrayMenu(trayOptions)
   applyTrayImage()
 }

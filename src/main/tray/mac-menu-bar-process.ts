@@ -12,6 +12,8 @@ import {
 } from './mac-menu-bar-protocol'
 import { MenuBarReplyDeadline } from './mac-menu-bar-reply-deadline'
 import { MenuBarRestartPolicy } from './mac-menu-bar-restart-policy'
+// The first launch after an update can include a Gatekeeper check of the new nested app.
+const STARTUP_TIMEOUT = 60_000
 type Generation = {
   child: ChildProcessWithoutNullStreams
   exited: Promise<void>
@@ -68,7 +70,11 @@ export class MacMenuBarProcess {
   /** Called on user-visible events (window focus, app activation) to replace a hung helper without polling. */
   probe(): void {
     const generation = this.current
-    if (!generation?.ready || generation.retired || this.deadline.armed || this.deadline.paused) {
+    // A focus/activation means the system is awake, so a missed resume can't disable checks.
+    this.deadline.resume()
+    // An outstanding (or menu-deferred) update already proves or tests liveness.
+    const idle = generation && generation.sentRevision === generation.appliedRevision
+    if (!idle || !generation.ready || generation.retired || this.deadline.armed) {
       return
     }
     generation.probe = ++this.probeId
@@ -171,7 +177,7 @@ export class MacMenuBarProcess {
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => this.read(generation, chunk))
     child.stdin.on('drain', () => this.flush())
-    this.arm(generation)
+    this.arm(generation, STARTUP_TIMEOUT)
   }
 
   private read(generation: Generation, chunk: string): void {
@@ -274,8 +280,8 @@ export class MacMenuBarProcess {
   }
 
   // retire() ignores a generation that already ended.
-  private arm(generation: Generation): void {
-    this.deadline.arm(() => void this.retire(generation))
+  private arm(generation: Generation, timeoutMs?: number): void {
+    this.deadline.arm(() => void this.retire(generation), timeoutMs)
   }
 
   private schedule(delay: number): void {
