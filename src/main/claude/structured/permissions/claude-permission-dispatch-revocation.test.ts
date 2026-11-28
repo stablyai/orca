@@ -101,7 +101,7 @@ it('cuts only the exact child: a later acquisition under the same chat keeps its
   const sessions = new Map([['chat', old.session]])
   const revokeChild = revokeClaudePermissionDispatch(sessions)
   revokeChild('chat', 1, 'process', true)
-  expect(old.session.permissionDispatchRevoked).toBe(true)
+  expect(old.session.permissionDispatchCuts).toBe(1)
 
   sessions.set('chat', next.session)
   // The slept or replaced child's cut, arriving late, names the old acquisition.
