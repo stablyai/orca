@@ -34,7 +34,11 @@ export const TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY = 'terminal.split-retry.v1'
 export const TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY =
   'terminal.send-approval-guard.v1' as const
 
+export const TERMINAL_EMPTY_DRAFT_RESERVATION_CAPABILITY =
+  'terminal.empty-draft-reservation.v1' as const
+
 export const TERMINAL_RUNTIME_CAPABILITIES = [
+  TERMINAL_EMPTY_DRAFT_RESERVATION_CAPABILITY,
   TERMINAL_ORDERED_INPUT_CAPABILITY,
   TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',

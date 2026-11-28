@@ -1747,7 +1747,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost means this bot’s computer.",
           "headers": "Headers",
-          "authHint": "If the server needs browser sign-in, Connect appears after its native check.",
+          "authHint": "If the server needs browser sign-in, Sign in appears after its native check.",
           "executable": "Executable",
           "commandPlaceholder": "npx",
           "args": "Arguments",
@@ -6141,9 +6141,8 @@
             "84c3b15dca": "Agent usage limits",
             "d663430cf9": "Configure usage tracking",
             "remoteLabel": "No usage on {{host}}",
-            "remoteTitle": "Usage on {{host}}",
-            "remoteBody": "This workspace runs on {{host}}, so the bar shows that host's usage. Sign in to an agent there, or focus a local workspace to see this computer's usage.",
-            "remoteOpenAccounts": "Open {{host}} accounts"
+            "remoteNoUsageYet": "No usage yet. Sign in there.",
+            "remoteAccounts": "Accounts"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Updating skills",
@@ -15814,7 +15813,10 @@
             "operationAbortConfirm": "Select again to abort",
             "operationResolve": "Resolve",
             "operationMoreActions": "More actions",
-            "operationResolveLabel": "Resolve conflicts with AI"
+            "operationResolveLabel": "Resolve conflicts with AI",
+            "operationRunChangedTitle": "Nothing was aborted",
+            "operationRunChangedDescription": "The operation changed after Abort was chosen. Check its current state and try again.",
+            "operationRunUnknown": "Can't tell which run is paused, so Abort is off here. Refresh Source Control, or abort it in a terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

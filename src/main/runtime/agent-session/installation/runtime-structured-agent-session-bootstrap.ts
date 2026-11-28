@@ -93,6 +93,7 @@ export type RuntimeStructuredAgentSessionHostBootstrapContext = {
   >
   onStructuredRequestFailureForErrorMail: NonNullable<StructuredHostDeps['onRequestFailure']>
   onStructuredIdleProviderDeathForMail: NonNullable<StructuredHostDeps['onIdleProviderDeath']>
+  onStructuredUserClosedProviderForMail: NonNullable<StructuredHostDeps['onUserClosedProvider']>
   notifyCrewChanges: (change: ReturnType<typeof crewChatStatusChange>) => void
   onStructuredSessionStatusForMail: (
     summary: Parameters<NonNullable<StructuredHostDeps['onSessionStatusChanged']>>[0]
@@ -161,6 +162,7 @@ export async function ensureRuntimeStructuredAgentSessionHost(
         context.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
       onRequestFailure: (failure) => context.onStructuredRequestFailureForErrorMail(failure),
       onIdleProviderDeath: (death) => context.onStructuredIdleProviderDeathForMail(death),
+      onUserClosedProvider: (closed) => context.onStructuredUserClosedProviderForMail(closed),
       readWorkerDockPresence: (sessionId) =>
         context.readWorkerDockSource(workerDockSourceOfSession(sessionId)),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.

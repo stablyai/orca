@@ -16,7 +16,7 @@ it.each(['before-paste', 'before-enter', 'none'])(
           processIncarnation: 'process',
           generation: 1
         }),
-        readTerminal: async () => ({})
+        readTerminal: async () => ({ source: 'screen' })
       },
       'terminal'
     )
@@ -53,3 +53,20 @@ it.each(['before-paste', 'before-enter', 'none'])(
     }
   }
 )
+
+it('refuses a screen-unavailable snapshot instead of treating its omitted draft as empty', async () => {
+  await expect(
+    reserveEmptyTerminalDraft(
+      {
+        terminalRunFacts: new TerminalRunFactsRegister(),
+        getTerminalPromptRequestBinding: () => ({
+          ptyId: 'pty',
+          processIncarnation: 'process',
+          generation: 1
+        }),
+        readTerminal: async () => ({ source: 'screen-unavailable' })
+      },
+      'terminal'
+    )
+  ).rejects.toThrow('terminal_reply_draft_changed')
+})

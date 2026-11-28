@@ -54,6 +54,8 @@ export class AgentStatusProjectionState {
   readonly handleByKey = new Map<string, string>()
   readonly keysByHandle = new Map<string, Set<string>>()
   readonly acceptedByTab = new Map<string, Set<string>>()
+  /** The tab each accepted key is filed under: a chat's tab can't be re-derived once it changed. */
+  readonly acceptedTabByKey = new Map<string, string>()
   readonly worktrees = new Map<string, Bucket>()
   readonly mobileKeys = new Map<string, Set<string>>()
   readonly mobileOwners = new Map<string, string>()

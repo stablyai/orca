@@ -1,5 +1,4 @@
 import { asyncQuestionSourceScope } from '../../../../../shared/native-chat/input/native-chat-ask'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionHostKey } from '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
@@ -28,6 +27,7 @@ import {
   type StructuredAgentSessionAsyncQuestionSkip
 } from './use-structured-agent-session-async-question-skip'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
@@ -156,7 +156,7 @@ export function nativeChatStructuredAsyncQuestion(
     <NativeChatHostAsyncQuestion
       target={props.target}
       sessionId={sessionId}
-      paneKey={structuredAgentSessionPaneKey(props.tabId, sessionId)}
+      paneKey={chatPaneKey(sessionId)}
       session={session}
       submissions={controller.submissions}
       send={transport.send}

@@ -209,3 +209,10 @@ export function closeSavedMobileNativeChatDraft(scope: string): void {
     tab.workspace.row.save('immediate')
   }
 }
+
+export function persistMobileNativeChatDrafts(
+  hostId: string,
+  worktreeId: string
+): Promise<boolean> {
+  return workspaceFor(hostId, worktreeId).row.persist()
+}

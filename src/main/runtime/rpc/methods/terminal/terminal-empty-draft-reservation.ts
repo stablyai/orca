@@ -10,7 +10,7 @@ type ReplyRuntime = {
   readTerminal: (
     handle: string,
     options: { screen: true; limit: number }
-  ) => Promise<{ draft?: string }>
+  ) => Promise<{ draft?: string; source?: string }>
   terminalRunFacts: Pick<OrcaRuntimeService['terminalRunFacts'], 'readInputRevision'>
 }
 
@@ -18,7 +18,7 @@ export async function reserveEmptyTerminalDraft(runtime: ReplyRuntime, handle: s
   const binding = runtime.getTerminalPromptRequestBinding(handle)
   let expectedRevision = runtime.terminalRunFacts.readInputRevision(binding.ptyId)
   const screen = await runtime.readTerminal(handle, { screen: true, limit: 1 })
-  if ((screen.draft ?? '') !== '') {
+  if (screen.source !== 'screen' || (screen.draft ?? '') !== '') {
     throw new Error('terminal_reply_draft_changed')
   }
   // Reserve synchronously before each chunk and Enter; only this operation's next write may advance it.

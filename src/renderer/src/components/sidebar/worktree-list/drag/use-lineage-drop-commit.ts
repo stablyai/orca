@@ -29,6 +29,7 @@ import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/w
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getDropFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 const rowsByIdentityCache = new WeakMap<readonly Worktree[], Map<string, Worktree>>()
 
 function getCachedRowsByIdentity(worktrees: readonly Worktree[]): Map<string, Worktree> {
@@ -97,9 +98,8 @@ export function useWorktreeLineageDropCommit(args: {
     },
     [captureGeometry, folderParentOf, getWorktreeDragGroups]
   )
-  const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
-  const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
-  const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+  const { assignWorktreeParent, assignCrossStoreWorktreeParent, updateWorktreeLineage } =
+    getAppStoreState()
 
   /** The picked rows and the parent row, when the picker would offer that parent to every one. */
   const resolveLineageDrop = useCallback(

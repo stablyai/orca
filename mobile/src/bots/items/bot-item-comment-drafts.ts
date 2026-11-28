@@ -1,13 +1,41 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import {
+  durableDraftRow,
+  durableDraftRowKey,
+  pageDraftRowBackend,
+  type DurableDraftRow
+} from '../../drafts/durable-draft-rows'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import {
   appendNativeChatQuote,
   formatNativeChatQuote
 } from '../../../../src/shared/native-chat/input/quotes/native-chat-quote-selection'
 
-// Each item's unsent comment text on the phone, for this app session, and the open box showing it.
+// Each item's unsent text and the open box showing it.
 export const botItemCommentDrafts = new Map<string, string>()
 // The open box of each item, so text set from outside it (a late photo's [Image #N]) shows in its field.
 export const shownBotItemCommentDrafts = new Map<string, (next: string) => void>()
+
+const rows = new Map<string, DurableDraftRow>()
+function rowFor(key: string): DurableDraftRow {
+  const existing = rows.get(key)
+  if (existing) {
+    return existing
+  }
+  const storageKey = durableDraftRowKey('bot-item-comment', '', key)
+  const row = durableDraftRow(storageKey, {
+    backend: () => pageDraftRowBackend(storageKey),
+    snapshot: () => botItemCommentDrafts.get(key) ?? null,
+    restore: (text) => {
+      if (typeof text === 'string' && !botItemCommentDrafts.has(key)) {
+        setBotItemCommentDraft(key, text)
+      }
+    }
+  })
+  rows.set(key, row)
+  return row
+}
+export const loadBotItemCommentDraft = (key: string) => rowFor(key).load()
+export const persistBotItemCommentDraft = (key: string) => rowFor(key).persist()
 
 const listeners = new Map<string, Set<() => void>>()
 
@@ -19,10 +47,14 @@ export function writeBotItemCommentDraft(key: string, text: string): void {
     botItemCommentDrafts.delete(key)
   }
   listeners.get(key)?.forEach((listener) => listener())
+  rowFor(key).save(text ? 'deferred' : 'immediate')
 }
 
 /** Whether the item's draft holds no words, as the comment box's reply target reads it. */
 export function useBotItemCommentDraftEmpty(key: string): boolean {
+  useEffect(() => {
+    void loadBotItemCommentDraft(key)
+  }, [key])
   const subscribe = useCallback(
     (listener: () => void) => {
       const set = listeners.get(key) ?? new Set()

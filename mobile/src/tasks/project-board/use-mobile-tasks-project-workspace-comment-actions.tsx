@@ -289,12 +289,13 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
     },
     [activeGitHubProjectHost, client, projectEditingCommentDraft, projectMutating]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     createWorkspaceFromProjectRow,
     mutateProjectRowIssueOrPr,
     addProjectRowComment,
     updateProjectRowComment
-  })
+  }
 }
 
 export type ProjectWorkspaceCommentActionsModel = ReturnType<

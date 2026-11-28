@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { MoreHorizontal, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -28,7 +28,12 @@ export type OperationRowProps = {
   /** Extra tooltip lines: the detached HEAD, why there is no primary. */
   notes?: (string | null)[]
   primary: OperationRowPrimary | null
-  abort: { unavailable: boolean; busy: boolean; reason?: string | null; onAbort: () => void }
+  abort: {
+    unavailable: boolean
+    busy: boolean
+    reason?: string | null
+    onAbort: () => void
+  }
   /** Identifies what Abort would abort (workspace, host, operation, step); a change disarms it. */
   abortTargetKey: string
 }
@@ -90,8 +95,8 @@ const VERB_GAP_PX = 6
 
 /**
  * "Rebasing feature/x": the branch truncates, and hides whole when it can't show
- * min(its own width, 56px). A detail such as "Check failed" shows whole and outranks the verb,
- * since the icon-less verb is the part the tooltip can carry.
+ * min(its own width, 56px). A detail such as "Check failed" outranks the verb (the tooltip
+ * carries the verb) and, when even it can't fit, truncates rather than vanish.
  */
 function OperationLabel({
   verb,
@@ -105,7 +110,7 @@ function OperationLabel({
   const slot = useRef<HTMLSpanElement>(null)
   const verbMeasure = useRef<HTMLSpanElement>(null)
   const tailMeasure = useRef<HTMLSpanElement>(null)
-  const [visible, setVisible] = useState<'full' | 'verb' | 'detail' | 'none'>('full')
+  const [visible, setVisible] = useState<'full' | 'verb' | 'detail'>('full')
   useLayoutEffect(() => {
     const measure = () => {
       const width = slot.current?.clientWidth ?? 0
@@ -114,13 +119,7 @@ function OperationLabel({
       const tailWidth = detail ? tailFull : Math.min(MIN_BRANCH_PX, tailFull)
       const tail = detail || branch
       setVisible(
-        tail && width >= verbWidth + VERB_GAP_PX + tailWidth
-          ? 'full'
-          : detail && width >= tailFull
-            ? 'detail'
-            : width >= verbWidth
-              ? 'verb'
-              : 'none'
+        tail && width >= verbWidth + VERB_GAP_PX + tailWidth ? 'full' : detail ? 'detail' : 'verb'
       )
     }
     return observeForMeasure(measure, [slot.current, verbMeasure.current, tailMeasure.current])
@@ -149,7 +148,15 @@ function OperationLabel({
         {tail}
       </span>
       {visible === 'full' || visible === 'verb' ? (
-        <span className="shrink-0 text-xs font-medium whitespace-nowrap text-foreground">
+        <span
+          className={
+            // Alone, a long translated verb truncates rather than leave the row empty; beside the
+            // branch it stays whole and only the branch truncates.
+            visible === 'verb'
+              ? 'min-w-0 truncate text-xs font-medium whitespace-nowrap text-foreground'
+              : 'shrink-0 text-xs font-medium whitespace-nowrap text-foreground'
+          }
+        >
           {verb}
         </span>
       ) : null}
@@ -157,7 +164,10 @@ function OperationLabel({
         <span
           className={
             detail
-              ? 'shrink-0 text-xs whitespace-nowrap text-muted-foreground'
+              ? // Alone, a detail truncates rather than vanish: a long translation must still say why.
+                visible === 'detail'
+                ? 'min-w-0 truncate text-xs text-muted-foreground'
+                : 'shrink-0 text-xs whitespace-nowrap text-muted-foreground'
               : 'min-w-0 truncate font-mono text-[10.5px] text-muted-foreground'
           }
         >
@@ -289,6 +299,7 @@ function AbortMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   const armedAbort = useArmedAbort(abort.onAbort, abortTargetKey)
+  const reasonId = useId()
   const moreLabel = t(
     'auto.components.right.sidebar.SourceControl.operationMoreActions',
     'More actions'
@@ -329,24 +340,34 @@ function AbortMenu({
       </Tooltip>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          disabled={abort.unavailable}
+          // aria-disabled, not disabled: Radix skips disabled items, so keyboard and screen-reader
+          // users could never reach the item to hear why Abort is off.
+          aria-disabled={abort.unavailable || undefined}
           onKeyDown={(event) => {
             // A held Enter or Space repeats selection; only a fresh press may arm or confirm.
             if ((event.key === 'Enter' || event.key === ' ') && event.repeat) {
               event.preventDefault()
             }
           }}
+          aria-describedby={abort.reason ? reasonId : undefined}
           onSelect={(event) => {
+            if (abort.unavailable) {
+              event.preventDefault()
+              return
+            }
             // Arming keeps the menu open so the confirming press lands on the same item.
             if (!armedAbort.press()) {
               event.preventDefault()
             }
           }}
         >
-          {armedAbort.armed ? confirmLabel : abortLabel}
+          {/* Weight, not colour, marks the armed state: this row stays free of red. */}
+          {armedAbort.armed ? <span className="font-medium">{confirmLabel}</span> : abortLabel}
         </DropdownMenuItem>
         {abort.reason ? (
-          <p className="max-w-60 px-2.5 pb-1.5 text-xs text-muted-foreground">{abort.reason}</p>
+          <p id={reasonId} className="max-w-60 px-2.5 pb-1.5 text-xs text-muted-foreground">
+            {abort.reason}
+          </p>
         ) : null}
         {/* The menu item's text change alone may not be re-read, so arming is announced too. */}
         <span className="sr-only" aria-live="polite">
@@ -385,8 +406,11 @@ export function OperationRow({
             className="flex min-w-0 flex-1 items-center rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <OperationLabel verb={copy.verb} branch={branch} detail={detail} />
-            {/* The visible words may be cut short; screen readers get every line of the tooltip. */}
-            <span className="sr-only">{tooltipLines.join('. ')}</span>
+            {/* The row's one live copy, named by the status alone: the tooltip already describes the
+                trigger with every line, so repeating the notes here would read them twice. */}
+            <span className="sr-only" role="status" aria-live="polite">
+              {statusText}
+            </span>
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6} className="max-w-72 break-words">
@@ -395,10 +419,6 @@ export function OperationRow({
           ))}
         </TooltipContent>
       </Tooltip>
-      {/* Why: a narrow row may hide the words; the live region still announces the state. */}
-      <span className="sr-only" role="status" aria-live="polite">
-        {statusText}
-      </span>
       <span className="flex shrink-0 items-center gap-0.5">
         {primary ? <PrimaryButton primary={primary} /> : null}
         <AbortMenu abortLabel={copy.abortLabel} abort={abort} abortTargetKey={abortTargetKey} />

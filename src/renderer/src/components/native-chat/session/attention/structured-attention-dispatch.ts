@@ -18,7 +18,6 @@ import {
   type AgentSessionAttentionEdge,
   type StructuredAttentionRead
 } from '../../../../../../shared/agent-session/view/agent-session-attention'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import {
   deliverAgentAttentionNotification,
@@ -45,6 +44,7 @@ import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestratio
 import { getNotificationWorkspaceLabels } from '@/attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export function dispatchStructuredTurnCompletionAttention(
   tab: StructuredTab,
@@ -93,7 +93,7 @@ function dispatchStructuredAttention(
   }
   const attentionKey = agentSessionAttentionKey(edge)
   const state = useAppStore.getState()
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const paneKey = chatPaneKey(tab.entityId)
   const decision = resolveAgentAttention(
     {
       // Address the renderer tab’s workspace; host scope ids may name different remote workspaces.
