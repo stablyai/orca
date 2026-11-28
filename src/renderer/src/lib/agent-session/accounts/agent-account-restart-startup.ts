@@ -113,7 +113,7 @@ export function resolveAgentAccountRestartResumeStartup(
   }
 }
 
-/** Account-switch startup: Codex can relaunch fresh; Claude requires its recorded conversation. */
+/** Account-switch startup: Codex and Antigravity can relaunch fresh; Claude requires its recorded conversation. */
 export function buildPaneAccountRestartStartup(
   agent: AccountRestartAgent,
   args: AccountRestartPane
@@ -132,10 +132,35 @@ export function buildPaneAccountRestartStartup(
   ) {
     return null
   }
-  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+  if (resume || agent === 'claude') {
+    return resume
+  }
+  // Why: a fresh agy replaces whatever runs there, so the pane must still show agy, not another agent or its shell.
+  if (agent === 'antigravity' && !paneStillRunsAgent(agent, args)) {
+    return null
+  }
+  return buildFreshAccountRestartStartup(agent, args)
 }
 
-export function buildCodexAccountRestartStartup(
+function paneStillRunsAgent(agent: AccountRestartAgent, args: AccountRestartPane): boolean {
+  const state = useAppStore.getState()
+  const paneKey = makePaneKey(args.tabId, args.leafId)
+  const entry = state.agentStatusByPaneKey.get(paneKey)
+  const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+  if (foreground?.shellForeground || (foreground?.agent && foreground.agent !== agent)) {
+    return false
+  }
+  if (entry) {
+    return entry.agentType === agent
+  }
+  const tab = state.tabsByWorktree[args.worktreeId]?.find(
+    (candidate) => candidate.id === args.tabId
+  )
+  return foreground?.agent === agent || tab?.launchAgent === agent
+}
+
+export function buildFreshAccountRestartStartup(
+  agent: Exclude<AccountRestartAgent, 'claude'>,
   args: AccountRestartTarget
 ): AgentAccountRestartStartup {
   const state = useAppStore.getState()
@@ -145,7 +170,7 @@ export function buildCodexAccountRestartStartup(
     getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
   )
   const command = resolveAgentLaunchCommand({
-    agent: 'codex',
+    agent,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: target.platform,
     agentHostPlatform: target.agentHostPlatform,
@@ -157,7 +182,7 @@ export function buildCodexAccountRestartStartup(
   return {
     command: command.command,
     startupCommandDelivery: 'shell-ready',
-    launchAgent: 'codex'
+    launchAgent: agent
   }
 }
 

@@ -134,7 +134,12 @@ export class AntigravityAccountService {
   }
 
   /** `switched` runs once agy holds another login than before and the switch is saved. */
-  selectAccount(id: string, switched?: () => void): Promise<AntigravityAccountState> {
+  /** `switched` hears a write of agy's login, with the selection it replaced (read in this same
+   *  serialized step, so concurrent selections each see their own predecessor). */
+  selectAccount(
+    id: string,
+    switched?: (previous: string | null) => void
+  ): Promise<AntigravityAccountState> {
     return this.serialize(async () => {
       const { vault, current } = await this.reconcile(id)
       const selected = vault.accounts.find((account) => account.id === id)
@@ -148,11 +153,12 @@ export class AntigravityAccountService {
       ) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
+      const previous = latest.selectedAccountId
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
       await this.store.write(latest)
       if (switching) {
-        switched?.()
+        switched?.(previous)
       }
       return this.state({ vault: latest, current: readback })
     })

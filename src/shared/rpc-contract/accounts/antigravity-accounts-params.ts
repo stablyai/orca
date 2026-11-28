@@ -20,6 +20,32 @@ export const AntigravityAccountMutationParams = lazyZodSchema(() =>
     .strict()
 )
 
+export const AntigravityAccountSelectParams = lazyZodSchema(() =>
+  z
+    .object({
+      target: AntigravityAccountTargetParams,
+      accountId: z.string().min(1).max(128),
+      // The switching window restarts its own terminals; the host only lists them.
+      movesRunningSessions: z.literal(true).optional(),
+      // The switching client's choice for the host's running terminals.
+      runningSessions: z.enum(['ask', 'restart', 'keep']).optional(),
+      // Answers the Ask an earlier switch to this account left open; never switches accounts itself.
+      answersAsk: z.literal(true).optional()
+    })
+    .strict()
+)
+
+export const AntigravityUnheldTerminalsParams = lazyZodSchema(() =>
+  z
+    .object({
+      previousAccountId: z.string().min(1).max(128).nullable(),
+      accountId: z.string().min(1).max(128),
+      ptyIds: z.array(z.string().min(1).max(512)).max(4096),
+      runningSessions: z.enum(['ask', 'restart', 'keep'])
+    })
+    .strict()
+)
+
 export const AntigravityChatSignInStartParams = lazyZodSchema(() =>
   z.strictObject({
     intent: z.enum(['signIn', 'changeAccount']).optional()

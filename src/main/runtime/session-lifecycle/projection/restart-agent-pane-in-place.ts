@@ -37,10 +37,10 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
   /** Restarts a pane's agent conversation in a new terminal in the same tab and leaf; the spawn
    *  applies whatever account is selected now. Refusals other than `stop_failed` and
    *  `create_failed` stop nothing. `stillCurrent` confirms, last before the stop, that the pane still
-   *  runs `session` and should move. */
+   *  runs `session` and should move. A null `providerSession` starts the agent afresh. */
   async restartAgentPaneInPlace(
     ptyId: string,
-    session: { agent: TuiAgent; providerSession: AgentProviderSessionMetadata },
+    session: { agent: TuiAgent; providerSession: AgentProviderSessionMetadata | null },
     stillCurrent: () => boolean | Promise<boolean> = () => true
   ): Promise<AgentPaneRestartResult> {
     const pty = this.ptysById.get(ptyId)
@@ -68,21 +68,28 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     let dispatched = false
     try {
       // Resolved before the stop, so nothing after it can leave the pane without its agent.
+      const { providerSession } = session
       const resume = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
         .then((workspace) =>
-          this.resolveMobileSessionResumeCommand(workspace, {
-            ...session,
-            launchConfig: pty.launchConfig ?? undefined
-          })
+          providerSession
+            ? this.resolveMobileSessionResumeCommand(workspace, {
+                ...session,
+                providerSession,
+                launchConfig: pty.launchConfig ?? undefined
+              })
+            : this.resolveMobileSessionTerminalCommand(workspace, { agent: session.agent })
         )
         .catch(() => null)
       if (!resume) {
         return { ok: false, reason: 'no_resume_command' }
       }
       const ownPaneKey = makePaneKey(tabId, pane.leafId)
+      const resumed = providerSession ? { agent: session.agent, providerSession } : null
       // Held from before the live-pane check, so no other resume can start this conversation
-      // while it runs or in the gap after the stop.
-      const claim = this.agentSessionResumeClaims.claim(session, ownPaneKey)
+      // while it runs or in the gap after the stop. A fresh start has no conversation to hold.
+      const claim = resumed
+        ? this.agentSessionResumeClaims.claim(resumed, ownPaneKey)
+        : { bind: () => {}, settleFailure: () => {} }
       if (!claim) {
         return { ok: false, reason: 'busy' }
       }
@@ -91,7 +98,11 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         claim.settleFailure(false)
         return { ok: false, reason }
       }
-      if (await this.isProviderSessionLiveInAnotherPane(session, ownPaneKey).catch(() => true)) {
+      const liveElsewhere = (): Promise<boolean> =>
+        resumed
+          ? this.isProviderSessionLiveInAnotherPane(resumed, ownPaneKey).catch(() => true)
+          : Promise.resolve(false)
+      if (await liveElsewhere()) {
         return refuse('busy')
       }
       const wasActive =
@@ -117,7 +128,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         return refuse('busy')
       }
       // A conversation started outside Orca holds no claim; it may have appeared during that await.
-      if (await this.isProviderSessionLiveInAnotherPane(session, ownPaneKey).catch(() => true)) {
+      if (await liveElsewhere()) {
         return refuse('busy')
       }
       // The awaits above let the pane move, change process or gain a viewer: checked again with no
@@ -187,7 +198,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             launchConfig: resume.launchConfig,
             launchAgent: resume.launchAgent,
             launchRuntime: resume.launchRuntime,
-            resumeProviderSession: resume.resumeProviderSession,
+            ...(resumed ? { resumeProviderSession: resumed.providerSession } : {}),
             spawnIntent: 'user-resume',
             // A desktop window that didn't hold the pane isn't shown or focused to the new terminal.
             presentation: 'background',

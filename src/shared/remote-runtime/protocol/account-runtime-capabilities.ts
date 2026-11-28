@@ -16,6 +16,9 @@ export const ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY =
 // Why separate: older hosts lack the read that finds a host's Gemini API key and gcloud login.
 export const ANTIGRAVITY_CHAT_AUTH_DETECT_RUNTIME_CAPABILITY =
   'accounts.antigravity-chat-auth-detect.v1' as const
+// Why separate: older hosts reject a switch that says what to do with running agy terminals.
+export const ANTIGRAVITY_RUNNING_TERMINALS_RUNTIME_CAPABILITY =
+  'accounts.antigravity-running-terminals.v1' as const
 export const DATA_ACCOUNT_RUNTIME_CAPABILITY = 'accounts.managed-data-profiles.v1' as const
 // Why separate: hosts with these accounts may still refuse a phone's switch between them.
 export const PHONE_PROVIDER_ACCOUNT_SWITCH_RUNTIME_CAPABILITY =
@@ -39,6 +42,7 @@ export const ACCOUNT_RUNTIME_CAPABILITIES = [
   ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_DETECT_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_RUNNING_TERMINALS_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY,
   PHONE_PROVIDER_ACCOUNT_SWITCH_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,

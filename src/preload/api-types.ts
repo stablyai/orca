@@ -1,4 +1,5 @@
 import type {
+  AntigravityAccountsApi,
   ClaudeAccountsApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
@@ -134,6 +135,8 @@ export type PreloadApi = {
   keybindings: KeybindingsApi
   codexAccounts: CodexAccountsApi
   claudeAccounts: ClaudeAccountsApi
+  /** Absent from the web client, whose host's own window moves the host's terminals. */
+  antigravityAccounts?: AntigravityAccountsApi
   cli: CliApi
   orcaUninstall: OrcaUninstallApi
   codexConfigSync: CodexConfigSyncApi

@@ -16,6 +16,13 @@ import {
   warnUncheckedSessions
 } from './claude-account-switch-toasts'
 import { getClaudeAccountLabel } from './claude-account-label'
+import {
+  createAccountSwitchPromptStore,
+  currentPtyIds,
+  pickedSwitchSessions,
+  type AccountSwitchPrompt,
+  type AccountSwitchPromptAnswer
+} from './account-switch-prompt'
 import { moveUnheldClaudeSessions } from './claude-account-switch-unheld-sessions'
 import {
   claudeLaunchAccountId,
@@ -34,19 +41,16 @@ export type ClaudeAccountSwitchPromptSessions = {
   cantMove: ClaudeSwitchSessions['cantMove']
 }
 
-export type ClaudeAccountSwitchPrompt = {
-  id: number
+export type ClaudeAccountSwitchPrompt = Omit<AccountSwitchPrompt, 'sessions'> & {
   sessions: ClaudeAccountSwitchPromptSessions
-  /** Opened from the restart toast: the outgoing account's sessions are already restarting. */
-  review?: true
-  previousAccountLabel: string
-  nextAccountLabel: string
 }
 
 let switchGeneration = 0
 const hostAskGenerationByOwner = new Map<string, number>()
-let prompt: ClaudeAccountSwitchPrompt | null = null
-const promptListeners = new Set<() => void>()
+const promptStore = createAccountSwitchPromptStore<ClaudeAccountSwitchPrompt>()
+const setPrompt = promptStore.set
+export const getClaudeAccountSwitchPrompt = promptStore.get
+export const subscribeClaudeAccountSwitchPrompt = promptStore.subscribe
 
 function hostOwnerKey(owner: RuntimeClientTarget): string {
   return owner.kind === 'local' ? 'local' : `environment:${owner.environmentId}`
@@ -63,55 +67,22 @@ function nextHostAskGeneration(ownerKey: string): number {
   return next
 }
 
-function setPrompt(next: ClaudeAccountSwitchPrompt | null): void {
-  prompt = next
-  for (const listener of promptListeners) {
-    listener()
-  }
-}
-
-export function getClaudeAccountSwitchPrompt(): ClaudeAccountSwitchPrompt | null {
-  return prompt
-}
-
-export function subscribeClaudeAccountSwitchPrompt(listener: () => void): () => void {
-  promptListeners.add(listener)
-  return () => promptListeners.delete(listener)
-}
-
 function queueClaudeRestarts(ptyIds: string[]): void {
   useAppStore.getState().queuePaneAccountRestarts(ptyIds, 'claude')
 }
 
-/** Why now: a reattach can rebind a pane while the dialog is open, and a closed pane has none. */
-function currentPtyIds(sessions: readonly ClaudeSessionMoveCandidate[]): string[] {
-  const layouts = useAppStore.getState().terminalLayoutsByTabId
-  return sessions.flatMap((session) => {
-    const ptyId = layouts[session.tabId]?.ptyIdsByLeafId?.[session.leafId]
-    return ptyId ? [ptyId] : []
-  })
-}
-
 /** Answers the open dialog. "Don't ask again" only turns restarts on, as native chat's resume prompt does. */
-export function answerClaudeAccountSwitchPrompt(
-  answer: 'restart' | 'keep',
-  options: {
-    /** The sessions the user ticked; every listed session when absent. */
-    ptyIds?: readonly string[]
-    dontAskAgain?: boolean
-  } = {}
-): void {
-  const request = prompt
+export const answerClaudeAccountSwitchPrompt: AccountSwitchPromptAnswer = (
+  answer,
+  options = {}
+) => {
+  const request = promptStore.get()
   if (!request) {
     return
   }
   setPrompt(null)
   if (answer === 'restart') {
-    const chosen = options.ptyIds
-    // Why filtered: only sessions this question listed may restart.
-    const listed = [...request.sessions.onAccount, ...request.sessions.elsewhere]
-    const picked = chosen ? listed.filter((session) => chosen.includes(session.ptyId)) : listed
-    queueClaudeRestarts(currentPtyIds(picked))
+    queueClaudeRestarts(currentPtyIds(pickedSwitchSessions(request.sessions, options.ptyIds)))
   }
   if (options.dontAskAgain) {
     void useAppStore.getState().updateSettings({ claudeAccountSwitchRunningSessions: 'restart' })

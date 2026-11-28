@@ -9,6 +9,7 @@ import {
   agyLaunchIsForeign,
   assertHostCredentialAuthority
 } from './agy-launch-credential-authority'
+import { noteAgyTerminalAuthority } from './agy-terminal-authority'
 
 /** The selected account ('' when none) agy's login was found or put on; undefined when this launch
  *  doesn't select one, null when `quiet` left the login unread. */
@@ -25,6 +26,15 @@ export async function prepareAntigravityAccountForLaunch(args: {
   /** Nobody is waiting on this launch: never read a login only a keychain dialog could name. */
   quiet?: boolean
 }): Promise<string | null | undefined> {
+  const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }
+  for (const key of args.envToDelete ?? []) {
+    delete env[key]
+  }
+  // Any host terminal may run agy later, typed in its shell: a switch reads who its login is.
+  const paneKey = args.env?.ORCA_PANE_KEY
+  if (paneKey && !args.connectionId && !args.isWsl) {
+    noteAgyTerminalAuthority(paneKey, env, args.envToDelete)
+  }
   // Windows account selection applies the host default; the shell and agent own each launch.
   if (process.platform === 'win32') {
     return undefined
@@ -42,10 +52,6 @@ export async function prepareAntigravityAccountForLaunch(args: {
   }
   if (!(await createEncryptedAntigravityAccountStore(path).read()).selectedAccountId) {
     return ''
-  }
-  const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }
-  for (const key of args.envToDelete ?? []) {
-    delete env[key]
   }
   await assertHostCredentialAuthority(env, { envToDelete: args.envToDelete ?? [] })
   return (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch({

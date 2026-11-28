@@ -4,6 +4,11 @@ import {
   announceAntigravityAccountSwitch,
   announceAntigravityAccountSwitchFailure
 } from '@/lib/provider-accounts/antigravity-account-switch-toasts'
+import {
+  announceAccountRestart,
+  announceHostAccountMove
+} from '@/lib/provider-accounts/account-switch-toasts'
+import { antigravityAccountSwitchCopy } from '@/lib/provider-accounts/account-switch-copy'
 
 // The toasts Settings shows when a saved Antigravity account is selected, from the production code.
 function Stage(): React.JSX.Element {
@@ -58,6 +63,38 @@ export const switched = defineFixture({
         currentAccount: null
       },
       'work'
+    )
+    await waitForToast(frame)
+  }
+})
+
+// A switch under Always restart, or one made from the CLI under Ask.
+export const restartingTerminals = defineFixture({
+  width: 420,
+  render: () => <Stage />,
+  interact: async (frame) => {
+    announceAccountRestart(
+      antigravityAccountSwitchCopy(),
+      2,
+      'personal@example.com',
+      1,
+      () => {},
+      1
+    )
+    await waitForToast(frame)
+  }
+})
+
+// A server with no window left its terminals running under Ask; only the switching client can answer.
+export const serverAsks = defineFixture({
+  width: 420,
+  render: () => <Stage />,
+  interact: async (frame) => {
+    announceHostAccountMove(
+      antigravityAccountSwitchCopy(),
+      { restarting: 0, notMoved: 2, canRestart: 2 },
+      { previous: 'work@example.com', next: 'personal@example.com' },
+      async () => undefined
     )
     await waitForToast(frame)
   }

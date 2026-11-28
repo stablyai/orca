@@ -57,7 +57,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     change: ClaudeAccountSelectionChange
   ): Promise<ClaudeHostRunningSessionsMove | undefined> {
     if (this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID) {
-      this.notifier?.claudeAccountSelected?.(change)
+      this.notifier?.accountSelectedElsewhere?.('claude', change)
       return Promise.resolve(undefined)
     }
     return this.moveRunningClaudePanes(change)

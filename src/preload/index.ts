@@ -41,6 +41,7 @@ import { localhostWorktreeLabelsApi } from './api/workspaces/localhost-worktree-
 import { keybindingsApi } from './api/preferences/keybindings-bridge'
 import { codexAccountsApi } from './api/agent-accounts/codex-accounts-bridge'
 import { claudeAccountsApi } from './api/agent-accounts/claude-accounts-bridge'
+import { antigravityAccountsApi } from './api/agent-accounts/antigravity-accounts-bridge'
 import { cliApi } from './api/cli-install/cli-bridge'
 import { orcaUninstallApi } from './api/orca-uninstall/orca-uninstall-bridge'
 import { codexConfigSyncApi } from './api/agent-accounts/codex-config-sync-bridge'
@@ -156,6 +157,7 @@ const api = {
   keybindings: keybindingsApi,
   codexAccounts: codexAccountsApi,
   claudeAccounts: claudeAccountsApi,
+  antigravityAccounts: antigravityAccountsApi,
   cli: cliApi,
   orcaUninstall: orcaUninstallApi,
   codexConfigSync: codexConfigSyncApi,

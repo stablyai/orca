@@ -177,6 +177,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   /** `confirmedExit`: a command mark finished the launched command (whether its agent quit or
    *  stopped is the host's proof to tell); undefined when the PTY exited. */
   protected retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void {
+    this.forgetAgyInvocation(ptyId)
     const finishedBefore = this.ptysById.get(ptyId)?.launchEvidence?.kind === 'gone'
     const pty = this.retireHeldLaunch(ptyId)
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
