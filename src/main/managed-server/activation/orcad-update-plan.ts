@@ -120,6 +120,16 @@ export function planOrcadUpdate(input: {
   }
   // Only an uncounted census the server answered can pass on a later force; a counted one never can.
   const forceable = liveSessions === null && isAnsweredOrcadTerminalCensus(input.census)
+  // A census that never reached a daemon names the check that blocked it, not a silent daemon (#51014).
+  if (liveSessions === null && input.census.unansweredBecause && input.force !== true) {
+    return {
+      action: 'defer',
+      code: 'orcad_update_terminal_census_unavailable',
+      reason:
+        `${input.census.unansweredBecause} So this update cannot tell whether work is running ` +
+        'on the host, and it waits. Retry once that clears.'
+    }
+  }
   if (input.force && crossing.state === 'unverifiable') {
     return {
       action: 'defer',

@@ -68,3 +68,24 @@ export function posixProcessArgsShellFunction(): string {
     'printf "%s\\n" "$orcad_argv"; };'
   )
 }
+
+/**
+ * `orcad_slot_busy LAUNCHER SERVER` returns 0 when a process other than this probe's shells has
+ * argv naming either entry, 1 when none does, 2 when processes cannot be listed. Matching argv,
+ * not a PID, means PID reuse cannot fake a live slot or hide one that is starting (#51014).
+ */
+export function posixSlotProcessScanShellFunction(): string {
+  // The glob expands before this shell forks any reader, so only $$ and $PPID can be the probe.
+  const viaProc =
+    'for orcad_sp in /proc/[0-9]*; do orcad_sp=${orcad_sp#/proc/}; ' +
+    '{ [ "$orcad_sp" = "$$" ] || [ "$orcad_sp" = "$PPID" ]; } && continue; ' +
+    'orcad_sa=$(tr "\\000" " " 2>/dev/null < "/proc/$orcad_sp/cmdline") || continue; ' +
+    'case "$orcad_sa" in *"$1"* | *"$2"*) return 0;; esac; done; return 1;'
+  // A subshell that has not exec'd ps yet carries this shell's argv, so skip this shell's children.
+  const viaPs =
+    'orcad_sl=$(ps -A -ww -o pid= -o ppid= -o args= 2>/dev/null) && [ -n "$orcad_sl" ] || return 2; ' +
+    'printf "%s\\n" "$orcad_sl" | { while read -r orcad_sp orcad_spp orcad_sa; do ' +
+    '{ [ "$orcad_sp" = "$$" ] || [ "$orcad_sp" = "$PPID" ] || [ "$orcad_spp" = "$$" ]; } && continue; ' +
+    'case "$orcad_sa" in *"$1"* | *"$2"*) exit 0;; esac; done; exit 1; };'
+  return `orcad_slot_busy() { if [ -r /proc/self/cmdline ]; then ${viaProc} fi; ${viaPs} };`
+}
