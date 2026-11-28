@@ -54,3 +54,25 @@ it("an older host's /clear keeps sends held through a released view until the ta
   view('new')
   expect(structuredAgentSessionSendsHeld('old')).toBe(false)
 })
+
+it("an older host's /clear keeps sends held when its session's view remounts before the reply", async () => {
+  let reply = (_value: unknown): void => {}
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the clear reads only the outcome's kind and replacement id.
+  const write = vi.fn(
+    () => new Promise((resolve) => (reply = resolve))
+  ) as unknown as StructuredAgentSessionWrite
+  const view = (sessionId: string) =>
+    renderHook(() => useStructuredAgentSessionCommandWrite(sessionId, write), { wrapper: inTab })
+  const first = view('old')
+  let cleared: Promise<unknown> = Promise.resolve()
+  act(() => {
+    cleared = first.result.current('clear')
+  })
+  first.unmount()
+  view('old')
+  await act(async () => {
+    reply({ kind: 'done', value: { replacementSessionId: 'new' } })
+    await cleared
+  })
+  expect(structuredAgentSessionSendsHeld('old')).toBe(true)
+})

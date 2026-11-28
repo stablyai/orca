@@ -182,8 +182,9 @@ export function useStructuredAgentSessionMutate(args: {
       ) {
         return send<T>(method, fingerprintMethod, fields, pressedFence)
       }
-      // Older hosts lack quiet repeated Stops; retain joining until none remain supported.
-      const key = `${hostKey}:${sessionId}:${method}:${JSON.stringify(fields)}`
+      // Older hosts lack quiet repeated Stops; retain joining until none remain supported. Only within one fence: a
+      // Stop pressed after the runtime moved on must reach the new runtime.
+      const key = `${hostKey}:${sessionId}:${pressedFence}:${method}:${JSON.stringify(fields)}`
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key names the method and fields, so the joined promise is this very call and settles to its T.
       return joinStructuredAgentSessionStop(inFlightStops.current, key, () =>
         send<T>(method, fingerprintMethod, fields, pressedFence)

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -26,16 +26,17 @@ function Transcript({
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLElement>(null)
-  report(
-    useNativeChatFindMatches({
-      rootRef,
-      barRef,
-      query: 'cat',
-      isVisible: true,
-      revealMatch: () => {},
-      restoredQuery
-    })
-  )
+  const find = useNativeChatFindMatches({
+    rootRef,
+    barRef,
+    query: 'cat',
+    isVisible: true,
+    revealMatch: () => {},
+    restoredQuery
+  })
+  useLayoutEffect(() => {
+    report(find)
+  })
   return (
     <div ref={rootRef}>
       <div data-native-chat-transcript-column="">

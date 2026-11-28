@@ -171,17 +171,23 @@ export function useNativeChatQueuedEditLifetime({
         activeRef.current = null
         reopenRef.current = null
         windUpQueuedEdit(kept, close)
+        // `close` skips an edit no longer active; the tab's shown editor belonged to it.
+        render(null)
+      }
+      if (reopenRef.current && reopenRef.current.scope !== scope) {
+        reopenRef.current = null
       }
       window.addEventListener('pagehide', handOff)
       return () => {
         window.removeEventListener('pagehide', handOff)
-        if (viewTab && activeRef.current) {
+        // A reopen waiting on newer queue text is kept like an open edit.
+        if (viewTab && (activeRef.current || reopenRef.current)) {
           keptQueuedEditRelease.set(activeRef, onNativeChatViewTabRelease(viewTab, handOff))
         } else {
           handOff()
         }
       }
-    }, [scope, close, activeRef, reopenRef, viewTab])
+    }, [scope, close, render, activeRef, reopenRef, viewTab])
   )
 
   useEffect(() => {

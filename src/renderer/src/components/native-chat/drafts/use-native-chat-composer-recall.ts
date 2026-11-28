@@ -24,16 +24,22 @@ export function useNativeChatRecallPosition(
   const [position, setPosition] = useState<NativeChatRecallPosition | null>(
     () => kept.saved ?? null
   )
-  // A scope change mid-view takes the new scope's own kept position, so the old one is never kept under it.
+  // Separate stores can render position before draft; only an already-shown position may end on mismatch.
+  const [shown, setShown] = useState<NativeChatRecallPosition | null>(null)
+  // A scope change mid-view takes the new scope's own kept position, so the old one is never kept under it; the
+  // old position isn't checked against the new scope's draft, or its mismatch would clear the new one.
   const [positionScope, setPositionScope] = useState(scopeKey)
-  if (positionScope !== scopeKey) {
+  const scopeChanged = positionScope !== scopeKey
+  if (scopeChanged) {
     setPositionScope(scopeKey)
     setPosition(kept.saved ?? null)
+    setShown(null)
   }
   const { write: keep } = kept
   useEffect(() => keep(position ?? undefined), [keep, position])
-  // Separate stores can render position before draft; only an already-shown position may end on mismatch.
-  const [shown, setShown] = useState<NativeChatRecallPosition | null>(null)
+  if (scopeChanged) {
+    return [kept.saved ?? null, setPosition]
+  }
   if (position !== null) {
     if (position.recalled === draft) {
       if (shown !== position) {

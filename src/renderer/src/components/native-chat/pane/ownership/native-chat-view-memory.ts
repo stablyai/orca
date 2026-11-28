@@ -47,7 +47,7 @@ export function releaseNativeChatViewTabs(tabIds: Iterable<string>): void {
  * Open in any workspace: a tab a rename or drag moved still counts. Its own workspace answers on a switch; only a
  * tab that left it (moved or closed, both rare) walks the others.
  */
-function isTabIdOpen(tab: NativeChatViewTab): boolean {
+export function isNativeChatViewTabOpenAnywhere(tab: NativeChatViewTab): boolean {
   const byWorktree = useAppStore.getState().unifiedTabsByWorktree
   if (byWorktree[tab.worktreeId]?.some((entry) => entry.id === tab.tabId)) {
     return true
@@ -77,7 +77,7 @@ export function onNativeChatViewTabRelease(
   tab: NativeChatViewTab,
   release: () => void
 ): () => void {
-  if (!isTabIdOpen(tab)) {
+  if (!isNativeChatViewTabOpenAnywhere(tab)) {
     release()
     return () => {}
   }

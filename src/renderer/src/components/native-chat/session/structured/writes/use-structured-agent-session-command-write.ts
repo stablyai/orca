@@ -114,10 +114,12 @@ export function useStructuredAgentSessionCommandWrite(
           return outcome
         },
         () => {
-          // Kept while this session's view is shown, or released with the tab still open; else it ends now.
+          // Kept while a view of this session is shown (this one or its remount), or released with the tab still
+          // open; else it ends now.
+          const stillShown = shown.current === sessionId || shownInTabRef.current === sessionId
           const released =
             shown.current === null && viewTab !== null && shownInTabRef.current === null
-          if (!movedOn || (shown.current !== sessionId && !released)) {
+          if (!movedOn || (!stillShown && !released)) {
             release()
             return
           }

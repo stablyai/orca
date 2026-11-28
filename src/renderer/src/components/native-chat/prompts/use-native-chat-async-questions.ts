@@ -8,7 +8,7 @@ import {
   useSyncExternalStore
 } from 'react'
 import {
-  isNativeChatViewTabLive,
+  isNativeChatViewTabOpenAnywhere,
   NativeChatViewTabContext
 } from '../pane/ownership/native-chat-view-memory'
 import {
@@ -78,11 +78,11 @@ export function useNativeChatAsyncQuestions({
     }
   }, [owner])
   const viewTab = useContext(NativeChatViewTabContext)
-  // A released view of an open tab keeps its skips; closing the tab sweeps them with the tab's other dismissals.
+  // A released view of an open tab keeps its skips, a tab moved to another workspace included; closing the tab sweeps them with the tab's other dismissals.
   useNativeChatPaneLifetimeEffect(
     useCallback(
       () => () => {
-        if (viewTab && isNativeChatViewTabLive(viewTab)) {
+        if (viewTab && isNativeChatViewTabOpenAnywhere(viewTab)) {
           keepAsyncScopeForTab(viewTab.tabId, scopeKey)
         } else {
           dismissals.forgetAsync(scopeKey)

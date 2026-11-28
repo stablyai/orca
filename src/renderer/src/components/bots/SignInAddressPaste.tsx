@@ -22,19 +22,25 @@ export function SignInAddressPaste({
   describeError: (error: unknown) => string
 }): React.JSX.Element {
   const t = useTranslate()
-  const [address, setAddress] = useState('')
-  // Kept with the chat tab when shown in a chat: a card released mid-finish returns still finishing.
+  // Kept with the chat tab when shown in a chat: a card released mid-finish returns still finishing, or with the
+  // refused address and why, to correct it.
   const [busy, setBusy] = useNativeChatViewGuard(
     memoryKey === undefined ? undefined : `sign-in-address:${memoryKey}`,
     false
   )
-  const [refused, setRefused] = useState<string | null>(null)
+  const [refusal, setRefusal] = useNativeChatViewGuard<{ address: string; why: string } | null>(
+    memoryKey === undefined ? undefined : `sign-in-address-refused:${memoryKey}`,
+    null
+  )
+  const [address, setAddress] = useState(() => refusal?.address ?? '')
+  const refused = refusal?.why ?? null
   const finish = () => {
+    const tried = address
     setBusy(true)
-    setRefused(null)
-    void onFinish(address)
+    setRefusal(null)
+    void onFinish(tried)
       .then(() => setAddress(''))
-      .catch((error: unknown) => setRefused(describeError(error)))
+      .catch((error: unknown) => setRefusal({ address: tried, why: describeError(error) }))
       .finally(() => setBusy(false))
   }
   return (
@@ -53,7 +59,7 @@ export function SignInAddressPaste({
           value={address}
           onChange={(event) => {
             setAddress(event.target.value)
-            setRefused(null)
+            setRefusal(null)
           }}
           aria-invalid={refused !== null}
           aria-label={t('components.bots.toolSignIn.address', 'Address')}

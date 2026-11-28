@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -29,7 +29,11 @@ export function useWorkerDockOwnerActions(
   const t = useTranslate()
   // Kept with the chat tab: a dock released mid-request returns with those rows still pending.
   const [pending, setPending] = useNativeChatViewGuard('worker-dock-pending', NO_PENDING)
-  const [failure, setFailure] = useState<WorkerDockFailure | null>(null)
+  // Kept with it, so a request failing while the chat is switched away still offers its message and Retry.
+  const [failure, setFailure] = useNativeChatViewGuard<WorkerDockFailure | null>(
+    'worker-dock-failure',
+    null
+  )
   const acknowledge = useCallback(
     async (settlements: { dispatchId: string; settlement: string }[]) => {
       if (!party) {
@@ -68,7 +72,7 @@ export function useWorkerDockOwnerActions(
       }
       attempt()
     },
-    [setPending]
+    [setFailure, setPending]
   )
   const action = useCallback(
     (row: WorkerDockRowView, kind: 'stop' | 'clear') => {
