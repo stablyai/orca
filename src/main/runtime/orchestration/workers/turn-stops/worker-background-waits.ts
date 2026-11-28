@@ -13,6 +13,11 @@ import {
   settleWorkerRestUnreported
 } from '../../db/worker-presence/worker-presence-store'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
+import {
+  chatWakesItselfOnBackgroundExit,
+  heldTurnFinished,
+  wakeChatWorkerAfterBackgroundExit
+} from './chat-worker-background-wake'
 import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
 import { observeWorker } from './worker-presence-report'
 import { terminalRequestError } from './terminal-request-error'
@@ -43,6 +48,8 @@ export class WorkerBackgroundWaits {
   private readonly waitingSince = new Map<string, number>()
   /** Panes last seen with a failed lead turn under live children, by that turn's end. */
   private readonly failedSince = new Map<string, number>()
+  /** What each waiting pane's background tasks run, for the wake that names them. */
+  private readonly waitCommands = new Map<string, string[]>()
 
   constructor(private readonly deps: WorkerBackgroundWaitsDeps) {}
 
@@ -58,6 +65,7 @@ export class WorkerBackgroundWaits {
       // Seen again, a wait or failure that failed to record is recorded then.
       this.waitingSince.delete(change.paneKey)
       this.failedSince.delete(change.paneKey)
+      this.waitCommands.delete(change.paneKey)
       console.warn('[orchestration] observing a worker background wait failed', error)
     }
   }
@@ -136,6 +144,7 @@ export class WorkerBackgroundWaits {
       // Seen again until a worker is found: a first sighting before its Dispatch resolves still counts.
       if (workers.length > 0) {
         this.waitingSince.set(paneKey, wait.since)
+        this.waitCommands.set(paneKey, wait.commands)
       }
       for (const worker of workers) {
         observeWorker(
@@ -164,10 +173,15 @@ export class WorkerBackgroundWaits {
       return
     }
     this.waitingSince.delete(paneKey)
+    const commands = this.waitCommands.get(paneKey)
+    this.waitCommands.delete(paneKey)
     // A chat whose tasks ended without waking it is idle now: its held finish is reported after the
     // quiet period a finish gets, unless the wake turn starts by then.
     if (row?.structuredHost && row.state === 'done') {
       this.deps.setTimer(() => this.reportChatFinish(paneKey, since), AGENT_DONE_QUIET_MS)
+      if (!chatWakesItselfOnBackgroundExit(row.agentType)) {
+        this.wakeChat(paneKey, row, { since, commands })
+      }
       return
     }
     // Its lead took a turn again (a finished task woke it, or mail did): the wait is over. A rest,
@@ -179,23 +193,39 @@ export class WorkerBackgroundWaits {
     }
   }
 
+  /** This chat's agent won't take a turn for its ended tasks, so Orca starts one through its own mail. */
+  private wakeChat(
+    paneKey: string,
+    row: AgentStatusIpcPayload,
+    wait: { since: number; commands?: string[] }
+  ): void {
+    try {
+      const sessionId = row.tabId ? structuredAgentSessionIdOfTab(row.tabId) : null
+      // A task the person stopped ended by their hand: there's nothing for the agent to pick up.
+      if (
+        !heldTurnFinished(row, wait.since) ||
+        (sessionId && this.deps.backgroundStopRequestedSince?.(sessionId, wait.since))
+      ) {
+        return
+      }
+      // One chat runs one turn: its first open Dispatch's mail starts it.
+      const worker = this.finishedWorkersOf(paneKey, row)[0]
+      if (worker?.target.kind === 'local') {
+        wakeChatWorkerAfterBackgroundExit(worker.db, worker.target.dispatch, wait, this.deps)
+      }
+    } catch (error) {
+      console.warn('[orchestration] waking a chat worker after its background task failed', error)
+    }
+  }
+
   /** Still idle on the same turn end, and not failed or cut: the held turn finished. */
   private reportChatFinish(paneKey: string, since: number): void {
     try {
       const row = this.deps.readHookRow(paneKey)
-      const lead = row?.mainAgent
-      if (
-        row?.state !== 'done' ||
-        lead?.stateStartedAt !== since ||
-        (lead.outcome !== undefined && lead.outcome !== 'success')
-      ) {
+      if (!row || !heldTurnFinished(row, since)) {
         return
       }
-      for (const worker of this.workersOf(paneKey, row)) {
-        const dispatch = worker.target.kind === 'local' ? worker.target.dispatch : null
-        if (dispatch && worker.db.getWorkerDispatch(dispatch.id)?.state === 'starting') {
-          continue
-        }
+      for (const worker of this.finishedWorkersOf(paneKey, row)) {
         observeWorker(
           worker.db,
           worker.target,
@@ -216,6 +246,15 @@ export class WorkerBackgroundWaits {
     } catch (error) {
       console.warn('[orchestration] reporting a chat background finish failed', error)
     }
+  }
+
+  /** Workers whose held turn is news: a Dispatch still starting has not run one. */
+  private finishedWorkersOf(paneKey: string, row: AgentStatusIpcPayload): PaneWorker[] {
+    return this.workersOf(paneKey, row).filter(
+      (worker) =>
+        worker.target.kind !== 'local' ||
+        worker.db.getWorkerDispatch(worker.target.dispatch.id)?.state !== 'starting'
+    )
   }
 
   /** The open Dispatches this pane's worker runs: a terminal's by its handle, a chat's by its session. */

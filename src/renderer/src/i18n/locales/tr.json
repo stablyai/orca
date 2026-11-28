@@ -16929,14 +16929,18 @@
           "resetDone": "Simge ve renk sıfırlandı",
           "undo": "Geri al",
           "styleLetters": "Harfler",
-          "stylePicture": "Resim",
-          "resetAppearance": "Simgeyi ve rengi sıfırla",
+          "styleImage": "Görsel",
           "faviconPlaceholder": "Favicon için web sitesi",
           "lettersInput": "En fazla 2 harf",
           "lettersPlaceholder": "1–2 harf",
           "useLetters": "“{{value0}}” kullan",
-          "usingGitHubAvatar": "GitHub avatarı kullanılıyor",
-          "openSettings": "Ayarları Aç"
+          "openSettings": "Ayarları Aç",
+          "noIconFound": "Simge bulunamadı",
+          "githubAvatar": "GitHub avatarı",
+          "websiteIcon": "Web sitesi simgesi",
+          "fetchIcon": "Getir",
+          "uploadTooLarge": "256 KB'tan büyük",
+          "options": "Seçenekler"
         }
       },
       "pet": {
@@ -19927,7 +19931,7 @@
           "runStatusDispatchFailed": "Başarısız"
         },
         "runContent": {
-          "noOutput": "Çıktı içeriği yok."
+          "noOutput": "Çıktı yok."
         },
         "runViewState": {
           "viewRun": "Çalıştırmayı görüntüle",
@@ -22962,10 +22966,7 @@
         "refused": "Google bu sohbetin kimlik bilgilerini kabul etmedi.",
         "usageLimit": "Bu oturum için kullanım sınırına ulaşıldı.",
         "signInGoogle": "Google ile oturum aç",
-        "yourAgy": "Sizin agy kopyanız",
         "yourAgyVersion": "Sizin agy sürümünüz · v{{version}}",
-        "orcasAgy": "Orca'nın agy kopyası",
-        "orcasAgyVersion": "Orca’nın agy sürümü · v{{version}}",
         "runsOn": "Çalıştığı program: {{program}}",
         "keepsOwnLogin": "Bu sohbet agy’nin kendi Google oturumunu kullanmaya devam eder. Yeni sohbetlerde kullanılacak yöntem: {{method}}.",
         "apiKeyEnvironment": "Ortamınızdan",
@@ -25693,7 +25694,6 @@
       "noEmailNotSaved": "agy e-posta adresi bildirmedi · kaydedilmedi",
       "saveShort": "Kaydet",
       "active": "Etkin",
-      "runtime": "Çalışma zamanı",
       "chatTitle": "Antigravity Chat",
       "terminalTitle": "Terminalde agy",
       "terminalDescription": "agy’nin kendi kayıtlı hesaplarını kullanır. Hesap değişikliği yeni agy oturumları için geçerlidir.",
@@ -29223,7 +29223,7 @@
       "repliesValue": "Yanıtlar: {{value0}}",
       "repliesPrefix": "Yanıtlar:",
       "whoAnswers": "Mesajlarınızı kim yanıtlar?",
-      "peerAsked": "{{from}} bir soru sordu. Sorunun yöneltildiği bot: {{to}}",
+      "peerAsked": "{{from}}, {{to}} botuna sordu",
       "peerTold": "{{from}}, {{to}} botuna bildirdi",
       "peerFollowedUp": "{{bot}} takip mesajı gönderdi",
       "peerReadItems": "{{bot}}, öğeleriyle ilgili bir güncellemeyi okudu",
@@ -29258,7 +29258,7 @@
       "newThreadTab": "Yeni ileti dizisi",
       "items": {
         "orNames": "{{names}} veya {{last}}",
-        "emptyBotsNeedsYou": "{{names}} tarafından oluşturulan öğeler arasında sizden işlem bekleyen yok",
+        "emptyBotsNeedsYou": "{{names}}: Sizi bekleyen öğe yok",
         "emptyBots": "{{names}} tarafından oluşturulmuş öğe yok",
         "emptyTitle": "Bu gruptan henüz öğe yok",
         "filterNamed": "Öğeleri filtrele · Geçerli filtre: {{filter}}",

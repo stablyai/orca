@@ -89,8 +89,8 @@ export type AttachFlowInput = {
     attached: AttachedJournal,
     acquisitionGeneration: string | null,
     owner: AttachedOwner,
-    /** The account home the spawned child launched under, when its adapter reports one. */
-    accountHome?: AgentSessionAccountHome
+    /** The account the spawned child launched under, as far as its adapter reports one. */
+    launched: { accountHome?: AgentSessionAccountHome; accountKey?: string }
   ) => Promise<void> | void
   /** Wait outside commits for sink drains/provider reads. */
   beforePublish?: (owner: AttachedOwner) => Promise<void>
@@ -154,7 +154,7 @@ export async function performAttach(
   ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
     let record: AgentSessionRecord
     let acquisitionGeneration: string | null = null
-    let accountHome: AgentSessionAccountHome | undefined
+    let launched: { accountHome?: AgentSessionAccountHome; accountKey?: string } = {}
     let owner: AttachedOwner = 'kept'
     let reservedRecord: AgentSessionRecord | null = null
     let unsupportedReservationSettlementAttempted = false
@@ -215,7 +215,10 @@ export async function performAttach(
         )
         record = acquired.record
         acquisitionGeneration = acquired.acquisitionGeneration
-        accountHome = acquired.accountHome
+        launched = {
+          ...(acquired.accountHome ? { accountHome: acquired.accountHome } : {}),
+          ...(acquired.accountKey !== undefined ? { accountKey: acquired.accountKey } : {})
+        }
         owner = 'acquired'
       }
     } catch (error) {
@@ -274,7 +277,7 @@ export async function performAttach(
           openConversation: input.openConversation
         })
         await importAdoptedTranscript(params, journal, acquired, preparedItems, { store })
-        await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
+        await input.onAttached(journal, acquisitionGeneration, owner, launched)
         return journal
       })
       await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())

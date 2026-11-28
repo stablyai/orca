@@ -17,7 +17,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     // Covers the IPC, daemon PTY, preload and renderer owners the WSL launch crosses.
     matches: (file) =>
       isProductSource(file) &&
-      /(?:^(?:config\/scripts\/runtime-verification\/participation\/(?:verify-wsl-e2e-participation|verify-playwright-participation)\.mjs$|src\/main\/(?:wsl[/-]|ipc\/wsl\/|pty\/.*wsl|(?:daemon\/)?providers\/wsl)|src\/shared\/(?:wsl-|shell\/wsl\/|remote-runtime\/wsl-hosts\/|shell\/launch\/(?:windows-terminal-shell|shell-argument-quoting))|src\/preload\/api\/wsl\/|src\/renderer\/src\/(?:runtime\/hosts\/wsl\/|components\/terminal-pane\/.*wsl|.*(?:terminal-paste|pty-paste))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))|^(?:tests\/e2e\/golden-journeys\/golden-stub-agent\.ts|tests\/e2e\/golden-journeys\/golden-tab-bar-agent-launch\.spec\.ts|tests\/e2e\/remote\/wsl-hosts\/wsl-golden-stub-agent\.ts)$)/.test(
+      /(?:^(?:config\/scripts\/runtime-verification\/participation\/(?:verify-wsl-e2e-participation|verify-playwright-participation)\.mjs$|src\/main\/(?:wsl[/-]|ipc\/wsl\/|pty\/.*wsl|(?:daemon\/)?providers\/wsl)|src\/shared\/(?:wsl-|shell\/wsl\/|remote-runtime\/(?:wsl-hosts\/|host-(?:catalog|store)\/.*wsl)|shell\/launch\/(?:windows-terminal-shell|shell-argument-quoting))|src\/preload\/api\/wsl\/|src\/renderer\/src\/(?:runtime\/hosts\/wsl\/|components\/terminal-pane\/.*wsl|.*(?:terminal-paste|pty-paste))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))|^(?:tests\/e2e\/golden-journeys\/golden-stub-agent\.ts|tests\/e2e\/golden-journeys\/golden-tab-bar-agent-launch\.spec\.ts|tests\/e2e\/remote\/wsl-hosts\/wsl-golden-stub-agent\.ts)$)/.test(
         file
       )
   }

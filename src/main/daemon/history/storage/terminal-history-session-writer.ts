@@ -13,7 +13,7 @@ import {
   encodeLogHeader,
   LOG_HEADER_BYTES
 } from './terminal-history-log'
-import type { SessionMeta } from './terminal-history-metadata'
+import { updateTerminalHistoryProbedCwd, type SessionMeta } from './terminal-history-metadata'
 import { clearTerminalHistoryRecoveryProtection } from './terminal-history-recovery-quarantine'
 import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../../protocol/terminal-snapshot'
@@ -33,6 +33,7 @@ export class TerminalHistorySessionWriter {
   readonly logPath: string
   private logGeneration: number | null
   private logBytes: number | null
+  private lastRecordedCwd: string | null = null
 
   constructor(
     readonly dir: string,
@@ -72,8 +73,9 @@ export class TerminalHistorySessionWriter {
     snapshot: TerminalSnapshot,
     opts?: { pendingOutputSeq?: number }
   ): Promise<{ result: 'committed' } | { result: 'retryable'; error: Error }> {
-    // Preserve metadata cwd until the shell sends OSC 7.
-    const effectiveCwd = snapshot.cwd ?? this.readMeta()?.cwd ?? null
+    const meta = this.readMeta()
+    // Preserve probed or metadata cwd until the shell sends OSC 7.
+    const effectiveCwd = snapshot.cwd ?? meta?.lastProbedCwd ?? meta?.cwd ?? null
     this.resolveLogState()
     const generation = (this.logGeneration ?? 0) + 1
     let data: string
@@ -107,8 +109,24 @@ export class TerminalHistorySessionWriter {
     })
     this.logGeneration = generation
     this.logBytes = LOG_HEADER_BYTES
+    this.lastRecordedCwd = effectiveCwd
+    if (meta?.lastProbedCwd !== undefined) {
+      await updateTerminalHistoryProbedCwd(this.dir, null)
+    }
     clearTerminalHistoryRecoveryProtection(this.dir)
     return { result: 'committed' }
+  }
+
+  async recordProbedCwd(cwd: string): Promise<void> {
+    if (this.lastRecordedCwd === null) {
+      const meta = this.readMeta()
+      this.lastRecordedCwd = meta?.lastProbedCwd ?? meta?.cwd ?? null
+    }
+    if (cwd === this.lastRecordedCwd) {
+      return
+    }
+    await updateTerminalHistoryProbedCwd(this.dir, cwd)
+    this.lastRecordedCwd = cwd
   }
 
   // Warm writers must extend the existing generation without clobbering its log.

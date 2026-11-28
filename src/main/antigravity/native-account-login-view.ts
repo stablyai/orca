@@ -19,6 +19,20 @@ export type AntigravityQuietRead =
 
 export type AntigravityLoginView = Omit<VerifiedAntigravityLogin, 'fingerprint'>
 
+/** What one restore read of agy's login itself, until it wrote one. */
+export type AntigravityLoginEvidence = { login?: AntigravityNativeCredential | null }
+
+/** A launch's restore failed. `holder`: the saved account agy's login holds, by evidence that is
+ *  fresh and raised no dialog; null when there is none. */
+export class AntigravityLaunchRestoreError extends Error {
+  readonly holder: string | null
+  constructor(cause: unknown, holder: string | null) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.name = 'AntigravityLaunchRestoreError'
+    this.holder = holder
+  }
+}
+
 type LoginBackend = {
   read(): Promise<AntigravityNativeCredential | null>
   readWithoutPrompt?(): Promise<AntigravityQuietRead>
@@ -118,22 +132,25 @@ export class AntigravityLoginReader {
     }
   }
 
-  /** For a launch, where reading agy's login may raise a keychain dialog: true when nothing is
-   *  selected or the last read under the fingerprint found the selected account; throws the last
+  /** For a launch, where reading agy's login may raise a keychain dialog: the selected account
+   *  ('' when none) when the last read under the fingerprint found it, else null; throws the last
    *  read's error when it failed under this fingerprint, so the launch doesn't raise it again. */
-  async settlesLaunch(quiet: AntigravityQuietRead | undefined, persist: boolean): Promise<boolean> {
+  async settlesLaunch(
+    quiet: AntigravityQuietRead | undefined,
+    persist: boolean
+  ): Promise<string | null> {
     if (!quiet || !('fingerprint' in quiet)) {
-      return false
+      return null
     }
     const vault = await this.store.read()
     const login = await this.known(vault, quiet.fingerprint, persist)
     if (!vault.selectedAccountId || login?.accountId === vault.selectedAccountId) {
-      return true
+      return vault.selectedAccountId ?? ''
     }
     if (this.refused?.fingerprint === quiet.fingerprint) {
       throw this.refused.error
     }
-    return false
+    return null
   }
 
   /** The login last read while agy's keychain item still has `fingerprint`, kept in the vault so it
@@ -172,6 +189,18 @@ export class AntigravityLoginReader {
       await this.store.write(vault).catch(() => undefined)
     }
     return next
+  }
+
+  /** Who holds agy's login after a failed restore: read now without a dialog, or what that
+   *  restore read itself before any write. */
+  async holderAfterFailure(seen: AntigravityLoginEvidence): Promise<string | null> {
+    const quiet = await this.backend.readWithoutPrompt?.().catch(() => undefined)
+    const vault = await this.store.read()
+    if (quiet && 'fingerprint' in quiet) {
+      return (await this.known(vault, quiet.fingerprint, false))?.accountId ?? null
+    }
+    const login = quiet ? quiet.credential : seen.login
+    return login ? this.view(vault, login).accountId : null
   }
 
   /** Which account `current` is, as far as the saved ones tell. */

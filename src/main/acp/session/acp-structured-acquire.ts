@@ -21,9 +21,11 @@ import { acpLaneChildWorkDelivery } from '../journal/acp-lane-child-work-deliver
 import { NO_ACP_CHILD_STOPS } from '../turns/acp-structured-child-stop'
 import {
   acpLaunchConnect,
+  currentAcpLaunchAccount,
   prepareAcpStructuredLaunch
 } from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
+import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
@@ -36,15 +38,13 @@ import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-a
 import type { AcpStructuredTurnsDeps } from '../turns/acp-turn-dispatch-contract'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
-const MAX_EARLY_FRAMES = 2_048
-
 export async function acquireAcpStructuredSession(input: {
   acquire: StructuredAgentSessionAcquireInput
   deps: AcpStructuredSessionAdapterDeps
   generation: string
   /** Checked until spawn; afterward `track` gives cancellation the connection. */
   abandoned: () => boolean
-  track: (connection: AcpStructuredConnection) => void
+  track: (connection: AcpStructuredConnection, launch: AcpStructuredLaunch) => void
   onExit: (session: childState.AcpStructuredChild | null) => void
   /** Protocol loss may precede process exit; null means startup has not produced a session. */
   onConnectionLost: (session: childState.AcpStructuredChild | null, error: Error) => void
@@ -92,7 +92,8 @@ export async function acquireAcpStructuredSession(input: {
   const whenLane = (deliver: () => void): void => {
     if (slot.lane) {
       deliver()
-    } else if (early.length < MAX_EARLY_FRAMES) {
+    } else if (early.length < 2_048) {
+      // Frames before the lane exists, bounded.
       early.push(deliver)
     }
   }
@@ -107,6 +108,9 @@ export async function acquireAcpStructuredSession(input: {
   if (relayed && input.abandoned()) {
     await relayed.managed.close().catch(() => undefined)
   }
+  const fullAccess = launchPermission.permission === 'full-access'
+  // The last wait before the synchronous spawn.
+  const spawning = await currentAcpLaunchAccount(launch, closedBeforeSpawn)
   const connection = connect(processLaunch, {
     ...(relayed ? { relayed } : {}),
     clientInfo: acpClientInfo(spec),
@@ -146,21 +150,18 @@ export async function acquireAcpStructuredSession(input: {
   // Until the process exits, only its session's tools can name the chat.
   sharedTools = SharedToolProcessSession.forLaunch(spec, launch.env, launch.version)
   if (!spec.permissionModeConfig) {
-    const mode = launchPermission.permission === 'full-access' ? 'full-access' : 'ask'
-    options.applied.set('permissionMode', mode)
+    options.applied.set('permissionMode', fullAccess ? 'full-access' : 'ask')
   }
   // From here, cancellation closes this connection even before exit is proven.
-  input.track(connection)
+  input.track(connection, spawning)
   stopAtToolWork(launch, connection, (reason) => input.interrupt(sessionId, reason))
   connection.subscribe((event: AcpSessionEvent) =>
     whenLane(() => {
-      relayed?.turns.observeSessionUpdate(event.kind === 'known' ? event.notification : event.raw)
+      const update = event.kind === 'known' ? event.notification : event.raw
+      relayed?.turns.observeSessionUpdate(update)
       if (slot.lane) {
         if (slot.reattaching) {
-          slot.history?.keep(
-            'session/update',
-            event.kind === 'known' ? event.notification : event.raw
-          )
+          slot.history?.keep('session/update', update)
         }
         routeAcpSessionEvent({ lane: slot.lane, options }, event, now(), slot.reattaching)
         if (

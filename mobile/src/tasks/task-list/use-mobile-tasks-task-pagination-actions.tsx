@@ -17,7 +17,7 @@ import { useCallback, useState } from 'react'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import { buildPartialRepositoryNotice } from '../repositories/mobile-tasks-repository-presentation'
 import { linearAccountConnect } from './mobile-task-list-operations'
-import { linearAccountClient } from './linear-account-host'
+import { trackerAccountClient } from './tracker-account-host'
 
 function hasRepoWithFullPage(
   page: readonly Extract<TaskItem, { provider: 'github' }>[],
@@ -81,7 +81,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     setLinearConnectState('connecting')
     setLinearConnectError('')
     try {
-      const target = await linearAccountClient(linearAccountBindingRef.current, client)
+      const target = await trackerAccountClient(linearAccountBindingRef.current, client)
       const reply = await linearAccountConnect.request(target, { apiKey })
       const result = linearAccountConnect.interpret(reply)
       if (result.ok === false) {

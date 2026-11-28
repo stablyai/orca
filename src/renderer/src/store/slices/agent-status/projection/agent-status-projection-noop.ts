@@ -3,7 +3,7 @@ import {
   movedAgentSenderChannels,
   samePublishingHosts
 } from '@/runtime/native-chat/agent-senders/agent-sender-index'
-import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { sameStructuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '../../../types'
 import {
   selectFolderWorkspaces,
@@ -48,26 +48,20 @@ export function isAgentStatusProjectionNoop(
   ) {
     return false
   }
-  for (const key of state.agentStatusByPaneKey.stagedKeys()) {
-    if (state.agentStatusByPaneKey.wasMoved(key)) {
-      return false
+  if (state.agentStatusByPaneKey.replacementCount > 0) {
+    for (const key of state.agentStatusByPaneKey.stagedKeys()) {
+      if (state.agentStatusByPaneKey.wasMoved(key)) {
+        return false
+      }
     }
   }
   if (remoteRowContextsFor(state) !== data.remoteRows) {
     return false
   }
-  const ownerInputs = structuredAgentSessionOwnerInputs(state)
-  const oldOwnerInputs = structuredAgentSessionOwnerInputs(previous)
-  if (ownerInputs.length !== oldOwnerInputs.length) {
-    return false
-  }
-  for (let index = 0; index < ownerInputs.length; index++) {
-    if (ownerInputs[index] !== oldOwnerInputs[index]) {
-      return false
-    }
-  }
-  return true
+  return sameStructuredAgentSessionOwnerInputs(state, previous)
 }
+
+const EMPTY_MOVED_SENDERS: readonly string[] = []
 
 export function detectProjectionSenderChanges(
   data: AgentStatusProjectionState,
@@ -75,8 +69,6 @@ export function detectProjectionSenderChanges(
   state: AppState,
   changes: readonly AgentStatusChange[]
 ): { senderLocationsChanged: boolean; movedSenders: readonly string[] } {
-  const ownerInputs = structuredAgentSessionOwnerInputs(state)
-  const oldOwnerInputs = previous ? structuredAgentSessionOwnerInputs(previous) : []
   const sendersChanged =
     previous?.agentSenderPublicationsByHost !== state.agentSenderPublicationsByHost
   const senderLocationsChanged =
@@ -84,7 +76,7 @@ export function detectProjectionSenderChanges(
     (sendersChanged && !samePublishingHosts(previous, state)) ||
     previous.tabsByWorktree !== state.tabsByWorktree ||
     previous.unifiedTabsByWorktree !== state.unifiedTabsByWorktree ||
-    ownerInputs.some((value, index) => value !== oldOwnerInputs[index]) ||
+    !sameStructuredAgentSessionOwnerInputs(state, previous) ||
     changes.some(
       (change) =>
         change.previous?.terminalHandle !== change.current?.terminalHandle ||
@@ -95,6 +87,6 @@ export function detectProjectionSenderChanges(
   const movedSenders =
     previous && sendersChanged && !senderLocationsChanged
       ? movedAgentSenderChannels(previous, state, data.listeners.keys())
-      : []
+      : EMPTY_MOVED_SENDERS
   return { senderLocationsChanged, movedSenders }
 }

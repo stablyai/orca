@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   -- Set when every send under request_key failed before leaving this Orca, so a cancel may retire
   -- the reservation; a resend clears it first.
   never_sent_at      TEXT,
+  -- Monotonic per-reservation send generation so an older unsent failure cannot mark never_sent_at after a concurrent retry started.
+  send_attempt       INTEGER NOT NULL DEFAULT 1,
   -- Who placed it, as a local Dispatch records its creator; each Dispatch adopted for it takes these.
   creator_orca_session_id TEXT,
   creator_pane_key   TEXT

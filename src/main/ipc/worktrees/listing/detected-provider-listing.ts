@@ -20,7 +20,8 @@ import {
   buildDisconnectedDetectedWorktrees,
   buildFolderDetectedWorktrees
 } from './folder-workspace-catalog'
-import { isFolderWorkspaceIdForRepo } from '../folder-workspace-model'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../../shared/worktree/id'
+import { getFolderWorkspaceRootId } from '../folder-workspace-model'
 import { hasConflictingStoredWorktreeOwner } from './worktree-host-ownership'
 import {
   applyFreshDetectedWorktreeScanSideEffects,
@@ -75,12 +76,14 @@ export async function listDetectedWorktreesForCapturedRepo(
       if (!isCurrent()) {
         return null
       }
+      const rootId = getFolderWorkspaceRootId(repo)
+      const instancePrefix = `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
       const folderWorkspaceIds: string[] = []
       const allWorktreeMeta = store.getAllWorktreeMeta()
       for (const worktreeId in allWorktreeMeta) {
         if (
-          Object.hasOwn(allWorktreeMeta, worktreeId) &&
-          isFolderWorkspaceIdForRepo(repo, worktreeId)
+          (worktreeId === rootId || worktreeId.startsWith(instancePrefix)) &&
+          Object.hasOwn(allWorktreeMeta, worktreeId)
         ) {
           folderWorkspaceIds.push(worktreeId)
         }

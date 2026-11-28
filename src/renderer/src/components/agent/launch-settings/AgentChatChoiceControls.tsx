@@ -1,13 +1,11 @@
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useTranslate } from '@/i18n/use-translate'
-import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import {
   useManagedRuntimeInstall,
   type ManagedRuntimeInstallObservation
 } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
-import { useAntigravityChatSignIn } from '../../provider-accounts/use-antigravity-chat-sign-in'
 import type { AgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
@@ -73,16 +71,8 @@ export function ChatUnavailableOnWindowsNote({ label }: { label: string }): Reac
 }
 
 /** This computer's install of the program Orca downloads for an agent's chats. */
-export function useAgentChatRuntimeInstall(agent: TuiAgent): {
-  runtime: ManagedRuntimeInstallObservation
-  signInRunning: boolean
-} {
-  const runtime = useManagedRuntimeInstall(CHAT_HOST, agent, true)
-  // Install and Remove wait for a running sign-in, which runs agy.
-  const signIn = useAntigravityChatSignIn(
-    agent === 'antigravity' && runtime.kind === 'active' ? CHAT_HOST : null
-  )
-  return { runtime, signInRunning: antigravityChatSignInRunning(signIn.flow) }
+export function useAgentChatRuntimeInstall(agent: TuiAgent): ManagedRuntimeInstallObservation {
+  return useManagedRuntimeInstall(CHAT_HOST, agent, true)
 }
 
 /** The program Orca downloads for an agent's chats, apart from its CLI; mounted only while its row is open. */
@@ -94,7 +84,7 @@ export function AgentChatRuntimeArea({
   label: string
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { runtime, signInRunning } = useAgentChatRuntimeInstall(agent)
+  const runtime = useAgentChatRuntimeInstall(agent)
   if (chatUnavailableOnThisDesktop(agent)) {
     return <ChatUnavailableOnWindowsNote label={label} />
   }
@@ -102,11 +92,7 @@ export function AgentChatRuntimeArea({
     return null
   }
   return (
-    <ManagedRuntimeInstallRow
-      observation={runtime}
-      agentLabel={label}
-      signInRunning={signInRunning}
-    >
+    <ManagedRuntimeInstallRow observation={runtime} agentLabel={label}>
       {(line, actions) => (
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">

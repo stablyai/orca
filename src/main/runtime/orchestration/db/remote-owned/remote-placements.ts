@@ -58,7 +58,7 @@ export function reserveRemotePlacement(
     /** Who is starting it, recorded as a local start records its Dispatch's creator. */
     creator: DispatchCreator
   }
-): { placement: RemotePlacementRow; task: TaskRow; nothingSent: boolean } {
+): { placement: RemotePlacementRow; task: TaskRow; nothingSent: boolean; sendAttempt: number } {
   const transaction = beginLifecycleWriteTransaction(db.db, 'reserve_remote_placement')
   try {
     const link = getOpenRemoteRunLink(db, params.link.conversation_id)
@@ -75,14 +75,18 @@ export function reserveRemotePlacement(
       existing?.request_key === params.requestKey &&
       existing.conversation_id === link.conversation_id
     ) {
+      const sendAttempt = existing.send_attempt + 1
       db.db
-        .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')
-        .run(params.taskId)
+        .prepare(
+          'UPDATE remote_placements SET never_sent_at = NULL, send_attempt = ? WHERE task_id = ?'
+        )
+        .run(sendAttempt, params.taskId)
       commitLifecycleWriteTransaction(db.db, transaction)
       return {
-        placement: { ...existing, never_sent_at: null },
+        placement: { ...existing, never_sent_at: null, send_attempt: sendAttempt },
         task: writtenRow(db.getTask(params.taskId), `Task ${params.taskId}`),
-        nothingSent: existing.never_sent_at !== null
+        nothingSent: existing.never_sent_at !== null,
+        sendAttempt
       }
     }
     const task =
@@ -103,13 +107,13 @@ export function reserveRemotePlacement(
       .prepare(
         `INSERT INTO remote_placements (
            task_id, run_id, environment_id, conversation_id, state, request_key, prior_task_status,
-           dispatch_id, creator_orca_session_id, creator_pane_key
-         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?)
+           dispatch_id, send_attempt, creator_orca_session_id, creator_pane_key
+         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, 1, ?, ?)
          ON CONFLICT(task_id) DO UPDATE SET
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
-           dispatch_id = excluded.dispatch_id, never_sent_at = NULL,
+           dispatch_id = excluded.dispatch_id, never_sent_at = NULL, send_attempt = 1,
            creator_orca_session_id = excluded.creator_orca_session_id,
            creator_pane_key = excluded.creator_pane_key`
       )
@@ -136,7 +140,8 @@ export function reserveRemotePlacement(
     return {
       placement: writtenRow(getRemotePlacement(db, task.id), `Placement of ${task.id}`),
       task: writtenRow(db.getTask(task.id), `Task ${task.id}`),
-      nothingSent: true
+      nothingSent: true,
+      sendAttempt: 1
     }
   } catch (error) {
     rollbackLifecycleWriteTransaction(db.db, transaction)
@@ -283,10 +288,11 @@ export function currentRemoteAttempt(
   taskId: string
 ): RemoteDispatchRow | undefined {
   const placement = getLiveRemotePlacement(db, taskId)
-  if (placement?.state !== 'accepted' || !placement.dispatch_id) {
-    return undefined
-  }
-  if (getActiveDispatchForTask(db, taskId)) {
+  if (
+    placement?.state !== 'accepted' ||
+    !placement.dispatch_id ||
+    getActiveDispatchForTask(db, taskId)
+  ) {
     return undefined
   }
   return getRemoteDispatch(db, placement.dispatch_id)
@@ -332,21 +338,16 @@ export function settleRemoteAttemptHere(
     if (!record) {
       return
     }
-    if (how === 'abandoned') {
+    const settledValue = how === 'abandoned' ? ABANDONED_HERE : 1
+    if (how === 'abandoned' || !record.task_settled_here) {
       db.db
         .prepare('UPDATE remote_dispatches SET task_settled_here = ? WHERE dispatch_id = ?')
-        .run(ABANDONED_HERE, dispatchId)
+        .run(settledValue, dispatchId)
     }
-    if (record.task_settled_here) {
-      return
-    }
-    const current = currentRemoteAttempt(db, record.task_id)?.dispatch_id === dispatchId
-    if (how === 'stopped') {
-      db.db
-        .prepare('UPDATE remote_dispatches SET task_settled_here = 1 WHERE dispatch_id = ?')
-        .run(dispatchId)
-    }
-    if (current) {
+    if (
+      !record.task_settled_here &&
+      currentRemoteAttempt(db, record.task_id)?.dispatch_id === dispatchId
+    ) {
       reconcileTaskAfterDispatchInterruption(db, record.task_id, dispatchId)
     }
   })

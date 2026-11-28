@@ -43,7 +43,9 @@ function cycleFocus(event: React.KeyboardEvent, root: HTMLElement | null): void 
   const active = document.activeElement
   const index = active instanceof HTMLElement ? focusables.indexOf(active) : -1
   const step = event.shiftKey ? -1 : 1
-  focusables[(index + step + focusables.length) % focusables.length]?.focus()
+  const next = focusables[(index + step + focusables.length) % focusables.length]
+  // Why: Radix's focus loop runs after this on the same keydown; moving first made it skip the last control.
+  queueMicrotask(() => next?.focus())
 }
 
 /** Clicking a project's mark opens its card to change the icon and color. */

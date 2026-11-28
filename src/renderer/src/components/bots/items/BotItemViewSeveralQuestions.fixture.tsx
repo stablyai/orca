@@ -1,5 +1,5 @@
 // An agent's ask of several questions on the item page: every question on one card, answers picked or
-// typed in the comment box held until Send posts them as one comment.
+// typed in the comment box held until the last open line's answer posts them all as one comment.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { stubBots } from '../../../component-fixtures/fixture-bots'
@@ -157,11 +157,15 @@ function findButton(frame: HTMLElement, text: string): HTMLButtonElement | undef
 }
 
 // Words arriving in the open item's empty box take the line "Replying to" names; Enter holds them.
-async function typeAndEnter(
-  frame: HTMLElement,
-  uid: string,
-  held = ''
-): Promise<HTMLButtonElement> {
+async function typeAndEnter(frame: HTMLElement, uid: string): Promise<HTMLButtonElement> {
+  await typeAndComment(frame, uid)
+  return waitForButton(
+    () => frame.querySelector('button[title^="Where should the chat switcher live? →"]'),
+    'the folded typed answer'
+  )
+}
+
+async function typeAndComment(frame: HTMLElement, uid: string, held = ''): Promise<void> {
   // Again once open: drafts a theme's earlier run left are restored from storage after setup.
   clearBox(uid, held)
   await pause(250)
@@ -175,15 +179,10 @@ async function typeAndEnter(
     'the Comment button'
   )
   comment.click()
-  return waitForButton(
-    () => frame.querySelector('button[title^="Where should the chat switcher live? →"]'),
-    'the folded typed answer'
-  )
 }
 
 // Words typed for the first of several questions, Enter in the box: held like a pick, the line folds
 // to "✓ Question → answer", the box empties and names the next open line, and Send counts it.
-// Nothing posts until Send.
 export const severalQuestionsTypedAnswer = defineFixture({
   width: 900,
   setup: () => {
@@ -230,11 +229,13 @@ export const severalQuestionsTypedAnswerReopened = defineFixture({
   }
 })
 
-// The other three lines' recommended answers, held.
-const OTHERS_HELD = SEVERAL.questions
-  .slice(1)
-  .map(({ prompt, options }) => `${prompt} → ${options[0]!.label}`)
-  .join('\n')
+// Lines after the first, from `from`, their recommended answers held.
+const heldFrom = (from: number): string =>
+  SEVERAL.questions
+    .slice(from)
+    .map(({ prompt, options }) => `${prompt} → ${options[0]!.label}`)
+    .join('\n')
+const OTHERS_HELD = heldFrom(1)
 
 const onItsWayItem = makeTestBotItem(233, {
   ...severalItem,
@@ -242,7 +243,7 @@ const onItsWayItem = makeTestBotItem(233, {
 })
 const onItsWayView = { ...severalView, item: onItsWayItem }
 
-// Words typed for the first line, the other three held, then Send: all four post as one comment.
+// Words typed for the last open line, the other three held, then Enter: all four post as one comment.
 // While the host takes it the lines fold as sent and stay, and the box names no question.
 export const severalQuestionsTypedAnswerOnItsWay = defineFixture({
   width: 900,
@@ -269,9 +270,7 @@ export const severalQuestionsTypedAnswerOnItsWay = defineFixture({
     </div>
   ),
   interact: async (frame) => {
-    await typeAndEnter(frame, onItsWayItem.uid, OTHERS_HELD)
-    const send = await waitForButton(() => findButton(frame, 'Send'), 'the full Send button')
-    send.click()
+    await typeAndComment(frame, onItsWayItem.uid, OTHERS_HELD)
     await waitForButton(() => findButton(frame, 'Sending…'), 'the pending Sending… button')
   }
 })
@@ -322,7 +321,7 @@ export const severalQuestionsTypedAnswerRead = defineFixture({
 const SHOT = '/tmp/agent-session-attachments/0123abcd-0123-4567-89ab-0123456789ab/top-strip.png'
 
 // An answer with a screenshot, Enter in the box: held like typed words, its line folds with the image
-// under it, and the other three lines held too; Send then posts all four, the image with them.
+// under it, with the third and fourth lines held; `send`, the second held too, so Enter posts all four.
 function heldImageFixture(number: number, uid: string, send: boolean) {
   const heldImageItem = makeTestBotItem(number, { ...severalItem, uid })
   const heldImageView = { ...severalView, item: heldImageItem }
@@ -330,7 +329,7 @@ function heldImageFixture(number: number, uid: string, send: boolean) {
     width: 900,
     setup: () => {
       setupFixtureBot()
-      clearBox(heldImageItem.uid, OTHERS_HELD)
+      clearBox(heldImageItem.uid, send ? OTHERS_HELD : heldFrom(2))
       // Before the box mounts: its editor takes the draft, image chip and all, as it opens.
       updateNativeChatComposerDraft(
         `bot-item-comment:${botRefKey(fixtureCos)}:${heldImageItem.uid}`,
@@ -371,20 +370,18 @@ function heldImageFixture(number: number, uid: string, send: boolean) {
         'the Comment button'
       )
       comment.click()
-      await waitForButton(
-        () => frame.querySelector('button[title^="Where should the chat switcher live? →"]'),
-        'the folded answer'
-      )
-      if (send) {
-        ;(await waitForButton(() => findButton(frame, 'Send'), 'Send')).click()
-        await waitForButton(() => findButton(frame, 'Sending…'), 'Sending…')
-      }
+      await (send
+        ? waitForButton(() => findButton(frame, 'Sending…'), 'Sending…')
+        : waitForButton(
+            () => frame.querySelector('button[title^="Where should the chat switcher live? →"]'),
+            'the folded answer'
+          ))
     }
   })
 }
 
 export const severalQuestionsHeldImage = heldImageFixture(236, 'fixture-several-held-image', false)
-// Send: the four answers post as one comment, the held image with them.
+// The last answer's Enter: the four post as one comment, the held image with them.
 export const severalQuestionsHeldImageSent = heldImageFixture(
   237,
   'fixture-several-held-image-sent',

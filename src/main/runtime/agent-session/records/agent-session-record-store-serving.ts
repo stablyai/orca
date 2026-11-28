@@ -25,4 +25,9 @@ export function agentSessionRecordStoreHostServing(runtime: ServingRuntime): voi
   }
   startOldChatHistoryCleanup(runtime)
   runtime.startPullRequestWatches({ admit: true })
+  // Desktop and headless hosts both serve through here; a naming home a crash or a failed removal
+  // left may hold a copy of the agent's login, whatever the naming settings now say.
+  void import('../../../acp/text-task/acp-text-task-homes-at-launch')
+    .then(({ sweepAcpTextTaskHomesAtLaunch }) => sweepAcpTextTaskHomesAtLaunch())
+    .catch((error: unknown) => console.warn('[acp-text-task] Launch sweep failed:', error))
 }

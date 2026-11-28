@@ -1414,7 +1414,7 @@
       "pairingTemporarilyUnavailable": "페어링 일시 사용 불가",
       "unlockHint": "휴대폰 잠금을 해제한 후 탭하여 다시 시도하세요.",
       "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개",
-      "tapToPairAgain": "탭하여 데스크톱과 다시 페어링하세요."
+      "tapToPairAgain": "탭하여 다시 페어링"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "호스트 호환성 확인 중"
@@ -1434,7 +1434,10 @@
       "connectHint": "Orca 데스크톱의 설정 → 연동에서 Jira 사이트를 추가한 뒤 다시 확인하세요.",
       "connectOnDesktop": "데스크톱에서 Jira 연결",
       "credentialUnreadable": "Jira 인증 정보가 저장되어 있지만 읽을 수 없습니다: {{credentialError}}",
-      "updateDesktop": "이 호스트의 Orca 업데이트"
+      "updateDesktop": "이 호스트의 Orca 업데이트",
+      "connectTitle": "Jira 계정 연결",
+      "connectMessage": "할당된 Jira 이슈를 작업에서 바로 둘러보고 작업을 시작하세요.",
+      "connect": "Jira 연결"
     },
     "markdownBlocks": {
       "copyCode": "코드 복사",
@@ -2043,7 +2046,9 @@
       "loading": "파일 로드 중…",
       "loadFailed": "파일을 불러올 수 없습니다.",
       "title": "파일",
-      "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시"
+      "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시",
+      "more": "더 보기",
+      "newEntry": "새로 만들기"
     },
     "fileExplorerRow": {
       "fileUnavailable": "모바일에서 {{name}} 사용 불가",
@@ -2058,7 +2063,28 @@
     },
     "fileExplorerRowActions": {
       "copyName": "이름 복사",
-      "copyRelativePath": "상대 경로 복사"
+      "copyRelativePath": "상대 경로 복사",
+      "newFile": "새 파일",
+      "newFolder": "새 폴더",
+      "rename": "이름 변경",
+      "duplicate": "복제",
+      "create": "만들기",
+      "fileName": "파일 이름",
+      "folderName": "폴더 이름",
+      "deleteTitle": "{{name}}을(를) 삭제할까요?",
+      "deleteFileDetail": "파일이 영구적으로 삭제됩니다. 되돌릴 수 없습니다.",
+      "deleteFolderDetail": "폴더와 그 안의 내용이 영구적으로 삭제됩니다. 되돌릴 수 없습니다.",
+      "duplicateFailed": "{{name}}을(를) 복제하지 못했습니다. {{reason}}",
+      "duplicateUnconfirmed": "복사본이 완전하지 않을 수 있습니다. 확인하고 다시 시도하세요.",
+      "deleteFailed": "{{name}}을(를) 삭제하지 못했습니다. {{reason}}",
+      "deleteUnconfirmed": "아직 남아 있습니다. 폴더를 확인하고 다시 시도하세요.",
+      "renameFailed": "{{name}}의 이름을 변경하지 못했습니다. {{reason}}",
+      "newFileFailed": "파일을 만들지 못했습니다. {{reason}}",
+      "newFolderFailed": "폴더를 만들지 못했습니다. {{reason}}",
+      "share": "공유",
+      "shareFailed": "{{name}}을(를) 공유하지 못했습니다",
+      "shareTooLarge": "256MB보다 큰 파일은 휴대폰에서 공유할 수 없습니다",
+      "shareHostOutdated": "파일을 공유하려면 이 워크스페이스가 실행되는 곳의 Orca를 업데이트하세요"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",
@@ -4942,6 +4968,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "워크스페이스를 생성하지 못했습니다."
+    },
+    "jiraConnect": {
+      "title": "Jira 연결",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian 이메일",
+      "apiToken": "API 토큰",
+      "storageHint": "토큰은 이 호스트에 저장되며 OS가 지원하면 암호화됩니다.",
+      "createToken": "API 토큰 만들기",
+      "failed": "연결 실패",
+      "serverNeedsUpdate": "이 서버는 먼저 Orca 업데이트가 필요합니다. 대신 Orca 데스크톱에서 Jira를 연결하세요."
     }
   },
   "terminal": {
@@ -5102,7 +5138,7 @@
       "started": "시작됨",
       "trigger": "트리거",
       "output": "출력",
-      "noOutput": "사용 가능한 출력 내용이 없습니다.",
+      "noOutput": "볼 수 있는 출력이 없습니다.",
       "loadingRuns": "실행 로드 중…",
       "loading": "로드 중…",
       "hourly": "매시간",
@@ -6620,7 +6656,7 @@
         "count": "항목 {{count}}개"
       },
       "empty": {
-        "allClear": "확인이 필요한 것이 없습니다"
+        "allClear": "확인할 항목이 없습니다"
       },
       "write": {
         "offline": "{{host}}이(가) 오프라인입니다."

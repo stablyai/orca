@@ -1469,7 +1469,7 @@
       "pairingTemporarilyUnavailable": "Emparejamiento no disponible temporalmente",
       "unlockHint": "Desbloquea tu teléfono y toca para reintentar.",
       "worktreeAccessibilitySummary": "{{summary}}, activos: {{activeCount}}",
-      "tapToPairAgain": "Toca para volver a emparejar tu escritorio."
+      "tapToPairAgain": "Toca para volver a emparejar"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Comprobando la compatibilidad del host"
@@ -1489,7 +1489,10 @@
       "connectHint": "Añade tu sitio de Jira en Ajustes → Integraciones de Orca de escritorio y verifica de nuevo.",
       "connectOnDesktop": "Conecta Jira en tu escritorio",
       "credentialUnreadable": "La conexión de Jira está guardada, pero no se puede leer: {{credentialError}}",
-      "updateDesktop": "Actualiza Orca en este host"
+      "updateDesktop": "Actualiza Orca en este host",
+      "connectTitle": "Conecta tu cuenta de Jira",
+      "connectMessage": "Explora y empieza a trabajar en tus incidencias asignadas de Jira directamente desde Tareas.",
+      "connect": "Conectar Jira"
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
@@ -2107,7 +2110,9 @@
       "loading": "Cargando archivos…",
       "loadFailed": "No se pudieron cargar los archivos",
       "title": "Archivos",
-      "truncatedList": "{{worktreeLabel}} - Mostrando los primeros 5000"
+      "truncatedList": "{{worktreeLabel}} - Mostrando los primeros 5000",
+      "more": "Más",
+      "newEntry": "Nuevo"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} no disponible en el móvil",
@@ -2122,7 +2127,28 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar nombre",
-      "copyRelativePath": "Copiar ruta relativa"
+      "copyRelativePath": "Copiar ruta relativa",
+      "newFile": "Nuevo archivo",
+      "newFolder": "Nueva carpeta",
+      "rename": "Cambiar nombre",
+      "duplicate": "Duplicar",
+      "create": "Crear",
+      "fileName": "Nombre del archivo",
+      "folderName": "Nombre de la carpeta",
+      "deleteTitle": "¿Eliminar {{name}}?",
+      "deleteFileDetail": "Esto elimina el archivo de forma permanente. No se puede deshacer.",
+      "deleteFolderDetail": "Esto elimina la carpeta y su contenido de forma permanente. No se puede deshacer.",
+      "duplicateFailed": "No se pudo duplicar {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "Es posible que la copia no esté completa. Revísala y vuelve a intentarlo.",
+      "deleteFailed": "No se pudo eliminar {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Sigue ahí. Revisa la carpeta y vuelve a intentarlo.",
+      "renameFailed": "No se pudo cambiar el nombre de {{name}}. {{reason}}",
+      "newFileFailed": "No se pudo crear el archivo. {{reason}}",
+      "newFolderFailed": "No se pudo crear la carpeta. {{reason}}",
+      "share": "Compartir",
+      "shareFailed": "No se pudo compartir {{name}}",
+      "shareTooLarge": "Los archivos de más de 256 MB no se pueden compartir desde el teléfono",
+      "shareHostOutdated": "Actualiza Orca donde se ejecuta este espacio de trabajo para compartir archivos"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código fuente Markdown cargado",
@@ -5084,6 +5110,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "No se pudo crear el espacio de trabajo"
+    },
+    "jiraConnect": {
+      "title": "Conectar Jira",
+      "siteUrl": "tu-equipo.atlassian.net",
+      "email": "Correo de Atlassian",
+      "apiToken": "Token de API",
+      "storageHint": "Tu token se guarda en este host, cifrado si su sistema operativo lo admite.",
+      "createToken": "Crear un token de API",
+      "failed": "Error de conexión",
+      "serverNeedsUpdate": "Este servidor necesita antes una actualización de Orca. Conecta Jira desde Orca para escritorio."
     }
   },
   "terminal": {
@@ -5247,7 +5283,7 @@
       "started": "Iniciado",
       "trigger": "Desencadenante",
       "output": "Salida",
-      "noOutput": "No hay contenido de salida disponible.",
+      "noOutput": "Salida no disponible.",
       "loadingRuns": "Cargando ejecuciones…",
       "loading": "Cargando…",
       "hourly": "Cada hora",

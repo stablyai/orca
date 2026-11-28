@@ -73,6 +73,8 @@ export function isSqliteAvailable(): boolean {
 class SyncDatabase {
   private readonly db: DatabaseSync
   private readonly statementCache = new Map<string, SqliteStatement>()
+  private lastPreparedSql: string | undefined
+  private lastPreparedStmt: SqliteStatement | undefined
   /** Names this database in main-thread stall reports. */
   private readonly label: string
 
@@ -92,6 +94,8 @@ class SyncDatabase {
     // Invalidate before DDL so partially applied batches cannot retain stale statements.
     if (SCHEMA_CHANGING_SQL.test(sql)) {
       this.statementCache.clear()
+      this.lastPreparedSql = undefined
+      this.lastPreparedStmt = undefined
     }
     const call = enterSyncCall()
     try {
@@ -106,10 +110,15 @@ class SyncDatabase {
   }
 
   prepare(sql: string): SqliteStatement {
+    if (sql === this.lastPreparedSql && this.lastPreparedStmt !== undefined) {
+      return this.lastPreparedStmt
+    }
     const cached = this.statementCache.get(sql)
     if (cached) {
       this.statementCache.delete(sql)
       this.statementCache.set(sql, cached)
+      this.lastPreparedSql = sql
+      this.lastPreparedStmt = cached
       return cached
     }
     const statement = new NodeSqliteStatement(() => this.db.prepare(sql), this.label, sql)
@@ -121,6 +130,8 @@ class SyncDatabase {
         }
       }
       this.statementCache.set(sql, statement)
+      this.lastPreparedSql = sql
+      this.lastPreparedStmt = statement
     }
     return statement
   }
@@ -158,6 +169,8 @@ class SyncDatabase {
 
   close(): void {
     this.statementCache.clear()
+    this.lastPreparedSql = undefined
+    this.lastPreparedStmt = undefined
     this.db.close()
   }
 }

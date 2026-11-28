@@ -16,7 +16,6 @@ import {
 import type { GitHubPrRepoSlug } from '../../github-operations/github-pr-repo-slug'
 import type { UnvalidatedRpcRequestPort } from '../../../../transport/rpc/unvalidated-rpc-request-port'
 import { PrActionsEngine, type PrActionBusyKey } from './pr-actions-engine'
-import './pr-action-mutation-contract'
 import type { PrActionMutations } from './pr-action-mutation-contract'
 
 export type PrActionsInput = {

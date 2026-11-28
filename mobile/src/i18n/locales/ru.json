@@ -1580,7 +1580,7 @@
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
       "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}",
-      "tapToPairAgain": "Нажмите, чтобы повторно выполнить сопряжение с компьютером"
+      "tapToPairAgain": "Нажмите для повторного сопряжения"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Проверка совместимости сервера"
@@ -1600,7 +1600,10 @@
       "connectHint": "Добавьте сайт Jira в Orca на компьютере в разделе «Настройки → Интеграции», затем проверьте снова.",
       "connectOnDesktop": "Подключите Jira на компьютере",
       "credentialUnreadable": "Не удалось прочитать сохранённые данные Jira: {{credentialError}}",
-      "updateDesktop": "Обновите Orca на этом сервере"
+      "updateDesktop": "Обновите Orca на этом сервере",
+      "connectTitle": "Подключите аккаунт Jira",
+      "connectMessage": "Просматривайте назначенные вам задачи Jira и начинайте работу прямо из раздела «Задачи».",
+      "connect": "Подключить Jira"
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
@@ -2229,7 +2232,9 @@
       "loadFailed": "Не удалось загрузить файлы",
       "title": "Файлы",
       "truncatedList": "{{worktreeLabel}} — показаны первые 5000",
-      "loading": "Загрузка файлов…"
+      "loading": "Загрузка файлов…",
+      "more": "Ещё",
+      "newEntry": "Создать"
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
@@ -2244,7 +2249,28 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Копировать имя",
-      "copyRelativePath": "Копировать относительный путь"
+      "copyRelativePath": "Копировать относительный путь",
+      "newFile": "Новый файл",
+      "newFolder": "Новая папка",
+      "rename": "Переименовать",
+      "duplicate": "Дублировать",
+      "create": "Создать",
+      "fileName": "Имя файла",
+      "folderName": "Имя папки",
+      "deleteTitle": "Удалить {{name}}?",
+      "deleteFileDetail": "Файл будет удалён безвозвратно. Это действие нельзя отменить.",
+      "deleteFolderDetail": "Папка и её содержимое будут удалены безвозвратно. Это действие нельзя отменить.",
+      "duplicateFailed": "Не удалось дублировать {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "Копия может быть неполной. Проверьте её и повторите попытку.",
+      "deleteFailed": "Не удалось удалить {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Он всё ещё на месте. Проверьте папку и повторите попытку.",
+      "renameFailed": "Не удалось переименовать {{name}}. {{reason}}",
+      "newFileFailed": "Не удалось создать файл. {{reason}}",
+      "newFolderFailed": "Не удалось создать папку. {{reason}}",
+      "share": "Поделиться",
+      "shareFailed": "Не удалось поделиться {{name}}",
+      "shareTooLarge": "Файлы больше 256 МБ нельзя отправить с телефона",
+      "shareHostOutdated": "Обновите Orca там, где работает это рабочее пространство, чтобы делиться файлами"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",
@@ -5302,7 +5328,17 @@
     "runtimeHydration": {
       "loadFailed": "Не удалось загрузить настройки задач"
     },
-    "rerunUnsuccessful": "Повторить проверки"
+    "rerunUnsuccessful": "Повторить проверки",
+    "jiraConnect": {
+      "title": "Подключить Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Почта Atlassian",
+      "apiToken": "API-токен",
+      "storageHint": "Токен хранится на этом хосте и шифруется, если ОС это поддерживает.",
+      "createToken": "Создать API-токен",
+      "failed": "Не удалось подключиться",
+      "serverNeedsUpdate": "Сначала обновите Orca на этом сервере. Или подключите Jira в Orca на компьютере."
+    }
   },
   "terminal": {
     "keyDefinitions": {
@@ -5468,7 +5504,7 @@
       "started": "Начало",
       "trigger": "Триггер",
       "output": "Вывод",
-      "noOutput": "Нет доступного содержимого вывода.",
+      "noOutput": "Нет доступного вывода.",
       "loadingRuns": "Загрузка запусков…",
       "loading": "Загрузка…",
       "hourly": "Каждый час",

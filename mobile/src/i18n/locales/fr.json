@@ -1469,7 +1469,7 @@
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
       "unlockHint": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité",
-      "tapToPairAgain": "Touchez pour appairer à nouveau votre ordinateur."
+      "tapToPairAgain": "Touchez pour appairer à nouveau"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Vérification de la compatibilité de l'hôte"
@@ -1489,7 +1489,10 @@
       "connectHint": "Ajoutez votre site Jira dans Orca sur votre ordinateur, sous Paramètres → Intégrations, puis revérifiez.",
       "connectOnDesktop": "Connecter Jira sur votre ordinateur",
       "credentialUnreadable": "Les identifiants Jira sont enregistrés mais illisibles : {{credentialError}}",
-      "updateDesktop": "Mettre à jour Orca sur cet hôte"
+      "updateDesktop": "Mettre à jour Orca sur cet hôte",
+      "connectTitle": "Connecter votre compte Jira",
+      "connectMessage": "Parcourez vos tickets Jira assignés et commencez à travailler directement depuis Tâches.",
+      "connect": "Connecter Jira"
     },
     "markdownBlocks": {
       "copyCode": "Copier le code",
@@ -2107,7 +2110,9 @@
       "loading": "Chargement des fichiers…",
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
-      "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés"
+      "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés",
+      "more": "Plus",
+      "newEntry": "Nouveau"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponible sur mobile",
@@ -2122,7 +2127,28 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copier le nom",
-      "copyRelativePath": "Copier le chemin relatif"
+      "copyRelativePath": "Copier le chemin relatif",
+      "newFile": "Nouveau fichier",
+      "newFolder": "Nouveau dossier",
+      "rename": "Renommer",
+      "duplicate": "Dupliquer",
+      "create": "Créer",
+      "fileName": "Nom du fichier",
+      "folderName": "Nom du dossier",
+      "deleteTitle": "Supprimer {{name}} ?",
+      "deleteFileDetail": "Le fichier sera supprimé définitivement. Cette action est irréversible.",
+      "deleteFolderDetail": "Le dossier et son contenu seront supprimés définitivement. Cette action est irréversible.",
+      "duplicateFailed": "Impossible de dupliquer {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "La copie est peut-être incomplète. Vérifiez-la et réessayez.",
+      "deleteFailed": "Impossible de supprimer {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Il est toujours là. Vérifiez le dossier et réessayez.",
+      "renameFailed": "Impossible de renommer {{name}}. {{reason}}",
+      "newFileFailed": "Impossible de créer le fichier. {{reason}}",
+      "newFolderFailed": "Impossible de créer le dossier. {{reason}}",
+      "share": "Partager",
+      "shareFailed": "Impossible de partager {{name}}",
+      "shareTooLarge": "Les fichiers de plus de 256 Mo ne peuvent pas être partagés depuis le téléphone",
+      "shareHostOutdated": "Mettez à jour Orca là où ce workspace s’exécute pour partager des fichiers"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",
@@ -5084,6 +5110,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "Échec de la création de l'espace de travail"
+    },
+    "jiraConnect": {
+      "title": "Connecter Jira",
+      "siteUrl": "votre-equipe.atlassian.net",
+      "email": "E-mail Atlassian",
+      "apiToken": "Jeton d’API",
+      "storageHint": "Votre jeton est stocké sur cet hôte, chiffré si son système le permet.",
+      "createToken": "Créer un jeton d’API",
+      "failed": "Échec de la connexion",
+      "serverNeedsUpdate": "Ce serveur doit d’abord être mis à jour vers une version récente d’Orca. Connectez plutôt Jira depuis Orca sur ordinateur."
     }
   },
   "terminal": {
@@ -5246,7 +5282,7 @@
       "started": "Démarré",
       "trigger": "Déclenchement",
       "output": "Sortie",
-      "noOutput": "Aucun contenu de sortie disponible.",
+      "noOutput": "Aucune sortie disponible.",
       "loadingRuns": "Chargement des exécutions…",
       "loading": "Chargement…",
       "hourly": "Toutes les heures",

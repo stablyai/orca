@@ -53,7 +53,12 @@ const openCodeUsageAggregation = createUsageEventAggregation<
         (target.cacheWriteInputTokens ?? 0) + (source.cacheWriteInputTokens ?? 0)
     }
   },
-  cloneSessionForMerge: (session) => structuredClone(session)
+  cloneSessionForMerge: (session) => ({
+    ...session,
+    locationBreakdown: session.locationBreakdown.map((location) => ({ ...location })),
+    modelBreakdown: session.modelBreakdown.map((model) => ({ ...model })),
+    locationModelBreakdown: session.locationModelBreakdown.map((entry) => ({ ...entry }))
+  })
 })
 
 const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregates } =

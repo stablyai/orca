@@ -5,7 +5,6 @@ import {
   terminalOrderedInputControls,
   terminalOrderedInputByteLength
 } from '../../../../src/shared/terminal/input/terminal-ordered-input'
-import { getTerminalInputByteLength } from '../../../../src/shared/terminal/input/terminal-input'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
@@ -13,9 +12,10 @@ import {
   terminalInputSend,
   terminalInputSessionOpen
 } from '../host-operations/mobile-terminal-operations'
-import { TERMINAL_LIVE_INPUT_MAX_BYTES } from '../live-input/terminal-live-input'
 
 import {
+  acquireTerminalInputOwner,
+  canMergeTerminalInputBatch,
   refused,
   epoch,
   type TerminalInputEnqueueOptions,
@@ -32,6 +32,19 @@ export class MobileTerminalInputSender {
   private waiters = 0
   private active = 0
 
+  private acquireOwner(client: RpcClient, terminal: string, capable: boolean): Owner | null {
+    if (this.client !== client) {
+      for (const owner of this.owners.values()) {
+        this.fail(owner)
+      }
+      this.owners.clear()
+      this.client = client
+    }
+    return acquireTerminalInputOwner(this.owners, client, terminal, capable, (owner) =>
+      this.fail(owner)
+    )
+  }
+
   request(
     client: RpcClient,
     params: Params,
@@ -42,52 +55,11 @@ export class MobileTerminalInputSender {
     if (client.getState() !== 'connected' || enqueue.signal?.aborted || options?.signal?.aborted) {
       return this.refuse(params.terminal, enqueue)
     }
-    if (this.client !== client) {
-      for (const owner of this.owners.values()) {
-        this.fail(owner)
-      }
-      this.owners.clear()
-      this.client = client
+    const target = this.acquireOwner(client, params.terminal, capable)
+    if (!target) {
+      return this.refuse(params.terminal, enqueue)
     }
-    let owner = this.owners.get(params.terminal)
-    if (owner && owner.epoch !== epoch(client)) {
-      this.fail(owner)
-      this.owners.delete(params.terminal)
-      owner = undefined
-    }
-    if (owner?.failed) {
-      if (owner.active.size || owner.opening) {
-        return this.refuse(params.terminal, enqueue)
-      }
-      capable = owner.strict
-      this.owners.delete(params.terminal)
-      owner = undefined
-    }
-    if (!owner) {
-      if (this.owners.size >= 64) {
-        const idle = [...this.owners].find(
-          ([, entry]) => !entry.active.size && !entry.pending.length && !entry.opening
-        )
-        if (!idle) {
-          return this.refuse(params.terminal, enqueue)
-        }
-        this.owners.delete(idle[0])
-      }
-      owner = {
-        client,
-        handle: params.terminal,
-        epoch: epoch(client),
-        strict: capable,
-        token: null,
-        seq: 0,
-        pending: [],
-        active: new Set(),
-        opening: false,
-        failed: false
-      }
-      this.owners.set(params.terminal, owner)
-    }
-    if (owner.strict) {
+    if (target.strict) {
       params = { ...params, ...terminalOrderedInputControls(params) }
     }
     const bytes = terminalOrderedInputByteLength(params)
@@ -95,10 +67,9 @@ export class MobileTerminalInputSender {
       this.waiters >= TERMINAL_ORDERED_INPUT_MAX_WAITERS ||
       this.bytes + bytes > TERMINAL_ORDERED_INPUT_MAX_BYTES
     ) {
-      this.fail(owner)
+      this.fail(target)
       return this.refuse(params.terminal, enqueue)
     }
-    const target = owner
     const kind =
       enqueue.gestureDeadline !== undefined
         ? 'gesture'
@@ -115,25 +86,14 @@ export class MobileTerminalInputSender {
     const caller: Caller = {
       resolve,
       bytes,
+      waiters: 1,
       options: { ...enqueue, signal },
       cleanup: () => signal?.removeEventListener('abort', abort)
     }
     this.bytes += bytes
     this.waiters += 1
     const tail = target.pending.at(-1)
-    if (
-      tail &&
-      options === tail.options &&
-      !options?.beforeSend &&
-      kind !== 'control' &&
-      tail.kind === kind &&
-      [tail.params, params].every((input) =>
-        Object.keys(input).every((key) => ['terminal', 'text', 'enter', 'client'].includes(key))
-      ) &&
-      tail.params.client?.id === params.client?.id &&
-      tail.params.client?.type === params.client?.type &&
-      getTerminalInputByteLength(tail.params.text ?? '') + bytes <= TERMINAL_LIVE_INPUT_MAX_BYTES
-    ) {
+    if (canMergeTerminalInputBatch(tail, params, options, kind, bytes)) {
       tail.params = { ...tail.params, text: (tail.params.text ?? '') + (params.text ?? '') }
       tail.callers.push(caller)
       tail.deadline = enqueue.gestureDeadline
@@ -153,6 +113,58 @@ export class MobileTerminalInputSender {
     }
     this.pump()
     return delivery
+  }
+
+  /** Enqueues a multi-chunk paste atomically as 1 waiter with no tail merging so frames stay within cap and cannot interleave. */
+  requestSequence(
+    client: RpcClient,
+    chunks: readonly Params[],
+    options: SendRequestOptions | undefined,
+    capable: boolean
+  ): Promise<RpcResponse[]> {
+    if (chunks.length === 0) {
+      return Promise.resolve([])
+    }
+    const terminal = chunks[0].terminal
+    const refuseAll = () => Promise.resolve(chunks.map(() => refused(terminal)))
+    if (client.getState() !== 'connected' || options?.signal?.aborted) {
+      return refuseAll()
+    }
+    const target = this.acquireOwner(client, terminal, capable)
+    if (!target) {
+      return refuseAll()
+    }
+    const normalized = chunks.map((chunk) =>
+      target.strict ? { ...chunk, ...terminalOrderedInputControls(chunk) } : chunk
+    )
+    const chunkBytes = normalized.map((chunk) => terminalOrderedInputByteLength(chunk))
+    const totalBytes = chunkBytes.reduce((sum, size) => sum + size, 0)
+    if (
+      this.waiters >= TERMINAL_ORDERED_INPUT_MAX_WAITERS ||
+      this.bytes + totalBytes > TERMINAL_ORDERED_INPUT_MAX_BYTES
+    ) {
+      return refuseAll()
+    }
+    this.bytes += totalBytes
+    this.waiters += 1
+    const deliveries = normalized.map((params, index) => {
+      let resolve!: (reply: RpcResponse) => void
+      const delivery = new Promise<RpcResponse>((done) => {
+        resolve = done
+      })
+      const caller: Caller = {
+        resolve,
+        bytes: chunkBytes[index],
+        waiters: index === normalized.length - 1 ? 1 : 0,
+        resolveOnFinish: true,
+        options: {},
+        cleanup: () => {}
+      }
+      target.pending.push({ params, options, kind: 'paste', callers: [caller] })
+      return delivery
+    })
+    this.pump()
+    return Promise.all(deliveries)
   }
 
   private refuse(handle: string, enqueue: TerminalInputEnqueueOptions): Promise<RpcResponse> {
@@ -178,7 +190,7 @@ export class MobileTerminalInputSender {
     for (const caller of batch.callers) {
       caller.cleanup()
       this.bytes -= caller.bytes
-      this.waiters -= 1
+      this.waiters -= caller.waiters
       caller.resolve(reply)
     }
     batch.callers = []
@@ -192,7 +204,9 @@ export class MobileTerminalInputSender {
     // Issued work retains its budget until the actual request settles, even after a field cancels.
     for (const batch of owner.active) {
       for (const caller of batch.callers) {
-        caller.resolve(refused(owner.handle))
+        if (!caller.resolveOnFinish) {
+          caller.resolve(refused(owner.handle))
+        }
       }
     }
   }
@@ -288,9 +302,9 @@ export class MobileTerminalInputSender {
     } catch {
       this.fail(owner)
     } finally {
-      this.finish(batch, owner.failed ? refused(owner.handle) : reply)
       owner.active.delete(batch)
       this.active -= 1
+      this.finish(batch, owner.failed ? refused(owner.handle) : reply)
       this.pump()
     }
   }

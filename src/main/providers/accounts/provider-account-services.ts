@@ -22,6 +22,11 @@ import { HOST_SYSTEM_DEFAULT_USAGE_IDS } from '../../../shared/agent-accounts/ho
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { releaseIdleChatsOnOtherAccount } from '../../native-chat/agent-session-wire/host/structured-agent-session-account-switch'
+import { AGY_HOST_SELECTION } from '../../antigravity/agy-account-selection'
+import {
+  moveChatsToSelectedAccount,
+  noteChatNotMovedToAccount
+} from '../../native-chat/agent-session-wire/host/structured-agent-session-saved-account-switch'
 
 export type ProviderAccountServices = {
   rateLimits: RateLimitService
@@ -54,6 +59,23 @@ export function createProviderAccountServices(
   claudeAccounts.onSelectionApplied((committed) => {
     void releaseIdleChatsOnOtherAccount(getStructuredAgentSessionHost(), 'claude', committed)
   })
+  // agy's saved accounts swap its one login, which a chat's running agy keeps: same as above, and
+  // a chat still running a turn on the previous account says so.
+  AGY_HOST_SELECTION.onChanged((committed) => {
+    void moveChatsToSelectedAccount(
+      getStructuredAgentSessionHost(),
+      'antigravity',
+      AGY_HOST_SELECTION,
+      committed
+    )
+  })
+  AGY_HOST_SELECTION.onChatNotMoved(
+    (chat) =>
+      void noteChatNotMovedToAccount(getStructuredAgentSessionHost(), {
+        ...chat,
+        to: AGY_HOST_SELECTION.email(chat.to) ?? 'the selected account'
+      })
+  )
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
   rateLimits.setCodexHomePathResolver((target) =>
     resolveCodexRateLimitHomeUnlessStopped(codexRuntimeHome, target)

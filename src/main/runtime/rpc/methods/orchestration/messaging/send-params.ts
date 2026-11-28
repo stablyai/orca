@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   OptionalString,
+  OptionalPlainString,
   OptionalBoolean,
   requiredString
 } from '../../../../../../shared/rpc-contract/rpc-param-primitives'
@@ -8,7 +9,8 @@ import { isGroupAddress } from '../../../../orchestration/addressing/groups/grou
 import { MESSAGE_TYPES } from '../../../../orchestration/db/orchestration-records'
 import {
   getLifecycleGroupRecipientError,
-  isDispatchMutationMessageType
+  isDispatchMutationMessageType,
+  WORKER_DONE_BLANK_BODY_ERROR
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { lazyZodSchema } from '../../../../../../shared/schema/lazy-zod-schema'
 
@@ -23,7 +25,8 @@ export const SendParams = lazyZodSchema(() =>
       to: OptionalString,
       subject: requiredString('Missing --subject'),
       from: OptionalString,
-      body: OptionalString,
+      // Kept as '' until the worker_done check below runs, then normalized to undefined.
+      body: OptionalPlainString,
       type: z
         .enum(MESSAGE_TYPES, {
           error: SEND_MESSAGE_TYPE_ERROR
@@ -52,14 +55,24 @@ export const SendParams = lazyZodSchema(() =>
       devMode: OptionalBoolean
     })
     .superRefine((params, ctx) => {
-      if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
-        return
+      if (isDispatchMutationMessageType(params.type) && params.to && isGroupAddress(params.to)) {
+        // Lifecycle authority targets one coordinator; fanout would leak signals to unrelated terminals.
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: getLifecycleGroupRecipientError(params.type),
+          path: ['to']
+        })
       }
-      // Lifecycle authority targets one coordinator; fanout would leak signals to unrelated terminals.
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: getLifecycleGroupRecipientError(params.type),
-        path: ['to']
-      })
+      // `--body "$(cat missing-file)"` expands to ''; completing the Task with it loses the report.
+      if (params.type === 'worker_done' && params.body?.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: WORKER_DONE_BLANK_BODY_ERROR,
+          path: ['body']
+        })
+      }
     })
+    .transform((params): typeof params =>
+      params.body === '' ? { ...params, body: undefined } : params
+    )
 )

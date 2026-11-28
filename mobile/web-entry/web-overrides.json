@@ -166,6 +166,10 @@
       "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
     },
     {
+      "file": "src/platform/file-sharing/file-sharer.web.ts",
+      "reason": "The page cannot hand a file to the system share sheet: the shell origin is not a secure context on iOS and Android WebView has no Web Share, and a workspace file can pass the frame cap many times over. This one asks the shell through native.file.share, which downloads the file itself and opens the share sheet, cancels that download when the user backs out, and returns null on shells that do not grant the verb so the Files browser offers no Share."
+    },
+    {
       "file": "src/platform/image-actions/image-actions.web.ts",
       "reason": "The page cannot reach the clipboard, Photos or the share sheet: the shell origin is not a secure context on iOS and Android WebView has no Web Share. This one stages a base64 image to the shell a chunk at a time over native.image.act, because a chat image passes the 640 KiB frame cap, then asks the shell to copy, save or share it; web images go by URL because the page cannot read cross-origin pixels. Shells that do not grant the verb get null, so the viewer offers no actions."
     },
@@ -232,6 +236,14 @@
     {
       "file": "src/platform/shell-storage/shell-storage.web.ts",
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
+    },
+    {
+      "file": "src/i18n/bundled-locale-catalogs.web.ts",
+      "reason": "The native file imports gzip-compressed base64 catalog modules so Hermes does not compile 68,000+ nested object properties into bytecode. The Route A web build already splits raw JSON catalogs into separate on-demand locale-catalog chunks tracked by the bundle verifier."
+    },
+    {
+      "file": "src/components/mermaid/mermaid-page-engine.web.ts",
+      "reason": "Mermaid draws diagrams into a DOM element and pulls in KaTeX for math labels, which only a document can render. The native file resolves to null so native bundles never carry the 3 MiB pre-bundled Mermaid engine or KaTeX; this one loads the deferred page engine."
     },
     {
       "file": "src/components/markdown/math/mobile-markdown-math-typesetter.web.ts",

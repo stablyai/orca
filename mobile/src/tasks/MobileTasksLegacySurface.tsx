@@ -26,6 +26,7 @@ import {
 } from './hosted-review/mobile-tasks-hosted-review'
 import { renderMobileTasksChrome } from './screen/mobile-tasks-screen-chrome'
 import { renderMobileTasksListSurface } from './task-list/mobile-tasks-list-surface'
+import { renderMobileTasksJiraConnectDrawer } from './providers/jira/MobileTasksJiraConnectDrawer'
 import { renderMobileTasksSearchControl } from './screen/mobile-tasks-search-control'
 import { MobileTasksFilterSheet } from './screen/mobile-tasks-filter-sheet'
 import {
@@ -206,6 +207,8 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         {renderMobileTasksCreateTargetPicker(model)}
 
         {renderMobileTasksLinearConnectDrawer(model)}
+
+        {renderMobileTasksJiraConnectDrawer(model)}
 
         {renderMobileTasksWorkspaceCreateTargetPicker(model)}
 

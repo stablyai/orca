@@ -31,6 +31,25 @@ export type TextSecretSentinelSubstituter = {
   ) => { payload: string; stateHash: string }
 }
 
+function computeCommonPrefix(values: readonly string[]): string {
+  if (values.length === 0) {
+    return ''
+  }
+  let prefix = values[0]
+  for (let i = 1; i < values.length && prefix.length > 0; i += 1) {
+    const candidate = values[i]
+    let j = 0
+    const limit = Math.min(prefix.length, candidate.length)
+    while (j < limit && prefix.charCodeAt(j) === candidate.charCodeAt(j)) {
+      j += 1
+    }
+    if (j < prefix.length) {
+      prefix = prefix.slice(0, j)
+    }
+  }
+  return prefix
+}
+
 /** Precompile sentinel patterns once across multi-domain profile writes. */
 export function createTextSecretSentinelSubstituter(
   substitutions: readonly SecretSentinelSubstitution[]
@@ -51,24 +70,34 @@ export function createTextSecretSentinelSubstituter(
     }
   }
   const replacementBySentinel = new Map<string, { blob: string; hashValue: string }>()
+  const escapedSentinels: string[] = []
   const alternatives: string[] = []
   for (const { sentinel, blob, hashValue } of substitutions) {
     const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
     if (replacementBySentinel.has(escapedSentinel)) {
       continue
     }
+    escapedSentinels.push(escapedSentinel)
     alternatives.push(escapeRegex(escapedSentinel))
     replacementBySentinel.set(escapedSentinel, {
       blob: JSON.stringify(blob).slice(1, -1),
       hashValue: JSON.stringify(hashValue).slice(1, -1)
     })
   }
+  const commonPrefix = computeCommonPrefix(escapedSentinels)
   const pattern = new RegExp(alternatives.join('|'), 'g')
   return {
     apply(serialized, hashPrefix = '', hashSuffix = '') {
       const hash = createHash('sha1')
       if (hashPrefix) {
         hash.update(hashPrefix)
+      }
+      if (commonPrefix.length > 0 && !serialized.includes(commonPrefix)) {
+        hash.update(serialized)
+        if (hashSuffix) {
+          hash.update(hashSuffix)
+        }
+        return { payload: serialized, stateHash: hash.digest('hex') }
       }
       pattern.lastIndex = 0
       let match = pattern.exec(serialized)

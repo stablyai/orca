@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
 
 if (process.platform === 'win32') {
@@ -17,6 +19,22 @@ if (process.platform === 'linux') {
 if (process.platform !== 'darwin') {
   console.log(`[native-build] no macOS native computer build required on ${process.platform}`)
   process.exit(0)
+}
+
+if (process.env.ORCA_REUSE_MACOS_NATIVE_HELPERS === '1') {
+  const repoRoot = path.resolve(import.meta.dirname, '../../../..')
+  const cachedOutputs = [
+    'native/computer-use-macos/.build/release/orca-computer-use-macos',
+    'native/computer-use-macos/.build/release/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos',
+    'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
+    'native/notification-status-macos/.build/release/orca-notification-status',
+    'native/process-footprint-macos/.build/release/orca-process-footprint',
+    'native/socket-owner-macos/.build/release/orca-socket-owner'
+  ]
+  if (cachedOutputs.every((rel) => existsSync(path.join(repoRoot, rel)))) {
+    console.log('[native-build] reusing cached macOS native helpers')
+    process.exit(0)
+  }
 }
 
 // Each compiler tree needs its own group so cancellation reaches Swift descendants.

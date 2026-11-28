@@ -1,10 +1,13 @@
 import type { KeyboardEvent } from 'react'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
-import type {
-  KeybindingInput,
-  KeybindingOverrides
-} from '../../../../../../shared/keybindings/types'
+import {
+  shortcutProducesText,
+  textInputOwnsComposition,
+  type TextShortcutInput
+} from '../../../../../../shared/keybindings/text-input-shortcut-policy'
+import type { KeybindingOverrides } from '../../../../../../shared/keybindings/types'
 import type { NativeChatContextMenuActions } from '../actions/use-native-chat-context-menu'
 
 export type NativeChatSplitDirection = 'right' | 'down'
@@ -14,14 +17,25 @@ type NativeChatTerminalPaneShortcutActions = Pick<
   NativeChatContextMenuActions,
   'onSplitRight' | 'onSplitDown' | 'canEqualizePaneSizes' | 'onEqualizePaneSizes'
 >
-type NativeChatPaneShortcutEvent = KeybindingInput &
+export type NativeChatPaneShortcutInput = TextShortcutInput & {
+  target?: EventTarget | null
+  nativeEvent?: TextShortcutInput
+}
+type NativeChatPaneShortcutEvent = NativeChatPaneShortcutInput &
   Pick<KeyboardEvent, 'repeat' | 'preventDefault' | 'stopPropagation'>
 
 export function matchNativeChatPaneShortcut(
-  input: KeybindingInput,
+  input: NativeChatPaneShortcutInput,
   platform: NodeJS.Platform,
   keybindings: KeybindingOverrides
 ): NativeChatPaneShortcut | null {
+  const compositionInput = input.nativeEvent ?? input
+  if (
+    textInputOwnsComposition(compositionInput) ||
+    (shortcutProducesText(compositionInput, platform) && isEditableTarget(input.target ?? null))
+  ) {
+    return null
+  }
   if (keybindingMatchesAction('terminal.splitRight', input, platform, keybindings)) {
     return 'right'
   }

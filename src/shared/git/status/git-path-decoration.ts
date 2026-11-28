@@ -109,11 +109,19 @@ export function getPathDecoration<T>(
   return composed === null ? null : (byPath.get(composed) ?? null)
 }
 
+function hasPathOrComposed(paths: ReadonlySet<string>, relativePath: string): boolean {
+  if (paths.has(relativePath)) {
+    return true
+  }
+  const composed = composedVariant(relativePath)
+  return composed !== null && paths.has(composed)
+}
+
 export function isPathIgnored(ignored: Set<string>, relativePath: string): boolean {
   if (ignored.size === 0) {
     return false
   }
-  if (ignored.has(relativePath)) {
+  if (hasPathOrComposed(ignored, relativePath)) {
     return true
   }
   let candidate = relativePath
@@ -123,7 +131,7 @@ export function isPathIgnored(ignored: Set<string>, relativePath: string): boole
       return false
     }
     candidate = candidate.slice(0, idx)
-    if (ignored.has(candidate)) {
+    if (hasPathOrComposed(ignored, candidate)) {
       return true
     }
   }

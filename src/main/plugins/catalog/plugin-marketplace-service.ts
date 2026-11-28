@@ -21,7 +21,12 @@ import type {
   PluginKillListEntry
 } from '../../../shared/plugins/catalog/plugin-kill-list'
 import type { PluginImageCache } from '../media/plugin-image-cache'
-import { cacheValidatedMarketplace } from './plugin-marketplace-provenance'
+import {
+  cacheValidatedMarketplace,
+  pruneMarketplaceImageCache,
+  readMarketplaceSnapshots,
+  saveMarketplaceSnapshot
+} from './plugin-marketplace-provenance'
 import { CommunityMarketplaceSeed } from './plugin-community-marketplace-seed'
 import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-install-link'
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
@@ -112,7 +117,12 @@ export class PluginMarketplaceService {
     }
     const registered = existing ?? (await this.store.addSource(parsedSource, candidate.addedAt))
     try {
-      const snapshot = await this.store.writeSnapshot({ source: registered, ...fetched })
+      const snapshot = await saveMarketplaceSnapshot(
+        this.store,
+        registered,
+        fetched,
+        this.imageCache
+      )
       this.sourceErrors.delete(registered.id)
       return pluginMarketplaceSourceState(registered, snapshot, undefined, this.teamPolicy)
     } catch (error) {
@@ -138,6 +148,8 @@ export class PluginMarketplaceService {
     const removed = await this.store.removeSource(sourceId)
     if (removed) {
       this.sourceErrors.delete(sourceId)
+      this.refreshSourceShared.evict(sourceId)
+      void pruneMarketplaceImageCache(this.store, this.imageCache).catch(() => undefined)
       if (this.officialSeedRequested) {
         // Recover the managed source when a full profile frees a slot, without restart.
         await this.seedOfficialSource().catch(() => undefined)
@@ -204,7 +216,10 @@ export class PluginMarketplaceService {
 
   /** Listings from the cached catalogs in catalog order, without waiting on any fetch. */
   async listCachedPlugins(pluginKeys?: ReadonlySet<string>): Promise<PluginMarketplaceListing[]> {
-    const states = await this.listSnapshots()
+    const states = await readMarketplaceSnapshots(
+      await this.teamPolicy.list(this.store),
+      this.store
+    )
     return states.flatMap(({ source, snapshot }) =>
       snapshot.marketplace.plugins
         // Why: hide packs whose contribution kind this build no longer
@@ -245,7 +260,7 @@ export class PluginMarketplaceService {
     }
     try {
       const fetched = await this.fetchAndValidate(source)
-      const snapshot = await this.store.writeSnapshot({ source, ...fetched })
+      const snapshot = await saveMarketplaceSnapshot(this.store, source, fetched, this.imageCache)
       this.sourceErrors.delete(source.id)
       return pluginMarketplaceSourceState(source, snapshot, undefined, this.teamPolicy)
     } catch (error) {
@@ -287,26 +302,6 @@ export class PluginMarketplaceService {
     source: PluginMarketplaceRegisteredSource
   ): Promise<PluginMarketplaceFetchResult> {
     return cacheValidatedMarketplace(source, await this.fetcher(source), this.imageCache)
-  }
-
-  private async listSnapshots(): Promise<
-    { source: PluginMarketplaceRegisteredSource; snapshot: PluginMarketplaceCachedSnapshot }[]
-  > {
-    const sources = await this.teamPolicy.list(this.store)
-    const snapshots = await Promise.all(
-      sources.map(async (source) => ({
-        source,
-        snapshot: await this.store.readSnapshot(source.id)
-      }))
-    )
-    return snapshots.filter(
-      (
-        candidate
-      ): candidate is {
-        source: PluginMarketplaceRegisteredSource
-        snapshot: PluginMarketplaceCachedSnapshot
-      } => candidate.snapshot !== null
-    )
   }
 
   private listingFromEntry(

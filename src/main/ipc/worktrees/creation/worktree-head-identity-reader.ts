@@ -3,7 +3,7 @@ import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../../../shared/worktree/types'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { ownRetainedString } from '../../../../shared/text/own-retained-string'
-import { isSafeRefName, parsePackedRefsContent } from './packed-refs-parser'
+import { decodeTrimmedUtf8Buffer, isSafeRefName, parsePackedRefsBuffer } from './packed-refs-parser'
 import {
   FULL_HEAD_IDENTITY_SCOPE,
   headIdentityEntryKey,
@@ -53,18 +53,18 @@ type Unreadable = typeof UNREADABLE
 
 async function readTrimmedFile(path: string): Promise<string | null | Unreadable> {
   try {
-    return (await readFile(path, 'utf8')).trim()
+    return decodeTrimmedUtf8Buffer(await readFile(path))
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : UNREADABLE
   }
 }
 
 async function readPackedRefs(commonDirPath: string): Promise<Map<string, string> | Unreadable> {
-  const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'))
-  if (content === UNREADABLE) {
-    return UNREADABLE
+  try {
+    return parsePackedRefsBuffer(await readFile(join(commonDirPath, 'packed-refs')))
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? new Map() : UNREADABLE
   }
-  return content === null ? new Map() : parsePackedRefsContent(content)
 }
 
 // Only SHA-1/SHA-256 object IDs may leave this reader, bounding malformed-repo output.

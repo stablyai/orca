@@ -10,7 +10,7 @@ import { ManagedRuntimeInstallRow } from './ManagedRuntimeInstallRow'
 const NARROWEST_SETTINGS = 256
 
 const base: ManagedRuntimeInstallState = {
-  agent: 'antigravity',
+  agent: 'opencode',
   revision: 1,
   available: true,
   version: '1.5.0',
@@ -37,7 +37,7 @@ function installing(phase: ManagedRuntimeOperation['phase']): ManagedRuntimeInst
 
 function row(
   state: ManagedRuntimeInstallState,
-  agentLabel = 'Antigravity',
+  agentLabel = 'OpenCode',
   width = NARROWEST_SETTINGS
 ) {
   return defineFixture({
@@ -68,7 +68,7 @@ function row(
 
 export const downloading = row(installing('downloading'))
 // A typical Settings width, where the bar fits on the line beside the download count.
-export const downloadingWide = row(installing('downloading'), 'Antigravity', 520)
+export const downloadingWide = row(installing('downloading'), 'OpenCode', 520)
 export const unpacking = row(installing('extracting'))
 export const verifying = row(installing('verifying'))
 export const externalWithoutOrcaCopy = row({ ...base, source: 'external' })

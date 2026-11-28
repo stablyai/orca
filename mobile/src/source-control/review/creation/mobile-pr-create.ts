@@ -6,7 +6,6 @@ import type {
 import { translate, type Translate } from '../../../i18n/mobile-i18n'
 import { isHostedReviewCreateEligibilityConfirmable } from '../../../../../src/shared/source-control/hosted-review/hosted-review-create-confirmation'
 import { hostedReviewCopy } from './hosted-review-copy'
-import './mobile-hosted-review-service'
 
 export function getMobilePrCreateSuccessWarning(
   outcome: Extract<MobilePrCreateOutcome, { ok: true }>,

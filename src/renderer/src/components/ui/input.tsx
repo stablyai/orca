@@ -30,7 +30,9 @@ const inputVariants = cva('', {
     density: {
       default: '',
       // pl/pr, not px: a later sheet re-emits px-2, which would beat the leading icon's pl-8.
-      compact: 'h-7 border-border pr-2 pl-2 text-xs shadow-none md:text-xs'
+      compact: 'h-7 border-border pr-2 pl-2 text-xs shadow-none md:text-xs',
+      // Text that matches 30px list rows, for a field drawn among them.
+      row: 'text-settings-detail md:text-settings-detail'
     },
     /** Room for an absolutely positioned icon at the start, such as a search glass. */
     inset: {

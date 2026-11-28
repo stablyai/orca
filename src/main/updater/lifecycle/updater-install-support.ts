@@ -1,4 +1,4 @@
-import { hasInProcessTerminalSessions } from '../../ipc/pty/provider/kill-all'
+import { hasAutomaticInstallBlockingWork } from './automatic-install-blocking-work'
 import { prepareRendererForUpdate } from '../../window/renderer-relays/native-unload-coordinator'
 import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 import { app } from 'electron'
@@ -167,7 +167,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     const wslHold = wslMoveInstallHold()
     const hold = wslHold
       ? { message: wslHold.message }
-      : automatic && hasInProcessTerminalSessions()
+      : automatic && hasAutomaticInstallBlockingWork()
         ? { ...updaterCodedMessage('automaticInstallTerminalBusy'), retryable: false }
         : null
     if (!hold) {

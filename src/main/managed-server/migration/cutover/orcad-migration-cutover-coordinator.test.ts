@@ -1,10 +1,14 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
+import {
+  serializeOrcadMigrationValue,
+  type OrcadMigrationManifest
+} from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   closeTestStores,
   createSqliteTestStore
@@ -23,7 +27,11 @@ import {
 } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { assertOrcadMigrationRequestFits } from '../catalog/orcad-migration-request-budget'
 import { createOrcadMigrationManifest } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
-import { MAX_ORCAD_MIGRATION_MANIFEST_BYTES } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import {
+  MAX_ORCAD_MIGRATION_MANIFEST_BYTES,
+  parseOrcadMigrationManifest
+} from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import { assertOrcadMigrationManifestDigest } from '../../../orcad/migration/orcad-migration-manifest-digest'
 import { fenceOrcadMigrationSource } from '../../../ssh/migration-source/orcad-migration-source-fence'
 import { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
 import { fakeOrcadMigrationDestination as fakeDestination } from './testing/orcad-migration-destination-fake'
@@ -295,5 +303,53 @@ describe('migration cutover coordinator', () => {
       })
       expect(h.owner()).toBe('env-1')
     })
+  })
+
+  it('aborts by reference when a rolled-back parser stripped unknown fields from a newer manifest', async () => {
+    const h = await setup()
+    const cutover = h.journal()!
+    const { manifestSha256: _oldDigest, ...unsigned } = cutover.manifest
+    // Simulate a newer build signing an extra field that this build's parser drops on read.
+    const newerManifest = {
+      ...unsigned,
+      payload: { ...unsigned.payload, futureField: { version: 2 } }
+    }
+    const newerSha256 = createHash('sha256')
+      .update(serializeOrcadMigrationValue(newerManifest))
+      .digest('hex')
+    const strippedManifest = parseOrcadMigrationManifest({
+      ...newerManifest,
+      manifestSha256: newerSha256
+    })
+    await h.destination.stage(strippedManifest)
+    writeOrcadMigrationSourceCutover(h.context.userDataPath, {
+      ...cutover,
+      phase: 'destination-staged',
+      manifestSha256: newerSha256,
+      manifest: strippedManifest
+    })
+    const rejectBadDigest =
+      <T>(real: (sent: OrcadMigrationManifest) => Promise<T>) =>
+      async (sent: OrcadMigrationManifest): Promise<T> => {
+        assertOrcadMigrationManifestDigest(sent)
+        return real(sent)
+      }
+    h.destination.readState.mockImplementation(
+      rejectBadDigest(h.destination.readState.getMockImplementation()!)
+    )
+    h.destination.abort.mockImplementation(
+      rejectBadDigest(h.destination.abort.getMockImplementation()!)
+    )
+
+    await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).resolves.toEqual({
+      outcome: 'released',
+      evidence: 'catalog-absent'
+    })
+    expect(h.destination.abortByReference).toHaveBeenCalledWith(
+      expect.objectContaining({ migrationId: h.migrationId, manifestSha256: newerSha256 })
+    )
+    expect(h.destination.readState).not.toHaveBeenCalled()
+    expect(h.owner()).toBeNull()
+    expect(h.journal()).toBeUndefined()
   })
 })

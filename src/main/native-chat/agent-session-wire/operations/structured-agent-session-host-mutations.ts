@@ -39,6 +39,7 @@ import {
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import { promptPlan } from './structured-agent-session-prompt-plan'
+import { noteBackgroundStopRequested } from '../termination/background-stop-requests'
 import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import {
   admitStructuredAgentSessionSend,
@@ -141,6 +142,7 @@ export function cancelStructuredAgentSessionTurn(
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   if (params.scope) {
     const { sessionId } = params.envelope
+    noteBackgroundStopRequested(sessionId)
     return mutateStructuredAgentSession(
       context,
       caller,

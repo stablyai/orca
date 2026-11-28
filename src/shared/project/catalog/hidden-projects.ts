@@ -102,16 +102,35 @@ export function isListedByFolderWorkspace(
   identity: string,
   parentIdentityOf: (identity: string) => string | undefined
 ): boolean {
-  const seen = new Set<string>()
-  for (
-    let parent = parentIdentityOf(identity);
-    parent !== undefined && !seen.has(parent);
-    parent = parentIdentityOf(parent)
-  ) {
+  let parent = parentIdentityOf(identity)
+  if (parent === undefined) {
+    return false
+  }
+  let seen: Set<string> | undefined
+  let firstParent: string | undefined
+  while (parent !== undefined) {
     if (parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder') {
       return true
     }
-    seen.add(parent)
+    const nextParent = parentIdentityOf(parent)
+    if (nextParent === undefined) {
+      return false
+    }
+    if (firstParent === undefined) {
+      firstParent = parent
+      if (nextParent === firstParent) {
+        return false
+      }
+    } else {
+      if (!seen) {
+        seen = new Set<string>([firstParent])
+      }
+      seen.add(parent)
+      if (seen.has(nextParent)) {
+        return false
+      }
+    }
+    parent = nextParent
   }
   return false
 }

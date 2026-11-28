@@ -63,18 +63,41 @@ describe('extractPartialEscapeTail', () => {
     const pending = advancePartialEscapeTail('', '\x1bPq\x1b')
     expect(advancePartialEscapeTail(pending, '\x1b[3')).toBe('\x1b[3')
   })
+
+  it.each([
+    ['\x1b]t\x9b3', '1', '\x1b[31', 'm'],
+    ['\x1b]t\x9d0;', 'hi', '\x1b]0;hi', '\x07'],
+    ['\x1b]t\x90q', 'ab', '\x1bPqab', '\x1b\\'],
+    ['\x1b]t\x9fG', 'a=1', '\x1b_Ga=1', '\x9c']
+  ])(
+    'preserves extract(a + b) === extract(extract(a) + b) for C1 opener %j inside an open OSC',
+    (first, second, expected, terminator) => {
+      const combined = extractPartialEscapeTail(first + second)
+      expect(combined).toBe(expected)
+      expect(extractPartialEscapeTail(extractPartialEscapeTail(first) + second)).toBe(combined)
+
+      const pending = advancePartialEscapeTail('', first)
+      expect(advancePartialEscapeTail(pending, second)).toBe(combined)
+      expect(advancePartialEscapeTail(combined, terminator)).toBe('')
+    }
+  )
 })
 
 describe('advancePartialEscapeTail past the length cap', () => {
   it.each([
-    ['\x1b]52;c;', 'A', '\x1b]x;', '\x07'],
-    ['\x1bPq', '#', '\x1bP0<', '\x1b\\'],
-    ['\x1b_G', 'A', '\x1bP0<', '\x18'],
-    ['\x1b[', '3', '\x1b[0<', 'm']
+    ['\x1b]52;c;', '\x07', 'A', '\x1b]x;'],
+    ['\x1b]52;c;', '\x9c', 'A', '\x1b]x;'],
+    ['\x1bPq', '\x1b\\', '#', '\x1bP0<'],
+    ['\x1bPq', '\x9c', '#', '\x1bP0<'],
+    ['\x1b_G', '\x18', 'A', '\x1bP0<'],
+    ['\x1b_G', '\x9c', 'A', '\x1bP0<'],
+    ['\x1b[', 'm', '3', '\x1b[0<'],
+    ['\x1b[', '\x9c', '3', '\x1b[0<']
   ])(
-    'carries %j as a bounded inert prefix until it ends',
-    (introducer, fill, inert, terminator) => {
+    'carries %j as a bounded inert prefix until %j ends it',
+    (introducer, terminator, fill, inert) => {
       const overflow = fill.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH)
+      expect(advancePartialEscapeTail('', `${introducer}${overflow}${terminator}plain`)).toBe('')
       const tail = advancePartialEscapeTail('', introducer + overflow)
       expect(tail).toBe(inert)
       expect(advancePartialEscapeTail(tail, overflow)).toBe(inert)

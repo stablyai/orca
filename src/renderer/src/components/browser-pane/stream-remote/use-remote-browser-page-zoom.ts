@@ -69,24 +69,21 @@ export function useRemoteBrowserPageZoom({
     BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY
   )
   const { feedbackBadgeRef, showBrowserZoomFeedback } = useBrowserPageZoomFeedback()
-  // A pinch sends wheel events faster than a round trip, so one waiting wheel step stands for the rest;
-  // each key press is its own step, as in a local pane.
+  // Coalesce waiting pinch and held-key zoom steps to one latest pending direction so slow links do not build a backlog.
   const inFlightRef = useRef(false)
-  const queuedRef = useRef<BrowserPageZoomDirection[]>([])
+  const pendingRef = useRef<BrowserPageZoomDirection | null>(null)
 
   const requestZoom = useCallback(
-    function zoom(direction: BrowserPageZoomDirection, gesture: 'key' | 'wheel' = 'key'): void {
+    function zoom(direction: BrowserPageZoomDirection, _gesture: 'key' | 'wheel' = 'key'): void {
       if (inFlightRef.current) {
-        if (gesture === 'key' || queuedRef.current.length === 0) {
-          queuedRef.current.push(direction)
-        }
+        pendingRef.current = direction
         return
       }
       const target = runtimeTarget()
       const pageId = lifecycle.tokens.remotePage
       const token = pageId ? createRemoteOperationToken(pageId) : null
       if (!target || !pageId || !token) {
-        queuedRef.current = []
+        pendingRef.current = null
         return
       }
       inFlightRef.current = true
@@ -115,14 +112,12 @@ export function useRemoteBrowserPageZoom({
         .finally(() => {
           inFlightRef.current = false
           // A pane that lost its page or stream drops the rest, or it would zoom whatever it shows next.
-          const queued = isCurrentRemoteOperationToken(token)
-            ? queuedRef.current.shift()
-            : undefined
-          if (!queued) {
-            queuedRef.current = []
+          const pending = isCurrentRemoteOperationToken(token) ? pendingRef.current : null
+          pendingRef.current = null
+          if (!pending) {
             return
           }
-          zoom(queued)
+          zoom(pending)
         })
     },
     [
