@@ -6,6 +6,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
+import { MobileTerminalUrlTapSheet } from './MobileTerminalUrlTapSheet'
 import { MobileWorkerAutoCloseStrip } from './tabs/MobileWorkerAutoCloseStrip'
 import { BotChatOpenContext, BotItemOpenContext, BotPanelOpenContext } from '../bots/bot-item-open'
 import { openBotChatTab } from './bot-chat-tab-open'
@@ -111,6 +112,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
         </View>
       </MobileSessionSidebarStage>
       <MobileSessionSheets controller={controller} />
+      <MobileTerminalUrlTapSheet controller={controller} />
     </View>
   )
 }
