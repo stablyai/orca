@@ -57,7 +57,7 @@ export function acpSessionUpdate(
                 ? { id: context.messageKey }
                 : update.messageId
                   ? { id: acpNamedTextKey(update.messageId, channel) }
-                  : { stream: update.sessionUpdate },
+                  : { stream: 'message' },
               channel,
               text: update.content.text,
               join: {
