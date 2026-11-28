@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { checkIgnoredPaths } from '../../source-control/ignores/check-ignored-paths'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
-import { loadHooks } from '../../../workspace-hooks/hooks'
+import { loadHooks, loadHooksAsync } from '../../../workspace-hooks/hooks'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 
@@ -51,10 +51,11 @@ export function getWorktreeSharedLinkPaths(repo: Pick<Repo, 'path' | 'symlinkPat
 /** Share only existing gitignored directories; failures return [] so sharing cannot block creation. */
 export async function resolveWorktreeSharedDirectories(
   repoPath: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  reportSkip?: (path: string, reason: string) => void
 ): Promise<string[]> {
   try {
-    const configured = loadHooks(repoPath)?.worktree?.sharedDirectories ?? []
+    const configured = (await loadHooksAsync(repoPath))?.worktree?.sharedDirectories ?? []
     if (configured.length === 0) {
       return []
     }
@@ -78,11 +79,13 @@ export async function resolveWorktreeSharedDirectories(
     const existing: string[] = []
     for (const probe of probes) {
       if (!probe.exists) {
+        reportSkip?.(probe.relativePath, 'missing or unreadable in the primary checkout')
         continue
       }
       if (probe.isDirectory) {
         existing.push(probe.relativePath)
       } else {
+        reportSkip?.(probe.relativePath, 'not a directory')
         console.warn(
           `[worktree-shared-directories] Skipping "${probe.relativePath}": sharedDirectories entries must be directories`
         )
@@ -95,6 +98,7 @@ export async function resolveWorktreeSharedDirectories(
     const ignored = new Set(await checkIgnoredPaths(repoPath, existing, options))
     for (const relativePath of existing) {
       if (!ignored.has(relativePath)) {
+        reportSkip?.(relativePath, 'not gitignored')
         console.warn(
           `[worktree-shared-directories] Skipping "${relativePath}": only gitignored directories can be shared`
         )

@@ -22,6 +22,7 @@ type WorktreeLinkedPathOptions = {
   cloneWorktreePath?: (source: string, target: string, sourceIsDirectory: boolean) => Promise<void>
   apfsCloneDeps?: ApfsCloneDeps
   copyBudget?: WorktreeCopyBudget
+  onFailure?: (path: string, reason: string) => void
 }
 
 // link prefers APFS clone then symlink; copy requires independent content; share always links so one install serves all worktrees.
@@ -186,6 +187,7 @@ async function materializeWorktreePaths(
       sourceIsDirectory = s.isDirectory()
     } catch {
       // Missing source is normal on fresh clones; do not leave a dangling link.
+      options.onFailure?.(safePath.rel, 'source no longer readable')
       continue
     }
 
@@ -221,6 +223,7 @@ async function materializeWorktreePaths(
         measuredBytes = verdict.bytes
       } catch (error) {
         console.error(`[worktree-symlinks] Failed to size "${safePath.rel}" (${source}):`, error)
+        options.onFailure?.(safePath.rel, 'could not prepare copy')
         continue
       }
     }
@@ -252,6 +255,12 @@ async function materializeWorktreePaths(
         `[worktree-symlinks] Failed to link "${safePath.rel}" (${source} -> ${target}):`,
         error
       )
+      const reason = mode === 'copy' ? 'copy failed' : 'link failed'
+      const mayBePartial = mode === 'copy' && sourceIsDirectory
+      options.onFailure?.(
+        safePath.rel,
+        mayBePartial ? `${reason}; directory may be incomplete` : reason
+      )
     }
   }
   return skipped
@@ -266,7 +275,7 @@ export async function createWorktreeLinkedPaths(
   await materializeWorktreePaths(primaryPath, worktreePath, paths, 'link', options)
 }
 
-/** Copy includes independently, isolate per-path failures, and report budget refusals to the creator. */
+/** Copy includes independently and report per-path failures and budget refusals. */
 export async function createWorktreeCopiedPaths(
   primaryPath: string,
   worktreePath: string,

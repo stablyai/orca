@@ -29,7 +29,7 @@ import type {
   RemoveManagedWorktreeOptions,
   RuntimeWorktreeRemovalTarget
 } from '../catalog/runtime-worktree-selection'
-import { materializeWorktreeContentPaths } from '../creation/runtime-local-worktree-materialization'
+import { materializeWorktreeContentPaths } from '../../../ipc/worktrees/linked-paths/materialize-worktree-content-paths'
 
 /** Archive only a live, linked Git checkout on a branch; anything else has nothing to restore. */
 export async function resolveArchivableCheckout(

@@ -522,7 +522,7 @@
 16 src/main/git/repositories/discovery/repo-git-marker-scan.ts
 2 src/main/git/worktrees/catalog/worktree-git-path.ts
 1 src/main/git/worktrees/catalog/wsl-worktree-git-path.ts
-3 src/main/git/worktrees/content-paths/worktree-shared-directories.ts
+2 src/main/git/worktrees/content-paths/worktree-shared-directories.ts
 1 src/main/github/accounts/account-binding-required-host.ts
 1 src/main/github/client/fetch/repo-slug-upstream.ts
 17 src/main/github/pr-watch/pr-head-evaluation.ts
@@ -688,7 +688,7 @@
 1 src/main/ipc/worktrees/removal/remove-folder-workspace.ts
 1 src/main/ipc/worktrees/removal/remove-registered-local-worktree.ts
 1 src/main/ipc/worktrees/removal/worktree-removal-ownership.ts
-6 src/main/ipc/worktrees/worktree-remote.ts
+5 src/main/ipc/worktrees/worktree-remote.ts
 1 src/main/ipc/wsl/wsl-drive-project-handlers.ts
 4 src/main/ipc/wsl/wsl-drive-unc-conversion-handlers.ts
 2 src/main/ipc/wsl/wsl-host-automation-wake-wiring.ts
@@ -1277,7 +1277,6 @@
 1 src/main/runtime/workspaces/creation/runtime-folder-worktree-setup.ts
 1 src/main/runtime/workspaces/creation/runtime-group-folder-setup.ts
 2 src/main/runtime/workspaces/creation/runtime-local-worktree-create.ts
-1 src/main/runtime/workspaces/creation/runtime-local-worktree-materialization.ts
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts

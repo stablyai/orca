@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs'
-import { access } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseOrcaYaml } from '../../shared/workspace-setup/orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../../shared/workspace-setup/hooks/hook-command-source-policy'
@@ -115,6 +115,14 @@ export function loadHooks(repoPath: string): OrcaHooks | null {
   try {
     const content = readFileSync(yamlPath, 'utf-8')
     return parseOrcaYaml(content)
+  } catch {
+    return null
+  }
+}
+
+export async function loadHooksAsync(repoPath: string): Promise<OrcaHooks | null> {
+  try {
+    return parseOrcaYaml(await readFile(orcaYamlPath(repoPath), 'utf-8'))
   } catch {
     return null
   }
