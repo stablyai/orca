@@ -141,35 +141,44 @@ export function coordinatorRecipients(
   return recipients
 }
 
-/** Mail to another Run's mailbox reaches this coordinator when that Run is coordinated by it too. */
-export function reachesCoordinator(
+/** Whether mail to `to` reaches this Dispatch's coordinator: a recipient, or another Run whose current
+ *  coordinator is one. Live workers of this Run are not its coordinator, as in `coordinatorRecipients`. */
+export function coordinatorReach(
   db: OrchestrationDb,
-  recipients: ReadonlySet<string>,
-  to: string
-): boolean {
-  if (recipients.has(to)) {
-    return true
-  }
-  if (!to.startsWith('run:')) {
-    return false
-  }
-  const runId = to.slice('run:'.length)
-  const run = db.getRun(runId)
-  if (!run) {
-    return false
-  }
-  const session = currentRunCoordinatorOrcaSessionId(run)
-  const coordinators = [
-    run.coordinator_handle,
-    session && formatOrcaSessionAddress(session),
-    ...db.db
-      .prepare('SELECT terminal_handle FROM run_coordinator_handles WHERE run_id = ?')
-      .all(runId)
-      .map((row) => text(row.terminal_handle))
-  ]
-  return coordinators.some(
-    (handle) => !!handle && !handle.startsWith('run:') && recipients.has(handle)
+  dispatch: DispatchContextRow,
+  recipients: ReadonlySet<string>
+): (to: string) => boolean {
+  const byRun = new Map<string, boolean>()
+  const liveWorkers = new Set(
+    nonCreatorRunWorkers(db, dispatch.id)
+      .filter((worker) => Number.isNaN(worker.completedAt))
+      .map((worker) => worker.assignee_handle)
   )
+  const reachesRun = (runId: string): boolean => {
+    const run = db.getRun(runId)
+    if (!run) {
+      return false
+    }
+    const session = currentRunCoordinatorOrcaSessionId(run)
+    return [run.coordinator_handle, session && formatOrcaSessionAddress(session)].some(
+      (handle) => !!handle && !liveWorkers.has(handle) && recipients.has(handle)
+    )
+  }
+  return (to) => {
+    if (recipients.has(to)) {
+      return true
+    }
+    if (!to.startsWith('run:')) {
+      return false
+    }
+    const runId = to.slice('run:'.length)
+    let reaches = byRun.get(runId)
+    if (reaches === undefined) {
+      reaches = reachesRun(runId)
+      byRun.set(runId, reaches)
+    }
+    return reaches
+  }
 }
 
 function nonCreatorRunWorkers(db: OrchestrationDb, dispatchId: string) {
