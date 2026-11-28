@@ -6,6 +6,7 @@ import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/ag
 import { stopAgentSessionProviderRoot } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
 import { withAgentSessionCreatePhase } from '../../../observability/agent-session-instrumentation'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
+import { withOwnOrcaReads } from './claude-own-orca-reads'
 import {
   CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS,
@@ -122,7 +123,7 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     })
     return {
       ...launch,
-      options: sdkOptions,
+      options: withOwnOrcaReads(sdkOptions, launch.env),
       savedOptions: { ...savedOptions, cliFlag: launch.cliFlag, flagSettingsControl }
     }
   })

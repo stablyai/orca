@@ -183,6 +183,16 @@ export function lookAroundCommandRefusal(
   return null
 }
 
+/** Whether a Bash command is only Orca reads, each part naming this session's CLI the way Orca's
+ *  prompts do. Checked as written: a shell wrapper would run a login shell first. */
+export function ownOrcaReadsOnly(command: unknown): boolean {
+  return (
+    typeof command === 'string' &&
+    chainParts(command).every((part) => part.startsWith(BOT_CLI_PREFIX)) &&
+    lookAroundCommandRefusal(command) === null
+  )
+}
+
 /** Whether a shell command is reads the run may make. */
 export function lookAroundCommandAllowed(
   command: string,
