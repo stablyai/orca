@@ -110,7 +110,7 @@ export const pasteTerminalPaneMenuClipboard = async (
     transport
   )
   const result = await pasteTerminalClipboard({
-    readClipboardText: window.api.ui.readClipboardText,
+    readClipboardContent: window.api.ui.readClipboardPasteContent,
     saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
     copiedFiles: createTerminalClipboardCopiedFiles({
       managerRef: context.managerRef,

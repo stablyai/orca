@@ -50,14 +50,41 @@ function showHostFailure(store: AppStoreApi, row: Worktree & { removalError: str
 /** Mirror host removal markers into Deleting/error cards: disappearing rows finished, while unmarked returns did not; retain reported errors until retry. */
 export function reconcileHostWorktreeRemovals(store: AppStoreApi = useAppStore): void {
   settleHostWorktreeRemovals()
-  const listed = new Map<string, Worktree>()
-  for (const rows of Object.values(selectWorktreesByRepo(store.getState()))) {
-    for (const row of rows) {
-      listed.set(deleteStateKey(row), row)
+  const worktreesByRepo = selectWorktreesByRepo(store.getState())
+  let trackedIds: Set<string> | undefined
+  if (hostFailedDeleteStates.size > 0 || hostMarkedDeleteStates.size > 0) {
+    trackedIds = new Set<string>()
+    for (const shown of hostFailedDeleteStates.values()) {
+      trackedIds.add(shown.id)
+    }
+    for (const row of hostMarkedDeleteStates.values()) {
+      trackedIds.add(row.id)
     }
   }
+  let listed: Map<string, Worktree> | undefined
+  let flaggedIds: Set<string> | undefined
+  for (const repoId in worktreesByRepo) {
+    if (!Object.hasOwn(worktreesByRepo, repoId)) {
+      continue
+    }
+    for (const row of worktreesByRepo[repoId]) {
+      const flagged = Boolean(row.removalError || row.removing)
+      if (!flagged && !trackedIds?.has(row.id) && !flaggedIds?.has(row.id)) {
+        continue
+      }
+      listed ??= new Map()
+      listed.set(deleteStateKey(row), row)
+      if (flagged) {
+        flaggedIds ??= new Set()
+        flaggedIds.add(row.id)
+      }
+    }
+  }
+  if (!listed && hostFailedDeleteStates.size === 0 && hostMarkedDeleteStates.size === 0) {
+    return
+  }
   for (const [key, shown] of hostFailedDeleteStates) {
-    const row = listed.get(key)
+    const row = listed?.get(key)
     if (row?.removalError === shown.error && !row.removing) {
       continue
     }
@@ -69,28 +96,33 @@ export function reconcileHostWorktreeRemovals(store: AppStoreApi = useAppStore):
   }
   const state = store.getState()
   const marked: HostMarkedRow[] = []
-  for (const [key, row] of listed) {
-    const current = getDeleteStateForWorktreeHost(row, state.deleteStateByWorktreeId)
-    if (row.removalError && !row.removing) {
-      if (!current && !hostMarkedDeleteStates.has(key)) {
-        showHostFailure(store, { ...row, removalError: row.removalError })
+  if (listed) {
+    for (const [key, row] of listed) {
+      if (!row.removalError && !row.removing) {
+        continue
       }
-      continue
+      const current = getDeleteStateForWorktreeHost(row, state.deleteStateByWorktreeId)
+      if (row.removalError && !row.removing) {
+        if (!current && !hostMarkedDeleteStates.has(key)) {
+          showHostFailure(store, { ...row, removalError: row.removalError })
+        }
+        continue
+      }
+      if (!row.removing || hostMarkedDeleteStates.has(key)) {
+        continue
+      }
+      if (current?.isDeleting && current.phase !== 'queued') {
+        continue
+      }
+      hostMarkedDeleteStates.set(key, { id: row.id, hostId: row.hostId })
+      marked.push({ id: row.id, hostId: row.hostId })
     }
-    if (!row.removing || hostMarkedDeleteStates.has(key)) {
-      continue
-    }
-    if (current?.isDeleting && current.phase !== 'queued') {
-      continue
-    }
-    hostMarkedDeleteStates.set(key, { id: row.id, hostId: row.hostId })
-    marked.push({ id: row.id, hostId: row.hostId })
   }
   if (marked.length > 0) {
     state.markWorktreesDeleting(marked)
   }
   for (const [key, row] of hostMarkedDeleteStates) {
-    const listedRow = listed.get(key)
+    const listedRow = listed?.get(key)
     if (listedRow?.removing) {
       continue
     }

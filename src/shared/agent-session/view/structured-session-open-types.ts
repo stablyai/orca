@@ -26,6 +26,8 @@ export type StructuredSessionOpenFailure = {
   code?: string
   surface?: 'terminal'
   workspaceKind?: StructuredSessionRemovedWorkspaceKind
+  /** With `unknown`: the paired server (environment ID) the answering host started it on. */
+  pairedServer?: string
   detail?: string // Raw cause for a details disclosure; never decides a remedy.
 }
 export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }

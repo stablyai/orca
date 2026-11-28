@@ -3,11 +3,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import {
-  getExecutionHostIdFromWorktreeHostIdentity,
-  getWorktreeIdFromHostIdentity
-} from '../../../../shared/worktree/host-qualified-identity'
+import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { isLocalOnlyWorktreeMetaId } from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { resolveAliasIdentityKey } from './worktree-identity-alias'
@@ -17,16 +14,8 @@ type WorktreeMetaState = Pick<
   'worktreeMeta' | 'worktreeMetaByIdentity' | 'worktreeIdentityAliases'
 >
 
-// Local-only IDs cannot belong to remote hosts even when legacy rows lack stamps.
-function isExcludedWorktreeMetaRow(
-  worktreeId: string,
-  executionHostId: ExecutionHostId,
-  repoId?: string
-): boolean {
-  return (
-    (repoId !== undefined && getRepoIdFromWorktreeId(worktreeId) !== repoId) ||
-    (executionHostId !== LOCAL_EXECUTION_HOST_ID && isLocalOnlyWorktreeMetaId(worktreeId))
-  )
+function matchesRepoId(worktreeId: string, repoId: string, repoPrefix: string): boolean {
+  return worktreeId.startsWith(repoPrefix) || worktreeId === repoId
 }
 
 export function getAllWorktreeMetaForHost(
@@ -36,10 +25,13 @@ export function getAllWorktreeMetaForHost(
 ): Record<string, WorktreeMeta> {
   const { worktreeMeta, worktreeIdentityAliases: aliases, worktreeMetaByIdentity } = runtime.state
   const projected: Record<string, WorktreeMeta> = {}
+  const isRemoteHost = executionHostId !== LOCAL_EXECUTION_HOST_ID
+  const repoPrefix = repoId !== undefined ? `${repoId}${WORKTREE_ID_SEPARATOR}` : undefined
   for (const worktreeId in worktreeMeta) {
     if (
       !Object.hasOwn(worktreeMeta, worktreeId) ||
-      isExcludedWorktreeMetaRow(worktreeId, executionHostId, repoId)
+      (repoId !== undefined && !matchesRepoId(worktreeId, repoId, repoPrefix!)) ||
+      (isRemoteHost && isLocalOnlyWorktreeMetaId(worktreeId))
     ) {
       continue
     }
@@ -48,15 +40,25 @@ export function getAllWorktreeMetaForHost(
       projected[worktreeId] = meta
     }
   }
+  if (!aliases) {
+    return projected
+  }
+  const hostPrefix = composeWorktreeHostIdentity(executionHostId, '')
+  const hostRepoPrefix = repoPrefix !== undefined ? `${hostPrefix}${repoPrefix}` : undefined
+  const hostExactRepo = repoId !== undefined ? `${hostPrefix}${repoId}` : undefined
   for (const alias in aliases) {
-    if (
-      !Object.hasOwn(aliases, alias) ||
-      getExecutionHostIdFromWorktreeHostIdentity(alias) !== executionHostId
-    ) {
+    if (!Object.hasOwn(aliases, alias)) {
       continue
     }
-    const worktreeId = getWorktreeIdFromHostIdentity(alias)
-    if (!worktreeId || isExcludedWorktreeMetaRow(worktreeId, executionHostId, repoId)) {
+    if (hostRepoPrefix !== undefined) {
+      if (!alias.startsWith(hostRepoPrefix) && alias !== hostExactRepo) {
+        continue
+      }
+    } else if (!alias.startsWith(hostPrefix)) {
+      continue
+    }
+    const worktreeId = alias.slice(hostPrefix.length)
+    if (!worktreeId || (isRemoteHost && isLocalOnlyWorktreeMetaId(worktreeId))) {
       continue
     }
     const identityKey = resolveAliasIdentityKey(runtime.state, alias)

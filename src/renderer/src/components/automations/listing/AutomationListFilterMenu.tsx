@@ -1,8 +1,7 @@
 import React from 'react'
 import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
-import { X } from 'lucide-react'
+import { RailPageFilterPill } from '@/components/rail-page/RailPageFilterPill'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { BotFilterMenuRow, useRemoveBotFilterLabel } from './AutomationListBotFilterRow'
 import {
   DropdownMenu,
@@ -32,49 +31,6 @@ import {
   type AutomationListLastRunFilter,
   type AutomationListStatusFilter
 } from './automation-list-view'
-
-function FilterPill({
-  label,
-  value,
-  onClear,
-  removeLabel
-}: {
-  label: string
-  value: string
-  onClear: () => void
-  /** Overrides "Remove <label> filter" when the value names what is removed. */
-  removeLabel?: string
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/50 pl-2 pr-1 text-[11px] text-foreground">
-      <span className="text-muted-foreground">{label}:</span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="max-w-[140px] truncate font-medium">{value}</span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6} className="max-w-72 break-words">
-          {value}
-        </TooltipContent>
-      </Tooltip>
-      <button
-        type="button"
-        aria-label={
-          removeLabel ??
-          t(
-            'auto.components.automations.AutomationListFilterMenu.removeFilter',
-            'Remove {{value0}} filter',
-            { value0: label }
-          )
-        }
-        onClick={onClear}
-        className="rounded-full p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-      >
-        <X className="size-3" />
-      </button>
-    </span>
-  )
-}
 
 export function AutomationListFilterPills({
   filter,
@@ -124,7 +80,7 @@ export function AutomationListFilterPills({
   return (
     <>
       {filter.bot ? (
-        <FilterPill
+        <RailPageFilterPill
           label={t('auto.components.automations.AutomationListFilterMenu.bot', 'Bot')}
           value={filter.bot.name}
           onClear={() => onChange({ ...filter, bot: null })}
@@ -132,28 +88,28 @@ export function AutomationListFilterPills({
         />
       ) : null}
       {hostPillLabel && onClearHost ? (
-        <FilterPill
+        <RailPageFilterPill
           label={t('auto.components.automations.AutomationsPage.tableHost', 'Host')}
           value={hostPillLabel}
           onClear={onClearHost}
         />
       ) : null}
       {statusValueLabel ? (
-        <FilterPill
+        <RailPageFilterPill
           label={statusLabel}
           value={statusValueLabel}
           onClear={() => onChange({ ...filter, status: 'all' })}
         />
       ) : null}
       {lastRunValueLabel ? (
-        <FilterPill
+        <RailPageFilterPill
           label={lastRunLabel}
           value={lastRunValueLabel}
           onClear={() => onChange({ ...filter, lastRun: 'all' })}
         />
       ) : null}
       {agentValueLabel ? (
-        <FilterPill
+        <RailPageFilterPill
           label={t('auto.components.automations.AutomationListFilterMenu.agent', 'Agent')}
           value={agentValueLabel}
           onClear={() => onChange({ ...filter, agentIds: [] })}

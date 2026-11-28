@@ -5327,34 +5327,38 @@ private func printPermissionStatus() {
 
 private let selfResponsibleMarker = "ORCA_COMPUTER_USE_SELF_RESPONSIBLE"
 
-// Why: Orca spawns this probe directly to own its PID, so TCC must be told to judge this helper, not Orca.
-private func becomeSelfResponsible() {
+// Why: TCC judges the spawner's responsible app, so the probe and dev agents disclaim it to be judged as this helper.
+private func becomeSelfResponsible(required: Bool) {
     typealias ResponsiblePid = @convention(c) (pid_t) -> pid_t
     typealias SetDisclaim = @convention(c) (UnsafeMutablePointer<posix_spawnattr_t?>, Bool) -> Int32
+    func fail(_ message: String) {
+        fputs("\(message)\n", stderr)
+        if required {
+            exit(70)
+        }
+    }
     let defaultHandle = UnsafeMutableRawPointer(bitPattern: -2)
     guard let responsibleSymbol = dlsym(defaultHandle, "responsibility_get_pid_responsible_for_pid"),
           let disclaimSymbol = dlsym(defaultHandle, "responsibility_spawnattrs_setdisclaim")
     else {
-        fputs("permission status needs macOS responsibility disclaim\n", stderr)
-        exit(70)
+        return fail("computer-use helper needs macOS responsibility disclaim")
     }
     if unsafeBitCast(responsibleSymbol, to: ResponsiblePid.self)(getpid()) == getpid() {
         return
     }
     guard getenv(selfResponsibleMarker) == nil else {
-        fputs("permission status helper is still attributed to its parent\n", stderr)
-        exit(70)
+        return fail("computer-use helper is still attributed to its parent")
     }
     setenv(selfResponsibleMarker, "1", 1)
     var attributes: posix_spawnattr_t?
     posix_spawnattr_init(&attributes)
-    // SETEXEC replaces this image in place, so the PID Orca owns stays the probe's PID.
+    // SETEXEC replaces this image in place, so the PID Orca owns stays the helper's PID.
     posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETEXEC))
     _ = unsafeBitCast(disclaimSymbol, to: SetDisclaim.self)(&attributes, true)
     let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
     let status = posix_spawn(nil, executable, nil, &attributes, CommandLine.unsafeArgv, environ)
-    fputs("failed to re-exec permission status helper: \(String(cString: strerror(status)))\n", stderr)
-    exit(70)
+    posix_spawnattr_destroy(&attributes)
+    fail("failed to re-exec computer-use helper: \(String(cString: strerror(status)))")
 }
 
 private func runStdio() {
@@ -5464,6 +5468,9 @@ let permissionLocale = arguments.firstIndex(of: "--locale").flatMap { index -> S
 }
 let permissionCopy = PermissionWindowCopy(localeIdentifier: permissionLocale)
 if arguments.first == "--agent" {
+    if arguments.contains("--self-responsible") {
+        becomeSelfResponsible(required: false)
+    }
     guard arguments.count >= 2 else {
         fputs("usage: orca-computer-use-macos --agent <socket-path> --token-file <token-path>\n", stderr)
         exit(2)
@@ -5489,7 +5496,7 @@ if arguments.first == "--agent" {
         copy: permissionCopy
     )
 } else if arguments.first == "--permission-status" {
-    becomeSelfResponsible()
+    becomeSelfResponsible(required: true)
     printPermissionStatus()
 } else {
     runStdio()

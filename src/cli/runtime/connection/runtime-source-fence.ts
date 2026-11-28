@@ -9,7 +9,8 @@ import type {
   RuntimeRpcResponse
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { getPlatformUserDataPath } from '../profile/metadata'
+import { getDefaultUserDataPath, getPlatformUserDataPath } from '../profile/metadata'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 import { sendRequest } from './transport'
 import { RuntimeClientError } from './types'
 
@@ -19,8 +20,13 @@ type StatusProbe = (metadata: RuntimeMetadata) => Promise<RuntimeRpcResponse<Run
 export function resolveFencedRuntimeSource(
   stamp: RuntimeSourceStamp | null,
   userDataPath: string,
-  platformDefaultPath: string | null
+  platformDefaultPath: string | null,
+  platform: NodeJS.Platform = process.platform
 ): RuntimeSourceStamp | null {
+  // A Windows-stamped pane's WSL child cannot reach that runtime from a guest CLI; its own Orca is another one.
+  if (stamp?.profilePath && platform !== 'win32' && isWindowsAbsolutePathLike(stamp.profilePath)) {
+    return null
+  }
   if (!stamp?.profilePath || isSameUserDataPath(userDataPath, stamp.profilePath)) {
     return stamp
   }
@@ -83,7 +89,8 @@ export class RuntimeSourceFence {
 
 function resolveEnvRuntimeSource(
   env: Readonly<Record<string, string | undefined>>,
-  userDataPath: string
+  userDataPath: string,
+  platform: NodeJS.Platform = process.platform
 ): RuntimeSourceStamp | null {
   let platformDefaultPath: string | null = null
   try {
@@ -91,15 +98,53 @@ function resolveEnvRuntimeSource(
   } catch {
     // Without a platform default, no terminal can fall back to it.
   }
-  return resolveFencedRuntimeSource(readRuntimeSourceStamp(env), userDataPath, platformDefaultPath)
+  return resolveFencedRuntimeSource(
+    readRuntimeSourceStamp(env),
+    userDataPath,
+    platformDefaultPath,
+    platform
+  )
 }
 
 /** A terminal launched by another profile carries workspace ids that this runtime never issued. */
 export function isLaunchedByAnotherRuntime(
   env: Readonly<Record<string, string | undefined>>,
-  userDataPath: string
+  userDataPath: string,
+  platform: NodeJS.Platform = process.platform
 ): boolean {
-  return readRuntimeSourceStamp(env) !== null && resolveEnvRuntimeSource(env, userDataPath) === null
+  return (
+    readRuntimeSourceStamp(env) !== null &&
+    resolveEnvRuntimeSource(env, userDataPath, platform) === null
+  )
+}
+
+let foreignTerminalHandleDropped = false
+
+/** True once this run dropped another runtime's handle, so errors must not blame an env filter. */
+export function wasForeignTerminalHandleDropped(): boolean {
+  return foreignTerminalHandleDropped
+}
+
+/** Another runtime's handle names no terminal here; dropping it lets callers fall back to cwd inference. */
+export function dropForeignTerminalHandle(
+  env: Record<string, string | undefined>,
+  resolveUserDataPath: () => string = getDefaultUserDataPath,
+  platform: NodeJS.Platform = process.platform
+): void {
+  if (!env.ORCA_TERMINAL_HANDLE) {
+    return
+  }
+  let userDataPath: string
+  try {
+    userDataPath = resolveUserDataPath()
+  } catch {
+    // An unresolvable profile is reported by the client that needs it, not by every command here.
+    return
+  }
+  if (isLaunchedByAnotherRuntime(env, userDataPath, platform)) {
+    delete env.ORCA_TERMINAL_HANDLE
+    foreignTerminalHandleDropped = true
+  }
 }
 
 export function createRuntimeSourceFence(

@@ -15,7 +15,6 @@ import type { RuntimeOrchestrationFederation } from '../orchestration/federation
 import type {
   RuntimeGraphStatus,
   RuntimeMobileSessionCreateTerminalResult,
-  RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
@@ -68,22 +67,11 @@ import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../termina
 import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
 import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender-associations'
-
+import type { MobileSessionTabSubscription } from './mobile-session-tab-subscription'
+export type { MobileSessionTabSubscription } from './mobile-session-tab-subscription'
 import { RuntimeBotConstructionHooks } from './runtime-bot-construction-hooks'
 
 export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
-
-export type MobileSessionTabSubscription = {
-  listener: (
-    snapshot: RuntimeMobileSessionTabsResult,
-    changeSequence: number,
-    delivery?: 'reconciliation'
-  ) => void
-  clientNavigationId?: string
-  clientKind?: 'mobile' | 'runtime'
-  observation?: 'caller'
-  acceptsWorktree?: (worktree: string) => boolean
-}
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHooks {
   protected getLeafKey(tabId: string, leafId: string): string {

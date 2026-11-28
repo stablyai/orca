@@ -7,25 +7,35 @@ import { sessionTabPaneKey } from '../../../../../shared/remote-runtime/session-
 
 type Verdicts = Readonly<Record<string, AgentListVerdict>> | undefined
 
-function isUnread(
+function unreadVerdict(
   verdicts: Verdicts,
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
-): boolean {
+): Extract<AgentListVerdict, { listed: true }> | null {
   const paneKey = verdicts && sessionTabPaneKey(tab)
   const verdict = paneKey ? verdicts[paneKey] : undefined
-  return verdict?.listed === true && verdict.unread
+  return verdict?.listed === true && verdict.unread ? verdict : null
 }
 
 function projectSessionTabUnread(
   snapshot: RuntimeMobileSessionTabsResult,
   verdicts: Verdicts
 ): RuntimeMobileSessionTabsResult {
-  if (!verdicts || !snapshot.tabs.some((tab) => isUnread(verdicts, tab))) {
+  if (!verdicts || !snapshot.tabs.some((tab) => unreadVerdict(verdicts, tab) !== null)) {
     return snapshot
   }
   return {
     ...snapshot,
-    tabs: snapshot.tabs.map((tab) => (isUnread(verdicts, tab) ? { ...tab, unread: true } : tab))
+    tabs: snapshot.tabs.map((tab) => {
+      const verdict = unreadVerdict(verdicts, tab)
+      if (!verdict) {
+        return tab
+      }
+      return {
+        ...tab,
+        unread: true,
+        ...(verdict.sortAt > 0 ? { unreadAt: verdict.sortAt } : {})
+      }
+    })
   }
 }
 
@@ -48,12 +58,17 @@ export function sessionTabUnreadMarks(
 ): string {
   const verdicts =
     clientKind === 'mobile' ? runtime.readAgentListPublication?.()?.verdicts : undefined
-  return verdicts
-    ? snapshot.tabs
-        .filter((tab) => isUnread(verdicts, tab))
-        .map((tab) => tab.id)
-        .join('\n')
-    : ''
+  if (!verdicts) {
+    return ''
+  }
+  const marks: string[] = []
+  for (const tab of snapshot.tabs) {
+    const verdict = unreadVerdict(verdicts, tab)
+    if (verdict) {
+      marks.push(`${tab.id}:${verdict.sortAt}`)
+    }
+  }
+  return marks.join('\n')
 }
 
 const paneKeysBySnapshot = new WeakMap<RuntimeMobileSessionTabsResult, ReadonlySet<string>>()

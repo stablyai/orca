@@ -864,7 +864,9 @@
         "pending": "Bağlanıyor…",
         "tools_one": "{{count}} araç",
         "tools_other": "{{count}} araç",
-        "waitingForSignIn": "Oturum açılması bekleniyor…"
+        "waitingForSignIn": "Oturum açılması bekleniyor…",
+        "orcaRemoved": "Kaldırıldı: sonraki mesajda yeniden başlar",
+        "orcaChanged": "Değiştirildi: sonraki mesajda yeniden başlar"
       },
       "source": {
         "project": "Proje",
@@ -897,7 +899,8 @@
         "failed": "Başarısız: {{count}}"
       },
       "pasteHint": "Tarayıcı yüklenmeyen bir sayfaya yönlendiğinde adresi kopyalayıp buraya yapıştırın.",
-      "manage": "MCP sunucularını yönet"
+      "manage": "MCP sunucularını yönet",
+      "stillFailing": "Yeniden bağlandıktan sonra hâlâ başarısız."
     },
     "restartNote": {
       "continued": "Orca, yeniden başlatmanın ardından bu ajandan devam etmesini istedi. İsteminiz yeniden gönderilmedi.",
@@ -6680,7 +6683,6 @@
       "suggestThree": "{{a}}, {{b}} ve {{c}}",
       "suggestMore": "{{a}}, {{b}} ve {{count}} tane daha",
       "pickOne": "Bir bot seçin",
-      "needsTwoBots": "{{host}} üzerinde 2 bot gerekir",
       "peerReadItems": "{{bot}}, öğeleriyle ilgili bir güncellemeyi okudu",
       "remoteReplied": "{{computer}} üzerinde yanıt verdi",
       "remoteNotice": "{{computer}} üzerinde yanıt vermedi",
@@ -8547,6 +8549,7 @@
     "workspacesCount": "{{count}} çalışma alanı",
     "workspacesAllButCount": "{{count}} hariç tümü",
     "headerMissing": "Bu sunucuyu eklemek için {{header}} alanını doldurun.",
-    "servers": "Sunucular"
+    "servers": "Sunucular",
+    "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar açılamıyor. Yeniden oturum açın."
   }
 }

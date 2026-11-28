@@ -84,8 +84,8 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
-16 src/main/bots/bot-tool-credentials.ts # +1 botToolCredentialFingerprints: botToolCredentialsFingerprint split so one store read serves every credential; +1 botToolCredentialsReader: one store read serves every sign-in and saved-value lookup of a list, check or write
-3 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read
+14 src/main/bots/bot-tool-credentials.ts # +1 botToolCredentialFingerprints: botToolCredentialsFingerprint split so one store read serves every credential; +1 botToolCredentialsReader: one store read serves every sign-in and saved-value lookup of a list, check or write
+5 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read; +2 withSavedBotToolHeaders moved from bot-tool-credentials.ts (its row went 16 to 14), read per edit
 3 src/main/bots/bot-tool-secret-scrub.ts
 3 src/main/bots/bot-tools-claude.ts # claudeOwnServerNames: one read of the account config for its user and per-folder servers, once per chat launch that has host servers
 21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys; +1 botOwnTools and changeSnapshot: one credential store read per list and write instead of one per row
@@ -136,7 +136,6 @@
 16 src/main/browser/cookies/staging/browser-session-cookie-staging.ts
 3 src/main/browser/extensions/api-runtime/browser-extension-worker-shim-source.ts
 3 src/main/browser/extensions/browser-extension-management.ts
-1 src/main/browser/extensions/browser-extension-startup.ts
 6 src/main/browser/extensions/installation/browser-extension-load-directory.ts
 2 src/main/browser/extensions/installation/browser-extension-webstore-install.ts
 1 src/main/browser/extensions/native-messaging/browser-extension-native-host-process.ts
@@ -162,7 +161,7 @@
 1 src/main/browser/sessions/browser-session-frame-preloads.ts
 1 src/main/browser/sessions/profiles/browser-session-meta-store.ts
 1 src/main/browser/sessions/profiles/browser-session-profile-retirement.ts
-6 src/main/browser/sessions/profiles/browser-session-registry.ts
+5 src/main/browser/sessions/profiles/browser-session-registry.ts
 1 src/main/browser/site-settings/browser-profile-site-store.ts
 1 src/main/browser/site-settings/display/browser-site-display-store.ts
 1 src/main/browser/site-settings/permissions/browser-site-permission-store.ts
@@ -398,11 +397,12 @@
 5 src/main/daemon/executable-host/macos/macos-retired-daemon-recovery.ts
 11 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
 2 src/main/daemon/executable-host/windows/daemon-host-file-hash-cache.ts
+2 src/main/daemon/executable-host/windows/daemon-host-manifest.ts # copyFilteredTreeSync replaces a filtered cpSync (sync-fs row raised with it); once per daemon-host staging; #51222 replaces it
 1 src/main/daemon/executable-host/windows/daemon-host-reclaim.ts
 18 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts
 3 src/main/daemon/health/daemon-liveness-report.ts
-5 src/main/daemon/history/restoration/history-reader.ts
+6 src/main/daemon/history/restoration/history-reader.ts # +1: openDirectorySync replaces its own opendirSync (sync-fs count dropped by 1); one-shot restore listing
 16 src/main/daemon/history/storage/history-manager.ts
 3 src/main/daemon/history/storage/terminal-history-file-reader.ts
 6 src/main/daemon/history/storage/terminal-history-metadata.ts
@@ -546,7 +546,7 @@
 17 src/main/grok/hook-service.ts
 1 src/main/hang-watchdog/hang-detection-marker.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog.ts
-6 src/main/hang-watchdog/previous-hang-detection.ts
+5 src/main/hang-watchdog/previous-hang-detection.ts
 4 src/main/hang-watchdog/renderer-hang-records.ts
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
@@ -614,8 +614,6 @@
 2 src/main/ipc/hooks/register-worktree-hook-file-handlers.ts
 1 src/main/ipc/linear/register-handlers.ts
 7 src/main/ipc/notebook.ts
-1 src/main/ipc/notifications/notification-authorization-status.ts
-2 src/main/ipc/notifications/notifications.ts
 5 src/main/ipc/orca-uninstall.ts
 3 src/main/ipc/plugins/plugin-management-ipc.ts # moved from plugins.ts for lazy IPC loading
 2 src/main/ipc/plugins/plugins.ts # lazy loader references registerPluginManagementHandlers
@@ -648,7 +646,7 @@
 1 src/main/ipc/register-core-handlers/lazy-account-and-diagnostic-ipc-handlers.ts # diagnostics charge moved from direct registration; the module imports on first invoke, so mkdirSync never runs at boot
 2 src/main/ipc/register-core-handlers/lazy-rare-ipc-handlers.ts # charges moved from register-core-handlers; handlers import on first invoke, so the blocking helpers never run at boot
 2 src/main/ipc/register-core-handlers/lazy-setup-ipc-handlers.ts # cli and shell handler charges moved from register-core-handlers; modules import on first invoke, never at boot
-8 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
+7 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
@@ -669,7 +667,6 @@
 2 src/main/ipc/settings/settings.ts
 3 src/main/ipc/shell/shell.ts
 5 src/main/ipc/source-control/hosted-review.ts
-3 src/main/ipc/ssh/plain-ssh-terminal-handlers.ts
 2 src/main/ipc/ssh/ssh-connection-handlers.ts
 2 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 2 src/main/ipc/ssh/ssh-target-crud-handlers.ts
@@ -697,7 +694,7 @@
 2 src/main/ipc/wsl/wsl-host-automation-wake-wiring.ts
 8 src/main/ipc/wsl/wsl-host-handlers.ts
 6 src/main/ipc/wsl/wsl-move-driver-wiring.ts
-3 src/main/ipc/wsl/wsl-move-orchestrator-wiring.ts
+2 src/main/ipc/wsl/wsl-move-orchestrator-wiring.ts
 1 src/main/ipc/wsl/wsl-move-release-here.ts
 2 src/main/ipc/wsl/wsl-move-undo-wiring.ts
 8 src/main/jcode/hook-service.ts
@@ -752,7 +749,7 @@
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
 3 src/main/mcp-servers/mcp-host-list-launch.ts # mcpServersForLaunch moved from mcp-host-list.ts: reads the host list per chat launch and per orca mcp connect; +2 the saved-values digests, read at launch and after Orca writes the list
-3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+4 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does; +1 commitBotToolOAuth: Sign in replaces a saved entry that doesn't open on this computer, once per press
 10 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does; +2 botOwnTools for a list from one credential store read, and botOwnTool now reading the store in its own file
 1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
 1 src/main/mcp-servers/session-mcp-at-rest.ts # /mcp tray reads for a chat its agent can't list: one credential store read for the host list's sign-ins, as mcpServers.list does
@@ -1124,7 +1121,7 @@
 8 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts
 1 src/main/runtime/agent-session/records/local-agent-session-record-store-startup-open.ts
-4 src/main/runtime/browser/commands/browser-profiles.ts
+3 src/main/runtime/browser/commands/browser-profiles.ts
 1 src/main/runtime/client/settings/runtime-client-settings.ts
 3 src/main/runtime/construction/desktop-workspace-services.ts
 1 src/main/runtime/construction/runtime-identity-state.ts
@@ -1358,8 +1355,8 @@
 1 src/main/startup/main-process-ipc-bootstrap.ts
 2 src/main/startup/main-process-observers.ts
 1 src/main/startup/main-process-preflight-failure.ts
-25 src/main/startup/main-process-preflight.ts
-15 src/main/startup/main-process-ready-foundation.ts
+23 src/main/startup/main-process-preflight.ts
+14 src/main/startup/main-process-ready-foundation.ts
 2 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
@@ -1375,7 +1372,8 @@
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
 1 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
-15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
+6 src/main/startup/runtime-startup/launch-serve-mode.ts # one-shot headless serve startup split out of main-process-runtime-launch.ts for lazy desktop boot (net -1)
+8 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 3 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
 3 src/main/startup/serve-launch/main-process-serve.ts
@@ -1383,7 +1381,7 @@
 1 src/main/startup/serve-launch/serve-user-data-path-guard.ts
 4 src/main/startup/shell-environment/windows-shell-path-hydration.ts
 1 src/main/startup/uninstall/agent-hooks-uninstall-preflight.ts
-2 src/main/startup/uninstall/wsl-holder-uninstall-preflight.ts
+1 src/main/startup/uninstall/wsl-holder-uninstall-preflight.ts
 3 src/main/startup/windows-install-permissions/windows-install-dir-acl-probe.ts
 13 src/main/startup/windows-install-permissions/windows-install-dir-acl-recovery.ts
 4 src/main/startup/windows-install-permissions/windows-install-dir-package-acl-grant.ts
@@ -1432,7 +1430,7 @@
 1 src/main/webhooks/webhook-call-runs.ts
 1 src/main/webhooks/webhook-host-ledger.ts
 2 src/main/webhooks/webhook-host-newer-agent-hooks.ts # the ledger's two secure writes, moved out of webhook-host-ledger.ts (its count dropped by 2)
-8 src/main/window/attach-main-window-services.ts
+6 src/main/window/attach-main-window-services.ts
 2 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 3 src/main/window/desktop-integration/app-icon.ts
 1 src/main/window/desktop-integration/custom-app-icon.ts
@@ -1471,7 +1469,8 @@
 3 src/main/wsl/discovery/wsl-availability.ts
 2 src/main/wsl/discovery/wsl-console-running-distros.ts
 2 src/main/wsl/discovery/wsl-distro-boot-id.ts
-4 src/main/wsl/discovery/wsl-distro-holder.ts
+2 src/main/wsl/discovery/wsl-distro-holder-command.ts # moved from wsl-distro-holder.ts with spawnDetachedHolder (cached wsl.exe path, interop cwd stat)
+2 src/main/wsl/discovery/wsl-distro-holder.ts
 4 src/main/wsl/discovery/wsl-installation.ts
 1 src/main/wsl/discovery/wsl-registered-distro-fallback.ts
 2 src/main/wsl/execution/wsl-exe-process.ts
@@ -1494,15 +1493,16 @@
 8 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
-4 src/main/wsl/host-lifecycle/wsl-host-connector.ts
+1 src/main/wsl/host-lifecycle/wsl-host-account-migration.ts # per user Connect of an unpinned host after a mismatch: one root wsl.exe transport; its only sync step is the cached wsl.exe existsSync
+3 src/main/wsl/host-lifecycle/wsl-host-connector.ts
 6 src/main/wsl/host-lifecycle/wsl-host-kept-for-peers.ts
 2 src/main/wsl/host-lifecycle/wsl-host-removal.ts
 1 src/main/wsl/host-lifecycle/wsl-host-uninstall-server-stop.ts
 1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
-1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
+1 src/main/wsl/orcad/wsl-orcad-account-facts.ts # per connect of a pinned host: one default-user wsl.exe transport; its only sync step is the cached wsl.exe existsSync
 1 src/main/wsl/orcad/wsl-orcad-active-probe.ts
 2 src/main/wsl/orcad/wsl-orcad-connection.ts
-7 src/main/wsl/orcad/wsl-orcad-deploy.ts
+6 src/main/wsl/orcad/wsl-orcad-deploy.ts
 1 src/main/wsl/orcad/wsl-orcad-failed-install-removal.ts
 2 src/main/wsl/orcad/wsl-orcad-host-transport.ts
 5 src/main/wsl/orcad/wsl-orcad-instance-adoption.ts
@@ -1530,6 +1530,7 @@
 2 src/shared/agent-hook-listener/providers/muse/muse-session-log.ts
 2 src/shared/agent-hook-listener/transcript-lines.ts
 2 src/shared/agent-hook-listener/transcript-reader.ts
+1 src/shared/agent-hook-listener/transport/agent-hook-endpoint-temp-cleanup.ts # openDirectorySync replaces its own opendirSync (sync-fs count dropped by 1); same bounded sweep per endpoint publication
 4 src/shared/agent-hook-listener/transport/agent-hook-spool.ts
 1 src/shared/agent-hook-listener/transport/endpoint-publication.ts
 1 src/shared/agent-launch/installation/local-agent-install-dir-detection.ts

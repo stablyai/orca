@@ -27,10 +27,6 @@ on:
         required: false
         type: boolean
         default: false
-      fast_release:
-        description: Use the faster unsigned-build runner outside signing provenance
-        type: boolean
-        default: true
       javascript_source_sha:
         description: Restore this run's shared dev JavaScript instead of rebuilding it
         type: string
@@ -63,11 +59,6 @@ on:
         required: true
         type: string
 
-      fast_release:
-        description: Use Blacksmith for unsigned Windows builds
-        type: boolean
-        default: true
-
 permissions:
   contents: read
 
@@ -81,15 +72,14 @@ jobs:
     if: github.repository == 'stablyai/orca'
     # Use mac workflows’ same environment for cross-repo App secrets.
     environment: adhoc-mac-build
-    # The fast image has VS Build Tools 2022; signed release provenance stays separate.
-    runs-on: ${{ inputs.fast_release && 'blacksmith-8vcpu-windows-2025' || 'windows-2022' }}
+    runs-on: windows-2022
     permissions:
       contents: read
       actions: read
     timeout-minutes: 90
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
-      JOBS: ${{ inputs.fast_release && 'max' || '' }}
+      JOBS: ${{ inputs.stage_only && 'max' || '' }}
       NODE_OPTIONS: --max-old-space-size=4096
       CHANNEL: ${{ inputs.channel }}
       TAG: ${{ inputs.tag }}
@@ -143,7 +133,7 @@ jobs:
           echo "Vetted $CHANNEL $TAG at $REQUESTED_SHA"
 
       - name: Enable parallel checkout
-        if: inputs.fast_release
+        if: inputs.stage_only
         shell: bash
         run: |
           git config --global checkout.workers 0
@@ -263,7 +253,7 @@ jobs:
 
       # Inline so refs predating the wait can still use the trusted dispatch workflow.
       - name: Wait for the qualified orcad template
-        if: inputs.fast_release && inputs.stage_only && inputs.orcad_template
+        if: inputs.stage_only && inputs.orcad_template
         uses: actions/github-script@v8
         with:
           script: |

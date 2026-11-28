@@ -206,8 +206,7 @@ it('words sent from the box with picks on several questions show once, as a comm
     )
   )
   act(() => result.current.steps!.pick(0, 'Yes'))
-  act(() => result.current.steps!.pick(1, 'No'))
-  // Every line picked, so the box names none: the picks go with the words, in one comment.
+  // The box's × closed, so it names no line: the pick goes with the words, in one comment.
   act(() => void result.current.fromBox('what is the later part', [], null))
   expect(posted).toHaveLength(1)
   render(<Activity item={makeTestBotItem(1, { status: 'working' })} events={[asked, ...posted]} />)

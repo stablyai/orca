@@ -222,11 +222,13 @@ export function drainClaudeChildWork(
   }
   // Recheck cards and answer state so waits end when a card closes or its answer starts.
   session.childWork.observeWaiting(claudeWaitingChildIds(session))
-  return [
-    ...withClaudeChildWorkOwners(
-      session.childWork.drain(observedAt),
-      session.translator?.childToolOwner
-    ),
-    ...(message ? claudeChildOperation(message, session.translator?.childActivity, observedAt) : [])
-  ]
+  const drained = withClaudeChildWorkOwners(
+    session.childWork.drain(observedAt),
+    session.translator?.childToolOwner
+  )
+  const operation = message
+    ? claudeChildOperation(message, session.translator?.childActivity, observedAt)
+    : []
+  // Runs per streamed frame, which almost always has neither.
+  return operation.length === 0 ? drained : [...drained, ...operation]
 }

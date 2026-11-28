@@ -26,6 +26,7 @@ import { undeliveredBatchPayload } from './filesystem-watcher-local-events'
 import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import type { WatchWorktreeResult } from '../../../../shared/file-watch/watch-worktree-result'
 import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
+import { publishLocalWatchPause, sendLocalWatchPauseTo } from './filesystem-watcher-pause-state'
 
 const cancelledInstallWaiters = watcherLifecycleState.cancelledLocalInstallWaiters
 
@@ -61,6 +62,13 @@ export async function subscribeLocalWatcher(
   const finishInstall = beginWatcherInstall(worktreePath)
   try {
     await subscribeWhileRemovalAllowed(worktreePath, sender, generation, senderSignal)
+    // Every subscribe outcome settles here; publish even for a retired sender, whose install may have carried other windows.
+    const { key, path } = getLocalWatcherRoot(worktreePath)
+    if (isCurrentWatcherSender(sender, senderSignal)) {
+      sendLocalWatchPauseTo(key, path, sender)
+    } else {
+      publishLocalWatchPause(key, path)
+    }
   } finally {
     finishInstall()
   }
