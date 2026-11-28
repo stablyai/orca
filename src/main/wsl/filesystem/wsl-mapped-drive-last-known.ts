@@ -4,26 +4,46 @@
  */
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 
-/** A letter's settled answer: the share it maps to (null: nowhere), and when it was read. */
-export type WslMappedDriveAnswer = { letter: string; share: string | null; at: number }
+/** `read`: Windows answered; `failed`: the lookup errored. Absent on answers saved before either. */
+export type WslMappedDriveLookup = 'read' | 'failed'
 
-const lastKnown = new Map<string, { share: string | null; at: number }>()
+/** A letter's settled answer: the share it maps to (null: nowhere), when, and how it was learned. */
+export type WslMappedDriveAnswer = {
+  letter: string
+  share: string | null
+  at: number
+  lookup?: WslMappedDriveLookup
+}
+
+type Known = Omit<WslMappedDriveAnswer, 'letter'>
+
+const lastKnown = new Map<string, Known>()
 // Told every changed answer, so a restart knows a drive without reading it.
 let answerSink: ((answers: WslMappedDriveAnswer[]) => void) | null = null
+let settledListeners: (() => void)[] = []
 
 function isWslShare(share: string | null): share is string {
   return share !== null && parseWslUncPath(share) !== null
 }
 
-function settle(key: string, share: string | null, at: number): void {
-  lastKnown.set(key, { share, at })
+function settle(key: string, known: Known): void {
+  lastKnown.set(key, known)
   answerSink?.(wslMappedDriveAnswers())
+  const listeners = settledListeners
+  settledListeners = []
+  for (const listener of listeners) {
+    try {
+      listener()
+    } catch (error) {
+      console.warn('[wsl] Mapped-drive answer listener failed:', error)
+    }
+  }
 }
 
 /** A lookup's answer: the drive root's final path, kept as a share only inside WSL. */
 export function rememberWslMappedDriveRead(key: string, real: string, at: number): string | null {
   const share = isWslShare(real) ? real.replace(/[\\/]+$/, '') : null
-  settle(key, share, at)
+  settle(key, { share, at, lookup: 'read' })
   return share
 }
 
@@ -35,7 +55,7 @@ export function rememberWslMappedDriveFailure(key: string, at: number): boolean 
   if (isWslShare(lastKnown.get(key)?.share ?? null)) {
     return true
   }
-  settle(key, null, at)
+  settle(key, { share: null, at, lookup: 'failed' })
   return false
 }
 
@@ -45,16 +65,24 @@ export function setWslMappedDriveAnswerSink(
   answerSink = sink
 }
 
+/** Calls `listener` once, when the next lookup settles; returns the cancel. */
+export function onNextWslMappedDriveAnswer(listener: () => void): () => void {
+  settledListeners.push(listener)
+  return () => {
+    settledListeners = settledListeners.filter((other) => other !== listener)
+  }
+}
+
 export function wslMappedDriveAnswers(): WslMappedDriveAnswer[] {
   return [...lastKnown].map(([letter, known]) => ({ letter, ...known }))
 }
 
 /** Seeds answers read from disk; one already settled in this run is newer and wins. */
 export function seedWslMappedDriveAnswers(answers: readonly WslMappedDriveAnswer[]): void {
-  for (const { letter, share, at } of answers) {
+  for (const { letter, share, at, lookup } of answers) {
     const key = letter.toUpperCase()
     if (!lastKnown.has(key)) {
-      lastKnown.set(key, { share, at })
+      lastKnown.set(key, lookup ? { share, at, lookup } : { share, at })
     }
   }
 }
@@ -67,9 +95,11 @@ export function wslMappedDriveLastKnownShare(
   letter: string,
   maxAgeMs = Number.POSITIVE_INFINITY,
   now: number = Date.now()
-): { share: string | null } | null {
+): { share: string | null; lookup?: WslMappedDriveLookup } | null {
   const known = lastKnown.get(letter.toUpperCase())
-  return known && known.at <= now && now - known.at < maxAgeMs ? { share: known.share } : null
+  return known && known.at <= now && now - known.at < maxAgeMs
+    ? { share: known.share, lookup: known.lookup }
+    : null
 }
 
 /** Whether the letter's last answer, of any age, maps into WSL. */

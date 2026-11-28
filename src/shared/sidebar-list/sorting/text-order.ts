@@ -8,7 +8,6 @@ function isAsciiDigit(code: number): boolean {
 }
 
 const COMBINING_MARKS = /\p{M}/gu
-const NON_ASCII = /[\u0080-\u{10ffff}]/u
 
 function isPureAscii(text: string): boolean {
   for (let i = 0; i < text.length; i += 1) {
@@ -35,7 +34,7 @@ function foldSidebarText(text: string): string {
     return text
   }
   const lower = text.toLowerCase()
-  return NON_ASCII.test(lower) ? lower.normalize('NFD').replace(COMBINING_MARKS, '') : lower
+  return isPureAscii(lower) ? lower : lower.normalize('NFD').replace(COMBINING_MARKS, '')
 }
 
 function codePointLength(code: number): number {

@@ -178,6 +178,7 @@ export function NativeChatAgentMessageRow({
         className={cn(
           'group/agent-row relative -mx-1 flex w-[calc(100%+0.5rem)] min-h-6 items-center gap-1.5 rounded-md px-1 font-sans text-sm leading-relaxed text-chat-foreground-faint',
           toggles && 'hover:bg-foreground/[0.04]',
+          '@max-[400px]/agent-row:has-[[data-agent-start-items]]:items-start',
           previewShown &&
             '@max-[400px]/agent-row:flex-wrap @max-[400px]/agent-row:gap-y-0 @max-[400px]/agent-row:pb-1'
         )}
@@ -198,7 +199,10 @@ export function NativeChatAgentMessageRow({
             </span>
           </button>
         ) : null}
-        <span className={cn(content, 'flex shrink-0')} aria-hidden={toggles || undefined}>
+        <span
+          className={cn(content, 'flex min-h-lh shrink-0 items-center')}
+          aria-hidden={toggles || undefined}
+        >
           <NativeChatEventIcon badge={badge}>{icon}</NativeChatEventIcon>
         </span>
         {toggles ? null : <span className="sr-only">{`${lead} `}</span>}
@@ -210,12 +214,11 @@ export function NativeChatAgentMessageRow({
         <span
           className={cn(
             content,
-            // The first line takes only the room left, so it gives way first, down to a few words or to
-            // the room a name and an item need to keep a few letters each. Past its cap, or once the
-            // row's end leaves too little, the name, then its items, cut short. Several items can need
-            // more than the cap, so it clips sideways only, keeping focus rings whole.
+            // The preview takes only the room left after the names, so it gives way first. Past the cap
+            // the name, then its items, cut short; past their floors the end clips sideways only, keeping
+            // focus rings whole. A narrow row moves item chips that can't fit beside the name under it.
             'flex min-w-0 max-w-[max(100cqw-13rem,14rem)] shrink items-center overflow-x-clip gap-1 font-medium whitespace-nowrap text-chat-foreground',
-            '@max-[400px]/agent-row:max-w-fit @max-[400px]/agent-row:shrink @max-[400px]/agent-row:grow @max-[400px]/agent-row:basis-0'
+            '@max-[400px]/agent-row:max-w-fit @max-[400px]/agent-row:shrink @max-[400px]/agent-row:grow @max-[400px]/agent-row:basis-0 @max-[400px]/agent-row:has-[[data-agent-start-items]]:flex-wrap'
           )}
         >
           {names(!toggles)}
@@ -238,7 +241,7 @@ export function NativeChatAgentMessageRow({
         ) : null}
         {!toggles && time ? <span className="sr-only">{`, ${time}`}</span> : null}
         {/* Pinned to the row's end: actions, then the time's slot, then the chevron, always last. */}
-        <span ref={endRef} className="ml-auto flex shrink-0 items-center gap-1.5">
+        <span ref={endRef} className="ml-auto flex min-h-lh shrink-0 items-center gap-1.5">
           {action ? (
             // Width-revealed rather than faded, so the hidden buttons never cover the row's own button.
             <span ref={actionRef} className={cn(content, REVEAL, 'flex items-center')}>

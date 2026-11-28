@@ -1,5 +1,6 @@
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtyCheckpointScheduler } from './daemon-pty-checkpoint-scheduler'
+import { readDaemonLiveSleepCwd } from '../adapter/daemon-live-sleep-cwd'
 import type { SnapshotCheckpointResult } from '../adapter/daemon-pty-runtime-state'
 import type { GetSnapshotResult, TakePendingOutputResult } from '../../protocol/daemon-rpc-contract'
 
@@ -83,6 +84,13 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
+      return 'done'
+    }
+    if (!this.wslDistrosBySessionId.has(sessionId)) {
+      const probedCwd = await readDaemonLiveSleepCwd(this.client, sessionId)
+      if (probedCwd) {
+        await this.historyManager.recordProbedCwd(sessionId, probedCwd)
+      }
     }
     return 'done'
   }
@@ -112,8 +120,11 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
                 ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
                 : {})
             })
-      // Set only inside an exclusive final pass (Sleep or quit), so no other checkpoint sees it.
-      const probedCwd = this.probedShellCwds.get(sessionId)
+      const probedCwd =
+        this.probedShellCwds.get(sessionId) ??
+        (!durable.cwd && !this.wslDistrosBySessionId.has(sessionId)
+          ? await readDaemonLiveSleepCwd(this.client, sessionId)
+          : null)
       const snapshot = probedCwd ? { ...durable, cwd: probedCwd } : durable
       const checkpoint = await this.historyManager.checkpoint(sessionId, snapshot, {
         pendingOutputSeq: take.seq

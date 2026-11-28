@@ -1,6 +1,5 @@
 /** Measure runtime writes that replace equal-valued references; lint cannot infer payload equality. Dev/exposed stores only, one flag check while disarmed; armed comparisons never resolve functional updaters, which remain Zustand-owned. */
 import type { StateCreator } from 'zustand'
-import type { StoreSetArgs } from './react-commit-cascade-write-probe'
 
 export const storeIdentityChurnProbe = { armed: false, captureSites: false }
 
@@ -150,28 +149,33 @@ export function withStoreIdentityChurnProbe<TState>(
 ): StateCreator<TState, [], []> {
   return (set, get, api) => {
     const probe = (write: typeof set): typeof set => {
-      const forward = (args: StoreSetArgs<TState>): void => {
-        if (args[1] === true) {
-          write(...args)
-        } else {
-          write(...args)
-        }
-      }
-      return (...args: StoreSetArgs<TState>): void => {
+      const wrapped = (
+        partial: TState | Partial<TState> | ((state: TState) => TState | Partial<TState>),
+        replace?: boolean
+      ): void => {
         if (!storeIdentityChurnProbe.armed) {
-          forward(args)
+          if (replace === true) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace=true overload requires a complete TState or updater returning TState.
+            write(partial as TState | ((state: TState) => TState), true)
+          } else {
+            write(partial, false)
+          }
           return
         }
         const previous = get()
         // Why the write is passed through untouched: zustand owns when and how an
         // updater runs. The probe only compares the states on either side of it.
-        forward(args)
+        if (replace === true) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace=true overload requires a complete TState or updater returning TState.
+          write(partial as TState | ((state: TState) => TState), true)
+        } else {
+          write(partial, false)
+        }
         try {
           const next = get()
           if (next === previous || !isPlainRecord(previous) || !isPlainRecord(next)) {
             return
           }
-          const [partial, replace] = args
           const fields =
             replace !== true && partial !== null && typeof partial === 'object'
               ? Object.keys(partial)
@@ -181,6 +185,8 @@ export function withStoreIdentityChurnProbe<TState>(
           // A diagnostic on the app's universal write path must never break writes.
         }
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: named parameters implement both Zustand setState overloads without rest-args allocation.
+      return wrapped as typeof set
     }
     // Why separately: an outer middleware may hand slices a different `set` than api.setState.
     api.setState = probe(api.setState)

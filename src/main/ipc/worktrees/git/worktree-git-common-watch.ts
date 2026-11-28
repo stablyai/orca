@@ -57,6 +57,7 @@ export async function startGitCommonWatch(
       )
     ])
     return {
+      syncRepos: () => narrowWatch.syncRepos(),
       unsubscribe: async () => {
         await Promise.all([narrowWatch.unsubscribe(), primaryWatch.unsubscribe()])
       }

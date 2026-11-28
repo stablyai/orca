@@ -89,11 +89,15 @@ export function terminalFontOptions(scope: TerminalDocumentScope) {
 }
 
 // A native WebView has no asset server, so its host sends the picked bundled face as CSS.
-function installFontFaceCss(css: unknown) {
+function installFontFaceCss(font: TerminalFontStyle['font'], css: unknown) {
   if (typeof css !== 'string' || css === '' || typeof document === 'undefined') {
     return
   }
+  if (document.head.querySelector(`style[data-orca-terminal-font="${font}"]`)) {
+    return
+  }
   const style = document.createElement('style')
+  style.setAttribute('data-orca-terminal-font', font)
   style.textContent = css
   document.head.appendChild(style)
 }
@@ -145,7 +149,7 @@ export function applyTerminalFontStyle(
   }
   scope.terminalFontStyle = style
   scope.terminalFontLoad = null
-  installFontFaceCss(fontFaceCss)
+  installFontFaceCss(style.font, fontFaceCss)
   const family = terminalFontFamilyCss(style.font, isIOSWebView())
   const face = terminalFontFace(style.font)
   if (!face || fontFaceLoaded(face)) {

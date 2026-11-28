@@ -23,22 +23,29 @@ export type SmartAttentionIndexes = {
   mirroredTabIds: ReadonlySet<string>
 }
 
+export const EMPTY_MIRRORED_TAB_IDS: ReadonlySet<string> = new Set()
+
 export function buildMirroredTabIds(
   tabsByWorktree: Record<string, readonly SmartAttentionTab[]> | null
 ): ReadonlySet<string> {
-  const mirroredTabIds = new Set<string>()
-  if (tabsByWorktree) {
-    for (const worktreeId in tabsByWorktree) {
-      if (!Object.hasOwn(tabsByWorktree, worktreeId)) {
-        continue
-      }
-      const tabs = tabsByWorktree[worktreeId]
-      for (let i = 0; i < tabs.length; i += 1) {
-        mirroredTabIds.add(tabs[i].id)
-      }
+  if (!tabsByWorktree) {
+    return EMPTY_MIRRORED_TAB_IDS
+  }
+  let mirroredTabIds: Set<string> | undefined
+  for (const worktreeId in tabsByWorktree) {
+    if (!Object.hasOwn(tabsByWorktree, worktreeId)) {
+      continue
+    }
+    const tabs = tabsByWorktree[worktreeId]
+    if (tabs.length === 0) {
+      continue
+    }
+    mirroredTabIds ??= new Set<string>()
+    for (let i = 0; i < tabs.length; i += 1) {
+      mirroredTabIds.add(tabs[i].id)
     }
   }
-  return mirroredTabIds
+  return mirroredTabIds ?? EMPTY_MIRRORED_TAB_IDS
 }
 
 export function buildSmartAttentionIndexes(
@@ -46,10 +53,15 @@ export function buildSmartAttentionIndexes(
   agentStatusByPaneKey: AgentStatusRows | undefined,
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
 ): SmartAttentionIndexes {
+  const entriesByAttributedWorktreeId = buildExplicitEntriesByWorktreeId(agentStatusByPaneKey)
   return {
     entriesByTabId: buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId),
-    entriesByAttributedWorktreeId: buildExplicitEntriesByWorktreeId(agentStatusByPaneKey),
-    mirroredTabIds: buildMirroredTabIds(tabsByWorktree)
+    entriesByAttributedWorktreeId,
+    // mirroredTabIds is only consulted for worktrees with attributed agent status entries.
+    mirroredTabIds:
+      entriesByAttributedWorktreeId.size > 0
+        ? buildMirroredTabIds(tabsByWorktree)
+        : EMPTY_MIRRORED_TAB_IDS
   }
 }
 

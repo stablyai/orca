@@ -90,6 +90,7 @@ export function useMobilePairingGeneration(params: {
             setPairQrDataUrl(null)
             setPairQrSize(null)
             setPairingUrl(null)
+            setPairExpiresAt(null)
             setPairingQrError(false)
             if (result.reason === 'relay_mint_failed' && result.relayFailure) {
               setRelayMintFailure(result.relayFailure)
@@ -113,6 +114,7 @@ export function useMobilePairingGeneration(params: {
           setPairQrDataUrl(null)
           setPairQrSize(null)
           setPairingUrl(null)
+          setPairExpiresAt(null)
           setPairingQrError(false)
           setRelayMintFailure(null)
           toast.error(

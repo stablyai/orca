@@ -1,5 +1,4 @@
 import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambiguity'
-import '../../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../../transport/connection/logical-client-cutover-error'
 import { RpcIncompatibleReplyError } from '../../../transport/rpc/rpc-incompatible-reply-error'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../../src/shared/execution-host/project-runtime-repair-message'

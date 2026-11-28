@@ -19,7 +19,6 @@ import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambiguity'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import '../../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../../transport/connection/logical-client-cutover-error'
 import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from '../composer/delivery/mobile-native-chat-send'
 import { translate } from '../../../i18n/mobile-i18n'

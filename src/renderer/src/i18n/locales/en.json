@@ -5795,7 +5795,8 @@
             "startChat": "Start a chat with {{value0}}",
             "cliTag": "(CLI)",
             "agentsLoading": "Loading agents",
-            "chatNotOnWindows": "No chat on Windows yet"
+            "chatNotOnWindows": "No chat on Windows yet",
+            "chatUpdateRequired": "Update CLI for chat"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",

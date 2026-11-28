@@ -49,7 +49,6 @@ import {
   type ReadyProjectHostSetupOption
 } from '@/lib/workspace/creation/project-host-setup-options'
 import { useAppStore } from '@/store/index'
-import '@/lib/workspace/creation/new-workspace-composer-repo'
 import { getNewWorkspaceDialogEligibleRepos } from '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 
 export function useTargetChangeActions(input: TargetChangeActionsInput) {

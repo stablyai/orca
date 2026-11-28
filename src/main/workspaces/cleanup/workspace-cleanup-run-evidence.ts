@@ -2,10 +2,12 @@ import type { RuntimeStore } from '../../runtime/construction/runtime-store-cont
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
+  buildFolderMembership,
+  folderGroupByKey,
   folderGroupOf,
-  folderSiblingsByWorktree,
   summaryHostId,
-  summaryIdentity
+  summaryIdentity,
+  type FolderMembershipIndex
 } from './workspace-cleanup-folder-membership'
 import {
   pairedFolderChildrenOnce,
@@ -51,8 +53,11 @@ export type WorkspaceCleanupWorkspace = {
   removing: boolean
   /** Its host identity; every workspace here is this host's. */
   identity: string
-  /** The host identities of the other worktrees its folder workspace lists, on any host. */
-  folderSiblings: string[]
+  /** The host identities of the worktrees its folder workspace lists, on any host. */
+  folderSiblings: readonly string[]
+  /** Local folder key (`folder:<id>`) when this workspace belongs to a folder on this host. */
+  localFolderKey: string | null
+  findPairedHeldFolders: FolderMembershipIndex['findPairedHeldFolders']
   readPairedFolderChildren: () => Promise<PairedFolderChildren>
 }
 
@@ -193,35 +198,35 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   now: number
   worktreeId?: string
   withFolderSiblings?: boolean
-  /** The scan's read of paired servers, so a re-check never asks them again. */
+  /** Narrows a full listing to every owned member of one local folder for a group recheck. */
+  folderKey?: string
+  /** The scan's read of paired servers, or a fresh reader for pre-removal rechecks. */
   readPairedFolderChildren?: () => Promise<PairedFolderChildren>
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
-  const { store, runtime, globalRules, now, worktreeId, signal } = args
+  const { store, runtime, globalRules, now, worktreeId, folderKey, signal } = args
   const repos = listWorkspaceCleanupOwnedRepos(store)
-  // A re-check projects only its target, so M removals don't rebuild the whole host's listing M times;
-  // a folder member needs the whole listing to see who is in its folder now.
+  // A targeted re-check projects only its worktree; a folder re-check projects once for the group.
+  const needsFullListing = Boolean(args.withFolderSiblings || folderKey)
   const ps = await runtime.getWorktreePs(
     WORKTREE_PS_LIMIT,
     true,
     false,
-    args.withFolderSiblings ? undefined : worktreeId
+    needsFullListing ? undefined : worktreeId
   )
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')
   }
   const readPairedFolderChildren =
     args.readPairedFolderChildren ?? pairedFolderChildrenOnce(runtime)
-  const folderSiblingsOf = await folderSiblingsByWorktree(
-    store,
-    ps.worktrees,
-    readPairedFolderChildren
-  )
+  const membership = buildFolderMembership(store, ps.worktrees)
   const owned = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
   const summaries =
-    args.withFolderSiblings && worktreeId !== undefined
-      ? folderGroupOf(owned, worktreeId, folderSiblingsOf)
-      : owned
+    folderKey !== undefined
+      ? folderGroupByKey(owned, folderKey, membership.localFolderKeyOf)
+      : args.withFolderSiblings && worktreeId !== undefined
+        ? folderGroupOf(owned, worktreeId, membership.siblingsOf)
+        : owned
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
   for (const summary of summaries) {
     if (!policies.has(summary.repoId)) {
@@ -275,7 +280,9 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       paneAgentStates,
       removing: summary.removing === true,
       identity: summaryIdentity(summary),
-      folderSiblings: folderSiblingsOf(summary),
+      folderSiblings: membership.siblingsOf(summary),
+      localFolderKey: membership.localFolderKeyOf(summary),
+      findPairedHeldFolders: membership.findPairedHeldFolders,
       readPairedFolderChildren
     }
   })

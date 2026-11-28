@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 import type { Store } from '../../persistence/loading-store/store'
@@ -41,6 +42,17 @@ export async function attachOrcadRuntimeServices(args: {
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
   const relay = await installOrcadRelayAndAccount(runtime, registerCleanup)
+  const { BotShareClient } = await import('../../bots/sharing/bot-share-client')
+  const { skillPackageDownloadOrigins } =
+    await import('../../skills/runtime-transfer/skill-client-mediated-transfer')
+  const appEnv = getAppEnvironment()
+  const userDataPath = appEnv.getPath('userData')
+  const isPackaged = appEnv.isPackaged()
+  runtime.setBotShareClient(BotShareClient.forProfile(userDataPath), {
+    temporaryRoot: join(userDataPath, 'bot-share-downloads'),
+    allowedOrigins: skillPackageDownloadOrigins(!isPackaged),
+    requireHttps: isPackaged
+  })
   // Agents here set Google up through a paired desktop's browser; their key and secret stay here.
   const { installGoogleSetupHostWatch } = await import('../../google/google-setup-host-watch')
   registerCleanup(installGoogleSetupHostWatch(runtime))

@@ -11,7 +11,6 @@ import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-m
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
   getRuntimeFolderWorkspaceRootId,
-  isRuntimeFolderWorkspaceIdForRepo,
   mergeRuntimeFolderWorkspace
 } from './runtime-folder-workspace'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
@@ -39,6 +38,7 @@ function runtimeFolderWorkspaceRows(
   stamp: boolean
 ): Worktree[] {
   const rootId = getRuntimeFolderWorkspaceRootId(repo)
+  const instancePrefix = `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
   const allMeta = store.getAllWorktreeMeta()
   const expectedHostId = getRepoExecutionHostId(repo)
   // A project a WSL move is taking still lists, without stamping identities it lacks.
@@ -46,9 +46,8 @@ function runtimeFolderWorkspaceRows(
   const ids: string[] = [rootId]
   for (const worktreeId in allMeta) {
     if (
-      worktreeId !== rootId &&
+      worktreeId.startsWith(instancePrefix) &&
       Object.hasOwn(allMeta, worktreeId) &&
-      isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId) &&
       (repoOwnerCount === 1 || allMeta[worktreeId]?.hostId === expectedHostId)
     ) {
       ids.push(worktreeId)

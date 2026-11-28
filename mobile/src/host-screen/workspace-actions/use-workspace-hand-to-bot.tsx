@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { chatPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../src/shared/agent-session/view/chat-pane-address'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
 import {
   suggestedBotAgent,

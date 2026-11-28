@@ -252,10 +252,22 @@ export async function probeCodexVersion(codexCommand: string): Promise<string | 
 export async function sweepStaleCodexScratchHomes(): Promise<void> {
   const root = tmpdir()
   const names = await readdir(root).catch(() => [])
-  for (const name of names.filter((n) => SCRATCH_PREFIXES.some((p) => n.startsWith(p)))) {
+  const now = Date.now()
+  for (let i = 0; i < names.length; i += 1) {
+    const name = names[i]
+    let matched = false
+    for (let j = 0; j < SCRATCH_PREFIXES.length; j += 1) {
+      if (name.startsWith(SCRATCH_PREFIXES[j])) {
+        matched = true
+        break
+      }
+    }
+    if (!matched) {
+      continue
+    }
     const path = join(root, name)
     const info = await stat(path).catch(() => null)
-    if (info && Date.now() - info.mtimeMs > STALE_SCRATCH_MS) {
+    if (info && now - info.mtimeMs > STALE_SCRATCH_MS) {
       await removeTree(path).catch(() => {})
     }
   }

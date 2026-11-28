@@ -16,7 +16,6 @@ import type {
   MobileGitHistoryResult
 } from '../../history/git-history-reply-schema'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
-import './mobile-pr-create'
 import {
   mobileRepoSelectorFromWorktreeId,
   resolveMobileHostedReviewPrefill as resolveMobilePrPrefill

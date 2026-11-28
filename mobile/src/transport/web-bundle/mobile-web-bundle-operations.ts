@@ -14,7 +14,6 @@ import {
 } from './mobile-web-bundle-reply-schemas'
 import { isRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
 import { defineRpcOperation } from '../rpc/rpc-operation'
-import '../connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../connection/logical-client-cutover-error'
 import { rpcResultVariant } from '../rpc/rpc-operation-result-reader'
 
