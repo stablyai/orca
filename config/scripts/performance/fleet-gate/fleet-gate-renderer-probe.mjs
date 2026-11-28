@@ -1,9 +1,6 @@
 // Renderer counters over CDP: store publications, subscriber wakeups, no-op publications, long tasks, heap.
 
-// zustand's notify loop, minified or not: `listeners.forEach((listener) => listener(state, previousState))`.
-const NOTIFY_LOOP = /([\w$]+)\.forEach\(\(?([\w$]+)\)?\s*=>\s*\2\(([\w$]+),\s*([\w$]+)\)\)/g
-// Only the loop that follows zustand's merge of the next state, not any other forEach of the same shape.
-const STORE_MERGE = 'Object.assign({},'
+import { locateStoreNotifications } from './fleet-gate-store-notify.mjs'
 
 function installPageCounters() {
   if (globalThis.__fleetGateRenderer) {
@@ -63,41 +60,69 @@ export async function installRendererProbe(page) {
   await page.evaluate(installPageCounters)
   const cdp = await page.context().newCDPSession(page)
   const scripts = []
-  cdp.on('Debugger.scriptParsed', (event) => scripts.push(event))
-  await cdp.send('Debugger.enable')
-  await new Promise((resolve) => setTimeout(resolve, 1_000))
+  const onScriptParsed = (event) => scripts.push(event)
+  cdp.on('Debugger.scriptParsed', onScriptParsed)
+  const debuggerEnabled = await cdp.send('Debugger.enable').then(
+    () => true,
+    () => false
+  )
+  if (debuggerEnabled) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
+  cdp.off('Debugger.scriptParsed', onScriptParsed)
   let breakpoints = 0
+  let attachmentFailed = !debuggerEnabled
   for (const script of scripts) {
-    if (!script.url || script.length < 1_000) {
+    // A split renderer chunk can contain just the store factory and its React bindings.
+    if (!script.url) {
       continue
     }
-    const { scriptSource } = await cdp.send('Debugger.getScriptSource', {
-      scriptId: script.scriptId
-    })
-    for (const match of scriptSource.matchAll(NOTIFY_LOOP)) {
-      const window = scriptSource.slice(Math.max(0, match.index - 400), match.index)
-      if (!window.includes(STORE_MERGE)) {
-        continue
-      }
-      const [, listeners, , next, previous] = match
-      const start = offsetToLocation(scriptSource, match.index)
-      const end = offsetToLocation(scriptSource, match.index + match[0].length)
-      const { locations } = await cdp.send('Debugger.getPossibleBreakpoints', {
-        start: { scriptId: script.scriptId, ...start },
-        end: { scriptId: script.scriptId, ...end }
-      })
-      if (locations.length === 0) {
-        continue
-      }
-      await cdp.send('Debugger.setBreakpoint', {
-        location: locations[0],
-        condition: `globalThis.__fleetGateRenderer ? globalThis.__fleetGateRenderer.pub(${listeners}.size, ${next}, ${previous}) : false`
-      })
-      breakpoints += 1
+    const scriptContents = await cdp
+      .send('Debugger.getScriptSource', { scriptId: script.scriptId })
+      .catch(() => null)
+    if (!scriptContents) {
+      attachmentFailed = true
+      continue
     }
+    const { scriptSource } = scriptContents
+    if (!scriptSource) {
+      continue
+    }
+    for (const { start, end, listeners, next, previous } of locateStoreNotifications(
+      scriptSource
+    )) {
+      const possible = await cdp
+        .send('Debugger.getPossibleBreakpoints', {
+          start: { scriptId: script.scriptId, ...offsetToLocation(scriptSource, start) },
+          end: { scriptId: script.scriptId, ...offsetToLocation(scriptSource, end) },
+          restrictToFunction: true
+        })
+        .catch(() => null)
+      const location = possible?.locations[0]
+      if (!location) {
+        attachmentFailed = true
+        continue
+      }
+      const breakpoint = await cdp
+        .send('Debugger.setBreakpoint', {
+          location,
+          condition: `globalThis.__fleetGateRenderer ? globalThis.__fleetGateRenderer.pub(${listeners}.size, ${next}, ${previous}) : false`
+        })
+        .catch(() => null)
+      if (breakpoint) {
+        breakpoints += 1
+      } else {
+        attachmentFailed = true
+      }
+    }
+  }
+  const storeMeasured = breakpoints > 0 && !attachmentFailed
+  if (!storeMeasured && debuggerEnabled) {
+    await cdp.send('Debugger.disable').catch(() => {})
   }
   return {
     breakpoints,
+    storeMeasured,
     async reset() {
       await page.evaluate(() => globalThis.__fleetGateRenderer.reset())
     },

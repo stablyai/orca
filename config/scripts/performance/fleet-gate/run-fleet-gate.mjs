@@ -354,10 +354,15 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       result.incomplete.push('main probe could not count invoke(): R→M would miss requests')
     }
     const renderer = await installRendererProbe(page)
-    if (renderer.breakpoints === 0) {
-      result.incomplete.push('store notify loop not found: store pubs/wakeups not measured')
+    result.storeBreakpoints = renderer.breakpoints
+    result.storeMeasured = renderer.storeMeasured
+    if (!result.storeMeasured) {
+      result.notes.push(`${arm} store pubs/wakeups: not measured (probe could not attach)`)
     }
-    console.log(`[fleet-gate] ${label} up; settling ${options.settleMs / 1000}s`)
+    const storeStatus = result.storeMeasured
+      ? `${renderer.breakpoints} store breakpoint(s)`
+      : 'store probe unavailable'
+    console.log(`[fleet-gate] ${label} up; ${storeStatus}; settling ${options.settleMs / 1000}s`)
     // Pinned twice: UI state may still be loading the first time, so only the post-settle result counts.
     await pinClassicWorktreeCards(page)
     const agents = await seedAgentStatuses({ page, userDataDir, count: AGENT_PANES })
@@ -410,7 +415,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
         elapsedMs: elapsed,
         metrics: windowMetrics(
           main,
-          renderer.breakpoints > 0
+          result.storeMeasured
             ? rendererSnapshot
             : { ...rendererSnapshot, pubs: Number.NaN, noop: Number.NaN, wakeups: Number.NaN },
           elapsed
