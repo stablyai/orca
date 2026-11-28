@@ -59,16 +59,18 @@ export function AppRailExperimentalSetting({
               )}
             </p>
           </div>
-          <SettingsSegmentedControl
-            size="sm"
-            ariaLabelledBy="app-rail-visibility-label"
-            value={settings.appRailVisibility === 'always' ? 'always' : 'hover'}
-            onChange={(value) => void updateSettings({ appRailVisibility: value })}
-            options={[
-              { value: 'hover', label: t('appRail.visibility.hover', 'Show on hover') },
-              { value: 'always', label: t('appRail.visibility.always', 'Always show') }
-            ]}
-          />
+          <div className="shrink-0">
+            <SettingsSegmentedControl
+              size="sm"
+              ariaLabelledBy="app-rail-visibility-label"
+              value={settings.appRailVisibility === 'always' ? 'always' : 'hover'}
+              onChange={(value) => void updateSettings({ appRailVisibility: value })}
+              options={[
+                { value: 'hover', label: t('appRail.visibility.hover', 'Show on hover') },
+                { value: 'always', label: t('appRail.visibility.always', 'Always show') }
+              ]}
+            />
+          </div>
         </div>
       ) : null}
     </SearchableSetting>

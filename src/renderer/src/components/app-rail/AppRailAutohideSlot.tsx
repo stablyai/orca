@@ -101,6 +101,14 @@ export function AppRailAutohideSlot({
     let overPanel = panel.matches(':hover')
     let inZone = false
     let pressed = false
+    let menuFromPointer = false
+    const initialFocus = document.activeElement
+    let focusBeforeRail: HTMLElement | null =
+      initialFocus instanceof HTMLElement &&
+      initialFocus !== document.body &&
+      !panel.contains(initialFocus)
+        ? initialFocus
+        : null
     const clearShow = (): void => {
       window.clearTimeout(showTimer)
       showTimer = 0
@@ -208,16 +216,55 @@ export function AppRailAutohideSlot({
       }
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || !openRef.current || menuOpen()) {
+      if (event.key !== 'Escape' || !openRef.current) {
+        return
+      }
+      if (menuOpen()) {
+        // A menu opened with the pointer: Esc closes it and the rail follows once Radix has handed focus back.
+        if (menuFromPointer) {
+          window.setTimeout(() => {
+            returnFocus()
+            evaluate()
+          }, 50)
+        }
         return
       }
       clearShow()
       clearHide()
+      returnFocus()
+      setOpen(false)
+    }
+    // Give focus back to where it was before the rail (a blur would let the menu's focus recovery pull it back).
+    const returnFocus = (): void => {
       const active = document.activeElement
-      if (active instanceof HTMLElement && panel.contains(active)) {
+      const lost = !active || active === document.body
+      if (!lost && !(active instanceof HTMLElement && panel.contains(active))) {
+        return
+      }
+      if (focusBeforeRail?.isConnected) {
+        focusBeforeRail.focus({ preventScroll: true })
+      } else if (active instanceof HTMLElement) {
         active.blur()
       }
-      setOpen(false)
+    }
+    const onPanelPointerDown = (): void => {
+      menuFromPointer = true
+    }
+    const onPanelKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') {
+        menuFromPointer = false
+      }
+    }
+    // Focus moves are rare, so tracking the last focus outside the rail and its menus costs nothing.
+    const onWindowFocusIn = (event: FocusEvent): void => {
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        !panel.contains(target) &&
+        !target.closest('[role="menu"]')
+      ) {
+        focusBeforeRail = target
+      }
     }
     const onFocusIn = (): void => {
       clearShow()
@@ -255,13 +302,17 @@ export function AppRailAutohideSlot({
     window.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true })
     window.addEventListener('pointerup', onPointerUp, { capture: true, passive: true })
     window.addEventListener('blur', onBlur)
-    window.addEventListener('keydown', onKeyDown)
+    // Capture, so Esc is seen before a Radix menu closes on it.
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    window.addEventListener('focusin', onWindowFocusIn, { capture: true, passive: true })
     window.addEventListener('dragover', onDragOver, { passive: true })
     window.addEventListener('dragend', onDragEnd)
     window.addEventListener('drop', onDragEnd)
     root.addEventListener('mouseleave', onWindowLeave)
     panel.addEventListener('pointerenter', onPanelEnter)
     panel.addEventListener('pointerleave', onPanelLeave)
+    panel.addEventListener('pointerdown', onPanelPointerDown)
+    panel.addEventListener('keydown', onPanelKeyDown)
     panel.addEventListener('focusin', onFocusIn)
     panel.addEventListener('focusout', onFocusOut)
     evaluate()
@@ -273,13 +324,16 @@ export function AppRailAutohideSlot({
       window.removeEventListener('pointerdown', onPointerDown, { capture: true })
       window.removeEventListener('pointerup', onPointerUp, { capture: true })
       window.removeEventListener('blur', onBlur)
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDown, { capture: true })
+      window.removeEventListener('focusin', onWindowFocusIn, { capture: true })
       window.removeEventListener('dragover', onDragOver)
       window.removeEventListener('dragend', onDragEnd)
       window.removeEventListener('drop', onDragEnd)
       root.removeEventListener('mouseleave', onWindowLeave)
       panel.removeEventListener('pointerenter', onPanelEnter)
       panel.removeEventListener('pointerleave', onPanelLeave)
+      panel.removeEventListener('pointerdown', onPanelPointerDown)
+      panel.removeEventListener('keydown', onPanelKeyDown)
       panel.removeEventListener('focusin', onFocusIn)
       panel.removeEventListener('focusout', onFocusOut)
     }
