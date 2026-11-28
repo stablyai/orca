@@ -201,29 +201,38 @@ export async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  if (startupCommandWritten && opts.command) {
-    staging.current = stageStartupCommand({
-      command: opts.command,
-      shellPath: subprocess.shellPath,
+  const buildStagedSubmission = (command: string, shellPath = subprocess.shellPath): string => {
+    const staged = stageStartupCommand({
+      command,
+      shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined
     })
-    const notice = startupStagingFailureNotice(staging.current)
+    staging.current = staged
+    const notice = startupStagingFailureNotice(staged)
     if (notice) {
       session.startupIngress.accept(notice)
       try {
         deps.reportReadinessEvent?.('startup-command-stage-failed', {
           sessionId: opts.sessionId,
-          reason: staging.current.failure
+          reason: staged.failure
         })
       } catch {
         // Diagnostics must never turn a live PTY into a failed create.
       }
     }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.writeStartupCommand(
-      buildStartupCommandSubmission(staging.current.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
+    return buildStartupCommandSubmission(staged.command, {
+      bracketedPasteSafe: shellReadySupported
+    })
+  }
+  const command = opts.command
+  if (command && startupCommandWritten) {
+    session.writeStartupCommand(buildStagedSubmission(command))
+  } else if (command && shellReadySupported) {
+    // The zsh wrapper runs the command from its first line editor; an rc file that execs tmux or another shell never gets there.
+    // Stage for the program that replaced zsh: fish has no `.` builtin.
+    session.armStartupCommandExecFallback((foregroundShell) =>
+      buildStagedSubmission(command, foregroundShell)
     )
   }
 

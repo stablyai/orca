@@ -26,6 +26,7 @@ import {
   resolveInheritedZdotdir
 } from '../../pty/shell-startup/zsh-wrapper-dir-ownership'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 
@@ -111,6 +112,8 @@ export type ShellLaunchConfig = {
   args: string[] | null
   env: Record<string, string>
   supportsReadyMarker: boolean
+  /** The wrapper runs the startup command itself from its first line editor; nothing may type it. */
+  startupCommandDeliveredByWrapper?: boolean
 }
 
 const UNWRAPPED: ShellLaunchConfig = {
@@ -124,6 +127,8 @@ export function getShellLaunchConfig(
   features: readonly ShellStartupFeature[],
   options?: {
     hasStartupCommand?: boolean
+    /** zsh only: hand this command to the wrapper instead of typing it after the ready marker. */
+    startupCommand?: string
     inheritedXdgDataDirs: string | undefined
     shellArgs?: readonly string[]
   }
@@ -138,14 +143,24 @@ export function getShellLaunchConfig(
       // Fall back rather than point ZDOTDIR at incomplete wrappers that suppress user config.
       return { args: ['-l'], env: {}, supportsReadyMarker: false }
     }
+    // Typed startup lines race user rc files that read the TTY (oh-my-zsh's update question took the first key).
+    const startupCommand = options?.startupCommand || undefined
+    const wrapperFeatures =
+      startupCommand !== undefined && !features.includes('startup')
+        ? [...features, 'startup' as const]
+        : features
     return {
       args: ['-l'],
       env: {
         ...inheritedZdotdirEnv(resolveInheritedZdotdir(process.env)),
         ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh'),
-        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
+        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(wrapperFeatures),
+        ...(startupCommand !== undefined
+          ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand }
+          : {})
       },
-      supportsReadyMarker: features.includes('ready')
+      supportsReadyMarker: features.includes('ready'),
+      ...(startupCommand !== undefined ? { startupCommandDeliveredByWrapper: true } : {})
     }
   }
 
