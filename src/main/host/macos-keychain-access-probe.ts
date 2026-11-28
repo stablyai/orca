@@ -173,8 +173,9 @@ async function runAccessProbe(
   } catch {
     return 'unknown'
   } finally {
+    // Cleanup must not delay `settled`: the persistent-grant grace compares child exit times.
     if (dir) {
-      await rm(dir, { recursive: true, force: true }).catch(() => {})
+      void rm(dir, { recursive: true, force: true }).catch(() => {})
     }
   }
 }
