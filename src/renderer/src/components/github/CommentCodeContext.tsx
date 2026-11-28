@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { loadAfterMonacoUiLocale } from '@/lib/editor/monaco/monaco-ui-locale'
 import {
   createCommentCodeContextExpansionState,
   resolveCommentCodeContextExpansionState,
@@ -23,7 +24,9 @@ import type {
   GitHubPRFileContents
 } from '../../../../shared/github/pull-requests/pull-request-types'
 
-const MonacoCodeExcerpt = lazy(() => import('@/components/editor/monaco/MonacoCodeExcerpt'))
+const MonacoCodeExcerpt = lazy(() =>
+  loadAfterMonacoUiLocale(() => import('@/components/editor/monaco/MonacoCodeExcerpt'))
+)
 
 const CODE_CONTEXT_EXPAND_STEP = 5
 const CODE_CONTEXT_FALLBACK_LINES = 20

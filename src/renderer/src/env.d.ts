@@ -8,6 +8,8 @@ import type { TerminalWorktreeParkingDebugVerdict } from './components/terminal-
 import type { TerminalPtyPreSpawnE2EBarrier } from './components/terminal-pane/pty-transport/ipc/terminal-pty-pre-spawn-e2e-barrier'
 import type { LocalLayoutStreamE2EEnd } from './runtime/workspace-layout/testing/local-layout-stream-e2e-end'
 
+declare module 'monaco-editor/esm/nls.messages.*.js'
+
 declare module 'monaco-editor/esm/vs/basic-languages/python/python.js' {
   export const conf: languages.LanguageConfiguration
   export const language: languages.IMonarchLanguage
@@ -147,6 +149,9 @@ declare global {
         getWorker(workerId: string, label: string): Worker
       }
     | undefined
+  /** Set by a Monaco locale pack; Monaco reads it on every string lookup. */
+  var _VSCODE_NLS_MESSAGES: (string | null)[] | undefined
+  var _VSCODE_NLS_LANGUAGE: string | undefined
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
     __paneManagers?: Map<string, PaneManager>

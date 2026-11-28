@@ -21,8 +21,11 @@ import {
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useTranslate } from '@/i18n/use-translate'
+import { loadAfterMonacoUiLocale } from '@/lib/editor/monaco/monaco-ui-locale'
 
-const DiffViewer = lazy(() => import('../diff/monaco-view/DiffViewer'))
+const DiffViewer = lazy(() =>
+  loadAfterMonacoUiLocale(() => import('../diff/monaco-view/DiffViewer'))
+)
 
 type DiskReadState =
   | { kind: 'loading' }
