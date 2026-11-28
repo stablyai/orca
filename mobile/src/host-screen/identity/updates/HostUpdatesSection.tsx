@@ -150,10 +150,8 @@ export function HostUpdatesSection(props: {
     hostCapabilities.includes(REMOTE_SERVER_UPDATE_CAPABILITY) &&
     support?.automatic === true
   const orcaDue = latest !== null && latest !== installed
-  const closeSheet = () => {
-    setSheetOpen(false)
-    settleHostOrcaUpdate(hostId)
-  }
+  // A finished update is settled by the toast that says so, once the sheet is closed.
+  const closeSheet = () => setSheetOpen(false)
   const sheet = (
     <HostOrcaUpdateSheet
       visible={sheetOpen}

@@ -60,6 +60,8 @@ const listeners = new Set<() => void>()
 /** Identity only: compared by reference, never read. */
 type HostOrcaUpdateOwner = Record<string, never>
 const owners = new Map<string, HostOrcaUpdateOwner>()
+// Restart-impact reads per computer in use; goes with its owner.
+const impactReads = new WeakMap<HostOrcaUpdateOwner, number>()
 
 function ownerOf(hostId: string): HostOrcaUpdateOwner {
   let owner = owners.get(hostId)
@@ -254,15 +256,24 @@ export async function downloadHostOrcaUpdate(
     return
   }
   write(hostId, (update) => ({ ...update, entry: downloaded }), owner)
-  await refreshHostOrcaRestartImpact(connections, hostId)
+  await refreshHostOrcaRestartImpact(connections, hostId, owner)
 }
 
 /** Reads again what a restart would stop, right before the confirm is shown. */
 export async function refreshHostOrcaRestartImpact(
   connections: RpcClientContextValue,
-  hostId: string
+  hostId: string,
+  owner: HostOrcaUpdateOwner = ownerOf(hostId)
 ): Promise<void> {
-  const owner = ownerOf(hostId)
+  // A download that finished as its computer was removed brings nothing back into the store.
+  if (owners.get(hostId) !== owner) {
+    return
+  }
+  const readNumber = (impactReads.get(owner) ?? 0) + 1
+  impactReads.set(owner, readNumber)
+  // Only the newest read decides; an older one landing late never reopens the confirm on its list.
+  const latest = (update: HostOrcaUpdate, next: HostOrcaRestartImpact): HostOrcaUpdate =>
+    impactReads.get(owner) === readNumber ? { ...update, impact: next } : update
   // Restart stays off until this read lands, so it never confirms against an older list.
   write(hostId, (update) => ({ ...update, impact: { state: 'loading' } }), owner)
   try {
@@ -272,9 +283,9 @@ export async function refreshHostOrcaRestartImpact(
         timeoutMs: STATUS_READ_TIMEOUT_MS
       })
     )
-    write(hostId, (update) => ({ ...update, impact: { state: 'ready', impact } }), owner)
+    write(hostId, (update) => latest(update, { state: 'ready', impact }), owner)
   } catch {
-    write(hostId, (update) => ({ ...update, impact: { state: 'unknown' } }), owner)
+    write(hostId, (update) => latest(update, { state: 'unknown' }), owner)
   }
 }
 
