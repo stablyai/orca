@@ -20089,8 +20089,7 @@
           "more": "Plus d'actions sur l'artifact"
         },
         "ArtifactCollection": {
-          "loadMore": "Charger plus",
-          "noMatches": "Aucun résultat"
+          "loadMore": "Charger plus"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Toute personne disposant de ce lien peut le consulter",

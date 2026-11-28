@@ -157,6 +157,12 @@
           "cleared_other": "Cleared {{count}} completed agents"
         }
       },
+      "artifacts": {
+        "ArtifactListTableHeader": {
+          "name": "Name",
+          "size": "Size"
+        }
+      },
       "automations": {
         "AutomationDetail": {
           "graceHours_one": "{{count}} hour",

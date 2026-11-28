@@ -79,7 +79,7 @@ function updatedSinceMs(filter: ArtifactListUpdatedFilter, nowMs: number): numbe
       return nowMs - 7 * DAY_MS
     case 'month':
       return nowMs - 30 * DAY_MS
-    default:
+    case 'any':
       return null
   }
 }

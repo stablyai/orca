@@ -25,6 +25,33 @@ function withoutSlug(current: DeletingState | null, identity: string, slug: stri
   return slugs.size === 0 ? null : { identity, slugs }
 }
 
+/** Module-level so the hook stays compilable: React Compiler cannot lower try/catch with a throw. */
+async function deleteOneArtifact(
+  slug: string,
+  requestedAccountIsCurrent: () => boolean,
+  refreshAuth: () => Promise<unknown>
+): Promise<'deleted' | 'stale' | 'failed'> {
+  try {
+    const result = await callRuntimeRpc<ArtifactCloudOperation<void>>(
+      LOCAL_RUNTIME,
+      'artifacts.delete',
+      { id: slug }
+    )
+    if (!requestedAccountIsCurrent()) {
+      return 'stale'
+    }
+    if (result.status !== 'ok') {
+      await refreshAuth()
+      console.error('Failed to delete artifact:', result.status)
+      return 'failed'
+    }
+    return 'deleted'
+  } catch (deleteError) {
+    console.error('Failed to delete artifact:', deleteError)
+    return 'failed'
+  }
+}
+
 /** One confirm for any number of artifacts, then deletes them one at a time so a failure stops the rest. */
 export function useArtifactDeletion({
   accountIdentity,
@@ -110,26 +137,13 @@ export function useArtifactDeletion({
         setDeleting((current) => withoutSlug(current, requestedIdentity, slug))
         continue
       }
-      try {
-        const result = await callRuntimeRpc<ArtifactCloudOperation<void>>(
-          LOCAL_RUNTIME,
-          'artifacts.delete',
-          { id: slug }
-        )
-        if (!requestedAccountIsCurrent()) {
-          continue
-        }
-        if (result.status !== 'ok') {
-          await refreshAuth()
-          throw new Error(result.status)
-        }
+      const outcome = await deleteOneArtifact(slug, requestedAccountIsCurrent, refreshAuth)
+      if (outcome === 'deleted') {
         removeArtifact(requestedIdentity, slug)
-      } catch (deleteError) {
-        console.error('Failed to delete artifact:', deleteError)
+      } else if (outcome === 'failed') {
         failedCount = items.length - index
-      } finally {
-        setDeleting((current) => withoutSlug(current, requestedIdentity, slug))
       }
+      setDeleting((current) => withoutSlug(current, requestedIdentity, slug))
     }
     if (failedCount > 0 && requestedAccountIsCurrent()) {
       setError(

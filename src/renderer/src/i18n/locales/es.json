@@ -19798,8 +19798,7 @@
           "more": "Más acciones del artefacto"
         },
         "ArtifactCollection": {
-          "loadMore": "Cargar más",
-          "noMatches": "Sin resultados"
+          "loadMore": "Cargar más"
         },
         "updatedAt": "Actualizado {{when}}",
         "updatedRecently": "recientemente",

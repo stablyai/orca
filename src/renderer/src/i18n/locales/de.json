@@ -20181,8 +20181,7 @@
           "more": "Weitere Artefakt-Aktionen"
         },
         "ArtifactCollection": {
-          "loadMore": "Mehr laden",
-          "noMatches": "Keine Treffer"
+          "loadMore": "Mehr laden"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Alle mit diesem Link können das Artefakt ansehen",

@@ -19582,8 +19582,7 @@
           "more": "更多产物操作"
         },
         "ArtifactCollection": {
-          "loadMore": "加载更多",
-          "noMatches": "没有匹配的产物"
+          "loadMore": "加载更多"
         },
         "ArtifactDetailHeader": {
           "publicLink": "任何持有此链接的人都可以查看",

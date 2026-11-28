@@ -124,9 +124,12 @@ export function ArtifactListFilterMenu({
           <DropdownMenuSubContent>
             <DropdownMenuRadioGroup
               value={filter.updated}
-              onValueChange={(value) =>
-                onChange({ ...filter, updated: value as ArtifactListUpdatedFilter })
-              }
+              onValueChange={(value) => {
+                const option = updatedOptions(t).find((each) => each.value === value)
+                if (option) {
+                  onChange({ ...filter, updated: option.value })
+                }
+              }}
             >
               {updatedOptions(t).map((option) => (
                 <DropdownMenuRadioItem key={option.value} value={option.value}>
@@ -141,9 +144,12 @@ export function ArtifactListFilterMenu({
           <DropdownMenuSubContent>
             <DropdownMenuRadioGroup
               value={filter.expires}
-              onValueChange={(value) =>
-                onChange({ ...filter, expires: value as ArtifactListExpiresFilter })
-              }
+              onValueChange={(value) => {
+                const option = expiresOptions(t).find((each) => each.value === value)
+                if (option) {
+                  onChange({ ...filter, expires: option.value })
+                }
+              }}
             >
               {expiresOptions(t).map((option) => (
                 <DropdownMenuRadioItem key={option.value} value={option.value}>

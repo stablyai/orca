@@ -21102,8 +21102,7 @@
           "more": "Другие действия с артефактом"
         },
         "ArtifactCollection": {
-          "loadMore": "Загрузить ещё",
-          "noMatches": "Нет совпадений"
+          "loadMore": "Загрузить ещё"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Любой, у кого есть ссылка, сможет просмотреть",

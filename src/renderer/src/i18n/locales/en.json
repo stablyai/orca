@@ -20539,7 +20539,6 @@
         },
         "ArtifactCollection": {
           "loadMore": "Load more",
-          "noMatches": "No matches",
           "noMatchingArtifacts": "No matching artifacts"
         },
         "ArtifactDetailHeader": {
