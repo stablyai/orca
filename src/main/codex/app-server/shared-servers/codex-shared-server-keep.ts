@@ -80,8 +80,13 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
           if (!live()) {
             throw new Error(`codex app-server connection is closed (${method})`)
           }
-          const left =
-            timeoutMs === null ? {} : { timeoutMs: Math.max(1, timeoutMs - (Date.now() - askedAt)) }
+          const remaining = timeoutMs === null ? null : timeoutMs - (Date.now() - askedAt)
+          if (remaining !== null && remaining <= 0) {
+            throw new CodexAppServerTimeoutError(
+              `codex app-server ${method} waited past its timeout`
+            )
+          }
+          const left = remaining === null ? {} : { timeoutMs: remaining }
           return await connection.request(method, params, { ...options, ...left })
         } finally {
           release()

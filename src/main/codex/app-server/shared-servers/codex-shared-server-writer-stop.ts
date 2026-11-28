@@ -36,17 +36,21 @@ export async function seedRunningCodexTurns(
   return settled.every((read) => read.status === 'fulfilled')
 }
 
-/** Marks the chat's threads the server has loaded as live. A failed listing marks none and leaves
- *  the chat's workload unproven (Stop reports it), rather than retrying reads that can't succeed. */
-async function markLoadedThreadsLive(reads: Reads, lease: CodexSharedServerLease): Promise<true> {
+/** A kept run's threads that may still run here: those the server lists as loaded (marked live, so
+ *  cleanup reaches them), or, when the listing fails, every one of them for this attempt only. */
+async function keptRunThreads(reads: Reads, lease: CodexSharedServerLease): Promise<string[]> {
   const loaded = await listCodexLoadedThreads(reads).catch(() => null)
+  // Unlisted, a quiet helper's terminals can't be told apart: its workload stays unproven.
   lease.helpersUnread = loaded === null
+  if (!loaded) {
+    return [...lease.threads]
+  }
   for (const threadId of lease.threads) {
-    if (loaded?.has(threadId)) {
+    if (loaded.has(threadId)) {
       lease.liveThreads.add(threadId)
     }
   }
-  return true
+  return [...lease.liveThreads]
 }
 
 /** Interrupts every turn on the chat's threads, the helpers it announces meanwhile included;
@@ -64,8 +68,14 @@ export async function stopCodexLeaseWriter(
   // run (a quiet one sends nothing), so they're stopped like live ones.
   const seeded =
     !lease.restored ||
-    ((await markLoadedThreadsLive(reads, lease)) &&
-      (await seedRunningCodexTurns(reads, lease.liveThreads, turns, requestTimeoutMs)))
+    (await seedRunningCodexTurns(
+      reads,
+      await keptRunThreads(reads, lease),
+      turns,
+      requestTimeoutMs
+    ))
+  // A read that failed may fail again: a retry waits for something that could change that.
+  lease.readsFailed = !seeded
   // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
   await turns.waitUntil(
     () => lease.pendingOpens.size === 0 && !turns.anyStartPending([...lease.threads]),

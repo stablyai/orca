@@ -47,6 +47,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   handedOff = false
   /** A kept run's close couldn't list which of its helpers still run here. */
   helpersUnread = false
+  /** A kept run's close couldn't read some thread's turn. */
+  readsFailed = false
   readonly unregister: () => void
   private closing: Promise<boolean> | null = null
   private closeAnnounced = false

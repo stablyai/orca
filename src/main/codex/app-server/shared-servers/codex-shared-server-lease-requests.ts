@@ -24,6 +24,8 @@ export type CodexLeaseRequestOwner = {
   readonly id: string
   readonly chatEnv: Readonly<Record<string, string>>
   readonly open: boolean
+  /** Quit handed its part to the daemon: it reads nothing more. */
+  readonly handedOff: boolean
   readonly host: CodexSharedLeaseHost
   /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
   readonly pendingOpens: Set<Promise<unknown>>
@@ -100,7 +102,9 @@ export async function sendCodexLeaseRequest(
     method === 'turn/start' && typeof params?.threadId === 'string' ? params.threadId : null
   let callerGone = false
   const via =
-    (METADATA_READS.has(method) && host.relay?.metadataReads(() => owner.open)) || host.connection
+    (METADATA_READS.has(method) &&
+      host.relay?.metadataReads(() => owner.open && !owner.handedOff)) ||
+    host.connection
   const sent = via.request(
     method,
     opensThread ? withLeaseTag(params, owner.id, owner.chatEnv) : params,
