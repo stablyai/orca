@@ -66,6 +66,10 @@ export async function startCodexSharedServer(
   }
   if (expected && connection.relay?.reattached) {
     server.keep.work.seed(connection.relay.openWork())
+    // Lines the spool let go may be any held chat's: each catches up from history instead.
+    if (connection.relay.spoolCut?.()) {
+      server.recovery.cutFromNowOn()
+    }
     if (relayed?.handedBack) {
       restoreCodexSharedRecovery(server, relayed.handedBack, expected)
     }

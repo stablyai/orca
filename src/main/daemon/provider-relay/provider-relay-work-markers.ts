@@ -10,7 +10,7 @@ export type ProviderRelayWorkChange =
   | { group: string; effect: 'start' | 'end'; key: string }
   | { group: string; effect: 'roster'; keys: string[] }
 
-const KEY_SEPARATOR = '\u0000'
+export const KEY_SEPARATOR = '\u0000'
 /** No marker names it, so nothing ends it: a chat that carries it never idle-stops. */
 const UNACCOUNTED_GROUP = 'unaccounted-work'
 

@@ -119,6 +119,7 @@ export function codexConnectionRelay(
     releaseOutput: () => child.releaseOutput(),
     endedWork: () => child.attachResult?.endedWork,
     openWork: () => child.attachResult?.openWork,
-    recordSeq: () => child.stdout?.relayRecords?.seq?.() ?? null
+    recordSeq: () => child.stdout?.relayRecords?.seq?.() ?? null,
+    spoolCut: () => child.attachResult?.truncatedThrough !== undefined
   }
 }

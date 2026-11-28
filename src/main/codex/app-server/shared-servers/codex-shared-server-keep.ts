@@ -197,11 +197,10 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
     }
     this.handedOff = true
     if (leases.length > 0 || this.quitOpen !== undefined || !this.server.recovery.empty) {
-      // Every chat's work, held chats' too, so the daemon can still idle-stop it.
-      const open = mergeWork(
-        this.quitOpen === undefined ? {} : this.quitOpen,
-        this.work.snapshot(this.server.turns)
-      )
+      // Every chat's work, held chats' too, as the server saw it end: a turn a handed-off chat
+      // reported running that completed since isn't brought back. A chat that couldn't say
+      // leaves it unknown.
+      const open = this.quitOpen === null ? null : this.work.snapshot(this.server.turns)
       trackProviderRelayQuitWork(
         detachProviderRelayForQuit(this.server.relayed?.chatKey ?? '', open)
       )

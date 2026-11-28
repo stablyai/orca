@@ -56,6 +56,8 @@ export type CodexAppServerConnection = {
     keep?: () => Promise<void>
     /** The daemon seq of the frame being handled now (read inside a handler); null when unknown. */
     recordSeq?: () => number | null
+    /** The daemon's spool let kept lines go before this attach (at its memory or file cap). */
+    spoolCut?: () => boolean
   }
 }
 import type { ProviderProcessCloseResult } from '../../provider-process/provider-process-close'
