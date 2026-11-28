@@ -7,7 +7,8 @@ import type { DecodedClaudeTask, EndedClaudeTask } from './claude-child-work-evi
 /** Long enough for a resumed owner's first frame, short enough that a wrong guess settles quickly. */
 export const CLAUDE_CHILD_WAKE_LEASE_MS = 60_000
 
-type Wake = { at: number; owner: EndedClaudeTask }
+/** `at` is stamped at the next drain, so the lease runs on the same clock that settles it. */
+type Wake = { at?: number; owner: EndedClaudeTask }
 
 /** What a wake reaches back into the decoder to undo or confirm. */
 export type ClaudeChildWakeHost = {
@@ -50,7 +51,7 @@ export class ClaudeChildWake {
     this.host.showWorking(ownerId, owner.task)
     // Why: Claude does not resume an owner whose remaining descendants end later (or one whose
     // worktree is gone), so the guess must expire or the row stays working until the chat closes.
-    this.wakes.set(ownerId, { at: Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS, owner })
+    this.wakes.set(ownerId, { owner })
   }
 
   /** The provider says this owner runs: the guess was right, or an expired wake is undone and re-admitted. */
@@ -61,11 +62,6 @@ export class ClaudeChildWake {
     }
   }
 
-  /** Whether this owner's wake already ran out, so the decoder must not read it as done. */
-  spent(id: string): boolean {
-    return this.expired.has(id)
-  }
-
   /** Accept a later running report for an owner whose wake ran out; `false` for any other ended task. */
   confirmedRunning(id: string): boolean {
     return this.expired.delete(id)
@@ -73,7 +69,10 @@ export class ClaudeChildWake {
 
   /** Settle the wakes that ran out before anyone reads the row; no further frame need arrive. */
   settleExpired(now: number): void {
-    const due = [...this.wakes].filter(([, wake]) => wake.at <= now)
+    for (const wake of this.wakes.values()) {
+      wake.at ??= now + CLAUDE_CHILD_WAKE_LEASE_MS
+    }
+    const due = [...this.wakes].filter(([, wake]) => wake.at! <= now)
     for (const [ownerId, wake] of due) {
       this.wakes.delete(ownerId)
       this.expired.add(ownerId)
@@ -84,8 +83,10 @@ export class ClaudeChildWake {
   /** The next moment a wake stops guessing; the host rests the row then. */
   earliestExpiry(): number | undefined {
     let earliest: number | undefined
-    for (const wake of this.wakes.values()) {
-      earliest = earliest === undefined ? wake.at : Math.min(earliest, wake.at)
+    for (const { at } of this.wakes.values()) {
+      if (at !== undefined) {
+        earliest = earliest === undefined ? at : Math.min(earliest, at)
+      }
     }
     return earliest
   }

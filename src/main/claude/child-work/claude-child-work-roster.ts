@@ -2,9 +2,7 @@ import {
   liveClaudeTaskRunState,
   record,
   taskAliasId,
-  taskId,
-  taskText,
-  taskUsageTotalTokens
+  taskId
 } from '../background-tasks/claude-background-task-frames'
 import { claudeRosterEntries, type DecodedClaudeTask } from './claude-child-work-evidence'
 
@@ -68,19 +66,6 @@ export function claudeRunningFrame(
     return message
   }
   return null
-}
-
-/** The ending a notification reports: its run and usage, and a summary unless a forked command's
- *  summary only repeats its name. */
-export function claudeEndedReport(
-  message: Record<string, unknown>,
-  forkedCommand: boolean
-): { runId: string | undefined; lastMessage: string | undefined; totalTokens: number | undefined } {
-  return {
-    runId: taskAliasId(message.tool_use_id),
-    lastMessage: forkedCommand ? undefined : taskText(message.summary),
-    totalTokens: taskUsageTotalTokens(message)
-  }
 }
 
 /** Whether this frame ends the lead's turn (`result`). A tool result instead marks the live tasks whose

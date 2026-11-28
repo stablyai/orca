@@ -11,7 +11,6 @@ import type {
 import {
   liveClaudeTaskRunState,
   record,
-  taskAliasId,
   taskId,
   taskText,
   taskUsageTotalTokens
@@ -31,6 +30,8 @@ export type EndedClaudeTask = {
   run: string | undefined
   outcome: AgentChildWorkOutcome
   task?: DecodedClaudeTask
+  /** What the ending said, restated if a wake that guessed past it expires. */
+  reported?: { lastMessage?: string; totalTokens?: number }
 }
 
 export type DecodedClaudeTask = {
@@ -61,11 +62,6 @@ export function claudeRosterEntries(tasks: readonly unknown[]): ClaudeRosterEntr
     const id = task && taskId(task)
     return task && id ? [{ id, live: liveClaudeTaskRunState(task.status) !== null, task }] : []
   })
-}
-
-/** The alias id a roster entry's spawn call uses, for parent lookups. */
-export function claudeRosterAliasId(task: Record<string, unknown>): string | undefined {
-  return taskAliasId(task.tool_use_id)
 }
 
 export function claudeChildWorkObservation(

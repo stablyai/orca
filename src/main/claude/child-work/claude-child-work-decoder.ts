@@ -6,10 +6,12 @@ import { classifyClaudeBackgroundTaskKind } from '../../../shared/agent-hook-lis
 import {
   liveClaudeTaskRunState,
   record,
+  taskAliasId,
   taskDescription,
   taskId,
   taskName,
   taskText,
+  taskUsageTotalTokens,
   terminalClaudeTaskRunState
 } from '../background-tasks/claude-background-task-frames'
 import { claudeStartedTaskKind } from '../subagents/claude-subagent-task-frames'
@@ -65,11 +67,7 @@ export class ClaudeChildWorkDecoder {
       for (const { id, task } of tf.claudeRosterConfirmations(message)) {
         this.wake.confirmRunning(id, task)
       }
-      const known = {
-        live: this.live,
-        ended: this.ended,
-        parentOf: this.taskInvocations.parentOf
-      }
+      const known = { live: this.live, ended: this.ended, parentOf: this.taskInvocations.parentOf }
       for (const [id, task] of tf.claudeRosterStarts(message, known)) {
         this.started(id, task, true)
       }
@@ -103,7 +101,12 @@ export class ClaudeChildWorkDecoder {
         this.end(
           id,
           message.status,
-          tf.claudeEndedReport(message, selected?.invocation.forkedCommand === true),
+          {
+            runId: taskAliasId(message.tool_use_id),
+            // A forked command's summary only repeats its name.
+            lastMessage: selected?.invocation.forkedCommand ? undefined : taskText(message.summary),
+            totalTokens: taskUsageTotalTokens(message)
+          },
           ownerOf
         )
     }
@@ -205,7 +208,7 @@ export class ClaudeChildWorkDecoder {
     this.live.delete(ownerId)
     this.ended.set(ownerId, restored)
     this.pending.push((observedAt) =>
-      childWorkEndedEvidence(ownerId, restored.run, restored.outcome, observedAt)
+      childWorkEndedEvidence(ownerId, restored.run, restored.outcome, observedAt, restored.reported)
     )
   }
 
@@ -324,7 +327,7 @@ export class ClaudeChildWorkDecoder {
       run: reported.runId ?? task?.toolUseId,
       outcome,
       // Kept only for an agent a task it launched can wake.
-      ...(task?.kind === 'agent' ? { task } : {})
+      ...(task?.kind === 'agent' ? { task, reported } : {})
     })
     if (outcome !== 'cancelled') {
       // Every ending but a stop notifies, which wakes the subagent that launched the task.
