@@ -132,6 +132,8 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
     fullAccessAtLaunch: true
   },
   instructions: deliverAntigravityInstructions,
+  // `agy` runs text after `/compact` as another turn, so leave compactionInstructions off.
+  compaction: true,
   transcriptImport: ANTIGRAVITY_TRANSCRIPT_IMPORT,
   sessionHistory: ANTIGRAVITY_SESSION_HISTORY,
   privateTempDirectory: true,
