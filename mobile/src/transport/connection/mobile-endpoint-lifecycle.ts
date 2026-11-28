@@ -12,6 +12,7 @@ import {
   writeMobileRelayCredentialBundle
 } from '../../host-credentials/mobile-relay-credential-bundle'
 import { setRelayRouting } from '../../host-catalog/host-store'
+import { setHostReachesOffLan } from '../../host-descriptors/direct-pairing-installations'
 import {
   lastGoodPathWasDirectHere,
   readLocalNetworkFingerprint,
@@ -69,6 +70,8 @@ export function startMobileEndpointLifecycle(
     const supervisor = createSupervisor(logical, initialHost, directEndpoints, relay, onLog)
     owner.stop()
     owner = supervisor
+    // Upgraded to Relay in place: this host now reaches off its network.
+    setHostReachesOffLan(initialHost.id, true)
     supervisor.setForeground(foreground)
     await supervisor.start()
   }

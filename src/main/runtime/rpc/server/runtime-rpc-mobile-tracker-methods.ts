@@ -3,6 +3,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 /** Linear and Jira have no workspace; untagged phone calls use the desktop's "New projects open on" host, as its Tasks page does. */
 export const DEFAULT_SCOPE_HOST_METHODS = [
   'jira.attachmentImage',
+  // A phone's Jira setup sheet stores a site token on the tracker host, as linear.connect does.
+  'jira.connect',
   'jira.getIssue',
   'jira.issueComments',
   'jira.listIssues',
@@ -37,7 +39,11 @@ export const DEFAULT_SCOPE_HOST_METHODS = [
 
 /** Untagged calls (older phones) that store the tracker account: they must not move hosts when the relay flips.
  *  Newer phones tag these with the host they bound when setup started. */
-const ACCOUNT_SETUP_METHODS: readonly string[] = ['linear.connect', 'linear.selectWorkspace']
+const ACCOUNT_SETUP_METHODS: readonly string[] = [
+  'jira.connect',
+  'linear.connect',
+  'linear.selectWorkspace'
+]
 
 // Structural, not RpcRequest: the CLI typecheck reaches this file, and core.ts would pull in all of main.
 type TrackerCall = { method: string; executionHost?: unknown }

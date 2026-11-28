@@ -18,6 +18,8 @@ export type FolderWorkspaceDeleteOptions = FolderWorkspaceMutationOptions & {
   allowFailedArchiveHook?: boolean
   /** Bot homes are torn down by the bot's own delete, which checks for unsaved drafts only before it starts. */
   discardUnsavedDrafts?: boolean
+  /** Internal-only: bot and bot-group teardown may remove their own home folder workspace. */
+  allowBotHome?: boolean
 }
 
 function hasUnsavedDraft(
@@ -55,6 +57,16 @@ export async function deleteFolderWorkspaceRow(
   const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
   if (options.requireUniqueId && !workspace) {
     return { deleted: false }
+  }
+  if (workspace && !options.allowBotHome) {
+    if (store.getBots?.().some((bot) => bot.folderWorkspaceId === folderWorkspaceId)) {
+      throw new Error('Cannot delete a bot home folder workspace directly. Delete the bot instead.')
+    }
+    if (await deps.isBotGroupHome?.(folderWorkspaceId)) {
+      throw new Error(
+        'Cannot delete a bot group home folder workspace directly. Delete the bot group instead.'
+      )
+    }
   }
   if (workspace && isLocalWslMoveRow(workspace)) {
     assertWslMoveProjectWritable(store, { folderWorkspaceId })

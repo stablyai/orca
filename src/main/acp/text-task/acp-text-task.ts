@@ -7,10 +7,8 @@ import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-sign
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../../provider-process/provider-acquisition-starts'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/execution/source-control-generation-limits'
-import { resolveAcpLaunchInvocation } from '../launch/acp-structured-launch-resolution'
-import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
-import { prepareAcpLaunch } from '../launch/acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from '../launch/acp-private-temp'
+import { acpTextTaskLaunch } from './acp-text-task-launch'
 import { acpClientInfo } from '../launch/acp-client-info'
 import {
   acpTextTaskCompletion,
@@ -89,6 +87,7 @@ export class AcpTextTasks {
     }
     let connection: AcpStructuredConnection | undefined
     let cwd: string | undefined
+    let release = (): void => {}
     let sessionId = ''
     let modeConfigId = 'mode'
     let completed = false
@@ -98,10 +97,14 @@ export class AcpTextTasks {
     let disposed = false
     let unsubscribe = (): void => {}
     const dispose = async (): Promise<void> => {
-      if (starting || !done || disposed || !cwd || (connection && !connection.exited)) {
+      if (starting || !done || disposed || (connection && !connection.exited)) {
         return
       }
       disposed = true
+      release()
+      if (!cwd) {
+        return
+      }
       try {
         await rm(cwd, { recursive: true, force: true })
       } catch (error) {
@@ -117,17 +120,18 @@ export class AcpTextTasks {
       if (!invocation) {
         throw new Error('Native text task launch is unavailable')
       }
-      // A naming session would stay in the user's own agent history.
-      if (acpLaunchSpecForAccount(spec, input.accountHome).keepsEverySession) {
+      const target = await acpTextTaskLaunch(spec, input.accountHome, this.deps)
+      if (!target) {
         return null
       }
+      release = target.release
       const launch = await waitForPromiseWithSignal(
-        prepareAcpLaunch(
-          () => resolveAcpLaunchInvocation(spec, input.accountHome, invocation),
-          () => signal.throwIfAborted()
-        ),
+        target.prepare(invocation, () => signal.throwIfAborted()),
         signal
       )
+      if (!launch) {
+        return null
+      }
       cwd = await mkdtemp(join(tmpdir(), 'orca-chat-name-'))
       if (spec.agent === 'grok') {
         cwd = await realpath(cwd)
@@ -150,7 +154,7 @@ export class AcpTextTasks {
             ...launch,
             env: acpTextTaskEnv(spec.agent, launch.env),
             cwd,
-            args: acpTextTaskArgs(spec),
+            args: acpTextTaskArgs(launch.spec),
             envToDelete: [...launch.envToDelete, ...TASK_ENV_TO_DELETE]
           },
           {

@@ -19,11 +19,8 @@ import {
   withoutHiddenVmCheckouts
 } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   getLocalExecutionHostLabel,
-  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
@@ -42,9 +39,6 @@ import {
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import { mergeDraggedHostSectionOrder } from '../../../../../../shared/sidebar-list/hosts/host-section-order'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
-import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-model'
 import { withWindowCreations } from './window-worktree-creations'
@@ -54,26 +48,17 @@ import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
+import {
+  indexFoldersByKey,
+  indexWorktreesByIdentity,
+  overlayWindowSectionRows,
+  windowFolderRecordOf,
+  windowRecordOf
+} from './window-record-overlay'
 
 const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
-
-function folderRecordKey(id: string, hostId: string | null | undefined): string {
-  return `${parseExecutionHostId(hostId)?.id ?? ''}\0${id}`
-}
-
-// Main's rows answer for the list; the window's own records answer for what a card shows.
-function windowRecordOf(records: ReadonlyMap<string, Worktree>, worktree: Worktree): Worktree {
-  return records.get(getWorktreeHostIdentity(worktree)) ?? worktree
-}
-
-function windowFolderRecordOf(
-  records: ReadonlyMap<string, FolderWorkspace>,
-  folder: FolderWorkspace
-): FolderWorkspace {
-  return records.get(folderRecordKey(folder.id, folder.executionHostId)) ?? folder
-}
 
 /** Use the phone’s builder over main’s domains, adding desktop state and pending writes; cards read window records. */
 export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarListModel {
@@ -198,31 +183,32 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   )
 
   const worktreeByIdentity = useMemo(
-    () =>
-      new Map(args.allWorktrees.map((worktree) => [getWorktreeHostIdentity(worktree), worktree])),
+    () => indexWorktreesByIdentity(args.allWorktrees),
     [args.allWorktrees]
   )
   const folderByKey = useMemo(
-    () =>
-      new Map(
-        args.folderWorkspaces.map((folder) => [
-          folderRecordKey(folder.id, getFolderWorkspaceHostId(folder, args.projectGroups)),
-          folder
-        ])
-      ),
+    () => indexFoldersByKey(args.folderWorkspaces, args.projectGroups),
     [args.folderWorkspaces, args.projectGroups]
   )
   const visibleWorktrees = useReusedArrayIdentity(
     useMemo(
       () =>
-        planned.visibleWorktrees.map((worktree) => windowRecordOf(worktreeByIdentity, worktree)),
+        planned.visibleWorktrees.length === 0 || worktreeByIdentity.size === 0
+          ? [...planned.visibleWorktrees]
+          : planned.visibleWorktrees.map((worktree) =>
+              windowRecordOf(worktreeByIdentity, worktree)
+            ),
       [planned.visibleWorktrees, worktreeByIdentity]
     )
   )
   const visibleFolderWorkspacesForRows = useReusedArrayIdentity(
     useMemo(
       () =>
-        planned.visibleFolderWorkspaces.map((folder) => windowFolderRecordOf(folderByKey, folder)),
+        planned.visibleFolderWorkspaces.length === 0 || folderByKey.size === 0
+          ? [...planned.visibleFolderWorkspaces]
+          : planned.visibleFolderWorkspaces.map((folder) =>
+              windowFolderRecordOf(folderByKey, folder)
+            ),
       [planned.visibleFolderWorkspaces, folderByKey]
     )
   )
@@ -253,18 +239,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     [planned, view, effectiveCollapsedGroups, hostDragActive]
   )
   const sectionRows = useMemo(
-    () =>
-      rendered.sectionRows.map((row): HostSectionRow => {
-        if (row.type === 'item') {
-          const worktree = windowRecordOf(worktreeByIdentity, row.worktree)
-          return worktree === row.worktree ? row : { ...row, worktree }
-        }
-        if (row.type === 'folder-workspace') {
-          const folderWorkspace = windowFolderRecordOf(folderByKey, row.folderWorkspace)
-          return folderWorkspace === row.folderWorkspace ? row : { ...row, folderWorkspace }
-        }
-        return row
-      }),
+    () => overlayWindowSectionRows(rendered.sectionRows, worktreeByIdentity, folderByKey),
     [rendered.sectionRows, worktreeByIdentity, folderByKey]
   )
   const allRepoIds = useMemo(() => repos.map((repo) => repo.id), [repos])

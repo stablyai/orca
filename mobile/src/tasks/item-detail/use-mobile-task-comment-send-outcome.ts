@@ -3,7 +3,6 @@ import { taskItemIdentity } from './task-draft-rows'
 import type { ActionableTaskItem } from '../mobile-tasks-project-workspace-types'
 import type { DetailPayload } from '../mobile-tasks-provider-detail-types'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
-import '../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
 
 export const COMMENT_SEND_UNCONFIRMED_NOTICE =

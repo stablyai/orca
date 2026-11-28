@@ -6,6 +6,10 @@ on:
       ref:
         required: true
         type: string
+      reuse_windows_prebuild_cache:
+        description: Reuse the validated Windows node-pty prebuild cache on unsigned dev builds
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -81,6 +85,7 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       build_template: true
+      reuse_windows_prebuild_cache: ${{ inputs.reuse_windows_prebuild_cache }}
 
   save:
     needs: [cache, qualify]

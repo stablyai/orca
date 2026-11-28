@@ -56,11 +56,12 @@ import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-prese
 import { useMobileTasksItemState } from '../item-detail/use-mobile-tasks-item-state'
 import { useTaskCommentDraft, useTaskCreateDraft } from '../item-detail/task-draft-rows'
 import {
-  bindLinearAccountClient,
-  type LinearAccountBinding
-} from '../task-list/linear-account-host'
+  bindTrackerAccountClient,
+  type TrackerAccountBinding
+} from '../task-list/tracker-account-host'
 import { useMobileJiraConnectionState } from '../providers/jira/use-mobile-jira-connection-state'
 import type { JiraIssueFilter } from '../../../../src/shared/jira/jira-types'
+import { JIRA_MOBILE_CONNECT_RUNTIME_CAPABILITY } from '../../../../src/shared/work-items/task-source-runtime-capabilities'
 
 export function useMobileTasksRouteAndItemState() {
   const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()
@@ -122,11 +123,20 @@ export function useMobileTasksRouteAndItemState() {
   const [selectedLinearTeamIds, setSelectedLinearTeamIds] = useState<Set<string>>(new Set())
   const defaultLinearTeamSelectionRef = useRef<string[] | null>(null)
   const [showLinearConnect, setShowLinearConnect] = useState(false)
-  const linearAccountBindingRef = useRef<LinearAccountBinding | null>(null)
+  const linearAccountBindingRef = useRef<TrackerAccountBinding | null>(null)
   // Called as Linear setup opens; its status, connect and workspace switch then share one host.
   const bindLinearAccountHost = useCallback(() => {
     linearAccountBindingRef.current = client
-      ? { base: client, client: bindLinearAccountClient(client, hostCapabilities) }
+      ? { base: client, client: bindTrackerAccountClient(client, hostCapabilities) }
+      : null
+  }, [client, hostCapabilities])
+  const jiraConnectSupported = hostCapabilities.includes(JIRA_MOBILE_CONNECT_RUNTIME_CAPABILITY)
+  const [showJiraConnect, setShowJiraConnect] = useState(false)
+  const jiraAccountBindingRef = useRef<TrackerAccountBinding | null>(null)
+  // Called as Jira setup opens; its connect and the status read after it share one host.
+  const bindJiraAccountHost = useCallback(() => {
+    jiraAccountBindingRef.current = client
+      ? { base: client, client: bindTrackerAccountClient(client, hostCapabilities) }
       : null
   }, [client, hostCapabilities])
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
@@ -262,6 +272,11 @@ export function useMobileTasksRouteAndItemState() {
     setShowLinearConnect,
     linearAccountBindingRef,
     bindLinearAccountHost,
+    jiraConnectSupported,
+    showJiraConnect,
+    setShowJiraConnect,
+    jiraAccountBindingRef,
+    bindJiraAccountHost,
     linearApiKeyDraft,
     setLinearApiKeyDraft,
     linearConnectState,

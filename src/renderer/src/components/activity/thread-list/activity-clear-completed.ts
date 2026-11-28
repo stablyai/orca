@@ -40,9 +40,8 @@ export function planClearCompletedActivity(
     clearedThreadCount += 1
     const previousCutoff =
       readWebChatMark(state, 'activityClearedAtByPaneKey', thread.paneKey) ?? null
-    const latestCutoff = Math.max(previousCutoff ?? 0, thread.latestTimestamp)
-    // Hydration drops non-positive cutoffs; use now for unstamped threads so clears survive restart.
-    cutoffPatch[thread.paneKey] = latestCutoff > 0 ? latestCutoff : now
+    // Stamp at least `now` so clearing an old row ranks as recent under the 500-entry hydration cap.
+    cutoffPatch[thread.paneKey] = Math.max(previousCutoff ?? 0, thread.latestTimestamp, now)
     restorePatch[thread.paneKey] = previousCutoff
   }
   return { cutoffPatch, restorePatch, clearedThreadCount }

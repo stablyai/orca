@@ -1,31 +1,24 @@
 import React from 'react'
-import { toast } from 'sonner'
-import { RotateCcw } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { explicitRepoMarkColor } from '../../../../../shared/repository/appearance/repo-mark-appearance'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../shared/repository/appearance/repo-badge-color'
 import { RepositoryIconColorSection } from '../../settings/repository/identity/RepositoryIconColorSection'
 import {
   useRepositoryIconActions,
   type RepoAppearanceUpdate
 } from '../../settings/repository/identity/use-repository-icon-actions'
 import type { ProjectRemoteDisplay } from './project-remote-display'
-import {
-  GlyphPanel,
-  LettersPanel,
-  PicturePanel,
-  useSuggestedMonogram
-} from './ProjectIconStylePanels'
+import { GlyphPanel, LettersPanel, useSuggestedMonogram } from './ProjectIconStylePanels'
+import { ProjectImageSourceList } from './ProjectImageSourceList'
 
 function SectionLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="text-2xs font-medium text-muted-foreground">{children}</div>
 }
 
-type IconStyle = 'letters' | 'icon' | 'picture'
+type IconStyle = 'letters' | 'icon' | 'image'
 
 /** The fill the letters will show: the picked color, else what Auto resolves to. */
 function autoColorFor(repo: Repo, autoColor: string): string {
@@ -37,121 +30,121 @@ function iconStyleOf(repoIcon: Repo['repoIcon']): IconStyle {
   if (repoIcon == null || repoIcon.type === 'letters') {
     return 'letters'
   }
-  return repoIcon.type === 'image' ? 'picture' : 'icon'
+  return repoIcon.type === 'image' ? 'image' : 'icon'
 }
 
 export function ProjectAppearanceEditor({
   repo,
   remote,
   autoColor,
+  appearanceEpoch,
+  intendedIcon,
   updateRepo
 }: {
   repo: Repo
   remote: ProjectRemoteDisplay | null
   autoColor: string
-  updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => void
+  /** Changes on Reset and Undo, which supersede any preview or fetch still pending. */
+  appearanceEpoch: number
+  /** The icon this card last asked for, or the saved one once its writes have landed. */
+  intendedIcon: () => RepoIcon | null
+  /** Settles once the write is applied; writes for one repo apply in order. */
+  updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => Promise<unknown>
 }): React.JSX.Element {
   const t = useTranslate()
-  const actions = useRepositoryIconActions(repo, updateRepo)
+  // Why: opening Letters previews a suggestion; browsing away untouched must give the old icon back.
+  const previewedFromRef = React.useRef<{ icon: RepoIcon | null; epoch: number } | null>(null)
+  const currentEpoch = useLatestHandler(() => appearanceEpoch)
+  // Any icon write from this editor, the GitHub action included, ends the preview. A write begun
+  // before a Reset or Undo (a GitHub lookup, upload or favicon still resolving) is dropped.
+  const writeAppearance = (repoId: string, updates: RepoAppearanceUpdate): Promise<unknown> => {
+    if (appearanceEpoch !== currentEpoch()) {
+      return Promise.resolve(false)
+    }
+    if ('repoIcon' in updates) {
+      previewedFromRef.current = null
+    }
+    return updateRepo(repoId, updates)
+  }
+  const actions = useRepositoryIconActions(repo, writeAppearance)
   const [style, setStyle] = React.useState<IconStyle>(() => iconStyleOf(repo.repoIcon))
   const suggestedLetters = useSuggestedMonogram(repo)
-  // Why: opening Letters previews a suggestion; browsing away untouched must give the old icon back.
-  const previewedFromRef = React.useRef<{ icon: RepoIcon | null } | null>(null)
   const setIcon = (repoIcon: RepoIcon | null): void => {
-    previewedFromRef.current = null
-    updateRepo(repo.id, { repoIcon })
+    void writeAppearance(repo.id, { repoIcon })
   }
 
   const chooseStyle = (next: IconStyle): void => {
     setStyle(next)
+    const current = intendedIcon()
     // Letters need no further input, so switching to them previews the smart pick right away.
-    if (next === 'letters' && repo.repoIcon != null && repo.repoIcon.type !== 'letters') {
-      const previous = repo.repoIcon ?? null
+    if (next === 'letters' && current != null && current.type !== 'letters') {
       setIcon({ type: 'letters', text: suggestedLetters })
-      previewedFromRef.current = { icon: previous }
+      previewedFromRef.current = { icon: current, epoch: appearanceEpoch }
       return
     }
     const previewed = previewedFromRef.current
-    if (previewed) {
+    // Edits clear the preview; a Reset or Undo since then wins. Repo updates apply in order, so
+    // this restore lands after the preview even if the preview has not reached the store yet.
+    if (previewed && previewed.epoch === appearanceEpoch) {
       setIcon(previewed.icon)
     }
-  }
-
-  const isDefault = repo.badgeColor === DEFAULT_REPO_BADGE_COLOR && repo.repoIcon == null
-  const reset = (): void => {
-    const previous = {
-      repoIcon: repo.repoIcon ?? null,
-      badgeColor: repo.badgeColor
-    }
-    actions.resetToDefault()
-    updateRepo(repo.id, { badgeColor: DEFAULT_REPO_BADGE_COLOR })
-    toast(t('auto.components.repo.ProjectPeek.resetDone', 'Icon and color reset'), {
-      action: {
-        label: t('auto.components.repo.ProjectPeek.undo', 'Undo'),
-        onClick: () => updateRepo(repo.id, previous)
-      }
-    })
+    previewedFromRef.current = null
   }
 
   return (
-    <>
-      <div className="space-y-3 px-3 pt-1 pb-3">
-        <Tabs
-          value={style}
-          onValueChange={(value) => {
-            if (value === 'letters' || value === 'icon' || value === 'picture') {
-              chooseStyle(value)
-            }
-          }}
-        >
-          <TabsList className="h-7 w-full">
-            <TabsTrigger value="letters">
-              {t('auto.components.repo.ProjectPeek.styleLetters', 'Letters')}
-            </TabsTrigger>
-            <TabsTrigger value="icon">
-              {t('auto.components.settings.RepositoryIconPicker.b2d7fd2116', 'Icon')}
-            </TabsTrigger>
-            <TabsTrigger value="picture">
-              {t('auto.components.repo.ProjectPeek.stylePicture', 'Picture')}
-            </TabsTrigger>
-          </TabsList>
-          {/* Pictures keep their own colors, so color only applies to letters and icons. */}
-          {repo.repoIcon?.type === 'image' ? null : (
-            <div className="space-y-1.5">
-              <SectionLabel>
-                {t('auto.components.settings.RepositoryIconPicker.642dc29c6d', 'Color')}
-              </SectionLabel>
-              <RepositoryIconColorSection
-                compact
-                autoColor={autoColor}
-                badgeColor={repo.badgeColor}
-                onBadgeColorChange={(badgeColor) => updateRepo(repo.id, { badgeColor })}
-              />
-            </div>
-          )}
-          <TabsContent value="letters" className="mt-1">
-            <LettersPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
-          </TabsContent>
-          <TabsContent value="icon" className="mt-1">
-            <GlyphPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
-          </TabsContent>
-          <TabsContent value="picture" className="mt-1">
-            <PicturePanel
-              repo={repo}
-              remote={remote}
-              loadingGitHub={actions.loadingGitHub}
-              onUseGitHubAvatar={() => void actions.applyGitHubAvatar()}
-              onSetIcon={setIcon}
+    <div className="space-y-3 px-3 pt-1 pb-3">
+      <Tabs
+        value={style}
+        onValueChange={(value) => {
+          if (value === 'letters' || value === 'icon' || value === 'image') {
+            chooseStyle(value)
+          }
+        }}
+      >
+        <TabsList size="segmented" className="w-full">
+          <TabsTrigger value="letters">
+            {t('auto.components.repo.ProjectPeek.styleLetters', 'Letters')}
+          </TabsTrigger>
+          <TabsTrigger value="icon">
+            {t('auto.components.settings.RepositoryIconPicker.b2d7fd2116', 'Icon')}
+          </TabsTrigger>
+          <TabsTrigger value="image">
+            {t('auto.components.repo.ProjectPeek.styleImage', 'Image')}
+          </TabsTrigger>
+        </TabsList>
+        {/* Images keep their own colors, so color only applies to letters and icons. */}
+        {repo.repoIcon?.type === 'image' ? null : (
+          <div className="space-y-1.5">
+            <SectionLabel>
+              {t('auto.components.settings.RepositoryIconPicker.642dc29c6d', 'Color')}
+            </SectionLabel>
+            <RepositoryIconColorSection
+              compact
+              autoColor={autoColor}
+              badgeColor={repo.badgeColor}
+              onBadgeColorChange={(badgeColor) => updateRepo(repo.id, { badgeColor })}
             />
-          </TabsContent>
-        </Tabs>
-      </div>
-      <div className="flex items-center px-1.5 pb-2">
-        <Button type="button" variant="ghost" size="xs" disabled={isDefault} onClick={reset}>
-          <RotateCcw />
-          {t('auto.components.repo.ProjectPeek.resetAppearance', 'Reset icon & color')}
-        </Button>
-      </div>
-    </>
+          </div>
+        )}
+        <TabsContent value="letters" className="mt-1">
+          <LettersPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
+        </TabsContent>
+        <TabsContent value="icon" className="mt-1">
+          <GlyphPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
+        </TabsContent>
+        {/* Extra room under the Color row, so the swatches don't read as part of the source list. */}
+        <TabsContent value="image" className={repo.repoIcon?.type === 'image' ? 'mt-1' : 'mt-3'}>
+          <ProjectImageSourceList
+            // A fresh list on Reset or Undo drops any fetch still loading and its error.
+            key={`${repo.id}:${appearanceEpoch}`}
+            repo={repo}
+            remote={remote}
+            loadingGitHub={actions.loadingGitHub}
+            onUseGitHubAvatar={() => void actions.applyGitHubAvatar()}
+            onSetIcon={setIcon}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
   )
 }

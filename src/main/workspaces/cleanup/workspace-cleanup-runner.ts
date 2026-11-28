@@ -26,7 +26,7 @@ import {
 } from './workspace-cleanup-run-evidence'
 import {
   decideWorkspaceCleanups,
-  removeWorkspaceForCleanup
+  removeWorkspacesForCleanup
 } from './workspace-cleanup-removal-step'
 import {
   keptRunOutcome,
@@ -295,18 +295,15 @@ export class WorkspaceCleanupRunner {
       }
       // Nested checkouts first, so a parent's removal never sweeps a child it did not re-check.
       removals.sort((a, b) => b.ref.path.length - a.ref.path.length)
-      for (const { workspace, ref, reason } of removals) {
-        if (this.abort.signal.aborted) {
-          break
-        }
-        const outcome = await removeWorkspaceForCleanup({
-          runtime: this.deps.runtime,
-          store: this.deps.store,
-          globalRules: () => this.globalRules(),
-          workspace,
-          now: () => Date.now(),
-          signal: this.abort.signal
-        })
+      const removalResults = await removeWorkspacesForCleanup({
+        runtime: this.deps.runtime,
+        store: this.deps.store,
+        globalRules: () => this.globalRules(),
+        removals,
+        now: () => Date.now(),
+        signal: this.abort.signal
+      })
+      for (const { ref, reason, outcome } of removalResults) {
         rows.push({ ...ref, reason, ...outcome })
       }
     } catch (cause) {

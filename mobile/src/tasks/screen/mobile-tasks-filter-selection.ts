@@ -14,7 +14,7 @@ import {
 } from '../../../../src/shared/work-items/task-github-search'
 import { normalizeJiraFilter } from '../providers/jira/mobile-jira-issue-filters'
 import { linearWorkspaceSelect } from '../screen-state/mobile-task-runtime-operations'
-import { linearAccountClient } from '../task-list/linear-account-host'
+import { trackerAccountClient } from '../task-list/tracker-account-host'
 import type {
   GitHubMode,
   GitHubPreset,
@@ -161,7 +161,7 @@ export function selectMobileTasksLinearWorkspace(
   if (!client) {
     return
   }
-  void linearAccountClient(linearAccountBindingRef.current, client)
+  void trackerAccountClient(linearAccountBindingRef.current, client)
     .then((target) => linearWorkspaceSelect.request(target, { workspaceId }))
     .then(() => loadLinearContext())
     .catch((err) => {

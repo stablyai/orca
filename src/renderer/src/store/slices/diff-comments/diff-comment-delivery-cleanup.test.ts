@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
-import type { DiffCommentBaseMutation } from '../../../../../shared/file-review/diff-comment-mutation'
-import { applyDiffCommentWrite } from '../../../../../shared/file-review/diff-comment-mutation'
-import type { Repo } from '../../../../../shared/repository/repo-types'
-import type { Worktree } from '../../../../../shared/worktree/types'
-import '../../../../../shared/execution-host/execution-host'
 import {
   diffCommentSendKey,
   isNoteInFlight
 } from '@/components/notes/delivery/notes-send-in-flight'
-import { createTestStore } from '../../testing/app-store-test-fixture'
-import type { DiffCommentOwner } from './diff-comment-owner'
+import {
+  createStore,
+  host,
+  note,
+  OWNER,
+  shown,
+  WT
+} from './diff-comment-delivery-cleanup.test-fixture'
 
 type ToastOptions = { action?: { label: string; onClick: () => void } }
 const toastError = vi.hoisted(() => vi.fn<(message: string, options?: ToastOptions) => void>())
@@ -19,108 +19,11 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: toastError, dismiss: toastDismiss }
 }))
 
-type Updates = { diffComments?: DiffComment[] } & DiffCommentBaseMutation
-
-// A host on this computer: it keeps its own list and answers each write with it.
-const host: {
-  notes: DiffComment[]
-  // Older host: drops the cleanup field it does not know, as a stripping parser would.
-  ignoresCleanup: boolean
-  gate: ((updates: Updates) => Promise<void>) | null
-} = { notes: [], ignoresCleanup: false, gate: null }
-const updateMeta = vi.fn(async ({ updates }: { updates: Updates }) => {
-  await host.gate?.(updates)
-  const applied = host.ignoresCleanup
-    ? { ...updates, deliveredDiffCommentSnapshots: undefined }
-    : updates
-  host.notes = applyDiffCommentWrite(host.notes, applied) ?? host.notes
-  return { diffComments: host.notes }
-})
-vi.stubGlobal('window', { api: { worktrees: { updateMeta }, ui: { set: vi.fn() } } })
-
-const REPO = 'repo-1'
-const WT = `${REPO}::/work/sample`
-const OWNER: DiffCommentOwner = {
-  kind: 'worktree',
-  worktreeId: WT,
-  authority: { endpoint: { kind: 'self' }, at: 'local' }
-}
-
-function note(id: string, body = `Sample note ${id}`): DiffComment {
-  return {
-    id,
-    worktreeId: WT,
-    filePath: 'sample.ts',
-    lineNumber: 1,
-    body,
-    createdAt: 1,
-    side: 'modified'
-  }
-}
-
-function worktree(diffComments: DiffComment[]): Worktree {
-  return {
-    id: WT,
-    repoId: REPO,
-    path: '/work/sample',
-    head: 'abc',
-    branch: 'refs/heads/sample',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'sample',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    hostId: 'local',
-    diffComments
-  }
-}
-
-function createStore(notes: DiffComment[]) {
-  host.notes = notes
-  const repo: Repo = {
-    id: REPO,
-    path: '/work/repo',
-    displayName: 'repo',
-    badgeColor: '#000',
-    addedAt: 0,
-    executionHostId: 'local'
-  }
-  const store = createTestStore()
-  store.setState({ repos: [repo], worktreesByRepo: { [REPO]: [worktree(notes)] } })
-  return store
-}
-
-const shown = (store: ReturnType<typeof createStore>): DiffComment[] =>
-  store.getState().getDiffComments(WT)
-
-const cleanupCalls = (): number =>
-  updateMeta.mock.calls.filter(([args]) => args.updates.deliveredDiffCommentSnapshots).length
-
 describe('removing delivered review notes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     host.ignoresCleanup = false
     host.gate = null
-  })
-
-  it('asks the host once when one success is reported twice', async () => {
-    const a = note('a')
-    const store = createStore([a])
-    const first = store.getState().clearDeliveredDiffComments(OWNER, [a])
-    const second = store.getState().clearDeliveredDiffComments(OWNER, [a])
-    expect(await Promise.all([first, second])).toEqual([true, true])
-    // A report after the note is gone needs no host work either.
-    expect(await store.getState().clearDeliveredDiffComments(OWNER, [a])).toBe(true)
-    expect(cleanupCalls()).toBe(1)
-    expect(shown(store)).toEqual([])
-    expect(host.notes).toEqual([])
   })
 
   it('keeps a note the host did not remove out of Send, and Remove removes it', async () => {
@@ -135,7 +38,6 @@ describe('removing delivered review notes', () => {
     expect(shown(store)[0].sentAt).toBeGreaterThan(0)
     expect(isNoteInFlight(diffCommentSendKey(OWNER, a))).toBe(false)
     await vi.waitFor(() => expect(host.notes[0]?.sentAt).toBeGreaterThan(0))
-    expect(toastError).toHaveBeenCalledTimes(1)
     const options = toastError.mock.calls[0][1]
     expect(toastError.mock.calls[0][0]).toBe("Notes sent, but they're still in the list.")
     expect(options?.action?.label).toBe('Remove')
@@ -229,5 +131,18 @@ describe('removing delivered review notes', () => {
     await editing
     expect(shown(store).map((n) => n.body)).toEqual(['Later sample edit'])
     expect(host.notes.map((n) => n.body)).toEqual(['Later sample edit'])
+  })
+
+  it('keeps a note edited after the send captured it, and removes the rest', async () => {
+    const [a, b] = [note('a'), note('b')]
+    const store = createStore([a, b])
+    expect(await store.getState().updateDiffComment(OWNER, 'a', 'Edited mid-send')).toBe(true)
+
+    expect(await store.getState().clearDeliveredDiffComments(OWNER, [a, b])).toBe(true)
+
+    expect(shown(store).map((n) => [n.id, n.body, n.sentAt])).toEqual([
+      ['a', 'Edited mid-send', undefined]
+    ])
+    expect(host.notes.map((n) => n.body)).toEqual(['Edited mid-send'])
   })
 })

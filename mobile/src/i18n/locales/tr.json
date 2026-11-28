@@ -18,7 +18,10 @@
       "title": "Hesaplar",
       "useReset": "Sıfırlama hakkını kullan",
       "weeklyWindow": "7g",
-      "pairingInvalidMessage": "Bilgisayardaki hesapları görmek için bu telefonu bilgisayarla yeniden eşleştirin."
+      "pairingInvalidMessage": "Bilgisayardaki hesapları görmek için bu telefonu bilgisayarla yeniden eşleştirin.",
+      "signedOut": "Oturum kapalı",
+      "addAccount": "Hesap ekle",
+      "signIn": "Oturum aç"
     },
     "claude": {
       "usageSignInLabel": "Yeniden oturum aç",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "%{{value}} kaldı"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "Bu oturum açma işlemini başlatan cihaz yanıt vermeyi bıraktı.",
+        "superseded": "Bu sunucudaki bir hesap değişikliği oturum açma işlemini durdurdu. Yeniden başlatın.",
+        "noPrompt": "Sunucudaki oturum açma komutu bir dakika içinde oturum açma bağlantısı göstermedi. Sunucudaki Orca'yı güncelleyin, ardından tekrar deneyin.",
+        "failed": "Oturum açılamadı. Yeniden deneyin."
+      },
+      "starting": "{{host}} üzerinde oturum açma başlatılıyor…",
+      "copied": "Kopyalandı",
+      "copyLink": "Bağlantıyı kopyala",
+      "continue": "Devam et",
+      "copyCode": "Kodu kopyala",
+      "signingIn": "Oturum açılıyor…",
+      "tryAgain": "Tekrar dene",
+      "titleClaude": "Claude’da oturum aç",
+      "titleCodex": "Codex’te oturum aç",
+      "savedOn": "{{host}} üzerine kaydedilir",
+      "newCode": "Yeni kod al",
+      "openPage": "Oturum açma sayfasını aç",
+      "pasteStep": "Kodu yapıştır",
+      "codePlaceholder": "Sayfadaki kod",
+      "enterCodeStep": "Bu kodu gir",
+      "waitingForPage": "Sayfada bitirmen bekleniyor",
+      "signedInAs": "{{email}} olarak oturum açıldı"
     }
   },
   "agentHistory": {
@@ -478,7 +506,10 @@
       "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar",
       "forkedFrom": "Çatallandığı kaynak",
       "botCreated": "Bot oluşturuldu",
-      "autoReviewDenied": "{{agent}} ajanının otomatik incelemesi işlemi reddetti: {{action}}"
+      "autoReviewDenied": "{{agent}} ajanının otomatik incelemesi işlemi reddetti: {{action}}",
+      "notSignedIn": "{{agent}} oturumu açık değil.",
+      "signInAccountHint": "Bu sohbeti çalıştıran bilgisayarda bu hesapta yeniden oturum açar",
+      "signedInSendAgain": "Oturum açıldı. Yeniden gönderin."
     },
     "ciResultLine": {
       "failingLead": "CI başarısız:",
@@ -1541,7 +1572,7 @@
       "unlockHint": "Telefonunuzun kilidini açın, ardından yeniden denemek için dokunun",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} etkin",
       "offlineSameWifiOnly": "Çevrimdışı · yalnızca aynı Wi-Fi",
-      "tapToPairAgain": "Masaüstünüzle yeniden eşleştirmek için dokunun"
+      "tapToPairAgain": "Yeniden eşleştirmek için dokunun"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Sunucu uyumluluğu kontrol ediliyor"
@@ -1561,7 +1592,10 @@
       "connectHint": "Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne Jira sitenizi ekleyin, ardından yeniden kontrol edin.",
       "connectOnDesktop": "Bilgisayarınızda Jira'yı bağlayın",
       "credentialUnreadable": "Jira bağlantısı kayıtlı ancak okunamıyor: {{credentialError}}",
-      "updateDesktop": "Bu sunucudaki Orca'yı güncelleyin"
+      "updateDesktop": "Bu sunucudaki Orca'yı güncelleyin",
+      "connectTitle": "Jira hesabını bağla",
+      "connectMessage": "Sana atanan Jira kayıtlarına göz at ve doğrudan Görevler’den çalışmaya başla.",
+      "connect": "Jira’yı bağla"
     },
     "markdownBlocks": {
       "copyCode": "Kodu kopyala",
@@ -2214,7 +2248,9 @@
       "truncatedList": "{{worktreeLabel}} - İlk 5000 dosya gösteriliyor",
       "loading": "Dosyalar yükleniyor…",
       "searching": "Aranıyor…",
-      "searchPlaceholder": "Dosyalarda ara"
+      "searchPlaceholder": "Dosyalarda ara",
+      "newEntry": "Yeni",
+      "add": "Ekle"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} mobilde kullanılamıyor",
@@ -2229,7 +2265,56 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Adı Kopyala",
-      "copyRelativePath": "Göreli Yolu Kopyala"
+      "copyRelativePath": "Göreli Yolu Kopyala",
+      "newFile": "Yeni Dosya",
+      "newFolder": "Yeni Klasör",
+      "rename": "Yeniden Adlandır",
+      "duplicate": "Çoğalt",
+      "create": "Oluştur",
+      "fileName": "Dosya adı",
+      "folderName": "Klasör adı",
+      "deleteTitle": "{{name}} silinsin mi?",
+      "deleteFileDetail": "Bu, dosyayı kalıcı olarak siler. Bu işlem geri alınamaz.",
+      "deleteFolderDetail": "Bu, klasörü ve içindekileri kalıcı olarak siler. Bu işlem geri alınamaz.",
+      "duplicateFailed": "{{name}} çoğaltılamadı. {{reason}}",
+      "duplicateUnconfirmed": "Kopya tamamlanmamış olabilir. Kontrol edip tekrar deneyin.",
+      "deleteFailed": "{{name}} silinemedi. {{reason}}",
+      "deleteUnconfirmed": "Hâlâ orada. Klasörü kontrol edip tekrar deneyin.",
+      "renameFailed": "{{name}} yeniden adlandırılamadı. {{reason}}",
+      "newFileFailed": "Dosya oluşturulamadı. {{reason}}",
+      "newFolderFailed": "Klasör oluşturulamadı. {{reason}}",
+      "share": "Paylaş",
+      "shareFailed": "{{name}} paylaşılamadı",
+      "shareTooLarge": "256 MB’tan büyük dosyalar telefondan paylaşılamaz",
+      "shareHostOutdated": "Dosya paylaşmak için bu çalışma alanının çalıştığı yerde Orca’yı güncelleyin",
+      "uploadHere": "Buraya yükle",
+      "uploadFiles": "Dosya yükle",
+      "noFreeCopyName": "{{name}} kopyası için boş ad yok"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Bekliyor",
+      "waitingForConnection": "Bağlantı bekleniyor",
+      "failed": "{{reason}} · Yeniden denemek için dokunun",
+      "failedReason": "Yükleme başarısız",
+      "dismiss": "{{name}} yüklenmesin",
+      "tooLarge": "{{max}} MB üzerindeki dosyalar henüz telefondan yüklenemiyor.",
+      "busy": "Tek seferde en fazla {{max}} dosya yükleyebilirsiniz.",
+      "pickFailed": "Dosyalarınız açılamadı. {{reason}}",
+      "clashMessage": "{{folder}} içinde zaten var",
+      "keepBoth": "İkisini de tut",
+      "keepBothAs": "{{name}} olarak kaydedilir",
+      "keepBothCopies": "Her birini kopya olarak kaydeder",
+      "skip": "Atla",
+      "skipAll": "Tümünü atla",
+      "uploaded_one": "{{count}} dosya {{folder}} klasörüne yüklendi",
+      "uploaded_other": "{{count}} dosya {{folder}} klasörüne yüklendi",
+      "clashTitleSeveral_one": "{{count}} dosya {{folder}} içinde zaten var",
+      "clashTitleSeveral_other": "{{count}} dosya {{folder}} içinde zaten var",
+      "lost_one": "{{count}} dosya yüklenmedi: telefon onu bıraktı. Yeniden seçin.",
+      "lost_other": "{{count}} dosya yüklenmedi: telefon onları bıraktı. Yeniden seçin.",
+      "nameTaken": "Ad kullanımda · Seçmek için dokunun",
+      "workspaceRoot": "çalışma alanının kökü",
+      "unconfirmed": "Yükleme doğrulanamadı. Klasörü kontrol edin."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",
@@ -5281,6 +5366,16 @@
       "checkSkipped": "Atlandı",
       "checkPending": "Beklemede",
       "checkNeutral": "Nötr"
+    },
+    "jiraConnect": {
+      "title": "Jira’yı bağla",
+      "siteUrl": "ekibin.atlassian.net",
+      "email": "Atlassian e-postası",
+      "apiToken": "API belirteci",
+      "storageHint": "Belirtecin bu ana bilgisayarda saklanır, işletim sistemi destekliyorsa şifrelenir.",
+      "createToken": "API belirteci oluştur",
+      "failed": "Bağlantı başarısız",
+      "serverNeedsUpdate": "Bu sunucunun önce Orca güncellemesi alması gerekiyor. Bunun yerine Jira’yı Orca masaüstünden bağla."
     }
   },
   "terminal": {
@@ -5445,7 +5540,7 @@
       "started": "Başladı",
       "trigger": "Tetikleyici",
       "output": "Çıktı",
-      "noOutput": "Çıktı içeriği yok.",
+      "noOutput": "Gösterilecek çıktı yok.",
       "loadingRuns": "Çalıştırmalar yükleniyor…",
       "loading": "Yükleniyor…",
       "hourly": "Saatlik",
@@ -6667,7 +6762,7 @@
       "composerPlaceholder": "Gruba mesaj yazın; bir bottan bahsetmek için @ kullanın",
       "repliesValue": "Yanıtlar: {{value0}}",
       "whoAnswers": "Mesajlarınızı kim yanıtlar?",
-      "peerAsked": "{{from}} bir soru sordu. Sorunun yöneltildiği bot: {{to}}",
+      "peerAsked": "{{from}}, {{to}} botuna sordu",
       "peerFollowedUp": "{{bot}} takip mesajı gönderdi",
       "deleteTitle": "{{name}} silinsin mi?",
       "deleteDescription": "Gruptaki botlar silinmez.",

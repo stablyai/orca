@@ -138,6 +138,14 @@ export const mcpPanelStylesSheet = themedStyleSheet((colors) => ({
     paddingBottom: spacing.sm,
     marginTop: -spacing.xs
   },
+  rowHint: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    paddingLeft: NAME_INSET,
+    paddingRight: spacing.md,
+    paddingBottom: spacing.sm,
+    marginTop: -spacing.xs
+  },
   pasteBox: {
     paddingLeft: NAME_INSET,
     paddingRight: spacing.sm,

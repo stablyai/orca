@@ -33,7 +33,7 @@ import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-acc
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getCodexAccountAuthWarning } from './codex/codex-account-auth-warning'
+import { getCodexAccountAuthWarning } from '../../../../../shared/agent-accounts/codex/codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex/codex-config-sync-warning'
 import {
   getProviderAccountActiveIdForView,

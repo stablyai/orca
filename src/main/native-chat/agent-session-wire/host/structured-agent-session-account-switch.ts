@@ -21,7 +21,8 @@ export async function releaseIdleChatsOnOtherAccount(
   }
   await Promise.all(
     host.loadedSessionIds().map(async (id) => {
-      if (host.sessionAgent(id) !== agent || !host.childAccountHome(id)) {
+      // Any running child: one whose agent keeps a single home reports no home of its own.
+      if (host.sessionAgent(id) !== agent || !host.childAccountHome(id, true)) {
         return
       }
       await host.releaseOffAccount(id, committed).catch((error: unknown) => {

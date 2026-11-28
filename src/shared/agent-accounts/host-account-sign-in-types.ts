@@ -55,6 +55,10 @@ export const HOST_ACCOUNT_SIGN_IN_FAILURE_COPY = {
 
 export type HostAccountSignInFailureCode = keyof typeof HOST_ACCOUNT_SIGN_IN_FAILURE_COPY
 
+/** How long a host keeps a sign-in nobody asks about: as long as Claude's own login waits, since a phone on
+ *  the sign-in page is suspended and can't ask. Older hosts end it after 90 s. */
+export const HOST_ACCOUNT_SIGN_IN_OWNER_SILENCE_MS = 10 * 60_000
+
 export const HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES: ReadonlySet<HostAccountSignInPhase> = new Set([
   'signedIn',
   'failed',

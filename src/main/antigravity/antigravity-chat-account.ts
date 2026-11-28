@@ -8,10 +8,11 @@ import type {
 } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { RevisionedState } from '../runtime/events/revisioned-state'
 import { AcpLaunchGate } from '../acp/launch/acp-launch-gate'
+import { AGY_HOST_SELECTION } from './agy-account-selection'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { resolveAgentPlatformProject } from './antigravity-agent-platform-project'
 
-export const ANTIGRAVITY_LAUNCH_GATE = new AcpLaunchGate('Antigravity')
+export const ANTIGRAVITY_LAUNCH_GATE = new AcpLaunchGate('Antigravity', AGY_HOST_SELECTION.started)
 
 /** The message is suitable for display without further translation. */
 export class AntigravitySignInSentence extends Error {}

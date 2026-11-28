@@ -60,8 +60,9 @@ type ImageModule = {
   saveImageToPhotos: (uri: string, mime: string) => Promise<void>
 }
 
-// iOS takes a file:// URI; Android takes a FileProvider content:// URI and grants the chosen app read access.
-export function shareImage(uri: string, mime: string): Promise<void> {
+// The system share sheet for any file (named for its first use, images). iOS takes a file:// URI;
+// Android takes a FileProvider content:// URI and grants the chosen app read access.
+export function shareFile(uri: string, mime: string): Promise<void> {
   return requireNativeModule<ImageModule>('OrcaMobileWebShell').shareImage(uri, mime)
 }
 

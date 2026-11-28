@@ -18,7 +18,37 @@ type RemoteRowState = Parameters<typeof rowIdentities>[0] &
   Parameters<typeof terminalProvenance>[0] &
   Partial<Pick<AppState, 'runtimeAgentOrchestrationByPaneKey' | 'remoteAgentOrchestrationByHost'>>
 
-let cache: { inputs: unknown[]; contexts: Contexts } | undefined
+let cache:
+  | {
+      byHost: Record<string, Contexts>
+      rows: RowIdentities
+      terminals: TerminalHosts
+      contexts: Contexts
+    }
+  | undefined
+
+function hasOwnKey(record: Record<string, unknown>): boolean {
+  for (const key in record) {
+    if (Object.hasOwn(record, key)) {
+      return true
+    }
+  }
+  return false
+}
+
+function contextsShallowEqual(previous: Contexts, next: Contexts, nextCount: number): boolean {
+  let prevCount = 0
+  for (const key in previous) {
+    if (!Object.hasOwn(previous, key)) {
+      continue
+    }
+    prevCount += 1
+    if (previous[key] !== next[key]) {
+      return false
+    }
+  }
+  return prevCount === nextCount
+}
 
 /** The row this window shows for a host's pane key: that host's chat row, or a terminal tab it runs. */
 export function rowOnHost(
@@ -61,17 +91,25 @@ export function remoteRowContexts(
   rows: RowIdentities,
   terminals: TerminalHosts
 ): Contexts {
-  if (!byHost || Object.keys(byHost).length === 0) {
+  if (!byHost || !hasOwnKey(byHost)) {
     return EMPTY_REMOTE_ROWS
   }
-  const inputs = [byHost, rows, terminals]
-  if (cache && inputs.every((value, index) => value === cache?.inputs[index])) {
+  if (cache && cache.byHost === byHost && cache.rows === rows && cache.terminals === terminals) {
     return cache.contexts
   }
   const previous = cache?.contexts
-  const contexts: Contexts = Object.fromEntries([])
-  for (const [host, hostContexts] of Object.entries(byHost)) {
-    for (const [key, context] of Object.entries(hostContexts)) {
+  const contexts: Contexts = {}
+  let contextCount = 0
+  for (const host in byHost) {
+    if (!Object.hasOwn(byHost, host)) {
+      continue
+    }
+    const hostContexts = byHost[host]
+    for (const key in hostContexts) {
+      if (!Object.hasOwn(hostContexts, key)) {
+        continue
+      }
+      const context = hostContexts[key]
       const row = rowOnHost(host, key, rows, terminals)
       if (!row) {
         continue
@@ -86,16 +124,15 @@ export function remoteRowContexts(
             ? { ...context, parentPaneKey: parent }
             : withoutParent(context)
       const kept = previous?.[row]
+      if (!Object.hasOwn(contexts, row)) {
+        contextCount += 1
+      }
       contexts[row] =
         next !== context && kept && orchestrationContextsEqual(kept, next) ? kept : next
     }
   }
-  const keys = Object.keys(contexts)
-  const unchanged =
-    previous &&
-    keys.length === Object.keys(previous).length &&
-    keys.every((key) => previous[key] === contexts[key])
-  cache = { inputs, contexts: unchanged ? previous : contexts }
+  const unchanged = previous !== undefined && contextsShallowEqual(previous, contexts, contextCount)
+  cache = { byHost, rows, terminals, contexts: unchanged ? previous : contexts }
   return cache.contexts
 }
 
@@ -118,12 +155,8 @@ export function orchestrationForStatusRows(state: RemoteRowState): Contexts {
 export function remoteRowContextsFor(state: RemoteRowState): Contexts {
   const byHost = state.remoteAgentOrchestrationByHost
   // A purely local window builds no row identities or terminal hosts for this.
-  if (!byHost || Object.keys(byHost).length === 0) {
+  if (!byHost || !hasOwnKey(byHost)) {
     return EMPTY_REMOTE_ROWS
   }
-  return remoteRowContexts(
-    state.remoteAgentOrchestrationByHost,
-    rowIdentities(state),
-    terminalProvenance(state)
-  )
+  return remoteRowContexts(byHost, rowIdentities(state), terminalProvenance(state))
 }

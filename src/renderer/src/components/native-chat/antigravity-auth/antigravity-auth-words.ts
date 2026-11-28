@@ -5,24 +5,17 @@ import type {
   AntigravityChatAuthAlternative
 } from './antigravity-chat-auth-choices'
 
-/** Which agy runs a chat and its version, so its models and account are no surprise. */
+/** The agy version a chat runs, so its models and account are no surprise; null until the host
+ *  reports one. */
 export function antigravityProgramLabel(
-  orcas: boolean,
   version: string | null | undefined,
   t: Translate = translate
-): string {
-  if (orcas) {
-    return version
-      ? t('components.native-chat.antigravityAuth.orcasAgyVersion', "Orca's agy · v{{version}}", {
-          version
-        })
-      : t('components.native-chat.antigravityAuth.orcasAgy', "Orca's agy")
-  }
+): string | null {
   return version
     ? t('components.native-chat.antigravityAuth.yourAgyVersion', 'Your agy · v{{version}}', {
         version
       })
-    : t('components.native-chat.antigravityAuth.yourAgy', 'Your agy')
+    : null
 }
 
 export function antigravityAlternativeLabel(

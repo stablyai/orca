@@ -14,10 +14,14 @@ import { isStructuredAgentSessionCommandEntry } from '../requests/structured-age
 
 /** Loaded startup causes and authentication explanations already visible in the transcript. */
 export function agentSessionVisibleFailureFacts(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  hiddenRowIds?: ReadonlySet<string>
 ): AgentSessionFailureFact[] {
   const facts: AgentSessionFailureFact[] = []
   for (const item of items) {
+    if (hiddenRowIds?.has(item.itemId)) {
+      continue
+    }
     if (item.body.kind === 'status') {
       const fact = readWholeAgentSessionFailureFact(item.body.failure)
       if (

@@ -7,7 +7,7 @@ import {
 } from '../worktree/row-display/worktree-status-rollup'
 import type { BotGroup } from './bot-group-schema'
 import { botGroupRoomMembers } from './bot-group'
-import { chatPaneKey } from '../agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../agent-session/view/chat-pane-address'
 
 type BotGroupDot = Extract<WorktreeStatus, 'permission' | 'working'> | null
 type MemberStatus = Parameters<typeof applyAgentPaneActivityFlags>[1]

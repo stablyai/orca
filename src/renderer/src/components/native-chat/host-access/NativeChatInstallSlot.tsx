@@ -15,10 +15,7 @@ import {
   useAntigravityChatSignInStrip,
   type NativeChatSignInStripState
 } from './NativeChatSignInStrip'
-import {
-  useStructuredAgentSessionHostProgram,
-  useStructuredAgentSessionOwnLogin
-} from '../session/status/structured-agent-session-status-hooks'
+import { useStructuredAgentSessionOwnLogin } from '../session/status/structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
@@ -52,11 +49,9 @@ export function useNativeChatInstallSlot(
   antigravityAuth: NativeChatAntigravityAuthTarget | null
 } {
   const t = useTranslate()
-  const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
   const ownLogin = useStructuredAgentSessionOwnLogin(props.sessionId, props.target)
-  // Chats on the host program follow it too: Orca's agy may be what they need installed.
   const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
-  const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
+  const slot = nativeChatInstallSlotState(observation, layout)
   const antigravity = props.agent === 'antigravity' && props.isVisible
   // Advisory, as the host's other verdicts: a login agy gets elsewhere isn't seen at once.
   const signIn = useAntigravityChatSignInStrip(
@@ -72,43 +67,15 @@ export function useNativeChatInstallSlot(
     signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint,
-    antigravityAuth: antigravity
-      ? { host: props.target, ownLogin, ...antigravityAgy(observation) }
-      : null
+    antigravityAuth: antigravity ? { host: props.target, ownLogin } : null
   }
 }
 
-/** Which agy runs Antigravity chats on the host, once its install status says. */
-function antigravityAgy(
-  observation: ManagedRuntimeInstallObservation
-): Pick<NativeChatAntigravityAuthTarget, 'agy' | 'managedVersion'> {
-  const state =
-    observation.kind === 'active' && observation.snapshot.kind === 'known'
-      ? observation.snapshot.state
-      : null
-  if (state?.program !== 'cli' || state.source === null) {
-    return { agy: null, managedVersion: null }
-  }
-  return state.source === 'managed'
-    ? { agy: 'orcas', managedVersion: state.installedVersion }
-    : { agy: 'yours', managedVersion: null }
-}
-
-/** A chat on the host's own program needs an install only when that program is Orca's missing
- *  copy; an unanswered status never holds its sends. */
+/** An agent Orca downloads needs an install until the host reports one. */
 export function nativeChatInstallSlotState(
   observation: ManagedRuntimeInstallObservation,
-  layout: ManagedRuntimeInstallLayout,
-  hostProgram: boolean
+  layout: ManagedRuntimeInstallLayout
 ): NativeChatInstallSlotState {
-  if (hostProgram) {
-    return observation.kind === 'active' &&
-      observation.snapshot.kind === 'known' &&
-      observation.snapshot.state.program === 'cli' &&
-      observation.snapshot.state.source === null
-      ? { kind: 'install', observation, state: observation.snapshot.state, layout }
-      : NONE
-  }
   if (observation.kind === 'inactive') {
     return NONE
   }

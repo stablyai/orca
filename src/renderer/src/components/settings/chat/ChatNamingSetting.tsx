@@ -4,7 +4,9 @@ import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-
 import { resolveSourceControlAiForOperation } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { CUSTOM_AGENT_ID } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { Switch } from '../../ui/switch'
 import { SourceControlActionRecipeRow } from '../source-control/SourceControlActionRecipeRow'
 import { useGlobalTextActionRecipeDraft } from '../source-control/use-global-text-action-recipe-draft'
@@ -116,6 +118,18 @@ export function ChatNamingSetting({
             onCheckedChange={(checked) => updateSettings({ nativeChatAutoName: checked })}
           />
         </div>
+        {/* Manual names need it too; a chosen naming agent names Antigravity chats instead. */}
+        {!recipe?.agentId && !recipe?.agentArgs?.trim() ? (
+          <SettingsSwitchRow
+            className="mt-3"
+            label={t('settings.chat.names.antigravity', 'Generate chat titles with Antigravity')}
+            description={antigravityNamingCopy(t, settings.antigravityChatAuth?.method)}
+            checked={settings.antigravityChatNaming === true}
+            onChange={() =>
+              updateSettings({ antigravityChatNaming: settings.antigravityChatNaming !== true })
+            }
+          />
+        ) : null}
         {/* Inside the row so the naming anchor and highlight cover its Advanced recipe too. */}
         {settings.nativeChatAutoName !== false || dirty ? (
           <div className="mt-3">
@@ -184,4 +198,34 @@ export function ChatNamingSetting({
       </SearchableSetting>
     </SettingsGroup>
   )
+}
+
+/** Where a naming run's usage lands depends on the saved Antigravity sign-in method. */
+function antigravityNamingCopy(
+  t: Translate,
+  method: AntigravityChatAuthConfig['method'] | undefined
+): string {
+  switch (method) {
+    case 'oauth-business':
+      return t(
+        'settings.chat.names.antigravityEnterprise',
+        'Sends each chat’s first message to Antigravity to name it, which uses your Gemini Enterprise quota.'
+      )
+    case 'gemini-api-key':
+      return t(
+        'settings.chat.names.antigravityApiKey',
+        'Sends each chat’s first message to Antigravity to name it, billed to your Gemini API key.'
+      )
+    case 'agent-platform':
+      return t(
+        'settings.chat.names.antigravityAgentPlatform',
+        'Sends each chat’s first message to Antigravity to name it, billed to your Google Cloud project.'
+      )
+    case 'oauth-personal':
+    case undefined:
+      return t(
+        'settings.chat.names.antigravityGoogle',
+        'Sends each chat’s first message to Antigravity to name it, which uses your Antigravity quota on your Google account.'
+      )
+  }
 }

@@ -702,6 +702,8 @@ const ORCA_CLI_AUTOMATIONS_REFERENCE_MARKDOWN = [
   "",
   "Use `--precheck <command>` to run a shell command only before scheduled runs. Exit code `0` continues; any other exit, error, or timeout skips the run. Set the time limit with `--precheck-timeout <seconds>` (default `60`). Skips appear in Orca run history and `ORCA automations runs --id <automationId> --json` with status `skipped_precheck`.",
   "",
+  "On `ORCA automations edit`, `--precheck <command>` keeps the saved timeout unless you also pass `--precheck-timeout`, and `--precheck-timeout <seconds>` alone retimes the saved command.",
+  "",
   "**Run now** in Orca and `ORCA automations run <automationId>` intentionally bypass the precheck, so you can test the automation or override its scheduled condition.",
   "",
   "Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` / `--workspace-mode existing` for an existing Orca worktree. `--repo` and `--workspace` are mutually exclusive. Use `--reuse-session` only for existing-workspace automations; if the previous terminal is gone, Orca falls back to a fresh session. Prefer `--disabled` while testing setup.",

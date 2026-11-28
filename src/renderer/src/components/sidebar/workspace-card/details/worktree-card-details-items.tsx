@@ -1,6 +1,9 @@
 import React from 'react'
 import { useComposedRefs } from 'radix-ui/internal'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import {
+  EMPTY_WORKSPACE_ATTACHMENTS,
+  getReadonlyWorkspaceAttachments
+} from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import { WorktreeCardMetaBadges } from '../metadata/WorktreeCardMetaBadges'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
@@ -18,19 +21,26 @@ export function renderWorktreeCardIndicators(
   if (!hasDetails && !hasPorts) {
     return null
   }
-  const allReferenceItems = getWorkspaceAttachments(worktree)
-  const referenceItems = allReferenceItems.filter((item) =>
-    item.type !== 'issue'
-      ? showPR &&
-        !compactLine &&
-        (!reviewInStatusLane ||
-          allReferenceItems.filter((candidate) => candidate.type !== 'issue').length > 1)
-      : item.provider === 'linear'
-        ? card.showLinearIssue
-        : item.provider === 'jira'
-          ? card.showJiraIssue
-          : showIssue
-  )
+  const allReferenceItems = getReadonlyWorkspaceAttachments(worktree)
+  let referenceItems: readonly (typeof allReferenceItems)[number][] = EMPTY_WORKSPACE_ATTACHMENTS
+  if (allReferenceItems.length > 0) {
+    let reviewCount = 0
+    for (let i = 0; i < allReferenceItems.length; i += 1) {
+      if (allReferenceItems[i].type !== 'issue') {
+        reviewCount += 1
+      }
+    }
+    const showReviewsInBadges = showPR && !compactLine && (!reviewInStatusLane || reviewCount > 1)
+    referenceItems = allReferenceItems.filter((item) =>
+      item.type !== 'issue'
+        ? showReviewsInBadges
+        : item.provider === 'linear'
+          ? card.showLinearIssue
+          : item.provider === 'jira'
+            ? card.showJiraIssue
+            : showIssue
+    )
+  }
   return (
     <div className="flex shrink-0 items-center gap-1">
       {hasPorts && <WorktreeCardPortsTrigger ports={card.workspacePorts} />}
@@ -55,11 +65,19 @@ export function renderWorktreeCardIndicators(
 }
 
 function canUnlink(card: WorktreeCardController): boolean {
-  return (
-    !card.affiliateListMode &&
-    (card.canUnlinkReview ||
-      getWorkspaceAttachments(card.worktree).some((item) => item.type !== 'issue'))
-  )
+  if (card.affiliateListMode) {
+    return false
+  }
+  if (card.canUnlinkReview) {
+    return true
+  }
+  const attachments = getReadonlyWorkspaceAttachments(card.worktree)
+  for (let i = 0; i < attachments.length; i += 1) {
+    if (attachments[i].type !== 'issue') {
+      return true
+    }
+  }
+  return false
 }
 
 /** The classic card's hover over its meta-row badges. */

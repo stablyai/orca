@@ -6,8 +6,21 @@ import {
   jiraIssueListSchema,
   jiraIssueRowSchema
 } from './jira-reply-schema'
+import { taskMutationEnvelopeSchema } from '../../task-provider-entity-reply-schema'
 
-// Credentials and issue mutations stay on desktop.
+/** The tracker host's own phone allowlist lacks jira.connect (an older server behind this desktop). */
+export class JiraConnectRefusedError extends Error {}
+
+// Accepted replies may still fail in-band with the host's message (bad token, bad site URL).
+export const jiraAccountConnect = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'jira.connect-account',
+    method: 'jira.connect',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('jira-account-connected', taskMutationEnvelopeSchema)
+  })
+)
 
 const jiraStatusReader = rpcResultVariant('jira-status', jiraConnectionStatusSchema)
 

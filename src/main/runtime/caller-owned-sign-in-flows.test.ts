@@ -51,3 +51,37 @@ describe('CallerOwnedSignInFlows prompt deadline', () => {
     expect(status.phase).toBe('waiting')
   })
 })
+
+describe('CallerOwnedSignInFlows owner take-over', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  function flowsWithTakeOver(): CallerOwnedSignInFlows<'claude', Prompt, string, object, string> {
+    return new CallerOwnedSignInFlows<'claude', Prompt, string, object, string>(
+      (_provider, channel) => runUntilAborted(channel),
+      {
+        acceptsPrompt: () => true,
+        acceptsCode: () => true,
+        describeFailure: (error) => ({ error }),
+        busyMessage: 'busy',
+        startKey: (accountId) => accountId,
+        ownerSilenceMs: 600_000,
+        ownerTakesOverAfterMs: 60_000
+      }
+    )
+  }
+
+  it('lets an owner that stopped asking replace its own flow, but never another owner or a live one', async () => {
+    const flows = flowsWithTakeOver()
+    const lost = flows.start('phone', 'claude', 'account-a')
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(() => flows.start('phone', 'claude', 'account-b')).toThrow('busy')
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(() => flows.start('desktop', 'claude', 'account-b')).toThrow('busy')
+
+    const replacement = flows.start('phone', 'claude', 'account-b')
+    expect(replacement.flowId).not.toBe(lost.flowId)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(flows.activeFlow()).toEqual({ owner: 'phone', flowId: replacement.flowId })
+  })
+})

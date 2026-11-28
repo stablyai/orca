@@ -20,7 +20,8 @@ import {
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace' | 'createFolderWorkspace'>
+  runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace' | 'createFolderWorkspace'> &
+    Partial<Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'>>
 ): void {
   ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => visibleFolderWorkspaces(store))
 
@@ -103,6 +104,8 @@ export function registerFolderWorkspaceHandlers(
       'invalid_folder_workspace_delete_args'
     )
     // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
+    const { assertNotBotGroupHomeFolderWorkspace } = await import('../../bots/bot-group-runtime')
+    assertNotBotGroupHomeFolderWorkspace(runtime, args.folderWorkspaceId)
     return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId, args)).deleted
   })
 }

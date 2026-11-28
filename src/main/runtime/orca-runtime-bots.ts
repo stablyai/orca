@@ -82,7 +82,10 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     createFolderWorkspace: async (input) =>
       (await this.projectGroups.createFolderWorkspace(input)).folderWorkspace,
     deleteFolderWorkspace: (id) =>
-      this.projectGroups.deleteFolderWorkspace(id, { discardUnsavedDrafts: true }),
+      this.projectGroups.deleteFolderWorkspace(id, {
+        discardUnsavedDrafts: true,
+        allowBotHome: true
+      }),
     deleteBotAutomations: (botId) =>
       deleteAutomationsOfBot(this.store?.listAutomations?.() ?? [], botId, (id) =>
         this.deleteAutomation(id)
