@@ -85,7 +85,7 @@ function OperationLabel({
     <span aria-hidden="true" className="flex min-w-0 flex-1 flex-col">
       <span className="truncate text-xs leading-4 font-medium text-foreground">{verb}</span>
       {tail ? (
-        <span className="truncate text-[11px] leading-[14px] text-muted-foreground">{tail}</span>
+        <span className="truncate text-2xs leading-3.5 text-muted-foreground">{tail}</span>
       ) : null}
     </span>
   )
