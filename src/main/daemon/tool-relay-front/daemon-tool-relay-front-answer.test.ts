@@ -39,7 +39,8 @@ describe.skipIf(process.platform === 'win32')('tool relay front answers', () => 
     })
     await new Promise<void>((resolve) => pairs!.listen(0, '127.0.0.1', resolve))
     const address = pairs!.address()
-    const daemonEnd = connect(typeof address === 'object' && address ? address.port : 0, '127.0.0.1')
+    const appPort = typeof address === 'object' && address ? address.port : 0
+    const daemonEnd = connect(appPort, '127.0.0.1')
     opened.push(daemonEnd)
     await new Promise((resolve) => daemonEnd.once('connect', resolve))
     expect(front.splice(ids[0]!, daemonEnd, 'app')).toBe(true)
@@ -57,5 +58,5 @@ describe.skipIf(process.platform === 'win32')('tool relay front answers', () => 
     agent.resume()
     await closed
     expect(received).toBe(size)
-  }, 30_000)
+  })
 })
