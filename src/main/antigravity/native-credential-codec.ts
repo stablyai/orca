@@ -92,11 +92,24 @@ export type AntigravityNativeCredential = {
   identity: AntigravityCredentialIdentity | null
   accessToken: string
   refreshToken: string | null
+  /** When the stored access token stops working (agy's `expiry`); null when agy saved none. */
+  accessTokenExpiresAt: number | null
+}
+
+function readExpiry(expiry: unknown): number | null {
+  const time = typeof expiry === 'string' ? Date.parse(expiry) : Number.NaN
+  return Number.isFinite(time) ? time : null
 }
 
 export function projectAntigravityNativeCredential(
   contents: string,
-  token: { authMethod: string; accessToken: string; refreshToken: string | null; idToken: unknown }
+  token: {
+    authMethod: string
+    accessToken: string
+    refreshToken: string | null
+    idToken: unknown
+    expiry?: unknown
+  }
 ): AntigravityNativeCredential {
   if (Buffer.byteLength(contents) > MAX_CREDENTIAL_BYTES || !token.accessToken.trim()) {
     throw invalidCredential()
@@ -106,7 +119,8 @@ export function projectAntigravityNativeCredential(
     authMethod: token.authMethod,
     identity: readIdentity(token.idToken),
     accessToken: token.accessToken,
-    refreshToken: token.refreshToken || null
+    refreshToken: token.refreshToken || null,
+    accessTokenExpiresAt: readExpiry(token.expiry)
   }
 }
 
@@ -140,6 +154,7 @@ export function parseAntigravityNativeCredential(contents: string): AntigravityN
     idToken: value.id_token ?? token.id_token,
     accessToken: token.access_token,
     refreshToken:
-      typeof token.refresh_token === 'string' && token.refresh_token ? token.refresh_token : null
+      typeof token.refresh_token === 'string' && token.refresh_token ? token.refresh_token : null,
+    expiry: token.expiry
   })
 }

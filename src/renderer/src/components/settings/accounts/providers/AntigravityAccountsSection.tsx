@@ -11,6 +11,7 @@ import type {
 } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
+import { clearAntigravityChatSignInError } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { AntigravityChatAuthRows } from '../../../provider-accounts/AntigravityChatAuthRows'
 import { useAntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
@@ -22,10 +23,12 @@ import {
   announceAntigravityAccountSwitch,
   announceAntigravityAccountSwitchFailure
 } from '@/lib/provider-accounts/antigravity-account-switch-toasts'
+import { useAgyLoginChange } from './use-agy-login-change'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
   AntigravityAgyAccountRows,
-  type AntigravityAccountAction
+  type AntigravityAccountAction,
+  type AntigravityAccountError
 } from './AntigravityAgyAccountRows'
 import { AntigravityAgyCliRow } from './AntigravityAgyCliRow'
 
@@ -42,8 +45,10 @@ export function AntigravityAccountsSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const [state, setState] = useState<AntigravityAccountState | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<AntigravityAccountError | null>(null)
   const mounted = useRef(true)
+  // Reads can answer out of order (the mount read and a login-change re-read); the newest wins.
+  const reads = useRef({ issued: 0, applied: 0 })
   const { busy, run } = useAntigravityAccountRun(perform, mounted)
   const ownerKind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
@@ -83,17 +88,22 @@ export function AntigravityAccountsSection({
       ownerKind === 'environment' && environmentId
         ? { kind: 'environment', environmentId }
         : { kind: 'local' }
+    const read = ++reads.current.issued
     void callAntigravityAccounts(currentOwner, { runtime, wslDistro }, 'List').then(
       (next) => {
-        if (!cancelled) {
+        if (!cancelled && read > reads.current.applied) {
+          reads.current.applied = read
           setState(next)
         }
       },
       (cause: unknown) => {
-        if (!cancelled) {
-          setError(
-            cause instanceof Error ? cause.message : 'Antigravity accounts could not be loaded.'
-          )
+        // A newer read already showed the accounts; this older failure describes nothing on screen.
+        if (!cancelled && read > reads.current.applied) {
+          setError({
+            message:
+              cause instanceof Error ? cause.message : 'Antigravity accounts could not be loaded.',
+            accountId: null
+          })
         }
       }
     )
@@ -112,11 +122,16 @@ export function AntigravityAccountsSection({
     if (!keepShown) {
       setError(null)
     }
-    try {
-      const next = await callAntigravityAccounts(owner, target, action, accountId)
-      if (mounted.current) {
+    const apply = (read: number, next: AntigravityAccountState | null) => {
+      if (mounted.current && read > reads.current.applied) {
+        reads.current.applied = read
         setState(next)
       }
+    }
+    const read = ++reads.current.issued
+    try {
+      const next = await callAntigravityAccounts(owner, target, action, accountId)
+      apply(read, next)
       if (action === 'Select' && accountId) {
         announceAntigravityAccountSwitch(next, accountId, target.runtime === 'host')
       }
@@ -125,20 +140,19 @@ export function AntigravityAccountsSection({
         announceAntigravityAccountSwitchFailure(cause)
       }
       if (action === 'Select' || action === 'Remove' || action === 'AddCurrent') {
+        const reread = ++reads.current.issued
         try {
-          const observed = await callAntigravityAccounts(owner, target, 'List')
-          if (mounted.current) {
-            setState(observed)
-          }
+          apply(reread, await callAntigravityAccounts(owner, target, 'List'))
         } catch {
-          if (mounted.current) {
-            setState(null)
-          }
+          apply(reread, null)
         }
       }
       // A background re-read fails quietly, and a failed switch says why in its toast.
       if (mounted.current && !keepShown && action !== 'Select') {
-        setError(cause instanceof Error ? cause.message : 'Antigravity account action failed.')
+        setError({
+          message: cause instanceof Error ? cause.message : 'Antigravity account action failed.',
+          accountId: accountId ?? null
+        })
       }
     }
   }
@@ -151,14 +165,26 @@ export function AntigravityAccountsSection({
   )
   // A pick moves new chats between agy's own home and Orca's, which the description follows.
   const reread = () => void run('List', undefined, true)
-  // Signing in or adding an account changes agy's login, which the account rows read again.
-  // 'idle' once the status is read is a first value, so the first sign-in after mount re-reads too.
-  const signedInFlow = !signIn.known
+  // Every sign-in that ends changes what the rows show: agy's new login, or, when cancelled or
+  // failed, its current one saved before the sign-in began. 'idle' once the status is read is a
+  // first value, so the first sign-in after mount re-reads too.
+  const flow = signIn.flow
+  const flowEnded = flow !== null && !signIn.signingIn
+  const endedFlow = !signIn.known
     ? null
-    : signIn.flow?.phase === 'signedIn'
-      ? (signIn.flow.flowId ?? 'another client')
+    : flowEnded
+      ? `${flow.flowId ?? 'another client'}:${flow.phase}`
       : 'idle'
-  useOnLaterChange(signedInFlow, reread)
+  // agy's login on the host doesn't change a WSL distro's.
+  const shown = useAgyLoginChange(owner, chats, state, reread, () => {
+    setError(null)
+    // The sign-in store follows the host's agy, which a WSL distro's login doesn't change.
+    if (chats) {
+      clearAntigravityChatSignInError(owner)
+    }
+  })
+  // A sign-in signs in the host's agy, not a WSL distro's; a hidden window reads once shown again.
+  useOnLaterChange(chats && shown ? endedFlow : null, reread)
   const description = windowsHost
     ? t(
         'accounts.antigravity.descriptionWindows',

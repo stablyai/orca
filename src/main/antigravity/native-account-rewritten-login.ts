@@ -15,7 +15,10 @@ export class AntigravityRewrittenLoginIdentity {
     identity: Promise<AntigravityCredentialIdentity | null>
   } | null = null
 
-  constructor(private readonly lookup: () => LookupIdentity) {}
+  constructor(
+    private readonly lookup: () => LookupIdentity,
+    private readonly now: () => number = Date.now
+  ) {}
 
   async identify(
     current: AntigravityNativeCredential | null,
@@ -26,6 +29,8 @@ export class AntigravityRewrittenLoginIdentity {
       !current ||
       current.identity ||
       !accounts.some((account) => account.subject) ||
+      // Google rejects an expired access token; agy refreshes it on its next run.
+      (current.accessTokenExpiresAt !== null && current.accessTokenExpiresAt <= this.now()) ||
       accounts.some((account) => matches(account, current))
     ) {
       return current
@@ -38,5 +43,30 @@ export class AntigravityRewrittenLoginIdentity {
     }
     const identity = await this.last.identity
     return identity ? { ...current, identity } : current
+  }
+
+  /** Who a login being saved belongs to. `keepUnidentified` saves it without one when Google can't
+   *  say, and doesn't ask at all once its access token expired, since Google rejects that token. */
+  async identifyToSave(
+    current: AntigravityNativeCredential,
+    options?: { keepUnidentified?: boolean }
+  ): Promise<AntigravityCredentialIdentity | null> {
+    if (current.identity) {
+      return current.identity
+    }
+    const keep = options?.keepUnidentified === true
+    if (
+      keep &&
+      current.accessTokenExpiresAt !== null &&
+      current.accessTokenExpiresAt <= this.now()
+    ) {
+      return null
+    }
+    return this.lookup()(current.accessToken).catch((error: unknown) => {
+      if (keep) {
+        return null
+      }
+      throw error
+    })
   }
 }

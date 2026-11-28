@@ -36,6 +36,8 @@ export type AntigravityChatSignInView = {
 type HostStatus = AntigravityChatSignInStatus & { runtimeId?: string }
 
 type Notes = Pick<AntigravityChatSignInView, 'error' | 'openFailed'> & {
+  /** An ended flow that described agy's previous login, hidden until another flow replaces it. */
+  dismissedFlow?: string | null
   attempt: {
     intent: AntigravityChatSignInIntent
     previousFlow: string | null | undefined
@@ -53,7 +55,12 @@ type Local = {
   notes: Notes
 }
 
-const NO_NOTES: Notes = { error: null, openFailed: false, attempt: null }
+const NO_NOTES: Notes = { error: null, openFailed: false, attempt: null, dismissedFlow: null }
+
+const endedFlowKey = (flow: AntigravityChatSignInState | null | undefined): string | null =>
+  flow && (flow.phase === 'failed' || flow.phase === 'cancelled' || flow.phase === 'expired')
+    ? `${flow.flowId ?? ''}|${flow.phase}|${flow.error ?? ''}`
+    : null
 const hostKey = (owner: RuntimeClientTarget): string =>
   owner.kind === 'local' ? '' : owner.environmentId
 
@@ -201,6 +208,15 @@ export async function startAntigravityChatSignIn(
   }
 }
 
+/** Drops a start error, and an ended flow's failure, that described agy's previous login. */
+export function clearAntigravityChatSignInError(owner: RuntimeClientTarget): void {
+  const local = localFor(owner)
+  const dismissedFlow = endedFlowKey(stateFor(owner)?.flow) ?? local.notes.dismissedFlow ?? null
+  if (local.notes.error !== null || dismissedFlow !== (local.notes.dismissedFlow ?? null)) {
+    note(local, { error: null, dismissedFlow })
+  }
+}
+
 /** Only the client that started a flow is told its id, so only it can cancel or complete it. */
 const ownFlowId = (owner: RuntimeClientTarget): string | null => flowOf(owner)?.flowId ?? null
 
@@ -251,9 +267,16 @@ export function readAntigravityChatSignIn(owner: RuntimeClientTarget): Antigravi
     return cached.view
   }
   const known = stateFor(owner)
+  const flow = known?.flow ?? null
+  // A dismissal covers only the flow it hid: once the host shows another, it lapses, so a later
+  // failure reads again even when its words match.
+  const local = locals.get(hostKey(owner))
+  if (local?.notes.dismissedFlow && endedFlowKey(flow) !== local.notes.dismissedFlow) {
+    local.notes = { ...local.notes, dismissedFlow: null }
+  }
   const view = {
     status: known ? ('known' as const) : snapshot.kind,
-    flow: known?.flow ?? null,
+    flow: notes.dismissedFlow && endedFlowKey(flow) === notes.dismissedFlow ? null : flow,
     auth: known?.auth ?? 'unknown',
     error: notes.error,
     openFailed: notes.openFailed,

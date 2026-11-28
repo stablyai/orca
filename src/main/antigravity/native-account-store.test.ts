@@ -412,6 +412,24 @@ describe('protected Antigravity account snapshots', () => {
     expect(h.getNative()).toBe(credential('b'))
   })
 
+  it('keeps a login Google will not name when signing in over it, and survives a restart', async () => {
+    const h = harness(refreshedWithoutIdToken(1))
+    await expect(h.service.addCurrentAccount()).rejects.toThrow('Google did not confirm')
+    expect(h.getVault().accounts).toEqual([])
+    await h.service.addCurrentAccount({ keepUnidentified: true })
+    const path = join(dir, 'vault')
+    const store = createEncryptedAntigravityAccountStore(path)
+    await store.write(h.getVault())
+    expect(await store.read()).toMatchObject({
+      accounts: [{ email: null, subject: null, credentials: refreshedWithoutIdToken(1) }]
+    })
+    h.setNative(credential('b', 2))
+    const restarted = new AntigravityAccountService(store, h.backend, Date.now, h.lookupIdentity)
+    const id = (await store.read()).accounts[0].id
+    await restarted.selectAccount(id)
+    expect(h.getNative()).toBe(refreshedWithoutIdToken(1))
+  })
+
   it.skipIf(process.platform === 'win32')(
     'refuses a broadly readable persisted snapshot',
     async () => {

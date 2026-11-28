@@ -11,7 +11,8 @@ import {
   ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_DETECT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY,
-  ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
+  ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_LOGIN_CHANGES_RUNTIME_CAPABILITY
 } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import type { RuntimeRpcSuccess } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
@@ -93,6 +94,24 @@ export async function subscribeAntigravityChatSignIn(
     ...handlers,
     onEvent: (result, runtimeId) => handlers.onEvent(Object.assign({}, result, { runtimeId }))
   })
+}
+
+/** The host's count of changes to agy's stored login, then each new count. An older host has no
+ *  such stream, so it sends nothing and its rows update as before. */
+export async function subscribeAntigravityLoginChanges(
+  owner: RuntimeClientTarget,
+  handlers: RuntimeRpcSubscriptionHandlers
+): Promise<{ unsubscribe: () => void }> {
+  if (
+    owner.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      owner.environmentId,
+      ANTIGRAVITY_LOGIN_CHANGES_RUNTIME_CAPABILITY
+    ))
+  ) {
+    return { unsubscribe: () => {} }
+  }
+  return subscribeRuntimeRpc(owner, 'accounts.antigravityLoginSubscribe', null, handlers)
 }
 
 export async function callAntigravityChatAuthConfig(

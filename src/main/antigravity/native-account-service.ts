@@ -40,7 +40,8 @@ export class AntigravityAccountService {
   private prompting = 0
   private readonly logins: AntigravityLoginReader
   private readonly rewrittenLogins = new AntigravityRewrittenLoginIdentity(
-    () => this.lookupIdentity
+    () => this.lookupIdentity,
+    () => this.now()
   )
 
   constructor(
@@ -79,7 +80,7 @@ export class AntigravityAccountService {
   private async listKeychainLogin(fingerprint: string, persist: boolean) {
     const vault = await this.store.read()
     const login = (await this.logins.known(vault, fingerprint, persist)) ?? 'unread'
-    return antigravityAccountState(vault, login, Boolean(this.launchRestore))
+    return antigravityAccountState(vault, login, Boolean(this.launchRestore), this.now())
   }
 
   /** Reads only Orca's saved accounts, never agy's login, and waits on no other account work. */
@@ -104,7 +105,8 @@ export class AntigravityAccountService {
     return this.serialize(async () => this.state(await this.reconcile()))
   }
 
-  addCurrentAccount(): Promise<AntigravityAccountState> {
+  /** `keepUnidentified`: saves a login Google won't name, without an email. */
+  addCurrentAccount(options?: { keepUnidentified?: boolean }): Promise<AntigravityAccountState> {
     return this.serialize(async () => {
       const { vault, current } = await this.reconcile()
       if (!current) {
@@ -113,7 +115,7 @@ export class AntigravityAccountService {
       if (vault.accounts.some((entry) => this.matches(entry, current))) {
         return this.state({ vault, current })
       }
-      const identity = current.identity ?? (await this.lookupIdentity(current.accessToken))
+      const identity = await this.rewrittenLogins.identifyToSave(current, options)
       if (!current.identity && (await this.backend.read())?.contents !== current.contents) {
         throw new Error('The native Antigravity account changed. Save the current account again.')
       }
@@ -123,8 +125,8 @@ export class AntigravityAccountService {
         const timestamp = this.now()
         latest.accounts.push({
           id: randomUUID(),
-          email: identity.email,
-          subject: identity.subject,
+          email: identity?.email ?? null,
+          subject: identity?.subject ?? null,
           authMethod: current.authMethod,
           credentials: current.contents,
           createdAt: timestamp,
@@ -333,7 +335,7 @@ export class AntigravityAccountService {
     current: AntigravityNativeCredential | null
   }): AntigravityAccountState {
     const login = current ? this.logins.view(vault, current) : null
-    return antigravityAccountState(vault, login, Boolean(this.launchRestore))
+    return antigravityAccountState(vault, login, Boolean(this.launchRestore), this.now())
   }
 
   private serialize<T>(operation: () => Promise<T>, mayPrompt = true): Promise<T> {

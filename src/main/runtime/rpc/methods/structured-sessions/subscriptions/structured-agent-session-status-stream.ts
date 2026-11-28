@@ -14,8 +14,11 @@ import { clientReadsStructuredSessionAgent } from '../structured-agent-session-p
 export function bindStructuredAgentSessionStream(
   ctx: RpcContext,
   subscriptionId: string,
-  onClose: () => void
+  onClose: () => void,
+  /** The client may end this one stream by its request id, as a shared connection does. */
+  byRequest = false
 ): { isClosed: () => boolean; close: () => void } {
+  const requestId = byRequest ? ctx.requestId : undefined
   let closed = false
   let releaseTransportSubscription = (): void => {}
   const onTransportAbort = (): void => releaseTransportSubscription()
@@ -29,10 +32,11 @@ export function bindStructuredAgentSessionStream(
     registration = ctx.runtime.registerOwnedSubscriptionCleanup(
       subscriptionId,
       cleanup,
-      ctx.connectionId
+      ctx.connectionId,
+      requestId
     )
   } else {
-    ctx.runtime.registerSubscriptionCleanup(subscriptionId, cleanup, ctx.connectionId)
+    ctx.runtime.registerSubscriptionCleanup(subscriptionId, cleanup, ctx.connectionId, requestId)
     registration = { releaseIfCurrent: () => ctx.runtime.cleanupSubscription(subscriptionId) }
   }
   releaseTransportSubscription = registration.releaseIfCurrent

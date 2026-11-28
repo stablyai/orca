@@ -1,14 +1,17 @@
-import { AlertCircle, Trash2, UserPlus } from 'lucide-react'
-import { cn } from '@/lib/class-names'
-import { useTranslate } from '@/i18n/use-translate'
+import { Trash2, UserPlus } from 'lucide-react'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
+import { AntigravityAccountRow } from './AntigravityAccountRow'
 import { AntigravityChatSignInFlowPanel } from '../../../provider-accounts/AntigravityChatSignInFlowPanel'
 import type { AntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 
 export type AntigravityAccountAction = 'List' | 'ReadCurrent' | 'AddCurrent' | 'Select' | 'Remove'
+
+/** A failed account action, shown on the row it acted on: a saved account, or agy's current login. */
+export type AntigravityAccountError = { message: string; accountId: string | null }
 
 /** agy's Google logins, which agy in the terminal and Google-account chats share: the current
  *  login, then saved accounts. With `signIn`, signing in and adding an account run in Orca. */
@@ -21,7 +24,7 @@ export function AntigravityAgyAccountRows({
   signIn
 }: {
   state: AntigravityAccountState | null
-  error: string | null
+  error: AntigravityAccountError | null
   busy: boolean
   windowsHost: boolean
   run: (action: AntigravityAccountAction, accountId?: string) => void
@@ -29,10 +32,19 @@ export function AntigravityAgyAccountRows({
   signIn?: AntigravityChatSignInControls
 }): React.JSX.Element {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const signingIn = signIn?.ownFlow === true
-  const signInAlert = signIn?.alert ? <ActionError message={signIn.alert} /> : null
   // Until Orca reads agy's login it can't tell which account holds it, so nothing changed yet.
   const unread = state?.currentAccount?.unread === true
+  // agy's login, saved or not, that is expired for good: agy renews an expired access token on its
+  // next run, unless it signs in with gcloud, has no refresh token, or says it's signed out.
+  const current = state?.currentAccount
+  const currentExpiredAt =
+    current?.expiredAt !== undefined &&
+    (current.cannotRefresh || state?.agyAdcAuth || state?.chatAgySignedOut)
+      ? current.expiredAt
+      : undefined
+  const expiredAt = state?.activeAccountId ? undefined : currentExpiredAt
   const changed = Boolean(
     !unread && state?.selectedAccountId && state.activeAccountId !== state.selectedAccountId
   )
@@ -53,23 +65,69 @@ export function AntigravityAgyAccountRows({
     state.accounts.some((account) => account.id === state.selectedAccountId)
       ? state.selectedAccountId
       : null
+  // agy started with AGY_ADC_AUTH signs in with gcloud; the Google logins below wait unused.
+  const adc = state?.agyAdcAuth === true
+  const signInAlert = signIn?.alert ?? null
+  const expiredBadge = (
+    <Badge variant="warning">{t('accounts.antigravity.expired', 'Expired')}</Badge>
+  )
+  const expiredDate = (at: number) => new Date(at).toLocaleDateString(locale)
+  const expiredOn = (at: number) =>
+    t('accounts.antigravity.expiredOn', 'Expired {{date}}', { date: expiredDate(at) })
+  const signInAgain = signIn ? (
+    <Button
+      size="xs"
+      variant="outline"
+      disabled={busy || signIn.signInDisabled}
+      onClick={signIn.addAccount}
+    >
+      {t('accounts.antigravity.signInAgain', 'Sign in again')}
+    </Button>
+  ) : undefined
+  const saveCurrent = (
+    <Button size="xs" variant="outline" disabled={busy} onClick={() => run('AddCurrent')}>
+      {t('accounts.antigravity.saveShort', 'Save')}
+    </Button>
+  )
+  // An error about agy's current login sits on its row, or on Add account when it's saved.
+  const currentLoginError = state && error?.accountId === null ? error.message : null
+  let currentLoginErrorShown = false
   const terminalRows: React.ReactNode[] = []
-  if (error) {
+  if (adc) {
     terminalRows.push(
-      state ? (
-        <AntigravityAccountRow key="error" title={null} detail={<ActionError message={error} />} />
-      ) : (
-        <AntigravityAccountRow
-          key="error"
-          title={t('accounts.antigravity.loadFailed', "Couldn't load agy accounts")}
-          detail={<ActionError message={error} />}
-          actions={
-            <Button size="xs" variant="outline" disabled={busy} onClick={() => run('List')}>
-              {t('accounts.antigravity.retry', 'Retry')}
-            </Button>
-          }
-        />
-      )
+      <AntigravityAccountRow
+        key="adc"
+        title={t('accounts.antigravity.adcTitle', 'gcloud credentials')}
+        badge={
+          <Badge variant="outline">{t('accounts.antigravity.environment', 'Environment')}</Badge>
+        }
+        detail={
+          // Chats in Orca's own agy home (Gemini API key, Enterprise) launch without it.
+          state?.chatUsesAgy || state?.chatAgySignedOut
+            ? t(
+                'accounts.antigravity.adcAuth',
+                'AGY_ADC_AUTH is set, so agy and chats use gcloud · unset it to use a Google account'
+              )
+            : t(
+                'accounts.antigravity.adcAuthTerminal',
+                'AGY_ADC_AUTH is set, so agy in the terminal uses gcloud · unset it to use a Google account'
+              )
+        }
+      />
+    )
+  }
+  if (error && !state) {
+    terminalRows.push(
+      <AntigravityAccountRow
+        key="error"
+        title={t('accounts.antigravity.loadFailed', "Couldn't load agy accounts")}
+        error={error.message}
+        actions={
+          <Button size="xs" variant="outline" disabled={busy} onClick={() => run('List')}>
+            {t('accounts.antigravity.retry', 'Retry')}
+          </Button>
+        }
+      />
     )
   } else if (!state) {
     terminalRows.push(
@@ -93,31 +151,32 @@ export function AntigravityAgyAccountRows({
       </div>
     )
   } else if (state && !state.currentAccount) {
+    currentLoginErrorShown = true
     terminalRows.push(
       <AntigravityAccountRow
         key="signed-out"
         title={t('accounts.antigravity.notSignedIn', 'Not signed in')}
         detail={
           <>
-            {signInAlert ??
-              (signIn ? null : (
-                <span>
-                  {t('accounts.antigravity.runAgy', 'Run agy on this host to sign in')}
-                  {' · '}
-                  <a
-                    className="text-foreground underline underline-offset-2"
-                    href="https://antigravity.google/docs/cli/install/"
-                    target="_blank"
-                    onClick={openAppHttpLinkFromAnchor}
-                    rel="noopener noreferrer"
-                  >
-                    {t('accounts.antigravity.signInHelp', 'Sign-in help')}
-                  </a>
-                </span>
-              ))}
+            {signIn ? null : (
+              <span>
+                {t('accounts.antigravity.runAgy', 'Run agy on this host to sign in')}
+                {' · '}
+                <a
+                  className="text-foreground underline underline-offset-2"
+                  href="https://antigravity.google/docs/cli/install/"
+                  target="_blank"
+                  onClick={openAppHttpLinkFromAnchor}
+                  rel="noopener noreferrer"
+                >
+                  {t('accounts.antigravity.signInHelp', 'Sign-in help')}
+                </a>
+              </span>
+            )}
             {changed ? <span className="text-status-warning-text">{changedText}</span> : null}
           </>
         }
+        error={signInAlert ?? currentLoginError}
         actions={
           signIn ? (
             <Button size="xs" disabled={signIn.signInDisabled} onClick={signIn.start}>
@@ -128,10 +187,12 @@ export function AntigravityAgyAccountRows({
       />
     )
   } else if (unread) {
+    currentLoginErrorShown = true
     terminalRows.push(
       <AntigravityAccountRow
         key="current"
         title={t('accounts.antigravity.signedInUnread', 'agy is signed in')}
+        error={currentLoginError}
         detail={t(
           'accounts.antigravity.unreadDetail',
           'Show the account to see which one. macOS may ask you to allow keychain access.'
@@ -143,13 +204,38 @@ export function AntigravityAgyAccountRows({
         }
       />
     )
+  } else if (state?.currentAccount && !state.activeAccountId && expiredAt !== undefined) {
+    currentLoginErrorShown = true
+    terminalRows.push(
+      <AntigravityAccountRow
+        key="current"
+        title={state.currentAccount.email ?? t('accounts.antigravity.googleLogin', 'Google login')}
+        badge={expiredBadge}
+        error={signInAlert ?? currentLoginError}
+        detail={
+          adc
+            ? t('accounts.antigravity.expiredUnused', 'Expired {{date}} · not saved', {
+                date: expiredDate(expiredAt)
+              })
+            : expiredOn(expiredAt)
+        }
+        actions={
+          <>
+            {state.currentAccount.identityKnown ? saveCurrent : null}
+            {signInAgain}
+          </>
+        }
+      />
+    )
   } else if (state?.currentAccount && !state.activeAccountId) {
     const { email } = state.currentAccount
+    currentLoginErrorShown = true
     terminalRows.push(
       <AntigravityAccountRow
         key="current"
         title={email ?? t('accounts.antigravity.currentLogin', 'Current agy login')}
-        active
+        active={!adc}
+        error={currentLoginError}
         detail={
           changed ? (
             <span className="text-status-warning-text">{changedText}</span>
@@ -159,32 +245,44 @@ export function AntigravityAgyAccountRows({
             t('accounts.antigravity.noEmailNotSaved', "agy didn't report an email · not saved")
           )
         }
-        actions={
-          <Button size="xs" variant="outline" disabled={busy} onClick={() => run('AddCurrent')}>
-            {t('accounts.antigravity.saveShort', 'Save')}
-          </Button>
-        }
+        actions={saveCurrent}
       />
     )
   }
   for (const account of state?.accounts ?? []) {
     const active = state?.activeAccountId === account.id
+    const expired = active && currentExpiredAt !== undefined
+    if (expired) {
+      currentLoginErrorShown = true
+    }
     terminalRows.push(
       <AntigravityAccountRow
         key={account.id}
         title={account.email ?? t('accounts.antigravity.saved', 'Saved Google account')}
-        active={active}
+        active={active && !adc}
+        {...(expired ? { badge: expiredBadge } : {})}
+        error={
+          error?.accountId === account.id
+            ? error.message
+            : expired
+              ? (signInAlert ?? currentLoginError)
+              : null
+        }
         detail={
-          account.id === launchesUse
-            ? t('accounts.antigravity.launchesUse', 'New agy launches use this account')
-            : launchesUse && active
-              ? t('accounts.antigravity.loginNow', "agy's login right now")
-              : undefined
+          expired
+            ? expiredOn(currentExpiredAt)
+            : account.id === launchesUse
+              ? t('accounts.antigravity.launchesUse', 'New agy launches use this account')
+              : launchesUse && active
+                ? t('accounts.antigravity.loginNow', "agy's login right now")
+                : undefined
         }
         selectDisabled={busy}
         onSelect={() => run('Select', account.id)}
         actions={
-          active ? null : (
+          expired ? (
+            signInAgain
+          ) : active ? null : (
             <Button
               variant="ghost"
               size="xs"
@@ -199,19 +297,22 @@ export function AntigravityAgyAccountRows({
       />
     )
   }
-  if (state?.currentAccount && !signingIn) {
+  // An expired login's row offers Sign in again instead, where this host can sign in.
+  if (state?.currentAccount && !signingIn && (currentExpiredAt === undefined || !signIn)) {
+    const showsCurrentError = Boolean(signIn) && !currentLoginErrorShown
+    if (showsCurrentError) {
+      currentLoginErrorShown = true
+    }
     terminalRows.push(
       signIn ? (
         <AntigravityAccountRow
           key="add-account"
           title={null}
-          detail={
-            signInAlert ??
-            t(
-              'accounts.antigravity.addAccountInApp',
-              'Sign in to another Google account. Both stay saved here to switch between.'
-            )
-          }
+          detail={t(
+            'accounts.antigravity.addAccountInApp',
+            'Sign in to another Google account. Both stay saved here to switch between.'
+          )}
+          error={signInAlert ?? (showsCurrentError ? currentLoginError : null)}
           actions={
             <Button
               size="xs"
@@ -241,79 +342,10 @@ export function AntigravityAgyAccountRows({
       )
     )
   }
+  if (currentLoginError && !currentLoginErrorShown) {
+    terminalRows.push(
+      <AntigravityAccountRow key="action-error" title={null} error={currentLoginError} />
+    )
+  }
   return <>{terminalRows}</>
-}
-
-function ActionError({ message }: { message: string }): React.JSX.Element {
-  return (
-    <span role="alert" className="flex items-center gap-1.5 text-destructive">
-      <AlertCircle className="size-3.5 shrink-0" />
-      {message}
-    </span>
-  )
-}
-
-/** A settings row whose label selects the account, like Codex's account rows. */
-function AntigravityAccountRow({
-  title,
-  detail,
-  active = false,
-  actions,
-  onSelect,
-  selectDisabled
-}: {
-  title: string | null
-  detail?: React.ReactNode
-  active?: boolean
-  actions?: React.ReactNode
-  onSelect?: () => void
-  selectDisabled?: boolean
-}): React.JSX.Element {
-  const t = useTranslate()
-  const label = (
-    <>
-      {title ? (
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium">{title}</span>
-          {active ? (
-            <Badge variant="outline">{t('accounts.antigravity.active', 'Active')}</Badge>
-          ) : null}
-        </span>
-      ) : null}
-      {detail ? (
-        <span
-          className={cn(
-            'flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground',
-            title && 'mt-0.5'
-          )}
-        >
-          {detail}
-        </span>
-      ) : null}
-    </>
-  )
-  return (
-    <div data-settings-row="">
-      <div
-        className={cn(
-          '-mx-5 flex min-h-14 items-center justify-between gap-4 px-5 py-3',
-          onSelect && !selectDisabled && 'transition-colors hover:bg-accent/40'
-        )}
-      >
-        {onSelect ? (
-          <button
-            type="button"
-            onClick={onSelect}
-            disabled={selectDisabled}
-            className="flex min-w-0 flex-1 flex-col items-start text-left disabled:cursor-default"
-          >
-            {label}
-          </button>
-        ) : (
-          <div className="flex min-w-0 flex-1 flex-col items-start">{label}</div>
-        )}
-        {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
-      </div>
-    </div>
-  )
 }
