@@ -22893,6 +22893,9 @@
           "never": "しない"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "トラブルシューティングのための低レベルの互換性設定。これらの設定は {{host}} ではなく、このコンピュータに保存されます。"
+      },
       "repositoryHooks": {
         "availableEnvVars": "利用可能な環境変数"
       },
