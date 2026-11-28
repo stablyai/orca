@@ -51,17 +51,37 @@ beforeEach(async () => {
   testState.dir = root
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
+// Every runtime a test opened, a reloaded one's predecessor too: each holds `root`'s orchestration
+// database open until its process would exit.
+const runtimes = new Set<AuthorityRuntime>()
+
 afterEach(async () => {
   await chatTabCommandsSettled()
   await launchContinuationsSettled()
   await stopStructuredAgentSessionRuntime()
   await closeTestStores()
   await closeTestJournalHostDatabases()
+  // A connection left open writes its WAL while `root` is removed (ENOTEMPTY on CI).
+  for (const runtime of runtimes) {
+    runtime.closeOrchestrationDb()
+  }
+  runtimes.clear()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
 
 export class AuthorityRuntime extends OrcaRuntimeService {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeService>) {
+    super(...args)
+    runtimes.add(this)
+  }
+
+  /** As its process exiting would: the orchestration database's connection, and its threads. */
+  closeOrchestrationDb(): void {
+    this._orchestrationDb?.close()
+    this._orchestrationDb = null
+  }
+
   protected override structuredAgentCatalogDependencies() {
     const missing = () => ({ command: join(root, 'agent-not-installed'), prefixArgs: [] })
     return {
