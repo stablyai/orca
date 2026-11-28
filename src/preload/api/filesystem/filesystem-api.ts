@@ -15,7 +15,8 @@ import type {
 } from '../../../shared/file-import/filesystem-import-result'
 import type {
   StagedRuntimeUploadSource as StagedExternalImportSource,
-  RuntimeUploadFileStreamRequest
+  RuntimeUploadFileStreamRequest,
+  RuntimeUploadProgressEvent
 } from '../../../shared/file-import/runtime-upload-staging-contract'
 import type {
   LocalLogTailChangedPayload,
@@ -243,6 +244,9 @@ export type FilesystemApi = {
     uploadExternalFileToRuntime: (
       args: RuntimeUploadFileStreamRequest
     ) => Promise<{ byteLength: number }>
+    /** Stops this window's upload with that id; unknown or finished ids are ignored. */
+    cancelRuntimeUpload: (args: { uploadId: string }) => Promise<void>
+    onRuntimeUploadProgress: (callback: (event: RuntimeUploadProgressEvent) => void) => () => void
     resolveDroppedPathsForAgent: (
       args: {
         paths: string[]

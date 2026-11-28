@@ -22,6 +22,7 @@ export type RuntimeUploadFileStreamArgs = RuntimeUploadFileStreamRequest & {
   environmentId: string
   userDataPath: string
   signal?: AbortSignal
+  onProgress?: (sentBytes: number) => void
 }
 
 /** Stream with one slice in memory rather than buffering and encoding the whole file. */
@@ -33,6 +34,7 @@ export async function streamExternalFileToRuntime(
     entryRelativePath: args.entryRelativePath,
     expected: args.expected,
     signal: args.signal,
+    onProgress: args.onProgress,
     maxFileBytes: REMOTE_IMPORT_MAX_FILE_BYTES,
     limitLabel: 'per-file remote import limit',
     writeSlice: (contentBase64, offset) => sendChunk(args, contentBase64, offset > 0)
@@ -46,6 +48,8 @@ export type ExternalFileSliceStreamArgs = {
   entryRelativePath: string
   expected: StagedRuntimeUploadFileIdentity
   signal?: AbortSignal
+  /** Source bytes the destination has acknowledged so far. */
+  onProgress?: (sentBytes: number) => void
   maxFileBytes: number
   /** Names the ceiling in the refusal, e.g. "per-file remote import limit". */
   limitLabel: string
@@ -109,6 +113,7 @@ export async function streamExternalFileSlices(
         }
         await args.writeSlice(buffer.subarray(0, bytesRead).toString('base64'), offset)
         offset += bytesRead
+        args.onProgress?.(offset)
       }
     }
 

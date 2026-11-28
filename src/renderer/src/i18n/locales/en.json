@@ -31509,5 +31509,22 @@
       "badJson": "Check the pasted JSON: it doesn’t parse.",
       "none": "Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported."
     }
+  },
+  "files": {
+    "transferProgress": {
+      "bytesOfTotal": "{{done}} of {{total}}",
+      "lessThanMinuteLeft": "Less than a minute remaining",
+      "timeLeft": "About {{duration}} remaining"
+    },
+    "uploadProgress": {
+      "waiting": "Waiting",
+      "cancelled": "Cancelled",
+      "failed": "Failed",
+      "cancelFile": "Cancel {{name}}",
+      "cancelAll": "Cancel all"
+    },
+    "downloadProgress": {
+      "title": "Downloading {{name}}…"
+    }
   }
 }

@@ -15,6 +15,7 @@ import type {
 } from '../../../shared/file-write/file-write-disk-precondition'
 import type {
   RuntimeUploadFileStreamRequest,
+  RuntimeUploadProgressEvent,
   StagedRuntimeUploadSource as StagedExternalImportSource
 } from '../../../shared/file-import/runtime-upload-staging-contract'
 import type {
@@ -256,6 +257,16 @@ export const fsApi = {
   uploadExternalFileToRuntime: (
     args: RuntimeUploadFileStreamRequest
   ): Promise<{ byteLength: number }> => ipcRenderer.invoke('fs:uploadExternalFileToRuntime', args),
+  cancelRuntimeUpload: (args: { uploadId: string }): Promise<void> =>
+    ipcRenderer.invoke('fs:cancelRuntimeUpload', args),
+  onRuntimeUploadProgress: (
+    callback: (event: RuntimeUploadProgressEvent) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: RuntimeUploadProgressEvent) =>
+      callback(payload)
+    ipcRenderer.on('fs:runtimeUploadProgress', listener)
+    return () => ipcRenderer.removeListener('fs:runtimeUploadProgress', listener)
+  },
   resolveDroppedPathsForAgent: (
     args: {
       paths: string[]

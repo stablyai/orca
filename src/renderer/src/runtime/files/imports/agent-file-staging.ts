@@ -10,7 +10,10 @@ import type { ImportSkipReason } from '../../../../../shared/file-import/filesys
 import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
 import { isTerminalDropWindowsPathLike } from '../../../../../shared/terminal/input/image-path-paste'
 import { runtimeTargetForOwnerEnvironment } from '../../rpc/targets/runtime-client-target'
-import { importExternalPathsToRuntime } from './runtime-file-import-client'
+import {
+  importExternalPathsToRuntime,
+  type RuntimeImportTransfer
+} from './runtime-file-import-client'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export function resolveAgentStagingWorktreePath(
@@ -66,7 +69,13 @@ export async function stageClientFilesForAgent(
   sourcePaths: string[],
   assertCurrent?: () => void,
   // A page's upload keeps the files' own names: each file gets its own folder and no image is renamed.
-  { keepNames = false }: { keepNames?: boolean } = {}
+  // That imports one source per call, restarting a transfer's source indexes, so the two exclude.
+  {
+    keepNames = false,
+    transfer
+  }:
+    | { keepNames: true; transfer?: never }
+    | { keepNames?: false; transfer?: RuntimeImportTransfer } = {}
 ): Promise<AgentFileStagingResult> {
   const { worktreePath } = target
   const windowsHost = isTerminalDropWindowsPathLike(worktreePath)
@@ -84,7 +93,7 @@ export async function stageClientFilesForAgent(
         },
         sources,
         windowsHost ? dir.replace(/\//g, '\\') : dir,
-        { assertCurrent, nameExtensionlessImages: !keepNames }
+        { assertCurrent, nameExtensionlessImages: !keepNames, transfer }
       )
     ).results
   const results = keepNames ? [] : await importInto(sourcePaths, dropDir)
