@@ -305,3 +305,25 @@ it('leaves the saved warning in place when delivery retires before acknowledgeme
   await build
   expect(rows).toEqual([])
 })
+
+it('posts the accepted startup fallback at once, below a saved Full access recovery', async () => {
+  const { session, rows, writes, frame } = permissionTestSession('bypassPermissions')
+  await openPermissionTestSession(session, 'default', async () => ({
+    effective: { permissions: { disableBypassPermissionsMode: 'disable' } }
+  }))
+  await session.startupSettings
+  await readClaudeEarlierRefusalNotice(
+    session,
+    { newestItemId: async () => savedNotice('restored:bypassPermissions') },
+    () => {}
+  )
+  frame('init', 'default')
+  finishPermissionCatchUp(session)
+  await setImmediate()
+
+  // No later turn is needed for the row: Claude may sit idle after accepting the fallback.
+  expect(writes).toEqual(['default', 'auto'])
+  expect(rows).toEqual([
+    "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses Approve for me instead."
+  ])
+})

@@ -41,7 +41,7 @@ import {
   structuredAgentSessionStopNoteIdentity,
   structuredAgentSessionCommandWasStopped
 } from './structured-agent-session-command-turn'
-import { revokeStructuredAgentSessionPermissionDispatch } from '../host/structured-agent-session-permission-revocation'
+import { cutChildPermissionWrites } from '../host/structured-agent-session-permission-revocation'
 
 type ChatStopOutcome = TurnOutcome<AgentSessionCancelResult>
 
@@ -220,7 +220,7 @@ export function mutateWithChatStop<TValue>(
       target.child &&
       context.sessions.get(sessionId)?.child === target.child
     ) {
-      revokeStructuredAgentSessionPermissionDispatch(context.deps.adapter, sessionId, target.child)
+      cutChildPermissionWrites(context.deps.adapter, sessionId, target.child)
     }
     // Accepted Stop invalidates claims made even after its early abort.
     if (flight && (target.queued || target.reach === 'withdraw' || target.reach === 'starting')) {

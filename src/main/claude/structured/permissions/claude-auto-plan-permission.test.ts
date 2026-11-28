@@ -11,6 +11,9 @@ import {
 } from './__tests__/claude-permission.test-fixture'
 import { claudeInPlan } from './claude-full-access-refusal'
 import { leaveClaudePlanModeOnApproval } from './claude-plan-approval-mode'
+import { pickClaudePermissionMode } from './claude-permission-picks'
+import { setClaudeAllowedPermissionMode } from './claude-permission-mode-ladder'
+import { applyKeptClaudeModeOwed } from '../../relay/claude-kept-permission'
 
 const startupWarning =
   "Claude didn't start this chat in Approve for me, so Claude uses Ask for approval instead."
@@ -164,4 +167,48 @@ it('writes Ask on an explicit Build send after Claude reports a fresh Plan', asy
 
   frame('status', 'plan')
   expect(claudeInPlan(session)).toBe(true)
+})
+
+it('sends Approve for me for a live pick made after Claude opened in Ask', async () => {
+  const { session, writes, rows, frame } = permissionTestSession('auto')
+  await openPermissionTestSession(session, 'default')
+  await session.startupSettings
+  finishPermissionCatchUp(session)
+  frame('init', 'default')
+  const shown = [...rows]
+
+  // How Claude opened predates the pick, so it is no evidence against Approve for me.
+  pickClaudePermissionMode(session, 'auto')
+  expect(await setClaudeAllowedPermissionMode(session, 'auto')).toBe('auto')
+  expect(writes).toEqual(['auto'])
+  expect(rows).toEqual(shown)
+})
+
+it('sends a message at once when its Ask fallback is already running and settings are pending', async () => {
+  const { session, writes, frame } = permissionTestSession('auto')
+  await openPermissionTestSession(session, 'auto', () => new Promise(() => {}))
+  finishPermissionCatchUp(session)
+  frame('init', 'default')
+  expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
+
+  const send = applyClaudeMessageOptions(session, {}, undefined)
+  expect(await Promise.race([send.then(() => 'sent'), setImmediate('waiting')])).toBe('sent')
+  expect(writes).toEqual([])
+})
+
+it("sends no re-Ask for a kept agent's owed Approve for me once its send is aborted", async () => {
+  const send = new AbortController()
+  const { session, writes } = permissionTestSession('auto', async (mode) => {
+    if (mode === 'auto') {
+      send.abort()
+      throw new ClaudeControlRequestTimeoutError('set_permission_mode')
+    }
+  })
+  await openPermissionTestSession(session, 'auto')
+  finishPermissionCatchUp(session)
+  session.keptModeOwed = 'auto'
+
+  await applyKeptClaudeModeOwed(session, undefined, send.signal).catch(() => {})
+  await setImmediate()
+  expect(writes).toEqual(['auto'])
 })

@@ -18,11 +18,11 @@ afterEach(async () => {
 
 async function workingRig(options?: Parameters<typeof createQueuedMessageTestRig>[0]) {
   rig = await createQueuedMessageTestRig(options)
-  revoked = vi.spyOn(rig.host.collaboratorsForTests().deps.adapter, 'revokePermissionDispatch')
+  revoked = vi.spyOn(rig.host.collaboratorsForTests().deps.adapter, 'setPermissionDispatchRevoked')
 }
 
 function expectRevokedBeforeClose(): void {
-  expect(revoked).toHaveBeenCalledWith(SESSION, expect.any(Number), 'generation-1')
+  expect(revoked).toHaveBeenCalledWith(SESSION, expect.any(Number), 'generation-1', true)
   expect(rig.closeSession).toHaveBeenCalled()
   expect(revoked.mock.invocationCallOrder[0]).toBeLessThan(
     rig.closeSession.mock.invocationCallOrder[0]
@@ -69,4 +69,20 @@ it('a Stop that ends a starting child revokes it at its receipt, before the clos
   )
   expect(await rig.stop()).toMatchObject({ ok: true })
   expectRevokedBeforeClose()
+})
+
+it('a close that fails before its child begins closing gives the child its writes back', async () => {
+  await workingRig()
+  await rig.workingSend()
+  const { deps, sessions } = rig.host.collaboratorsForTests()
+  const closing = rig.host.close(SESSION, 'user-close')
+  // Admitted and cut already; the close then fails in its lane, before the stop begins.
+  const store = vi.spyOn(deps.store, 'selectWritableRecord').mockImplementation(() => {
+    throw new Error('store unavailable')
+  })
+  await expect(closing).rejects.toThrow('store unavailable')
+  store.mockRestore()
+
+  expect(sessions.get(SESSION)?.child?.close).toBeUndefined()
+  expect(revoked.mock.calls.map((call) => call[3])).toEqual([true, false])
 })

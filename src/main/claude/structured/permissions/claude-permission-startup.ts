@@ -116,6 +116,8 @@ export function startClaudeStartupFallback(
     (mode) => {
       if (mode !== undefined && holds() && session.permissionModeRequests === claimed) {
         recordClaudeBuildPermissionMode(session, mode)
+        // No turn may follow to post it: the settled fallback's row replaces a saved recovery now.
+        journalClaudeSessionPermissionNotice(session)
       }
     },
     () => {

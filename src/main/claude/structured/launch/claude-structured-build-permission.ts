@@ -34,7 +34,7 @@ export async function applyClaudeBuildInteractionMode(
 ): Promise<void> {
   await waitForClaudeStartupSettings(session, signal)
   const leavingPlan = claudeInPlan(session)
-  const asked = leavingPlan ? askKeptBypassLeavingPlan(session, timeoutMs) : undefined
+  const asked = leavingPlan ? askKeptBypassLeavingPlan(session, timeoutMs, signal) : undefined
   if (asked) {
     await waitForPromiseWithSignal(asked, signal)
   }
@@ -50,7 +50,7 @@ export async function applyClaudeBuildInteractionMode(
   const written = write && (await waitForPromiseWithSignal(write, signal))
   const sent = leavingPlan
     ? await waitForPromiseWithSignal(
-        sendKeptPickMadeLeavingPlan(session, written ?? null, holds, timeoutMs),
+        sendKeptPickMadeLeavingPlan(session, written ?? null, holds, timeoutMs, signal),
         signal
       )
     : { mode: written ?? null, holds }
@@ -103,6 +103,8 @@ async function waitForClaudeStartupSettings(
       !session.firstRootInit) ||
     (intent === 'auto' &&
       session.autoDisabled === undefined &&
+      // Already running its Ask fallback, a send owes no write; the reason's row waits on its own.
+      session.appliedInputOptions.get('buildPermissionMode') !== 'default' &&
       session.firstRootInit?.permissionMode !== 'auto' &&
       !claudeInPlan(session))
   const pending = session.startupSettings

@@ -132,7 +132,7 @@ export function structuredAgentSessionTabId(sessionId: string): string {
 
 /** An approval or question still waiting on the user; with the host's scope, never one from an ended
  *  generation, which no child can answer. */
-export function pendingStructuredAgentSessionPrompt(
+export function pendCutChildPrompt(
   scope?: StructuredAgentSessionWorkScope
 ): (item: AgentJournalRenderItem) => boolean {
   return (item) =>
@@ -149,7 +149,7 @@ export function projectStructuredAgentSessionStatus(
   scope?: StructuredAgentSessionWorkScope
 ): StructuredAgentSessionProjectedStatus {
   ;({ items, submissions } = agentSessionCurrentContextRows(items, submissions))
-  return items.some(pendingStructuredAgentSessionPrompt(scope))
+  return items.some(pendCutChildPrompt(scope))
     ? 'attention'
     : owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
       ? 'working'
@@ -241,8 +241,7 @@ export function projectStructuredAgentSessionStatusState(
     currentFence,
     request
   )
-  const pending =
-    status === 'attention' ? items.filter(pendingStructuredAgentSessionPrompt(scope)) : []
+  const pending = status === 'attention' ? items.filter(pendCutChildPrompt(scope)) : []
   return {
     latestRequest,
     owesWork:

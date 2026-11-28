@@ -17,8 +17,9 @@ export type ClaudeSessionPermissionFacts = {
   /** The latest permission notice, including a warning or Auto recovery from an earlier process. */
   fullAccessRefusalNoticeId?: string
   fullAccessRefusalNotices?: { process: string; count: number; after?: number }
-  /** One-way: this child's permission writes lost their owner (closed, stopped, replaced, exited). */
-  permissionDispatchRevoked?: true
+  /** This child's permission writes lost their owner (closed, stopped, replaced, exited); a failed
+   *  host cut gives them back. */
+  permissionDispatchRevoked?: boolean
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number

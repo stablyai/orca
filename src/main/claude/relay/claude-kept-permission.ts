@@ -14,6 +14,7 @@ import {
   setClaudeAllowedPermissionMode
 } from '../structured/permissions/claude-permission-mode-ladder'
 import { keptClaudeAgentRelay } from './claude-kept-agent-connection'
+import { claudePermissionWriteAdmitted } from '../structured/permissions/claude-permission-dispatch-authority'
 import {
   claudePermissionPickedWhileStarting,
   claudePermissionPickHolds,
@@ -51,15 +52,27 @@ const bypassRefused = (session: ClaudeSession, mode: AgentChatPermissionChoice):
 /** Only Claude knows whether this process was launched able to bypass: asked straight, not through
  *  the ladder (which reads an Ask launch's first init as a refusal). A refusal makes the next send
  *  start a flagged agent; acceptance proves Full access for this process. */
-async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefined): Promise<void> {
+async function askKeptBypass(
+  session: ClaudeSession,
+  timeoutMs: number | undefined,
+  signal?: AbortSignal
+): Promise<void> {
   // A newer write than any older ladder's: that ladder's late fallback stays unsent.
-  claimClaudePermissionModeRequest(session)
+  const request = claimClaudePermissionModeRequest(session)
+  // The same owner check as a ladder's: a cut child or an aborted send sends and records nothing.
+  const admits = claudePermissionWriteAdmitted(session, request, signal)
   try {
-    await session.connection.setPermissionMode('bypassPermissions', { timeoutMs })
+    await session.connection.setPermissionMode('bypassPermissions', { timeoutMs, admits })
+    if (!admits()) {
+      return
+    }
     session.bypassAccepted = true
     session.bypassDisabled = false
     session.bypassRefusal = undefined
   } catch (error) {
+    if (!admits()) {
+      return
+    }
     const refusal = claudeBypassRefusalOf(error)
     if (refusal === null) {
       throw error
@@ -77,7 +90,8 @@ async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefin
 async function applyPick(
   session: ClaudeSession,
   mode: PermissionMode,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  signal?: AbortSignal
 ): Promise<void> {
   // Messages, leaving Plan, a refused Full access and the next reattach all read the pick now.
   pickClaudePermissionMode(session, mode)
@@ -90,10 +104,10 @@ async function applyPick(
   }
   try {
     if (mode === 'bypassPermissions') {
-      await askKeptBypass(session, timeoutMs)
+      await askKeptBypass(session, timeoutMs, signal)
       return
     }
-    const applied = await setClaudeAllowedPermissionMode(session, mode, { timeoutMs })
+    const applied = await setClaudeAllowedPermissionMode(session, mode, { timeoutMs, signal })
     // Undefined: a newer request or the child's end took the write over; it records nothing.
     if (applied !== undefined) {
       recordClaudeBuildMode(session, holds, applied)
@@ -115,14 +129,15 @@ async function applyPick(
  *  first; otherwise an Ask launch's first init reads as a refusal and the ladder never tries it. */
 export function askKeptBypassLeavingPlan(
   session: ClaudeSession,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  signal?: AbortSignal
 ): Promise<void> | undefined {
   // Written now (not after a tick), so it goes out ahead of whatever the caller writes next.
   return keptClaudeAgentRelay(session.connection) &&
     session.launchIntent?.permissionMode === 'bypassPermissions' &&
     session.bypassAccepted !== true &&
     session.bypassDisabled !== true
-    ? askKeptBypass(session, timeoutMs).catch(() => {})
+    ? askKeptBypass(session, timeoutMs, signal).catch(() => {})
     : undefined
 }
 
@@ -133,7 +148,8 @@ export async function sendKeptPickMadeLeavingPlan(
   session: ClaudeSession,
   written: PermissionMode | null,
   holds: () => boolean,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  signal?: AbortSignal
 ): Promise<{ mode: PermissionMode | null; holds: () => boolean }> {
   let mode = written
   let current = holds
@@ -144,13 +160,15 @@ export async function sendKeptPickMadeLeavingPlan(
     }
     current = claudePermissionPickHolds(session)
     const ask =
-      latest === 'bypassPermissions' ? askKeptBypassLeavingPlan(session, timeoutMs) : undefined
+      latest === 'bypassPermissions'
+        ? askKeptBypassLeavingPlan(session, timeoutMs, signal)
+        : undefined
     if (ask) {
       await ask
     }
     // A newer pick while Claude answered goes out next, not this one again.
     if (current()) {
-      mode = (await setClaudeAllowedPermissionMode(session, latest, { timeoutMs })) ?? null
+      mode = (await setClaudeAllowedPermissionMode(session, latest, { timeoutMs, signal })) ?? null
     }
   }
 }
@@ -177,7 +195,8 @@ export function noteKeptClaudeReattach(session: ClaudeSession): void {
  *  Claude reports one, so a stale launch-time Plan never drops an owed Ask. */
 export async function applyKeptClaudeModeOwed(
   session: ClaudeSession,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  signal?: AbortSignal
 ): Promise<void> {
   const owed = session.keptModeOwed
   if (!isBuildMode(owed)) {
@@ -188,7 +207,7 @@ export async function applyKeptClaudeModeOwed(
     return
   }
   try {
-    await applyPick(session, owed, timeoutMs)
+    await applyPick(session, owed, timeoutMs, signal)
   } catch (error) {
     if (owed !== 'bypassPermissions') {
       throw error

@@ -258,7 +258,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   acknowledgeSessionRelease = (sessionId: string) => void this.settledExitErrors.delete(sessionId)
   startupEnding = (sessionId: string, generation: string) => this.endings.get(sessionId, generation)
   retireStartup = (id: string, generation: string) => this.endings.retire(id, generation)
-  revokePermissionDispatch = revokeClaudePermissionDispatch(this.sessions)
+  setPermissionDispatchRevoked = revokeClaudePermissionDispatch(this.sessions)
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined ||
     this.sessions.has(sessionId) ||

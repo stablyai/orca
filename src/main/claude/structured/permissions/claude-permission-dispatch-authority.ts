@@ -15,6 +15,7 @@ export function claudePermissionWriteAdmitted(
     signal?.aborted !== true &&
     session.permissionModeRequests === request &&
     !session.connection.closed &&
+    session.connection.handedOff !== true &&
     session.delivery.ready
 }
 
@@ -22,11 +23,11 @@ export function claudePermissionWriteAdmitted(
  *  replacement or a later acquisition keeps its own authority. */
 export function revokeClaudePermissionDispatch(
   sessions: ReadonlyMap<string, ClaudeSession>
-): (sessionId: string, fence: number, acquisitionGeneration: string) => void {
-  return (sessionId, fence, acquisitionGeneration) => {
+): (sessionId: string, fence: number, acquisitionGeneration: string, revoked: boolean) => void {
+  return (sessionId, fence, acquisitionGeneration, revoked) => {
     const session = sessions.get(sessionId)
     if (session?.fence === fence && session.acquisitionGeneration === acquisitionGeneration) {
-      session.permissionDispatchRevoked = true
+      session.permissionDispatchRevoked = revoked
     }
   }
 }

@@ -3,6 +3,7 @@ import {
   applyClaudePermissionFallback
 } from './claude-structured-build-permission'
 import { claimClaudePermissionModeRequest } from '../permissions/claude-permission-mode-ladder'
+import { claudePermissionWriteAdmitted } from '../permissions/claude-permission-dispatch-authority'
 import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
 import { claudeExecutionObservations } from '../turns/claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../dispatch/claude-structured-dispatch'
@@ -78,16 +79,19 @@ export async function applyClaudeMessageOptions(
     )
   }
   throwIfSignalAborted(signal)
-  await waitForPromiseWithSignal(applyKeptClaudeModeOwed(session, timeoutMs), signal)
+  await waitForPromiseWithSignal(applyKeptClaudeModeOwed(session, timeoutMs, signal), signal)
   if (options.interactionMode !== undefined) {
     if (options.interactionMode === 'plan') {
-      claimClaudePermissionModeRequest(session)
+      const request = claimClaudePermissionModeRequest(session)
       // Recorded ahead of the answer, so a live pick meanwhile only records its mode for later.
       const before = session.appliedInputOptions.get('interactionMode')
       session.appliedInputOptions.set('interactionMode', 'plan')
       try {
         await waitForPromiseWithSignal(
-          session.connection.setPermissionMode('plan', { timeoutMs }),
+          session.connection.setPermissionMode('plan', {
+            timeoutMs,
+            admits: claudePermissionWriteAdmitted(session, request, signal)
+          }),
           signal
         )
       } catch (error) {
@@ -176,9 +180,10 @@ export async function dispatchClaudeMessage(
       await (messageOptions !== undefined
         ? applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
         : // A steer too: no input goes out in a looser mode than the one picked.
-          waitForPromiseWithSignal(applyKeptClaudeModeOwed(session, timeoutMs), input.signal).then(
-            () => applyClaudePermissionFallback(session, timeoutMs, input.signal)
-          ))
+          waitForPromiseWithSignal(
+            applyKeptClaudeModeOwed(session, timeoutMs, input.signal),
+            input.signal
+          ).then(() => applyClaudePermissionFallback(session, timeoutMs, input.signal)))
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.onExecutionSnapshot?.()

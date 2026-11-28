@@ -30,6 +30,7 @@ export type ClaudeBypassFacts = Partial<
     | 'permissionModeRequests'
     | 'askAcknowledgedAtReport'
     | 'acknowledgedBuildPermissionMode'
+    | 'permissionPick'
   >
 >
 
@@ -89,7 +90,9 @@ export function claudeAutoFallbackReason(
     return 'for-now'
   }
   const opened = session.actualFirstRootInit?.permissionMode
+  // A live pick of Approve for me came after that start: how Claude opened says nothing about it.
   return session.autoAccepted !== true &&
+    session.permissionPick === undefined &&
     session.actualFirstRootInit?.source === undefined &&
     typeof opened === 'string' &&
     opened !== 'auto' &&

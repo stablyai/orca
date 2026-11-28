@@ -1,6 +1,6 @@
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
-import { revokeStructuredAgentSessionPermissionDispatch } from '../host/structured-agent-session-permission-revocation'
+import { cutChildPermissionWrites } from '../host/structured-agent-session-permission-revocation'
 import { closeStructuredAgentSessionHandovers } from '../delivery/structured-agent-session-handing-over'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionConversations } from '../host/structured-agent-session-conversations'
@@ -64,7 +64,7 @@ export function cutClosingStructuredAgentSession(
   }
   const session = host.sessions.get(sessionId)
   const { deps, runtimeState } = host.context()
-  revokeStructuredAgentSessionPermissionDispatch(deps.adapter, sessionId, session?.child)
+  cutChildPermissionWrites(deps.adapter, sessionId, session?.child)
   if (session?.journal) {
     closeStructuredAgentSessionHandovers(session.journal)
   }

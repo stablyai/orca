@@ -69,8 +69,8 @@ export function createQueuedRigProvider(
   )
   const releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>> =
     vi.fn(async () => true)
-  const revokePermissionDispatch: Mock<
-    NonNullable<StructuredAgentSessionAdapter['revokePermissionDispatch']>
+  const setPermissionDispatchRevoked: Mock<
+    NonNullable<StructuredAgentSessionAdapter['setPermissionDispatchRevoked']>
   > = vi.fn()
   let events: StructuredAgentSessionEventSink | undefined
   let proveOpen: (() => void) | null = null
@@ -144,7 +144,7 @@ export function createQueuedRigProvider(
     }),
     closeSession,
     releaseAcquisition,
-    revokePermissionDispatch,
+    setPermissionDispatchRevoked,
     compact,
     cancelTurn,
     answerPrompt: vi.fn(async ({ commit }) => commit()),
@@ -248,7 +248,7 @@ export function createQueuedRigProvider(
     setOption,
     closeSession,
     releaseAcquisition,
-    revokePermissionDispatch,
+    setPermissionDispatchRevoked,
     finishCompact,
     providerEvents
   }
