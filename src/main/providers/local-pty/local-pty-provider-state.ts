@@ -1,10 +1,11 @@
-import type { WslGuestRoot } from '../../../shared/wsl-guest-root-marker'
+import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 import type * as pty from 'node-pty'
-import type { PhysicalExitTracker } from '../../../shared/physical-exit-tracker'
+import type { PhysicalExitTracker } from '../../../shared/process-observation/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
-import type { IPtyProvider } from '../pty-provider-contract'
-import type { PtyDataEvent } from '../pty-provider-events'
+import type { IPtyProvider } from '../pty/provider-contract'
+import type { PtyDataEvent } from '../pty/events'
 import { getSpawnedShellName, normalizeLocalCallerSessionId } from './local-pty-launch-context'
+import { mintPtySessionId } from '../../daemon/sessions/pty-session-id'
 
 export type PtyShutdownOperation = {
   promise: Promise<void>
@@ -21,7 +22,6 @@ export type DataCallback = (payload: PtyDataEvent) => void
 
 export type ExitCallback = Parameters<IPtyProvider['onExit']>[0]
 
-let ptyCounter = 0
 export const ptyProcesses = new Map<string, pty.IPty>()
 export const ptyIncarnations = new Map<string, string>()
 // Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
@@ -126,14 +126,14 @@ export function clearPtyState(id: string): void {
   ptyPhysicalExits.delete(id)
 }
 
-export function allocatePtyId(sessionId: string | undefined): string {
+export function allocatePtyId(sessionId: string | undefined, worktreeId?: string): string {
   const requested = normalizeLocalCallerSessionId(sessionId)
   if (requested) {
     return requested
   }
   let id: string
   do {
-    id = String(++ptyCounter)
+    id = mintPtySessionId(worktreeId)
   } while (ptyProcesses.has(id))
   return id
 }

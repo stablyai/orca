@@ -1,41 +1,43 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { strToU8, zipSync } from 'fflate'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { zipSync } from 'fflate'
+import { describe, expect, it } from 'vitest'
 import {
   readBrowserExtensionArchive,
   writeBrowserExtensionArchive
 } from './browser-extension-archive'
+import { readBrowserExtensionIconDataUrl } from './browser-extension-manifest'
 
-let parent: string
-let target: string
+describe('dot-prefixed extension folders', () => {
+  it('extracts and reads files under names that only start with two dots', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-extension-archive-'))
+    try {
+      const archive = zipSync({
+        'manifest.json': Buffer.from('{}'),
+        '..assets/icon.svg': Buffer.from('<svg/>')
+      })
+      await writeBrowserExtensionArchive(await readBrowserExtensionArchive(archive), root)
 
-beforeEach(() => {
-  parent = mkdtempSync(join(tmpdir(), 'orca-extension-archive-'))
-  target = join(parent, 'target')
-})
-afterEach(() => {
-  rmSync(parent, { recursive: true, force: true })
-})
-
-describe('browser extension archives', () => {
-  it('rejects an archive with an entry that escapes the folder before writing anything', () => {
-    const archive = zipSync({ 'manifest.json': strToU8('{}'), '../evil.js': strToU8('pwned') })
-
-    expect(() => readBrowserExtensionArchive(archive)).toThrow('unsafe file name')
-    expect(existsSync(join(parent, 'evil.js'))).toBe(false)
+      expect(await readFile(join(root, '..assets/icon.svg'), 'utf8')).toBe('<svg/>')
+      expect(await readBrowserExtensionIconDataUrl(root, '..assets/icon.svg')).toMatch(
+        /^data:image\/svg\+xml;base64,/
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
-  it('re-checks each path when writing', async () => {
-    await expect(
-      writeBrowserExtensionArchive([{ path: '../evil.js', data: strToU8('pwned') }], target)
-    ).rejects.toThrow('unsafe file name')
-    expect(existsSync(join(parent, 'evil.js'))).toBe(false)
-  })
-
-  it('refuses to overwrite an existing file', async () => {
-    const entry = { path: 'a.js', data: strToU8('1') }
-    await expect(writeBrowserExtensionArchive([entry, entry], target)).rejects.toThrow()
+  it('still refuses parent references', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-extension-archive-'))
+    try {
+      for (const path of ['../escape', 'a/../../escape']) {
+        await expect(
+          writeBrowserExtensionArchive([{ path, data: Buffer.from('outside') }], root)
+        ).rejects.toThrow('unsafe file name')
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })

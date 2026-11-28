@@ -6,13 +6,15 @@
  * standing request, so it is the one non-interactive wake. Nothing here boots a distro to check.
  * A run due while this desktop last saw the host ready already ran there, so it never wakes it.
  */
-import type { Automation } from '../../../shared/automations-types'
-import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import { nextAutomationOccurrenceAfter } from '../../../shared/automations/scheduling/automation-schedule-occurrences'
 
 export type WslHostAutomationSchedule = {
   rrule: string
   dtstart: number
   missedRunGraceMinutes: number
+  /** Absent in schedules saved before it was learned; those read the desktop's clock. */
+  timezone?: string
 }
 
 export type WslHostAutomationDue = {
@@ -61,10 +63,11 @@ export function earliestWslHostAutomationDue(
     ? {
         nextRunAt: soonest.nextRunAt,
         wakeUntil: graceEnd(soonest.nextRunAt, soonest.missedRunGraceMinutes),
-        schedules: enabled.map(({ rrule, dtstart, missedRunGraceMinutes }) => ({
+        schedules: enabled.map(({ rrule, dtstart, missedRunGraceMinutes, timezone }) => ({
           rrule,
           dtstart,
-          missedRunGraceMinutes
+          missedRunGraceMinutes,
+          timezone
         })),
         lastSeenReadyAt
       }
@@ -81,7 +84,12 @@ export function nextWslHostAutomationDue(
   for (const schedule of schedules) {
     let nextRunAt: number
     try {
-      nextRunAt = nextAutomationOccurrenceAfter(schedule.rrule, schedule.dtstart, after)
+      nextRunAt = nextAutomationOccurrenceAfter(
+        schedule.rrule,
+        schedule.dtstart,
+        after,
+        schedule.timezone
+      )
     } catch {
       continue
     }

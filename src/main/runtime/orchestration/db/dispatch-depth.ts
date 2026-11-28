@@ -1,14 +1,16 @@
 import { createDispatchCreatorEvaluation } from './dispatch-creator-evaluation'
-import { requireOrchestrationAdmission } from '../orchestration-admission'
-export { isSelfCreatedDispatch, AmbiguousDispatchParentError } from './dispatch-creator-evaluation'
+import { requireOrchestrationAdmission } from '../addressing/orchestration-admission'
+
 import type { OrchestrationDb } from './orchestration-db'
-import type { OrcaSessionId } from '../../../../shared/orca-session-address'
-import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../types'
+import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
+import type { DispatchContextRow, RemoteDispatchAttachmentRow } from './orchestration-records'
 import { potentiallyLiveRemoteAttachmentSql } from './federation/remote-attachment-liveness'
 import {
   DISPATCH_CONTEXT_COLUMN_LIST,
   REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST
 } from './row-column-lists'
+
+export type DispatchCreatorTurnSource = NonNullable<DispatchContextRow['creator_turn_source']>
 
 /** The system root is internal host-local coordinator code; never let callers select it to bypass depth. */
 export type DispatchCreator =
@@ -21,30 +23,40 @@ export type DispatchCreator =
       processIncarnation?: string
       /** A structured worker's bare Orca session id, recorded beside its handle. */
       orcaSessionId?: OrcaSessionId | null
+      turnSource?: DispatchCreatorTurnSource
     }
   /** A structured session with no terminal handle, identified by its Orca session id alone. */
-  | { kind: 'session'; orcaSessionId: OrcaSessionId }
+  | { kind: 'session'; orcaSessionId: OrcaSessionId; turnSource?: DispatchCreatorTurnSource }
 
 /** Creator identity to persist on a new row, so depth can later tell delegation from bookkeeping. */
 export function recordedCreatorIdentity(creator: DispatchCreator): {
   creatorHandle: string | null
   creatorPaneKey: string | null
   creatorOrcaSessionId: OrcaSessionId | null
+  creatorTurnSource: DispatchCreatorTurnSource | null
 } {
   if (creator.kind === 'system') {
-    return { creatorHandle: null, creatorPaneKey: null, creatorOrcaSessionId: null }
+    return {
+      creatorHandle: null,
+      creatorPaneKey: null,
+      creatorOrcaSessionId: null,
+      creatorTurnSource: null
+    }
   }
+  const creatorTurnSource = creator.turnSource ?? null
   if (creator.kind === 'session') {
     return {
       creatorHandle: null,
       creatorPaneKey: null,
-      creatorOrcaSessionId: creator.orcaSessionId
+      creatorOrcaSessionId: creator.orcaSessionId,
+      creatorTurnSource
     }
   }
   return {
     creatorHandle: creator.handle,
     creatorPaneKey: creator.paneKey ?? null,
-    creatorOrcaSessionId: creator.orcaSessionId ?? null
+    creatorOrcaSessionId: creator.orcaSessionId ?? null,
+    creatorTurnSource
   }
 }
 
@@ -88,6 +100,14 @@ function findPotentiallyLiveAttachmentsForCreator(
   return rows
 }
 
+/** Whether the creator's own live Dispatch starts its workers as chats: the row depth reads, one indexed lookup. */
+export function creatorStartsChatWorkers(this: OrchestrationDb, creator: DispatchCreator): boolean {
+  return (
+    creator.kind !== 'system' &&
+    findActiveDispatchForCreator.call(this, creator)?.chat_lineage === 1
+  )
+}
+
 export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCreator): number {
   return (
     requireOrchestrationAdmission(
@@ -120,6 +140,7 @@ export function liveDispatchCreatorEvaluation(db: OrchestrationDb, creator: Disp
 }
 
 export type DispatchDepthMethods = {
+  creatorStartsChatWorkers: typeof creatorStartsChatWorkers
   resolveCreatorDepth: typeof resolveCreatorDepth
   resolveCreatorDispatchId: typeof resolveCreatorDispatchId
   resolveChildDispatchDepth: typeof resolveChildDispatchDepth
@@ -127,6 +148,7 @@ export type DispatchDepthMethods = {
 
 export function attachDispatchDepth(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
+    creatorStartsChatWorkers,
     resolveCreatorDepth,
     resolveCreatorDispatchId,
     resolveChildDispatchDepth

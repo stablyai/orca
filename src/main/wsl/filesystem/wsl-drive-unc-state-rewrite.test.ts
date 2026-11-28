@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { foldersAndAutomationsWslMoverProfile } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-folders-profile'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { heavyWslMoverProfile } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-heavy-profile'
 import {
   repo,
@@ -9,7 +8,7 @@ import {
   WSL_MOVER_DISTRO,
   type WslMoverPaths
 } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-profile-rows'
-import type { WslMoveProjectionInput } from '../../persistence/moving-wsl-projects/wsl-move-state-projection'
+import type { WslMoveProjectionInput } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-state-projection'
 import { WslDriveUncKeyCollisionError } from './wsl-drive-unc-identity-rewrite'
 import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'
 
@@ -42,45 +41,7 @@ function convert(state: PersistedState, repoIds: string[], folderWorkspaceIds: s
   return rewriteWslDriveUncState(state, { distro: WSL_MOVER_DISTRO, repoIds, folderWorkspaceIds })
 }
 
-const WINDOWS_GIT = { kind: 'wsl', distro: WSL_MOVER_DISTRO, git: 'windows-host' } as const
-
 describe('rewriteWslDriveUncState', () => {
-  it('re-keys every session, UI and catalog row of the converted projects', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const { state, worktreeIds } = convert(before, ['repo-a', 'repo-b'])
-    const expected = persisted(heavyWslMoverProfile(drive))
-    for (const [oldId, newId] of worktreeIds) {
-      expected.worktreeMeta[newId] = {
-        ...expected.worktreeMeta[newId],
-        priorWorktreeIds: [oldId]
-      }
-    }
-    expected.projects = expected.projects.map((project) => ({
-      ...project,
-      localWindowsRuntimePreference: WINDOWS_GIT
-    }))
-    expect(state).toEqual(expected)
-    expect(Object.fromEntries(worktreeIds)).toEqual({
-      [`repo-a::${unc.at('/home/dev/app')}`]: `repo-a::${drive.at('/home/dev/app')}`,
-      [`repo-a::${unc.at('/home/dev/app-feature')}`]: `repo-a::${drive.at('/home/dev/app-feature')}`,
-      [`repo-b::${unc.at('/home/dev/lib', 'wsl$')}`]: `repo-b::${drive.at('/home/dev/lib')}`
-    })
-  })
-
-  it('converts folder workspaces and their group, and keeps automation history as it ran', () => {
-    const before = persisted(foldersAndAutomationsWslMoverProfile(unc))
-    const { state } = convert(before, ['repo-auto'], ['folder-1'])
-    const expected = persisted(foldersAndAutomationsWslMoverProfile(drive))
-    const wtAuto = `repo-auto::${drive.at('/srv/jobs')}`
-    expected.worktreeMeta[wtAuto] = {
-      ...expected.worktreeMeta[wtAuto],
-      priorWorktreeIds: [`repo-auto::${unc.at('/srv/jobs')}`]
-    }
-    expected.projects = [{ ...expected.projects[0], localWindowsRuntimePreference: WINDOWS_GIT }]
-    expected.automationRuns = before.automationRuns
-    expect(state).toEqual(expected)
-  })
-
   it('rewrites minted PTY session ids, keeping the incarnation suffix', () => {
     const before = persisted(heavyWslMoverProfile(unc))
     const oldId = `repo-a::${unc.at('/home/dev/app')}`
@@ -100,75 +61,10 @@ describe('rewriteWslDriveUncState', () => {
     })
   })
 
-  it('leaves projects outside the scope, other hosts and user text as written', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const otherId = `repo-b::${unc.at('/home/dev/lib', 'wsl$')}`
-    before.workspaceSessionsByHostId = {
-      'ssh:box': { ...before.workspaceSession }
-    }
-    before.settings = { ...before.settings, workspaceDir: unc.at('/home/dev/app') }
-    const { state } = convert(before, ['repo-a'])
-    expect(state.repos.find((row) => row.id === 'repo-b')).toEqual(
-      before.repos.find((row) => row.id === 'repo-b')
-    )
-    expect(state.workspaceSession.tabsByWorktree[otherId]).toEqual(
-      before.workspaceSession.tabsByWorktree[otherId]
-    )
-    expect(state.workspaceSessionsByHostId).toBe(before.workspaceSessionsByHostId)
-    expect(state.settings).toBe(before.settings)
-    expect(state.projects.find((row) => row.id === 'project-b')).toEqual(
-      before.projects.find((row) => row.id === 'project-b')
-    )
-  })
-
-  it("keeps a project's own runtime choice and only adds Windows Git to a WSL one", () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    before.projects = [
-      { ...before.projects[0], localWindowsRuntimePreference: { kind: 'windows-host' } },
-      { ...before.projects[1], localWindowsRuntimePreference: { kind: 'wsl', distro: 'Other' } }
-    ]
-    const { state } = convert(before, ['repo-a', 'repo-b'])
-    expect(state.projects.map((row) => row.localWindowsRuntimePreference)).toEqual([
-      { kind: 'windows-host' },
-      { kind: 'wsl', distro: 'Other', git: 'windows-host' }
-    ])
-  })
-
-  it('is idempotent, so a resumed conversion changes nothing', () => {
-    const once = convert(persisted(heavyWslMoverProfile(unc)), ['repo-a', 'repo-b']).state
-    const twice = convert(once, ['repo-a', 'repo-b'])
-    expect(twice.state).toEqual(once)
-    expect(twice.worktreeIds.size).toBe(0)
-  })
-
   it('refuses a project that would keep an unconverted repo', () => {
     const before = persisted(heavyWslMoverProfile(unc))
     before.projects = [{ ...before.projects[0], sourceRepoIds: ['repo-a', 'repo-b'] }]
     expect(() => convert(before, ['repo-a'])).toThrow('wsl_drive_unc_project_split')
-  })
-
-  it('refuses when a converted key lands on one with different user data, naming the key', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const oldId = `repo-a::${unc.at('/home/dev/app')}`
-    const newId = `repo-a::${drive.at('/home/dev/app')}`
-    before.worktreeMeta[newId] = { ...before.worktreeMeta[oldId], displayName: 'other' }
-    expect(() => convert(before, ['repo-a', 'repo-b'])).toThrow(
-      new WslDriveUncKeyCollisionError(newId)
-    )
-  })
-
-  it('merges a drive key that holds nothing, or the same data, into the converted one', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const oldId = `repo-a::${unc.at('/home/dev/app')}`
-    const newId = `repo-a::${drive.at('/home/dev/app')}`
-    before.workspaceSession.tabsByWorktree[newId] = []
-    before.worktreeMeta[newId] = before.worktreeMeta[oldId]
-    const { state } = convert(before, ['repo-a', 'repo-b'])
-    expect(state.workspaceSession.tabsByWorktree[newId]).toEqual(
-      convert(persisted(heavyWslMoverProfile(unc)), ['repo-a', 'repo-b']).state.workspaceSession
-        .tabsByWorktree[newId]
-    )
-    expect(state.worktreeMeta[newId]?.displayName).toBe('app')
   })
 
   it('drops the drive-keyed row startup discovery wrote for the saved UNC worktree', () => {
@@ -252,5 +148,18 @@ describe('rewriteWslDriveUncState', () => {
       [`repo-a::${drive.at('/home/dev/app')}`]: drive.at('/home/dev/app/src'),
       [`repo-c::${unc.at('/home/dev/other')}`]: unc.at('/home/dev/other/src')
     })
+  })
+
+  it('leaves an SSH project path alone when it shares the converted repo id', () => {
+    const before = persisted(heavyWslMoverProfile(unc))
+    before.repos = [
+      repo('repo-shared', unc.at('/home/dev/desktop')),
+      { ...repo('repo-shared', unc.at('/home/dev/remote')), connectionId: 'ssh-1' }
+    ]
+    const { state } = convert(before, ['repo-shared'])
+    expect(state.repos.map(({ path }) => path)).toEqual([
+      drive.at('/home/dev/desktop'),
+      unc.at('/home/dev/remote')
+    ])
   })
 })

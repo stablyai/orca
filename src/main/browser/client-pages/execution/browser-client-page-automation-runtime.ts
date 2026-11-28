@@ -1,7 +1,7 @@
 import type { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { AgentBrowserBridge } from '../../agent-browser/agent-browser-bridge'
-import type { BrowserGuestRegistration } from '../../guest-lifecycle/manager/browser-manager-types'
-import type { BrowserManager } from '../../browser-manager'
+import type { BrowserGuestRegistration } from '../../guest-lifecycle/manager/registration/browser-manager-registration'
+import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
 import type { BrowserRoutePageGuestIdentity } from '../../routing/guest-authority/browser-route-page-authority'
 
@@ -26,13 +26,15 @@ type AutomationRuntimeDependencies = {
     'getGuestWebContentsId' | 'registerGuest' | 'unregisterGuest'
   >
   getAgentBrowserBridge(): Pick<AgentBrowserBridge, 'onTabClosed'> | null
-  executeRpc(
-    method: BrowserClientAutomationMethod,
-    params: Record<string, unknown>,
-    agent: boolean,
-    signal: AbortSignal
-  ): Promise<unknown>
+  executeRpc: BrowserClientPageAutomationRpc
 }
+
+export type BrowserClientPageAutomationRpc = (
+  method: BrowserClientAutomationMethod,
+  params: Record<string, unknown>,
+  agent: boolean,
+  signal: AbortSignal
+) => Promise<unknown>
 
 type AutomationRegistration = {
   pageHostGeneration: number

@@ -1,12 +1,12 @@
 /** Production wiring for the E9 automation wake: host automations over runtime RPC, a userData file. */
-import type { Automation } from '../../../shared/automations-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import { WslHostAutomationWake } from '../../wsl/host-lifecycle/wsl-host-automation-wake'
 import {
   readWslHostAutomationWakes,
   writeWslHostAutomationWakes
 } from '../../wsl/host-lifecycle/wsl-host-automation-wake-store'
 import type { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
-import { callRuntimeEnvironment } from '../runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
 import { onWslOrcadHostAutomationsChanged } from '../../wsl/orcad/wsl-orcad-host-environments'
 
 // A connected host's schedule can change from any client; re-read it this often.
@@ -24,7 +24,12 @@ export function createWslHostAutomationWake(
         userDataPath(),
         environmentId,
         'automation.list',
-        undefined
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        // Bookkeeping, not use: it must neither hold an idle host up nor wake one (#46567).
+        { background: true }
       )
       if (!response.ok) {
         throw new Error(response.error.message)

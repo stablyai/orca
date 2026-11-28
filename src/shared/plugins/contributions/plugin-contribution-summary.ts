@@ -6,6 +6,7 @@ import {
 } from './plugin-contribution-points'
 import type { PluginManifest } from '../manifest/plugin-manifest'
 import type { PluginFileMatch } from './plugin-file-match'
+import { pluginMcpServerListing } from './plugin-mcp-server-contribution'
 import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
 
 export const PLUGIN_CONTRIBUTION_SUMMARY_LIMIT = 64
@@ -47,6 +48,14 @@ export const pluginContributionSummarySchema = z
     return known.length === 0 && items.length > 0 ? undefined : known
   })
 
+// Why clipped: the summary's detail holds 160 characters, and a command line can be longer.
+const pluginMcpServerSummaryDetail = (
+  server: PluginManifest['contributes']['mcpServers'][number]
+): string => {
+  const { detail } = pluginMcpServerListing(server)
+  return detail.length > 160 ? `${detail.slice(0, 159)}…` : detail
+}
+
 function fileMatchDetail(match: PluginFileMatch): string | undefined {
   return [...match.extensions, ...match.filenames].join(', ') || undefined
 }
@@ -83,6 +92,7 @@ export function pluginContributionSummary(
     ...named('themes', c.themes, (theme) => theme.title),
     ...named('terminalThemes', c.terminalThemes, (theme) => theme.title),
     ...named('iconThemes', c.iconThemes, (theme) => theme.title),
+    ...named('fonts', c.fonts, (font) => font.family),
     ...named('syntaxes', c.syntaxes, (syntax) => syntax.title, fileMatchDetail),
     ...named('customEditors', c.customEditors, (editor) => editor.title, fileMatchDetail),
     ...named(
@@ -92,7 +102,8 @@ export function pluginContributionSummary(
       (newFile) => newFile.extension
     ),
     // Each item's text, or its id when it shows only an icon.
-    ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id)
+    ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id),
+    ...named('mcpServers', c.mcpServers, (server) => server.name, pluginMcpServerSummaryDetail)
   ].slice(0, PLUGIN_CONTRIBUTION_SUMMARY_LIMIT)
 }
 

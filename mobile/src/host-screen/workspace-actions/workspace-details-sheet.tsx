@@ -1,0 +1,208 @@
+import type { ReactNode } from 'react'
+import { Text, View } from 'react-native'
+import {
+  CalendarClock,
+  CircleDot,
+  ExternalLink,
+  GitMerge,
+  SquareTerminal,
+  StickyNote
+} from 'lucide-react-native'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
+import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
+import {
+  LIST_LEADING_INSET,
+  LIST_LEADING_SLOT,
+  LIST_ROW_PADDING,
+  ListGroup,
+  ListRow
+} from '../../components/list/ListGroup'
+import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
+import {
+  buildWorkspaceDetailLinks,
+  buildWorkspaceOrigin,
+  workspaceNotes,
+  type WorkspaceDetailLink,
+  type WorkspaceOrigin
+} from './workspace-details-model'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+
+const ICON_SIZE = 16
+
+const PROVIDER_LABELS: Record<WorkspaceDetailLink['provider'], string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  linear: 'Linear',
+  jira: 'Jira',
+  bitbucket: 'Bitbucket',
+  'azure-devops': 'Azure DevOps',
+  gitea: 'Gitea'
+}
+function stateLabels(t: Translate): Record<string, string> {
+  return {
+    open: t('hostScreen.workspaceDetailsSheet.prOpen', 'Open'),
+    merged: t('hostScreen.workspaceDetailsSheet.merged', 'Merged'),
+    closed: t('hostScreen.workspaceDetailsSheet.closed', 'Closed'),
+    draft: t('hostScreen.workspaceDetailsSheet.draft', 'Draft')
+  }
+}
+function checkLabels(t: Translate): Record<string, string> {
+  return {
+    success: t('hostScreen.workspaceDetailsSheet.checksPassing', 'Checks: Passing'),
+    failure: t('hostScreen.workspaceDetailsSheet.checksFailing', 'Checks: Failing'),
+    pending: t('hostScreen.workspaceDetailsSheet.checksPending', 'Checks: Pending'),
+    cancelled: t('pullRequest.checkStatus.cancelled', 'Cancelled')
+  }
+}
+
+export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: string) => void }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const { row, onOpenLink } = props
+  const origin = buildWorkspaceOrigin(row)
+  const OriginIcon = origin?.kind === 'automation' ? CalendarClock : SquareTerminal
+  const notes = workspaceNotes(row)
+  const rows: ReactNode[] = buildWorkspaceDetailLinks(row).map((item) => (
+    <LinkRow key={item.key} item={item} onOpen={onOpenLink} />
+  ))
+  if (origin) {
+    rows.push(
+      <ListRow
+        key="origin"
+        testID="workspace-origin"
+        title={originLabel(origin, t)}
+        leading={<OriginIcon size={ICON_SIZE} color={colors.textSecondary} />}
+      />
+    )
+  }
+  if (notes) {
+    rows.push(
+      // Notes wrap and stay selectable, which a ListRow title cannot; laid out on the same grid.
+      <View key="notes" style={styles.notesRow}>
+        <View style={styles.notesIcon}>
+          <StickyNote size={ICON_SIZE} color={colors.textSecondary} />
+        </View>
+        <Text style={styles.notes} selectable>
+          {notes}
+        </Text>
+      </View>
+    )
+  }
+  return rows.length > 0 ? (
+    <View testID="workspace-details">
+      <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+        {rows}
+      </ListGroup>
+    </View>
+  ) : null
+}
+
+function originLabel(origin: WorkspaceOrigin, t: Translate): string {
+  if (origin.kind === 'cli') {
+    return t('hostScreen.workspaceDetailsSheet.createdFromCli', 'Created from Orca CLI')
+  }
+  return origin.name
+    ? t(
+        'hostScreen.workspaceDetailsSheet.createdByNamedAutomation',
+        'Created by automation \u201c{{name}}\u201d',
+        {
+          name: origin.name
+        }
+      )
+    : t('hostScreen.workspaceDetailsSheet.createdByAutomation', 'Created by automation')
+}
+
+function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
+  const colors = useMobileColors()
+  const state = item.state ?? ''
+  const color = prStateColor(state, colors)
+  // GitLab draws every open MR with the merge glyph.
+  if (item.type === 'mr' && state !== 'closed' && state !== 'draft') {
+    return <GitMerge size={ICON_SIZE} color={color} />
+  }
+  return <PrStateIcon state={state} size={ICON_SIZE} color={color} />
+}
+
+function LinkIcon({ item }: { item: WorkspaceDetailLink }) {
+  const colors = useMobileColors()
+  if (item.type !== 'issue') {
+    return <ReviewIcon item={item} />
+  }
+  if (item.provider === 'linear' || item.provider === 'jira') {
+    return (
+      <TaskProviderLogo provider={item.provider} size={ICON_SIZE} color={colors.textSecondary} />
+    )
+  }
+  return <CircleDot size={ICON_SIZE} color={colors.textSecondary} />
+}
+
+function linkMeta(item: WorkspaceDetailLink, t: Translate): string {
+  const reference = item.title ? item.label : null
+  if (item.type === 'issue') {
+    return [reference, PROVIDER_LABELS[item.provider]].filter(Boolean).join(' · ')
+  }
+  // As the desktop's tone rule: checks only speak for a review that is still open.
+  const checks = item.state === 'open' && item.checks ? checkLabels(t)[item.checks] : null
+  return [reference, item.state ? stateLabels(t)[item.state] : null, checks]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: string) => void }) {
+  const colors = useMobileColors()
+  const t = useMobileTranslation()
+  const url = item.url
+  const meta = linkMeta(item, t)
+  return (
+    <ListRow
+      title={item.title ?? item.label}
+      subtitle={meta || undefined}
+      leading={<LinkIcon item={item} />}
+      accessory={url ? <ExternalLink size={14} color={colors.textMuted} /> : undefined}
+      onPress={url ? () => onOpen(url) : undefined}
+      accessibilityRole={url ? 'link' : undefined}
+      accessibilityLabel={
+        !url
+          ? undefined
+          : item.title
+            ? t('hostScreen.workspaceDetailsSheet.openLinkWithTitle', 'Open {{label}}, {{title}}', {
+                label: item.label,
+                title: item.title
+              })
+            : t('hostScreen.workspaceDetailsSheet.openLink', 'Open {{label}}', {
+                label: item.label
+              })
+      }
+    />
+  )
+}
+
+const stylesSheet = themedStyleSheet((colors) => ({
+  group: {
+    marginBottom: spacing.md
+  },
+  notesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: spacing.md
+  },
+  notesIcon: {
+    width: LIST_LEADING_SLOT,
+    alignItems: 'center',
+    paddingTop: 1
+  },
+  notes: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary
+  }
+}))

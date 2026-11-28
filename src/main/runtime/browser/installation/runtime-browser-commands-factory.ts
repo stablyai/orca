@@ -1,7 +1,18 @@
+import type {
+  BrowserExtensionListParams,
+  BrowserExtensionReloadParams,
+  BrowserExtensionReloadResult,
+  BrowserExtensionSummaryListResult
+} from '../../../../shared/browser/extensions/browser-extension-types'
+import type {
+  BrowserIdentityModeSetResult,
+  BrowserIdentityModeStatus,
+  BrowserUserAgentMode
+} from '../../../../shared/browser/identity/browser-user-agent-mode'
 import { BrowserError } from '../../../browser/browser-error'
-import '../../../../shared/runtime-types'
-import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeBrowserUnavailableReason } from '../../../../shared/runtime-capability-degradation'
+
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeBrowserUnavailableReason } from '../../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../commands/browser-commands'
 import { closeBrowserPageWithoutEngine } from '../client-pages/browser-client-page-close'
@@ -13,10 +24,26 @@ export type RuntimeBrowserCommandsFactory = (
   host: RuntimeBrowserCommandHost
 ) => RuntimeBrowserCommands
 
+export type RuntimeBrowserIdentity = {
+  get(): Promise<BrowserIdentityModeStatus>
+  set(
+    mode: BrowserUserAgentMode,
+    options: { reset?: boolean }
+  ): Promise<BrowserIdentityModeSetResult>
+}
+
 export type RuntimeBrowserCommandsFactoryOptions = {
   /** The provider creates pages against this runtime's client-host lease registry. */
   clientHosting?: boolean
-  supportsGoogleCookieClear?: () => boolean
+  /** Only the desktop installs access to its local extension manager. */
+  extensions?: {
+    list(params: BrowserExtensionListParams): Promise<BrowserExtensionSummaryListResult>
+    reload(params: BrowserExtensionReloadParams): Promise<BrowserExtensionReloadResult>
+  }
+  /** Capabilities only the browser engine can serve; absent means none. */
+  supportsEngineCapability?: (capability: string) => boolean
+  /** An engine process with its own identity setting; null while it can't serve one. */
+  identity?: () => RuntimeBrowserIdentity | null
   /** Client pages live in this runtime's own registries, so they need no healthy engine. */
   clientHostingWithoutEngine?: boolean
   /** The provider owns browser pages without a renderer window. */
@@ -57,11 +84,16 @@ export function runtimeBrowserCommandsFactorySupportsClientHosting(): boolean {
   return runtimeBrowserCommandsFactoryIsAvailable() && currentOptions.clientHosting === true
 }
 
-export function runtimeBrowserCommandsFactorySupportsGoogleCookieClear(): boolean {
+export function runtimeBrowserCommandsFactorySupportsEngineCapability(capability: string): boolean {
   return (
     runtimeBrowserCommandsFactoryIsAvailable() &&
-    currentOptions.supportsGoogleCookieClear?.() === true
+    currentOptions.supportsEngineCapability?.(capability) === true
   )
+}
+
+/** Hosts without their own identity store (orcad) serve the browser engine's. */
+export function runtimeBrowserEngineIdentity(): RuntimeBrowserIdentity | null {
+  return runtimeBrowserCommandsFactoryIsAvailable() ? (currentOptions.identity?.() ?? null) : null
 }
 
 export type RuntimeBrowserUnavailableCause = {
@@ -116,4 +148,21 @@ export function browserUnavailableError(): BrowserError {
     BROWSER_UNAVAILABLE_ERROR_CODE,
     'Browser automation is unavailable on this host.'
   )
+}
+
+/** Requires an available desktop extension provider; headless and remote browser providers are unsupported. */
+export function getRuntimeBrowserExtensions(): NonNullable<
+  RuntimeBrowserCommandsFactoryOptions['extensions']
+> {
+  if (
+    !runtimeBrowserCommandsFactoryIsAvailable() ||
+    currentOptions.headless ||
+    !currentOptions.extensions
+  ) {
+    throw new BrowserError(
+      'browser_unavailable',
+      'Browser extension management requires the Orca desktop on this host; it is unavailable in headless or remote browser providers.'
+    )
+  }
+  return currentOptions.extensions
 }

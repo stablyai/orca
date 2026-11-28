@@ -1,3 +1,4 @@
+import { providerRelayRunOutlivesQuit } from '../../../provider-relay/app-provider-relays'
 import { settleCodexRequestEndWaiters } from '../turns/codex-request-end-wait'
 import {
   agentSessionFailureFact,
@@ -11,8 +12,9 @@ import {
   type CodexSession,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-state'
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { providerOutcomeLost } from '../../../provider-process/provider-process-exit-status'
 
 export function handleCodexSessionExit(input: {
   sessions: Map<string, CodexSession>
@@ -40,9 +42,10 @@ export function handleCodexSessionExit(input: {
     reason: ((input.closedByOrca && session.orcaClose?.reason) || input.error).message,
     // Orca-initiated closes are host faults, regardless of the exit report. No spawn ENOENT reaches
     // here: a session registers only after the CLI answered thread/start, so the acquire path owns it.
-    failure: input.closedByOrca
-      ? agentSessionFailureFact('hostFault')
-      : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(input.error) }),
+    failure:
+      input.closedByOrca || providerOutcomeLost(input.error)
+        ? agentSessionFailureFact('hostFault')
+        : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(input.error) }),
     cause: session.orcaClose?.requested ? 'requested-close' : 'unexpected-exit',
     ...(input.closedByOrca && input.connection?.closeResult
       ? {
@@ -63,7 +66,11 @@ export function handleCodexSessionExit(input: {
   session.events?.observeExit?.(session.dispatchEchoes.heldSends(), session.exitObservedAt, event)
   // Refused terminal rows use host settlement fallback; the observed child exit remains proven.
   const admission = session.translator?.handle(event) ?? { accepted: true }
-  if (!admission.accepted) {
+  // A quit's hand-off ends the session after its sink closed; the agent runs on, nothing was lost.
+  if (
+    !admission.accepted &&
+    !providerRelayRunOutlivesQuit(input.connection?.relay ? 'relayed' : 'direct')
+  ) {
     input.logger?.warn("Codex's final rows were refused; the host settles the turn instead", {
       scope: 'codex-exit-rows',
       sessionId: input.sessionId,
@@ -147,6 +154,7 @@ export async function closeCodexSession(
   const attempt = acquisitions.get(sessionId)
   const published = sessions.get(sessionId)
   if (attempt && published?.connection === attempt.window.connection) {
+    attempt.historyCatchUp?.abort()
     attempt.cancelled = true
     attempt.requestedClose = requestedClose
     const closed = await closeCodexPublishedSession(sessions, sessionId, onEvent, {

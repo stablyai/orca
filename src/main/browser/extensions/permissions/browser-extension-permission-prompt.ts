@@ -1,4 +1,5 @@
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
 import { requestBrowserExtensionInstallPrompt } from './browser-extension-install-prompt'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { readBrowserExtensionIconDataUrl } from '../installation/browser-extension-manifest'
@@ -30,7 +31,9 @@ export async function askToGrantBrowserExtensionPermissions(
         : null,
       permissions: add.permissions,
       hostPermissions: add.origins,
-      profileLabel: browserSessionRegistry.getProfile(browserProfileId)?.label ?? null
+      profileLabel:
+        browserSessionRegistry.getProfile(browserExtensionSourceProfileId(browserProfileId))
+          ?.label ?? null
     },
     undefined,
     signal

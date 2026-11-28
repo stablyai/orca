@@ -1,0 +1,337 @@
+// Preserve event order across journal backpressure; hold later events until the sink accepts.
+
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  createProviderTimelineAssembler,
+  type ProviderTimelineAssembler
+} from '../../native-chat/agent-session-timeline/provider-timeline-assembler'
+import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
+import { acpPromptTurnId } from '../timeline/acp-prompt-turns'
+import {
+  createLegacyProviderTimelineIdentityScheme,
+  spellProviderTimelineKey
+} from '../../native-chat/agent-session-timeline/provider-timeline-identity'
+import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
+import type { StructuredAgentSessionCommandRun } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { AcpChildStops, AcpDialect } from '../acp-dialects/acp-dialect'
+import { AcpTimelineTranslator } from '../timeline/acp-timeline-translator'
+import { isAcpBackgroundTaskChildWorkEvent } from '../timeline/acp-background-task-child-work'
+import { AcpLiveChildWork } from './acp-live-child-work'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import {
+  neverThrowingStructuredAgentSessionLogger,
+  type StructuredAgentSessionLogger
+} from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import type { AcpTextDrop } from '../timeline/acp-turn-messages'
+import { AcpAgentTurnQuiet } from './acp-agent-turn-quiet'
+import { AcpLaneTurnWatchers } from './acp-lane-turn-watchers'
+
+const BACKPRESSURE_RETRY_MS = 250
+
+// Publish child-work evidence only after preceding journal events commit.
+type OwnershipPublication = { type: 'ownership.publish'; publish: () => void }
+type SubagentWork = { type: 'subagent.work'; evidence: AgentChildWorkEvidence[] }
+
+export type AcpStructuredLaneDeps = {
+  sink: ProviderTimelineSink
+  sessionId: string
+  agent: string
+  agentName: string
+  generation: string
+  /** A relayed agent's requests are its process's: a reattach keeps their cards. */
+  requestGeneration?: string
+  providerSessionId: string
+  dialect: AcpDialect
+  logger: StructuredAgentSessionLogger
+  /** First provider event confirms receipt of an Orca send. */
+  onInputAccepted: (clientMessageId: string) => void
+  /** Permanent sink refusal prevents further journaling. */
+  onFailed: (reason: string) => void
+  onChildWorkEvidence?: (evidence: AgentChildWorkEvidence[]) => void
+  onChildWorkFailure?: (error: unknown) => void
+  now?: () => number
+  childStops?: () => AcpChildStops
+  /** An agent-started turn ended (quiet, Stop or a send): its messages stream no more. */
+  onAgentTurnEnded?: () => void
+}
+
+export class AcpStructuredLane {
+  readonly translator: AcpTimelineTranslator
+  private readonly assembler: ProviderTimelineAssembler
+  private readonly backlog: (ProviderTimelineEvent | SubagentWork | OwnershipPublication)[] = []
+  private readonly turnWatchers = new AcpLaneTurnWatchers(() => this.openTurnId)
+  private readonly requestIdentity: ReturnType<typeof createLegacyProviderTimelineIdentityScheme>
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
+  readonly agentTurn = new AcpAgentTurnQuiet(this, () => this.deps.now?.() ?? Date.now())
+  readonly agentTurnEnded = (): void => this.deps.onAgentTurnEnded?.()
+  private readonly children = new AcpLiveChildWork(
+    () => this.deps.childStops?.(),
+    (taskId) => this.translator.isSyntheticBackgroundTask(taskId)
+  )
+  private failed = false
+  private ended = false
+  private disposed = false
+  private readonly logger: StructuredAgentSessionLogger
+
+  constructor(private readonly deps: AcpStructuredLaneDeps) {
+    this.logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
+    this.requestIdentity = createLegacyProviderTimelineIdentityScheme({
+      agent: deps.agent,
+      sessionId: deps.sessionId
+    })
+    this.translator = new AcpTimelineTranslator({
+      sessionId: deps.providerSessionId,
+      dialect: deps.dialect,
+      agentName: deps.agentName,
+      onTextDropped: (drop) => this.reportTextDrop(drop),
+      numbersMessages: deps.requestGeneration !== undefined
+    })
+    this.assembler = createProviderTimelineAssembler({
+      sink: deps.sink,
+      sessionId: deps.sessionId,
+      agent: deps.agent,
+      generation: deps.generation,
+      ...(deps.requestGeneration ? { requestGeneration: deps.requestGeneration } : {}),
+      namespace: deps.providerSessionId
+    })
+  }
+
+  hasPendingDiagnostic(clientMessageId: string): boolean {
+    const turn = acpPromptTurnId(clientMessageId)
+    return (
+      !this.failed &&
+      !this.disposed &&
+      !this.ended &&
+      this.backlog.some(
+        (event) =>
+          event.type === 'item.update' &&
+          event.body.kind === 'status' &&
+          !event.producer &&
+          event.join?.thread === this.deps.providerSessionId &&
+          event.join.turn === turn
+      )
+    )
+  }
+
+  get openTurnId(): string | null {
+    return this.assembler.openTurnId
+  }
+
+  promptTurnIdentity(clientMessageId: string) {
+    const turnId = spellProviderTimelineKey(this.deps.providerSessionId, {
+      source: 'provider',
+      value: acpPromptTurnId(clientMessageId)
+    })
+    return !this.failed && !this.disposed && this.openTurnId === turnId
+      ? this.assembler.openTurnIdentity
+      : null
+  }
+
+  beginCommand(command: StructuredAgentSessionCommandRun): void {
+    if (this.failed || this.disposed || this.backlog.length > 0) {
+      throw new Error('ACP timeline has not drained for this command')
+    }
+    this.assembler.beginCommand(command)
+  }
+
+  forgetCommand(turnId: string): void {
+    this.assembler.forgetCommand(turnId)
+  }
+
+  apply(events: readonly ProviderTimelineEvent[]): void {
+    if (this.failed || this.disposed) {
+      return
+    }
+    this.backlog.push(...events)
+    const evidence = this.translator.subagents.drainEvidence()
+    if (evidence.length > 0) {
+      this.backlog.push({ type: 'subagent.work', evidence })
+    }
+    const publish = this.translator.publication()
+    if (publish) {
+      this.backlog.push({ type: 'ownership.publish', publish })
+    }
+    this.drain()
+    this.agentTurn.restart()
+  }
+
+  onTurnOpened(notify: () => void): void {
+    this.turnWatchers.onOpened(notify)
+  }
+
+  /** Resolves when the turn leaves or further writes become impossible. */
+  whenTurnLeaves(turnId: string, signal?: AbortSignal): Promise<void> {
+    return this.turnWatchers.whenLeaves(turnId, signal)
+  }
+
+  retry(): void {
+    this.drain()
+  }
+
+  /** Matches this acquisition's request row, including reused-key incarnations. */
+  isRequestRow(itemId: string, requestKey: string): boolean {
+    const identity = parseAgentJournalItemKey(itemId)
+    if (identity?.provider !== 'legacy' || identity.sessionId !== this.deps.sessionId) {
+      return false
+    }
+    const generation = this.deps.requestGeneration ?? this.deps.generation
+    const first = this.requestIdentity.request({ generation, key: requestKey, incarnation: 1 })
+    const prefix = first.provider === 'legacy' ? first.recordId : null
+    return identity.recordId === prefix || identity.recordId.startsWith(`${prefix}#`)
+  }
+
+  flush(): void {
+    this.assembler.flush()
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
+    this.translator.dispose()
+    this.clearRetry()
+    this.agentTurn.dispose()
+    this.backlog.length = 0
+    this.assembler.dispose()
+    this.turnWatchers.close()
+    // Observation has ended even if its journal edge was refused; drain admitted snapshots first.
+    void Promise.resolve(this.deps.sink.written?.()).then(
+      () => this.publishSessionEnd(),
+      () => this.publishSessionEnd()
+    )
+  }
+
+  private drain(): void {
+    this.clearRetry()
+    while (this.backlog.length > 0 && !this.failed && !this.disposed) {
+      const event = this.backlog[0]
+      if (event.type === 'ownership.publish') {
+        if (!this.queuePublication(event.publish)) {
+          break
+        }
+        this.backlog.shift()
+        continue
+      }
+      if (event.type === 'subagent.work') {
+        if (!this.queueSubagentWork(event.evidence)) {
+          break
+        }
+        this.backlog.shift()
+        continue
+      }
+      const { admission, dropped } = this.assembler.apply(
+        event,
+        event.type === 'session.ended'
+          ? () => this.publishSessionEnd()
+          : isAcpBackgroundTaskChildWorkEvent(event)
+            ? () => this.publishChildWork(event)
+            : undefined
+      )
+      if (dropped === 'stream-mismatch' && event.type === 'text.delta') {
+        this.reportTextDrop({
+          reason: dropped,
+          itemId: 'id' in event.item ? event.item.id : undefined,
+          channel: event.channel,
+          threadId: event.join?.thread,
+          turnId: event.join?.turn,
+          producerAgentId: event.producer?.agentId
+        })
+      }
+      if (!admission.accepted) {
+        this.refused(admission.reason)
+        break
+      }
+      this.backlog.shift()
+      // Ignore live-child evidence after session end.
+      this.ended ||= event.type === 'session.ended' && dropped === undefined
+      if (event.type === 'input.accepted') {
+        this.deps.onInputAccepted(event.clientMessageId)
+      }
+    }
+    this.turnWatchers.notify()
+  }
+
+  /** A background task's live state for the host's work view (also a restated one's, rowless). */
+  publishChildWork(event: ProviderTimelineEvent): void {
+    const evidence = this.children.tasks(event, this.deps.now?.() ?? Date.now())
+    if (evidence.length > 0) {
+      this.publishEvidence(evidence)
+    }
+  }
+
+  /** Stop support learned after children were published (a kept agent's late probe). */
+  restateChildStops(): void {
+    const restated = this.children.restated(this.deps.now?.() ?? Date.now())
+    if (restated.length > 0 && !this.ended && !this.disposed) {
+      this.publishEvidence(restated)
+    }
+  }
+
+  private refused(reason: string): void {
+    if (reason === 'backpressure') {
+      this.retryTimer = setTimeout(() => this.drain(), BACKPRESSURE_RETRY_MS)
+      return
+    }
+    this.failed = true
+    this.translator.dispose()
+    this.backlog.length = 0
+    this.turnWatchers.close()
+    this.deps.onFailed(reason)
+  }
+
+  private queueSubagentWork(evidence: AgentChildWorkEvidence[]): boolean {
+    return this.ended || this.queuePublication(() => this.publishSubagentWork(evidence))
+  }
+
+  private queuePublication(onPublished: () => void): boolean {
+    const admission = this.deps.sink.tryAppendTransition({
+      steps: [],
+      lifecycle: false,
+      publish: false,
+      onPublished
+    })
+    if (!admission.accepted) {
+      this.refused(admission.reason)
+    }
+    return admission.accepted
+  }
+
+  private publishSubagentWork(evidence: AgentChildWorkEvidence[]): void {
+    this.publishEvidence(this.children.subagents(evidence))
+  }
+
+  private publishEvidence(evidence: AgentChildWorkEvidence[]): void {
+    try {
+      this.deps.onChildWorkEvidence?.(evidence)
+    } catch (error) {
+      try {
+        this.deps.onChildWorkFailure?.(error)
+      } catch {
+        // Diagnostics cannot fail an admitted journal transition.
+      }
+    }
+  }
+
+  private publishSessionEnd(): void {
+    this.publishEvidence([{ type: 'session-ended', observedAt: this.deps.now?.() ?? Date.now() }])
+  }
+
+  private reportTextDrop(drop: AcpTextDrop): void {
+    this.logger.warn('ACP text chunk rejected by its message stream', {
+      scope: `acp-text-${drop.reason}`,
+      sessionId: this.deps.sessionId,
+      providerSessionId: this.deps.providerSessionId,
+      agent: this.deps.agent,
+      generation: this.deps.generation,
+      ...drop
+    })
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
+  }
+}

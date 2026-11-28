@@ -1,11 +1,11 @@
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../workspace/identity/floating-workspace-id'
 import { getRepoIdFromWorktreeId } from '../worktree/id'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../terminal/replay/terminal-scrollback-limits'
-import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from '../utf8-byte-limits'
-import { parseExecutionHostId } from '../execution-host'
-import { ownRetainedString } from '../own-retained-string'
+import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from '../text/utf8-byte-limits'
+import { parseExecutionHostId } from '../execution-host/execution-host'
+import { ownRetainedString } from '../text/own-retained-string'
 
 export type RepoConnection = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
@@ -57,13 +57,33 @@ export function capTerminalScrollbackSessionBuffer(buffer: string): string {
   )
 }
 
-function capTerminalScrollbackLeafBuffers(buffers: Record<string, string> | undefined): {
-  buffers: Record<string, string> | undefined
-  changed: boolean
-} {
-  if (!buffers) {
-    return { buffers: undefined, changed: false }
+type TerminalLayout = WorkspaceSessionState['terminalLayoutsByTabId'][string]
+
+type CappedLeafBuffers = { buffers: Record<string, string> | undefined; changed: boolean }
+
+// Pure in their input object: a repeat save hands back the same output, so unchanged entries compare by identity.
+const cappedByBuffers = new WeakMap<Record<string, string>, CappedLeafBuffers>()
+const cappedLayouts = new WeakMap<TerminalLayout, TerminalLayout>()
+const layoutsWithoutBuffers = new WeakMap<TerminalLayout, TerminalLayout>()
+
+function memoized<K extends object, V>(cache: WeakMap<K, V>, key: K, build: (key: K) => V): V {
+  let value = cache.get(key)
+  if (value === undefined) {
+    value = build(key)
+    cache.set(key, value)
   }
+  return value
+}
+
+function capTerminalScrollbackLeafBuffers(
+  buffers: Record<string, string> | undefined
+): CappedLeafBuffers {
+  return buffers
+    ? memoized(cappedByBuffers, buffers, capLeafBuffers)
+    : { buffers: undefined, changed: false }
+}
+
+function capLeafBuffers(buffers: Record<string, string>): CappedLeafBuffers {
   let changed = false
   const capped: Record<string, string> = {}
   for (const [leafId, buffer] of Object.entries(buffers)) {
@@ -79,6 +99,15 @@ export const TERMINAL_SCROLLBACK_SESSION_HOMES = [
   'terminalLayoutsByTabId',
   'localOnlyScrollbackByTabId'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
+
+function layoutWithoutBuffers(layout: TerminalLayout): TerminalLayout {
+  return memoized(layoutsWithoutBuffers, layout, () => {
+    const stripped = { ...layout }
+    delete stripped.buffersByLeafId
+    delete stripped.scrollbackRefsByLeafId
+    return stripped
+  })
+}
 
 export function pruneLocalTerminalScrollbackBuffers(
   session: WorkspaceSessionState,
@@ -115,16 +144,16 @@ export function pruneLocalTerminalScrollbackBuffers(
       const capped = capTerminalScrollbackLeafBuffers(layout.buffersByLeafId)
       if (capped.changed) {
         terminalLayoutsByTabId ??= { ...terminalLayoutsByTabIdForRead }
-        terminalLayoutsByTabId[tabId] = { ...layout, buffersByLeafId: capped.buffers }
+        terminalLayoutsByTabId[tabId] = memoized(cappedLayouts, layout, () => ({
+          ...layout,
+          buffersByLeafId: capped.buffers
+        }))
       }
       continue
     }
 
     terminalLayoutsByTabId ??= { ...terminalLayoutsByTabIdForRead }
-    const layoutWithoutBuffers = { ...layout }
-    delete layoutWithoutBuffers.buffersByLeafId
-    delete layoutWithoutBuffers.scrollbackRefsByLeafId
-    terminalLayoutsByTabId[tabId] = layoutWithoutBuffers
+    terminalLayoutsByTabId[tabId] = layoutWithoutBuffers(layout)
   }
 
   // Cap the local-only home too: it stays inline rather than being externalized to refs.

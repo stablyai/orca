@@ -1,18 +1,21 @@
-import { sortByUpdatedAtDescending } from '../../shared/updated-at-order'
+import { sortByUpdatedAtDescending } from '../../shared/collections/updated-at-order'
 import type {
   JiraIssue,
   JiraIssueFilter,
   JiraIssueListFilters,
+  JiraProject,
   JiraSiteSelection
 } from '../../shared/jira/jira-types'
-import { buildJiraPresetJql } from '../../shared/jira/jira-preset-jql'
+import { buildJiraPresetJql, searchJiraPreset } from '../../shared/jira/jira-preset-jql'
+import { restrictJiraQueryToProjectIds } from '../../shared/jira/jira-project-reference'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
+import { JiraApiError } from './jira-api-error'
 import { ISSUE_LIST_FIELDS, mapJiraIssue, type JiraAgileFieldIds } from './jira-issue-mapping'
 import { agileFieldIdList, getAgileFieldIds } from './jira-agile-fields'
 import type { JiraSearchResponse } from './jira-record-pages'
-import { readProjectsForClient } from './jira-project-queries'
+import { readFirstCloudProjectPage, readProjectsForClient } from './jira-project-queries'
 import {
   requireStrictJiraSite,
   shouldSurfaceSiteFailure,
@@ -23,6 +26,9 @@ import {
 
 const ISSUE_SEARCH_TIMEOUT_MS = 30_000
 const PROJECTS_PER_QUERY = 100
+const BOUNDED_RETRY_SKIP_MS = 5 * 60_000
+// Site id -> when to stop skipping the unbounded-JQL retry; set when its projects did not fit one query.
+const sitesSkippingBoundedRetry = new Map<string, number>()
 type JiraIssueQuery = { filter: JiraIssueFilter; filters?: JiraIssueListFilters } | { jql: string }
 
 function clampLimit(limit: number | undefined, fallback = 30): number {
@@ -41,17 +47,36 @@ async function readIssuesForClient(
   signal: AbortSignal
 ): Promise<JiraIssue[]> {
   if ('jql' in query) {
-    return searchIssuesForClient(entry, query.jql, limit, agileFields, signal)
+    try {
+      return await searchIssuesForClient(entry, query.jql, limit, agileFields, signal)
+    } catch (error) {
+      if (entry.site.authType === 'server' || !isUnboundedJqlError(error)) {
+        throw error
+      }
+      // Any retry failure keeps Jira's 400 so the renderer's text fallback still runs.
+      const issues = await searchBoundedToVisibleProjects(
+        entry,
+        query.jql,
+        limit,
+        agileFields,
+        signal
+      ).catch(() => null)
+      if (!issues) {
+        throw error
+      }
+      return issues
+    }
+  }
+  if (entry.site.authType === 'server') {
+    return searchJiraPreset(query.filter, query.filters, (jql) =>
+      searchIssuesForClient(entry, jql, limit, agileFields, signal)
+    )
   }
   const jql = buildJiraPresetJql(query.filter, query.filters)
-  if (query.filter !== 'all' || entry.site.authType === 'server') {
+  if (query.filter !== 'all') {
     return searchIssuesForClient(entry, jql, limit, agileFields, signal)
   }
-  const projects = await readProjectsForClient(entry, signal, true)
-  const projectIds = [...new Set(projects.map((project) => project.id || project.key))]
-  if (projectIds.some((id) => !id)) {
-    throw new Error('Jira returned a project without an ID or key.')
-  }
+  const projectIds = uniqueProjectIds(await readProjectsForClient(entry, signal, true))
   const issues: JiraIssue[] = []
   // Cloud requires a search restriction; project bounds preserve older open work.
   for (let start = 0; start < projectIds.length; start += PROJECTS_PER_QUERY) {
@@ -68,6 +93,45 @@ async function readIssuesForClient(
     )
   }
   return sortAndLimitIssues(issues, limit)
+}
+
+function isUnboundedJqlError(error: unknown): boolean {
+  return (
+    error instanceof JiraApiError && error.status === 400 && /unbounded jql/i.test(error.message)
+  )
+}
+
+function uniqueProjectIds(projects: JiraProject[]): string[] {
+  const projectIds = [...new Set(projects.map((project) => project.id || project.key))]
+  if (projectIds.some((id) => !id)) {
+    throw new Error('Jira returned a project without an ID or key.')
+  }
+  return projectIds
+}
+
+// Merging per-chunk results would replace the caller's ORDER BY with recency, so retry only when
+// one project page lists every visible project and they fit one bounded query.
+async function searchBoundedToVisibleProjects(
+  entry: JiraClientForSite,
+  jql: string,
+  limit: number,
+  agileFields: JiraAgileFieldIds,
+  signal: AbortSignal
+): Promise<JiraIssue[] | null> {
+  if ((sitesSkippingBoundedRetry.get(entry.site.id) ?? 0) > Date.now()) {
+    return null
+  }
+  const page = await readFirstCloudProjectPage(entry, PROJECTS_PER_QUERY, signal)
+  if (!page.complete) {
+    sitesSkippingBoundedRetry.set(entry.site.id, Date.now() + BOUNDED_RETRY_SKIP_MS)
+    return null
+  }
+  const projectIds = uniqueProjectIds(page.projects)
+  if (projectIds.length === 0) {
+    return null
+  }
+  const boundedJql = restrictJiraQueryToProjectIds(jql, projectIds)
+  return searchIssuesForClient(entry, boundedJql, limit, agileFields, signal, true)
 }
 
 async function searchIssuesForClient(
@@ -150,7 +214,7 @@ async function runIssueSearch(
   signal?: AbortSignal,
   strict = false
 ): Promise<JiraIssue[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   if (entries.length === 0 || ('jql' in query && !query.jql)) {
     return []
@@ -174,7 +238,7 @@ async function runIssueSearch(
           }
           const authFailure = isAuthError(error)
           if (authFailure) {
-            clearToken(entry.site.id)
+            await clearToken(entry)
           }
           if (surfaceSiteFailure) {
             throw toIssueSearchFailureError(error)

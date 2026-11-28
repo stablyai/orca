@@ -9,8 +9,11 @@ import {
 } from '../../endpoint/identity/daemon-endpoint-errors'
 import { DaemonPtyCheckpointPersistence } from '../checkpointing/daemon-pty-checkpoint-persistence'
 import type { DaemonRespawnReason } from './daemon-pty-adapter-options'
-import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
-import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
+import {
+  countLiveDaemonSessions,
+  type ListSessionsResult
+} from '../../protocol/daemon-rpc-contract'
+import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import type {
   TerminalLimitStatus,
   TerminalLimitUpdate
@@ -290,7 +293,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     try {
       await this.client.ensureConnected()
       const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-      return result.sessions.filter((session) => session.isAlive).length
+      return countLiveDaemonSessions(result)
     } catch {
       return null
     }

@@ -1,4 +1,10 @@
-import { parseGitRepositoryIdentity, splitQualifiedPluginKey } from './plugin-marketplace'
+import {
+  isOfficialOrganizationGitSource,
+  isSameGitRepository,
+  parseGitRepositoryIdentity,
+  splitQualifiedPluginKey
+} from './plugin-marketplace'
+import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from './plugin-install-link'
 import { gitUrlPluginPublisher } from '../installation/plugin-publisher-derivation'
 
 const LINKABLE_GIT_HOSTS = new Set(['github.com', 'gitlab.com'])
@@ -21,7 +27,7 @@ export function pluginRepositoryPageUrl(gitUrl: string): string | null {
 
 const COMMIT_RE = /^[0-9a-f]{40}$/
 
-/** The plugin's folder at the exact commit the catalog pinned, where the host renders its
+/** The plugin's folder at an exact source commit, where the host renders its
  *  README; built like `pluginRepositoryPageUrl`, so a listing cannot point it elsewhere. */
 export function pluginReadmePageUrl(source: {
   gitUrl: string
@@ -40,9 +46,8 @@ export function pluginReadmePageUrl(source: {
   return `${[repository, tree, source.commit, ...pathSegments].join('/')}#readme`
 }
 
-/** The repository a listing's links open: the release's recorded author repository when it
- *  belongs to the listed publisher, else the install source (such as Stably's mirror, which a
- *  catalog marks `sourceUnavailable` once the author's repository is gone). */
+/** The catalog's repository claim when its namespace matches; otherwise the fetch source.
+ *  Neither the claim nor a matching namespace establishes who authored the plugin. */
 export function pluginListingRepositoryUrl(listing: {
   pluginKey: string
   source: { url: string }
@@ -58,4 +63,38 @@ export function pluginListingRepositoryUrl(listing: {
     return authored
   }
   return listing.source.url
+}
+
+/** Orca's own reading of a Git URL: `host/owner/repo` plus the owner, never the manifest's claim. */
+export function pluginRepositoryOrigin(
+  url: string,
+  path?: string
+): { owner: string; repository: string } | null {
+  const identity = parseGitRepositoryIdentity(url)
+  if (!identity) {
+    return null
+  }
+  const repository = `${identity.host}/${identity.path}`
+  return { owner: identity.owner, repository: path ? `${repository} (${path})` : repository }
+}
+
+/** Who an install confirmation asks the reader to trust: the repository owner Orca parsed, else
+ *  the publisher. Why the community catalog's Orca-hosted sources name the publisher: Orca mirrors
+ *  community plugins there, so the owner would read stablyai; any other catalog cannot use an
+ *  Orca repository to put a publisher of its choosing in the prompt. */
+export function pluginInstallTrustee(source: {
+  url: string
+  publisher: string | null
+  catalogUrl: string | null
+}): string | null {
+  const { url, publisher, catalogUrl } = source
+  if (
+    publisher &&
+    catalogUrl &&
+    isSameGitRepository(catalogUrl, COMMUNITY_MARKETPLACE_GIT_SOURCE.url) &&
+    isOfficialOrganizationGitSource(url)
+  ) {
+    return publisher
+  }
+  return pluginRepositoryOrigin(url)?.owner ?? publisher
 }

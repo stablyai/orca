@@ -87,6 +87,19 @@ var onPersistedChange = null;
 var onMemoryChange = null;
 var onStorageAtom = null;
 var writableAtoms = /* @__PURE__ */ new Set();
+var writableAtomCleanup = new FinalizationRegistry((ref) => {
+  writableAtoms.delete(ref);
+});
+function* liveWritableAtomStates() {
+  for (const ref of writableAtoms) {
+    const target = ref.deref();
+    if (!target) {
+      writableAtoms.delete(ref);
+      continue;
+    }
+    yield target[ATOM];
+  }
+}
 function create(initial, fields = {}) {
   const created = Object.freeze({
     [ATOM]: {
@@ -100,14 +113,16 @@ function create(initial, fields = {}) {
     }
   });
   if (!created[ATOM].readonly) {
-    writableAtoms.add(created[ATOM]);
+    const ref = new WeakRef(created);
+    writableAtoms.add(ref);
+    writableAtomCleanup.register(created, ref);
   }
   return created;
 }
 function resetAtoms() {
   snapshot.plugin = /* @__PURE__ */ new Map();
   snapshot.workspace = /* @__PURE__ */ new Map();
-  for (const inner of writableAtoms) {
+  for (const inner of liveWritableAtomStates()) {
     inner.value = inner.initial;
   }
 }
@@ -259,7 +274,7 @@ function applyStorageValue(key, value) {
 }
 function captureAtomValues() {
   const values = /* @__PURE__ */ new Map();
-  for (const inner of writableAtoms) {
+  for (const inner of liveWritableAtomStates()) {
     values.set(inner, inner.value);
   }
   return () => {
@@ -815,7 +830,8 @@ function readHostMessage(payload) {
     plugin: "plugin" in payload ? payload.plugin : void 0,
     workspace: "workspace" in payload ? payload.workspace : void 0,
     memory: "memory" in payload ? payload.memory : void 0,
-    retain: "retain" in payload ? payload.retain : void 0
+    retain: "retain" in payload ? payload.retain : void 0,
+    hydration: "hydration" in payload ? payload.hydration : void 0
   };
 }
 function readStoredValues(raw) {
@@ -1036,6 +1052,25 @@ function createDeclarativePersistence(options) {
   };
 }
 
+// src/shared/plugins/declarative/runtime/declarative-hydration-persistence.ts
+function createHydratedPersistence(options) {
+  let hydration;
+  const persistence = createDeclarativePersistence({
+    bridge: options.bridge,
+    report: options.report,
+    post: (entries) => options.post({ entries, ...hydration === void 0 ? {} : { hydration } })
+  });
+  function hydrate(payload) {
+    persistence.flush();
+    const next = readHostMessage(payload).hydration;
+    if (typeof next === "number") {
+      hydration = next;
+    }
+    options.hydratePanel(payload);
+  }
+  return { persistence, hydrate };
+}
+
 // src/shared/plugins/declarative/runtime/declarative-renderer.ts
 function createOrcaDeclarativeRuntime(options) {
   const { post } = options;
@@ -1170,16 +1205,17 @@ function createOrcaDeclarativeRuntime(options) {
       invalidate(retryAfterMs);
     }
   }
-  const persistence = createDeclarativePersistence({
+  const { persistence, hydrate } = createHydratedPersistence({
     bridge,
     report,
-    post: (entries) => post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document: document2, entries })
+    post: (fields) => post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document: document2, ...fields }),
+    hydratePanel: panel.hydrate
   });
   const flushPersist = persistence.flush;
   const bridgeSubscriptions = bridge?.on ? [
     bridge.on(PLUGIN_DECLARATIVE_MESSAGES.event, dispatchEvent),
     bridge.on(PLUGIN_DECLARATIVE_MESSAGES.ack, acknowledge),
-    bridge.on(PLUGIN_DECLARATIVE_MESSAGES.hydrate, panel.hydrate),
+    bridge.on(PLUGIN_DECLARATIVE_MESSAGES.hydrate, hydrate),
     bridge.on(PLUGIN_DECLARATIVE_MESSAGES.visibility, panel.setVisibility),
     ...actSnapshotSubscriptions(bridge.on.bind(bridge), document2),
     bridge.on("theme", (payload) => {
@@ -1245,7 +1281,7 @@ function createOrcaDeclarativeRuntime(options) {
     mounted: () => component !== null,
     dispatchEvent,
     acknowledge,
-    hydrate: panel.hydrate,
+    hydrate,
     rerender: () => render(),
     flush() {
       if (scheduled) {

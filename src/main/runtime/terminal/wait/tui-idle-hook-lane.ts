@@ -1,11 +1,13 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { hookAuthority } from '../../agent-state-rules/agent-state-rules-engine'
 import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import { terminalHostConnectionMatches } from '../../orchestration/worker-provider-session'
-
-type HookTurnState = 'done' | 'working' | 'permission'
+import { terminalHostConnectionMatches } from '../../orchestration/workers/transcripts/worker-provider-session'
+import {
+  hookLeadTurnState,
+  type HookTurnState
+} from '../../../../shared/agent-status/lifecycle/hook-lead-turn-state'
 
 /** The main agent's hook turn plus permission-arbiter blocked verdict, with a generic prompt for hook waits lacking recognized text. */
 export type TuiIdleHookTurn = {
@@ -36,22 +38,6 @@ export function retainedTailIncludes(
     }
   }
   return false
-}
-
-/** Read the lead's own turn: child completion cannot end it, but child permission waits still block. An ended lead can accept input while children run. */
-export function hookLeadTurnState(
-  row: Pick<AgentStatusIpcPayload, 'state' | 'mainAgent' | 'sessionBoundary'>
-): HookTurnState | null {
-  // Why no answer: a session start is not a turn end, and some agents post it before their
-  // composer accepts input, so startup readiness stays with the screen and text rules.
-  if (row.state === 'done' && row.sessionBoundary === true) {
-    return null
-  }
-  if (row.state === 'waiting' || row.state === 'blocked') {
-    return 'permission'
-  }
-  const lead = row.mainAgent?.state ?? row.state
-  return lead === 'done' || lead === 'working' ? lead : 'permission'
 }
 
 export type TuiIdleHookTurnRead = {

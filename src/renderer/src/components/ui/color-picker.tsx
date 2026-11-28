@@ -1,13 +1,16 @@
 import * as React from 'react'
 import { HexColorPicker } from 'react-colorful'
 
-import { normalizeRepoBadgeColor, resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
-import { cn } from '@/lib/utils'
+import {
+  normalizeRepoBadgeColor,
+  resolveRepoBadgeColor
+} from '../../../../shared/repository/appearance/repo-badge-color'
+import { cn } from '@/lib/class-names'
 import { Button } from './button'
 import { Input } from './input'
 import { Label } from './label'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ColorPickerProps = {
   value: string
@@ -18,6 +21,8 @@ type ColorPickerProps = {
   selected?: boolean
   triggerLabel?: string
   showHexInTrigger?: boolean
+  /** Replaces the default trigger button, such as a swatch-sized '+' in a row of swatches. */
+  trigger?: React.ReactElement
 }
 
 const FULL_HEX_COLOR_PATTERN = /^#?[0-9a-fA-F]{6}$/
@@ -30,8 +35,10 @@ export function ColorPicker({
   defaultOpen,
   selected,
   triggerLabel,
-  showHexInTrigger
+  showHexInTrigger,
+  trigger
 }: ColorPickerProps): React.JSX.Element {
+  const t = useTranslate()
   const inputId = React.useId()
   const currentColor = resolveRepoBadgeColor(value)
   const [draftState, setDraftState] = React.useState(() => ({
@@ -63,47 +70,55 @@ export function ColorPicker({
   }
 
   return (
-    <Popover defaultOpen={defaultOpen}>
+    <Popover
+      defaultOpen={defaultOpen}
+      onOpenChange={(open) => {
+        // Reopening starts from the current color, not a draft left from last time.
+        if (!open) {
+          setDraftState({ syncedColor: currentColor, draft: currentColor, isEditing: false })
+        }
+      }}
+    >
       <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={cn(
-            'h-8 gap-2 px-2.5',
-            selected ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : null,
-            className
-          )}
-          aria-label={label}
-          aria-pressed={selected}
-        >
-          <span
-            aria-hidden="true"
-            className="size-4 rounded-[4px] border border-border/70"
-            style={{ backgroundColor: currentColor }}
-          />
-          {triggerLabel ? <span className="text-xs">{triggerLabel}</span> : null}
-          {shouldShowTriggerHex ? (
-            <span className="font-mono text-xs uppercase">{currentColor}</span>
-          ) : null}
-        </Button>
+        {trigger ?? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(
+              'h-8 gap-2 px-2.5',
+              selected ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : null,
+              className
+            )}
+            aria-label={label}
+            aria-pressed={selected}
+          >
+            <span
+              aria-hidden="true"
+              className="size-4 rounded-[4px] border border-border/70"
+              style={{ backgroundColor: currentColor }}
+            />
+            {triggerLabel ? <span className="text-xs">{triggerLabel}</span> : null}
+            {shouldShowTriggerHex ? (
+              <span className="font-mono text-xs uppercase">{currentColor}</span>
+            ) : null}
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-3">
         <div className="space-y-3">
           <HexColorPicker
             color={swatchColor}
             onChange={updateColor}
-            aria-label={translate(
-              'auto.components.ui.color.picker.1cec618bcc',
-              '{{value0}} picker',
-              { value0: label }
-            )}
+            aria-label={t('auto.components.ui.color.picker.1cec618bcc', '{{value0}} picker', {
+              value0: label
+            })}
             className="[&_.react-colorful__hue]:rounded-b-md [&_.react-colorful__interactive:focus_.react-colorful__pointer]:ring-[3px] [&_.react-colorful__interactive:focus_.react-colorful__pointer]:ring-ring/50 [&_.react-colorful__pointer]:border-popover"
             style={{ width: '100%', height: 180 }}
           />
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor={inputId}>
-              {translate('auto.components.ui.color.picker.faa855a582', 'Hex')}
+              {t('auto.components.ui.color.picker.faa855a582', 'Hex')}
             </Label>
             <span className="font-mono text-xs uppercase text-muted-foreground">{swatchColor}</span>
           </div>
@@ -132,7 +147,7 @@ export function ColorPicker({
           />
           {hasInvalidDraft ? (
             <p className="text-xs text-destructive">
-              {translate('auto.components.ui.color.picker.ebcf6ba29e', 'Invalid hex color.')}
+              {t('auto.components.ui.color.picker.ebcf6ba29e', 'Invalid hex color.')}
             </p>
           ) : null}
         </div>

@@ -1,0 +1,2 @@
+# Grandfathered code React Compiler would run differently (<file>#<function>:<hazard>).
+# Generated; never hand-edit. Lower after a fix: pnpm check:react-compiler-compat-ratchet --prune

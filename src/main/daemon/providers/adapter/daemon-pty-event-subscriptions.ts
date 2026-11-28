@@ -4,9 +4,13 @@ import { emitPtyListeners } from './daemon-pty-listener-emission'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { DaemonPtySessionInventory } from './daemon-pty-session-inventory'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
-import type { ListSessionsResult, ShutdownIfIdleResult } from '../../protocol/daemon-rpc-contract'
+import {
+  countLiveDaemonSessions,
+  type ListSessionsResult,
+  type ShutdownIfIdleResult
+} from '../../protocol/daemon-rpc-contract'
 import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
-import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
+import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import { readDaemonWslQuitCwds } from '../wsl/daemon-wsl-sleep-cwd'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
@@ -133,7 +137,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       let liveSessions: number | null = null
       try {
         const inventory = await this.client.request<ListSessionsResult>('listSessions', undefined)
-        liveSessions = inventory.sessions.filter((session) => session.isAlive).length
+        liveSessions = countLiveDaemonSessions(inventory)
       } catch {
         liveSessions = null
       }

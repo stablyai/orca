@@ -1,3 +1,4 @@
+import type { DivergedUpstreamProbe } from './git-upstream-status'
 import { isNoUpstreamError } from './git-remote-error'
 import type { GitUpstreamStatus } from '../status/git-status-types'
 import {
@@ -6,7 +7,7 @@ import {
 } from './git-configured-branch-target'
 import { splitRemoteBranchName } from './git-remote-branch-name'
 import { parseGitRevListAheadBehindCounts } from '../refs/git-rev-list-output'
-import { iterateProcessOutputLines } from '../../process-output-field-scanner'
+import { iterateProcessOutputLines } from '../../process-observation/process-output-field-scanner'
 import { createGitConfigSnapshotRunner } from '../commands/git-config-snapshot-runner'
 import { getGitCurrentBranchName } from '../refs/git-current-branch'
 
@@ -25,10 +26,6 @@ export type EffectiveGitUpstream =
       branchName: string
       isConfiguredUpstream: false
     }
-
-function hasMultipleSlashSegments(refName: string): boolean {
-  return refName.includes('/') && refName.indexOf('/') !== refName.lastIndexOf('/')
-}
 
 export async function splitRemoteBranchNameByKnownRemote(
   runGit: GitCommandRunner,
@@ -64,24 +61,28 @@ async function getConfiguredUpstream(
   runGit: GitCommandRunner
 ): Promise<EffectiveGitUpstream | null> {
   try {
-    const { stdout } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD@{u}'])
-    const upstreamName = stdout.trim()
+    // Why: --abbrev-ref prints remotes/origin/main when a local branch or tag is named origin/main,
+    // so split the full ref and keep Git's unambiguous short name for revision arguments.
+    const { stdout } = await runGit([
+      'rev-parse',
+      '--symbolic-full-name',
+      'HEAD@{u}',
+      '--abbrev-ref',
+      'HEAD@{u}'
+    ])
+    const [fullName = '', upstreamName = ''] = stdout.split(/\r?\n/).map((line) => line.trim())
     if (!upstreamName) {
       return null
     }
-    const parsed = splitRemoteBranchName(upstreamName)
-    if (!parsed) {
-      return {
-        upstreamName,
-        remoteName: null,
-        branchName: upstreamName,
-        isConfiguredUpstream: true
-      }
-    }
+    const localBranchName = stripRefPrefix(fullName, 'refs/heads/')
+    const parsed =
+      localBranchName === null
+        ? splitRemoteBranchName(stripRefPrefix(fullName, 'refs/remotes/') ?? upstreamName)
+        : null
     return {
       upstreamName,
-      remoteName: parsed.remoteName,
-      branchName: parsed.branchName,
+      remoteName: parsed?.remoteName ?? null,
+      branchName: parsed?.branchName ?? localBranchName ?? upstreamName,
       isConfiguredUpstream: true
     }
   } catch (error) {
@@ -90,6 +91,10 @@ async function getConfiguredUpstream(
     }
     throw error
   }
+}
+
+function stripRefPrefix(refName: string, prefix: string): string | null {
+  return refName.startsWith(prefix) ? refName.slice(prefix.length) : null
 }
 
 async function remoteTrackingRefExists(
@@ -116,9 +121,12 @@ async function resolveEffectiveGitUpstreamForBranch(
       currentBranchName &&
       configured.remoteName === 'origin' &&
       configured.branchName !== currentBranchName &&
-      hasMultipleSlashSegments(configured.upstreamName)
+      configured.branchName.includes('/')
     ) {
-      const parsed = await splitRemoteBranchNameByKnownRemote(runGit, configured.upstreamName)
+      const parsed = await splitRemoteBranchNameByKnownRemote(
+        runGit,
+        `${configured.remoteName}/${configured.branchName}`
+      )
       if (parsed) {
         configured = { ...configured, ...parsed }
       }
@@ -177,7 +185,7 @@ export async function resolveEffectiveGitUpstream(
 
 export async function getEffectiveGitUpstreamStatus(
   execGit: GitCommandRunner,
-  getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
+  probeDivergedUpstream?: (upstreamName: string) => Promise<DivergedUpstreamProbe>
 ): Promise<GitUpstreamStatus> {
   const runGit = createGitConfigSnapshotRunner(execGit)
   const currentBranchName = await getGitCurrentBranchName(runGit)
@@ -194,18 +202,14 @@ export async function getEffectiveGitUpstreamStatus(
     }
   }
 
-  return getGitUpstreamStatusForUpstreamName(
-    runGit,
-    upstream.upstreamName,
-    getBehindCommitsArePatchEquivalent
-  )
+  return getGitUpstreamStatusForUpstreamName(runGit, upstream.upstreamName, probeDivergedUpstream)
 }
 
 /** Refresh ahead/behind with one rev-list when branch/config-derived upstream resolution is already cached. */
 export async function getGitUpstreamStatusForUpstreamName(
   runGit: GitCommandRunner,
   upstreamName: string,
-  getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
+  probeDivergedUpstream?: (upstreamName: string) => Promise<DivergedUpstreamProbe>
 ): Promise<GitUpstreamStatus> {
   const { stdout } = await runGit(['rev-list', '--left-right', '--count', `HEAD...${upstreamName}`])
   const counts = parseGitRevListAheadBehindCounts(stdout)
@@ -216,9 +220,9 @@ export async function getGitUpstreamStatusForUpstreamName(
     throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(stdout)}`)
   }
 
-  const behindCommitsArePatchEquivalent =
-    counts.ahead > 0 && counts.behind > 0 && getBehindCommitsArePatchEquivalent
-      ? await getBehindCommitsArePatchEquivalent(upstreamName)
+  const diverged =
+    counts.ahead > 0 && counts.behind > 0 && probeDivergedUpstream
+      ? await probeDivergedUpstream(upstreamName)
       : undefined
 
   return {
@@ -226,6 +230,11 @@ export async function getGitUpstreamStatusForUpstreamName(
     upstreamName,
     ahead: counts.ahead,
     behind: counts.behind,
-    ...(behindCommitsArePatchEquivalent !== undefined ? { behindCommitsArePatchEquivalent } : {})
+    ...(diverged
+      ? {
+          behindCommitsArePatchEquivalent: diverged.behindCommitsArePatchEquivalent,
+          ...(diverged.upstreamOid ? { upstreamOid: diverged.upstreamOid } : {})
+        }
+      : {})
   }
 }

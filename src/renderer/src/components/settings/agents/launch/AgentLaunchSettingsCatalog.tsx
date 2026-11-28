@@ -1,19 +1,25 @@
-import { AgentLaunchChoiceEditor } from '../../../agent/launch-settings/AgentLaunchChoiceEditor'
-import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
+
+import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
+import {
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
-import { toast } from 'sonner'
+import { recomputeOn } from '@/lib/recompute-on'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
 } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   agentPermissionArgs,
-  agentPermissionEnv,
+  agentPermissionHasTerminalChoice,
   agentPermissionChoices,
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
@@ -21,43 +27,54 @@ import {
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
-import {
-  agentPermissionChoiceLabel,
-  AllAgentsPermissionSetting,
-  type AgentPermissionChoiceRow
-} from '../../../agent/launch-settings/AgentPermissionChoiceControls'
-import type { AgentPermissionsSettingProps } from '../permissions/AgentPermissionsSetting'
+import { toastLiftedAgentPermission } from './agent-permission-lift-toast'
+import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSetting'
+import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
+import type { AgentPermissionsSettingProps } from '@/components/settings/agents/permissions/AgentPermissionsSetting'
 import {
   buildAgentRowPermissions,
   sharedAgentPermissionChoice as sharedChoice
-} from '../permissions/agent-row-permission-model'
+} from '@/components/settings/agents/permissions/agent-row-permission-model'
 import {
   getTuiAgentDefaultArgs,
   getTuiAgentDefaultEnv,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import {
+  isTuiAgentEnabled,
+  pickTuiAgent
+} from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   agentChoiceOpensAsChat,
   readChatProgram,
   resolveChatProgramContext
-} from '@/lib/host-chat-program'
-import { useAppStore } from '@/store/index'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
-import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
-import { AgentDefaultSetting } from './AgentDefaultSetting'
-import { AgentDetectionCatalog } from './AgentDetectionCatalog'
-import type { AgentCatalogRowProps } from './AgentCatalogRow'
-import { HostAgentEnvironmentEditor } from './HostAgentEnvironmentEditor'
-import { buildCodexSessionSourceHomeControl } from '../../../agent/launch-settings/codex-session-source-home-control'
-import { buildAgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
-import { AgentChatRuntimeArea } from '../../../agent/launch-settings/AgentChatChoiceControls'
-import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
-import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+} from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { agentLaunchRouteStoreFor } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
+import {
+  useDetectedAgents,
+  type AgentDetectionTarget
+} from '@/lib/agent-session/launch/inventory/useDetectedAgents'
+import { AgentLaunchDefaultsGroup } from '@/components/settings/agents/launch/AgentLaunchDefaultsGroup'
+import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
+import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'
+import { HostAgentEnvironmentEditor } from '@/components/settings/agents/launch/HostAgentEnvironmentEditor'
+import { buildCodexSessionSourceHomeControl } from '@/components/agent/launch-settings/codex-session-source-home-control'
+import { buildAgentOpensAs } from '@/lib/agent-session/launch/native-chat-provider-choice'
+import {
+  AgentChatRuntimeArea,
+  chatUnavailableOnThisDesktop
+} from '@/components/agent/launch-settings/AgentChatChoiceControls'
+import {
+  chatProviderAgents,
+  managedRuntimeChatAgents,
+  useHostStructuredAgentsVersion
+} from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
+import { useTranslate } from '@/i18n/use-translate'
+import { chatProgramInstalled } from '../../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -90,6 +107,7 @@ export function AgentLaunchSettingsCatalog({
     updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   }
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     detectedIds: detected,
     detectionFailed,
@@ -97,8 +115,8 @@ export function AgentLaunchSettingsCatalog({
     refresh
   } = useDetectedAgents(detectionTarget, 'all')
   const detectedIds = useMemo(() => (detected ? new Set(detected) : null), [detected])
-  useHostStructuredAgentsVersion()
-  const installedHere = useAppStore(readNativeDetectedAgents)
+  const hostAgentsVersion = useHostStructuredAgentsVersion()
+  const installedHere = useAppStateValue(readNativeDetectedAgents)
   const workspace =
     detectionTarget.kind === 'runtime'
       ? { kind: 'git-worktree' as const, runtimeEnvironmentId: detectionTarget.environmentId }
@@ -106,37 +124,36 @@ export function AgentLaunchSettingsCatalog({
   useChatProgramFacts(workspace, detectionTarget.kind !== 'ssh')
   const chosen = settings.defaultTuiAgent
   // The saved default reads as available where it opens as a chat without its CLI.
-  const defaultOpensAsChat = useAppStore((state) =>
-    chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
-      ? agentChoiceOpensAsChat(state, chosen, workspace, detected)
-      : false
-  )
+  const defaultOpensAsChat = useAppStateValueWithHostStatuses((appState, statuses) => {
+    const state = agentLaunchRouteStoreFor(appState, statuses)
+    const opensAsChat = chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
+    return opensAsChat ? agentChoiceOpensAsChat(state, chosen, workspace, detected) : false
+  })
   // The chat-or-CLI choice is this computer's, so a paired host's page doesn't offer it.
-  const chatAgents = local ? chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined) : []
-  const managedChatAgents = new Set(
-    readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
-      ?.filter((row) => row.managedRuntime)
-      .map((row) => row.agent)
+  const chatAgents = local
+    ? recomputeOn([hostAgentsVersion], () => chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined))
+    : []
+  const managedChatAgents = recomputeOn([hostAgentsVersion], () =>
+    managedRuntimeChatAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
-  const chatOnlyKey = useAppStore((state) => {
+  const chatOnlyKey = useAppStateValueWithHostStatuses((appState, statuses) => {
     if (detectionTarget.kind === 'ssh') {
       return ''
     }
+    const state = agentLaunchRouteStoreFor(appState, statuses)
     const context = resolveChatProgramContext(state, workspace)
     const selectedDetected = detectionTarget.kind === 'runtime' ? detected : installedHere
-    return chatProviderAgents(context.executionHostId, state.runtimeStatusByEnvironmentId)
+    return chatProviderAgents(context.executionHostId, statuses)
       .filter(
         (agent) =>
           !selectedDetected?.includes(agent) &&
-          readChatProgram(state, agent, context, selectedDetected) === 'available'
+          chatProgramInstalled(readChatProgram(statuses, agent, context, selectedDetected))
       )
       .join(' ')
   })
   const chatOnly = new Set(chatOnlyKey.split(' '))
   const catalog = getAgentCatalog()
-  const detectedAgents =
-    detectedIds === null ? [] : catalog.filter((agent) => detectedIds.has(agent.id))
   const installedAgents = catalog.filter(
     (agent) => detectedIds?.has(agent.id) || chatOnly.has(agent.id)
   )
@@ -146,6 +163,13 @@ export function AgentLaunchSettingsCatalog({
       !chatOnly.has(agent.id) &&
       (detectedIds !== null || chatAgents.includes(agent.id))
   )
+  // The agent new sessions get: the saved default when usable, else Auto's pick.
+  const effectiveDefault =
+    detectedIds === null
+      ? null
+      : pickTuiAgent(chosen, detectedIds, settings.disabledTuiAgents, (agent) =>
+          Boolean(defaultOpensAsChat && agent === chosen)
+        )
   const save = (mutation: AgentLaunchSettingsMutation): void => {
     const scopedMutation =
       mutation.type === 'permissions' && nativeChatPermissionsSupported
@@ -168,11 +192,9 @@ export function AgentLaunchSettingsCatalog({
       choices,
       chatOwnSupported,
       ...resolved,
-      terminalChoice:
-        agentPermissionArgs(agent, resolved.choice) ||
-        Object.keys(agentPermissionEnv(agent, resolved.choice)).length
-          ? resolved.choice
-          : 'own',
+      terminalChoice: agentPermissionHasTerminalChoice(agent, resolved.choice)
+        ? resolved.choice
+        : 'own',
       chatChoice:
         chatSupport && resolved.choice !== 'own'
           ? savedChatPermissionMode(chatSupport, resolved.choice)
@@ -189,21 +211,13 @@ export function AgentLaunchSettingsCatalog({
     const lifted = liftAgentPermissionArgs(agent, value)
     await mutate({ type: 'user-arguments', agent, value })
     if (lifted.choice) {
-      const chatSupported = nativeChatPermissionsSupported && agentChatPermissionModes(agent)
-      const values = { agent: label, mode: agentPermissionChoiceLabel(lifted.choice, label) }
-      toast.success(
-        chatSupported
-          ? translate(
-              'settings.agents.permissionFromArgs',
-              '{{agent}} set to {{mode}} in terminals and new chats.',
-              values
-            )
-          : translate(
-              'settings.agents.permissionFromArgsTerminals',
-              '{{agent}} set to {{mode}} in terminals.',
-              values
-            )
-      )
+      toastLiftedAgentPermission({
+        agent,
+        label,
+        choice: lifted.choice,
+        chatPermissionsSupported: nativeChatPermissionsSupported,
+        t
+      })
     }
   }
   const permissions = buildAgentRowPermissions({
@@ -217,6 +231,9 @@ export function AgentLaunchSettingsCatalog({
     agent: (typeof catalog)[number],
     isDetected: boolean
   ): AgentCatalogRowProps => ({
+    cliUpdate: isDetected ? (
+      <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
+    ) : undefined,
     agentId: agent.id,
     label: agent.label,
     homepageUrl: agent.homepageUrl,
@@ -225,8 +242,9 @@ export function AgentLaunchSettingsCatalog({
     defaultEnv: typed ? {} : getTuiAgentDefaultEnv(agent.id),
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, settings.disabledTuiAgents),
-    isDefault: isDetected && settings.defaultTuiAgent === agent.id,
-    cmdOverride: isDetected ? settings.agentCmdOverrides[agent.id] : undefined,
+    defaultMark: effectiveDefault !== agent.id ? null : chosen === agent.id ? 'chosen' : 'auto',
+    isSavedDefault: chosen === agent.id,
+    cmdOverride: settings.agentCmdOverrides[agent.id],
     argsOverride:
       choicesSupported && settings.agentChoices
         ? (settings.agentChoices.userArgs[agent.id] ?? '')
@@ -247,6 +265,13 @@ export function AgentLaunchSettingsCatalog({
             <AgentLaunchChoiceEditor
               permissionControlRef={permissionControlRef}
               showArguments={isDetected}
+              catalogTarget={
+                detectionTarget.kind === 'ssh'
+                  ? null
+                  : detectionTarget.kind === 'runtime'
+                    ? { kind: 'environment', environmentId: detectionTarget.environmentId }
+                    : { kind: 'local' }
+              }
               agent={agent.id}
               label={agent.label}
               choices={settings.agentChoices?.defaults[agent.id]}
@@ -258,13 +283,16 @@ export function AgentLaunchSettingsCatalog({
             />
           )
         : undefined,
-    onSetDefault: () =>
-      save({
-        type: 'default',
-        agent: settings.defaultTuiAgent === agent.id ? 'blank' : agent.id
-      }),
+    onSetDefault: (isDefault) => save({ type: 'default', agent: isDefault ? agent.id : null }),
     onSetEnabled: (enabled) => save({ type: 'availability', agent: agent.id, enabled }),
-    onSaveOverride: (value) => mutate({ type: 'command', agent: agent.id, value }),
+    onSaveOverride: async (value) => {
+      const changed = value !== (settings.agentCmdOverrides[agent.id] ?? '')
+      await mutate({ type: 'command', agent: agent.id, value })
+      // Detection probes the override; local inventories reset on the settings change, a host's need a refresh.
+      if (changed && !local) {
+        void refresh()
+      }
+    },
     onSaveArgs: (value) =>
       typed
         ? saveUserArgs(agent.id, agent.label, value)
@@ -300,12 +328,14 @@ export function AgentLaunchSettingsCatalog({
             cliDetected: installedHere === null ? null : installedHere.includes(agent.id),
             chatProgramHere: chatOnly.has(agent.id),
             settings: local.settings,
-            updateSettings: local.updateSettings
+            updateSettings: local.updateSettings,
+            includeDisabled: true
           })
         : undefined,
+      reserveOpensAsSlot: Boolean(local),
       chatRuntime:
         chatAgents.includes(agent.id) &&
-        managedChatAgents.has(agent.id) &&
+        (managedChatAgents.has(agent.id) || chatUnavailableOnThisDesktop(agent.id)) &&
         isTuiAgentEnabled(agent.id, settings.disabledTuiAgents) ? (
           <AgentChatRuntimeArea agent={agent.id} label={agent.label} />
         ) : undefined
@@ -313,46 +343,41 @@ export function AgentLaunchSettingsCatalog({
   }
   return (
     <>
-      <AgentDefaultSetting
-        defaultAgent={settings.defaultTuiAgent}
-        detectedIds={detectedIds}
-        enabledDetectedAgents={detectedAgents.filter((agent) =>
-          isTuiAgentEnabled(agent.id, settings.disabledTuiAgents)
-        )}
-        catalog={catalog}
-        description={translate(
+      <AgentLaunchDefaultsGroup
+        description={t(
           'settings.agents.hostDefaults',
           'Defaults for new agents on the selected host.'
         )}
-        onSetDefault={(agent) => save({ type: 'default', agent })}
-        defaultOpensAsChat={defaultOpensAsChat}
+        permissions={
+          permissionSettings ? (
+            <AllAgentsPermissionSetting
+              chatOwnSupported={chatOwnSupported}
+              choice={permissionSettings.agentPermissionDefault ?? 'own'}
+              withoutAutoChoice={sharedChoice(
+                PERMISSION_CHOICE_AGENTS.filter(
+                  (agent) => !agentPermissionChoices(agent).includes('auto')
+                ).map((agent) => resolveAgentPermission(agent, permissionSettings).choice)
+              )}
+              onChange={(choice) => save({ type: 'permission', choice })}
+              onChangeWithoutAuto={(choice) =>
+                save({ type: 'permission', choice, withoutAuto: true })
+              }
+            />
+          ) : (
+            renderPermissions({
+              mode: permissions.globalMode,
+              nonAutoMode: settings.nonAutoPermissionMode,
+              majorityMode: permissions.majorityMode,
+              autoAgentLabels: catalog
+                .filter((agent) => agent.id in AUTO_TUI_AGENT_ARGS)
+                .map((agent) => agent.label),
+              onChange: (mode) => save({ type: 'permissions', mode }),
+              onChangeNonAuto: (mode) => save({ type: 'permissions', mode, exceptAuto: true }),
+              autoSupported
+            })
+          )
+        }
       />
-      {permissionSettings ? (
-        <AllAgentsPermissionSetting
-          chatOwnSupported={chatOwnSupported}
-          choice={permissionSettings.agentPermissionDefault ?? 'own'}
-          withoutAutoChoice={sharedChoice(
-            PERMISSION_CHOICE_AGENTS.filter(
-              (agent) => !agentPermissionChoices(agent).includes('auto')
-            ).map((agent) => resolveAgentPermission(agent, permissionSettings).choice)
-          )}
-          onChange={(choice) => save({ type: 'permission', choice })}
-          onChangeWithoutAuto={(choice) => save({ type: 'permission', choice, withoutAuto: true })}
-        />
-      ) : null}
-      {permissionSettings
-        ? null
-        : renderPermissions({
-            mode: permissions.globalMode,
-            nonAutoMode: settings.nonAutoPermissionMode,
-            majorityMode: permissions.majorityMode,
-            autoAgentLabels: catalog
-              .filter((agent) => agent.id in AUTO_TUI_AGENT_ARGS)
-              .map((agent) => agent.label),
-            onChange: (mode) => save({ type: 'permissions', mode }),
-            onChangeNonAuto: (mode) => save({ type: 'permissions', mode, exceptAuto: true }),
-            autoSupported
-          })}
       <AgentDetectionCatalog
         detectedAgents={installedAgents}
         undetectedAgents={undetectedAgents}

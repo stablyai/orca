@@ -1,24 +1,25 @@
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useRef } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   createFileSearchResultOwner,
   type FileSearchResultOwner
-} from '@/lib/file-search-result-owner'
+} from '@/lib/files/search/file-search-result-owner'
 import {
   createEmptyRuntimeFileSearchResult,
   getRuntimeFileSearchRejectedField
-} from '@/runtime/runtime-file-search-bounds'
-import { searchRuntimeFiles } from '@/runtime/runtime-file-search-client'
+} from '@/runtime/files/search/runtime-file-search-bounds'
+import { searchRuntimeFiles } from '@/runtime/files/search/runtime-file-search-client'
 import { useAppStore } from '@/store/index'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
-} from '@/lib/worktree-runtime-owner'
-import { isTwinWorkspace } from '@/lib/resolve-owner'
-import type { SearchResult } from '../../../../../../shared/code-search-types'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+} from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
+import type { SearchResult } from '../../../../../../shared/file-search/code-search-types'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_MAX_RESULTS = 2000
@@ -124,70 +125,75 @@ export function useFileSearchRunner({
         })
         const controller = new AbortController()
         searchControllerRef.current = controller
-        try {
-          const state = useAppStore.getState()
-          const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-          const activeSearchState = state.fileSearchStateByWorktree[activeWorktreeId]
-          if (
-            getRuntimeFileSearchRejectedField({
-              query,
-              includePattern: activeSearchState?.includePattern || undefined,
-              excludePattern: activeSearchState?.excludePattern || undefined
-            })
-          ) {
-            if (latestSearchIdRef.current === searchId) {
-              updateActiveSearchState({
-                results: createEmptyRuntimeFileSearchResult(),
-                resultOwner,
-                loading: false
-              })
+        await runWithFinally(
+          async () => {
+            try {
+              const state = useAppStore.getState()
+              const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+              const activeSearchState = state.fileSearchStateByWorktree[activeWorktreeId]
+              if (
+                getRuntimeFileSearchRejectedField({
+                  query,
+                  includePattern: activeSearchState?.includePattern || undefined,
+                  excludePattern: activeSearchState?.excludePattern || undefined
+                })
+              ) {
+                if (latestSearchIdRef.current === searchId) {
+                  updateActiveSearchState({
+                    results: createEmptyRuntimeFileSearchResult(),
+                    resultOwner,
+                    loading: false
+                  })
+                }
+                return
+              }
+              const results = await searchRuntimeFiles(
+                {
+                  target: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
+                  worktreeId: activeWorktreeId,
+                  worktreePath,
+                  connectionId
+                },
+                {
+                  query,
+                  rootPath: worktreePath,
+                  caseSensitive: activeSearchState?.caseSensitive ?? false,
+                  wholeWord: activeSearchState?.wholeWord ?? false,
+                  useRegex: activeSearchState?.useRegex ?? false,
+                  includePattern: activeSearchState?.includePattern || undefined,
+                  excludePattern: activeSearchState?.excludePattern || undefined,
+                  maxResults: SEARCH_MAX_RESULTS
+                },
+                controller.signal
+              )
+              if (latestSearchIdRef.current === searchId) {
+                updateActiveSearchState({ results, resultOwner })
+              }
+            } catch (err) {
+              if (controller.signal.aborted) {
+                return
+              }
+              console.error('Search failed:', err)
+              if (latestSearchIdRef.current === searchId) {
+                updateActiveSearchState({
+                  results: null,
+                  error:
+                    readIpcErrorDetail(err) ??
+                    translate('fileSearch.failed', 'Search failed. Try again.'),
+                  resultOwner
+                })
+              }
             }
-            return
+          },
+          () => {
+            if (searchControllerRef.current === controller) {
+              searchControllerRef.current = null
+            }
+            if (latestSearchIdRef.current === searchId) {
+              updateActiveSearchState({ loading: false })
+            }
           }
-          const results = await searchRuntimeFiles(
-            {
-              target: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
-              worktreeId: activeWorktreeId,
-              worktreePath,
-              connectionId
-            },
-            {
-              query,
-              rootPath: worktreePath,
-              caseSensitive: activeSearchState?.caseSensitive ?? false,
-              wholeWord: activeSearchState?.wholeWord ?? false,
-              useRegex: activeSearchState?.useRegex ?? false,
-              includePattern: activeSearchState?.includePattern || undefined,
-              excludePattern: activeSearchState?.excludePattern || undefined,
-              maxResults: SEARCH_MAX_RESULTS
-            },
-            controller.signal
-          )
-          if (latestSearchIdRef.current === searchId) {
-            updateActiveSearchState({ results, resultOwner })
-          }
-        } catch (err) {
-          if (controller.signal.aborted) {
-            return
-          }
-          console.error('Search failed:', err)
-          if (latestSearchIdRef.current === searchId) {
-            updateActiveSearchState({
-              results: null,
-              error:
-                readIpcErrorDetail(err) ??
-                translate('fileSearch.failed', 'Search failed. Try again.'),
-              resultOwner
-            })
-          }
-        } finally {
-          if (searchControllerRef.current === controller) {
-            searchControllerRef.current = null
-          }
-          if (latestSearchIdRef.current === searchId) {
-            updateActiveSearchState({ loading: false })
-          }
-        }
+        )
       }, SEARCH_DEBOUNCE_MS)
     },
     [

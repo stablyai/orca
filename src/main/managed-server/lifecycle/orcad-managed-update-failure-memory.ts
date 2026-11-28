@@ -29,7 +29,3 @@ export function orcadUpdateFailedThisLaunch(host: OrcadUpdateFailureHost): boole
 export function clearOrcadUpdateFailedThisLaunch(host: OrcadUpdateFailureHost): void {
   failedThisLaunch.delete(key(host))
 }
-
-export function resetOrcadUpdateFailuresForTests(): void {
-  failedThisLaunch.clear()
-}

@@ -1,6 +1,6 @@
 import type { LinearSlice, LinearSliceGet, LinearSliceSet } from './linear-slice-contract'
 import { clampLinearIssueListLimit } from '../../../../../shared/linear/issue-read-limits'
-import { linearListCustomViewIssues } from '@/runtime/runtime-linear-project-client'
+import { linearListCustomViewIssues } from '@/runtime/linear/runtime-linear-project-client'
 import {
   collectionWithWorkspaceError,
   emptyLinearCollection,

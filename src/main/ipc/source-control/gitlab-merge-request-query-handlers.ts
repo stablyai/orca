@@ -1,13 +1,19 @@
 import { ipcMain } from 'electron'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
+import type { GitLabMRInvolvement } from '../../../shared/gitlab/gitlab-types'
 import {
+  normalizeGitLabMRInvolvement,
   normalizeGitLabMRListState,
   normalizeGitLabPositiveInteger,
   normalizeGitLabSearchQuery
-} from '../../gitlab/gitlab-preload-args'
-import { getMergeRequest, getMergeRequestForBranch } from '../../gitlab/merge-request-lookup'
-import { listMergeRequests } from '../../gitlab/merge-request-list'
+} from '../../gitlab/requests/gitlab-preload-args'
+import {
+  getMergeRequest,
+  getMergeRequestForBranch
+} from '../../gitlab/merge-requests/merge-request-lookup'
+import { listMergeRequests } from '../../gitlab/merge-requests/merge-request-list'
 
 import {
   type GitLabRepoSelectorArgs,
@@ -17,8 +23,11 @@ import {
   repoConnectionId
 } from './gitlab-repo-access'
 
-export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerGitLabMergeRequestQueryHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'gitlab:mrForBranch',
     async (
       _event,
@@ -35,7 +44,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('gitlab:mr', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
+  ipc.handle('gitlab:mr', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
     const repo = assertRegisteredRepo(args, store)
     return getMergeRequest(
       repo.path,
@@ -45,7 +54,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
     )
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:listMRs',
     async (
       _event,
@@ -57,6 +66,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
         page?: number
         perPage?: number
         query?: string
+        involvement?: GitLabMRInvolvement
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -71,7 +81,8 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
         repo.issueSourcePreference,
         normalizeGitLabSearchQuery(args.query),
         repoConnectionId(repo),
-        ...localGitOptionArgs(store, repo)
+        localGitOptionArgs(store, repo)[0] ?? {},
+        { involvement: normalizeGitLabMRInvolvement(args.involvement) }
       )
     }
   )

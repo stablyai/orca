@@ -1,5 +1,5 @@
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type {
   GitHubPrStartPoint,

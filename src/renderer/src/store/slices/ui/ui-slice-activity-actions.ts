@@ -1,5 +1,12 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
+import { readManualUnreadProtectionTurn } from '@/attention/agent-attention-acknowledgement'
+import { recordDraft } from '@/store/record-transitions/keyed-record-transitions'
+import {
+  deleteChatReadMark,
+  deleteChatReadMarkAliases,
+  readWebChatMark
+} from '../agent-status/structured-sessions/chat-read-mark-aliases'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   collectAcknowledgedAgentNotificationId,
@@ -19,6 +26,8 @@ type ActivityActions = Pick<
   | 'clearManuallyUnreadTurns'
 >
 
+const ACKNOWLEDGEMENT_REFRESH_MS = 24 * 60 * 60 * 1000
+
 export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): ActivityActions {
   return {
     acknowledgedAgentsByPaneKey: {},
@@ -31,16 +40,19 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
         }
         const now = Date.now()
         const migrationUnsupported = Object.values(s.migrationUnsupportedByPtyId ?? {})
-        let next: Record<string, number> | null = null
+        const ack = recordDraft(s.acknowledgedAgentsByPaneKey)
+        const manual = recordDraft(s.manuallyUnreadTurnsByPaneKey)
         let nextUnreadCompletions: Record<string, StoredAgentAttentionUnread> | null = null
         for (const key of paneKeys) {
+          deleteChatReadMarkAliases(ack, 'acknowledgedAgentsByPaneKey', key)
+          deleteChatReadMark(manual, 'manuallyUnreadTurnsByPaneKey', key)
           if (s.unreadAgentCompletionPanes[key]) {
             nextUnreadCompletions ??= { ...s.unreadAgentCompletionPanes }
             delete nextUnreadCompletions[key]
           }
           const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
-          let stamp = now
-          const liveEntry = s.agentStatusByPaneKey?.[key]
+          let known = 0
+          const liveEntry = s.agentStatusByPaneKey.get(key)
           if (liveEntry) {
             collectAcknowledgedAgentNotificationId({
               state: s,
@@ -50,45 +62,40 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
               stateStartedAt: liveEntry.stateStartedAt,
               previousAckAt: prev
             })
-            stamp = Math.max(stamp, latestAgentTurnTimestamp(liveEntry))
-          }
-          const retained = s.retainedAgentsByPaneKey?.[key]
-          if (retained) {
-            collectAcknowledgedAgentNotificationId({
-              state: s,
-              ids: notificationIdsToDismiss,
-              worktreeId: retained.worktreeId,
-              ptyId: retained.tab.ptyId,
-              paneKey: key,
-              stateStartedAt: retained.entry.stateStartedAt,
-              previousAckAt: prev
-            })
-            stamp = Math.max(stamp, latestAgentTurnTimestamp(retained.entry))
+            known = latestAgentTurnTimestamp(liveEntry)
           }
           for (const unsupported of migrationUnsupported) {
             if (unsupported.paneKey === key) {
-              stamp = Math.max(stamp, usableTimestamp(unsupported.updatedAt))
+              known = Math.max(known, usableTimestamp(unsupported.updatedAt))
             }
           }
+          // A stamp already covering every known turn changes no reader; re-stamping costs a persisted UI write per click.
+          // Refresh it once a day anyway so hydration's newest-entries cap can't drop a stamp the user keeps renewing.
+          if (
+            s.acknowledgedAgentsByPaneKey[key] !== undefined &&
+            prev >= known &&
+            now - prev < ACKNOWLEDGEMENT_REFRESH_MS
+          ) {
+            continue
+          }
+          const stamp = Math.max(now, known)
           if (prev < stamp) {
-            next ??= { ...s.acknowledgedAgentsByPaneKey }
-            next[key] = stamp
+            ack.set(key, stamp)
           }
         }
-        let nextManual: Record<string, number> | null = null
-        for (const key of paneKeys) {
-          if (s.manuallyUnreadTurnsByPaneKey[key] !== undefined) {
-            nextManual ??= { ...s.manuallyUnreadTurnsByPaneKey }
-            delete nextManual[key]
-          }
-        }
-        if (!next && !nextUnreadCompletions && !nextManual) {
+        const nextAck = ack.finish()
+        const nextManual = manual.finish()
+        if (
+          nextAck === s.acknowledgedAgentsByPaneKey &&
+          nextManual === s.manuallyUnreadTurnsByPaneKey &&
+          !nextUnreadCompletions
+        ) {
           return s
         }
         return {
-          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
-          ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {}),
-          ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
+          acknowledgedAgentsByPaneKey: nextAck,
+          manuallyUnreadTurnsByPaneKey: nextManual,
+          ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {})
         }
       })
       // Dismiss main’s announced subjects; rebuilt IDs cover restart-empty notification records.
@@ -101,61 +108,48 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
         if (paneKeys.length === 0) {
           return s
         }
-        let next: Record<string, number> | null = null
-        let nextManual: Record<string, number> | null = null
+        const ack = recordDraft(s.acknowledgedAgentsByPaneKey)
+        const manual = recordDraft(s.manuallyUnreadTurnsByPaneKey)
         for (const key of paneKeys) {
-          if (s.acknowledgedAgentsByPaneKey[key] !== undefined) {
-            next ??= { ...s.acknowledgedAgentsByPaneKey }
-            delete next[key]
-          }
-          const turnTimestamp =
-            s.agentStatusByPaneKey?.[key]?.stateStartedAt ??
-            s.retainedAgentsByPaneKey?.[key]?.entry.stateStartedAt
-          if (
-            turnTimestamp !== undefined &&
-            s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp
-          ) {
-            nextManual ??= { ...s.manuallyUnreadTurnsByPaneKey }
-            nextManual[key] = turnTimestamp
+          deleteChatReadMark(ack, 'acknowledgedAgentsByPaneKey', key)
+          const turn = readManualUnreadProtectionTurn({ liveTurns: s.agentStatusByPaneKey }, key)
+          const protection = turn ?? readWebChatMark(s, 'manuallyUnreadTurnsByPaneKey', key)
+          deleteChatReadMarkAliases(manual, 'manuallyUnreadTurnsByPaneKey', key)
+          if (protection !== undefined) {
+            manual.set(key, protection)
           }
         }
-        if (!next && !nextManual) {
-          return s
-        }
-        return {
-          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
-          ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
-        }
+        const nextAck = ack.finish()
+        const nextManual = manual.finish()
+        return nextAck === s.acknowledgedAgentsByPaneKey &&
+          nextManual === s.manuallyUnreadTurnsByPaneKey
+          ? s
+          : { acknowledgedAgentsByPaneKey: nextAck, manuallyUnreadTurnsByPaneKey: nextManual }
       }),
     manuallyUnreadTurnsByPaneKey: {},
     clearManuallyUnreadTurns: (paneKeys) =>
       set((s) => {
-        let next: Record<string, number> | null = null
+        const manual = recordDraft(s.manuallyUnreadTurnsByPaneKey)
         for (const key of paneKeys) {
-          if (s.manuallyUnreadTurnsByPaneKey[key] !== undefined) {
-            next ??= { ...s.manuallyUnreadTurnsByPaneKey }
-            delete next[key]
-          }
+          deleteChatReadMark(manual, 'manuallyUnreadTurnsByPaneKey', key)
         }
-        return next ? { manuallyUnreadTurnsByPaneKey: next } : s
+        const next = manual.finish()
+        return next === s.manuallyUnreadTurnsByPaneKey ? s : { manuallyUnreadTurnsByPaneKey: next }
       }),
     activityClearedAtByPaneKey: {},
     applyActivityClearedAt: (patch) =>
       set((s) => {
-        let next: Record<string, number> | null = null
+        const cleared = recordDraft(s.activityClearedAtByPaneKey)
         for (const [key, value] of Object.entries(patch)) {
-          const previous = s.activityClearedAtByPaneKey[key]
-          if (value === null ? previous === undefined : previous === value) {
-            continue
-          }
-          next ??= { ...s.activityClearedAtByPaneKey }
           if (value === null) {
-            delete next[key]
+            deleteChatReadMark(cleared, 'activityClearedAtByPaneKey', key)
           } else {
-            next[key] = value
+            deleteChatReadMarkAliases(cleared, 'activityClearedAtByPaneKey', key)
+            cleared.set(key, value)
           }
         }
-        return next ? { activityClearedAtByPaneKey: next } : s
+        const next = cleared.finish()
+        return next === s.activityClearedAtByPaneKey ? s : { activityClearedAtByPaneKey: next }
       })
   }
 }

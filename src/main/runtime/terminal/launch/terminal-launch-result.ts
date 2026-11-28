@@ -1,9 +1,10 @@
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { admitStablePaneAdoption } from '../identity/runtime-terminal-pane-identity'
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { recordFreshLaunch } from './launch-evidence'
 import {
   copySleepingAgentLaunchConfig,
   resolveLaunchCommandPaneAgent,
@@ -53,9 +54,11 @@ export function recordTerminalLaunchMetadata(
   launch: ReturnType<typeof resolveTerminalLaunchResult>,
   command: string | undefined
 ): TuiAgent | null {
+  // Its own spawn's count: a reattach or a remote host without one leaves none behind.
+  pty.spawnHostTerminalUsage = result.hostTerminalUsage
   if (launch.adoptedStablePane) {
-    // A lower owner can supply facts before this runtime has a launch record.
-    if (!pty.launchConfig && result.launchConfig) {
+    // A lower owner can supply facts before this runtime has a launch record, unless its launch ended.
+    if (!pty.launchConfig && result.launchConfig && pty.launchEvidence?.kind !== 'gone') {
       pty.launchConfig = copySleepingAgentLaunchConfig(result.launchConfig)
     }
     pty.launchToken ??= result.launchToken ?? null
@@ -69,6 +72,11 @@ export function recordTerminalLaunchMetadata(
   pty.launchToken = launch.launchToken ?? null
   pty.launchIncarnationId = launch.launchToken ? pty.incarnationId : null
   pty.launchAgent = launch.launchAgent ?? null
+  recordFreshLaunch(pty, {
+    agent: pty.launchAgent ?? undefined,
+    token: pty.launchToken ?? undefined,
+    config: pty.launchConfig ?? undefined
+  })
   if (result.agentResumeRefused) {
     pty.launchCommandAgent = null
     return null

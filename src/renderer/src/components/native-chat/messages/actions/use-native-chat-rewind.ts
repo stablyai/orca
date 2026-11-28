@@ -1,0 +1,93 @@
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { translate } from '@/i18n/i18n'
+import type { AgentSessionRewindResult } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import {
+  createAgentSessionRewindHook,
+  type AgentSessionRewindInput
+} from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
+import { sayNativeChatRewind } from './native-chat-rewind-copy'
+import {
+  useNativeChatViewGuard,
+  useNativeChatViewGuardRef
+} from '../../pane/ownership/native-chat-view-memory'
+import type {
+  CaptureStructuredAgentSessionPresentation,
+  StructuredAgentSessionWriteOutcome
+} from '../../session/structured/writes/use-structured-agent-session-mutate'
+import { returnMessageToComposer } from '../../session/structured/delivery/structured-agent-session-message-hand-back'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
+
+export type RewindInput = Omit<
+  AgentSessionRewindInput,
+  'capturePresentation' | 'returnToComposer' | 'send' | 'notify'
+> & {
+  capturePresentation: CaptureStructuredAgentSessionPresentation
+  /** The composer the discarded message returns to, after whatever is typed there. */
+  composerScopeKey?: string
+  send: (fields: {
+    itemId: string
+    expectedEpoch: string
+  }) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionRewindResult>>
+}
+
+// Kept with the chat tab and its conversation: a view released mid-rewind returns still refusing sends, and a
+// late reply for a replaced conversation never blocks the new one.
+const useAgentSessionRewind = createAgentSessionRewindHook(
+  { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState },
+  sayNativeChatRewind,
+  {
+    useGuardRef: (name, initial) => useNativeChatViewGuardRef(`rewind-${name}`, initial),
+    useGuardState: (name, initial) => {
+      const [value, set] = useNativeChatViewGuard(`rewind-${name}`, initial)
+      return [value, set]
+    }
+  }
+)
+const notify = { error: toast.error, message: toast.message }
+
+export function useNativeChatRewind(input: RewindInput) {
+  const rewind = useAgentSessionRewind(
+    useMemo(() => {
+      const scope = input.composerScopeKey
+      return {
+        ...input,
+        notify,
+        ...(scope
+          ? {
+              returnToComposer: (
+                itemId: string,
+                blocks: Parameters<typeof returnMessageToComposer>[2]
+              ) => {
+                returnMessageToComposer(scope, `rewound-${itemId}`, blocks)
+              }
+            }
+          : {})
+      }
+    }, [input])
+  )
+  const sharedRequest = rewind.request
+  const request = useCallback(
+    (itemId: string, confirm: ConfirmationDialogContextValue) =>
+      sharedRequest(itemId, () =>
+        confirm({
+          title: translate('components.native-chat.rewind.title', 'Rewind to here?'),
+          description: translate(
+            'components.native-chat.rewind.confirmation',
+            'Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.'
+          ),
+          confirmLabel: translate('components.native-chat.rewind.confirm', 'Rewind'),
+          cancelLabel: translate('components.native-chat.rewind.cancel', 'Cancel'),
+          confirmVariant: 'destructive'
+        })
+      ),
+    [sharedRequest]
+  )
+  const shared = rewind.surface
+  const surface = useMemo<NativeChatRewindSurface | undefined>(
+    () => shared && { ...shared, request },
+    [shared, request]
+  )
+  return { ...rewind, request, surface }
+}

@@ -1,5 +1,5 @@
 import type { WindowsProcessEvidence } from '../../daemon/endpoint/identity/daemon-incarnation-evidence-types'
-import { isWslDistroHolderCommandLine } from './wsl-distro-holder-command'
+import { isWslDistroHolderCommandLine, isWslDistroHolderForUser } from './wsl-distro-holder-command'
 import type { WslDistroHolderRecord } from './wsl-distro-holder-record'
 import type { WslDistroHolderState } from './wsl-distro-holder-types'
 
@@ -32,4 +32,21 @@ export function classifyWslDistroHolderProcess(
   return timeKnown || record.creationTimeMs === null || commandLineSuffices
     ? 'live'
     : 'unverifiable'
+}
+
+/** As above, but a live holder running as another account than `user` reads `other-account` (#49180). */
+export function classifyWslDistroHolderForAccount(
+  record: WslDistroHolderRecord,
+  evidence: WindowsProcessEvidence,
+  /** null: pins not loaded yet, so no holder is judged another account's. */
+  user: string | undefined | null
+): WslDistroHolderState | 'other-account' {
+  const state = classifyWslDistroHolderProcess(record, evidence)
+  const commandLine = evidence.status === 'present' ? evidence.commandLine : null
+  return state === 'live' &&
+    commandLine &&
+    user !== null &&
+    !isWslDistroHolderForUser(commandLine, user)
+    ? 'other-account'
+    : state
 }

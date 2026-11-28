@@ -6,6 +6,7 @@ import type {
   AgentTabActionId,
   KeybindingActionId,
   KeybindingDefinition,
+  KeybindingOverrides,
   PluginKeybindingActionId
 } from './types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
@@ -45,12 +46,19 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
   ...buildAgentTabKeybindingDefinitions()
 ]
 
-/** Pre-swap tab-switch bindings; a one-time migration pins these for pre-release installs so upgrading users keep the shortcuts they learned. */
+/** Inherited by pre-rollout profiles; explicit shared shortcuts take precedence. */
 export const LEGACY_TAB_SWITCH_BINDINGS: Readonly<Partial<Record<KeybindingActionId, string[]>>> = {
   'tab.nextSameType': ['Mod+Shift+BracketRight'],
   'tab.previousSameType': ['Mod+Shift+BracketLeft'],
   'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
   'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
+}
+
+export function getLegacySearchBindings(platform: NodeJS.Platform): KeybindingOverrides {
+  return {
+    'worktree.palette': [platform === 'darwin' ? 'Mod+J' : 'Mod+Shift+J'],
+    'terminal.clear': ['Mod+K']
+  }
 }
 
 export const DEFINITIONS_BY_ID = new Map<KeybindingActionId, KeybindingDefinition>(
@@ -61,17 +69,12 @@ const DEFINITION_IDS = new Set<KeybindingActionId>(
   KEYBINDING_DEFINITIONS.map((definition) => definition.id)
 )
 
-// Each digit-index action is one remappable row: canonicalize to 1, but match any digit 1–9.
-export const DIGIT_INDEX_ACTION_IDS: readonly KeybindingActionId[] = [
-  'tab.selectByIndex',
-  'workspace.selectByIndex'
-]
-
-export const DIGIT_INDEX_KEY_PATTERN = /^[1-9]$/
-
-export function isDigitIndexActionId(actionId: KeybindingActionId): boolean {
-  return DIGIT_INDEX_ACTION_IDS.includes(actionId)
-}
+export {
+  DIGIT_INDEX_ACTION_IDS,
+  DIGIT_INDEX_KEY_PATTERN,
+  isDigitIndexActionId,
+  getKeybindingPlatform
+} from './definitions-support'
 
 export function isKeybindingActionId(value: string): value is KeybindingActionId {
   return DEFINITION_IDS.has(value as KeybindingActionId) || isPluginKeybindingActionId(value)
@@ -88,8 +91,4 @@ export function isPluginKeybindingActionId(value: string): value is PluginKeybin
 
 export function getKeybindingDefinition(actionId: KeybindingActionId): KeybindingDefinition | null {
   return DEFINITIONS_BY_ID.get(actionId) ?? null
-}
-
-export function getKeybindingPlatform(platform: NodeJS.Platform): 'darwin' | 'linux' | 'win32' {
-  return platform === 'darwin' ? 'darwin' : platform === 'win32' ? 'win32' : 'linux'
 }

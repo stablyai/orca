@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { hasTrustedPackageManagerFor } from './linux-package-install-command'
-import type { LinuxRootPackageType } from '../../../shared/update-status-types'
+import type { LinuxRootPackageType } from '../../../shared/updater/update-status-types'
 
 export type LinuxPackageType = LinuxRootPackageType | 'non-root' | 'unusable'
 
@@ -106,11 +106,19 @@ export function getLinuxRootPackageType(): LinuxRootPackageType | null {
   return packageType === 'deb' || packageType === 'rpm' ? packageType : null
 }
 
+// electron-builder's deb.packageName. dpkg writes this list for every package it installs.
+const DPKG_FILE_LIST = '/var/lib/dpkg/info/orca-ide.list'
+
 /** Repackagers can inherit deb/rpm markers; require the same manager discovery used for installation. */
 export function isExternallyManagedLinuxInstall(): boolean {
   if (cachedExternallyManaged === undefined) {
     const packageType = getLinuxRootPackageType()
-    cachedExternallyManaged = packageType !== null && !hasTrustedPackageManagerFor(packageType)
+    cachedExternallyManaged =
+      packageType !== null &&
+      (!hasTrustedPackageManagerFor(packageType) ||
+        // Why: Arch ships dpkg, and a pacman package built from our .deb keeps the deb marker.
+        // `dpkg -i` there unpacks over pacman's files before its dependency check fails.
+        (packageType === 'deb' && !existsSync(DPKG_FILE_LIST)))
   }
   return cachedExternallyManaged
 }

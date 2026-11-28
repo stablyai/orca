@@ -12,255 +12,171 @@ const authority: BrowserClientHostLeaseAuthority = {
 }
 
 describe('BrowserHostCommandLedger', () => {
-  it('replays each unsettled command when delivery reattaches', async () => {
-    const ledger = new BrowserHostCommandLedger({ authority })
-    const firstDelivery = vi.fn()
-    const release = ledger.attach(firstDelivery)
-    const issued = ledger.issue({
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      command: {
-        type: 'createPage',
-        browserProfileId: 'profile-a',
-        executionHostKey: 'native:runtime-a:1'
-      }
-    })
-    release()
-    const replacementDelivery = vi.fn()
-
-    ledger.attach(replacementDelivery)
-
-    expect(firstDelivery).toHaveBeenCalledWith(issued.event)
-    expect(replacementDelivery).toHaveBeenCalledOnce()
-    expect(replacementDelivery).toHaveBeenCalledWith(issued.event)
-    ledger.settle({ ...issued.event, result: { status: 'completed' } })
-    await expect(issued.result).resolves.toEqual({ status: 'completed' })
-  })
-
-  it('retains unsettled commands when replacement delivery fails partway through replay', async () => {
-    const ledger = new BrowserHostCommandLedger({ authority })
-    const release = ledger.attach(vi.fn())
-    const create = ledger.issue({
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      command: {
-        type: 'createPage',
-        browserProfileId: 'profile-a',
-        executionHostKey: 'native:runtime-a:1'
-      }
-    })
-    const navigate = ledger.issue({
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      command: { type: 'navigate', url: 'https://remote.internal' }
-    })
-    release()
-    expect(() =>
-      ledger.attach((event) => {
-        if (event.commandSequence === 2) {
-          throw new Error('transport closed')
-        }
-      })
-    ).toThrow('browser_host_command_delivery_failed')
-    const replay = vi.fn()
-
-    ledger.attach(replay)
-
-    expect(replay.mock.calls.map(([event]) => event.commandSequence)).toEqual([1, 2])
-    ledger.settle(resultParams(create.event, { status: 'completed' }))
-    ledger.settle(resultParams(navigate.event, { status: 'completed' }))
-    await expect(create.result).resolves.toEqual({ status: 'completed' })
-    await expect(navigate.result).resolves.toEqual({ status: 'completed' })
-  })
-
-  it('publishes bounded per-page sequences and settles results in order', async () => {
-    const emit = vi.fn()
-    const ledger = new BrowserHostCommandLedger({
-      authority,
-      createCommandId: (sequence) => `command-${sequence}`
-    })
-    ledger.attach(emit)
-    const create = ledger.issue({
-      browserPageId: 'page-a',
-      pageHostGeneration: 4,
-      command: {
-        type: 'createPage',
-        browserProfileId: 'default',
-        executionHostKey: 'host-key-a'
-      }
-    })
-    const navigate = ledger.issue({
-      browserPageId: 'page-a',
-      pageHostGeneration: 4,
-      command: { type: 'navigate', url: 'https://remote.internal' }
-    })
-
-    expect(emit.mock.calls.map(([event]) => event.commandSequence)).toEqual([1, 2])
-    expect(() => ledger.settle(resultParams(navigate.event, { status: 'completed' }))).toThrow(
-      'browser_host_command_result_sequence_gap'
-    )
-    expect(ledger.settle(resultParams(create.event, { status: 'completed' }))).toBe(true)
-    expect(ledger.settle(resultParams(navigate.event, { status: 'completed' }))).toBe(true)
-    await expect(create.result).resolves.toEqual({ status: 'completed' })
-    await expect(navigate.result).resolves.toEqual({ status: 'completed' })
-  })
-
-  it('accepts exact result replay but rejects conflicting or stale results', async () => {
+  it('settles and replays safe legacy navigation results after direct and staged receipt', async () => {
     const ledger = new BrowserHostCommandLedger({ authority })
     ledger.attach(vi.fn())
-    const issued = ledger.issue({
+    const created = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
-      command: {
-        type: 'createPage',
-        browserProfileId: 'default',
-        executionHostKey: 'host-key-a'
-      }
+      command: { type: 'createPage', browserProfileId: 'default', executionHostKey: 'host-key-a' }
     })
-    const completed = resultParams(issued.event, { status: 'completed' })
-
-    expect(ledger.settle(completed)).toBe(true)
-    expect(ledger.settle(completed)).toBe(false)
-    expect(() =>
-      ledger.settle(resultParams(issued.event, { status: 'failed', errorCode: 'different' }))
-    ).toThrow('browser_host_command_result_conflict')
-    expect(() => ledger.settle({ ...completed, authorityEpoch: 'epoch-b' })).toThrow(
-      'browser_host_command_result_authority_stale'
-    )
-    await issued.result
-  })
-
-  it('requires delivery and bounds outstanding commands before side effects', async () => {
-    const ledger = new BrowserHostCommandLedger({
-      authority,
-      maxOutstandingCommands: 1,
-      maxOutstandingCommandsPerPage: 1
-    })
-    const input = {
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      command: {
-        type: 'createPage' as const,
-        browserProfileId: 'default',
-        executionHostKey: 'host-key-a'
-      }
-    }
-
-    expect(() => ledger.issue(input)).toThrow('browser_host_command_delivery_required')
-    ledger.attach(vi.fn())
-    const issued = ledger.issue(input)
-    expect(() =>
-      ledger.issue({
-        browserPageId: 'page-b',
-        pageHostGeneration: 2,
-        command: { ...input.command }
-      })
-    ).toThrow('browser_host_command_capacity')
-    ledger.settle(resultParams(issued.event, { status: 'completed' }))
-    await issued.result
-  })
-
-  it('fences outstanding outcomes and rejects late results on close', async () => {
-    const ledger = new BrowserHostCommandLedger({ authority })
-    ledger.attach(vi.fn())
-    const issued = ledger.issue({
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      command: {
-        type: 'createPage',
-        browserProfileId: 'default',
-        executionHostKey: 'host-key-a'
-      }
-    })
-    void issued.result.catch(() => undefined)
-
-    ledger.close()
-    await expect(issued.result).rejects.toThrow('browser_host_command_outcome_unknown')
-    expect(() => ledger.settle(resultParams(issued.event, { status: 'completed' }))).toThrow(
-      'browser_host_command_ledger_closed'
-    )
-  })
-
-  it('makes outstanding outcomes unknown at exact page retirement', async () => {
-    const ledger = new BrowserHostCommandLedger({ authority })
-    ledger.attach(vi.fn())
-    const issued = ledger.issue({
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      command: {
-        type: 'createPage',
-        browserProfileId: 'default',
-        executionHostKey: 'host-key-a'
-      }
-    })
-
-    expect(ledger.retirePage('page-a', 1)).toBe(true)
-    await expect(issued.result).rejects.toThrow('browser_host_command_outcome_unknown')
-    expect(() => ledger.settle(resultParams(issued.event, { status: 'completed' }))).toThrow(
-      'browser_host_command_result_page_stale'
-    )
-  })
-
-  it('admits close-first only for reconciliation of imported inventory', async () => {
-    const ledger = new BrowserHostCommandLedger({ authority })
-    ledger.attach(vi.fn())
-    const input = {
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      command: {
-        type: 'closePage' as const,
-        targetAuthority: {
-          authorityRuntimeId: 'runtime-a',
-          authorityEpoch: 'epoch-a',
-          browserHostClientId: 'host-a',
-          browserHostGeneration: 1,
-          pageHostGeneration: 1
-        }
-      }
-    }
-
-    expect(() => ledger.issue(input)).toThrow('browser_host_command_create_required')
-    const issued = ledger.issue({ ...input, resultAdmission: 'reconciliation' })
-
-    expect(issued.event.commandSequence).toBe(1)
-    ledger.settle(resultParams(issued.event, { status: 'completed' }))
-    await expect(issued.result).resolves.toEqual({ status: 'completed' })
-  })
-
-  it('admits page state transactionally and releases exact retired generations', async () => {
-    const ledger = new BrowserHostCommandLedger({ authority, maxPages: 1 })
-    ledger.attach(vi.fn())
-    expect(() =>
-      ledger.issue({
+    ledger.settle(resultParams(created.event, { status: 'completed' }))
+    for (const staged of [false, true]) {
+      const issued = ledger.issue({
         browserPageId: 'page-a',
         pageHostGeneration: 1,
-        command: { type: 'navigate', url: 'https://remote.internal' }
+        command: { type: 'automation', method: 'browser.reload', params: {}, stagedResults: true }
       })
-    ).toThrow('browser_host_command_create_required')
-    const issued = ledger.issue({
-      browserPageId: 'page-b',
-      pageHostGeneration: 2,
-      command: {
-        type: 'createPage',
-        browserProfileId: 'default',
-        executionHostKey: 'host-key-a'
+      const reply = {
+        status: 'completed' as const,
+        value: {
+          url: 'https://kagi.com/search?token=cache-secret&q=one',
+          title: 'https://kagi.com/search?token=cache-secret&q=one'
+        }
       }
-    })
-    expect(() =>
-      ledger.issue({
-        browserPageId: 'page-c',
-        pageHostGeneration: 3,
-        command: {
-          type: 'createPage',
-          browserProfileId: 'default',
-          executionHostKey: 'host-key-a'
+      const params = resultParams(issued.event, reply)
+      if (staged) {
+        const json = Buffer.from(JSON.stringify(reply.value))
+        ledger.stageResultChunk({ ...params, offset: 0, contentBase64: json.toString('base64') })
+        ledger.settle({
+          ...params,
+          result: { status: 'completed', stagedValueBytes: json.byteLength }
+        })
+      } else {
+        ledger.settle(params)
+      }
+      await expect(issued.result).resolves.toEqual({
+        status: 'completed',
+        value: {
+          url: 'https://kagi.com/search?q=one',
+          title: 'https://kagi.com/search?q=one'
         }
       })
-    ).toThrow('browser_host_command_page_capacity')
-    ledger.settle(resultParams(issued.event, { status: 'completed' }))
-    await issued.result
-    expect(ledger.retirePage('page-b', 2)).toBe(true)
-    expect(() => ledger.retirePage('page-b', 1)).not.toThrow()
+      expect(ledger.settle(params)).toBe(false)
+    }
+  })
+
+  it('settles a safe old-client redirect failure before retaining its result', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority })
+    ledger.attach(vi.fn())
+    const created = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: { type: 'createPage', browserProfileId: 'default', executionHostKey: 'host-key-a' }
+    })
+    ledger.settle(resultParams(created.event, { status: 'completed' }))
+    const issued = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: {
+        type: 'automation',
+        method: 'browser.goto',
+        params: { url: 'https://example.com/' }
+      }
+    })
+    const params = resultParams(issued.event, {
+      status: 'failed',
+      errorCode: 'browser_error',
+      errorMessage: "ERR_FAILED loading 'https://kagi.com/search?token=cache-secret&q=one'"
+    })
+    ledger.settle(params)
+    await expect(issued.result).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'browser_error',
+      errorMessage: 'Private navigation failed.'
+    })
+    expect(ledger.settle(params)).toBe(false)
+  })
+
+  it('sanitizes direct and staged legacy upload frame receipts before retaining them', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority })
+    ledger.attach(vi.fn())
+    const created = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: { type: 'createPage', browserProfileId: 'default', executionHostKey: 'host-key-a' }
+    })
+    ledger.settle(resultParams(created.event, { status: 'completed' }))
+    for (const [raw, safe, staged] of [
+      ['https://kagi.com/search?token=frame-secret&q=one', 'https://kagi.com/search?q=one', false],
+      ['https://kagi.com/search?token=frame-secret&q=one', 'https://kagi.com/search?q=one', true],
+      [
+        'https://example.com/frame?token=ordinary',
+        'https://example.com/frame?token=ordinary',
+        false
+      ],
+      ['https://example.com/frame?token=ordinary', 'https://example.com/frame?token=ordinary', true]
+    ] as const) {
+      const issued = ledger.issue({
+        browserPageId: 'page-a',
+        pageHostGeneration: 1,
+        command: { type: 'automation', method: 'browser.upload', params: {}, stagedResults: true }
+      })
+      const reply = {
+        status: 'completed' as const,
+        value: {
+          uploaded: 1,
+          frameUrl: raw
+        }
+      }
+      const params = resultParams(issued.event, reply)
+      if (staged) {
+        const json = Buffer.from(JSON.stringify(reply.value))
+        ledger.stageResultChunk({ ...params, offset: 0, contentBase64: json.toString('base64') })
+        ledger.settle({
+          ...params,
+          result: { status: 'completed', stagedValueBytes: json.byteLength }
+        })
+      } else {
+        ledger.settle(params)
+      }
+      await expect(issued.result).resolves.toEqual({
+        status: 'completed',
+        value: {
+          uploaded: 1,
+          frameUrl: safe
+        }
+      })
+      expect(ledger.settle(params)).toBe(false)
+    }
+  })
+  it('sanitizes direct and staged legacy URL getter strings before retention', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority })
+    ledger.attach(vi.fn())
+    const created = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: { type: 'createPage', browserProfileId: 'default', executionHostKey: 'host-key-a' }
+    })
+    ledger.settle(resultParams(created.event, { status: 'completed' }))
+    for (const staged of [false, true]) {
+      const issued = ledger.issue({
+        browserPageId: 'page-a',
+        pageHostGeneration: 1,
+        command: {
+          type: 'automation',
+          method: 'browser.get',
+          params: { what: 'url' },
+          stagedResults: true
+        }
+      })
+      const value = 'https://kagi.com/search?token=get-secret&q=one'
+      const params = resultParams(issued.event, { status: 'completed', value })
+      if (staged) {
+        const json = Buffer.from(JSON.stringify(value))
+        ledger.stageResultChunk({ ...params, offset: 0, contentBase64: json.toString('base64') })
+        ledger.settle({
+          ...params,
+          result: { status: 'completed', stagedValueBytes: json.byteLength }
+        })
+      } else {
+        ledger.settle(params)
+      }
+      await expect(issued.result).resolves.toEqual({
+        status: 'completed',
+        value: 'https://kagi.com/search?q=one'
+      })
+    }
   })
 })
 

@@ -1,49 +1,42 @@
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { checkAgentCliVersion } from './agent-cli-version-probe'
 
-const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
-vi.mock('@orca/process-host', () => ({ runProcess }))
+// Root and Windows ignore POSIX mode bits.
+const modeBitsEnforced = process.platform !== 'win32' && process.getuid?.() !== 0
 
-const INPUT = { program: '/opt/bin/agent', cwd: '/repo', env: { PATH: '/opt/bin' } }
-const OPENCODE_MINIMUMS = ['1.18.31', '2.0.14']
+describe.runIf(modeBitsEnforced)('checkAgentCliVersion in a denied folder', () => {
+  let root: string
 
-function prints(stdout: string, result: Record<string, unknown> = {}): void {
-  runProcess.mockResolvedValue({
-    code: 0,
-    signal: null,
-    stdout,
-    stderr: '',
-    timedOut: false,
-    ...result
-  })
-}
-
-describe('checkAgentCliVersion', () => {
-  afterEach(() => vi.restoreAllMocks())
-  beforeEach(() => runProcess.mockReset())
-
-  it.each([
-    ['1.18.31', null],
-    ['1.18.30', '1.18.31'],
-    ['2.0.13', '2.0.14'],
-    ['2.0.14-rc.1', '2.0.14'],
-    ['2.0.14', null],
-    ['3.0.0', null],
-    ['3.0.0-beta.1', null],
-    ['0.9.0', '1.18.31']
-  ])('holds OpenCode %s to its minimum (too old for %s)', async (version, minimumVersion) => {
-    const check = await checkAgentCliVersion(INPUT, OPENCODE_MINIMUMS, async () => ({ version }))
-    expect(check).toEqual(
-      minimumVersion ? { status: 'tooOld', version, minimumVersion } : { status: 'ready', version }
-    )
+  beforeEach(async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    root = await mkdtemp(join(tmpdir(), 'orca-cli-version-'))
+    await mkdir(join(root, 'locked'), 0o000)
+    await mkdir(join(root, 'unlistable'), 0o311)
+    await writeFile(join(root, 'not-executable'), '#!/bin/sh\necho 1.0.0\n', { mode: 0o644 })
   })
 
-  it('reads a version printed only on stderr, as Pi 0.73 does', async () => {
-    prints('', { stderr: '0.73.1\n' })
-    expect(await checkAgentCliVersion(INPUT, ['0.84.0'])).toEqual({
-      status: 'tooOld',
-      version: '0.73.1',
-      minimumVersion: '0.84.0'
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    await Promise.all(['locked', 'unlistable'].map((name) => chmod(join(root, name), 0o755)))
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('blames the folder only when the probe cannot enter it', async () => {
+    const program = process.execPath
+    expect(await checkAgentCliVersion({ program, cwd: join(root, 'locked') }, [])).toEqual({
+      status: 'cwdAccessDenied',
+      version: null
+    })
+    // Entering needs search permission alone, so here the non-executable agent is at fault.
+    const unlistable = join(root, 'unlistable')
+    expect(
+      await checkAgentCliVersion({ program: join(root, 'not-executable'), cwd: unlistable }, [])
+    ).toEqual({
+      status: 'missing',
+      version: null
     })
   })
 })

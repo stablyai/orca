@@ -1,12 +1,12 @@
-import { lstat, opendir } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { platform } from 'node:process'
 import type { Dirent } from 'node:fs'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorkspaceSpaceWorktree } from '../../../shared/workspace-disk-space/workspace-space-types'
 import { compactWorkspaceSpaceItems } from '../../../shared/workspace-disk-space/workspace-space-compaction'
-import { escapeRegex } from '../../../shared/string-utils'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { escapeRegex } from '../../../shared/text/regex-escaping'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { scanWorkspaceSpaceEntryTree } from '../../../shared/workspace-disk-space/workspace-space-entry-traversal'
 import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-disk-space/workspace-space-directory-frame'
 import {
@@ -26,6 +26,7 @@ import {
   joinWorkspaceFilesystemPath,
   toWorkspaceSpaceItem
 } from './workspace-space-worktree-row'
+import { openDirectory } from '../../../shared/open-directory'
 
 const LOCAL_FS_CONCURRENCY = 48
 
@@ -69,7 +70,7 @@ async function scanLocalEntry(
         ? { kind: 'directory', sizeBytes: stats.size }
         : { kind: 'file', sizeBytes: stats.size }
     },
-    readDirectory: (path) => opendir(path),
+    readDirectory: (path) => openDirectory(path),
     checkCancelled: () => throwIfWorkspaceSpaceScanAborted(signal),
     createCancellationError: () => new WorkspaceSpaceScanCancelledError(),
     isCancellationError: (error) => error instanceof WorkspaceSpaceScanCancelledError
@@ -122,7 +123,7 @@ async function scanLocalWorktreeWithDu(
       ...compact
     })
   }
-  const directory = await opendir(worktree.path)
+  const directory = await openDirectory(worktree.path)
   const admission = await collectWorkspaceSpaceDirectoryEntries(
     directory,
     worktree.path,

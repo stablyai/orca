@@ -12,13 +12,13 @@ const jiti = createJiti(import.meta.url, {
   alias: { '@': fileURLToPath(new URL('../../../../src/renderer/src', import.meta.url)) }
 })
 const { compareBaseSensitivityLocaleText } = await jiti.import(
-  '../../../../src/shared/locale-text-collators.ts'
+  '../../../../src/shared/i18n/locale-text-collators.ts'
 )
 const { sortJiraIssues } = await jiti.import(
-  '../../../../src/renderer/src/components/jira-issue-sorter.ts'
+  '../../../../src/renderer/src/components/task-page/jira/listing/jira-issue-sorter.ts'
 )
 const { sortAutomationListViewItems } = await jiti.import(
-  '../../../../src/renderer/src/components/automations/automation-list-view.ts'
+  '../../../../src/renderer/src/components/automations/listing/automation-list-view.ts'
 )
 const automationLocale = 'en-US'
 

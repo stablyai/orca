@@ -1,9 +1,10 @@
 import { runProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import {
   buildWslCodexAppServerArgs,
   buildWslCodexIdentityProbe,
   WSL_CODEX_AVAILABILITY_TIMEOUT_MS
-} from '../../../codex-accounts/wsl-codex-command'
+} from '../../../codex-cli/wsl-codex-command'
 import type { CodexHookTrustGrantRequest } from '../../app-server/codex-app-server-client'
 import {
   binaryStampsMatch,
@@ -37,7 +38,7 @@ export async function resolveCodexTrustGrantHost(
     binaryStamp: await buildWslCodexBinaryStamp(host.distro),
     buildRequest: (input) => ({
       invocation: {
-        command: 'wsl.exe',
+        command: windowsSystem32Binary('wsl.exe'),
         // The guest resolves codex; a host CLI path cannot identify it.
         cliPath: null,
         args: buildWslCodexAppServerArgs(host.distro, host.linuxRuntimeHome),
@@ -57,7 +58,7 @@ async function buildWslCodexBinaryStamp(
     // Resolve the guest CLI path and version without requiring UNC access.
     const probe = buildWslCodexIdentityProbe(distro)
     const result = await runProcess({
-      program: 'wsl.exe',
+      program: windowsSystem32Binary('wsl.exe'),
       args: probe.args,
       cwd: resolveWslInteropSpawnCwd(),
       timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS

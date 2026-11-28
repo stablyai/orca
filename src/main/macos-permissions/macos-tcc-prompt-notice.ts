@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { MacosTccPromptWatch } from './macos-tcc-prompt-watch'
 import { reclaimOrphanedTccLogStreams } from './macos-tcc-log-stream-orphans'
@@ -92,10 +92,6 @@ function saveTally(): void {
   } catch {
     // Failed persistence only delays the notice until another prompt.
   }
-}
-
-export function handleTccPromptForTests(): TccPromptNoticePayload | null {
-  return recordPrompt()
 }
 
 function recordPrompt(): TccPromptNoticePayload | null {
@@ -271,13 +267,4 @@ export function stopTccPromptNotice(): void {
   watch?.stop()
   watch = null
   mainWindowRef = null
-}
-
-export function resetTccPromptNoticeForTests(): void {
-  cancelDeferredWatchStart()
-  tally = { ...EMPTY_TALLY }
-  watch = null
-  mainWindowRef = null
-  nextClaimId = 0
-  pendingClaim = null
 }

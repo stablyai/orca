@@ -1,4 +1,4 @@
-const FRONTMATTER_RE = /^(---|\+\+\+)\r?\n(?:[\s\S]*?\r?\n)?\1(?:\r?\n|$)/
+const FRONTMATTER_RE = /^\uFEFF?(---|\+\+\+)\r?\n(?:[\s\S]*?\r?\n)?\1(?:\r?\n|$)/
 
 export type FrontMatter = {
   /** Raw front matter including delimiters and any trailing newline. */
@@ -27,7 +27,7 @@ export function prependFrontMatter(raw: string, body: string): string {
 export function markdownFrontMatterInner(frontMatter: FrontMatter | null): string {
   return (
     frontMatter?.raw
-      .replace(/^(?:---|\+\+\+)\r?\n/, '')
+      .replace(/^\uFEFF?(?:---|\+\+\+)\r?\n/, '')
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim() ?? ''
   )

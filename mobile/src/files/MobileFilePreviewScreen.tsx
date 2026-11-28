@@ -1,46 +1,51 @@
-import { saveErrorMessageFromPreviewResult } from './mobile-file-preview-response'
-import { MobileChatAttachmentPreview } from './MobileChatAttachmentPreview'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { previewError, type MobileFilePreviewResult } from './preview/mobile-file-preview-response'
+import { MobileChatAttachmentPreview } from './attachments/MobileChatAttachmentPreview'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, Save } from 'lucide-react-native'
+import { ChevronLeft, Pencil, Save } from 'lucide-react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
-import { getWorktreeLabel } from '../session/worktree-label'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import { connectionRetryAction } from '../transport/connection-retry-action'
-import {
-  loadMobileFilePreview,
-  previewError,
-  saveMobileTerminalArtifactPreview,
-  type MobileFilePreviewResult
-} from './mobile-file-preview-request'
-import { ConfirmModal } from '../components/ConfirmModal'
+import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
+import { loadMobileFilePreview } from './preview/mobile-file-preview-request'
+import { MobileFilePreviewDiscardModal } from './preview/MobileFilePreviewDiscardModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { MobileFilePreviewBody } from './MobileFilePreviewBody'
+import { MobileFilePreviewBody } from './preview/MobileFilePreviewBody'
 import {
   MobileMarkdownPreviewModeBar,
   useMarkdownPreviewMode
-} from './MobileMarkdownPreviewModeBar'
+} from './markdown/MobileMarkdownPreviewModeBar'
 import {
   displayNameFromPreviewPath,
   type MobileFilePreviewRouteState
-} from './mobile-file-preview-route'
-import { previewSourceFromRoute, sourceKeyForPreview } from './mobile-file-preview-source'
-import { normalizeMobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
+} from './preview/mobile-file-preview-route'
+import { previewSourceFromRoute, sourceKeyForPreview } from './preview/mobile-file-preview-source'
+import { normalizeMobileFilePreviewLineColumn } from './preview/mobile-file-preview-line-column'
 import {
-  hasUnsavedMobileTerminalArtifactDraft,
-  isEditableMobileTerminalArtifactPreview,
+  hasUnsavedMobileFilePreviewDraft,
+  isEditableMobileFilePreview,
+  previewWithSavedText,
   shouldKeepDirtyDraftOnPreviewLoadResult
-} from './mobile-file-preview-editability'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
-import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
+} from './preview/mobile-file-preview-editability'
+import { MOBILE_FILE_WRITE_RUNTIME_CAPABILITY } from '../../../src/shared/file-write/file-write-disk-precondition'
+import { useRouteCapability } from '../worktree/execution-hosts/use-route-capability'
+import { useMobileFilePreviewSave } from './preview/use-mobile-file-preview-save'
+import { MobileFilePreviewConflictBar } from './preview/MobileFilePreviewConflictBar'
+import { filePreviewStylesSheet } from './preview/mobile-file-preview-styles'
+import { mobileMarkdownFileLink } from './markdown/mobile-markdown-file-link'
+import { useMobileFilePreviewBack } from './preview/use-mobile-file-preview-back'
+import {
+  filePreviewEditDraftKey,
+  MobileFilePreviewEditDraft
+} from './preview/MobileFilePreviewEditDraft'
+import { dropDocumentEditDraft } from '../drafts/document-edit-draft-rows'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type Props = {
   route: MobileFilePreviewRouteState
@@ -66,8 +71,9 @@ function WorkspaceFilePreviewScreen({ route }: Props) {
 }
 
 function MobileFilePreviewDocument({ route }: Props) {
+  const styles = useThemedStyles(filePreviewStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const executionHost = useWorkspaceExecutionHost()
   // Use the shared route handoff to keep this screen within the bundle asset budget.
   const router = useWorkspaceRouteHandoff()
   const previewParams = route.ok ? route.params : null
@@ -78,20 +84,6 @@ function MobileFilePreviewDocument({ route }: Props) {
       ? { status: 'loading', message: t('files.filePreviewScreen.loading', 'Loading preview...') }
       : previewError(route.message)
   )
-  const [draftContent, setDraftContent] = useState('')
-  const [savedContent, setSavedContent] = useState('')
-  const [saveError, setSaveError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const savingRef = useRef(false)
-  const saveRevisionRef = useRef(0)
-  useLayoutEffect(
-    () => () => {
-      saveRevisionRef.current += 1
-    },
-    []
-  )
-  const draftContentRef = useRef(draftContent)
-  const savedContentRef = useRef(savedContent)
   const draftSourceKeyRef = useRef<string | null>(null)
   const routePreviewSource = useMemo(
     () => (previewParams ? previewSourceFromRoute(previewParams) : null),
@@ -115,25 +107,59 @@ function MobileFilePreviewDocument({ route }: Props) {
     [previewParams]
   )
 
-  useEffect(() => {
+  // Re-seed from the route during render so a route change never paints the previous source.
+  const [seededRouteSource, setSeededRouteSource] = useState(routePreviewSource)
+  if (seededRouteSource !== routePreviewSource) {
+    setSeededRouteSource(routePreviewSource)
     setPreviewSource(routePreviewSource)
-  }, [routePreviewSource])
+  }
 
   useEffect(() => {
     previewSourceKeyRef.current = previewSourceKey
-  }, [previewSourceKey])
-
-  useEffect(() => {
     previewSourceRef.current = previewSource
-  }, [previewSource])
+  })
 
-  useEffect(() => {
-    draftContentRef.current = draftContent
-  }, [draftContent])
-
-  useEffect(() => {
-    savedContentRef.current = savedContent
-  }, [savedContent])
+  const routeWritesFiles = useRouteCapability(MOBILE_FILE_WRITE_RUNTIME_CAPABILITY)
+  const [editRequested, setEditRequested] = useState(false)
+  const isArtifact = previewSource?.source === 'terminalArtifact'
+  const canEdit =
+    previewSource !== null &&
+    isEditableMobileFilePreview(
+      preview,
+      previewSource.source === 'terminalArtifact'
+        ? previewSource.readOnly === true
+        : !routeWritesFiles
+    )
+  // Artifacts open in the editor; workspace files open to read, and edit on request.
+  const editing = canEdit && (isArtifact || editRequested)
+  const draftLoaded = draftSourceKeyRef.current === previewSourceKey
+  const onSaved = useCallback((fileText: string, draftUnchanged: boolean) => {
+    setPreview((current) => previewWithSavedText(current, fileText))
+    // Typing during the save keeps the editor open on the newer draft.
+    if (draftUnchanged) {
+      setEditRequested(false)
+    }
+  }, [])
+  const {
+    draftContent,
+    setDraftContent,
+    savedContent,
+    draftContentRef,
+    savedContentRef,
+    conflict,
+    saveError,
+    setSaveError,
+    saving,
+    acceptLoaded,
+    revertDraft,
+    save
+  } = useMobileFilePreviewSave({
+    client,
+    source: previewSource,
+    canWrite: editing && draftLoaded,
+    onSourceRefreshed: setPreviewSource,
+    onSaved
+  })
 
   const loadPreview = useCallback(async () => {
     const revision = ++previewLoadRevisionRef.current
@@ -150,12 +176,12 @@ function MobileFilePreviewDocument({ route }: Props) {
       draftContentRef.current !== savedContentRef.current
     if (!client || connState !== 'connected') {
       if (preserveDirtyDraft) {
-        setSaveError(translate('files.filePreviewScreen.waiting', 'Waiting for desktop...'))
+        setSaveError(translate('common.waitingForHost', 'Waiting for host…'))
         return
       }
       setPreview({
         status: 'waiting',
-        message: translate('files.filePreviewScreen.waiting', 'Waiting for desktop...'),
+        message: translate('common.waitingForHost', 'Waiting for host…'),
         reconnect: true
       })
       return
@@ -196,8 +222,7 @@ function MobileFilePreviewDocument({ route }: Props) {
             ? ''
             : null
       if (loadedContent !== null) {
-        setDraftContent(loadedContent)
-        setSavedContent(loadedContent)
+        acceptLoaded(loadedContent)
         draftSourceKeyRef.current = previewSourceKey
       }
       setPreview(result)
@@ -214,7 +239,18 @@ function MobileFilePreviewDocument({ route }: Props) {
       }
       setPreview(previewError(message ?? ''))
     }
-  }, [client, connState, previewParams, previewSourceKey, route, routePreviewSourceKey])
+  }, [
+    acceptLoaded,
+    client,
+    connState,
+    draftContentRef,
+    previewParams,
+    previewSourceKey,
+    route,
+    routePreviewSourceKey,
+    savedContentRef,
+    setSaveError
+  ])
 
   useEffect(() => {
     void loadPreview()
@@ -244,79 +280,33 @@ function MobileFilePreviewDocument({ route }: Props) {
   const title = previewParams?.name ?? displayNameFromPreviewPath(displayPath)
   const worktreeLabel = getWorktreeLabel(
     previewParams?.worktreeName,
-    previewParams?.worktreeId ?? ''
+    previewParams?.worktreeId ?? '',
+    t
   )
   const [markdownMode, setMarkdownMode] = useMarkdownPreviewMode(displayPath, lineColumn?.line)
-  const isEditableTerminalArtifact =
-    previewSource?.source === 'terminalArtifact' &&
-    isEditableMobileTerminalArtifactPreview(preview, previewSource.readOnly === true)
-  const canSaveArtifact =
-    isEditableTerminalArtifact &&
-    draftSourceKeyRef.current === previewSourceKey &&
-    draftContent !== savedContent
-  const hasUnsavedTerminalArtifactDraft = hasUnsavedMobileTerminalArtifactDraft({
-    source: previewSource?.source,
+  const canSave = editing && draftLoaded && draftContent !== savedContent
+  const hasUnsavedDraft = hasUnsavedMobileFilePreviewDraft({
     draftSourceKey: draftSourceKeyRef.current,
     previewSourceKey,
     draftContent,
     savedContent
   })
 
-  const saveArtifact = useCallback(async () => {
-    if (
-      !client ||
-      previewSource?.source !== 'terminalArtifact' ||
-      !canSaveArtifact ||
-      savingRef.current
-    ) {
-      return
-    }
-    savingRef.current = true
-    const saveRevision = ++saveRevisionRef.current
-    const isCurrentSave = () => saveRevisionRef.current === saveRevision
-    setSaving(true)
-    setSaveError('')
-    try {
-      const result = await saveMobileTerminalArtifactPreview(client, previewSource, draftContent, {
-        baseContent: savedContent,
-        isCurrent: isCurrentSave,
-        onTerminalArtifactSourceRefreshed: (source) => {
-          if (isCurrentSave()) {
-            setPreviewSource(source)
-          }
-        }
-      })
-      if (!isCurrentSave()) {
-        return
-      }
-      if (result.status === 'saved') {
-        setSavedContent(draftContent)
-      } else {
-        setSaveError(saveErrorMessageFromPreviewResult(result))
-      }
-    } catch (err) {
-      if (!isCurrentSave()) {
-        return
-      }
-      const message =
-        err instanceof Error
-          ? err.message
-          : translate('files.filePreviewScreen.saveFailed', 'Unable to save file')
-      setSaveError(message)
-    } finally {
-      if (isCurrentSave()) {
-        savingRef.current = false
-        setSaving(false)
-      }
-    }
-  }, [canSaveArtifact, client, draftContent, previewSource, savedContent])
-
   // Unmount retires pending saves; a refused back keeps the document and its save alive.
   const leave = useCallback(() => router.back(), [router])
+  const editDraftKey = filePreviewEditDraftKey(previewSource, previewParams?.hostId, executionHost)
+  const dropEditDraft = () => editDraftKey && dropDocumentEditDraft(editDraftKey)
   const { confirmingDiscard, requestBack, stay, discard } = useMobileFilePreviewBack({
-    hasUnsavedDraft: hasUnsavedTerminalArtifactDraft,
-    leave
+    hasUnsavedDraft,
+    leave,
+    onDiscard: dropEditDraft
   })
+  // Reload, once confirmed, drops the draft for what disk holds now.
+  const reloadFromDisk = () => {
+    revertDraft()
+    dropEditDraft()
+    void loadPreview()
+  }
 
   return (
     <View style={styles.container}>
@@ -332,22 +322,27 @@ function MobileFilePreviewDocument({ route }: Props) {
           title={title || t('files.filePreviewScreen.title', 'Preview')}
           subtitle={previewParams ? worktreeLabel : undefined}
           trailing={
-            isEditableTerminalArtifact ? (
+            editing ? (
               <NavBarButton
                 icon={Save}
-                onPress={() => void saveArtifact()}
-                disabled={!canSaveArtifact || saving}
-                accessibilityLabel={t(
-                  'files.filePreviewScreen.saveArtifact',
-                  'Save terminal artifact'
-                )}
+                onPress={() => void save('save')}
+                disabled={!canSave || saving || conflict !== null}
+                accessibilityLabel={
+                  isArtifact
+                    ? t('files.filePreviewScreen.saveArtifact', 'Save terminal artifact')
+                    : t('files.filePreviewScreen.saveFile', 'Save file')
+                }
+              />
+            ) : canEdit ? (
+              <NavBarButton
+                icon={Pencil}
+                onPress={() => setEditRequested(true)}
+                accessibilityLabel={t('files.filePreviewScreen.editFile', 'Edit file')}
               />
             ) : null
           }
           accessory={
-            preview.status === 'ready' &&
-            preview.kind === 'markdown' &&
-            !isEditableTerminalArtifact ? (
+            preview.status === 'ready' && preview.kind === 'markdown' && !editing ? (
               <MobileMarkdownPreviewModeBar
                 mode={markdownMode}
                 onModeChange={setMarkdownMode}
@@ -365,7 +360,7 @@ function MobileFilePreviewDocument({ route }: Props) {
         worktreeId={previewSource?.source === 'worktree' ? previewSource.worktreeId : undefined}
         relativePath={displayPath}
         title={title || t('files.filePreviewScreen.fileTitle', 'File')}
-        editable={isEditableTerminalArtifact}
+        editable={editing}
         markdownMode={markdownMode}
         draftContent={draftContent}
         saveError={saveError}
@@ -394,20 +389,30 @@ function MobileFilePreviewDocument({ route }: Props) {
           }
         }}
       />
-      <ConfirmModal
-        visible={confirmingDiscard}
-        title={t('files.filePreviewScreen.discardTitle', 'Discard changes?')}
-        message={
-          saving
-            ? t(
-                'files.filePreviewScreen.discardMessageSaving',
-                'The save in progress may not finish. Unsaved edits will be lost.'
-              )
-            : t('files.filePreviewScreen.discardMessage', 'Unsaved edits will be lost.')
+      <MobileFilePreviewEditDraft
+        draftKey={editDraftKey}
+        base={draftLoaded ? savedContent : null}
+        editable={canEdit}
+        live={draftContent}
+        onRestore={(content) => {
+          setDraftContent(content)
+          setEditRequested(true)
+        }}
+        fallback={
+          conflict && editing ? (
+            <MobileFilePreviewConflictBar
+              hostId={previewParams?.hostId ?? ''}
+              conflict={conflict}
+              saving={saving}
+              onReload={reloadFromDisk}
+              onOverwrite={() => void save('overwrite')}
+            />
+          ) : null
         }
-        confirmLabel={t('files.filePreviewScreen.discard', 'Discard')}
-        cancelLabel={t('files.filePreviewScreen.stay', 'Stay')}
-        destructive
+      />
+      <MobileFilePreviewDiscardModal
+        visible={confirmingDiscard}
+        saving={saving}
         onConfirm={discard}
         onCancel={stay}
       />

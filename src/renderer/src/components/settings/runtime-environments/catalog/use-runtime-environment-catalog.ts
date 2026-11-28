@@ -10,14 +10,14 @@ import {
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
-import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { extractRuntimeTransportDiagnostics } from '@/runtime/hosts/connections/runtime-status-probe-diagnostics'
 import { useAppStore } from '@/store/index'
 import {
   isListedRemoteServer,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environment-host-details'
 
 type RuntimeEnvironmentCatalog = {
@@ -70,8 +70,11 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
   }, [detailsByEnvironmentId])
   const mountedRef = useMountedRef()
 
-  const loadEnvironments = useCallback(
-    async (verified?: { environmentId: string; runtimeStatus: RuntimeStatus }): Promise<void> => {
+  const load = useCallback(
+    async (
+      verified: { environmentId: string; runtimeStatus: RuntimeStatus } | undefined,
+      force: boolean
+    ): Promise<void> => {
       if (mountedRef.current) {
         setIsLoading(true)
       }
@@ -114,7 +117,8 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
               try {
                 const response = await window.api.runtimeEnvironments.getStatus({
                   selector: environment.id,
-                  timeoutMs: 10_000
+                  timeoutMs: 10_000,
+                  ...(force ? { force: true as const } : {})
                 })
                 const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
                 // Publish manual refreshes to sidebar pickers as well as Settings.
@@ -172,9 +176,15 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
     [mountedRef]
   )
 
+  // Every caller but the mount load is a user action, which probes now despite a host's failure backoff.
+  const loadEnvironments = useCallback(
+    (verified?: { environmentId: string; runtimeStatus: RuntimeStatus }) => load(verified, true),
+    [load]
+  )
+
   useEffect(() => {
-    void loadEnvironments()
-  }, [loadEnvironments])
+    void load(undefined, false)
+  }, [load])
 
   return {
     environments,

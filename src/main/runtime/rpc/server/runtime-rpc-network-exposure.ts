@@ -1,5 +1,5 @@
-import { WebSocketTransport } from '../ws-transport'
-import { writeWsFallbackPort } from '../ws-fallback-port-store'
+import { WebSocketTransport } from '../transports/websocket/ws-transport'
+import { writeWsFallbackPort } from '../transports/websocket/ws-fallback-port-store'
 import { RuntimeRpcLifecycle } from './runtime-rpc-lifecycle'
 import { WS_BIND_HOST_ALL_INTERFACES, WS_BIND_HOST_LOOPBACK } from './runtime-rpc-pairing-types'
 
@@ -9,13 +9,16 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     return this.pinnedBindHost ?? WS_BIND_HOST_ALL_INTERFACES
   }
 
+  // The host the listener answers on right now, before any widening; null until it starts.
+  getBoundWebSocketHost(): string | null {
+    return this.wsBoundHost
+  }
+
   // LAN opt-in rebinds loopback and disconnects local clients; reuse their already-issued port so all endpoints can reconnect (STA-2370).
   async ensureNetworkExposure(): Promise<void> {
-    if (this.pinnedBindHost && this.pinnedBindHost !== WS_BIND_HOST_ALL_INTERFACES) {
-      // Throw on failed widening so callers return network_exposure_failed rather than advertise unreachable LAN.
-      throw new Error(
-        `Runtime bind address is pinned to ${this.pinnedBindHost}; refusing to widen to all interfaces`
-      )
+    // A pinned bind is the operator's exposure choice: never widen it; offers advertise only what it answers.
+    if (this.pinnedBindHost) {
+      return
     }
     if (
       !this.enableWebSocket ||

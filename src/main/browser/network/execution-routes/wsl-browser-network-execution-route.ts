@@ -1,18 +1,21 @@
-import type { WslBrowserNetworkRelayChild } from './wsl-browser-network-relay-launch'
+import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import {
-  BrowserNetworkTunnelStreamFrameDecoder,
-  BrowserNetworkTunnelStreamFrameWriter
-} from '../../../../shared/browser-network-tunnel-stream-framing'
-import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
-import { BrowserNetworkTunnelClient } from '../tunnels/browser-network-tunnel-client'
-import {
-  browserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteContext
-} from './browser-network-execution-route'
+  launchBrowserNetworkRelay,
+  type BrowserNetworkRelayChild,
+  type BrowserNetworkRelayHost
+} from './browser-network-relay-launch'
+import { attachBrowserNetworkRelayTunnel } from './browser-network-relay-tunnel'
+import './browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
+import { WSL_BROWSER_NETWORK_RELAY_DIR } from '../../../../shared/browser/network/tunnels/wsl-browser-network-relay-contract'
+import type {
+  BrowserNetworkExecutionRoute,
+  BrowserNetworkExecutionRouteContext
+} from './browser-network-execution-route-contract'
 
 type WslBrowserNetworkExecutionRouteDependencies = {
-  launchRelay?: (distro: string, signal: AbortSignal) => Promise<WslBrowserNetworkRelayChild>
+  launchRelay?: (distro: string, signal: AbortSignal) => Promise<BrowserNetworkRelayChild>
 }
 
 export async function resolveWslBrowserNetworkExecutionRoute(
@@ -33,80 +36,44 @@ export async function resolveWslBrowserNetworkExecutionRoute(
   const routeAbort = new AbortController()
   const abortRoute = (): void => routeAbort.abort()
   context.signal?.addEventListener('abort', abortRoute, { once: true })
-  const launchRelay =
-    dependencies.launchRelay ??
-    (await import('./wsl-browser-network-relay-launch')).launchWslBrowserNetworkRelay
-  let child: WslBrowserNetworkRelayChild
+  const launchRelay = dependencies.launchRelay ?? launchWslBrowserNetworkRelay
+  let child: BrowserNetworkRelayChild
   try {
     child = await launchRelay(host.distro, routeAbort.signal)
   } catch (error) {
     context.signal?.removeEventListener('abort', abortRoute)
     throw error
   }
-
-  let valid = true
-  let resolveInvalidated = (): void => {}
-  const whenInvalidated = new Promise<void>((resolve) => {
-    resolveInvalidated = resolve
-  })
-  let client: BrowserNetworkTunnelClient
-  const writer = new BrowserNetworkTunnelStreamFrameWriter(
-    (bytes, callback) => child.stdin.write(bytes, callback),
-    (error) => invalidate(error)
-  )
-  const decoder = new BrowserNetworkTunnelStreamFrameDecoder(
-    (frame) => client.handleBinary(frame),
-    (error) => invalidate(error)
-  )
-  client = new BrowserNetworkTunnelClient({
-    tunnelGeneration: 1,
-    sendBinary: (frame) => writer.send(frame),
-    onClosed: (error) => invalidate(error)
-  })
-
-  const invalidate = (error: Error, kill = true): void => {
-    if (!valid) {
-      return
-    }
-    valid = false
+  const tunnel = attachBrowserNetworkRelayTunnel(child, routeAbort.signal)
+  void tunnel.whenInvalidated.then(() => {
     context.signal?.removeEventListener('abort', abortRoute)
     routeAbort.abort()
-    decoder.close()
-    writer.close()
-    client.close(error)
-    if (kill && !child.killed) {
-      child.kill()
-    }
-    resolveInvalidated()
-  }
-  const onAbort = (): void => invalidate(new Error('browser_tunnel_execution_host_unavailable'))
-  routeAbort.signal.addEventListener('abort', onAbort, { once: true })
-  child.stdout.on('data', (bytes: Buffer) => decoder.feed(bytes))
-  child.stdout.on('error', (error) => invalidate(error))
-  child.stdin.on('error', (error) => invalidate(error))
-  child.on('error', (error) => invalidate(error, false))
-  child.on('close', () => invalidate(new Error('browser_tunnel_execution_host_unavailable'), false))
-
-  if (routeAbort.signal.aborted) {
-    invalidate(new Error('browser_tunnel_execution_host_unavailable'))
-  }
-
+  })
   return {
     key: browserNetworkExecutionHostKey(host),
-    connect: (target) => {
-      const socket = new BrowserNetworkDeferredSocket()
-      if (!valid) {
-        queueMicrotask(() => socket.fail(new Error('browser_tunnel_execution_host_unavailable')))
-        return socket
-      }
-      void client.open(target).then(
-        (source) => socket.attach(source),
-        (error) => socket.fail(error instanceof Error ? error : new Error(String(error)))
-      )
-      return socket
-    },
-    whenInvalidated,
-    isValid: () => valid,
-    close: () => invalidate(new Error('browser_tunnel_execution_host_unavailable'))
+    connect: tunnel.connect,
+    whenInvalidated: tunnel.whenInvalidated,
+    isValid: tunnel.isValid,
+    close: tunnel.close
   }
+}
+
+function launchWslBrowserNetworkRelay(
+  distro: string,
+  signal: AbortSignal
+): Promise<BrowserNetworkRelayChild> {
+  const relayHost: BrowserNetworkRelayHost = {
+    homeDir: WSL_BROWSER_NETWORK_RELAY_DIR,
+    run: async (command) => {
+      // spawnProcess pipes all three streams, so the relay child has no null streams.
+      const child: BrowserNetworkRelayChild = spawnProcess({
+        program: windowsSystem32Binary('wsl.exe'),
+        args: ['-d', distro, '--exec', 'sh', '-c', command],
+        stdio: 'pipe',
+        env: { ...process.env, WSL_UTF8: '1' }
+      })
+      return child
+    }
+  }
+  return launchBrowserNetworkRelay(relayHost, signal)
 }

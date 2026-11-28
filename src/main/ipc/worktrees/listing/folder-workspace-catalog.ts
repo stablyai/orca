@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree, DetectedWorktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-meta-write-normalization'
-import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   hostWorktreeTargetForRepo,
   readAllWorktreeMetaForHost,
@@ -14,18 +14,18 @@ import {
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
-} from '../../../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+} from '../../../../shared/worktree/visibility/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   toDetectedWorktree,
   applyMetadataFallbackVisibility
-} from '../../../../shared/worktree/ownership'
+} from '../../../../shared/worktree/visibility/ownership'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../../shared/worktree/id'
 import {
   getFolderWorkspaceInstanceIdentity,
   getFolderWorkspaceRootId,
-  isFolderWorkspaceIdForRepo,
   mergeFolderWorkspace
 } from '../folder-workspace-model'
 
@@ -53,12 +53,13 @@ function folderMetaWriter(
 export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
   const writeMeta = folderMetaWriter(store, repo)
   const rootId = getFolderWorkspaceRootId(repo)
+  const instancePrefix = `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
   const allMeta = store.getAllWorktreeMeta()
-  const ids = Object.keys(allMeta).filter((worktreeId) =>
-    isFolderWorkspaceIdForRepo(repo, worktreeId)
-  )
-  if (!ids.includes(rootId)) {
-    ids.unshift(rootId)
+  const ids: string[] = [rootId]
+  for (const worktreeId in allMeta) {
+    if (worktreeId.startsWith(instancePrefix) && Object.hasOwn(allMeta, worktreeId)) {
+      ids.push(worktreeId)
+    }
   }
 
   return ids

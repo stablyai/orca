@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Validate saved layout against shared structural rules, including live dev profiles; print breaches and exit 1.
-// Usage: node config/scripts/check-workspace-layout-rules.mjs <userDataDir>
+// Usage: node config/scripts/static-analysis/repository-layout/check-workspace-layout-rules.mjs <userDataDir>
 
 import { build } from 'esbuild'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -23,7 +23,7 @@ try {
       contents: `
         export { readPersistedProfileState } from './tests/e2e/helpers/persisted-profile-state'
         export { partitionsFromProfileRoot } from './tests/e2e/helpers/workspace-layout-oracle-views'
-        export { checkWorkspaceLayoutRules } from './src/shared/workspace-layout/workspace-layout-rules'
+        export { checkWorkspaceLayoutRules } from './src/shared/workspace-layout/invariants/workspace-layout-rules'
       `,
       resolveDir: root,
       loader: 'ts'

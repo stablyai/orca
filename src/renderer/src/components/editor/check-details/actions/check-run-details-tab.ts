@@ -1,7 +1,6 @@
-import type { GitLabProjectRef } from '../../../../../../shared/gitlab-types'
-import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
-import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/pull-request-types'
+import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor/views/editor-tab-view-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
+import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/repositories/repository-identity'
 
 export type CheckRunDetailsTabPatch = Pick<
   OpenCheckRunDetailsState,
@@ -13,13 +12,6 @@ let nextCheckRunDetailsRequestId = 0
 export function createCheckRunDetailsRequestId(): number {
   nextCheckRunDetailsRequestId += 1
   return nextCheckRunDetailsRequestId
-}
-
-export function isSameGitLabProjectRef(
-  a: GitLabProjectRef | null,
-  b: GitLabProjectRef | null
-): boolean {
-  return a === b || (a?.host === b?.host && a?.path === b?.path)
 }
 
 export function isSameGitHubRepository(

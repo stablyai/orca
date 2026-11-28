@@ -1,0 +1,309 @@
+import { MEDIA_FILE_MIME_TYPES } from '../../../../src/shared/file-preview/media-mime-types'
+import { compareFileNames } from '../../../../src/shared/file-listing/file-name-sort'
+
+export type MobileDirEntry = {
+  name: string
+  isDirectory: boolean
+  isSymlink?: boolean
+}
+
+export type MobileFileKind = 'text' | 'binary'
+
+export type TreeNode = {
+  id: string
+  name: string
+  relativePath: string
+  depth: number
+  kind: 'directory' | MobileFileKind
+  isSymlink?: boolean
+  /** A folder too big for one page shows how many entries it has. */
+  entryCount?: number
+  /** A search result names the folder it is in; tree rows show that by indent. */
+  folder?: string
+}
+
+export type DirectoryState = {
+  entries: MobileDirEntry[]
+  loading?: boolean
+  error?: string
+  /** The folder's size as the host last listed it. */
+  total?: number
+  /** The host has entries after the last one here. */
+  hasMore?: boolean
+}
+
+export type DirectoryCache = Record<string, DirectoryState | undefined>
+
+export type InlineStatusNode = {
+  id: string
+  relativePath: string
+  depth: number
+  kind: 'loading' | 'error'
+  message?: string
+}
+
+/** Ends a part-loaded folder with "Show more". */
+export type FolderPagingNode = {
+  id: string
+  relativePath: string
+  depth: number
+  kind: 'more'
+  loaded: number
+  total: number
+}
+
+/** A titled break in the search results, e.g. hits inside files under the name matches. */
+export type SectionNode = { id: string; relativePath: string; depth: 0; kind: 'section' }
+
+/** One line inside a file that the content search matched; opens the file at that line. */
+export type ContentHitNode = {
+  id: string
+  relativePath: string
+  name: string
+  depth: 0
+  kind: 'contentHit'
+  line: number
+  column: number
+  matchLength: number
+  lineContent: string
+  displayColumn?: number
+  displayMatchLength?: number
+}
+
+export type FileExplorerRow =
+  | TreeNode
+  | InlineStatusNode
+  | FolderPagingNode
+  | SectionNode
+  | ContentHitNode
+
+/** Rows per "Show more"; a folder bigger than this shows its entry count. */
+export const DIRECTORY_PAGE_SIZE = 500
+
+const DESKTOP_EXCLUDED_NAMES = new Set(['.git', 'node_modules'])
+const BINARY_EXTENSIONS = new Set([
+  ...Object.keys(MEDIA_FILE_MIME_TYPES),
+  '.avif',
+  '.bmp',
+  '.gif',
+  '.heic',
+  '.ico',
+  '.jpeg',
+  '.jpg',
+  '.mov',
+  '.mp3',
+  '.mp4',
+  '.pdf',
+  '.png',
+  '.webp',
+  '.zip'
+])
+
+export function flattenDirectoryCache(
+  cache: DirectoryCache,
+  expanded: ReadonlySet<string>
+): FileExplorerRow[] {
+  const rows: FileExplorerRow[] = []
+  visitDirectory('', 0, cache, expanded, rows)
+  return rows
+}
+
+function visitDirectory(
+  relativePath: string,
+  depth: number,
+  cache: DirectoryCache,
+  expanded: ReadonlySet<string>,
+  rows: FileExplorerRow[]
+): void {
+  const state = getDirectoryCacheState(cache, relativePath)
+  const entries = state?.entries ?? []
+  const visibleEntries = entries
+    .filter(shouldIncludeMobileFileExplorerEntry)
+    .sort(compareDirectoryEntries)
+
+  for (const entry of visibleEntries) {
+    const childPath = joinRelativePath(relativePath, entry.name)
+    rows.push(toTreeNode(entry, childPath, depth, cache))
+    if (entry.isDirectory && expanded.has(childPath)) {
+      const childState = getDirectoryCacheState(cache, childPath)
+      if (childState?.loading) {
+        rows.push({
+          id: `loading:${childPath}`,
+          relativePath: childPath,
+          depth: depth + 1,
+          kind: 'loading'
+        })
+      } else if (childState?.error) {
+        rows.push({
+          id: `error:${childPath}`,
+          relativePath: childPath,
+          depth: depth + 1,
+          kind: 'error',
+          message: childState.error
+        })
+      } else {
+        visitDirectory(childPath, depth + 1, cache, expanded, rows)
+      }
+    }
+  }
+  const paging = folderPagingNode(relativePath, depth, state)
+  if (paging) {
+    rows.push(paging)
+  }
+}
+
+function folderPagingNode(
+  relativePath: string,
+  depth: number,
+  state: DirectoryState | undefined
+): FolderPagingNode | null {
+  if (!state?.hasMore) {
+    return null
+  }
+  const loaded = state.entries.length
+  return {
+    id: `more:${relativePath}`,
+    relativePath,
+    depth,
+    kind: 'more',
+    loaded,
+    // A folder that changed between pages can report a total at or below what is shown.
+    total: Math.max(state.total ?? 0, loaded + 1)
+  }
+}
+
+/**
+ * Paths in folders already listed whose name contains `query`, as the search reports them (folders as `dir/`).
+ * The host's search sees no SSH workspace and none offline; what was opened still answers.
+ */
+export function listedPathMatches(
+  cache: DirectoryCache,
+  query: string,
+  limit: number,
+  /** Paths already shown, which take none of the limit. */
+  skip: ReadonlySet<string>
+): string[] {
+  const needle = query.trim().toLowerCase()
+  const found: string[] = []
+  const visit = (relativePath: string): void => {
+    const entries = getDirectoryCacheState(cache, relativePath)?.entries ?? []
+    for (const entry of [...entries].sort(compareDirectoryEntries)) {
+      if (found.length >= limit || !shouldIncludeMobileFileExplorerEntry(entry)) {
+        continue
+      }
+      const childPath = joinRelativePath(relativePath, entry.name)
+      const path = entry.isDirectory ? `${childPath}/` : childPath
+      if (entry.name.toLowerCase().includes(needle) && !skip.has(path)) {
+        found.push(path)
+      }
+      if (entry.isDirectory) {
+        visit(childPath)
+      }
+    }
+  }
+  if (needle !== '') {
+    visit('')
+  }
+  return found
+}
+
+/** A workspace search's paths as rows, each naming its folder; `dir/` paths are folders. */
+export function searchResultRows(paths: readonly string[]): TreeNode[] {
+  return paths.flatMap((path) => {
+    const isDirectory = path.endsWith('/')
+    const relativePath = isDirectory ? path.slice(0, -1) : path
+    const slash = relativePath.lastIndexOf('/')
+    const name = relativePath.slice(slash + 1)
+    if (!shouldIncludeMobileFileExplorerEntry({ name, isDirectory })) {
+      return []
+    }
+    return [
+      {
+        id: `${isDirectory ? 'dir' : 'file'}:${relativePath}`,
+        name,
+        relativePath,
+        depth: 0,
+        kind: isDirectory ? 'directory' : getMobileFileKind(relativePath),
+        folder: slash === -1 ? '' : relativePath.slice(0, slash)
+      }
+    ]
+  })
+}
+
+/** Content search answer as rows: each file as a result row, then its matched lines. */
+export function contentSearchRows(
+  files: readonly {
+    relativePath: string
+    matches: readonly Omit<ContentHitNode, 'id' | 'relativePath' | 'name' | 'depth' | 'kind'>[]
+  }[]
+): FileExplorerRow[] {
+  return files.flatMap((file) => {
+    const [fileRow] = searchResultRows([file.relativePath])
+    if (!fileRow || file.matches.length === 0) {
+      return []
+    }
+    const hits = file.matches.map((match): ContentHitNode => ({
+      ...match,
+      id: `hit:${file.relativePath}:${match.line}:${match.column}`,
+      relativePath: file.relativePath,
+      name: fileRow.name,
+      depth: 0,
+      kind: 'contentHit'
+    }))
+    return [{ ...fileRow, id: `hit-file:${file.relativePath}` }, ...hits]
+  })
+}
+
+function toTreeNode(
+  entry: MobileDirEntry,
+  relativePath: string,
+  depth: number,
+  cache: DirectoryCache
+): TreeNode {
+  const total = entry.isDirectory ? getDirectoryCacheState(cache, relativePath)?.total : undefined
+  return {
+    id: `${entry.isDirectory ? 'dir' : 'file'}:${relativePath}`,
+    name: entry.name,
+    relativePath,
+    depth,
+    kind: entry.isDirectory ? 'directory' : getMobileFileKind(relativePath),
+    isSymlink: entry.isSymlink,
+    ...(total !== undefined && total > DIRECTORY_PAGE_SIZE ? { entryCount: total } : {})
+  }
+}
+
+function compareDirectoryEntries(a: MobileDirEntry, b: MobileDirEntry): number {
+  if (a.isDirectory !== b.isDirectory) {
+    return a.isDirectory ? -1 : 1
+  }
+  return compareFileNames(a.name, b.name)
+}
+
+export function shouldIncludeMobileFileExplorerEntry(entry: MobileDirEntry): boolean {
+  return !DESKTOP_EXCLUDED_NAMES.has(entry.name)
+}
+
+export function getDirectoryCacheState(
+  cache: DirectoryCache,
+  relativePath: string
+): DirectoryState | undefined {
+  // Inherited keys such as constructor must not masquerade as cached directories.
+  return Object.hasOwn(cache, relativePath) ? cache[relativePath] : undefined
+}
+
+export function joinRelativePath(parentPath: string, name: string): string {
+  return parentPath ? `${parentPath}/${name}` : name
+}
+
+export function getMobileFileKind(relativePath: string): MobileFileKind {
+  const basename = relativePath.split('/').pop() ?? relativePath
+  const dotIndex = basename.lastIndexOf('.')
+  if (dotIndex <= 0) {
+    return 'text'
+  }
+  return BINARY_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase()) ? 'binary' : 'text'
+}
+
+export function isMarkdownPath(relativePath: string): boolean {
+  return /\.(md|mdx|markdown)$/i.test(relativePath)
+}

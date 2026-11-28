@@ -1,24 +1,36 @@
+import { win32 as pathWin32 } from 'node:path'
 import type { TerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { pruneRetiredPtyIncarnations } from '../../../shared/retired-pty-incarnations'
-import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
-import { getCheapProcessTableSnapshot } from '../../../shared/cheap-process-table-snapshot-reader'
-import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-table-snapshot-reader'
-import { resolveRemoteForegroundEvidence } from '../../providers/agent-foreground-process'
-import { buildPaneProcessFingerprint } from '../../providers/posix-pane-foreground-fingerprint'
+import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
+import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
+import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'
 import type { Session } from '../sessions/session'
 import { resolveSpawnFileForegroundFromRows } from '../pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from '../pty-subprocess/spawn-file-child-processes'
 import {
   clearSteadyStateAnchor,
-  getSteadyStateAnchor,
+  readAnchoredForeground,
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import type { PtyProcessInspectionOptions } from '../../providers/pty-process-inspection'
+import {
+  paneActivity,
+  readProvenIdleShell,
+  rememberIdleShellProof
+} from './terminal-host-idle-shell-proof'
+import { steadyPollJudgesByJobMembership } from '../../providers/pty/process-inspection'
+
+const WINDOWS_FOREGROUND_REFRESH_SETTLE_MS = 1_000
+/** Longer than a cached census can lag: its 500 ms reuse window plus a slow scan. */
+const WINDOWS_IDLE_PROOF_QUIET_MS = 5_000
+/** Any `bin\\bash.exe`, without touching the disk; a direct MSYS bash just keeps its slow re-check too. */
+const MAY_BE_GIT_BASH_LAUNCHER = /(?:^|\\)bin\\bash\.exe$/i
+
+function mayBeGitBashLauncher(session: Session): boolean {
+  return MAY_BE_GIT_BASH_LAUNCHER.test(pathWin32.normalize(session.shellPath ?? ''))
+}
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
@@ -26,11 +38,14 @@ export type TerminalHostProcessInspection = {
   hasChildProcesses: boolean
   childProcessEvidence?: PtyChildProcessVerdict
   foregroundProcessEvidence?: RemoteForegroundEvidence
+  foregroundExitWatched?: true
+  /** This read proved the shell alone in front with nothing running; only then may the pane stop re-checking. */
+  idleShellProven?: true
 }
 
-type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
+export type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
-/** Cheap POSIX polls reuse anchored identity; unresolved reads escalate to full evidence capture. */
+/** Cheap POSIX polls reuse anchored identity from per-pid reads; a mismatch escalates to full evidence capture. */
 export type TerminalHostInspectionTier = 'full' | 'cheap'
 
 export async function inspectTerminalHostProcess(args: {
@@ -41,6 +56,8 @@ export async function inspectTerminalHostProcess(args: {
   foregroundOnly?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
+  /** A steady poll from a pane tracking no agent; a proven idle macOS shell answers from its group. */
+  jobMembershipOnly?: boolean
   ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
@@ -94,6 +111,27 @@ export async function inspectTerminalHostProcess(args: {
       }
     }
   }
+  // Idle shell panes poll forever; a recent full capture plus the PTY's foreground group answers them in O(1).
+  if (
+    args.steadyState === true &&
+    args.jobMembershipOnly === true &&
+    incarnationMatches &&
+    process.platform === 'darwin' &&
+    !session.processNameIsSpawnFile
+  ) {
+    const shell = await readProvenIdleShell(
+      session,
+      () => !args.currentSession || args.currentSession() === session
+    )
+    if (shell !== null) {
+      args.onTier?.('cheap')
+      return {
+        foregroundProcess: shell.name,
+        hasChildProcesses: false,
+        ...(shell.idle && !session.startupInputQueued() ? { idleShellProven: true as const } : {})
+      }
+    }
+  }
   if (args.steadyState === true && incarnationMatches) {
     const anchored = await readAnchoredForeground(session)
     if (anchored !== null) {
@@ -110,24 +148,70 @@ export async function inspectTerminalHostProcess(args: {
     ? 'unverifiable'
     : undefined
   let evidence: RemoteForegroundEvidence
+  let idleShellProven = false
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
   } else if (process.platform === 'win32') {
+    const activity = paneActivity(session)
+    const readStartedAt = Date.now()
     if (windowsDecision || session.processNameIsSpawnFile) {
       foregroundProcess = await session.confirmForegroundProcess(
         windowsDecision ? { decision: true } : undefined
       )
+    } else {
+      // The name lookup runs after the shell name is returned; an event read must carry its result,
+      // because nothing re-reads once it lands.
+      await session.settleForegroundRefresh(WINDOWS_FOREGROUND_REFRESH_SETTLE_MS)
+      foregroundProcess = session.getForegroundProcess()
     }
+    // Recent input, output or queued startup input already rules the proof out, so a census could not change the answer.
+    const proofEligible =
+      !session.startupInputQueued() &&
+      readStartedAt - session.lastActivityAt > WINDOWS_IDLE_PROOF_QUIET_MS
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
-      args.ignoreDetached === true
+      args.ignoreDetached === true,
+      // A pane the proof refuses (wsl.exe, a command, Git Bash, a busy shell) keeps main's job-only read.
+      steadyPollJudgesByJobMembership(args, foregroundProcess) ||
+        (args.jobMembershipOnly === true &&
+          !(
+            foregroundProcess !== null &&
+            isShellProcess(foregroundProcess) &&
+            !mayBeGitBashLauncher(session) &&
+            proofEligible
+          ))
     )
+    // A full census (escaped children included) is the only Windows proof; wsl.exe cannot prove its guest idle.
+    // A cached census may predate recent input or output, so prove only a pane quiet since before it could start.
+    idleShellProven =
+      childProcessEvidence === 'no-children' &&
+      foregroundProcess !== null &&
+      isShellProcess(foregroundProcess) &&
+      // The Git Bash launcher's census accepts any bash chain, so a nested bash at work reads as idle there.
+      !mayBeGitBashLauncher(session) &&
+      proofEligible &&
+      !session.startupInputQueued() &&
+      paneActivity(session) === activity
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
+      const activity = paneActivity(session)
       const snapshot = await getStrictProcessTableSnapshotWithAge()
+      // A shared capture that started before the pane's latest input or output may predate a child it started.
+      const capturedAfterActivity =
+        Date.now() - snapshot.capturedAgeMs > session.lastActivityAt &&
+        !session.startupInputQueued()
+      idleShellProven =
+        !session.processNameIsSpawnFile &&
+        rememberIdleShellProof(
+          session,
+          snapshot.rows,
+          snapshot.capturedAgeMs,
+          activity,
+          capturedAfterActivity
+        )
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
@@ -153,7 +237,10 @@ export async function inspectTerminalHostProcess(args: {
         snapshot.rows
       )
       await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
+      // Output or input after the capture may be a command the capture predates.
+      idleShellProven &&= paneActivity(session) === activity
     } catch {
+      idleShellProven = false
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')
       clearSteadyStateAnchor(session)
     }
@@ -161,6 +248,7 @@ export async function inspectTerminalHostProcess(args: {
   if (!session.isAlive || (args.currentSession && args.currentSession() !== session)) {
     childProcessEvidence = 'unverifiable'
     evidence = unverifiableEvidence(args, session, 'session_changed')
+    idleShellProven = false
   }
   const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
   // Agent-only evidence must not erase an ordinary foreground command.
@@ -176,27 +264,8 @@ export async function inspectTerminalHostProcess(args: {
         ? nonShellForeground
         : childProcessEvidence !== 'no-children',
     ...(childProcessEvidence === undefined ? {} : { childProcessEvidence }),
-    foregroundProcessEvidence: evidence
-  }
-}
-
-/** Reuse identity only while the pane fingerprint and raw foreground name still match the full capture. */
-async function readAnchoredForeground(session: Session): Promise<string | null> {
-  const anchor = getSteadyStateAnchor(session)
-  if (process.platform === 'win32' || !anchor) {
-    return null
-  }
-  if (session.getForegroundProcess({ rawFallback: true }) !== anchor.rawFallback) {
-    return null
-  }
-  try {
-    const observed = await buildPaneProcessFingerprint(
-      await getCheapProcessTableSnapshot(),
-      session.pid
-    )
-    return observed !== null && observed === anchor.fingerprint ? anchor.agentName : null
-  } catch {
-    return null
+    foregroundProcessEvidence: evidence,
+    ...(idleShellProven ? { idleShellProven: true as const } : {})
   }
 }
 
@@ -218,30 +287,4 @@ function unverifiableEvidence(
     verdict: 'unverifiable',
     reason
   }
-}
-
-export function inspectTerminalHostSession(
-  sessions: ReadonlyMap<string, Session>,
-  retired: Map<string, RetiredIncarnation>,
-  sessionId: string,
-  options: PtyProcessInspectionOptions | undefined,
-  authorityGeneration: string,
-  nextObservationEpoch: () => number
-): Promise<TerminalHostProcessInspection> {
-  pruneRetiredPtyIncarnations(retired)
-  const session = getInspectableTerminalHostSession(
-    sessions,
-    retired,
-    sessionId,
-    options?.expectedIncarnationId
-  )
-  return inspectTerminalHostProcess({
-    sessionId,
-    currentSession: () => sessions.get(sessionId),
-    session: session?.isAlive ? session : null,
-    ...options,
-    retiredIncarnation: retired.get(sessionId),
-    authorityGeneration,
-    nextObservationEpoch
-  })
 }

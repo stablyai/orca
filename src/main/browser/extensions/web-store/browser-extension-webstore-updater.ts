@@ -24,11 +24,13 @@ import { downloadWebStoreCrx, isAllowedCrxDownloadUrl } from './browser-extensio
 import {
   commitStagedWebStoreExtension,
   discardStagedWebStoreExtension,
-  isBrowserExtensionBusy,
   stageWebStoreExtension,
-  withBrowserExtensionLock,
   type StagedWebStoreExtension
 } from '../installation/browser-extension-webstore-install'
+import {
+  isBrowserExtensionBusy,
+  withBrowserExtensionLock
+} from '../installation/browser-extension-mutation-lock'
 
 /**
  * Background updates for store installs. Request shape follows electron-chrome-web-store's
@@ -312,11 +314,15 @@ export async function checkForBrowserExtensionUpdates(): Promise<void> {
 let started = false
 
 /** Checks shortly after launch and then every five hours, off the startup path. */
-export function startBrowserExtensionUpdateChecks(): void {
+export function startBrowserExtensionUpdateChecks(options?: { runImmediately?: boolean }): void {
   if (started) {
     return
   }
   started = true
-  setTimeout(() => void checkForBrowserExtensionUpdates(), FIRST_CHECK_DELAY_MS).unref()
+  if (options?.runImmediately) {
+    void checkForBrowserExtensionUpdates()
+  } else {
+    setTimeout(() => void checkForBrowserExtensionUpdates(), FIRST_CHECK_DELAY_MS).unref()
+  }
   setInterval(() => void checkForBrowserExtensionUpdates(), CHECK_INTERVAL_MS).unref()
 }

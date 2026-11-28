@@ -1,18 +1,26 @@
 /** R25: refuse WSL Add if a known paired server shares the distro orcad's public E2EE key; otherwise one install gets two desktop owners. Other desktops and data dirs outside ~/.orca are unobservable; C4 admission still guards them. */
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { E2EE_KEYPAIR_FILENAME } from '../../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
-import type { WslHostAddResult } from '../../../shared/wsl-host-types'
+import type { WslHostAddResult } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { wslHostAddRefusal } from './wsl-host-add-admission'
 
-// Prints only the public half; the private key never leaves the distro.
-const READ_PUBLIC_KEY = `sed -n 's/.*"publicKeyB64"[[:space:]]*:[[:space:]]*"\\([A-Za-z0-9+/=]*\\)".*/\\1/p' "$HOME/.orca/${E2EE_KEYPAIR_FILENAME}" 2>/dev/null | head -n 1`
+/** Keeps only the `publicKeyB64` value of an orcad key file on stdin; pipe into `head -n 1`. */
+export const ORCAD_PUBLIC_KEY_SED = `sed -n 's/.*"publicKeyB64"[[:space:]]*:[[:space:]]*"\\([A-Za-z0-9+/=]*\\)".*/\\1/p'`
+
+/** `home`'s orcad public key; the private key never leaves the distro. */
+export function orcadPublicKeyCommand(home: string): string {
+  // The redirect feeds sed, never head: head would print the file's raw first line.
+  return `${ORCAD_PUBLIC_KEY_SED} < "${home}/.orca/${E2EE_KEYPAIR_FILENAME}" 2>/dev/null | head -n 1`
+}
+
+const READ_PUBLIC_KEY = orcadPublicKeyCommand('$HOME')
 
 export async function readWslDistroOrcadPublicKey(
   transport: OrcadHostTransport,
@@ -48,7 +56,7 @@ export async function wslHostSshManagedRefusal(
   try {
     const sharing = findServerSharingWslOrcad(
       // A conflict check before an add: a crash-zeroed list (#18766) must read as empty here.
-      listEnvironments(userDataPath, { recoverBlankStore: true }),
+      await listEnvironments(userDataPath, { recoverBlankStore: true }),
       await readPublicKey(distro)
     )
     return sharing

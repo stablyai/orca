@@ -46,14 +46,20 @@ export class DaemonRouterRetirement {
       this.admissionClosed = this.retirementAttempted
       return { state: 'unsupported' }
     }
-    const inventories = await Promise.allSettled(adapters.map((adapter) => adapter.listSessions()))
+    const inventories = await Promise.allSettled(
+      adapters.map((adapter) => adapter.listSessionsAndRelays())
+    )
     if (inventories.some((inventory) => inventory.status === 'rejected')) {
       this.admissionClosed = this.retirementAttempted
       return { state: 'unverifiable' }
     }
-    // Each adapter's inventory lists live sessions only.
+    // Each adapter's inventory lists live sessions only; its chat relays end with it too.
     const liveSessions = inventories.reduce(
-      (count, inventory) => count + (inventory.status === 'fulfilled' ? inventory.value.length : 0),
+      (count, inventory) =>
+        count +
+        (inventory.status === 'fulfilled'
+          ? inventory.value.sessions.length + inventory.value.liveRelays
+          : 0),
       0
     )
     if (liveSessions > 0) {

@@ -2,7 +2,7 @@ import { OrcaRuntimeWithSerializeHeadlessTerminalBuffer } from '../../terminal/o
 import type {
   OrchestrationCompatibilityEvidence,
   OrchestrationCompatibilityHostStamp
-} from '../../../../shared/orchestration-compatibility-evidence'
+} from '../../../../shared/orchestration/orchestration-compatibility-evidence'
 import type {
   OrchestrationCompatibilityCallerAuthority,
   OrchestrationCompatibilitySshTerminal,

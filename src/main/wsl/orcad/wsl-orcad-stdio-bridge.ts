@@ -3,7 +3,7 @@ import {
   observeWslOrcadBridgeChannel,
   type WslOrcadBridgeChannelEvents
 } from './wsl-orcad-bridge-activity'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import {
   ORCAD_STDIO_BRIDGE_DEPENDENCIES,
   startOrcadStdioBridge,
@@ -11,6 +11,9 @@ import {
 } from '../../managed-server/lifecycle/orcad-stdio-bridge-provider'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import { assertWslUncPathRunning } from '../filesystem/wsl-unc-access-gate'
+
+// One wsl.exe per socket and no SSH MaxSessions to share; this only bounds a leaky client's spawns.
+const WSL_ORCAD_STDIO_BRIDGE_MAX_CHANNELS = 64
 
 export type WslOrcadStdioBridgeOptions = {
   environmentId: string
@@ -51,7 +54,8 @@ export function listenWslOrcadStdioBridge(
         const channel = await dependencies.openChannel(conn, bridge)
         return events ? observeWslOrcadBridgeChannel(channel, events) : channel
       }
-    }
+    },
+    WSL_ORCAD_STDIO_BRIDGE_MAX_CHANNELS
   )
 }
 

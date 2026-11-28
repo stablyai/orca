@@ -57,10 +57,6 @@ export function getPtyOwnerHostColors(): TerminalOscColorQueryReplyColors | null
   return hostColors
 }
 
-export function _resetPtyOwnerHostColorsForTest(): void {
-  hostColors = null
-}
-
 /** A launching client's theme pins its PTY; otherwise the host-wide viewer theme overrides spawn colors so old panes
  * track theme changes; use the default before any viewer reports. */
 export function resolvePtyOwnerColorQueryColors(

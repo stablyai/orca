@@ -1,4 +1,4 @@
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import type React from 'react'
 import { EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
@@ -20,10 +20,10 @@ import type {
 } from '../commands/rich-markdown-slash-command-primitives'
 import type { MarkdownTocItem } from '../../markdown/navigation/markdown-table-of-contents'
 import type { NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
-import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'
+import type { MarkdownReviewNote } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type { RichMarkdownAnnotationTarget } from '../review/rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from '../review/rich-markdown-review-note-layout'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { focusRichMarkdownEditorFromSearch } from '../search/rich-markdown-search-focus'
 
 function shouldFocusEmptyEditorFromSurfaceClick(
@@ -59,9 +59,8 @@ type RichMarkdownEditorSurfaceProps = {
   commentOwner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
-  markdownCommentsCount: number
+  markdownComments: readonly DiffComment[]
   reviewRailOpen: boolean
-  reviewNotesCopied: boolean
   unsentMarkdownReviewScope: NotesSendMenuScope<MarkdownReviewNote>[]
   linkBubble: LinkBubbleState | null
   isEditingLink: boolean
@@ -108,8 +107,9 @@ type RichMarkdownEditorSurfaceProps = {
     handleLinkSave: (href: string) => void
     handleLinkRemove: () => void
     handleLinkEditCancel: () => void
-    handleLinkOpen: () => void
     handleLinkCopy: () => void
+    onBubblePointerEnter: React.PointerEventHandler<HTMLDivElement>
+    onBubblePointerLeave: React.PointerEventHandler<HTMLDivElement>
     setIsEditingLink: (editing: boolean) => void
   }
   onToggleLink: () => void
@@ -152,9 +152,8 @@ export function RichMarkdownEditorSurface({
   commentOwner,
   worktreeId,
   filePath,
-  markdownCommentsCount,
+  markdownComments,
   reviewRailOpen,
-  reviewNotesCopied,
   unsentMarkdownReviewScope,
   linkBubble,
   isEditingLink,
@@ -288,8 +287,9 @@ export function RichMarkdownEditorSurface({
             onRemove={linkBubbleActions.handleLinkRemove}
             onEditStart={() => linkBubbleActions.setIsEditingLink(true)}
             onEditCancel={linkBubbleActions.handleLinkEditCancel}
-            onOpen={linkBubbleActions.handleLinkOpen}
             onCopy={linkBubbleActions.handleLinkCopy}
+            onPointerEnter={linkBubbleActions.onBubblePointerEnter}
+            onPointerLeave={linkBubbleActions.onBubblePointerLeave}
             ownerId={linkBubbleOwnerId}
           />
         ) : null}
@@ -334,20 +334,17 @@ export function RichMarkdownEditorSurface({
           onCancelPopover={onCancelAnnotationPopover}
           onSubmit={onSubmitAnnotation}
         />
-        {markdownCommentsCount > 0 ? (
-          <RichMarkdownReviewRailActions
-            owner={commentOwner}
-            worktreeId={worktreeId}
-            filePath={filePath}
-            noteCount={markdownCommentsCount}
-            railOpen={reviewRailOpen}
-            notesCopied={reviewNotesCopied}
-            unsentScope={unsentMarkdownReviewScope}
-            onToggleRail={onToggleReviewRail}
-            onCopyNotes={onCopyReviewNotes}
-            onDelivered={onReviewNotesDelivered}
-          />
-        ) : null}
+        <RichMarkdownReviewRailActions
+          owner={commentOwner}
+          worktreeId={worktreeId}
+          filePath={filePath}
+          notes={markdownComments}
+          railOpen={reviewRailOpen}
+          unsentScope={unsentMarkdownReviewScope}
+          onToggleRail={onToggleReviewRail}
+          onCopyNotes={onCopyReviewNotes}
+          onDelivered={onReviewNotesDelivered}
+        />
       </div>
     </div>
   )

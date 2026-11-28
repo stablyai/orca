@@ -2,27 +2,27 @@
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
+import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
+import { probeActiveOrcadReadiness } from '../../managed-server/activation/orcad-active-readiness'
 import { orcadBoundPort } from '../../managed-server/lifecycle/orcad-managed-bound-port'
 import { managedOrcadInstallDir } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from '../../managed-server/lifecycle/orcad-managed-wake'
 import type { OrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
-import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import type { OrcadSlotOptions } from '../../managed-server/activation/orcad-recovery-slot'
 import { readRemoteOrcadBuildHash } from '../../managed-server/install/orcad-remote-build-hash'
 import {
   requestOrcadTerminalCensus,
   type OrcadTerminalCensusRequestOptions
-} from '../../ssh/orcad-terminal-census-client'
-import { updateTerminalCounts } from '../../ssh/orcad-fenced-stop'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
+} from '../../managed-server/lifecycle/orcad-terminal-census-client'
+import { updateTerminalCounts } from '../../managed-server/activation/orcad-fenced-stop'
+import { tunneledOrcadPairingCode } from '../../managed-server/lifecycle/orcad-tunneled-pairing'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
 
@@ -48,6 +48,31 @@ const UNREADABLE: WslOrcadIncumbent = {
   readiness: null,
   recount: async () => UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
   releaseAdmission: async () => {}
+}
+
+/** An incumbent never woken has no daemon to ask; say which check stopped it, not that the daemon was silent. */
+function unreadableBecause(because: string): WslOrcadIncumbent {
+  const census = {
+    ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+    unansweredBecause: because
+  }
+  return { ...UNREADABLE, census, recount: async () => census }
+}
+
+function wakeBlockedReason(
+  wake: Awaited<ReturnType<typeof wakeStoppedManagedOrcad>>,
+  version: string
+): string | null {
+  if (wake.outcome === 'unverifiable') {
+    return (
+      `Orca could not tell whether orcad ${version} is still running on the host: its PID ` +
+      'check was inconclusive, or another process still runs that build.'
+    )
+  }
+  if (wake.outcome === 'fenced') {
+    return 'Another launch or update holds the activation lock on the host.'
+  }
+  return wake.outcome === 'recovery-refused' ? wake.reason : null
 }
 
 export type WslOrcadIncumbentDependencies = {
@@ -102,7 +127,8 @@ export async function readWslOrcadIncumbent(
         }
       )
     } else {
-      return UNREADABLE
+      const because = wakeBlockedReason(wake, record.active)
+      return because ? unreadableBecause(because) : UNREADABLE
     }
   } catch {
     return UNREADABLE

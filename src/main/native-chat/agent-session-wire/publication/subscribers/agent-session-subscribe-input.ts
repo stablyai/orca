@@ -1,0 +1,95 @@
+import type { LiveTextReaders } from '../../journal-ingress/structured-agent-session-event-sink'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
+import type { StructuredAgentSessionWorkFrameReader } from '../../observations/structured-agent-session-status-reader'
+import type {
+  SubscriberFieldHooks,
+  SubscriberFieldState
+} from './agent-session-subscriber-frame-fields'
+import type { CurrentRequestsSubscriber } from '../../observations/agent-session-current-requests'
+import type { ForkMarker } from '../history/agent-session-fork-marker'
+import type { HistoryReader } from '../history/agent-session-history-page-bounds'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
+import type { SubscriberHostWork, SubscriberLiveRow } from './agent-session-subscriber-live-text'
+
+export type AgentSessionSubscribeInput = {
+  commandsOnRequest?: boolean
+  id: string
+  sessionId: string
+  emit: (event: AgentSessionSubscribeEvent) => void
+  /** Ends the subscriber's stream once the host stops delivering to it, so the client resubscribes. */
+  end?: (cause: unknown) => void
+  cursor?: AgentJournalCursor
+  /** Bound each frame to the phone bridge’s limit; RPC enables this for every phone. */
+  boundedFrames?: boolean
+  projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
+  readHistorySnapshot?: HistoryReader['snapshot']
+  readQueueSourceIds?: HistoryReader['queueSourceIds']
+  projectJournalEvent?: SubscriberFieldState['projectJournalEvent']
+  readsCurrentRequests?: boolean
+  /** False for desktops that need exact replay to keep send echoes and current requests. */
+  snapshotCatchUp?: boolean
+  /** The reader shows prompt suggestions on screen; only these receive them or keep them generated. */
+  showsPromptSuggestions?: boolean
+  /** Whether this stream's append transport holds a row's text; live rows go only where it does.
+   *  Null once the row's turn ended and its base was let go of. */
+  holdsTextBase?: (itemId: string) => boolean | null
+  /** The viewer that opted in to live text (one connection's view of the chat), and whether it
+   *  said it is shown. Without one the stream gets saves only. */
+  liveTextViewer?: string
+  liveTextShown?: boolean
+  /** Hands the stream a setter for when its viewer says it is shown or hidden. */
+  onLiveTextShown?: (set: (shown: boolean) => void) => void
+}
+
+export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
+export type Subscriber = {
+  id: string
+  emit: AgentSessionSubscriberEmit
+  end?: (cause: unknown) => void
+  cursor: AgentJournalCursor
+  fence: number
+  forkMarkerView?: string
+  readForkMarker?: () => ForkMarker | undefined
+  readHistorySnapshot?: HistoryReader['snapshot']
+  readQueueSourceIds?: HistoryReader['queueSourceIds']
+  snapshotCatchUp?: boolean
+  /** The fence of a snapshot whose capture was abandoned; the next delivery sends it, not a batch. */
+  owedSnapshotFence?: number
+  showsPromptSuggestions?: boolean
+  /** The current-work view the last frame's fields were read under
+   *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
+  workView?: string
+  historyView?: string
+  holdsTextBase?: (itemId: string) => boolean | null
+  liveTextViewer?: string
+  liveTextShown?: boolean
+  /** Live rows last sent, by row; a page that replaces the view clears it. */
+  liveSent?: Map<string, SubscriberLiveRow>
+  /** Streaming replies this subscriber was sent shortened; their saves carry them, not live text. */
+  liveShortened?: Set<string>
+  /** Host facts the client holds, which a live row-carrying frame must restate. */
+  hostWork?: SubscriberHostWork
+  /** Aborts when the subscriber is dropped, withdrawing its reads still waiting for a reader. */
+  stopped?: AbortSignal
+} & CurrentRequestsSubscriber &
+  SubscriberFieldState
+
+export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
+  readLiveText?: (sessionId: string, readers?: LiveTextReaders) => readonly AgentJournalRenderItem[]
+  readForkMarker?: (sessionId: string) => ForkMarker | undefined
+  readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
+  /** The session's current journal, for a send outside a publication. */
+  readSessionJournal?: (sessionId: string) => AgentSessionJournal | undefined
+  onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
+  readCurrentWork?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => Promise<StructuredAgentSessionObservedWork | null>
+  readWorkFrame?: StructuredAgentSessionWorkFrameReader
+  /** The session gained its first, or lost its last, subscriber that shows prompt suggestions. */
+  onPromptSuggestionInterest?: (sessionId: string, wanted: boolean) => void
+  now?: () => number
+}

@@ -1,10 +1,45 @@
 export const BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES = 256 * 1024
 export const BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS = 10_000
-export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES = 256 * 1024
-export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS = 256
 export const BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS = 65_536
 // Chromium's per-session socket pool; a lower cap refuses a heavy page's own connections.
 export const BROWSER_NETWORK_TUNNEL_MAX_STREAMS = 256
+
+export type BrowserNetworkTunnelFlowControl = {
+  /** Largest stream window; streams start at the legacy window and grow within the connection window. */
+  streamWindowBytes: number
+  /** Bytes each side may have unacknowledged in flight across all streams; null is unbounded. */
+  connectionWindow: { toClientBytes: number; toSessionBytes: number } | null
+}
+
+// Per-stream throughput is capped at window / RTT, so 256 KiB is ~2.9 MB/s over a 90 ms link.
+export const BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL: BrowserNetworkTunnelFlowControl = {
+  streamWindowBytes: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  connectionWindow: null
+}
+
+// Connection windows keep each sender's WebSocket queue far below its overflow cap (session 64 MiB,
+// client 7 MiB) however many streams grow to the larger per-stream window.
+export const BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL: BrowserNetworkTunnelFlowControl = {
+  streamWindowBytes: 2 * 1024 * 1024,
+  connectionWindow: { toClientBytes: 16 * 1024 * 1024, toSessionBytes: 4 * 1024 * 1024 }
+}
+
+// Every relay stream shares one stdio pipe; the connection windows bound what either side queues on it.
+export const BROWSER_NETWORK_RELAY_FLOW_CONTROL: BrowserNetworkTunnelFlowControl = {
+  streamWindowBytes: 2 * 1024 * 1024,
+  connectionWindow: { toClientBytes: 4 * 1024 * 1024, toSessionBytes: 4 * 1024 * 1024 }
+}
+
+// Room for a full connection window plus frame headers and control frames, so a slow pipe backs up instead of failing.
+export const BROWSER_NETWORK_RELAY_WRITER_LIMITS = {
+  maxQueuedBytes: 8 * 1024 * 1024,
+  maxQueuedFrames: 65_536
+}
+
+// One chunk per KiB of window keeps tiny-frame floods bounded while a full window of 1 KiB frames fits.
+export function browserNetworkTunnelMaxPendingChunks(windowBytes: number): number {
+  return windowBytes / 1024
+}
 
 export function validateBrowserNetworkTunnelGeneration(generation: number): void {
   if (!Number.isInteger(generation) || generation < 1 || generation > 0xffff_ffff) {
@@ -46,6 +81,8 @@ export type BrowserNetworkTunnelSocket = {
 export type BrowserNetworkTunnelStream = {
   id: number
   socket: BrowserNetworkTunnelSocket
+  windowBytes: number
+  receiveWindowBytes: number
   connected: boolean
   closed: boolean
   receiveCredit: number
@@ -64,8 +101,9 @@ export type BrowserNetworkTunnelSessionOptions = {
   tunnelGeneration: number
   connect: (target: BrowserNetworkTunnelOpen) => BrowserNetworkTunnelSocket
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
+  flowControl?: BrowserNetworkTunnelFlowControl
   onClose?: () => void
   now?: () => number
   claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null
 }
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'

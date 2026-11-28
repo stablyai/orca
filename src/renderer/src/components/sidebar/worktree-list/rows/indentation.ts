@@ -13,7 +13,7 @@ export const LINEAGE_IMMEDIATE_PARENT_STEP =
   SIDEBAR_TREE_INDENT + PROJECT_WORKTREE_CARD_EXTRA_INDENT
 export const LINEAGE_NESTED_ROW_SURFACE_INSET = 0
 export const LINEAGE_CHILDREN_INLINE_OFFSET =
-  LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
+  LINEAGE_IMMEDIATE_PARENT_STEP - FLUSH_CARD_MIN_CONTENT_INSET
 // Why: header icon+gap (22) vs. card margin+border+legacy lane+gap (23) minus pullback lands the title on the header label.
 const GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET = 3
 export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
@@ -33,17 +33,25 @@ export function getProjectGroupHeaderPaddingLeft(depth: number): number {
   )
 }
 
+export function getWorktreeCardContentIndentDirect(
+  isGrouped: boolean,
+  groupDepth: number,
+  lineageDepth: number
+): number {
+  const lineageIndent = clampDepth(lineageDepth) * SIDEBAR_TREE_INDENT
+  return isGrouped
+    ? getProjectGroupHeaderPaddingLeft(groupDepth) +
+        GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET +
+        lineageIndent
+    : lineageIndent
+}
+
 export function getWorktreeCardContentIndent(args: {
   isGrouped: boolean
   groupDepth: number
   lineageDepth: number
 }): number {
-  const lineageIndent = clampDepth(args.lineageDepth) * SIDEBAR_TREE_INDENT
-  return args.isGrouped
-    ? getProjectGroupHeaderPaddingLeft(args.groupDepth) +
-        GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET +
-        lineageIndent
-    : lineageIndent
+  return getWorktreeCardContentIndentDirect(args.isGrouped, args.groupDepth, args.lineageDepth)
 }
 
 export function getFolderWorkspaceCardContentIndent(args: { groupDepth: number }): number {
@@ -120,14 +128,18 @@ export function getFolderWorkspaceRowGeometry(args: {
   }
 }
 
+export function getWorktreeCardSurfaceInsetDirect(isGrouped: boolean, groupDepth: number): number {
+  // Why: steps with group headers so each card edge keeps the same offset from its header icon.
+  return isGrouped
+    ? getProjectGroupHeaderPaddingLeft(groupDepth) - PROJECT_GROUP_HEADER_BASE_PADDING
+    : 0
+}
+
 export function getWorktreeCardSurfaceInset(args: {
   isGrouped: boolean
   groupDepth: number
 }): number {
-  // Why: steps with group headers so each card edge keeps the same offset from its header icon.
-  return args.isGrouped
-    ? getProjectGroupHeaderPaddingLeft(args.groupDepth) - PROJECT_GROUP_HEADER_BASE_PADDING
-    : 0
+  return getWorktreeCardSurfaceInsetDirect(args.isGrouped, args.groupDepth)
 }
 
 export function getFlushWorktreeCardPaddingLeft(

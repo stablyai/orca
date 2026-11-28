@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
-import { readPluginImageHeader } from './plugin-image-format'
+import { readPluginImageHeader, type PluginImageInfo } from './plugin-image-format'
 import {
   PLUGIN_IMAGE_RULES,
   pluginImageRuleError,
@@ -8,13 +8,16 @@ import {
   type PluginCatalogImages,
   type PluginImageKind
 } from './plugin-image-fields'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 // Why loose: only the image fields matter here; full manifest checks run at install.
-const manifestImagesSchema = z.object({
-  name: z.string().optional(),
-  icon: pluginRelativePathSchema.optional(),
-  ...pluginManifestImageFields
-})
+const manifestImagesSchema = lazyZodSchema(() =>
+  z.object({
+    name: z.string().optional(),
+    icon: pluginRelativePathSchema.optional(),
+    ...pluginManifestImageFields
+  })
+)
 
 type CatalogImage = NonNullable<PluginCatalogImages['cover']>
 
@@ -34,6 +37,7 @@ export async function catalogImagesFromManifest(input: {
   prefix: string | undefined
   read: PluginRepositoryFileReader
   sha256: (bytes: Uint8Array) => string
+  readHeader?: (bytes: Uint8Array) => PluginImageInfo | string
 }): Promise<PluginCatalogImages | null> {
   const parsed = manifestImagesSchema.safeParse(input.manifest)
   if (!parsed.success) {
@@ -47,7 +51,7 @@ export async function catalogImagesFromManifest(input: {
   ): Promise<CatalogImage | null> => {
     const path = input.prefix ? `${input.prefix}/${relative}` : relative
     const bytes = await input.read(path, PLUGIN_IMAGE_RULES[kind].maxBytes).catch(() => null)
-    const info = bytes ? readPluginImageHeader(bytes) : 'missing'
+    const info = bytes ? (input.readHeader ?? readPluginImageHeader)(bytes) : 'missing'
     if (!bytes || typeof info === 'string' || pluginImageRuleError(kind, info, bytes.byteLength)) {
       return null
     }

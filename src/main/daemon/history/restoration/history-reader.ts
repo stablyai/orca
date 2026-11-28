@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { existsSync, opendirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { TerminalCheckpointFile } from '../../protocol/daemon-checkpoint-file'
 import { getHistorySessionDirName } from '../storage/history-paths'
@@ -7,7 +7,7 @@ import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from '../storage/terminal-
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as DAEMON_RESTORE_SCROLLBACK_ROWS } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { historyReplayWindowsPty } from '../../protocol/daemon-history-replay-pty'
 import { HeadlessEmulator } from '../../emulation/headless-emulator'
-import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { readTerminalHistoryBufferAsync } from '../storage/terminal-history-file-reader'
 import { detectColdRestoreFromLegacyScrollback } from './terminal-history-legacy-scrollback-restore'
@@ -34,6 +34,7 @@ import {
 } from './terminal-history-cold-restore-info'
 import { readTerminalHistoryCheckpoint } from './terminal-history-checkpoint-reader'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
+import { openDirectorySync, type DirectoryHandle } from '../../../../shared/open-directory'
 
 export type RestorableHistoryProbe =
   | { status: 'none' }
@@ -143,12 +144,13 @@ export class HistoryReader {
         : { status: 'none' }
     }
 
+    const cwd = meta.lastProbedCwd ?? checkpoint.cwd ?? null
     return {
       status: 'restored',
       sessionId,
-      restoreInfo: coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta),
+      restoreInfo: coldRestoreInfoFromSnapshot(checkpoint, cwd, meta),
       hasUnreadableRecovery: logRestore.readFailed,
-      ...((checkpoint.cwd ?? null) === null ? { cwdFromSpawn: true } : {})
+      ...(cwd === null ? { cwdFromSpawn: true } : {})
     }
   }
 
@@ -157,9 +159,9 @@ export class HistoryReader {
       return []
     }
 
-    let directory: ReturnType<typeof opendirSync>
+    let directory: DirectoryHandle
     try {
-      directory = opendirSync(this.basePath)
+      directory = openDirectorySync(this.basePath)
     } catch {
       return []
     }
@@ -292,7 +294,7 @@ export class HistoryReader {
         }
         const snapshot = emulator.getSnapshot()
         const lastBatch = log.batches.at(-1)!
-        const cwd = snapshot.cwd ?? checkpoint?.cwd ?? null
+        const cwd = snapshot.cwd ?? meta.lastProbedCwd ?? checkpoint?.cwd ?? null
         return {
           restoreInfo: coldRestoreInfoFromSnapshot(
             { ...snapshot, pendingOutputSeq: lastBatch.seq },

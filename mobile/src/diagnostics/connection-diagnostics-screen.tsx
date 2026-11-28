@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useState } from 'react'
 import { ConnectionDiagnosticsView } from './connection-diagnostics-view'
 import {
   diagnoseConnection,
@@ -12,9 +12,9 @@ import {
 import type { DiagnosticsDeviceOperations } from './diagnostics-device-operations'
 import type {
   ConnectionLogEntry,
-  ConnectionState,
   MobileConnectionDiagnosticPath
-} from '../transport/types'
+} from './connection/connection-log-types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 export function ConnectionDiagnosticsScreen({
   device,
@@ -26,7 +26,8 @@ export function ConnectionDiagnosticsScreen({
   entries,
   writeClipboard,
   onBack,
-  hostPicker
+  hosts,
+  onSelectHost
 }: {
   device: DiagnosticsDeviceOperations | null
   /** Null only when no host is paired; an empty name or endpoint is still a host. */
@@ -38,7 +39,8 @@ export function ConnectionDiagnosticsScreen({
   entries: readonly ConnectionLogEntry[]
   writeClipboard: (report: string) => Promise<unknown>
   onBack: () => void
-  hostPicker?: ReactNode
+  hosts?: readonly { id: string; name: string }[]
+  onSelectHost?: (hostId: string) => void
 }) {
   const [copiedScope, setCopiedScope] = useState<{ hostId: string | null } | null>(null)
   const [submissionStates, setSubmissionStates] = useState<DiagnosticsSubmissionStates>({})
@@ -100,7 +102,9 @@ export function ConnectionDiagnosticsScreen({
       submissionState={submissionState}
       sendDiagnostics={sendDiagnostics}
       onBack={onBack}
-      hostPicker={hostPicker}
+      hosts={hosts}
+      selectedHostId={hostId}
+      onSelectHost={onSelectHost}
     />
   )
 }

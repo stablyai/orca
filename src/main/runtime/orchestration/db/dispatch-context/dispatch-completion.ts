@@ -1,4 +1,4 @@
-import type { TaskStatus, DispatchContextRow } from '../../types'
+import type { TaskStatus, DispatchContextRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -97,11 +97,14 @@ export function failActiveDispatchForTask(
 
 // Late heartbeats from settled Dispatches must not mask a hung retry.
 export function recordHeartbeat(this: OrchestrationDb, dispatchId: string, at: string): void {
-  this.db
-    .prepare(
-      "UPDATE dispatch_contexts SET last_heartbeat_at = ? WHERE id = ? AND status = 'dispatched'"
-    )
-    .run(at, dispatchId)
+  // Heartbeats update only last_heartbeat_at; suppress worker-status notices that repeat host lineage reads.
+  this.withoutWorkerStatusNotice(() => {
+    this.db
+      .prepare(
+        "UPDATE dispatch_contexts SET last_heartbeat_at = ? WHERE id = ? AND status = 'dispatched'"
+      )
+      .run(at, dispatchId)
+  })
 }
 
 export function failDispatch(

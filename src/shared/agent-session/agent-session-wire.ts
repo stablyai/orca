@@ -1,11 +1,13 @@
-import type { AgentSessionUnavailable } from './agent-session-availability'
-import type { AgentSessionFrameFields } from './agent-session-frame-fields'
+import type { AgentSessionForkNaming } from './conversation-naming/agent-session-fork-name'
+import type { AgentSessionUnavailable } from './failures/agent-session-availability'
+import type { AgentSessionFrameFields } from './view/live-read/agent-session-frame-fields'
+import type { AgentSessionUsageLimitContinue } from './lifecycle/stopping/agent-session-usage-limit-continue-wire'
 import type { AgentSessionCurrentWorkFields } from './requests/agent-session-current-work-wire'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from './agent-session-background-task-wire'
-import type { AgentSessionRewindReason } from './lifecycle/agent-session-rewind'
+} from './background-tasks/agent-session-background-task-wire'
+import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {
@@ -27,10 +29,14 @@ import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outc
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
+import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
-export type AgentSessionTurnActivity = {
-  turnId: string
+export type AgentSessionTurnActivity = { turnId: string; text: string }
+
+/** The agent's guess at the user's next prompt; never journaled, replaced when a turn opens. */
+export type AgentSessionPromptSuggestion = {
+  id: string
   text: string
 }
 
@@ -164,6 +170,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
+      /** Sent only to subscribers that asked for suggestions; null clears, absent keeps. */
+      promptSuggestion?: AgentSessionPromptSuggestion | null
       /** Rides every batch that carries rows, removals or submissions, so absent there means an
        *  older host; absent on one that carries none, which changes no turn. */
       latestTurn?: AgentSessionLatestTurn | null
@@ -188,13 +196,15 @@ export type AgentSessionSubscribeEvent =
 
 // ─── Status feed ────────────────────────────────────────────────────────────
 
+/** An open async question: its row, which Skip names, and its text bounded like a status preview. */
+export type AgentSessionAwaitedQuestion = { itemId: string; text: string }
+
+/** An open approval: the tool it asks to run and its command's first line, bounded like a status preview. */
+export type AgentSessionAwaitedApproval = { tool: string; input?: string }
+
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
-  usageLimitContinue?: {
-    turnItemId: string
-    resetsAt: number
-    state: 'scheduled' | 'cancelled' | 'failed' | 'off'
-  }
+  usageLimitContinue?: AgentSessionUsageLimitContinue
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string
@@ -214,16 +224,17 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
-  /** Current child's reported execution model, independent of the next-turn selection. */
+  /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
-  /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
-  permissionMode?: string
-  runtimePermission?: { fence: number; mode: string | null } | null
+  /** The current child's provider fallback model; moving it makes clients re-read options. */
+  fallbackModel?: string
   /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
    *  client re-reads options. Absent from older hosts. */
   effort?: string
   fastMode?: string
   serviceTier?: string
+  /** Saved next-turn intent; moves clients' option stamps without a turn or model change. */
+  interactionMode?: 'default' | 'plan'
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string
@@ -234,6 +245,24 @@ export type AgentSessionStatusSummary = {
   turnOutcome?: AgentTurnOutcome
   /** Host-derived, unpersisted Stop progress while working until its turn ends; clear a settled no-op Stop. Older hosts omit it and older clients ignore it. */
   stopping?: true
+  /** The agent asked a question its turn does not wait on (Codex's async question), and the person
+   *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
+  awaitsAnswer?: true
+  /** The question `awaitsAnswer` waits on, so a client that has not loaded its row can still show
+   *  it and Skip it. Older hosts omit it. */
+  awaitsQuestion?: AgentSessionAwaitedQuestion
+  /** The newest async question row the person skipped: clients hide it and every earlier question.
+   *  Older hosts omit it, and their clients hide a skipped card on that screen only. */
+  asyncQuestionsSkippedThrough?: string
+  /** The first prompt waiting on the person, when it is an approval; set only while `status` is
+   *  'attention'. Older hosts omit it. */
+  awaitsApproval?: AgentSessionAwaitedApproval
+  /** The first prompt waiting on the person, when it is a question its turn stops for (Claude's
+   *  AskUserQuestion): its text on one line. Set only while `status` is 'attention'. Older hosts omit it. */
+  awaitsBlockingQuestion?: { text: string }
+  /** Every prompt waiting on the person is a question, none an approval; set only while `status`
+   *  is 'attention'. Older hosts omit it, and their questions read as blocked. */
+  attentionAsksOnlyQuestions?: true
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
@@ -241,19 +270,30 @@ export type AgentSessionStatusSummary = {
   providerSession?: AgentProviderSessionMetadata
   /** Retain the saved conversation name beyond tab closure; absent while unnamed or on older hosts. */
   conversationName?: string
+  /** `'user'` once the user named the chat. Absent from older hosts. */
+  conversationNameSource?: 'user'
+  /** The chat's source, null when not a fork; current hosts always send it, making the naming
+   *  fields authoritative even while unnamed. Older hosts omit it. */
+  forkedFrom?: AgentSessionForkNaming | null
   /** Why the host could not name this chat, kept in memory only while the chat still has the
    *  name the failed run would have replaced. Absent from older hosts; older clients ignore it. */
   namingError?: AgentSessionNamingError
   /** The record's Sleep mark: the user's Sleep stopped this chat and nothing has been sent since.
    *  Absent from older hosts. */
   sleptAt?: number
+  /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
+   *  Absent from older hosts. */
+  hostProgram?: true
+  /** The chat runs on the host program's own login, which the sign-in method saved in Orca
+   *  doesn't change (an Antigravity chat on agy's own home). Absent from older hosts. */
+  ownLogin?: true
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string
   updatedAt: number
   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number
-}
+} & AgentSessionStatusPermissionFields
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = {
@@ -267,7 +307,9 @@ export type AgentSessionConversationName = {
   sessionId: string
   conversationName: string | null
   namingError?: AgentSessionNamingError
-}
+  /** The chat's agent, so an older fork can title itself from an unnamed source no longer open. */
+  agent?: AgentSessionStatusSummary['agent']
+} & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom'>
 
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
 export type AgentSessionStatusEvent =
@@ -317,7 +359,7 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** Only queue-if-active callers with queued-messages.v2 receive this draft arm; non-waiting states occur only on settled-draft replays. */
+/** Waiting input answers with its row; non-waiting states can occur on same-id replays. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number
@@ -328,7 +370,7 @@ export type AgentSessionSendResult =
   | { clientMessageId: string; submission: AgentJournalSubmission }
   | { clientMessageId: string; queued: AgentSessionQueuedSendReceipt }
 
-/** Undefined for queued replies; callers never sending delivery cannot receive that arm and read undefined as delivery-unknown. */
+/** Undefined while the input is a waiting row rather than a handed-off submission. */
 export function agentSessionSendSubmission(
   result: AgentSessionSendResult | undefined
 ): AgentJournalSubmission | undefined {
@@ -360,26 +402,7 @@ export type AgentSessionOptionChoice = {
   description?: string
 }
 
-export type AgentSessionModelOption = {
-  resolvedModel?: string | null
-  effortsKnown?: false
-  id: string
-  label: string
-  description?: string
-  isDefault: boolean
-  defaultEffort?: string
-  /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
-  declaredDefaultEffort?: string | null
-  efforts: AgentSessionOptionChoice[]
-  /** Additional structured-chat choices; never CLI effort arguments. Older hosts omit this. */
-  chatEfforts?: AgentSessionOptionChoice[]
-  /** Provider catalog fact. Absent means the host could not determine support. */
-  supportsFastMode?: boolean
-  /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */
-  supportsAutoMode?: boolean
-  /** Provider tier IDs beyond standard; capable clients replace Fast with one speed choice including default. Absence means unknown. */
-  serviceTiers?: AgentSessionOptionChoice[]
-}
+import type { AgentSessionModelOption } from './options/model-catalog/agent-session-model-option'
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
 
@@ -395,6 +418,9 @@ export type AgentSessionModelCatalogResult = {
    *  the probe re-checking `unavailable`); a `waitForListing` read answers when it lands. Absent
    *  from a host that predates it; such a host sends it only with `unknown`. */
   listingInProgress?: true
+  /** A `waitForListing` read ran out of budget while its listing still ran. The answer remains
+   *  provisional with `listingInProgress`; a reader still showing the picker may wait again. */
+  waitExpired?: true
   /** Why no chat can start under the account, as the host's probe last found it. Absent is
    *  unknown, which shows nothing; an older host never sends it. */
   unavailable?: AgentSessionUnavailable

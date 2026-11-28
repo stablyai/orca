@@ -1,9 +1,10 @@
 import type { Dirent } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
-  claudeSettingsMayPickModel,
-  codexConfigMayPickModel,
+  copilotSettingsMayPickModel,
+  cursorCliConfigMayPickModel,
   ompSettingsMayPickModel,
   openCodeAgentFileMayPickModel,
   openCodeConfigMayPickModel,
@@ -78,13 +79,6 @@ const OPENCODE_PROJECT_MODEL_LAYERS: ProjectModelLayers = {
 }
 
 const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
-  codex: { files: files(['.codex/config.toml'], codexConfigMayPickModel) },
-  claude: {
-    files: files(
-      ['.claude/settings.json', '.claude/settings.local.json'],
-      claudeSettingsMayPickModel
-    )
-  },
   opencode: OPENCODE_PROJECT_MODEL_LAYERS,
   opencode2: OPENCODE_PROJECT_MODEL_LAYERS,
   // OMP also merges other agents' project settings.
@@ -109,6 +103,15 @@ const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
   pi: {
     files: files(['.pi/settings.json'], piSettingsMayPickModel),
     codeFolders: ['.pi/extensions']
+  },
+  // Cursor merges .cursor/cli.json from the project root down to the folder it runs in.
+  cursor: { files: files(['.cursor/cli.json'], cursorCliConfigMayPickModel) },
+  // Copilot layers repo settings over the user's own.
+  copilot: {
+    files: files(
+      ['.github/copilot/settings.json', '.github/copilot/settings.local.json'],
+      copilotSettingsMayPickModel
+    )
   }
 }
 
@@ -193,9 +196,9 @@ function ancestry(cwd: string): string[] {
   }
 }
 
-// Grok uses user, managed and environment config, not project model settings.
+// Grok and Antigravity pick models from user-level config, not project model settings.
 export function agentReadsProjectModelConfig(agent: string): boolean {
-  return agent !== 'grok'
+  return agent !== 'grok' && agent !== 'antigravity'
 }
 
 export async function workspaceMayOverrideDefaultModel(input: {
@@ -203,7 +206,8 @@ export async function workspaceMayOverrideDefaultModel(input: {
   workspacePath: string
   accountHomePath: string | null
 }): Promise<boolean> {
-  if (!agentReadsProjectModelConfig(input.agent)) {
+  // Claude and Codex pickers follow the account wherever the chat runs.
+  if (!agentReadsProjectModelConfig(input.agent) || independentAgentModelCatalog(input.agent)) {
     return false
   }
   // Unknown project layers may override defaults anywhere.

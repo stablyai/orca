@@ -1,23 +1,40 @@
 import { session } from 'electron'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserSessionPermissionOptions } from '../../site-settings/permissions/browser-session-permission-handlers'
 import { isBrowserRoutePartition } from '../partitions/browser-route-identity'
 import {
   clearBrowserSessionPartitionPolicies,
   installBrowserSessionPartitionPolicies
-} from '../../sessions/browser-session-partition-policies'
+} from '../../sessions/partition-policies/browser-session-partition-policies'
+import { restoreBrowserRoutePartitionSessionCookies } from '../../cookies/session-restore/browser-session-cookie-route-restore'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 
-export function installBrowserRoutePartitionPolicies(
+// Same bound as launch: a slow restore must not hold the page.
+const SESSION_COOKIE_RESTORE_TIMEOUT_MS = 3_000
+
+export async function installBrowserRoutePartitionPolicies(
   profile: BrowserSessionProfile,
   partition: string,
-  { sitePermissions }: { sitePermissions?: 'saved' | 'session' } = {}
+  {
+    sitePermissions,
+    clipboardRead
+  }: Pick<BrowserSessionPermissionOptions, 'sitePermissions' | 'clipboardRead'> = {}
 ): Promise<void> {
   if (!isBrowserRoutePartition(partition)) {
     throw new Error('browser_route_partition_profile_unavailable')
   }
-  return installBrowserSessionPartitionPolicies(
-    { ...profile, partition },
-    { applyAppWideProxy: false, fileSystemAccess: false, sitePermissions }
-  )
+  await Promise.all([
+    installBrowserSessionPartitionPolicies(
+      { ...profile, partition },
+      { applyAppWideProxy: false, fileSystemAccess: false, sitePermissions, clipboardRead }
+    ),
+    // Why here: SSH and This-device partitions both pass through before their first page loads.
+    withTimeout(
+      restoreBrowserRoutePartitionSessionCookies(partition),
+      SESSION_COOKIE_RESTORE_TIMEOUT_MS,
+      undefined
+    )
+  ])
 }
 
 export function clearBrowserRoutePartitionPolicies(partition: string): void {

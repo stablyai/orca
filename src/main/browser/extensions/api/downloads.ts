@@ -1,10 +1,11 @@
 import { webContents as allWebContents } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
 } from '../../../../shared/browser/extensions/browser-extension-url'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
 import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
@@ -25,19 +26,21 @@ const startsInFlight = new Map<string, Promise<unknown>>()
 /** A name inside Downloads, or with saveAs, the exact path the user chose. */
 type DownloadPlace = { filename?: string; savePath?: string }
 
-const optionsSchema = z
-  .object({
-    url: z.string().min(1),
-    filename: z.string(),
-    saveAs: z.boolean(),
-    method: z.enum(['GET', 'POST']),
-    headers: z.array(z.object({ name: z.string(), value: z.string() })),
-    body: z.string(),
-    conflictAction: z.enum(['uniquify', 'overwrite', 'prompt'])
-  })
-  .partial()
-  .required({ url: true })
-  .loose()
+const optionsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      url: z.string().min(1),
+      filename: z.string(),
+      saveAs: z.boolean(),
+      method: z.enum(['GET', 'POST']),
+      headers: z.array(z.object({ name: z.string(), value: z.string() })),
+      body: z.string(),
+      conflictAction: z.enum(['uniquify', 'overwrite', 'prompt'])
+    })
+    .partial()
+    .required({ url: true })
+    .loose()
+)
 
 type ChromeDownloadState = 'in_progress' | 'interrupted' | 'complete'
 

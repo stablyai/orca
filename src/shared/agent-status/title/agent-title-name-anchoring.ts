@@ -16,7 +16,6 @@ const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
   ['codex', 'codex'],
   ['copilot', 'copilot'],
   ['cursor', 'cursor'],
-  ['gemini', 'gemini'],
   ['antigravity', 'antigravity'],
   ['opencode', 'opencode'],
   ['mimo', 'mimo-code'],
@@ -47,7 +46,6 @@ const DISPLAY_LABELS = [
     (agent) => [TUI_AGENT_DISPLAY_NAMES[agent].toLowerCase(), agent] as const
   ),
   ['claude code', 'claude'],
-  ['gemini cli', 'gemini'],
   ['agent teams', 'claude-agent-teams']
 ] satisfies readonly (readonly [string, TerminalAgent])[]
 

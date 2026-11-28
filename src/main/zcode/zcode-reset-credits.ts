@@ -7,7 +7,7 @@
 
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import {

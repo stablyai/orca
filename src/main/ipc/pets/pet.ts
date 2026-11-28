@@ -3,24 +3,28 @@ import {
   CUSTOM_PET_DEFAULT_LABEL,
   PetImportError,
   type PetImportFailure
-} from '../../../shared/pet-import-failure-copy'
+} from '../../../shared/pets/pet-import-failure-copy'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, extname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
-import type { CustomPet } from '../../../shared/pet-types'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
+import type { CustomPet } from '../../../shared/pets/pet-types'
 import { importPetBundle } from './pet-bundle-import'
 import { classifyFile } from './pet-image-formats'
 import { MAX_BYTES } from './pet-import-size-limits'
 import { getPetsDir, isSafeId, resolvePetFile } from './pet-storage-paths'
 
 // Validate untrusted IPC shape before resolvePetFile applies path constraints.
-const PetFileRequestSchema = z.object({
-  id: z.string(),
-  fileName: z.string(),
-  kind: z.enum(['image', 'bundle']).optional()
-})
+const PetFileRequestSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    fileName: z.string(),
+    kind: z.enum(['image', 'bundle']).optional()
+  })
+)
 
 // Known refusals return as data so the renderer can translate them by code.
 async function withPetImportFailure(
@@ -36,8 +40,8 @@ async function withPetImportFailure(
   }
 }
 
-export function registerPetHandlers(): void {
-  ipcMain.handle('pet:import', (event) =>
+export function registerPetHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('pet:import', (event) =>
     withPetImportFailure(async (): Promise<CustomPet | null> => {
       const senderWindow =
         BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
@@ -104,11 +108,9 @@ export function registerPetHandlers(): void {
     })
   )
 
-  ipcMain.handle('pet:importPetBundle', (event) =>
-    withPetImportFailure(() => importPetBundle(event))
-  )
+  ipc.handle('pet:importPetBundle', (event) => withPetImportFailure(() => importPetBundle(event)))
 
-  ipcMain.handle(
+  ipc.handle(
     'pet:read',
     async (
       _event,
@@ -137,7 +139,7 @@ export function registerPetHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'pet:delete',
     async (_event, id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> => {
       let parsed: z.infer<typeof PetFileRequestSchema>

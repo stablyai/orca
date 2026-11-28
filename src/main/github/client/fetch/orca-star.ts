@@ -1,5 +1,6 @@
-import { ghExecFileAsync, acquire, release } from '../../gh-utils'
-import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/default-wsl-cli-fallback'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/hosted-cli/default-wsl-cli-fallback'
 export const ORCA_REPO = 'stablyai/orca'
 
 // Bound optional star prompts more tightly than user work; failures can fall back to the browser.
@@ -14,11 +15,6 @@ export function checkOrcaStarred(): Promise<boolean | null> {
     inFlightStarCheck = null
   })
   return inFlightStarCheck
-}
-
-/** @internal Drop any coalesced check so suites cannot inherit one another's. */
-export function __resetOrcaStarCheckForTests(): void {
-  inFlightStarCheck = null
 }
 
 async function runOrcaStarredCheck(): Promise<boolean | null> {

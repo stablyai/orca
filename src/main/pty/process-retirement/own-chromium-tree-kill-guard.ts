@@ -2,7 +2,7 @@ import {
   recordRefusedOwnChromiumTreeKill,
   recordSelfInitiatedTreeKill,
   type SelfInitiatedTreeKillScope
-} from '../../crash-reporting/self-initiated-tree-kill-log'
+} from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { readOrcaChromiumProcessPids } from './orca-chromium-process-pids'
 import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
 

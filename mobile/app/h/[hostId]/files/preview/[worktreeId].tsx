@@ -4,21 +4,23 @@ import {
   workspaceRouteParams
 } from '../../../../../src/navigation/workspace-execution-host'
 import { useLocalSearchParams } from 'expo-router'
+import { useMobileTranslation } from '../../../../../src/i18n/use-mobile-translation'
 import {
   mobileFilePreviewShellParams,
   normalizeMobileFilePreviewRouteParams
-} from '../../../../../src/files/mobile-file-preview-route'
+} from '../../../../../src/files/preview/mobile-file-preview-route'
 import {
   shellScreenRoute,
   shellScreenRouteKey
-} from '../../../../../src/mobile-web-shell/shell-screen-route'
+} from '../../../../../src/mobile-web-shell/routing/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { PageRouteUnavailableScreen } from '../../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import { PageRouteUnavailableScreen } from '../../../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 import { firstParam } from '../../../../../src/navigation/route-param-reader'
 
 // Normalize preview route before opening shell; rejected params must not mount a page that rejects them again.
 // Only host/worktree ids are path segments; file paths stay params so /, spaces and dot-dot never enter the bridge’s segment vocabulary.
 export default withWorkspaceRoute(function MobileFilePreviewRoute() {
+  const t = useMobileTranslation()
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -36,7 +38,7 @@ export default withWorkspaceRoute(function MobileFilePreviewRoute() {
     name?: string | string[]
     worktreeName?: string | string[]
   }>()
-  const route = normalizeMobileFilePreviewRouteParams(params)
+  const route = normalizeMobileFilePreviewRouteParams(params, t)
   const executionHost = useWorkspaceExecutionHost()
 
   const shellRoute = route.ok

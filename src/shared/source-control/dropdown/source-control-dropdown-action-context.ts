@@ -17,6 +17,8 @@ export type DropdownActionContext = {
   isPullRequestOperationActive: boolean
   canPushLinkedReviewWithoutUpstream: boolean
   rebaseBaseRef: string | null | undefined
+  rebaseBehindCount: number | null
+  rebaseBlockedByDirtyTree: boolean
   hasDirtyLocalChanges: boolean
   upstreamLoading: boolean
   hasUpstream: boolean
@@ -53,6 +55,8 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     hasCurrentBranch = true,
     canPushLinkedReviewWithoutUpstream = false,
     rebaseBaseRef,
+    rebaseBehindCount = null,
+    rebaseBlockedByDirtyTree = false,
     isPullRequestOperationActive = false
   } = inputs
 
@@ -115,6 +119,8 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     isPullRequestOperationActive,
     canPushLinkedReviewWithoutUpstream,
     rebaseBaseRef,
+    rebaseBehindCount,
+    rebaseBlockedByDirtyTree,
     hasDirtyLocalChanges,
     upstreamLoading,
     hasUpstream,

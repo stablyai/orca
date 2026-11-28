@@ -5,55 +5,47 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
-import type { AppIdentity } from '../../shared/app-identity'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
-import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
-import { setWindowMaterialSuppressed } from '../window/window-material-suppression'
+import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
+import {
+  announceRuntimeRelaunch,
+  relaunchApp,
+  runBeforeRelaunchCleanup
+} from '../startup/quit/app-relaunch'
+import { setWindowMaterialSuppressed } from '../window/presentation/window-material-suppression'
 import { isTrustedUIRenderer } from './ui'
-import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
-import { quitProcess } from '../startup/process-quit-request'
+import { handleAppQuitRequest } from './renderer-requests/app-quit-request'
+import { quitProcess } from '../startup/quit/process-quit-request'
 import type { Store } from '../persistence/loading-store/store'
-import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
-import { isPwshAvailableAsync } from '../pty/shell-startup/pwsh'
-import { isWslAvailableAsync } from '../wsl/discovery/wsl-availability'
-import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
-import { isGitBashAvailable } from '../pty/shell-startup/git-bash'
-import { setUnreadDockBadgeCount } from '../dock/unread-badge'
+import { getDevInstanceIdentity } from '../startup/profile-startup/dev-instance-identity'
 import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
-import {
-  ensureDefaultFloatingWorkspacePath,
-  trustFloatingWorkspaceDirectory,
-  resolveFloatingTerminalCwd
-} from './floating-workspace-directory'
-import {
-  isMarkdownDocumentName,
-  markdownDocumentFromFilePath
-} from '../../shared/markdown-document-paths'
-import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
-import {
-  registerRendererShutdownCheckpointHandler,
-  type QuitResumeRecordsFor
-} from './renderer-shutdown-checkpoint'
-import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
-import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
-import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
-import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
-import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
-
-import type { ReconnectFactsFor } from '../persistence/window-save-view'
+import { registerMacSymbolicHotkeysProbeHandler } from './keyboard/macos-symbolic-hotkeys-probe'
+import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import type { RendererShutdownCheckpointService } from '../core-desktop/renderer-shutdown-checkpoint-service'
+import { registerMacKeyboardLayoutChangeNotifications } from './keyboard/macos-keyboard-layout-change-notifications'
+import { isProfileStateSaveDelayed } from '../startup/profile-startup/profile-state-save-delay'
+import { readCommandStdout } from './keyboard/macos-keyboard-input-source'
 
 type RegisterAppHandlersOptions = {
-  quitResumeRecordsFor?: QuitResumeRecordsFor
-  reconnectFactsFor?: ReconnectFactsFor
+  rendererCheckpoint: RendererShutdownCheckpointService
   onBeforeRelaunch?: () => void | Promise<void>
   /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
   onBeforeRelaunchExit?: () => void | Promise<void>
+  /** Ordinary user quit, the same path as the app menu and tray Quit. */
+  onQuit?: () => void
 }
 
 async function pickFloatingMarkdownDocument(
   event: IpcMainInvokeEvent
 ): Promise<MarkdownDocument | null> {
+  const [
+    { ensureDefaultFloatingWorkspacePath },
+    { isMarkdownDocumentName, markdownDocumentFromFilePath }
+  ] = await Promise.all([
+    import('./worktrees/floating-workspace-directory'),
+    import('../../shared/file-listing/markdown-document-paths')
+  ])
   const cwd = await ensureDefaultFloatingWorkspacePath()
   const options = {
     defaultPath: cwd,
@@ -91,6 +83,8 @@ async function pickFloatingWorkspaceDirectory(
   }
   const selectedDir = result.filePaths[0]
   // Only picker-approved paths may become the floating terminal cwd.
+  const { trustFloatingWorkspaceDirectory } =
+    await import('./worktrees/floating-workspace-directory')
   await trustFloatingWorkspaceDirectory(store, selectedDir)
   return selectedDir
 }
@@ -122,12 +116,8 @@ function resolveDevFeatureWallAssetDir(): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
-  registerRendererShutdownCheckpointHandler(
-    store,
-    options.quitResumeRecordsFor,
-    options.reconnectFactsFor
-  )
+export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions): void {
+  registerRendererShutdownCheckpointHandler(options.rendererCheckpoint)
   registerMacKeyboardLayoutChangeNotifications()
   ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
   ipcMain.handle('app:getSystemLanguageDetection', (_event, preferences: unknown) => {
@@ -147,7 +137,16 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
     return detection
   })
-  ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
+  ipcMain.handle('app:getWindowsAdministratorStatus', async () => {
+    const { getWindowsAdministratorStatus } =
+      await import('../windows/windows-administrator-status')
+    return getWindowsAdministratorStatus()
+  })
+  ipcMain.handle('app:getMacosUpgradeSupport', async (_event, minimumMacosVersion: unknown) => {
+    const { getMacosUpgradeSupport } =
+      await import('../macos-update-requirement/macos-upgrade-support')
+    return getMacosUpgradeSupport(minimumMacosVersion)
+  })
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
@@ -165,10 +164,29 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   // Async probes avoid blocking PTY traffic and IPC for up to 5s per capability read.
-  ipcMain.handle('wsl:isAvailable', (): Promise<boolean> => isWslAvailableAsync())
-  ipcMain.handle('wsl:listDistros', (): Promise<string[]> => listWslDistrosAsync())
-  ipcMain.handle('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
-  ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
+  ipcMain.handle('wsl:isAvailable', async (): Promise<boolean> => {
+    const { isWslAvailableAsync } = await import('../wsl/discovery/wsl-availability')
+    return isWslAvailableAsync()
+  })
+  ipcMain.handle('wsl:listDistros', async (): Promise<string[]> => {
+    const { listWslDistrosAsync } = await import('../wsl/discovery/distro-catalog')
+    return listWslDistrosAsync()
+  })
+  ipcMain.handle(
+    'wsl:resolveMappedDrivePath',
+    async (_event, mappedPath: unknown): Promise<string | null> => {
+      const { resolveWslMappedDrivePath } = await import('../wsl/filesystem/wsl-mapped-drive-share')
+      return resolveWslMappedDrivePath(mappedPath)
+    }
+  )
+  ipcMain.handle('pwsh:isAvailable', async (): Promise<boolean> => {
+    const { isPwshAvailableAsync } = await import('../pty/shell-startup/pwsh')
+    return isPwshAvailableAsync()
+  })
+  ipcMain.handle('gitBash:isAvailable', async (): Promise<boolean> => {
+    const { isGitBashAvailable } = await import('../pty/shell-startup/git-bash')
+    return isGitBashAvailable()
+  })
 
   // The selected IME identity must win over its US-shaped backing keyboard layout.
   ipcMain.handle('app:getKeyboardInputSourceId', async (): Promise<string | null> => {
@@ -177,6 +195,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
     try {
       // Focus-in probes must not block the main loop.
+      const { readKeyboardInputSourceId } = await import('./keyboard/macos-keyboard-input-source')
       const stdout = await readKeyboardInputSourceId()
       const trimmed = stdout?.trim() ?? ''
       return trimmed.length > 0 ? trimmed : null
@@ -186,7 +205,11 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
   })
 
-  ipcMain.handle('app:getKeyboardLayoutSnapshot', () => readMacKeyboardLayoutSnapshot())
+  ipcMain.handle('app:getKeyboardLayoutSnapshot', async () => {
+    const { readMacKeyboardLayoutSnapshot } =
+      await import('./keyboard/macos-keyboard-layout-snapshot')
+    return readMacKeyboardLayoutSnapshot()
+  })
 
   ipcMain.handle('app:setWindowMaterialSuppressed', (event, suppressed: unknown) => {
     const window = isTrustedUIRenderer(event.sender)
@@ -200,6 +223,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:relaunch', async () => {
     // Delay teardown so the renderer can paint Restarting after cleanup.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    await announceRuntimeRelaunch()
     await runBeforeRelaunchCleanup(options.onBeforeRelaunchExit)
     setTimeout(() => {
       // app.exit skips before-quit; remove the Windows tray to avoid a stale icon.
@@ -209,9 +233,12 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }, 150)
   })
 
+  ipcMain.handle('app:quit', (event) => handleAppQuitRequest(event, () => options.onQuit?.()))
+
   ipcMain.handle('app:restart', async () => {
     // Normal quit flushes daemon checkpoints and telemetry.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    await announceRuntimeRelaunch()
     setTimeout(() => {
       relaunchApp('admin-restart')
       quitProcess()
@@ -219,8 +246,11 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   ipcMain.handle('app:restartAsAdministrator', async () => {
+    const { prepareWindowsAdministratorRestart } =
+      await import('../windows/windows-administrator-restart')
     const relaunchOptions = prepareWindowsAdministratorRestart()
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    await announceRuntimeRelaunch()
     setTimeout(() => {
       relaunchApp('windows-administrator', undefined, relaunchOptions)
       quitProcess()
@@ -229,15 +259,20 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
 
   registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
 
-  ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
-    setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
-  })
-
-  ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
-    resolveFloatingTerminalCwd(store, args)
+  ipcMain.handle(
+    'app:getFloatingTerminalCwd',
+    async (_event, args?: FloatingTerminalCwdRequest) => {
+      const { resolveFloatingTerminalCwd } =
+        await import('./worktrees/floating-workspace-directory')
+      return resolveFloatingTerminalCwd(store, args)
+    }
   )
 
-  ipcMain.handle('app:getFloatingMarkdownDirectory', () => ensureDefaultFloatingWorkspacePath())
+  ipcMain.handle('app:getFloatingMarkdownDirectory', async () => {
+    const { ensureDefaultFloatingWorkspacePath } =
+      await import('./worktrees/floating-workspace-directory')
+    return ensureDefaultFloatingWorkspacePath()
+  })
 
   ipcMain.handle('app:pickFloatingMarkdownDocument', (event) => pickFloatingMarkdownDocument(event))
 

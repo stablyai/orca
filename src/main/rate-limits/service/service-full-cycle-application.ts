@@ -1,13 +1,33 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
-import { settleSiblingProviderResult } from './service-sibling-provider-result'
-import type { ProviderRateLimits } from './service-types'
+import { isZcodeUsageCredentialCurrent } from '../providers/zcode/zcode-usage-credentials'
+import {
+  settleSiblingProviderResult,
+  type SettledProviderResult
+} from './service-sibling-provider-result'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
+import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+
+function hasKnownProvenanceChange(
+  previous: ProviderRateLimits | null,
+  fresh: ProviderRateLimits
+): boolean {
+  const previousProvenance = previous?.usageMetadata?.authProvenance
+  const freshProvenance = fresh.usageMetadata?.authProvenance
+  return (
+    previousProvenance !== undefined &&
+    freshProvenance !== undefined &&
+    previousProvenance !== freshProvenance
+  )
+}
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
     signal: AbortSignal,
     options?: { force?: boolean }
   ): Promise<void> {
+    const museBeforeFetch = this.state.muse
+    const museResultPromise = this.startMuseUsageFetch(signal)
     const prepared = await this.prepareFetchAllCycle(signal, options)
     if (!prepared) {
       return
@@ -28,20 +48,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       miniMaxGeneration,
       zcodeConfigChanged,
       zcodeGeneration,
-      antigravityGeneration,
       claudeFetchGated,
-      results: [
-        claudeResult,
-        codexResult,
-        geminiResult,
-        opencodeGoResult,
-        kimiResult,
-        miniMaxResult
-      ],
+      results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
+      zcodeResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -70,19 +81,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             updatedAt: Date.now(),
             error:
               codexResult.reason instanceof Error ? codexResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
-
-    const gemini =
-      geminiResult.status === 'fulfilled'
-        ? geminiResult.value
-        : ({
-            provider: 'gemini',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
 
@@ -154,11 +152,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
+      const home = prepared.claudeAuthPreparation?.configDir
+      this.rememberUsageReadingAccount('claude', claudeTarget, home, claudeProvenance)
     }
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
+      const home = prepared.codexHomePath
+      this.rememberUsageReadingAccount('codex', codexTarget, home, codexProvenance)
     }
-    this.trackActiveFailureStreak('gemini', gemini)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -178,7 +179,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : codexBecameUnavailable
           ? codexStateBeforeFetch
           : this.state.codex,
-      gemini: this.applyStalePolicy(gemini, previousState.gemini),
       opencodeGo: shouldApplyOpencode
         ? opencodeConfigChanged
           ? opencodeGo
@@ -192,11 +192,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
+    const [grokSettled, cursorSettled, zcodeSettled] = await Promise.all([
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
+      zcodeResultPromise
     ])
     if (signal.aborted) {
       return
@@ -215,15 +214,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           error: 'ZCode Coding Plan account changed during refresh'
         }
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
-    const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
-    const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
-    const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
-    const cursorAccount = cursor.usageMetadata?.authProvenance
-    const cursorAccountChanged =
-      previousCursorAccount !== undefined &&
-      cursorAccount !== undefined &&
-      previousCursorAccount !== cursorAccount
+    const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
     const zcodeAccount = zcode.usageMetadata?.authProvenance
     const sameZcodeAccount =
@@ -235,9 +227,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
-    if (shouldApplyAntigravity) {
-      this.trackActiveFailureStreak('antigravity', antigravity)
-    }
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
@@ -248,10 +237,30 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           ? zcode
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
-            : this.applyStalePolicy(zcode, previousState.zcode),
-      antigravity: shouldApplyAntigravity
-        ? this.applyStalePolicy(antigravity, previousState.antigravity)
-        : this.state.antigravity
+            : this.applyStalePolicy(zcode, previousState.zcode)
     })
+
+    // Published separately so a slow Muse CLI never delays the sibling batch above.
+    const museSettled = await museResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const muse = settleSiblingProviderResult('muse', museSettled)
+    this.trackActiveFailureStreak('muse', muse)
+    this.updateState({
+      ...this.state,
+      muse: this.applyStalePolicy(muse, museBeforeFetch)
+    })
+  }
+
+  // Started before the shared preparation awaits; hidden meters skip the CLI spawn entirely.
+  private startMuseUsageFetch(signal: AbortSignal): Promise<SettledProviderResult> {
+    const enabled = this.museUsageEnabledResolver?.() ?? true
+    const previous = this.state.muse
+    const beforeFetch = enabled
+      ? this.withFetchingStatus(previous, 'muse')
+      : (previous ?? disabledUsageSnapshot('muse'))
+    this.updateState({ ...this.state, muse: beforeFetch })
+    return prepareMuseUsageFetch(signal, enabled, beforeFetch)
   }
 }

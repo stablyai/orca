@@ -1,5 +1,10 @@
-import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
-import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
+import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
+import { retainTmuxHookWriterTopology } from './cli-writer-observation'
+import {
+  pollCodexTranscriptStatus,
+  readCodexTranscriptPoll,
+  type CodexTranscriptPollReads
+} from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   hasPendingAgentResultText,
@@ -8,12 +13,16 @@ import {
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
+  museHookPollPane,
+  museLogOffset,
+  nextMusePollDelay,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
+import { codexReplayLeftTranscriptWork } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
   ASSISTANT_MESSAGE_RETRY_MS,
@@ -25,6 +34,7 @@ type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
   original: EnrichedAgentHookEventPayload
+  delayMs?: number
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
@@ -42,6 +52,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     CODEX_SUBAGENT_POLL_MS,
     (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
+
+  protected readonly replayTranscriptPolls = new Map<
+    string,
+    { body: unknown; original: EnrichedAgentHookEventPayload }
+  >()
 
   protected applyObservedLocalHook(
     incoming: IncomingAgentHookEvent,
@@ -85,16 +100,13 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   protected clearAllTranscriptPolls(): void {
+    this.replayTranscriptPolls.clear()
     this.transcriptPollScheduler.clearAll()
     this.claudeHelperKills.clearAll()
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {
-    const timer = this.assistantMessageRetryTimers.get(paneKey)
-    if (!timer) {
-      return
-    }
-    clearTimeout(timer)
+    clearTimeout(this.assistantMessageRetryTimers.get(paneKey))
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
@@ -103,10 +115,48 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     this.claudeHelperKills.clear(paneKey)
   }
 
+  protected replaceTranscriptPollRow(
+    previous: EnrichedAgentHookEventPayload,
+    next: EnrichedAgentHookEventPayload
+  ): void {
+    // Identity settlement replaces rows, including replayed ones still waiting for the server to bind.
+    for (const poll of [
+      this.transcriptPollScheduler.peek(previous.paneKey),
+      this.replayTranscriptPolls.get(previous.paneKey)
+    ]) {
+      if (poll?.original === previous && next.paneKey === previous.paneKey) {
+        poll.original = next
+      }
+    }
+  }
+
+  /** Replay drains before the server binds, and a poll that runs then is dropped, so these wait for it to listen. */
+  protected requestReplayTranscriptPoll(
+    body: unknown,
+    original: EnrichedAgentHookEventPayload
+  ): void {
+    if (!codexReplayLeftTranscriptWork(this.state, original.paneKey)) {
+      return
+    }
+    if (this.server) {
+      this.scheduleTranscriptPoll('codex', body, original)
+    } else {
+      this.replayTranscriptPolls.set(original.paneKey, { body, original })
+    }
+  }
+
+  protected scheduleReplayTranscriptPolls(): void {
+    for (const { body, original } of this.replayTranscriptPolls.values()) {
+      this.scheduleTranscriptPoll('codex', body, original)
+    }
+    this.replayTranscriptPolls.clear()
+  }
+
   protected scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
-    original: EnrichedAgentHookEventPayload
+    original: EnrichedAgentHookEventPayload,
+    delayMs?: number
   ): void {
     if (source === 'claude') {
       return
@@ -119,34 +169,84 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
+    // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
+    const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
     this.transcriptPollScheduler.schedule(
       original.paneKey,
-      { source, body, original },
-      hookTranscriptWatchPath(this.state, source, original.paneKey)
+      { source, body, original, delayMs: museDelayMs },
+      hookTranscriptWatchPath(this.state, source, original.paneKey),
+      museDelayMs
     )
   }
 
-  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
-    const { source, body, original } = poll
-    // Recheck ownership at callback time; newer events supersede this payload even if children remain.
-    if (
-      paneKey !== original.paneKey ||
-      !this.server ||
-      this.state.lastStatusByPaneKey.get(original.paneKey) !== original
-    ) {
+  protected rearmIgnoredMuseHook(body: unknown): void {
+    const paneKey = museHookPollPane(this.state, body, this.env)
+    if (!paneKey) {
       return
     }
-    const normalized =
-      source === 'codex'
-        ? pollCodexTranscriptStatus(this.state, original, body, this.env)
-        : normalizeHookPayload(this.state, source, body, this.env)
+    const poll = this.transcriptPollScheduler.peek(paneKey)
+    if (poll?.source === 'muse' && this.state.lastStatusByPaneKey.get(paneKey) === poll.original) {
+      this.scheduleTranscriptPoll('muse', poll.body, poll.original)
+    }
+  }
+
+  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void | Promise<void> {
+    if (!this.ownsTranscriptPoll(paneKey, poll)) {
+      return
+    }
+    if (poll.source !== 'codex') {
+      this.applyTranscriptPoll(paneKey, poll, undefined)
+      return
+    }
+    // Why: rollout reads stay off the main thread (#43539); the next tick waits for this one.
+    return readCodexTranscriptPoll(this.state, paneKey).then((reads) => {
+      // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
+      const current = this.transcriptPollScheduler.peek(paneKey)
+      const owner = this.ownsTranscriptPoll(paneKey, poll)
+        ? poll
+        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
+          ? current
+          : undefined
+      try {
+        if (owner) {
+          this.applyTranscriptPoll(paneKey, owner, reads)
+        }
+      } finally {
+        reads.batch.release()
+      }
+    })
+  }
+
+  // Recheck ownership at callback time; newer events supersede this payload even if children remain.
+  private ownsTranscriptPoll(paneKey: string, { original }: TranscriptPoll): boolean {
+    return (
+      paneKey === original.paneKey &&
+      Boolean(this.server) &&
+      this.state.lastStatusByPaneKey.get(original.paneKey) === original
+    )
+  }
+
+  private applyTranscriptPoll(
+    paneKey: string,
+    poll: TranscriptPoll,
+    codexReads: CodexTranscriptPollReads | undefined
+  ): void {
+    const { source, body, original } = poll
+    const logOffset = source === 'muse' ? museLogOffset(this.state, paneKey) : undefined
+    const normalized = codexReads
+      ? pollCodexTranscriptStatus(this.state, original, body, this.env, codexReads)
+      : normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return
     }
+    // A poll's Stop is read from the hook body too, so a tmux host keeps its shared topology.
+    retainTmuxHookWriterTopology(normalized, body)
     const update = transcriptPollUpdate(source, original, normalized)
     const next = update ? this.applyNormalizedStatus(update) : original
     if (next) {
-      this.scheduleTranscriptPoll(source, body, next)
+      const quiet = !update && museLogOffset(this.state, paneKey) === logOffset
+      const delayMs = source === 'muse' ? nextMusePollDelay(poll.delayMs, quiet) : undefined
+      this.scheduleTranscriptPoll(source, body, next, delayMs)
     }
   }
 

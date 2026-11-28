@@ -1,40 +1,53 @@
+import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 import type {
+  BrowserTabAnnotationsResult,
   BrowserTabCurrentResult,
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../shared/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { formatTabList, formatTabListWithProfiles, formatTabShow } from './browser-format'
-import { printResult } from '../format'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
+import type { CommandHandler } from '../dispatch/dispatch'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { formatTabAnnotations, formatTabList, formatTabShow } from './browser-format'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
   getPresentStringFlag,
   getRequiredStringFlag
-} from '../flags'
-import { RuntimeClientError } from '../runtime/types'
-import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
-import { getBrowserWorktreeSelector } from '../selectors'
-import { getBrowserCommandTarget } from './browser-command-target'
+} from '../arguments/flags'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
+import { escapeTerminalControlCharacters } from '../../shared/terminal/output/terminal-control-character-escape'
+import { isBrowserTabSplitDirection } from '../../shared/browser/workspaces/browser-tab-split-direction'
+import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
+import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
-    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
-    const result = await client.call<{ browserPageId: string }>(
-      'browser.openUrl',
-      { url, worktree },
-      { timeoutMs: 60_000 }
-    )
+    let result: RuntimeRpcSuccess<{ browserPageId: string }>
+    try {
+      const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
+      const fromTabId = process.env.ORCA_TAB_ID
+      result = await client.call<{ browserPageId: string }>(
+        'browser.openUrl',
+        { url, worktree, ...(fromTabId ? { fromTabId } : {}) },
+        { timeoutMs: 60_000 }
+      )
+    } catch (error) {
+      throw withOpenUrlYourselfLine(error, url)
+    }
     printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
   },
   'tab list': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<BrowserTabListResult>('browser.tabList', { worktree })
-    const showProfile = flags.has('show-profile')
     printResult(result, json, (value) =>
-      showProfile ? formatTabListWithProfiles(value, true) : formatTabList(value)
+      formatTabList(value, {
+        showProfile: flags.has('show-profile'),
+        // Without a selector the runtime lists every worktree.
+        scopedToWorktree: worktree !== undefined
+      })
     )
   },
   'tab show': async ({ flags, client, cwd, json }) => {
@@ -42,8 +55,13 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<BrowserTabShowResult>('browser.tabShow', target)
     printResult(result, json, formatTabShow)
   },
+  'tab annotations': async ({ flags, client, cwd, json }) => {
+    const target = await getBrowserCommandTarget(flags, cwd, client)
+    const result = await client.call<BrowserTabAnnotationsResult>('browser.tabAnnotations', target)
+    printResult(result, json, formatTabAnnotations)
+  },
   'tab current': async ({ flags, client, cwd, json }) => {
-    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<BrowserTabCurrentResult>('browser.tabCurrent', { worktree })
     printResult(result, json, formatTabShow)
   },
@@ -71,7 +89,7 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     if (split !== undefined && !isBrowserTabSplitDirection(split)) {
       throw new RuntimeClientError('invalid_argument', '--split must be right, left, down, or up')
     }
-    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
     // Why the caller's tab: the split should sit beside the terminal that ran the command, not
     // wherever the user last clicked. Spread conditionally so a plain create keeps its old payload.
     const callerTabId = process.env.ORCA_TAB_ID
@@ -81,7 +99,10 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
         url,
         worktree,
         profileId,
-        ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {})
+        ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {}),
+        ...(flags.has('headless') ? { placement: { kind: 'server' } } : {}),
+        // A CLI has no screen, so a paired caller's default 'caller' audience would show it nowhere.
+        ...(flags.has('focus') ? { activate: true, navigation: 'all' } : {})
       },
       { timeoutMs: 60_000 }
     )
@@ -99,7 +120,27 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   exec: async ({ flags, client, cwd, json }) => {
     const command = getRequiredStringFlag(flags, 'command')
     const target = await getBrowserCommandTarget(flags, cwd, client)
-    const result = await client.call<unknown>('browser.exec', { command, ...target })
+    // A paired runtime reads another filesystem, so only a local caller's directory applies.
+    const result = await client.call<unknown>('browser.exec', {
+      command,
+      ...(client.isRemote ? {} : { cwd, wslDistro: getWslCallerDistro(cwd) ?? undefined }),
+      ...target
+    })
     printResult(result, json, (v) => JSON.stringify(v, null, 2))
   }
+}
+
+// Why: BROWSER callers are often phone-only or headless sessions; when no desktop opens the page, the URL is their way on (#48645).
+function withOpenUrlYourselfLine(error: unknown, url: string): Error {
+  // The URL comes from whatever process ran BROWSER, so keep its control bytes off the terminal.
+  const line = `\nOpen it in a browser yourself: ${escapeTerminalControlCharacters(url, true)}`
+  if (!(error instanceof Error)) {
+    return new RuntimeClientError('runtime_error', `${String(error)}${line}`)
+  }
+  // Amend in place: rebuilding would re-redact and copy the error's recovery data.
+  error.message += line
+  if (error instanceof RuntimeRpcFailureError) {
+    error.response.error.message = error.message
+  }
+  return error
 }

@@ -16,10 +16,8 @@ import {
   PUSH_UNDER_SHIFT
 } from '../../navigation/push-motion'
 import { useDrawerReducedMotion } from './bottom-drawer-constants'
-import { REDUCED_MOTION_FADE_MS } from '../sheet-motion-values'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { REDUCED_MOTION_FADE_MS } from '../motion/sheet-motion-values'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { KeyedBottomDrawer } from './keyed-bottom-drawer'
 
 type Props = {
@@ -27,6 +25,8 @@ type Props = {
   onClose: () => void
   onAfterClose?: () => void
   children: ReactNode
+  /** False while a commit is in flight: no swipe, backdrop tap or Back closes it. */
+  dismissible?: boolean
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
   // Stable outer frame keeps docked input above keyboard while results reflow; content-sized sheets move it on every list change.
@@ -86,12 +86,25 @@ export function useOptionPager<Key extends string>() {
     })
   }, [reducedMotion, slide])
 
+  /** Close, then run `after` once the page is gone, e.g. to clear what it showed. */
+  const closeThen = useCallback(
+    (after: () => void) => {
+      slide.value = withTiming(1, pageTiming(reducedMotion), (finished) => {
+        if (finished) {
+          runOnJS(setPage)(null)
+          runOnJS(after)()
+        }
+      })
+    },
+    [reducedMotion, slide]
+  )
+
   const forget = useCallback(() => {
     slide.value = 1
     setPage(null)
   }, [slide])
 
-  return { page, open, close, forget, slide, reducedMotion }
+  return { page, open, close, closeThen, forget, slide, reducedMotion }
 }
 
 export type OptionPagerControls<Key extends string> = ReturnType<typeof useOptionPager<Key>>
@@ -104,7 +117,7 @@ export function OptionPager(props: {
   /** Fills a screen instead of sizing a sheet: the page covers the main view on the screen background. */
   fill?: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const [width, setWidth] = useState(0)
   const [mainHeight, setMainHeight] = useState<number | null>(null)
   const { slide, reducedMotion } = props.pager
@@ -166,11 +179,11 @@ export function OptionPager(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pager: { overflow: 'hidden' },
   underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
   page: { flexGrow: 1, backgroundColor: colors.sheetSurface },
-  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
+  dim: { ...StyleSheet.absoluteFill, backgroundColor: '#000' },
   fill: { flex: 1, overflow: 'hidden' },
-  fillPage: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.bgBase }
+  fillPage: { ...StyleSheet.absoluteFill, backgroundColor: colors.bgBase }
 }))

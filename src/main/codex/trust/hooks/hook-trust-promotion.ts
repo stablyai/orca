@@ -1,11 +1,15 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import {
-  createManagedCommandMatcher,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+  readObservedFileSync as readFileSync,
+  observedExistsSync as existsSync,
+  observeFilePublication
+} from '../../../filesystem/file-content-observation'
+import { writeFileSync } from 'node:fs'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
+import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { createManagedCommandMatcher } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
@@ -13,6 +17,7 @@ import {
 import {
   readHookTrustEntries,
   upsertHookTrustEntries,
+  type CodexEventLabel,
   type CodexTrustEntry
 } from '../toml/config-toml-trust'
 import {
@@ -25,7 +30,7 @@ import {
 import {
   CODEX_EVENT_NAME_BY_LABEL,
   createCodexHookTrustEntry,
-  getCodexHookTrustSignature,
+  getCodexUserHookMirrorSignature,
   getCodexManagedScriptFileName
 } from '../../hooks/definitions/codex-hook-identity'
 
@@ -37,18 +42,21 @@ type HookTrustProvenanceEntry = {
 }
 
 type HookTrustProvenanceFile = {
-  version: 1
+  version: 1 | 2
   entries: Record<string, HookTrustProvenanceEntry>
 }
 
-function getProvenancePath(runtimeHomePath: string): string {
+type HookTrustProvenance = { version: number; entries: Map<string, HookTrustProvenanceEntry> }
+
+// Version 1 snapshots could not record these events, so a missing entry there proves nothing.
+const EVENTS_UNRECORDED_BY_PROVENANCE_V1: ReadonlySet<CodexEventLabel> = new Set(['session_end'])
+
+export function getProvenancePath(runtimeHomePath: string): string {
   return join(runtimeHomePath, '.orca-hook-trust-provenance.json')
 }
 
 /** Missing, unreadable or malformed provenance cannot establish an approval's origin. */
-function readHookTrustProvenance(
-  runtimeHomePath: string
-): Map<string, HookTrustProvenanceEntry> | null {
+function readHookTrustProvenance(runtimeHomePath: string): HookTrustProvenance | null {
   const provenancePath = getProvenancePath(runtimeHomePath)
   let rawProvenance: string
   try {
@@ -74,7 +82,8 @@ function readHookTrustProvenance(
         })
       }
     }
-    return result
+    const version = (parsed as HookTrustProvenanceFile).version
+    return { version: typeof version === 'number' ? version : 1, entries: result }
   } catch {
     return null
   }
@@ -93,11 +102,13 @@ function provenanceIsUnreadable(provenancePath: string): boolean {
 /** Snapshot after all trust writes to distinguish Orca changes from later user approvals. */
 export function snapshotCodexRuntimeHookTrustProvenance(
   runtimeHomePath: string = getOrcaManagedCodexHomePath()
-): void {
+): boolean {
   if (provenanceIsUnreadable(getProvenancePath(runtimeHomePath))) {
-    return
+    return false
   }
   try {
+    // Why: a snapshot of another writer's edit would later pass for Orca's own output.
+    assertGuardedFileCurrent(join(runtimeHomePath, 'config.toml'))
     const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
     const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
     const entries: Record<string, HookTrustProvenanceEntry> = {}
@@ -111,25 +122,32 @@ export function snapshotCodexRuntimeHookTrustProvenance(
         ...(state.enabled !== undefined ? { enabled: state.enabled } : {})
       }
     }
-    const file: HookTrustProvenanceFile = { version: 1, entries }
-    writeFileSync(getProvenancePath(runtimeHomePath), `${JSON.stringify(file, null, 2)}\n`, {
+    const file: HookTrustProvenanceFile = { version: 2, entries }
+    const serialized = `${JSON.stringify(file, null, 2)}\n`
+    assertGuardedFileCurrent(getProvenancePath(runtimeHomePath))
+    writeFileSync(getProvenancePath(runtimeHomePath), serialized, {
       encoding: 'utf-8',
       mode: 0o600
     })
+    observeFilePublication(getProvenancePath(runtimeHomePath), serialized)
+    return true
   } catch (error) {
     console.warn('[codex-hook-promotion] failed to snapshot hook trust provenance', error)
+    return false
   }
 }
 
 /** Promote user approvals into canonical config before the mirror replaces runtime trust. */
 export function promoteCodexRuntimeHookApprovalsToSystem(
   runtimeHomePath: string = getOrcaManagedCodexHomePath()
-): void {
+): boolean {
   try {
     promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath)
+    return true
   } catch (error) {
     // Promotion failures must not block hook installation or Codex launch.
     console.warn('[codex-hook-promotion] failed to promote runtime hook approvals', error)
+    return false
   }
 }
 
@@ -171,7 +189,15 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
     if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
-    const previous = provenance.get(normalizeHookTrustKeyForLookup(key))
+    const previous = provenance.entries.get(normalizeHookTrustKeyForLookup(key))
+    if (
+      !previous &&
+      provenance.version < 2 &&
+      EVENTS_UNRECORDED_BY_PROVENANCE_V1.has(parsed.eventLabel)
+    ) {
+      // Why: may predate the snapshot, and promoting it could re-enable a hook disabled in ~/.codex.
+      continue
+    }
     if (
       previous &&
       previous.trustedHash === state.trustedHash &&
@@ -208,7 +234,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
       systemHooksPath,
       systemConfig.hooks,
       eventName,
-      getCodexHookTrustSignature(runtimeEntry),
+      getCodexUserHookMirrorSignature(runtimeEntry),
       isManagedCommand,
       state.trustedHash,
       state.enabled ?? true
@@ -248,7 +274,7 @@ function collectSystemPromotionTargets(
         systemDefinition,
         systemHook
       )
-      if (!systemEntry || getCodexHookTrustSignature(systemEntry) !== signature) {
+      if (!systemEntry || getCodexUserHookMirrorSignature(systemEntry) !== signature) {
         return
       }
       promotions.push({ ...systemEntry, trustedHash, enabled })

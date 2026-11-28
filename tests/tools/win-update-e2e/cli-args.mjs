@@ -20,10 +20,10 @@ Installer source (version N, then N+1) — path or release tag on each side:
 
 Required:
   --expect <profile>       Assertion profile: "cold-restore" or "survival"
-                           cold-restore = today's behavior (daemon killed by the
-                             installer sweep, app cold-restores scrollback, no
-                             flashing). survival = Phase 1 target (daemon PID
-                             unchanged, sessions still interactive).
+                           cold-restore = daemon killed by the installer sweep,
+                             app cold-restores scrollback, no flashing.
+                           survival = daemon PID unchanged, sessions still
+                             interactive.
 
 Options:
   --install-dir <path>     Isolated-install mode: install the test build into
@@ -48,6 +48,11 @@ Options:
   --keep-install           Skip teardown/uninstall (leaves the app installed)
   --asset-pattern <glob>   gh release asset glob (default: *windows-setup.exe)
   --soak-seconds <n>       Post-relaunch window watch duration (default: 180)
+  --updated                Run the update installer as electron-updater does
+                           (--updated /S) instead of as a manual /S install
+  --daemon-fallback        Launch the app with a LOCALAPPDATA too deep for the
+                           relocated daemon host, so the terminal daemon runs
+                           from the install folder's Orca.exe
   -h, --help               Show this help
 `
 
@@ -67,6 +72,8 @@ export function parseArgs(argv) {
     installDir: takeValue(argv, '--install-dir'),
     keepInstall: argv.includes('--keep-install'),
     allowExistingInstall: argv.includes('--allow-existing-install'),
+    updated: argv.includes('--updated'),
+    daemonFallback: argv.includes('--daemon-fallback'),
     usage: USAGE
   }
 

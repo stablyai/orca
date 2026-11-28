@@ -1,5 +1,8 @@
-import { githubRepoContext, withGitHubRepoExecution } from '../github/github-repository-identity'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import {
+  githubRepoContext,
+  withGitHubRepoExecution
+} from '../github/repositories/github-repository-identity'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import {
   cachedHostedReviewOutcome,
   type HostedReviewForBranchOutcome,
@@ -59,6 +62,7 @@ export async function readHostedReviewForBranch(
     active?: boolean
     force?: boolean
     userRefresh?: boolean
+    requireFreshAbsence?: boolean
   } & HostedReviewExecutionOptions
 ): Promise<HostedReviewForBranchOutcome> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
@@ -105,7 +109,8 @@ export async function readHostedReviewForBranch(
         headOid,
         ...(input.active === true ? { active: true } : {}),
         ...(input.force === true ? { force: true } : {}),
-        ...(input.userRefresh === true ? { userRefresh: true } : {})
+        ...(input.userRefresh === true ? { userRefresh: true } : {}),
+        ...(input.requireFreshAbsence === true ? { requireFreshAbsence: true } : {})
       },
       async () => {
         const provider = await getForgeProviderForRepository({
@@ -138,7 +143,7 @@ export async function readHostedReviewForBranch(
           ...(providerOptions.localGitExecOptions
             ? { localGitExecOptions: providerOptions.localGitExecOptions }
             : {}),
-          githubCurrentHeadOid: headOid,
+          currentHeadOid: headOid,
           ...(input.userRefresh === true ? { userRefresh: true } : {}),
           ...reviewLinkForProvider(input, provider.id)
         })

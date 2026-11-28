@@ -1,4 +1,4 @@
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
@@ -30,7 +30,10 @@ export function getSortedWorktreeRankIndex(sortedIds: readonly string[]): Map<st
   if (cached) {
     return cached
   }
-  const index = new Map(sortedIds.map((id, rank) => [id, rank]))
+  const index = new Map<string, number>()
+  for (let rank = 0; rank < sortedIds.length; rank += 1) {
+    index.set(sortedIds[rank], rank)
+  }
   sortedWorktreeRankIndexCache.set(sortedIds, index)
   return index
 }

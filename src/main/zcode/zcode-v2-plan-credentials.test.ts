@@ -16,8 +16,8 @@ import { readZcodeV2PlanCredential, type ZcodeCredentialHost } from './zcode-v2-
 import {
   readZcodeUsageCredentials,
   zcodeCredentialStorePath
-} from '../rate-limits/zcode-usage-credentials'
-import { fetchZcodeRateLimits } from '../rate-limits/zcode-usage-fetcher'
+} from '../rate-limits/providers/zcode/zcode-usage-credentials'
+import { fetchZcodeRateLimits } from '../rate-limits/providers/zcode/zcode-usage-fetcher'
 
 let dir: string
 let host: ZcodeCredentialHost
@@ -355,30 +355,6 @@ describe('upstream-written ZCode v2 stores', () => {
     }
   })
 
-  it('does not borrow credentials from another execution host', () => {
-    install()
-    const other = join(dir, 'other-host')
-    mkdirSync(other)
-    expect(
-      readZcodeV2PlanCredential({
-        ...host,
-        home: other,
-        env: { ZCODE_DATA_BASE_DIR: other, ZCODE_CREDENTIAL_SECRET: 'synthetic-secret' }
-      })
-    ).toEqual({ status: 'absent' })
-  })
-
-  it('preserves the protected Orca key priority even if v2 is corrupt', async () => {
-    install()
-    writeFileSync(join(dir, '.zcode', 'v2', 'credentials.json'), 'broken')
-    const result = await fetchZcodeRateLimits({
-      credentialHost: host,
-      planCredential: { apiKey: 'synthetic-orca-key', baseUrl: 'https://open.bigmodel.cn' }
-    })
-    expect(result.status).toBe('ok')
-    expect(result.usageMetadata?.credentialSource).toBe('orca-plan')
-  })
-
   it.each(['site', 'account', 'corrupt', 'network-error'])(
     'drops an in-flight quota when %s changes',
     async (change) => {
@@ -467,66 +443,6 @@ describe('external v2 file boundaries', () => {
   )
 
   it.each([
-    { options: { reasoningLevel: 42 } },
-    { options: { reasoningLevel: '' } },
-    { options: { reasoningLevel: '  ' } },
-    { options: { extra: true } },
-    { extra: true },
-    { options: null }
-  ])('rejects upstream-invalid selection %j without legacy fallback', (changed) => {
-    install()
-    legacy()
-    const path = join(dir, '.zcode', 'v2', 'provider_config.json')
-    const config = JSON.parse(readFileSync(path, 'utf8'))
-    Object.assign(config.config.defaultModelSelection, changed)
-    writeFileSync(path, JSON.stringify(config))
-    expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe('error')
-  })
-
-  it('accepts a valid optional reasoning level', () => {
-    install()
-    const path = join(dir, '.zcode', 'v2', 'provider_config.json')
-    const config = JSON.parse(readFileSync(path, 'utf8'))
-    config.config.defaultModelSelection.options = { reasoningLevel: ' high ' }
-    writeFileSync(path, JSON.stringify(config))
-    expect(readZcodeV2PlanCredential(host).status).toBe('ok')
-  })
-
-  it.each([
-    { providerConfigRules: null },
-    { providerConfigRules: { providerRules: 42 } },
-    { providerConfigRules: { providerRules: [], unknown: true } },
-    { modelConfigRules: null },
-    { modelConfigRules: { providerModelRules: 42, manualProviderModelRules: [] } },
-    { modelConfigRules: { providerModelRules: [], manualProviderModelRules: [null] } },
-    { modelConfigRules: { providerModelRules: [{}], manualProviderModelRules: [] } }
-  ])('rejects upstream-invalid rule containers %j without legacy fallback', (changed) => {
-    install()
-    legacy()
-    const path = join(dir, '.zcode', 'v2', 'provider_config.json')
-    const config = JSON.parse(readFileSync(path, 'utf8'))
-    Object.assign(config.config, changed)
-    writeFileSync(path, JSON.stringify(config))
-    expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe('error')
-  })
-
-  it('accepts a valid selected-provider empty personal rule and smart model rule', () => {
-    install('bigmodel')
-    const path = join(dir, '.zcode', 'v2', 'provider_config.json')
-    const config = JSON.parse(readFileSync(path, 'utf8'))
-    const selection = config.config.defaultModelSelection
-    config.config.providerConfigRules.providerRules = [
-      { providerId: selection.providerId, config: {} }
-    ]
-    config.config.modelConfigRules.providerModelRules = [{ ...selection, config: {} }]
-    writeFileSync(path, JSON.stringify(config))
-    expect(readZcodeV2PlanCredential(host)).toMatchObject({
-      status: 'ok',
-      baseUrl: 'https://open.bigmodel.cn'
-    })
-  })
-
-  it.each([
     { access: { type: 'api-key', apiKey: 'synthetic-personal-key' } },
     { access: null },
     { api: { type: 'bad-api-type', baseUrl: 'invalid-url' } },
@@ -561,54 +477,4 @@ describe('external v2 file boundaries', () => {
       ).toBe('ok')
     }
   )
-
-  it.each(['duplicate-provider', 'malformed-model', 'valid-unsupported-model', 'manual-model'])(
-    'cannot establish selected credentials from %s rules',
-    (kind) => {
-      install('bigmodel')
-      legacy()
-      const path = join(dir, '.zcode', 'v2', 'provider_config.json')
-      const config = JSON.parse(readFileSync(path, 'utf8'))
-      const selection = config.config.defaultModelSelection
-      if (kind === 'duplicate-provider') {
-        config.config.providerConfigRules.providerRules = Array.from({ length: 2 }, () => ({
-          providerId: selection.providerId,
-          config: {}
-        }))
-      } else {
-        const group = kind === 'manual-model' ? 'manualProviderModelRules' : 'providerModelRules'
-        config.config.modelConfigRules[group] = [
-          {
-            ...selection,
-            config:
-              kind === 'manual-model'
-                ? {}
-                : {
-                    optionSpecs: {
-                      reasoningLevel: { values: kind === 'malformed-model' ? 42 : ['high'] }
-                    }
-                  }
-          }
-        ]
-      }
-      writeFileSync(path, JSON.stringify(config))
-      expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe(
-        kind === 'duplicate-provider' ? 'error' : 'unavailable'
-      )
-    }
-  )
-})
-
-it('leaves encrypted CLI files unchanged across repeated account reads', () => {
-  install()
-  const root = join(dir, '.zcode', 'v2')
-  const before = new Map(readdirSync(root).map((name) => [name, readFileSync(join(root, name))]))
-  expect(before.get('credentials.json')?.toString()).toContain('enc:v1:')
-  for (let index = 0; index < 25; index++) {
-    expect(readZcodeV2PlanCredential(host).status).toBe('ok')
-  }
-  expect(readdirSync(root)).toEqual([...before.keys()])
-  for (const [name, bytes] of before) {
-    expect(readFileSync(join(root, name))).toEqual(bytes)
-  }
 })

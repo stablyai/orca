@@ -1,4 +1,7 @@
-import type { WorkspacePortScanResult, WorkspacePortProbe } from '../../shared/workspace-ports'
+import type {
+  WorkspacePortScanResult,
+  WorkspacePortProbe
+} from '../../shared/workspace/ports/workspace-ports'
 import { isPortScanWorkerUnavailableError } from './port-scan-command-client'
 import { PortScanCommandTimeoutError } from './port-scan-command-protocol'
 import {
@@ -62,15 +65,6 @@ export function recordWorkspacePortScanSuccess(): void {
 
 export function recordWorkspacePortScanTimeout(): void {
   commandTimeoutBackoff.recordTimeout()
-}
-
-export function resetWorkspacePortScanTimeoutBackoffForTests(): void {
-  commandTimeoutBackoff.reset()
-  loggedWorkerUnavailable = false
-  skippedMetadataOnLastScan = false
-  lastListenerMetadata = new Map()
-  metadataScanSequence = 0
-  reusedListenerKeys = new Set()
 }
 
 export function shouldSkipMetadataCommands(

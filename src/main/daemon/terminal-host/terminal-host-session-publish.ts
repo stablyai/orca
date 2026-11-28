@@ -1,13 +1,13 @@
 import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
-import type { WslGuestRoot } from '../../../shared/wsl-guest-root-marker'
-import { buildStartupCommandSubmission } from '../../../shared/startup-command-submission'
+import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
+import { buildStartupCommandSubmission } from '../../../shared/shell/launch/startup-command-submission'
 import {
   stageStartupCommand,
   startupStagingFailureNotice,
   type StartupCommandStaging
-} from '../../../shared/startup-command-staging'
+} from '../../../shared/shell/launch/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from '../protocol/daemon-create-or-attach-result'
 import { Session } from '../sessions/session'
@@ -182,6 +182,9 @@ export async function spawnAndPublishSession(
   onPublished(opts.sessionId, session.isAlive)
   const token = session.attachClient(opts.streamClient)
   attachSessionInputViewer(session, opts.streamClient)
+  if (opts.startupNotice && opts.command) {
+    session.startupIngress.accept(opts.startupNotice)
+  }
 
   const startupCommandWritten =
     Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs

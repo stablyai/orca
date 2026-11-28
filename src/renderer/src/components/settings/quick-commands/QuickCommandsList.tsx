@@ -1,5 +1,5 @@
 import { Check, Copy, Pencil, TerminalSquare, Trash2 } from 'lucide-react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
@@ -9,18 +9,23 @@ import {
   getTerminalQuickCommandScope,
   isTerminalAgentQuickCommand
 } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
-import { cn } from '@/lib/utils'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
 import { RepoBadgeMark } from '../../repo/RepoBadgeLabel'
+import { RepoMark, type RepoMarkRepo } from '../../repo/RepoMark'
 import { getQuickCommandRepoLabel } from './QuickCommandsScopeFilter'
+
+type QuickCommandRepo = RepoMarkRepo & Pick<Repo, 'path'>
 
 function getScopeLabel(
   scope: TerminalQuickCommandScope,
-  repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
+  repoById: Map<string, QuickCommandRepo>
 ): string {
   if (scope.type === 'global') {
     return 'Global'
@@ -29,13 +34,13 @@ function getScopeLabel(
   return repo ? getQuickCommandRepoLabel(repo) : 'Missing project'
 }
 
-function getRunModeLabel(command: TerminalQuickCommand): string {
+function getRunModeLabel(command: TerminalQuickCommand, t: Translate = translate): string {
   if (isTerminalAgentQuickCommand(command)) {
-    return translate('auto.components.settings.QuickCommandsPane.4ccc63da87', 'Agent')
+    return t('auto.components.settings.QuickCommandsPane.4ccc63da87', 'Agent')
   }
   return command.appendEnter
-    ? translate('auto.components.settings.QuickCommandsPane.9b3e338d62', 'Enter')
-    : translate('auto.components.settings.QuickCommandsPane.9fcfc29519', 'Insert')
+    ? t('auto.components.settings.QuickCommandsPane.9b3e338d62', 'Enter')
+    : t('auto.components.settings.QuickCommandsPane.9fcfc29519', 'Insert')
 }
 
 function QuickCommandRow({
@@ -45,10 +50,11 @@ function QuickCommandRow({
   onRemove
 }: {
   command: TerminalQuickCommand
-  repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
+  repoById: Map<string, QuickCommandRepo>
   onEdit: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const scope = getTerminalQuickCommandScope(command)
   const body = getTerminalQuickCommandBody(command)
   const { canCopy, copyText, status } = useClipboardTextCopyFeedback(body)
@@ -56,19 +62,17 @@ function QuickCommandRow({
 
   const copyLabel =
     status === 'copied'
-      ? translate('auto.components.settings.QuickCommandsPane.8d525e5f15', 'Copied')
+      ? t('auto.components.settings.QuickCommandsPane.8d525e5f15', 'Copied')
       : status === 'failed'
-        ? translate('auto.components.settings.QuickCommandsPane.53b17a4b1b', "Couldn't copy")
+        ? t('auto.components.settings.QuickCommandsPane.53b17a4b1b', "Couldn't copy")
         : canCopy
-          ? translate('auto.components.settings.QuickCommandsPane.a9a564b7e7', 'Copy {{value0}}', {
+          ? t('auto.components.settings.QuickCommandsPane.a9a564b7e7', 'Copy {{value0}}', {
               value0: commandName
             })
-          : translate('auto.components.settings.QuickCommandsPane.69a1441a21', 'Nothing to copy')
-  const editLabel = translate(
-    'auto.components.settings.QuickCommandsPane.7d90fd5299',
-    'Edit {{value0}}',
-    { value0: commandName }
-  )
+          : t('auto.components.settings.QuickCommandsPane.69a1441a21', 'Nothing to copy')
+  const editLabel = t('auto.components.settings.QuickCommandsPane.7d90fd5299', 'Edit {{value0}}', {
+    value0: commandName
+  })
 
   return (
     <div className="group/qc flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent/60 focus-within:bg-accent/60">
@@ -76,12 +80,16 @@ function QuickCommandRow({
         <div className="flex min-w-0 items-center gap-2">
           <div className="truncate text-sm font-medium">
             {command.label ||
-              translate('auto.components.settings.QuickCommandsPane.2bb9e38e93', 'Untitled')}
+              t('auto.components.settings.QuickCommandsPane.2bb9e38e93', 'Untitled')}
           </div>
           <Badge variant="outline" className="max-w-44 gap-1.5 text-[11px] font-normal">
             {scope.type === 'repo' ? (
               <>
-                <RepoBadgeMark color={repoById.get(scope.repoId)?.badgeColor} />
+                {repoById.get(scope.repoId) ? (
+                  <RepoMark repo={repoById.get(scope.repoId)!} />
+                ) : (
+                  <RepoBadgeMark color={undefined} />
+                )}
                 <span className="truncate">{getScopeLabel(scope, repoById)}</span>
               </>
             ) : (
@@ -99,15 +107,12 @@ function QuickCommandRow({
             {isTerminalAgentQuickCommand(command)
               ? `${getAgentLabel(command.agent)}: ${body}`
               : body ||
-                translate(
-                  'auto.components.settings.QuickCommandsPane.0252ddd578',
-                  'No command text'
-                )}
+                t('auto.components.settings.QuickCommandsPane.0252ddd578', 'No command text')}
           </span>
         </div>
       </div>
       <div className="w-12 shrink-0 text-right text-[11px] text-muted-foreground">
-        {getRunModeLabel(command)}
+        {getRunModeLabel(command, t)}
       </div>
       {/* Touch devices cannot hover, so keep actions visible there. */}
       <div className="flex shrink-0 items-center gap-0.5 transition-opacity can-hover:opacity-0 group-hover/qc:opacity-100 group-focus-within/qc:opacity-100">
@@ -140,7 +145,7 @@ function QuickCommandRow({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.QuickCommandsPane.8764c6e9e4',
             'Remove {{value0}}',
             { value0: commandName }
@@ -162,15 +167,16 @@ function QuickCommandsEmptyState({
   hasCommands: boolean
   hasQuery: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (hasCommands) {
     return (
       <div className="px-2 py-10 text-center text-sm text-muted-foreground">
         {hasQuery
-          ? translate(
+          ? t(
               'auto.components.settings.QuickCommandsList.noSearchMatches',
               'No commands match this search.'
             )
-          : translate(
+          : t(
               'auto.components.settings.QuickCommandsPane.3eb9897ab0',
               'No commands in the selected scopes.'
             )}
@@ -183,13 +189,10 @@ function QuickCommandsEmptyState({
       <TerminalSquare className="size-7 text-muted-foreground/50" />
       <div className="space-y-1">
         <p className="text-sm text-muted-foreground">
-          {translate(
-            'auto.components.settings.QuickCommandsPane.38d61927e6',
-            'No quick commands saved.'
-          )}
+          {t('auto.components.settings.QuickCommandsPane.38d61927e6', 'No quick commands saved.')}
         </p>
         <p className="text-xs text-muted-foreground/80">
-          {translate(
+          {t(
             'auto.components.settings.QuickCommandsPane.c36912efd5',
             'Run them from the Quick Commands button in the tab bar, or right-click inside any terminal.'
           )}
@@ -210,7 +213,7 @@ export function QuickCommandsList({
   commands: TerminalQuickCommand[]
   visibleCommands: TerminalQuickCommand[]
   hasQuery: boolean
-  repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
+  repoById: Map<string, QuickCommandRepo>
   onEdit: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {

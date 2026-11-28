@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type {
   OrcaOrgRole,
   OrcaProfileOrgInviteRevokeArgs,
@@ -8,7 +9,7 @@ import type {
   OrcaProfileOrgMemberRemoveArgs,
   OrcaProfileOrgMembersListArgs,
   OrcaProfileOrgMembersListResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import {
   changeOrcaProfileOrgMemberRole,
@@ -16,7 +17,7 @@ import {
   listOrcaProfileOrgMembers,
   removeOrcaProfileOrgMember,
   revokeOrcaProfileOrgInvite
-} from '../../orca-profiles/profile-cloud-org-members-service'
+} from '../../orca-profiles/cloud-org/profile-cloud-org-members-service'
 
 function orgMembersScopedArgs(args: unknown): { orgId: string; record: Record<string, unknown> } {
   if (!args || typeof args !== 'object') {
@@ -77,8 +78,8 @@ function orgMemberRemoveArgsFromUnknown(args: unknown): OrcaProfileOrgMemberRemo
   return { orgId, userId: orgUserIdFromUnknown(record.userId) }
 }
 
-export function registerOrcaProfileOrgMemberHandlers(): void {
-  ipcMain.handle(
+export function registerOrcaProfileOrgMemberHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'orcaProfiles:orgMembersList',
     async (
       _event,
@@ -87,7 +88,7 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       listOrcaProfileOrgMembers(getProfileUserDataPath(), orgMembersScopedArgs(rawArgs).orgId)
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'orcaProfiles:orgMemberInvite',
     async (
       _event,
@@ -96,7 +97,7 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       inviteOrcaProfileOrgMember(getProfileUserDataPath(), orgMemberInviteArgsFromUnknown(rawArgs))
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'orcaProfiles:orgInviteRevoke',
     async (
       _event,
@@ -105,7 +106,7 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       revokeOrcaProfileOrgInvite(getProfileUserDataPath(), orgInviteRevokeArgsFromUnknown(rawArgs))
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'orcaProfiles:orgMemberChangeRole',
     async (
       _event,
@@ -117,7 +118,7 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       )
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'orcaProfiles:orgMemberRemove',
     async (
       _event,

@@ -1,22 +1,28 @@
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
 } from '@/components/sidebar/workspace-card/review/worktree-card-pr-display'
 import type { ParentPrChecksCacheEntry } from './parent-pr-checks-row-types'
+import type { Translate } from '@/i18n/use-translate'
 
 export function canUseParentPrChecksHostedReviewCacheEntry(
   worktree: Worktree,
   review: HostedReviewInfo,
-  entry: ParentPrChecksCacheEntry<HostedReviewInfo>
+  entry: ParentPrChecksCacheEntry<HostedReviewInfo>,
+  t?: Translate
 ): boolean {
   if (review.provider === 'github' && isGitHubPRSuppressed(worktree, review.number)) {
     return false
   }
-  if (review.state === 'merged' && !mergedReviewMatchesHead(review, worktree)) {
+  // Why: only GitHub proves merged-head containment; other providers follow the child card's rule.
+  if (
+    review.provider === 'github' &&
+    review.state === 'merged' &&
+    !isCachedMergedBranchPRCurrentForWorktree(review, worktree)
+  ) {
     return false
   }
   const linkedReviewNumber = getLinkedReviewNumberForProvider(worktree, review.provider)
@@ -36,28 +42,10 @@ export function canUseParentPrChecksHostedReviewCacheEntry(
     {
       reviewHintKey: entry.linkedReviewHintKey,
       suppressedGitHubPR: worktree.suppressedGitHubPR ?? null
-    }
+    },
+    t
   )
   return display?.provider === review.provider && display.number === review.number
-}
-
-function mergedReviewMatchesHead(review: HostedReviewInfo, worktree: Worktree): boolean {
-  return isCachedMergedBranchPRCurrentForWorktree(
-    {
-      number: review.number,
-      title: review.title,
-      state: review.state,
-      url: review.url,
-      checksStatus: review.status,
-      updatedAt: review.updatedAt,
-      mergeable: review.mergeable,
-      ...(review.headSha ? { headSha: review.headSha } : {}),
-      ...(review.confirmedContainedHeadOid
-        ? { confirmedContainedHeadOid: review.confirmedContainedHeadOid }
-        : {})
-    } satisfies PRInfo,
-    worktree
-  )
 }
 
 function getLinkedReviewNumberForProvider(

@@ -2,7 +2,7 @@ import type {
   SidebarInputsChangedEvent,
   SidebarInputsReadParams,
   SidebarInputsReadResult
-} from '../sidebar-list/sidebar-inputs-feed-contract'
+} from '../sidebar-list/feed/sidebar-inputs-feed-contract'
 import {
   INITIAL_SIDEBAR_INPUTS_FEED_STATE,
   refreshSidebarInputs,
@@ -11,7 +11,7 @@ import {
   sidebarInputsReplied,
   type SidebarInputsFeedRequest,
   type SidebarInputsFeedStep
-} from '../sidebar-list/sidebar-inputs-feed-installer'
+} from '../sidebar-list/feed/sidebar-inputs-feed-installer'
 import { installSidebarFeedSnapshot, type SidebarFeedSnapshot } from './sidebar-feed-snapshot'
 
 /** One `sidebarInputs.read` as the platform carried it; a rejected promise reads as `failed`. */
@@ -125,12 +125,11 @@ export class SidebarFeedReader {
   private send(request: SidebarInputsFeedRequest): void {
     this.transport(request.params).then(
       (outcome) => {
-        if (this.disposed) {
+        if (this.disposed || request.id !== this.state.inFlight) {
           return
         }
         if (outcome.kind === 'answered') {
-          const answered = this.state.inFlight === request.id ? request.id : null
-          this.apply(sidebarInputsReplied(this.state, request.id, outcome.reply), answered)
+          this.apply(sidebarInputsReplied(this.state, request.id, outcome.reply), request.id)
           return
         }
         if (outcome.kind === 'unavailable' && !this.unavailable) {

@@ -2,7 +2,7 @@
 
 import type { AgentLaunchPaneVerdict } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
-import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 
 const PROCEED: AgentLaunchPaneVerdict = { kind: 'proceed' }
 
@@ -170,9 +170,4 @@ export function resolveAgentLaunchPaneVerdict(
   return runningLaunchesByPane.has(key) || failedLaunchesByPane.has(key)
     ? settleVerdict(pane, isPaneLive)
     : null
-}
-
-export function resetAgentLaunchPanesForTests(): void {
-  runningLaunchesByPane.clear()
-  failedLaunchesByPane.clear()
 }

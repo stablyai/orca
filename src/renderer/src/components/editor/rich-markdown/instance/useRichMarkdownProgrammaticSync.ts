@@ -1,7 +1,8 @@
+import type { EditorDiscardGeneration } from '../../save/flush/editor-discard-epoch'
 import { useEffect } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-html'
 import { syncDocLinkMenu, type DocLinkMenuState } from '../doc-links/rich-markdown-commands'
 import { normalizeEmptyListItems } from '../schema/rich-markdown-normalize'
@@ -11,12 +12,9 @@ import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
 } from '../images/rich-markdown-image-context'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
-import {
-  notifyStaleViewEditRejected,
-  staleViewEditEpoch
-} from '../../save/flush/editor-stale-view-edit'
+import { notifyStaleViewEditRejected } from '../../save/flush/editor-stale-view-edit'
 
 type RichMarkdownProgrammaticSyncOptions = {
   codec: RichMarkdownEditorCodec
@@ -36,7 +34,7 @@ type RichMarkdownProgrammaticSyncOptions = {
   runtimeTarget: RuntimeClientTarget | null
   /** Pending debounced commit, based on the text this view last synced. */
   serializeTimerRef: MutableRefObject<number | null>
-  pendingEditEpochRef: MutableRefObject<number>
+  pendingEditGenerationRef: MutableRefObject<EditorDiscardGeneration | null>
   slashMenuSetter: Dispatch<SetStateAction<SlashMenuState | null>>
   worktreeId: string
   worktreeRoot: string | null
@@ -45,6 +43,15 @@ type RichMarkdownProgrammaticSyncOptions = {
 type RichMarkdownEditorStorage = {
   markdownDocLink: {
     documents: MarkdownDocument[]
+  }
+}
+
+function withProgrammaticUpdateFlag(flagRef: MutableRefObject<boolean>, run: () => void): void {
+  flagRef.current = true
+  try {
+    run()
+  } finally {
+    flagRef.current = false
   }
 }
 
@@ -65,7 +72,7 @@ export function useRichMarkdownProgrammaticSync({
   rootRef,
   runtimeTarget,
   serializeTimerRef,
-  pendingEditEpochRef,
+  pendingEditGenerationRef,
   slashMenuSetter,
   worktreeId,
   worktreeRoot
@@ -74,8 +81,7 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor) {
       return
     }
-    isApplyingProgrammaticUpdateRef.current = true
-    try {
+    withProgrammaticUpdateFlag(isApplyingProgrammaticUpdateRef, () => {
       setRichMarkdownImageResolverContext(
         editor,
         createRichMarkdownImageResolverContext({
@@ -86,9 +92,7 @@ export function useRichMarkdownProgrammaticSync({
           worktreeRoot
         })
       )
-    } finally {
-      isApplyingProgrammaticUpdateRef.current = false
-    }
+    })
   }, [
     editor,
     externalSshTargetId,
@@ -103,22 +107,19 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor || !markdownDocuments) {
       return
     }
-    isApplyingProgrammaticUpdateRef.current = true
-    try {
+    withProgrammaticUpdateFlag(isApplyingProgrammaticUpdateRef, () => {
       const storage = editor.storage as unknown as RichMarkdownEditorStorage
       storage.markdownDocLink.documents = markdownDocuments
       editor.view.dispatch(editor.state.tr.setMeta('docLinksUpdated', true))
-    } finally {
-      isApplyingProgrammaticUpdateRef.current = false
-    }
+    })
   }, [editor, isApplyingProgrammaticUpdateRef, markdownDocuments])
 
   useEffect(() => {
     if (!editor) {
       return
     }
-    const editEpoch = pendingEditEpochRef.current
-    const discarded = staleViewEditEpoch(fileId) !== editEpoch
+    const editGeneration = pendingEditGenerationRef.current
+    const discarded = editGeneration?.discarded === true
     const pendingTimer = serializeTimerRef.current
     if (content === lastCommittedMarkdownRef.current && !(pendingTimer !== null && discarded)) {
       return
@@ -128,7 +129,7 @@ export function useRichMarkdownProgrammaticSync({
       window.clearTimeout(pendingTimer)
       serializeTimerRef.current = null
       if (!discarded && !matchesSharedText) {
-        notifyStaleViewEditRejected(fileId, editEpoch)
+        notifyStaleViewEditRejected(editGeneration)
       }
     }
     if (matchesSharedText) {
@@ -141,8 +142,7 @@ export function useRichMarkdownProgrammaticSync({
       }
       return
     }
-    isApplyingProgrammaticUpdateRef.current = true
-    try {
+    withProgrammaticUpdateFlag(isApplyingProgrammaticUpdateRef, () => {
       applyExternalRichMarkdownContent(
         editor,
         content,
@@ -151,9 +151,7 @@ export function useRichMarkdownProgrammaticSync({
         baseCanonicalRef,
         codec
       )
-    } finally {
-      isApplyingProgrammaticUpdateRef.current = false
-    }
+    })
     if (pendingTimer !== null) {
       // Why: republishing the shared text recomputes the dirty flag this view's typing raised.
       onContentChangeRef.current(content)
@@ -169,7 +167,7 @@ export function useRichMarkdownProgrammaticSync({
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
     onContentChangeRef,
-    pendingEditEpochRef,
+    pendingEditGenerationRef,
     originalSourceRef,
     baseCanonicalRef,
     rootRef,

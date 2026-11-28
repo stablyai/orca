@@ -3,21 +3,24 @@ import {
   type PublicKnownRuntimeEnvironment,
   type RuntimePairingRepairRoute
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { resolveHostDisplay } from '../../../../../../shared/host-display-resolution'
-import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import { resolveHostDisplay } from '../../../../../../shared/execution-host/host-display-resolution'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { translate } from '@/i18n/i18n'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
   type RuntimeHostConnectionState as RuntimeServerConnectionState
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import { useAppStore } from '@/store/index'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   evaluateHostDetails,
   getHostDetailsDescription,
   getRuntimeServerConnectionState,
-  isRuntimeServerTransportConnected,
   type RuntimeHostDetails
 } from '../catalog/runtime-environment-host-details'
 
@@ -31,19 +34,22 @@ export type RuntimeServerRowState = {
   problem: string | null
   probeFailed: boolean
   compatibilityBlocked: boolean
+  /** The host now runs a different server that refuses this computer's pairing. */
+  serverReplaced: boolean
   /** Last answered status, kept across a lost probe. */
   descriptorStatus: RuntimeStatus | null | undefined
   hostDescriptorText: string | null
   title: string
 }
 
+const selectEntry = (entry: RuntimeEnvironmentStatus | undefined) => entry
+
 export function useRuntimeServerRowState(
   environment: PublicKnownRuntimeEnvironment,
   details: RuntimeHostDetails | undefined
 ): RuntimeServerRowState {
-  const runtimeStatusEntry = useAppStore((state) =>
-    state.runtimeStatusByEnvironmentId.get(environment.id)
-  )
+  const t = useTranslate()
+  const runtimeStatusEntry = useRuntimeHostStatusSelector(environment.id, selectEntry)
   // Share the host verdict across Settings surfaces: an unverifiable probe can leave transport connected, so raw entry.status would offer Connect while repository setup still reports reachability.
   const entryReachable =
     runtimeStatusEntry !== undefined &&
@@ -75,7 +81,7 @@ export function useRuntimeServerRowState(
     details?.status === 'loading' && !runtimeStatusEntry?.status
       ? 'checking'
       : getRuntimeServerConnectionState(effectiveDetails)
-  const isReachable = isRuntimeServerTransportConnected(connectionState)
+  const isReachable = isConnectedRuntimeHostState(connectionState)
   // Keep last verified descriptors across lost probes; latest status alone can be absent.
   const descriptorStatus = lastVerifiedRuntimeStatus(runtimeStatusEntry)
   const hostDisplay = resolveHostDisplay({
@@ -83,7 +89,12 @@ export function useRuntimeServerRowState(
     machineName: descriptorStatus?.machineName,
     platform: descriptorStatus?.hostPlatform
   })
-  const compatibilityBlocked = !accessRevoked && effectiveDetails?.compatibility?.kind === 'blocked'
+  const serverReplaced =
+    snapshot?.verification === 'blocked' &&
+    !snapshot.retired &&
+    snapshot.blockedReason === 'server-replaced'
+  const compatibilityBlocked =
+    !accessRevoked && !serverReplaced && effectiveDetails?.compatibility?.kind === 'blocked'
   return {
     effectiveDetails,
     connectionState,
@@ -91,34 +102,45 @@ export function useRuntimeServerRowState(
     accessRevoked,
     repairRoute,
     problem: accessRevoked
-      ? getRevokedDescription(environment.name, repairRoute)
-      : getHostDetailsDescription(effectiveDetails),
+      ? getRevokedDescription(environment.name, repairRoute, t)
+      : serverReplaced
+        ? t(
+            'auto.components.settings.RuntimeEnvironmentsPane.serverReplaced',
+            '{{value0}} is not the Orca server this computer paired with: Orca connects to the host as a different SSH user, or its server was reinstalled. Open the ⋯ menu here and choose Forget…, then connect the SSH host to pair with its current server.',
+            { value0: environment.name }
+          )
+        : getHostDetailsDescription(effectiveDetails, t),
     probeFailed:
       !isReachable && effectiveDetails?.status === 'error' && Boolean(effectiveDetails.error),
     compatibilityBlocked,
+    serverReplaced,
     descriptorStatus,
     hostDescriptorText: hostDisplay.descriptorLine,
     title: hostDisplay.title
   }
 }
 
-function getRevokedDescription(name: string, repairRoute: RuntimePairingRepairRoute): string {
+function getRevokedDescription(
+  name: string,
+  repairRoute: RuntimePairingRepairRoute,
+  t: Translate = translate
+): string {
   if (repairRoute === 'ssh') {
     // Managed SSH pairing normally happens automatically; reaching this error means it failed.
-    return translate(
+    return t(
       'auto.components.settings.RuntimeEnvironmentsPane.managedAccessRevoked',
       "{{value0}} no longer accepts this computer, and Orca couldn't pair with it again over SSH. Connect to try again.",
       { value0: name }
     )
   }
   if (repairRoute === 'connect') {
-    return translate(
+    return t(
       'auto.components.settings.RuntimeEnvironmentsPane.connectAccessRevoked',
       '{{value0}} no longer accepts this computer. Connect to try again.',
       { value0: name }
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.RuntimeEnvironmentsPane.accessRevoked',
     '{{value0}} no longer accepts this computer. Re-pair it with a new access link.',
     { value0: name }

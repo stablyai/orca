@@ -1,17 +1,18 @@
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
-} from '../../../../shared/text-generation-failure-copy'
+} from '../../../../shared/text-generation/text-generation-failure-copy'
 import type { CommitMessageDraftContext } from '../../../../shared/source-control/ai/generation/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../../shared/source-control/ai/generation/commit-message-host-key'
+import { isRetiredTextAgent } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { withLinkedIssueDraftContext } from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { getStagedCommitContext } from '../../../git/source-control/staged-commit-context'
+import { getStagedCommitContext } from '../../../git/source-control/mutations/staged-commit-context'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../../providers/ssh-host-not-served-error'
 import { loadPullRequestLinkedIssue } from '../../../source-control/pull-request-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../../../source-control/pull-request-template'
-import { prepareLocalCommitMessageAgentEnv } from '../../../text-generation/commit-message-agent-environment'
+import { prepareLocalCommitMessageAgentEnv } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -25,7 +26,11 @@ import type {
   GenerateCommitMessageResult
 } from '../../../text-generation/source-control-text-generation-types'
 import type { GeneratePullRequestFieldsResult } from '../../../text-generation/commit-message-text-generation'
-import { getPullRequestDraftContext } from '../../../text-generation/pull-request-context'
+import { getPullRequestDraftContext } from '../../../text-generation/pull-request-context/pull-request-context'
+import {
+  CANCELED_GENERATION_RESULT,
+  runCancelableLocalGeneration
+} from '../../../text-generation/execution/source-control-generation-lanes'
 import {
   localGitOptionsForTarget,
   runtimeGitRouteForTarget,
@@ -41,6 +46,14 @@ import {
   type RuntimeCommitMessageSettingsOverride
 } from './runtime-git-generation-context'
 
+// Older clients resolve a saved Antigravity choice themselves; it picks as if unset here.
+function runnableResolvedParams(
+  settingsOverride: RuntimeCommitMessageSettingsOverride | undefined
+) {
+  const params = settingsOverride?.sourceControlAiResolvedParams
+  return params && !isRetiredTextAgent(params.agentId) ? params : undefined
+}
+
 export class RuntimeGitGenerationCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
@@ -53,11 +66,9 @@ export class RuntimeGitGenerationCommands {
     const discoveryHostKey =
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(route.kind === 'ssh' ? route.connectionId : null)
-    const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
-      ? {
-          ok: true as const,
-          params: settingsOverride.sourceControlAiResolvedParams
-        }
+    const resolvedParams = runnableResolvedParams(settingsOverride)
+    const resolvedSettings = resolvedParams
+      ? { ok: true as const, params: resolvedParams }
       : resolveCommitMessageSettings(
           getRuntimeGitGenerationSettings(
             this.host.getRuntimeSettings(),
@@ -80,35 +91,44 @@ export class RuntimeGitGenerationCommands {
       return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
     }
 
-    let context: CommitMessageDraftContext | null
-    try {
-      context = await getStagedCommitContext(target.worktree.path, {
-        ...localGitOptionsForTarget(target),
-        admissionTier: 'interactive'
-      })
-    } catch (error) {
-      console.error('[runtime-git] Failed to read staged commit context:', error)
-      return {
-        success: false,
-        ...textGenerationFailure('stagedChangesReadFailed')
+    return runCancelableLocalGeneration<GenerateCommitMessageResult>(
+      'commit-message',
+      target.worktree.path,
+      async (isCanceled) => {
+        let context: CommitMessageDraftContext | null
+        try {
+          context = await getStagedCommitContext(target.worktree.path, {
+            ...localGitOptionsForTarget(target),
+            admissionTier: 'interactive'
+          })
+        } catch (error) {
+          console.error('[runtime-git] Failed to read staged commit context:', error)
+          return {
+            success: false,
+            ...textGenerationFailure('stagedChangesReadFailed')
+          }
+        }
+        if (!context) {
+          return { success: false, ...textGenerationFailure('noStagedChanges') }
+        }
+        context = withLinkedIssueDraftContext(context, linkedIssueForTarget(this.host, target))
+        const localEnv = await prepareLocalCommitMessageAgentEnv(
+          resolvedSettings.params.agentId,
+          this.host.getCommitMessageAgentEnvironment?.(),
+          localAgentRuntimeTargetForTarget(target)
+        )
+        if (!localEnv.ok) {
+          return { success: false, error: localEnv.error }
+        }
+        if (isCanceled()) {
+          return CANCELED_GENERATION_RESULT
+        }
+        return generateCommitMessageFromContext(
+          context,
+          resolvedSettings.params,
+          localTextGenerationTargetForTarget(target, localEnv.env)
+        )
       }
-    }
-    if (!context) {
-      return { success: false, ...textGenerationFailure('noStagedChanges') }
-    }
-    context = withLinkedIssueDraftContext(context, linkedIssueForTarget(this.host, target))
-    const localEnv = await prepareLocalCommitMessageAgentEnv(
-      resolvedSettings.params.agentId,
-      this.host.getCommitMessageAgentEnvironment?.(),
-      localAgentRuntimeTargetForTarget(target)
-    )
-    if (!localEnv.ok) {
-      return { success: false, error: localEnv.error }
-    }
-    return generateCommitMessageFromContext(
-      context,
-      resolvedSettings.params,
-      localTextGenerationTargetForTarget(target, localEnv.env)
     )
   }
 
@@ -140,11 +160,9 @@ export class RuntimeGitGenerationCommands {
     const discoveryHostKey =
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(route.kind === 'ssh' ? route.connectionId : null)
-    const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
-      ? {
-          ok: true as const,
-          params: settingsOverride.sourceControlAiResolvedParams
-        }
+    const resolvedParams = runnableResolvedParams(settingsOverride)
+    const resolvedSettings = resolvedParams
+      ? { ok: true as const, params: resolvedParams }
       : resolveCommitMessageSettings(
           getRuntimeGitGenerationSettings(
             this.host.getRuntimeSettings(),
@@ -257,12 +275,12 @@ export class RuntimeGitGenerationCommands {
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    const localOptions = localGitOptionsForTarget(target)
-    return localOptions.wslDistro
-      ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, {
-          cwd: target.worktree.path,
-          wslDistro: localOptions.wslDistro
-        })
-      : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
+    const { wslDistro } = localGitOptionsForTarget(target)
+    return discoverCommitMessageModelsLocal(
+      typedAgentId,
+      localEnv.env,
+      agentCommandOverride,
+      wslDistro ? { cwd: target.worktree.path, wslDistro } : undefined
+    )
   }
 }

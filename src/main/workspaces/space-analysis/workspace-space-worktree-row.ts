@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type {
   WorkspaceSpaceDirectoryScanResult,
@@ -8,7 +8,7 @@ import type {
   WorkspaceSpaceWorktree
 } from '../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-disk-space/workspace-space-directory-frame'
-import { getWorktreeExecutionHostId } from '../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export function basenameWorkspaceFilesystemPath(pathValue: string): string {
   return looksLikeWindowsPath(pathValue) ? win32.basename(pathValue) : posix.basename(pathValue)
@@ -33,7 +33,7 @@ function createBaseWorktreeRow(repo: Repo, worktree: Worktree, scannedAt: number
     executionHostId: getWorktreeExecutionHostId(worktree, repo),
     repoDisplayName: repo.displayName,
     repoPath: repo.path,
-    displayName: worktree.displayName,
+    displayName: worktree.displayName ?? '',
     path: worktree.path,
     branch: worktree.branch,
     isMainWorktree: worktree.isMainWorktree,

@@ -17,6 +17,9 @@ export function refusalOf(signal: AbortSignal): ConnectorRefusal {
   return CONNECTOR_REFUSALS.find((reason) => reason === signal.reason) ?? 'connectors_disabled'
 }
 
+/** Work run in a conversation's queue, told by `signal` when a Stop ends its wait. */
+export type QueuedWork = (signal: AbortSignal) => Promise<unknown>
+
 /** Serialize each conversation; cancellation aborts its head and settles queued work without undoing prior writes. */
 export class ConversationChain {
   private readonly lanes = new Map<string, Lane>()
@@ -58,6 +61,29 @@ export class ConversationChain {
       }
     })
     return result
+  }
+
+  /** Waits in the lane after its queued items for `work`, which it starts; a cancel ends the wait
+   *  at once (the work goes on alone, told by `signal`) and it comes back refused. */
+  after(id: string, work?: QueuedWork): Promise<Delivery> {
+    return this.enqueue(id, async (signal) => {
+      const done = (work?.(signal) ?? Promise.resolve()).catch(() => undefined)
+      let onAbort = (): void => {}
+      const stopped = new Promise<void>((resolve) => {
+        onAbort = resolve
+        signal.addEventListener('abort', onAbort, { once: true })
+        if (signal.aborted) {
+          resolve()
+        }
+      })
+      try {
+        await Promise.race([done, stopped])
+      } finally {
+        // Its lane may outlive it: a listener left on its signal would be kept as long as the lane.
+        signal.removeEventListener('abort', onAbort)
+      }
+      return signal.aborted ? refused(refusalOf(signal)) : { outcome: 'accepted' }
+    })
   }
 
   /** Resolves true if no running work could publish; laneSignal protects a replacement lane. */

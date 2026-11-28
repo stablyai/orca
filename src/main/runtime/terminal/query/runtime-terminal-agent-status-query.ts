@@ -6,8 +6,8 @@ import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/pro
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -39,7 +39,8 @@ type Dependencies = {
   getPrimaryLeaf(ptyId: string): RuntimeLeafRecord | null
   getTabTitle(tabId: string): string | null
   getExplicitStatus(
-    handle: string
+    handle: string,
+    ptyId: string
   ): { status: NonNullable<RuntimeTerminalAgentStatus['status']>; updatedAt: number } | null
   getLifecycleStatus(
     ptyId: string
@@ -49,7 +50,7 @@ type Dependencies = {
   /** Stamps blocked text the PTY's throttled scan has not yet judged. */
   flushPendingBlockedStamp(ptyId: string): void
   /** The settled screen when it proves blocked tail text was erased; null keeps the tail. */
-  readScreenClearingBlockedTail(ptyId: string, lastOutputAt: number | null): string | null
+  readScreenClearingBlockedTail(ptyId: string): string | null
 }
 
 export class RuntimeTerminalAgentStatusQuery {
@@ -78,7 +79,7 @@ export class RuntimeTerminalAgentStatusQuery {
     // Use display state: stale-spinner clearing leaves foreground evidence to identify agents that exited behind it.
     const clear = this.deps.getTitleDisplayClear(ptyId)
     const terminal = this.getSnapshot(handle, ptyId, clear)
-    const explicitStatus = this.deps.getExplicitStatus(handle)
+    const explicitStatus = this.deps.getExplicitStatus(handle, ptyId)
     const lifecycle = getDisplayPromptLifecycle(this.deps.getLifecycleStatus(ptyId), clear)
     const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
     const liveTitleClearsBlockedText =
@@ -232,7 +233,7 @@ export class RuntimeTerminalAgentStatusQuery {
   // Why the screen may only clear: the line tail keeps a dialog the TUI erased in place (#24187).
   private readWaitText(
     ptyId: string,
-    record: Pick<RuntimeLeafRecord, 'tailBuffer' | 'tailPartialLine' | 'preview' | 'lastOutputAt'>
+    record: Pick<RuntimeLeafRecord, 'tailBuffer' | 'tailPartialLine' | 'preview'>
   ): string {
     const tailText = buildTerminalWaitText(
       record.tailBuffer,
@@ -242,7 +243,7 @@ export class RuntimeTerminalAgentStatusQuery {
     if (detectTerminalWaitBlockedReason(tailText) === null) {
       return tailText
     }
-    return this.deps.readScreenClearingBlockedTail(ptyId, record.lastOutputAt) ?? tailText
+    return this.deps.readScreenClearingBlockedTail(ptyId) ?? tailText
   }
 
   private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {

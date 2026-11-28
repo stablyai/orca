@@ -1,6 +1,6 @@
 /** Exhaustive state dispositions for local WSL project moves. Typed stores are compile-checked; tests census localStorage/SQLite. Sibling tables cover UI, storage and out-of-store state.
  * Item numbers refer to docs/design/wsl-via-orcad-lossless-mover.md §2. */
-import type { PersistedState } from '../persisted-state-types'
+import type { PersistedState } from '../orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 export type WslMoveDisposition =
@@ -85,6 +85,10 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     item: 47,
     note: "Rebuilt from the host's next project list; it caches only that answer."
   },
+  pairedPortForwards: notApplicableDisposition(
+    62,
+    'Forwards to this computer from paired servers.'
+  ),
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
   deletedSshConfigAliases: notApplicableDisposition(62),
@@ -94,11 +98,21 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   migrationUnsupportedPtyEntries: { disposition: 'gate', item: 20 },
   legacyPaneKeyAliasEntries: { disposition: 'gate', item: 20 },
   automations: moveDisposition(18, {
-    note: "The host runs the moved copy; the desktop's stays unchanged, and its scheduler only advances it."
+    note: "The host runs the moved copy; the desktop's turns off after commit (local-automations), and undo gives it the host's state."
   }),
   automationRuns: moveDisposition(19, {
     note: "An in-flight run in scope blocks the move. The desktop's history stays as written, beside its automation."
   }),
+  bots: notApplicableDisposition(
+    62,
+    "A bot's hidden project group is never offered for a move; the bot stays with its host."
+  ),
+  botsNewerAgents: notApplicableDisposition(62, 'Bots on newer agents; same as bots.'),
+  botOrder: notApplicableDisposition(62, 'Bot order; same as bots.'),
+  botsPermissionDefaultMigrated: notApplicableDisposition(
+    62,
+    'A one-time migration marker for bots.'
+  ),
   orcadMigrationImportReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationEvictedReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationStagedCatalogs: notApplicableDisposition(68, 'Mover-owned.'),
@@ -144,6 +158,8 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   terminalLayoutsByTabId: moveDisposition(23),
   localOnlyScrollbackByTabId: moveDisposition(25, { newManifestSection: true }),
   remoteSessionIdsByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayOwnerByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayAdoptionVersion: { disposition: 'drop-pty-binding', item: 36 },
   browserPagesByWorkspace: moveDisposition(29),
   markdownFrontmatterVisible: moveDisposition(28, {
     rewriteDesktopCopy: true,

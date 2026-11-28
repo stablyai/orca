@@ -1,14 +1,6 @@
 import { app, session, webContents, type Session, type WebContents } from 'electron'
 import { closeRouteGuest } from '../guest-authority/browser-route-guest-guard'
-import { sshExecutionHostStorageIdentity } from '../identity/browser-execution-host-storage-identity'
-import {
-  deriveBrowserRoutePartition,
-  deriveLocalSshBrowserRoutePartitionStorageScope
-} from '../partitions/browser-route-identity'
-import {
-  activeBrowserRoutePartitionOrcaProfileId,
-  currentBrowserRoutePartitionBindingStore
-} from '../partitions/browser-route-partition-binding-runtime'
+import { activeBrowserRoutePartitionOrcaProfileId } from '../partitions/browser-route-partition-binding-runtime'
 import {
   isBrowserRoutePartitionRetainedByAnyOwner,
   registerBrowserRoutePartitionRetentionProbe
@@ -19,15 +11,18 @@ import {
   type BrowserRouteProxyEndpoint
 } from '../sessions/browser-route-session-policy'
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
+import {
+  bindLocalSshBrowserPartitionFor,
+  boundLocalSshBrowserPartitionsForProfile,
+  deriveLocalSshBrowserPartition
+} from './local-ssh-browser-partition-bindings'
+import { getSshTargetRegistryStore } from '../../../ssh/targets/ssh-target-registry'
 import {
   closeLocalSshBrowserRouteForTarget,
   probeLocalSshBrowserRouteForwarding,
   retainLocalSshBrowserRoute
 } from './local-ssh-browser-route'
-
-const AUTHORITY_CONNECTION_IDENTITY_TAG = 'orca-local-ssh-browser'
-const AUTHORITY_CONNECTION_IDENTITY_VERSION = 1
 
 type PreparedLocalSshPartition = {
   partition: string
@@ -47,15 +42,6 @@ const preparedByIdentityKey = new Map<string, PendingLocalSshPartition>()
 const preparedByPartition = new Map<string, PreparedLocalSshPartition>()
 const partitionBySession = new WeakMap<Session, string>()
 
-// Keep the identity stable across restarts to preserve cookies.
-export function localSshBrowserAuthorityConnectionIdentity(orcaProfileId: string): string {
-  return JSON.stringify([
-    AUTHORITY_CONNECTION_IDENTITY_TAG,
-    AUTHORITY_CONNECTION_IDENTITY_VERSION,
-    orcaProfileId
-  ])
-}
-
 export function isLocalSshBrowserPartition(partition: string): boolean {
   const prepared = preparedByPartition.get(partition)
   if (!prepared) {
@@ -67,6 +53,19 @@ export function isLocalSshBrowserPartition(partition: string): boolean {
   } catch {
     return false
   }
+}
+
+/** The jar this target's routed pages of this profile use; null until a page has prepared it. */
+export function preparedLocalSshBrowserPartition(
+  targetId: string,
+  browserProfileId: string
+): string | null {
+  const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()
+  if (!orcaProfileId) {
+    return null
+  }
+  const { partition } = deriveLocalSshBrowserPartition(orcaProfileId, targetId, browserProfileId)
+  return isLocalSshBrowserPartition(partition) ? partition : null
 }
 
 export function localSshBrowserPartitionForSession(webSession: Session): string | null {
@@ -140,33 +139,11 @@ async function prepareFresh(
       throw new Error('browser_local_route_ssh_unavailable')
     }
   }
-  const derived = deriveBrowserRoutePartition({
+  const derived = bindLocalSshBrowserPartitionFor(
     orcaProfileId,
-    browserProfileId: input.browserProfileId,
-    authorityConnectionIdentity: localSshBrowserAuthorityConnectionIdentity(orcaProfileId),
-    executionHostIdentity: sshExecutionHostStorageIdentity(input.targetId)
-  })
-  const bindings = currentBrowserRoutePartitionBindingStore({
-    isPartitionRetained: isBrowserRoutePartitionRetainedByAnyOwner
-  })
-  const persistedFingerprint = bindings.get(derived.partition)
-  if (persistedFingerprint === null) {
-    const evicted = bindings.set(
-      derived.partition,
-      derived.bindingFingerprint,
-      deriveLocalSshBrowserRoutePartitionStorageScope({ orcaProfileId, targetId: input.targetId })
-    )
-    if (evicted.length > 0) {
-      void releaseEvictedBrowserRoutePartitionStorage(
-        evicted,
-        isBrowserRoutePartitionRetainedByAnyOwner
-      )
-    }
-  } else if (persistedFingerprint !== derived.bindingFingerprint) {
-    throw new Error('browser_route_partition_binding_conflict')
-  } else {
-    bindings.touch(derived.partition)
-  }
+    input.targetId,
+    input.browserProfileId
+  )
   storage.partition = derived.partition
   await prepareBrowserRouteSessionPolicy({
     partition: derived.partition,
@@ -280,6 +257,12 @@ browserSessionRegistry.onProfileDeleted = async (profileId) => {
   try {
     await releasePreparedPartitions((pending) => pending.browserProfileId === profileId, partitions)
   } finally {
+    // A jar an earlier launch or a Settings import bound has no prepared record; find it by host.
+    // Runs even when a prepared jar failed to release, so the profile's other jars still go.
+    const targetIds = (getSshTargetRegistryStore()?.listTargets() ?? []).map((target) => target.id)
+    for (const bound of boundLocalSshBrowserPartitionsForProfile(targetIds, profileId)) {
+      partitions.add(bound)
+    }
     await releaseEvictedBrowserRoutePartitionStorage(
       [...partitions],
       isBrowserRoutePartitionRetainedByAnyOwner

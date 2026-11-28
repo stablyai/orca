@@ -1,0 +1,222 @@
+import { createRedactedPasteDiagnostic } from './terminal-paste-diagnostics'
+import {
+  TERMINAL_PASTE_CHUNK_MAX_BYTES,
+  TERMINAL_PASTE_DIRECT_MAX_BYTES,
+  TERMINAL_PASTE_MAX_BYTES
+} from './terminal-paste-limits'
+import {
+  measurePastePayloadMetadata as measureTerminalPastePayloadMetadata,
+  measurePastePayloadMetadataWithYield as measureTerminalPastePayloadMetadataWithYield
+} from '../../../../lib/text-input/paste/paste-payload-metadata'
+import type {
+  TerminalPastePayload,
+  TerminalPastePlan,
+  TerminalPasteSource,
+  TerminalPasteTarget,
+  WindowsInputRecordNewline
+} from './terminal-paste-model'
+
+type PlanTerminalPasteArgs = {
+  text: string
+  source: TerminalPasteSource
+  target: TerminalPasteTarget
+  forceBracketedPaste?: boolean
+  forceBracketedPasteForMultiline?: boolean
+  windowsInputRecordNewline?: WindowsInputRecordNewline
+  terminalBracketedPasteMode?: boolean
+  hasRichText?: boolean
+  maxDirectBytes?: number
+  maxChunkBytes?: number
+  maxBytes?: number
+}
+
+type PlanTerminalPasteWithYieldArgs = PlanTerminalPasteArgs & {
+  measureYieldAfterCodeUnits?: number
+  yieldToEventLoop?: () => Promise<void>
+}
+
+export function createTerminalPastePayload({
+  text,
+  source,
+  hasRichText = false,
+  maxBytes
+}: {
+  text: string
+  source: TerminalPasteSource
+  hasRichText?: boolean
+  maxBytes?: number
+}): TerminalPastePayload {
+  const metadata = measureTerminalPastePayloadMetadata(text, { stopAfterBytes: maxBytes })
+  return {
+    plainText: text,
+    source,
+    byteLength: metadata.byteLength,
+    lineCount: metadata.lineCount,
+    hasRichText,
+    hasControlSequences: metadata.hasControlSequences,
+    lineEndingByteLength: metadata.lineEndingByteLength
+  }
+}
+
+export function planTerminalPaste({
+  text,
+  source,
+  target,
+  forceBracketedPaste = false,
+  forceBracketedPasteForMultiline = false,
+  windowsInputRecordNewline,
+  terminalBracketedPasteMode = false,
+  hasRichText = false,
+  maxDirectBytes = TERMINAL_PASTE_DIRECT_MAX_BYTES,
+  maxChunkBytes = TERMINAL_PASTE_CHUNK_MAX_BYTES,
+  maxBytes = TERMINAL_PASTE_MAX_BYTES
+}: PlanTerminalPasteArgs): TerminalPastePlan {
+  const payload = createTerminalPastePayload({ text, source, hasRichText, maxBytes })
+  return buildTerminalPastePlan({
+    forceBracketedPaste,
+    forceBracketedPasteForMultiline,
+    windowsInputRecordNewline,
+    maxBytes,
+    maxChunkBytes,
+    maxDirectBytes,
+    payload,
+    target,
+    terminalBracketedPasteMode
+  })
+}
+
+export async function planTerminalPasteWithYield({
+  text,
+  source,
+  target,
+  forceBracketedPaste = false,
+  forceBracketedPasteForMultiline = false,
+  windowsInputRecordNewline,
+  terminalBracketedPasteMode = false,
+  hasRichText = false,
+  maxDirectBytes = TERMINAL_PASTE_DIRECT_MAX_BYTES,
+  maxChunkBytes = TERMINAL_PASTE_CHUNK_MAX_BYTES,
+  maxBytes = TERMINAL_PASTE_MAX_BYTES,
+  measureYieldAfterCodeUnits,
+  yieldToEventLoop
+}: PlanTerminalPasteWithYieldArgs): Promise<TerminalPastePlan> {
+  const metadata = await measureTerminalPastePayloadMetadataWithYield(text, {
+    stopAfterBytes: maxBytes,
+    yieldAfterCodeUnits: measureYieldAfterCodeUnits,
+    yieldToEventLoop
+  })
+  const payload: TerminalPastePayload = {
+    plainText: text,
+    source,
+    byteLength: metadata.byteLength,
+    lineCount: metadata.lineCount,
+    hasRichText,
+    hasControlSequences: metadata.hasControlSequences,
+    lineEndingByteLength: metadata.lineEndingByteLength
+  }
+  return buildTerminalPastePlan({
+    forceBracketedPaste,
+    forceBracketedPasteForMultiline,
+    windowsInputRecordNewline,
+    maxBytes,
+    maxChunkBytes,
+    maxDirectBytes,
+    payload,
+    target,
+    terminalBracketedPasteMode
+  })
+}
+
+function buildTerminalPastePlan({
+  payload,
+  target,
+  forceBracketedPaste,
+  forceBracketedPasteForMultiline,
+  windowsInputRecordNewline,
+  terminalBracketedPasteMode,
+  maxDirectBytes,
+  maxChunkBytes,
+  maxBytes
+}: {
+  payload: TerminalPastePayload
+  target: TerminalPasteTarget
+  forceBracketedPaste: boolean
+  forceBracketedPasteForMultiline: boolean
+  windowsInputRecordNewline?: WindowsInputRecordNewline
+  terminalBracketedPasteMode: boolean
+  maxDirectBytes: number
+  maxChunkBytes: number
+  maxBytes: number
+}): TerminalPastePlan {
+  const effectiveWindowsInputRecordNewline =
+    !forceBracketedPaste && payload.lineCount > 1 ? windowsInputRecordNewline : undefined
+  const plannedByteLength = effectiveWindowsInputRecordNewline
+    ? payload.byteLength -
+      payload.lineEndingByteLength +
+      (payload.lineCount - 1) * (effectiveWindowsInputRecordNewline === 'csi-u' ? 7 : 2)
+    : payload.byteLength
+  const shouldChunk = plannedByteLength > maxDirectBytes
+  const effectiveForceBracketedPaste =
+    forceBracketedPaste ||
+    (effectiveWindowsInputRecordNewline === undefined &&
+      forceBracketedPasteForMultiline &&
+      payload.lineCount > 1)
+  const shouldBracketChunk =
+    effectiveWindowsInputRecordNewline === undefined &&
+    (effectiveForceBracketedPaste || terminalBracketedPasteMode)
+  const mode = choosePasteMode({
+    byteLength: plannedByteLength,
+    forceBracketedPaste: effectiveForceBracketedPaste,
+    windowsInputRecordNewline: effectiveWindowsInputRecordNewline,
+    shouldChunk,
+    maxBytes
+  })
+  const plan: TerminalPastePlan = {
+    target,
+    payload,
+    mode,
+    newlinePolicy:
+      effectiveWindowsInputRecordNewline !== undefined
+        ? 'windows-input-record'
+        : mode === 'chunked' || mode === 'bracketed-terminal'
+          ? 'terminal-cr'
+          : 'preserve',
+    ...(effectiveWindowsInputRecordNewline
+      ? { windowsInputRecordNewline: effectiveWindowsInputRecordNewline }
+      : {}),
+    runtimeKey: target.runtime.runtimeKey,
+    ...(shouldChunk ? { maxChunkBytes } : {}),
+    bracketed: mode === 'bracketed-terminal' || (mode === 'chunked' && shouldBracketChunk),
+    redactedDiagnostic: '',
+    ...(mode === 'reject' ? { rejectReason: 'payload-too-large' } : {})
+  }
+  return {
+    ...plan,
+    redactedDiagnostic: createRedactedPasteDiagnostic(plan)
+  }
+}
+
+function choosePasteMode({
+  byteLength,
+  forceBracketedPaste,
+  windowsInputRecordNewline,
+  shouldChunk,
+  maxBytes
+}: {
+  byteLength: number
+  forceBracketedPaste: boolean
+  windowsInputRecordNewline?: WindowsInputRecordNewline
+  shouldChunk: boolean
+  maxBytes: number
+}): TerminalPastePlan['mode'] {
+  if (byteLength > maxBytes) {
+    return 'reject'
+  }
+  if (shouldChunk) {
+    return 'chunked'
+  }
+  if (windowsInputRecordNewline !== undefined) {
+    return 'windows-input-record'
+  }
+  return forceBracketedPaste ? 'bracketed-terminal' : 'direct'
+}

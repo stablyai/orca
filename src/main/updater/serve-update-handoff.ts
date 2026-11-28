@@ -1,16 +1,17 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
-import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
+import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser/runtime/browser-sidecar-lifetime'
 import { app } from 'electron'
-import { quitProcess } from '../startup/process-quit-request'
+import { quitProcess } from '../startup/quit/process-quit-request'
+import { markBrowserEngineSidecarLaunch } from '../runtime/rpc/callers/browser-engine-sidecar-launch'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState,
   type ServeSupervisorMessage,
   type ServeUpdateHandoffState
-} from '../../shared/serve-update-handoff'
-import { isSameUserDataPath } from '../../shared/serve-user-data-path'
+} from '../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
+import { isSameUserDataPath } from '../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 
 function getConfiguredHandoffPath(): string | null {
@@ -85,6 +86,9 @@ export function installServeSupervisorDisconnectQuit(
 ): () => void {
   const isBrowserSidecar = process.env[BROWSER_SIDECAR_OWNER_ENV] === '1'
   delete process.env[BROWSER_SIDECAR_OWNER_ENV]
+  if (isBrowserSidecar && isServeMode) {
+    markBrowserEngineSidecarLaunch()
+  }
   if (!isServeMode || (!isBrowserSidecar && !hasServeUpdateSupervisor())) {
     return () => undefined
   }

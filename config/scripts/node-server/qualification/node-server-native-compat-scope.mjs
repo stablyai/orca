@@ -13,7 +13,7 @@ const MODIFIED_TEST_INPUTS = new Set([
   'config/reliability-gates.jsonc',
   'src/main/daemon/emulation/testing/serialize-grid-variant-scope.ts',
   'config/scripts/vitest-sqlite-database-runtime-files.mjs',
-  'src/main/native-chat/agent-session-journal/journal-host-database-test-support.ts'
+  'src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support.ts'
 ])
 
 function isRepositoryPath(file) {

@@ -1,5 +1,5 @@
 import { richMarkdownViewport } from '../viewport/rich-markdown-viewport'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
@@ -13,8 +13,8 @@ import {
 } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { measureRichMarkdownReviewNotePositions } from './rich-markdown-review-note-positioning'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 type UseRichMarkdownReviewRailControllerOptions = {
   canAnnotateRichMarkdown: boolean
@@ -45,7 +45,9 @@ export function useRichMarkdownReviewRailController({
   const notePositionsFrameRef = useRef<number | null>(null)
   const reviewRailVisible = markdownComments.length > 0 && reviewRailOpen
 
-  notePositionsRef.current = notePositions
+  useLayoutEffect(() => {
+    notePositionsRef.current = notePositions
+  })
 
   const clearAttentionTimers = useCallback((): void => {
     clearWindowTimer(attentionReviewCommentTimeoutRef)

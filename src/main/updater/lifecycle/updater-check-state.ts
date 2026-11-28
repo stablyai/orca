@@ -1,11 +1,11 @@
 import { writeMainThreadDiagnosticMarker } from '../../diagnostics/main-thread-churn-probe'
-import { isWindowsSignatureCheckUnavailableFailure } from '../../../shared/updater-windows-signature-check'
+import { isWindowsSignatureCheckUnavailableFailure } from '../../../shared/updater/updater-windows-signature-check'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { getRetainedLinuxPackageManualInstallStatus } from '../linux-package/linux-package-downloaded-status'
-import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/update-status-types'
+import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/updater/update-status-types'
 import type { UpdateCheckVariant } from './updater-types'
 import { UpdaterStatus } from './updater-status'
-import type { UpdaterCodedMessage } from '../../../shared/updater-failure-copy'
+import type { UpdaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import {
   AUTO_UPDATE_CHECK_INTERVAL_MS,
   AUTO_UPDATE_RETRY_INTERVAL_MS,
@@ -26,6 +26,10 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
   }
 
   protected getUpdateCheckVariant(options?: UpdateCheckOptions): UpdateCheckVariant {
+    const teamChannel = this.getTeamUpdatePolicy?.()?.updateChannel
+    if (teamChannel) {
+      return teamChannel === 'rc' ? 'prerelease' : 'default'
+    }
     if (options?.includePerfPrerelease) {
       return 'perf'
     }
@@ -288,7 +292,12 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
         message: 'Windows update signature check could not run'
       })
     }
-    this.sendStatus({ state: 'error', ...coded, userInitiated })
+    this.sendStatus({
+      state: 'error',
+      ...coded,
+      userInitiated,
+      ...(this.currentStatus.state === 'downloading' ? { failurePhase: 'download' } : {})
+    })
   }
 
   /** Retain the distro-package manual-install card when settling a check; ordinary status would erase it. */

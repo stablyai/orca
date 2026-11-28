@@ -1,21 +1,24 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const bottomDrawerStyles = themedStyleSheet(() => ({
+export const bottomDrawerStylesSheet = themedStyleSheet((colors) => ({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000
   },
   root: {
     flex: 1
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.55)'
   },
+  backdropClear: {
+    backgroundColor: 'transparent'
+  },
   backdropPressable: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   anchor: {
     flex: 1,

@@ -1,0 +1,257 @@
+import type { ChildProcess } from 'node:child_process'
+import {
+  DEFAULT_MAX_OUTPUT_BYTES,
+  type LaunchedProcess,
+  type ProcessSpec
+} from '@orca/process-host/process-spec'
+import { windowsTreeKillFor } from '@orca/process-host/windows-tree-kill'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
+import {
+  canSpawnOnWorkerThread,
+  isAbandonedWorkerChildError,
+  spawnProcessOnWorkerThread,
+  spawnWorkerReadyNow,
+  type WorkerThreadChildProcess
+} from '../../../worker-thread-child-process/worker-thread-child-process'
+import {
+  killAbandonedWorkerChildTree,
+  reportWhenAbandonedRootEnds
+} from './spawned-command-tree-kill'
+
+function isPlainPiped(spec: ProcessSpec): boolean {
+  const { stdio } = spec
+  const piped =
+    stdio === undefined ||
+    stdio === 'pipe' ||
+    (Array.isArray(stdio) && stdio.length === 3 && stdio.every((entry) => entry === 'pipe'))
+  return piped && !spec.detached && !spec.windowsVerbatimArguments && !spec.serialization
+}
+
+/** runProcess `launch` for Windows, where CreateProcessW blocks its calling thread (#27362): a plain piped spec starts on the process worker. */
+export function launchProcessSpecOnWindowsWorker(
+  spec: ProcessSpec,
+  onWorkerLost: (() => void) | undefined,
+  onTerminated: () => void,
+  /** The caller holds no mutation fence: worker loss ends its lifetime without proof. */
+  lifetimeEndsOnLoss = false,
+  outputCapture: 'head' | 'tail' = 'head'
+): LaunchedProcess | null {
+  if (process.platform !== 'win32' || !canSpawnOnWorkerThread()) {
+    return null
+  }
+  return launchProcessSpecOnWorker(
+    spec,
+    onWorkerLost,
+    onTerminated,
+    lifetimeEndsOnLoss,
+    outputCapture
+  )
+}
+
+/** Main's default runProcess launcher on POSIX: posix_spawn blocks its calling thread, for minutes under memory or disk pressure.
+ * Supports plain piped specs and boolean `terminationBarrier: true` (using the worker's owned POSIX process group).
+ * Specs with `'wait-for-posix-group'`, custom barriers, or `onChildTerminated` keep their proven launch on main.
+ * Uses spawnWorkerReadyNow() so a cold or broken worker falls back to main rather than rejecting early callers. */
+export function launchPlainProcessSpecOnPosixWorker(
+  spec: ProcessSpec,
+  outputCapture: 'head' | 'tail' = 'head'
+): LaunchedProcess | null {
+  const unsupportedBarrier =
+    spec.terminationBarrier !== undefined &&
+    spec.terminationBarrier !== false &&
+    spec.terminationBarrier !== true
+  if (
+    process.platform === 'win32' ||
+    unsupportedBarrier ||
+    spec.onChildTerminated ||
+    !spawnWorkerReadyNow()
+  ) {
+    return null
+  }
+  return launchProcessSpecOnWorker(spec, undefined, () => {}, true, outputCapture)
+}
+
+function createWorkerOwnedGroup(child: WorkerThreadChildProcess): NonNullable<
+  LaunchedProcess['ownedGroup']
+> & {
+  resolveAbandoned: (verified: boolean) => void
+} {
+  let stopping = false
+  let terminated = false
+  let stopPromise: Promise<boolean> | undefined
+  let settleStop: ((verified: boolean) => void) | undefined
+  const listeners = new Set<() => void>()
+
+  const notifyTerminated = (): void => {
+    if (terminated) {
+      return
+    }
+    terminated = true
+    for (const listener of listeners) {
+      listener()
+    }
+    listeners.clear()
+    settleStop?.(true)
+  }
+
+  child.once('group-terminated', notifyTerminated)
+  child.once('group-stop-unverified', () => {
+    settleStop?.(false)
+  })
+
+  return {
+    onTerminated(listener) {
+      if (terminated) {
+        listener()
+      } else {
+        listeners.add(listener)
+      }
+    },
+    stop() {
+      if (stopPromise) {
+        return stopPromise
+      }
+      stopping = true
+      if (terminated || child.ownedGroupTerminated) {
+        notifyTerminated()
+        stopPromise = Promise.resolve(true)
+        return stopPromise
+      }
+      stopPromise = new Promise<boolean>((resolve) => {
+        settleStop = resolve
+      })
+      if (!child.stopOwnedGroup()) {
+        settleStop?.(false)
+      }
+      return stopPromise
+    },
+    close() {
+      if (!stopping) {
+        notifyTerminated()
+      }
+    },
+    resolveAbandoned(verified) {
+      if (verified) {
+        notifyTerminated()
+      } else {
+        settleStop?.(false)
+      }
+    }
+  }
+}
+
+function launchProcessSpecOnWorker(
+  spec: ProcessSpec,
+  onWorkerLost: (() => void) | undefined,
+  onTerminated: () => void,
+  lifetimeEndsOnLoss: boolean,
+  outputCapture: 'head' | 'tail'
+): LaunchedProcess | null {
+  if (!isPlainPiped(spec)) {
+    return null
+  }
+  const ownedPosixGroup = process.platform !== 'win32' && spec.terminationBarrier === true
+  const args = [...(spec.args ?? [])]
+  const startedAt = performance.now()
+  const child = spawnProcessOnWorkerThread({
+    program: spec.program,
+    args,
+    cwd: spec.cwd,
+    // The worker's env is a copy from its start; send main's current one.
+    env: spec.env ?? process.env,
+    ...(ownedPosixGroup ? { terminationBarrier: true as const } : {})
+  })
+  recordSubprocessSpawn(spec.program, args, performance.now() - startedAt)
+  // Only discard past the cap for head-captured streams with no full-stream observer.
+  if (outputCapture === 'head') {
+    const cap = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
+    const hasStderrObserver =
+      Boolean(spec.onStderr) ||
+      (typeof spec.terminationBarrier === 'object' &&
+        Boolean(spec.terminationBarrier.observeStderr))
+    const discardableStreams: readonly ('stdout' | 'stderr')[] = hasStderrObserver
+      ? ['stdout']
+      : ['stdout', 'stderr']
+    for (const stream of discardableStreams) {
+      let received = 0
+      const onData = (chunk: Buffer): void => {
+        received += chunk.byteLength
+        if (received > cap) {
+          child[stream].off('data', onData)
+          child.discardOutput(stream)
+        }
+      }
+      child[stream].on('data', onData)
+    }
+  }
+  const ownedGroup = ownedPosixGroup ? createWorkerOwnedGroup(child) : undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in carries the piped surface runProcess and its tree kill read: pid, exitCode, signalCode, kill, stdio streams, and spawn/error/exit/close events.
+  const launched = child as unknown as ChildProcess
+  child.on('error', (error) => {
+    if (child.pid === undefined || !isAbandonedWorkerChildError(error)) {
+      return
+    }
+    if (process.platform !== 'win32') {
+      onWorkerLost?.()
+      const exitReported = child.exitCode !== null || child.signalCode !== null
+      if (ownedGroup) {
+        // An exited root not being stopped ended as a normal close would: its group may hold daemons it meant to leave, and its reaped id may be reused.
+        if (child.ownedGroupTerminated || (exitReported && !child.ownedGroupStopping)) {
+          onTerminated()
+          ownedGroup.resolveAbandoned(true)
+          return
+        }
+        // Wait for the real group kill before resolving stop() so runProcess never verifies prematurely or misses deferredError.
+        void forceTerminateProcessTree(launched)
+          .catch(() => false)
+          .then((ended) => {
+            if (ended || lifetimeEndsOnLoss) {
+              onTerminated()
+            }
+            ownedGroup.resolveAbandoned(ended)
+          })
+        return
+      }
+      // No worker is left to deliver a timeout or abort kill, and a child that ignores closed pipes would outlive both.
+      // The worker reports an exit in the turn it reaps, so an unreported exit means the pid is still this child's.
+      if (!exitReported) {
+        try {
+          process.kill(child.pid, 'SIGKILL')
+        } catch {
+          /* already gone */
+        }
+      }
+      if (lifetimeEndsOnLoss) {
+        onTerminated()
+      }
+      return
+    }
+    onWorkerLost?.()
+    // runProcess's own stop may already be walking this tree; join its verdict rather than walk the pid again.
+    const stopping = windowsTreeKillFor(launched)
+    const rootExited = child.exitCode !== null || child.signalCode !== null
+    const treeEnded =
+      stopping && !rootExited
+        ? stopping.settled.then((verdict) => verdict === 'exited')
+        : killAbandonedWorkerChildTree(child)
+    const barrier = spec.terminationBarrier
+    // Ending wsl.exe proves nothing about the Linux process group; the guest barrier's kill does.
+    const proven =
+      typeof barrier === 'object'
+        ? Promise.all([treeEnded, barrier.force(launched).catch(() => false)]).then(
+            ([, guestEnded]) => guestEnded
+          )
+        : treeEnded
+    if (lifetimeEndsOnLoss) {
+      onTerminated()
+      return
+    }
+    reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
+  })
+  return {
+    child: launched,
+    withdrawPendingLaunch: () => child.cancelPendingSpawn(),
+    ...(ownedGroup ? { ownedGroup } : {})
+  }
+}

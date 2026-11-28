@@ -1,18 +1,36 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveProviderChildEnv } from './provider-process-launch'
 
 describe('resolveProviderChildEnv', () => {
-  it('overlays the launch env on the inherited env, then strips deleted keys', () => {
-    const baseEnv = { PATH: '/bin', AGENT_HOME: '/inherited', PARENT_AGENT: 'parent' }
-    const overlay = { AGENT_HOME: '/pinned', LAUNCH_ONLY: 'added', PARENT_AGENT: 'overlay' }
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
-    const childEnv = resolveProviderChildEnv(
-      { env: overlay, envToDelete: ['PARENT_AGENT'] },
-      baseEnv
+  // zsh honors exported ARGV0, so agent tool shells ran host commands as `orca-ide` (#49649).
+  it('keeps the AppImage runtime out of Linux provider children', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    const env = resolveProviderChildEnv(
+      {
+        env: {
+          PATH: '/home/u/.config/orca/linux-orca-cli-shim:/tmp/.mount_orcaX/usr/bin:/usr/bin',
+          ORCA_CLI_COMMAND: '/home/u/.config/orca/linux-orca-cli-shim/orca'
+        }
+      },
+      {
+        APPIMAGE: '/home/u/Orca.AppImage',
+        APPDIR: '/tmp/.mount_orcaX',
+        ARGV0: 'orca-ide',
+        OWD: '/home/u',
+        LD_LIBRARY_PATH: '/tmp/.mount_orcaX/usr/lib',
+        PATH: '/usr/bin',
+        HOME: '/home/u'
+      }
     )
 
-    expect(childEnv).toEqual({ PATH: '/bin', AGENT_HOME: '/pinned', LAUNCH_ONLY: 'added' })
-    expect(baseEnv).toEqual({ PATH: '/bin', AGENT_HOME: '/inherited', PARENT_AGENT: 'parent' })
-    expect(overlay.PARENT_AGENT).toBe('overlay')
+    expect(env).toEqual({
+      PATH: '/home/u/.config/orca/linux-orca-cli-shim:/usr/bin',
+      ORCA_CLI_COMMAND: '/home/u/.config/orca/linux-orca-cli-shim/orca',
+      HOME: '/home/u'
+    })
   })
 })

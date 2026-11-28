@@ -1,18 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { deriveBitbucketBuildStatus, mapBitbucketPullRequestState } from './pull-request-mappers'
+import { expect, it } from 'vitest'
+import { mapBitbucketPullRequest } from './pull-request-mappers'
 
-describe('Bitbucket pull request mappers', () => {
-  it('normalizes Bitbucket pull request states', () => {
-    expect(mapBitbucketPullRequestState('OPEN')).toBe('open')
-    expect(mapBitbucketPullRequestState('MERGED')).toBe('merged')
-    expect(mapBitbucketPullRequestState('DECLINED')).toBe('closed')
-    expect(mapBitbucketPullRequestState('SUPERSEDED')).toBe('closed')
-  })
-
-  it('derives Orca check status from Bitbucket build statuses', () => {
-    expect(deriveBitbucketBuildStatus([])).toBe('neutral')
-    expect(deriveBitbucketBuildStatus([{ state: 'SUCCESSFUL' }])).toBe('success')
-    expect(deriveBitbucketBuildStatus([{ state: 'INPROGRESS' }])).toBe('pending')
-    expect(deriveBitbucketBuildStatus([{ state: 'FAILED' }])).toBe('failure')
-  })
+it('maps an open Bitbucket pull request with draft set to draft, keeping terminal states', () => {
+  const raw = {
+    id: 1,
+    title: 'Draft change',
+    state: 'OPEN',
+    draft: true,
+    links: { html: { href: 'https://bitbucket.org/team/repo/pull-requests/1' } }
+  }
+  expect(mapBitbucketPullRequest(raw, 'neutral')?.state).toBe('draft')
+  expect(mapBitbucketPullRequest({ ...raw, state: 'MERGED' }, 'neutral')?.state).toBe('merged')
 })

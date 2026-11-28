@@ -2,19 +2,23 @@ import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { writeSecureFile } from '../../../shared/secure-file'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { writeSecureFile } from '../../../shared/secure-storage/secure-file'
 import type { PluginThemeRegistration } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import type {
   PluginHostParams,
   PluginHostResult
 } from '../../../shared/plugins/workers/plugin-host-api'
-import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../plugin-discovery'
-import { getPluginsDataDir, isInvalidDiscoveredPlugin } from '../plugin-discovery'
+import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import { getPluginsDataDir, isInvalidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginService } from '../plugin-service'
-import { pluginDataDir } from '../plugin-storage-store'
-import { PluginHostCallError, type PluginHostCallScope } from '../workers/plugin-host-call-scope'
+import { pluginDataDir } from '../storage/plugin-storage-store'
+import {
+  PluginHostCallError,
+  type PluginHostCallScope
+} from '../workers/host-api/plugin-host-call-scope'
 import {
   preparePluginAppearanceColors,
   type PreparedPluginAppearance
@@ -25,12 +29,16 @@ export type PluginAppearanceSettingsStore = {
   updateSettings(updates: Partial<GlobalSettings>): void
 }
 
-const colors = z.strictObject({ app: z.string().max(16384), terminal: z.string().max(16384) })
-const snapshot = z.strictObject({
-  schemaVersion: z.literal(1),
-  dark: colors.optional(),
-  light: colors.optional()
-})
+const colors = lazyZodSchema(() =>
+  z.strictObject({ app: z.string().max(16384), terminal: z.string().max(16384) })
+)
+const snapshot = lazyZodSchema(() =>
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    dark: colors.optional(),
+    light: colors.optional()
+  })
+)
 type Snapshot = z.infer<typeof snapshot>
 type OwnerState = { snapshot: Snapshot; themes: PreparedPluginAppearance[] }
 

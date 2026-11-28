@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "jsPlugins": [
+    {
+      "name": "app-store-performance",
+      "specifier": "./oxlint-plugins/app-store-performance.mjs"
+    }
+  ],
+  "rules": {
+    "app-store-performance/no-whole-hot-map-selector": "warn"
+  }
+}

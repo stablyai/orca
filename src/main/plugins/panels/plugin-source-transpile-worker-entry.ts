@@ -1,9 +1,13 @@
 import { parentPort } from 'node:worker_threads'
 import type {
   PluginSourceTranspileRequest,
-  PluginSourceTranspileResponse
-} from './plugin-source-transpile-protocol'
-import { transpilePluginSource } from './plugin-source-transpiler'
+  PluginSourceTranspileResponse,
+  PluginSourceTranspileWorkerReady
+} from './source-transpilation/plugin-source-transpile-protocol'
+import { transpilePluginSource } from './source-transpilation/plugin-source-transpiler'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-plugin-transpile')
 
 // Electron-free: transpiling a large plugin file must never block the main process.
 
@@ -19,3 +23,6 @@ port.on('message', (request: PluginSourceTranspileRequest) => {
   }
   port.postMessage(response)
 })
+
+const ready: PluginSourceTranspileWorkerReady = { ready: true }
+port.postMessage(ready)

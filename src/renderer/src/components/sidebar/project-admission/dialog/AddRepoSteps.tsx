@@ -2,18 +2,20 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
-import { connectRuntimeEnvironmentSshTarget } from '@/runtime/runtime-environment-ssh-state'
+import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
+import { connectRuntimeEnvironmentSshTarget } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import {
   loadServerSshTargets,
   withServerSshStates,
   type RemoteRepoTarget
 } from '../host-selection/add-repo-server-ssh-targets'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { formatSshUserFacingError } from '@/components/settings/ssh/targets/ssh-user-facing-error'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useRemoteRepo(
   fetchWorktrees: (
@@ -106,7 +108,7 @@ export function useRemoteRepo(
       } catch (err) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : translate('auto.components.sidebar.AddRepoSteps.3e64e8a70d', 'Connection failed')
         )
       }
@@ -123,53 +125,61 @@ export function useRemoteRepo(
     const gen = ++remoteGenRef.current
     setIsAddingRemote(true)
     setRemoteError(null)
-    try {
-      const addedRepo = await addRuntimeSshRepo(serverEnvironmentId, {
-        connectionId: selectedTargetId,
-        remotePath: trimmedRemotePath
-      })
-      const { alreadyPresent, repo } = upsertAddedRepoWithProjectHostSetup(addedRepo, {
-        runtimeEnvironmentId: serverEnvironmentId
-      })
+    await runWithFinally(
+      async () => {
+        try {
+          const addedRepo = await addRuntimeSshRepo(serverEnvironmentId, {
+            connectionId: selectedTargetId,
+            remotePath: trimmedRemotePath
+          })
+          const { alreadyPresent, repo } = upsertAddedRepoWithProjectHostSetup(addedRepo, {
+            runtimeEnvironmentId: serverEnvironmentId
+          })
 
-      if (alreadyPresent) {
-        useAppStore.getState().clearOrcaHookTrustForRepo(repo.id)
-      }
+          if (alreadyPresent) {
+            useAppStore.getState().clearOrcaHookTrustForRepo(repo.id)
+          }
 
-      if (!mountedRef.current || gen !== remoteGenRef.current) {
-        return
+          if (!mountedRef.current || gen !== remoteGenRef.current) {
+            return
+          }
+          toast.success(
+            translate(
+              'auto.components.sidebar.AddRepoSteps.df8b0e6c22',
+              'Project added on SSH host'
+            ),
+            { description: repo.displayName }
+          )
+          // The repo is persisted; a non-authoritative SSH refresh must not strand the dialog.
+          const ownerOptions = worktreeRefreshOptions(serverEnvironmentId)
+          await fetchWorktrees(repo.id, ownerOptions)
+          if (!mountedRef.current || gen !== remoteGenRef.current) {
+            return
+          }
+          await onGitRepoReady(repo.id, ownerOptions.executionHostId)
+        } catch (err) {
+          const message = extractIpcErrorMessage(err, String(err))
+          if (message.includes('Not a valid git repository')) {
+            // Match local adds: confirm non-git feature limits before handing off to a folder workspace.
+            closeModal()
+            useAppStore.getState().openModal('confirm-non-git-folder', {
+              folderPath: trimmedRemotePath,
+              connectionId: selectedTargetId,
+              runtimeEnvironmentId: serverEnvironmentId
+            })
+            return
+          }
+          if (mountedRef.current && gen === remoteGenRef.current) {
+            setRemoteError(message)
+          }
+        }
+      },
+      () => {
+        if (mountedRef.current && gen === remoteGenRef.current) {
+          setIsAddingRemote(false)
+        }
       }
-      toast.success(
-        translate('auto.components.sidebar.AddRepoSteps.df8b0e6c22', 'Project added on SSH host'),
-        { description: repo.displayName }
-      )
-      // The repo is persisted; a non-authoritative SSH refresh must not strand the dialog.
-      const ownerOptions = worktreeRefreshOptions(serverEnvironmentId)
-      await fetchWorktrees(repo.id, ownerOptions)
-      if (!mountedRef.current || gen !== remoteGenRef.current) {
-        return
-      }
-      await onGitRepoReady(repo.id, ownerOptions.executionHostId)
-    } catch (err) {
-      const message = extractIpcErrorMessage(err, String(err))
-      if (message.includes('Not a valid git repository')) {
-        // Match local adds: confirm non-git feature limits before handing off to a folder workspace.
-        closeModal()
-        useAppStore.getState().openModal('confirm-non-git-folder', {
-          folderPath: trimmedRemotePath,
-          connectionId: selectedTargetId,
-          runtimeEnvironmentId: serverEnvironmentId
-        })
-        return
-      }
-      if (mountedRef.current && gen === remoteGenRef.current) {
-        setRemoteError(message)
-      }
-    } finally {
-      if (mountedRef.current && gen === remoteGenRef.current) {
-        setIsAddingRemote(false)
-      }
-    }
+    )
   }, [
     serverEnvironmentId,
     selectedTargetId,

@@ -1,26 +1,30 @@
-import { ImeInput } from '@/lib/ime-text-field'
-import React, { useCallback, useEffect, useRef } from 'react'
-import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
+import React from 'react'
+import { createPortal } from 'react-dom'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
-import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PrimaryAction } from '../review/source-control-primary-action-types'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { PrimaryActionTooltip } from '../review/source-control-primary-action-tooltip'
-import { translate } from '@/i18n/i18n'
-import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
-import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
+import {
+  HostedReviewToolbarLink,
+  CreatePrHeaderButton,
+  SuppressedGitHubPRToolbar
+} from './header-review-actions'
 import { SourceControlBranchContextRow } from './branch-context-row'
-import { shouldShowSourceControlBranchContextChrome } from './branch-context-stats'
-import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
+import {
+  SourceControlHeaderOverflowMenu,
+  type SourceControlPanelActions
+} from './header-overflow-menu'
+import { useSourceControlHeaderActionsSlot } from './header-actions-slot'
+import { useSourceControlScope } from './worktree-scope'
+import {
+  SourceControlFilterRow,
+  SourceControlFilterToggle,
+  type SourceControlFileFilterProps
+} from './file-filter-controls'
 
-type SourceControlHeaderToolbarProps = {
-  filterQuery: string
-  filterExpanded: boolean
-  onFilterQueryChange: (value: string) => void
-  onFilterExpandedChange: (expanded: boolean) => void
+type SourceControlHeaderToolbarProps = SourceControlFileFilterProps & {
   visibleCreatePrHeaderAction: PrimaryAction | null
   hostedReview: HostedReviewInfo | null
   isCreatePrIntentInFlight: boolean
@@ -29,113 +33,18 @@ type SourceControlHeaderToolbarProps = {
   onOpenHostedReviewInChecks: () => void
   suppressedGitHubPRNumber: number | null
   onRelinkSuppressedGitHubPR: () => void
-  sourceControlViewMode: SourceControlViewMode
-  viewModeToggleDisabled: boolean
-  onToggleViewMode: () => void
-  onChangeBaseRef: () => void
+  panelActions: SourceControlPanelActions
   onRefreshBranchCompare: () => void
-  branchCompareRefreshDisabled: boolean
-  diffCommentCount: number
-  onExpandNotes: () => void
   branchSummary: GitBranchCompareSummary | null
   compareBaseRef: string | null
+  headControl?: React.ReactNode
   headDisplay?: WorktreeGitIdentityDisplay | null
-  manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
-}
-
-function HostedReviewToolbarLink({
-  review,
-  onOpenHostedReviewInChecks,
-  compact
-}: {
-  review: HostedReviewInfo
-  onOpenHostedReviewInChecks: () => void
-  compact?: boolean
-}): React.JSX.Element {
-  return (
-    <div
-      className={cn(
-        'flex min-w-0 items-center gap-1 text-[11.5px] leading-none',
-        compact ? 'max-w-[72px] shrink-0' : 'flex-1'
-      )}
-    >
-      <HostedReviewIcon review={review} className="size-3 shrink-0" />
-      <HostedReviewHeaderLink
-        review={review}
-        onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
-      />
-    </div>
-  )
-}
-
-function CreatePrHeaderButton({
-  action,
-  isCreatePrIntentInFlight,
-  isCreatingPr,
-  onClick
-}: {
-  action: PrimaryAction
-  isCreatePrIntentInFlight: boolean
-  isCreatingPr: boolean
-  onClick: () => void
-}): React.JSX.Element {
-  return (
-    <PrimaryActionTooltip action={action} side="bottom">
-      <span className="inline-flex shrink-0">
-        <Button
-          type="button"
-          size="xs"
-          disabled={action.disabled}
-          onClick={onClick}
-          className="h-6 shrink-0 px-2 text-[11px]"
-        >
-          {isCreatePrIntentInFlight || isCreatingPr ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-          )}
-          {action.label}
-        </Button>
-      </span>
-    </PrimaryActionTooltip>
-  )
-}
-
-function SuppressedGitHubPRToolbar({
-  number,
-  onRelink
-}: {
-  number: number
-  onRelink: () => void
-}): React.JSX.Element {
-  return (
-    <div className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate text-[11.5px] text-muted-foreground">
-        {translate('sourceControl.unlinkedPr.status', 'PR #{{number}} unlinked', { number })}
-      </span>
-      <Button type="button" variant="outline" size="xs" onClick={onRelink} className="shrink-0">
-        <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-        {translate('checksPanel.unlinked.relink', 'Link PR #{{number}}', { number })}
-      </Button>
-    </div>
-  )
-}
-
-function renderOverflowMenu(
-  props: Pick<
-    SourceControlHeaderToolbarProps,
-    | 'sourceControlViewMode'
-    | 'viewModeToggleDisabled'
-    | 'onToggleViewMode'
-    | 'onChangeBaseRef'
-    | 'onRefreshBranchCompare'
-    | 'branchCompareRefreshDisabled'
-    | 'diffCommentCount'
-    | 'onExpandNotes'
-  >
-): React.JSX.Element {
-  return <SourceControlHeaderOverflowMenu {...props} />
+  operationRow?: React.ReactNode
+  /** Labeled Git Graph button; null where the context has no Git history (folders). */
+  graphControl?: React.ReactNode
+  /** The file-list header carries filter, Graph and overflow, so the panel header has no tool row. */
+  toolsInFileListHeader: boolean
 }
 
 export function SourceControlHeaderToolbar({
@@ -151,174 +60,114 @@ export function SourceControlHeaderToolbar({
   onOpenHostedReviewInChecks,
   suppressedGitHubPRNumber,
   onRelinkSuppressedGitHubPR,
-  sourceControlViewMode,
-  viewModeToggleDisabled,
-  onToggleViewMode,
-  onChangeBaseRef,
+  panelActions,
   onRefreshBranchCompare,
-  branchCompareRefreshDisabled,
-  diffCommentCount,
-  onExpandNotes,
   branchSummary,
   compareBaseRef,
   headDisplay = null,
-  manualReviewUrl,
-  branchLineTotal
-}: SourceControlHeaderToolbarProps): React.JSX.Element {
-  const filterInputRef = useRef<HTMLInputElement>(null)
-  const normalizedFilter = filterQuery.trim()
-  const showCollapsedToolbar = !filterExpanded
-  const overflowProps = {
-    sourceControlViewMode,
-    viewModeToggleDisabled,
-    onToggleViewMode,
-    onChangeBaseRef,
-    onRefreshBranchCompare,
-    branchCompareRefreshDisabled,
-    diffCommentCount,
-    onExpandNotes
+  headControl,
+  branchLineTotal,
+  operationRow,
+  graphControl,
+  toolsInFileListHeader
+}: SourceControlHeaderToolbarProps): React.JSX.Element | null {
+  const embedded = useSourceControlScope() !== null
+  const actionsSlot = useSourceControlHeaderActionsSlot()
+  const filterProps = { filterQuery, filterExpanded, onFilterQueryChange, onFilterExpandedChange }
+
+  const reviewControl = hostedReview ? (
+    <HostedReviewToolbarLink
+      review={hostedReview}
+      onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
+    />
+  ) : suppressedGitHubPRNumber !== null ? (
+    <SuppressedGitHubPRToolbar
+      number={suppressedGitHubPRNumber}
+      onRelink={onRelinkSuppressedGitHubPR}
+    />
+  ) : visibleCreatePrHeaderAction ? (
+    <CreatePrHeaderButton
+      action={visibleCreatePrHeaderAction}
+      isCreatePrIntentInFlight={isCreatePrIntentInFlight}
+      isCreatingPr={isCreatingPr}
+      onClick={onCreatePrHeaderClick}
+    />
+  ) : null
+
+  const branchContext = (
+    <SourceControlBranchContextRow
+      summary={branchSummary}
+      compareBaseRef={compareBaseRef}
+      headDisplay={headDisplay}
+      headControl={headControl}
+      branchLineTotal={branchLineTotal}
+      reviewControl={reviewControl}
+      operationRow={operationRow}
+      onRetry={onRefreshBranchCompare}
+    />
+  )
+
+  if (embedded) {
+    // The card header owns filter, Graph and overflow; the panel keeps the filter row and branch rows.
+    return (
+      <>
+        {actionsSlot
+          ? createPortal(
+              <>
+                {graphControl}
+                <SourceControlFilterToggle {...filterProps} embedded />
+                <SourceControlHeaderOverflowMenu panelActions={panelActions} />
+              </>,
+              actionsSlot
+            )
+          : null}
+        <SourceControlHeaderBlock>
+          {filterExpanded ? (
+            <div className="mb-1.5 flex min-w-0 items-center gap-1.5 border-b border-border pb-1.5">
+              <SourceControlFilterRow {...filterProps} />
+            </div>
+          ) : null}
+          {branchContext}
+        </SourceControlHeaderBlock>
+      </>
+    )
   }
 
-  const expandFilter = useCallback(() => {
-    onFilterExpandedChange(true)
-  }, [onFilterExpandedChange])
+  if (toolsInFileListHeader) {
+    return <SourceControlHeaderBlock>{branchContext}</SourceControlHeaderBlock>
+  }
 
-  const collapseFilter = useCallback(() => {
-    onFilterExpandedChange(false)
-  }, [onFilterExpandedChange])
-
-  const clearAndCollapseFilter = useCallback(() => {
-    onFilterQueryChange('')
-    onFilterExpandedChange(false)
-  }, [onFilterExpandedChange, onFilterQueryChange])
-
-  useEffect(() => {
-    if (!filterExpanded) {
-      return
-    }
-    filterInputRef.current?.focus()
-    filterInputRef.current?.select()
-  }, [filterExpanded])
-
-  const filterToggleTitle = normalizedFilter
-    ? translate('auto.components.right.sidebar.SourceControl.c8e4a1f902', 'Filter: {{value0}}', {
-        value0: filterQuery
-      })
-    : translate('auto.components.right.sidebar.SourceControl.b3c8f1a902', 'Filter files by name')
-
+  // Folders without Git history have no file-list header, so their tools keep a header row.
   return (
     <div className="border-b border-border px-3 pt-1.5 pb-1">
       <div
-        className={cn('flex min-w-0 items-center gap-1', filterExpanded && 'w-full gap-1.5')}
+        className="flex min-w-0 items-center gap-1"
         data-filter-expanded={filterExpanded ? 'true' : 'false'}
       >
-        {showCollapsedToolbar ? (
-          <>
-            {hostedReview ? (
-              <HostedReviewToolbarLink
-                review={hostedReview}
-                onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
-              />
-            ) : suppressedGitHubPRNumber !== null ? (
-              <SuppressedGitHubPRToolbar
-                number={suppressedGitHubPRNumber}
-                onRelink={onRelinkSuppressedGitHubPR}
-              />
-            ) : visibleCreatePrHeaderAction ? (
-              <CreatePrHeaderButton
-                action={visibleCreatePrHeaderAction}
-                isCreatePrIntentInFlight={isCreatePrIntentInFlight}
-                isCreatingPr={isCreatingPr}
-                onClick={onCreatePrHeaderClick}
-              />
-            ) : (
-              <span className="min-w-0 flex-1" aria-hidden="true" />
-            )}
-            {(visibleCreatePrHeaderAction || suppressedGitHubPRNumber !== null) && !hostedReview ? (
-              // Pin filter/overflow right without stretching Create PR.
-              <span className="min-w-0 flex-1" aria-hidden="true" />
-            ) : null}
-            <button
-              type="button"
-              data-testid="source-control-filter-toggle"
-              className={cn(
-                'relative inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-                normalizedFilter && 'bg-muted text-foreground'
-              )}
-              onClick={expandFilter}
-              aria-label={filterToggleTitle}
-              title={filterToggleTitle}
-              aria-expanded={false}
-            >
-              <Search className="size-3.5" />
-              {normalizedFilter ? (
-                <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />
-              ) : null}
-            </button>
-            {renderOverflowMenu(overflowProps)}
-          </>
+        {filterExpanded ? (
+          <SourceControlFilterRow {...filterProps} />
         ) : (
           <>
-            {/* Give expanded search the row so PR links and overflow controls do not squeeze typing. */}
-            <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
-              <Search className="size-3.5 shrink-0 text-muted-foreground" />
-              <ImeInput
-                ref={filterInputRef}
-                data-testid="source-control-filter-input"
-                type="text"
-                value={filterQuery}
-                onChange={(event) => onFilterQueryChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    collapseFilter()
-                  }
-                }}
-                placeholder={translate(
-                  'auto.components.right.sidebar.SourceControl.c35baf2f1e',
-                  'Filter files…'
-                )}
-                className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-                aria-label={translate(
-                  'auto.components.right.sidebar.SourceControl.c35baf2f1e',
-                  'Filter files…'
-                )}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-              aria-label={translate(
-                'auto.components.right.sidebar.SourceControl.d4f8c2a901',
-                'Clear and close filter'
-              )}
-              title={translate(
-                'auto.components.right.sidebar.SourceControl.d4f8c2a901',
-                'Clear and close filter'
-              )}
-              onClick={clearAndCollapseFilter}
-            >
-              <X className="size-3.5" />
-            </Button>
+            <span className="min-w-0 flex-1" aria-hidden="true" />
+            {graphControl}
+            <SourceControlFilterToggle {...filterProps} embedded={false} />
+            <SourceControlHeaderOverflowMenu panelActions={panelActions} />
           </>
         )}
       </div>
+      {branchContext}
+    </div>
+  )
+}
 
-      {shouldShowSourceControlBranchContextChrome(branchSummary, compareBaseRef, headDisplay) ? (
-        <div className="mt-1">
-          <SourceControlBranchContextRow
-            summary={branchSummary}
-            compareBaseRef={compareBaseRef}
-            headDisplay={headDisplay}
-            manualReviewUrl={manualReviewUrl}
-            branchLineTotal={branchLineTotal}
-            onChangeBaseRef={onChangeBaseRef}
-            onRetry={onRefreshBranchCompare}
-          />
-        </div>
-      ) : null}
+/** Renders its block only when a child has content, so an empty header leaves no bordered strip. */
+function SourceControlHeaderBlock({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div
+      className="flex flex-col border-b border-border px-3 py-1 empty:hidden"
+      data-testid="source-control-header"
+    >
+      {children}
     </div>
   )
 }

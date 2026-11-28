@@ -1,7 +1,7 @@
 import type { OpenFile } from '../types/open-file'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
+import { worktreeOwnerRowsTokenOf } from '@/lib/workspace/ownership/worktree-owner-rows-token'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { editorBufferIdentityOf } from './editor-buffer-identity'
 
 /** Route state plus the counter bumped when the runtime revision registry changes. */
@@ -96,10 +96,15 @@ export function editorBufferRouteInputsChanged(
   state: EditorBufferRouteState,
   write: Partial<EditorBufferRouteState>
 ): boolean {
-  return EDITOR_BUFFER_ROUTE_INPUT_KEYS.some(
-    (key) =>
+  for (let i = 0; i < EDITOR_BUFFER_ROUTE_INPUT_KEYS.length; i += 1) {
+    const key = EDITOR_BUFFER_ROUTE_INPUT_KEYS[i]
+    if (
       Object.hasOwn(write, key) &&
       write[key] !== state[key] &&
       routeInputOf(write, key) !== routeInputOf(state, key)
-  )
+    ) {
+      return true
+    }
+  }
+  return false
 }

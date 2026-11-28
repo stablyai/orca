@@ -4,14 +4,15 @@ import type {
   SshRemotePtyLease,
   SshRemoteRuntimeResolution,
   SshTarget
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_REMOTE_RUNTIME_RUNGS,
   SSH_REMOTE_RUNTIMES
-} from '../../../shared/ssh-types'
-import { normalizeSshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
-import { getLegacyManagedOrcadOwnerEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeSshPendingPtyKill } from '../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
+import { getLegacyManagedOrcadOwnerEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
@@ -162,19 +163,21 @@ function normalizeOrcadFence(target: SshTarget): SshTarget {
 }
 
 // Malformed cache entries only cost a new runtime-resolution attempt.
-const SshRemoteRuntimeResolutionSchema = z
-  .object({
-    rung: z.enum(SSH_REMOTE_RUNTIME_RUNGS),
-    pinnedRefusal: z.string().max(64).optional(),
-    refusedAt: z.number().int().nonnegative().optional(),
-    glibc: z
-      .string()
-      .regex(/^\d+\.\d+$/)
-      .nullable(),
-    runtimeSha256: z.string().regex(/^[0-9a-f]{64}$/),
-    orcaMajor: z.number().int().nonnegative()
-  })
-  .strict()
+const SshRemoteRuntimeResolutionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      rung: z.enum(SSH_REMOTE_RUNTIME_RUNGS),
+      pinnedRefusal: z.string().max(64).optional(),
+      refusedAt: z.number().int().nonnegative().optional(),
+      glibc: z
+        .string()
+        .regex(/^\d+\.\d+$/)
+        .nullable(),
+      runtimeSha256: z.string().regex(/^[0-9a-f]{64}$/),
+      orcaMajor: z.number().int().nonnegative()
+    })
+    .strict()
+)
 
 function normalizeSshRemoteRuntimeResolution(value: unknown): SshRemoteRuntimeResolution | null {
   const parsed = SshRemoteRuntimeResolutionSchema.safeParse(value)

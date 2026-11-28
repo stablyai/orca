@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 const forbiddenPersistedKeys = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -15,137 +16,170 @@ function hasForbiddenPersistedKey(value: unknown): boolean {
 }
 
 // Preserve raw own keys: Zod records erase __proto__ before emptiness checks.
-const rawConfigSchema = z.custom<Record<string, unknown>>(
-  (value) =>
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    !hasForbiddenPersistedKey(value)
+const rawConfigSchema = lazyZodSchema(() =>
+  z.custom<Record<string, unknown>>(
+    (value) =>
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      !hasForbiddenPersistedKey(value)
+  )
 )
 
-const modelRuleSchema = z
-  .object({
-    providerId: z.string().min(1),
-    modelId: z.string().min(1),
-    config: rawConfigSchema
-  })
-  .strict()
-const providerRuleSchema = z
-  .object({
-    providerId: z.string().min(1),
-    templateId: z.string().min(1).nullable().optional(),
-    providerName: z.string().min(1).nullable().optional(),
-    enabled: z.boolean().optional(),
-    config: rawConfigSchema
-  })
-  .strict()
-const oauthOnlyShellSchema = z
-  .object({ schemaVersion: z.literal(1), config: z.object({}).strict() })
-  .strict()
-const nullableModelIdsSchema = z.array(z.string().min(1)).nullable().optional()
-const oauthCompatibleProviderConfigSchema = z
-  .object({
-    group: z.literal('standard-personal').nullable().optional(),
-    logo: z
-      .object({ type: z.literal('builtin'), key: z.string().min(1) })
-      .strict()
-      .nullable()
-      .optional(),
-    access: z
-      .object({
-        type: z.enum(['api-key', 'zhipu-coding-plan-api-key']),
-        apiKey: z.string().nullable().optional(),
-        apiKeyManagementUrl: z.string().url().nullable().optional()
-      })
-      .strict()
-      .nullable()
-      .optional(),
-    api: z
-      .object({
-        type: z
-          .enum(['anthropic-messages', 'openai-chat-completions', 'openai-responses'])
-          .optional(),
-        baseUrl: z.string().nullable().optional(),
-        headers: z.record(z.string(), z.string()).nullable().optional()
-      })
-      .strict()
-      .nullable()
-      .optional(),
-    personalModelIds: nullableModelIdsSchema,
-    modelOrder: nullableModelIdsSchema,
-    visibility: z.enum(['visible', 'hidden']).nullable().optional()
-  })
-  .strict()
-const modelInputFormatSchema = z
-  .object({
-    supportsText: z.boolean().optional(),
-    supportsImage: z.boolean().optional(),
-    supportsVideo: z.boolean().optional(),
-    supportsAudio: z.boolean().optional(),
-    supportsPdf: z.boolean().optional()
-  })
-  .strict()
-const modelPropertiesSchema = z
-  .object({
-    requiresMfjsToolSchema: z.boolean().optional(),
-    contextWindow: z.number().int().positive().optional(),
-    inputFormat: modelInputFormatSchema.nullable().optional(),
-    outputFormat: z.object({ supportsText: z.boolean().optional() }).strict().nullable().optional(),
-    supportsToolCall: z.boolean().optional(),
-    supportsJsonSchemaOutput: z.boolean().optional(),
-    supportsNativeWebSearch: z.boolean().optional(),
-    supportsMidConversationSystem: z.boolean().optional()
-  })
-  .strict()
-const enumOptionSpecSchema = z
-  .object({ values: z.array(z.string().min(1)).optional(), map: z.string().min(1).optional() })
-  .strict()
-const limitOptionSpecSchema = z
-  .object({ max: z.number().int().positive().optional(), map: z.string().min(1).optional() })
-  .strict()
-const oauthCompatibleModelConfigSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    properties: modelPropertiesSchema.nullable().optional(),
-    optionSpecs: z
-      .object({
-        reasoningLevel: enumOptionSpecSchema.nullable().optional(),
-        maxOutputTokens: limitOptionSpecSchema.nullable().optional()
-      })
-      .strict()
-      .nullable()
-      .optional()
-  })
-  .strict()
+const modelRuleSchema = lazyZodSchema(() =>
+  z
+    .object({
+      providerId: z.string().min(1),
+      modelId: z.string().min(1),
+      config: rawConfigSchema
+    })
+    .strict()
+)
 
-const selectionSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    config: z
-      .object({
-        providerOrder: z.array(z.string().min(1)).optional(),
-        providerConfigRules: z.object({ providerRules: z.array(providerRuleSchema) }).strict(),
-        modelConfigRules: z
-          .object({
-            providerModelRules: z.array(modelRuleSchema),
-            manualProviderModelRules: z.array(modelRuleSchema)
-          })
-          .strict(),
-        defaultModelSelection: z
-          .object({
-            providerId: z.string().trim().min(1),
-            modelId: z.string().trim().min(1),
-            options: z
-              .object({ reasoningLevel: z.string().trim().min(1).optional() })
-              .strict()
-              .optional()
-          })
-          .strict()
-          .optional()
-      })
-      .strict()
-  })
-  .strict()
+const providerRuleSchema = lazyZodSchema(() =>
+  z
+    .object({
+      providerId: z.string().min(1),
+      templateId: z.string().min(1).nullable().optional(),
+      providerName: z.string().min(1).nullable().optional(),
+      enabled: z.boolean().optional(),
+      config: rawConfigSchema
+    })
+    .strict()
+)
+
+const oauthOnlyShellSchema = lazyZodSchema(() =>
+  z.object({ schemaVersion: z.literal(1), config: z.object({}).strict() }).strict()
+)
+
+const nullableModelIdsSchema = lazyZodSchema(() => z.array(z.string().min(1)).nullable().optional())
+
+const oauthCompatibleProviderConfigSchema = lazyZodSchema(() =>
+  z
+    .object({
+      group: z.literal('standard-personal').nullable().optional(),
+      logo: z
+        .object({ type: z.literal('builtin'), key: z.string().min(1) })
+        .strict()
+        .nullable()
+        .optional(),
+      access: z
+        .object({
+          type: z.enum(['api-key', 'zhipu-coding-plan-api-key']),
+          apiKey: z.string().nullable().optional(),
+          apiKeyManagementUrl: z.string().url().nullable().optional()
+        })
+        .strict()
+        .nullable()
+        .optional(),
+      api: z
+        .object({
+          type: z
+            .enum(['anthropic-messages', 'openai-chat-completions', 'openai-responses'])
+            .optional(),
+          baseUrl: z.string().nullable().optional(),
+          headers: z.record(z.string(), z.string()).nullable().optional()
+        })
+        .strict()
+        .nullable()
+        .optional(),
+      personalModelIds: nullableModelIdsSchema,
+      modelOrder: nullableModelIdsSchema,
+      visibility: z.enum(['visible', 'hidden']).nullable().optional()
+    })
+    .strict()
+)
+
+const modelInputFormatSchema = lazyZodSchema(() =>
+  z
+    .object({
+      supportsText: z.boolean().optional(),
+      supportsImage: z.boolean().optional(),
+      supportsVideo: z.boolean().optional(),
+      supportsAudio: z.boolean().optional(),
+      supportsPdf: z.boolean().optional()
+    })
+    .strict()
+)
+
+const modelPropertiesSchema = lazyZodSchema(() =>
+  z
+    .object({
+      requiresMfjsToolSchema: z.boolean().optional(),
+      contextWindow: z.number().int().positive().optional(),
+      inputFormat: modelInputFormatSchema.nullable().optional(),
+      outputFormat: z
+        .object({ supportsText: z.boolean().optional() })
+        .strict()
+        .nullable()
+        .optional(),
+      supportsToolCall: z.boolean().optional(),
+      supportsJsonSchemaOutput: z.boolean().optional(),
+      supportsNativeWebSearch: z.boolean().optional(),
+      supportsMidConversationSystem: z.boolean().optional()
+    })
+    .strict()
+)
+
+const enumOptionSpecSchema = lazyZodSchema(() =>
+  z
+    .object({ values: z.array(z.string().min(1)).optional(), map: z.string().min(1).optional() })
+    .strict()
+)
+
+const limitOptionSpecSchema = lazyZodSchema(() =>
+  z
+    .object({ max: z.number().int().positive().optional(), map: z.string().min(1).optional() })
+    .strict()
+)
+
+const oauthCompatibleModelConfigSchema = lazyZodSchema(() =>
+  z
+    .object({
+      enabled: z.boolean().optional(),
+      properties: modelPropertiesSchema.nullable().optional(),
+      optionSpecs: z
+        .object({
+          reasoningLevel: enumOptionSpecSchema.nullable().optional(),
+          maxOutputTokens: limitOptionSpecSchema.nullable().optional()
+        })
+        .strict()
+        .nullable()
+        .optional()
+    })
+    .strict()
+)
+
+const selectionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      schemaVersion: z.literal(1),
+      config: z
+        .object({
+          providerOrder: z.array(z.string().min(1)).optional(),
+          providerConfigRules: z.object({ providerRules: z.array(providerRuleSchema) }).strict(),
+          modelConfigRules: z
+            .object({
+              providerModelRules: z.array(modelRuleSchema),
+              manualProviderModelRules: z.array(modelRuleSchema)
+            })
+            .strict(),
+          defaultModelSelection: z
+            .object({
+              providerId: z.string().trim().min(1),
+              modelId: z.string().trim().min(1),
+              options: z
+                .object({ reasoningLevel: z.string().trim().min(1).optional() })
+                .strict()
+                .optional()
+            })
+            .strict()
+            .optional()
+        })
+        .strict()
+    })
+    .strict()
+)
 
 // ZCode 29628c9 validates the whole overlay before accepting its selected account.
 export function readSupportedZcodeV2Selection(input: unknown) {

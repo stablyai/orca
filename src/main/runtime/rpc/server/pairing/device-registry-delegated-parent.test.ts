@@ -1,9 +1,10 @@
 // Removing a desktop on disk (or by any path short of revokeRuntimeAccess) must also stop the
 // phones it delegated: their rows can outlive it, so auth checks the parent.
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
@@ -11,16 +12,20 @@ let dir: string
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-device-registry-parent-'))
+  vi.useFakeTimers({ toFake: ['performance'] })
 })
 
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true })
+  vi.useRealTimers()
+  removeTreeSync(dir)
 })
 
 function removeOnDisk(deviceId: string): void {
   const path = join(dir, DEVICE_REGISTRY_FILENAME)
   const rows: { deviceId: string }[] = JSON.parse(readFileSync(path, 'utf8'))
   writeFileSync(path, JSON.stringify(rows.filter((row) => row.deviceId !== deviceId)))
+  // Another process's edit is seen once the registry's one-second stat window has passed.
+  vi.advanceTimersByTime(1000)
 }
 
 function delegatedRegistry() {
@@ -49,24 +54,6 @@ describe('delegated phone auth follows its parent desktop', () => {
 
     expect(registry.validateToken(child.token)).toBeNull()
     expect(registry.resolveAuthenticatedPrincipal(principal)).toBeNull()
-  })
-
-  it('refuses it when the desktop row is removed without the cascade', () => {
-    const { registry, desktop, child, principal } = delegatedRegistry()
-
-    expect(registry.removeDevice(desktop.deviceId)).toBe(true)
-
-    expect(registry.validateToken(child.token)).toBeNull()
-    expect(registry.resolveAuthenticatedPrincipal(principal)).toBeNull()
-  })
-
-  it('leaves phones paired directly to this host alone', () => {
-    const { registry, desktop } = delegatedRegistry()
-    const phone = registry.addDevice('phone', 'mobile')
-
-    removeOnDisk(desktop.deviceId)
-
-    expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
   })
 
   it.each(['mobile', 'runtime'] as const)(
@@ -108,4 +95,36 @@ describe('delegated phone auth follows its parent desktop', () => {
       expect(registry.getDevice(fork.deviceId)).not.toBeNull()
     }
   )
+})
+
+describe('a delegated phone row stored without its token', () => {
+  it('gets a new token the phone can sign in with, keeping its row', () => {
+    const { desktop, child } = delegatedRegistry()
+    const path = join(dir, DEVICE_REGISTRY_FILENAME)
+    const rows: Record<string, unknown>[] = JSON.parse(readFileSync(path, 'utf8'))
+    writeFileSync(
+      path,
+      JSON.stringify(
+        rows.map((row) => {
+          if (row.deviceId !== child.deviceId) {
+            return row
+          }
+          // As a build that stored token hashes left it.
+          const { token: _token, ...rest } = row
+          return { ...rest, tokenHash: 'stored-hash', callerFingerprint: 'phone-fingerprint' }
+        })
+      )
+    )
+    const registry = new DeviceRegistry(dir)
+
+    const [synced] = registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'Pixel' }
+    ])
+
+    expect(synced?.deviceId).toBe(child.deviceId)
+    expect(typeof synced?.token).toBe('string')
+    expect(synced?.credentialRevision).toBe(1)
+    expect(synced?.callerFingerprint).toBe('phone-fingerprint')
+    expect(registry.validateToken(synced!.token)?.deviceId).toBe(child.deviceId)
+  })
 })

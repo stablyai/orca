@@ -5,8 +5,8 @@ import { writeEditorBuffer } from '@/store/slices/editor/buffers/editor-buffer-r
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { getWrittenContentDiskSignature } from '../../../../../../shared/disk-baseline-signature'
-import type { FileWriteDiskConflict } from '../../../../../../shared/file-write-disk-precondition'
+import { getWrittenContentDiskSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
+import type { FileWriteDiskConflict } from '../../../../../../shared/file-write/file-write-disk-precondition'
 import { notifyEditorFileCacheStale } from '../../autosave/editor-autosave'
 import { hasPendingEditorBufferChange } from '../flush/editor-pending-flush'
 import { trackExternalChangeConflictAction } from '../../external-changes/editor-external-change-telemetry'
@@ -19,12 +19,16 @@ import {
   noteEditorBaselineWrite,
   waitForEditorBaselineRestamp
 } from './editor-save-disk-precondition'
+import { noteEditorConflictReport } from '../../external-changes/editor-conflict-report-count'
 
 export function setModelExternalMutation(
   state: AppState,
   fileId: string,
   mutation: NonNullable<OpenFile['externalMutation']> | null
 ): void {
+  if (mutation !== null) {
+    noteEditorConflictReport(state.openFiles.find((tab) => tab.id === fileId)?.filePath)
+  }
   state.setExternalMutation(fileId, mutation)
 }
 

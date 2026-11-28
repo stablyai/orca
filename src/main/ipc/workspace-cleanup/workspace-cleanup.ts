@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
+import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissArgs,
@@ -8,20 +9,10 @@ import {
   type WorkspaceCleanupSnapshotPruneBatchArgs,
   type WorkspaceCleanupSnapshotPruneRecordArgs
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { getWorkspaceCleanupHostIdentity } from '../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
-import { abortWhenRendererGone } from '../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 import { hasTargetedWorkspaceCleanupScan } from './workspace-cleanup-scan-targets'
-import {
-  persistWorkspaceCleanupScanResult,
-  readWorkspaceCleanupScanSnapshot
-} from '../../workspaces/cleanup/workspace-cleanup-scan-snapshot'
-import {
-  beginWorkspaceCleanupRemovalSnapshotPruneBatch,
-  finishWorkspaceCleanupRemovalSnapshotPruneBatch,
-  recordWorkspaceCleanupRemovalSnapshotPrune
-} from '../../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune'
 
 // Module scope preserves old-window scan cancellation across handler re-registration.
 const activeScans = new Map<string, AbortController>()
@@ -32,7 +23,10 @@ function getBroadScanModeKey(senderId: number, args: WorkspaceCleanupScanArgs): 
   return `${senderId}\0${args.includeAllWorkspaces === true}`
 }
 
-export function registerWorkspaceCleanupHandlers(store: Store): void {
+export function registerWorkspaceCleanupHandlers(
+  store: Store,
+  getOrchestrationDb?: () => OrchestrationDb | null
+): void {
   const snapshotDirectory = store.getProfileStorageDirectory()
   ipcMain.removeHandler('workspaceCleanup:scan')
   ipcMain.removeHandler('workspaceCleanup:cancelScan')
@@ -64,8 +58,10 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
       const lifetime = abortWhenRendererGone(sender)
       lifetime.signal.addEventListener('abort', () => controller.abort(), { once: true })
       try {
+        const { scanWorkspaceCleanup } = await import('./workspace-cleanup-scan')
         const result = await scanWorkspaceCleanup(store, scanArgs, {
           signal: controller.signal,
+          getOrchestrationDb,
           onProgress: scanArgs.scanId
             ? (progress) => {
                 if (!controller.signal.aborted && !sender.isDestroyed()) {
@@ -76,7 +72,10 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         })
         // Persist only fleet scans: even empty targeted results would wipe the broad snapshot.
         if (!targeted) {
-          void persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, result)
+          void import('../../workspaces/cleanup/workspace-cleanup-scan-snapshot').then(
+            ({ persistWorkspaceCleanupScanResult }) =>
+              persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, result)
+          )
         }
         return result
       } finally {
@@ -101,8 +100,13 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
     return true
   })
 
-  ipcMain.handle('workspaceCleanup:getCachedScan', (): Promise<WorkspaceCleanupScanResult | null> =>
-    readWorkspaceCleanupScanSnapshot(snapshotDirectory)
+  ipcMain.handle(
+    'workspaceCleanup:getCachedScan',
+    async (): Promise<WorkspaceCleanupScanResult | null> => {
+      const { readWorkspaceCleanupScanSnapshot } =
+        await import('../../workspaces/cleanup/workspace-cleanup-scan-snapshot')
+      return readWorkspaceCleanupScanSnapshot(snapshotDirectory)
+    }
   )
 
   ipcMain.handle('workspaceCleanup:dismiss', (_event, args: WorkspaceCleanupDismissArgs) => {
@@ -142,8 +146,10 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
 
   ipcMain.handle(
     'workspaceCleanup:beginRemovalSnapshotPruneBatch',
-    (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
+    async (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
       if (isSnapshotPruneBatchId(args?.batchId)) {
+        const { beginWorkspaceCleanupRemovalSnapshotPruneBatch } =
+          await import('../../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune')
         beginWorkspaceCleanupRemovalSnapshotPruneBatch(snapshotDirectory, args)
       }
     }
@@ -151,13 +157,15 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
 
   ipcMain.handle(
     'workspaceCleanup:recordRemovalSnapshotPrune',
-    (_event, args: WorkspaceCleanupSnapshotPruneRecordArgs) => {
+    async (_event, args: WorkspaceCleanupSnapshotPruneRecordArgs) => {
       if (
         isSnapshotPruneBatchId(args?.batchId) &&
         typeof args?.worktreeId === 'string' &&
         args.worktreeId.length > 0 &&
         (args.executionHostId === undefined || parseExecutionHostId(args.executionHostId))
       ) {
+        const { recordWorkspaceCleanupRemovalSnapshotPrune } =
+          await import('../../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune')
         recordWorkspaceCleanupRemovalSnapshotPrune(snapshotDirectory, args)
       }
     }
@@ -165,8 +173,10 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
 
   ipcMain.handle(
     'workspaceCleanup:finishRemovalSnapshotPruneBatch',
-    (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
+    async (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
       if (isSnapshotPruneBatchId(args?.batchId)) {
+        const { finishWorkspaceCleanupRemovalSnapshotPruneBatch } =
+          await import('../../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune')
         return finishWorkspaceCleanupRemovalSnapshotPruneBatch(snapshotDirectory, args)
       }
       return undefined

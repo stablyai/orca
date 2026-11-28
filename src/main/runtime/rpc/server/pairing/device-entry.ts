@@ -1,9 +1,20 @@
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
-import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
-import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
-import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
+import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
+import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
+import type { NetworkSourceClass } from '../../transports/websocket/source-admission/network-source-class'
+
+export type DeviceOrcaAccount = { id: string; name: string; computer?: string }
+
+/** Who typed a device's messages: the account claim, its computer, and the relayed phone if any. */
+export type PairedDeviceTypist = DeviceOrcaAccount & { phone?: string }
+
+export type PairedDeviceAccountLookup = (
+  pairedDeviceId: string,
+  connectionClaim?: DeviceOrcaAccount | null
+) => PairedDeviceTypist | null
 
 export type DeviceEntry = {
   deviceId: string
@@ -13,6 +24,8 @@ export type DeviceEntry = {
   scope: DeviceScope
   pairedAt: number
   lastSeenAt: number
+  // Where its latest direct (non-Relay) connection came from; absent until one after this field shipped.
+  lastSourceClass?: NetworkSourceClass
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
   // STA-2370: local-only grants prove no off-host reach for listener binding.
@@ -21,6 +34,9 @@ export type DeviceEntry = {
   pushRegistration?: MobilePushRegistration
   // Relayed phones lose access with their parent desktop grant.
   parentDeviceId?: string
+  // The Orca account a paired desktop says it is signed in to (a plain claim, set on each connect);
+  // names who typed its messages in a bot's Slack thread. A relayed phone reads its parent's.
+  orcaAccount?: DeviceOrcaAccount
   phoneKey?: string
   // Grant only at pairing; absent on older rows means no administrative powers.
   grants?: RuntimeDeviceGrant[]
@@ -35,6 +51,29 @@ export type DeviceEntry = {
   forkedFrom?: string
   // Session-only browser key (memory only); the row is dropped on host restart and after idling.
   ephemeral?: true
+  // A never-seen offer stops authenticating here; absent (older rows, headless offers) never expires.
+  offerExpiresAt?: number
+  // Last sign-in used the older E2EE framing (set then; a v2 sign-in clears it). Local-only notice data.
+  legacyE2EEAuthAt?: number
+  // Minted as a pairing offer by a host that can exchange it; clients that never exchange keep using it.
+  ticket?: true
+  // Client-chosen replacement; first sign-in with it retires the pairing token (see pairing-ticket-exchange.ts).
+  exchangeToken?: string
+  // First sign-in with a ticket; exchange is offered only shortly after it.
+  ticketFirstSeenAt?: number
+  // A plain-http browser re-registers a session-only key from this link on each page load.
+  servesSessionBrowsers?: true
+  // Minted by `orca pair` in a terminal this paired client opened; revoking that client revokes this.
+  createdByDeviceId?: string
+  // A phone's desktop installation (the one relaying it, or whose terminal minted its offer), whose
+  // current account claim names its messages; a shared parent row's last claim may be another's.
+  originClientInstanceId?: string
+}
+
+export type PendingOfferOptions = {
+  // Desktop UI only; absent keeps headless offers valid until scanned.
+  offerTtlMs?: number
+  createdByDeviceId?: string
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }
@@ -47,10 +86,21 @@ export type DeviceKeyLookup =
   | { kind: 'refused' }
   | { kind: 'unavailable' }
 
+// Never-scanned QR tokens are not paired devices.
+export function isPairedMobileDevice(device: DeviceEntry): boolean {
+  return device.scope === 'mobile' && device.lastSeenAt > 0
+}
+
 // Only unscanned token rows are rotatable pairing offers; keyed rows never are.
 export function isPendingTokenRow(device: DeviceEntry): device is TokenDeviceEntry {
   return (
     device.lastSeenAt === 0 && device.token !== undefined && device.credentialKind === undefined
+  )
+}
+
+export function isExpiredPairingOffer(device: DeviceEntry, now: number): boolean {
+  return (
+    device.lastSeenAt === 0 && device.offerExpiresAt !== undefined && device.offerExpiresAt <= now
   )
 }
 
@@ -87,7 +137,10 @@ export function isStillAuthenticated(
 ): boolean {
   return (
     (device.credentialRevision ?? 0) === principal.credentialRevision &&
-    (principal.deviceToken === undefined || device.token === principal.deviceToken) &&
+    (principal.deviceToken === undefined ||
+      device.token === principal.deviceToken ||
+      // Signed in with the replacement while retiring the pairing token failed to persist.
+      device.exchangeToken === principal.deviceToken) &&
     // A keyed socket cannot survive replacement by a bearer row.
     (principal.deviceToken !== undefined || device.credentialKind === 'device-key')
   )
@@ -116,10 +169,20 @@ function withPairedParent(
 
 export function findTokenDevice(
   devices: readonly DeviceEntry[],
-  token: string
+  token: string,
+  // Sightings whose persist failed still count, or a connected client would be locked out.
+  seen: ReadonlySet<string> = new Set(),
+  now = Date.now()
 ): DeviceEntry | null {
-  const device = token && devices.find((d) => d.credentialKind === undefined && d.token === token)
-  return device ? withPairedParent(device, devices) : null
+  const device =
+    token &&
+    devices.find(
+      (d) => d.credentialKind === undefined && (d.token === token || d.exchangeToken === token)
+    )
+  if (!device || (isExpiredPairingOffer(device, now) && !seen.has(device.deviceId))) {
+    return null
+  }
+  return withPairedParent(device, devices)
 }
 
 export function findPrincipalDevice(

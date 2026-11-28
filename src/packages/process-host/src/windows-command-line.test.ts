@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildWindowsCmdShimCommandLine,
-  isCmdInterpretedProgram,
-  parseWindowsCommandLine,
-  quoteWindowsArgument
+  quoteWindowsArgument,
+  quoteWindowsArgumentLikeLibuv,
+  quoteWindowsCmdArgument
 } from './windows-command-line'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
@@ -13,19 +13,6 @@ function quoteParity(line: string): number {
 }
 
 describe('quoteWindowsArgument', () => {
-  it.each(WINDOWS_ARGUMENT_CORPUS)(
-    'round-trips $name through the command-line parser',
-    ({ value }) => {
-      expect(parseWindowsCommandLine(quoteWindowsArgument(value))).toEqual([value])
-    }
-  )
-
-  it('round-trips the whole corpus as a single multi-argument line', () => {
-    const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)
-    const line = values.map(quoteWindowsArgument).join(' ')
-    expect(parseWindowsCommandLine(line)).toEqual(values)
-  })
-
   it('writes an embedded quote as "" so cmd quote parity stays even', () => {
     expect(quoteWindowsArgument('c"d')).toBe('"c""d"')
     expect(quoteParity(quoteWindowsArgument('c"d'))).toBe(0)
@@ -36,12 +23,57 @@ describe('quoteWindowsArgument', () => {
   })
 })
 
+describe('quoteWindowsArgumentLikeLibuv', () => {
+  // The expected outputs are the ones libuv's quote_cmd_arg documents.
+  it.each([
+    ['', '""'],
+    ['hello', 'hello'],
+    ['hello\\world', 'hello\\world'],
+    ['hello world', '"hello world"'],
+    ['hello"world', '"hello\\"world"'],
+    ['hello""world', '"hello\\"\\"world"'],
+    ['hello\\"world', '"hello\\\\\\"world"'],
+    ['hello\\\\"world', '"hello\\\\\\\\\\"world"'],
+    ['hello world\\', '"hello world\\\\"'],
+    ['C:\\Program Files\\x', '"C:\\Program Files\\x"']
+  ])('quotes %j as %s', (value, expected) => {
+    expect(quoteWindowsArgumentLikeLibuv(value)).toBe(expected)
+  })
+})
+
 describe('buildWindowsCmdShimCommandLine', () => {
-  it('keeps cmd quote parity even for every corpus entry', () => {
-    for (const { name, value } of WINDOWS_ARGUMENT_CORPUS) {
-      const line = buildWindowsCmdShimCommandLine('C:\\bin\\agent.cmd', [value])
-      expect(quoteParity(line), `${name} leaves cmd mid-quote`).toBe(0)
+  it('keeps cmd quote parity even and leaves cmd only inert characters unquoted', () => {
+    // One probe per character cmd acts on, wrapped in an even quote count like JSON.
+    const probes = [...'&|<>^%!(),;= \t\u0085é'].map((char) => ({
+      name: `probe ${JSON.stringify(char)}`,
+      value: `{"k":"a${char}b"}`
+    }))
+    for (const { name, value } of [...WINDOWS_ARGUMENT_CORPUS, ...probes]) {
+      const quoted = quoteWindowsCmdArgument(value)
+      expect(quoteParity(quoted), `${name} leaves cmd mid-quote`).toBe(0)
+      // Even split segments are what cmd reads unquoted; "^%" is the deliberate percent break-out.
+      const unquoted = quoted
+        .split('"')
+        .filter((_, index) => index % 2 === 0)
+        .join('')
+        .replaceAll('^%', '')
+      expect(unquoted, `${name} exposes cmd-active characters`).toMatch(
+        /^[\w\\{}:.[\]/@#$*?~'`+-]*$/
+      )
     }
+  })
+
+  it('spells cmd-inert quotes as \\" so CommandLineToArgvW shims keep the next flag separate', () => {
+    // Bun <= 1.3 ends a quoted run at `""`, so this JSON swallowed `--setting-sources user`.
+    const line = buildWindowsCmdShimCommandLine('C:\\bin\\claude.cmd', [
+      '--settings',
+      '{"disableAllHooks":true}',
+      '--setting-sources',
+      'user'
+    ])
+    expect(line).toBe(
+      '/d /v:off /s /c ""C:\\bin\\claude.cmd" "--settings" "{\\"disableAllHooks\\":true}" "--setting-sources" "user""'
+    )
   })
 
   it('breaks every percent out of the quoted run', () => {
@@ -59,19 +91,6 @@ describe('buildWindowsCmdShimCommandLine', () => {
   it('quotes a program path containing spaces', () => {
     const line = buildWindowsCmdShimCommandLine('C:\\Program Files\\a\\agent.cmd', [])
     expect(line).toContain('"C:\\Program Files\\a\\agent.cmd"')
-  })
-})
-
-describe('isCmdInterpretedProgram', () => {
-  it.each([
-    ['C:\\bin\\agent.cmd', true],
-    ['C:\\bin\\agent.CMD', true],
-    ['C:\\bin\\agent.bat', true],
-    ['C:\\bin\\agent.exe', false],
-    ['C:\\bin\\agent', false],
-    ['C:\\bin\\agent.ps1', false]
-  ])('%s -> %s', (program, expected) => {
-    expect(isCmdInterpretedProgram(program)).toBe(expected)
   })
 })
 

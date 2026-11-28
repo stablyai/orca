@@ -1,0 +1,140 @@
+// Build durable-record access lazily and scope every restart offer action to agents this client renders.
+// Listing spends no offer; resume re-derives eligibility from host state, never trusts supplied ids.
+
+import { defineMethod } from '../../../core'
+import {
+  ensureStructuredHostInstalled,
+  requireStructuredHost,
+  requireStructuredSessionHost,
+  structuredCallerFor
+} from '../creation/structured-agent-session-gate'
+import {
+  RestartLaunchSettledParams,
+  RestartResumableParams,
+  RestartResumeParams
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import { ContinueInterruptedParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
+import { structuredAgentsReadBy } from '../structured-agent-session-policy'
+import { restartRowsFor } from '../../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
+import {
+  continueRestartOffers,
+  dismissRestartOffers,
+  listRestartOffers
+} from './terminal-worker-restart-offer-rows'
+
+export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
+  defineMethod({
+    name: 'agentSession.restartResumable',
+    permission: 'workspace',
+    params: RestartResumableParams,
+    handler: async (_params, ctx) => {
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredHost(ctx)
+      const audience = structuredAgentsReadBy(ctx, host.knownAgentIds())
+      return {
+        sessions: await listRestartOffers(ctx.runtime, host, audience),
+        // Acted-on offers whose agent did not carry on. Optional on the wire; older clients ignore it.
+        failed: await host.restartResume.listFailures(audience)
+      }
+    }
+  }),
+  defineMethod({
+    // Explicit dismissal abandons markers; dialog close only snoozes so the status-bar offer remains.
+    name: 'agentSession.restartResumableDismiss',
+    permission: 'workspace',
+    params: RestartResumableParams,
+    handler: async (params, ctx) => {
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredHost(ctx)
+      // Offers this client was never shown stay for a client that can show them.
+      const audience = structuredAgentsReadBy(ctx, host.knownAgentIds())
+      const dismissed = await dismissRestartOffers(ctx.runtime, host, params.sessionIds, audience)
+      if (params.sessionIds === undefined) {
+        // Dismissal already removed everything this client sees; another read adds only a post-success failure point.
+        return { dismissed, sessions: [], failed: [] }
+      }
+      return {
+        dismissed,
+        sessions: await listRestartOffers(ctx.runtime, host, audience),
+        failed: await host.restartResume.listFailures(audience)
+      }
+    }
+  }),
+  defineMethod({
+    // Reattach and ask agents to continue, for prompt/settings resume; legacy restartResume sends nothing.
+    name: 'agentSession.restartContinue',
+    permission: 'workspace',
+    params: RestartResumeParams,
+    handler: async (params, ctx) => {
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredHost(ctx)
+      return continueRestartOffers(
+        ctx.runtime,
+        host,
+        params.sessionIds,
+        structuredCallerFor(ctx).callerKey,
+        structuredAgentsReadBy(ctx, host.knownAgentIds())
+      )
+    }
+  }),
+  defineMethod({
+    // The runtime continues what a restart cut off; clients wait for it before offering the rest.
+    name: 'agentSession.restartLaunchSettled',
+    permission: 'workspace',
+    params: RestartLaunchSettledParams,
+    handler: async (params, ctx) => {
+      const launch = ctx.runtime.structuredAgentSessionLaunchContinuation
+      if (params.until === 'taken') {
+        const taken = await launch.taken
+        if (taken.length === 0) {
+          return { sessions: [] }
+        }
+        await ensureStructuredHostInstalled(ctx)
+        const host = requireStructuredHost(ctx)
+        return {
+          sessions: restartRowsFor(taken, structuredAgentsReadBy(ctx, host.knownAgentIds()))
+        }
+      }
+      const { continued, answer } = await launch.done
+      launch.markAnswered()
+      if (!answer) {
+        return { continuedSessionIds: [...continued] }
+      }
+      // Shaped as restartContinue's answer, so a window closes its run of these chats the same way.
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredHost(ctx)
+      const audience = structuredAgentsReadBy(ctx, host.knownAgentIds())
+      return {
+        continuedSessionIds: [...continued],
+        continued: answer.continued,
+        ...(answer.skipped ? { skipped: answer.skipped } : {}),
+        sessions: await listRestartOffers(ctx.runtime, host, audience),
+        failed: await host.restartResume.listFailures(audience)
+      }
+    }
+  }),
+  defineMethod({
+    // Continue the exact interrupted turn, separate from restart offers; clients negotiate its capability and name a readable chat.
+    name: 'agentSession.continueInterrupted',
+    permission: 'workspace',
+    params: ContinueInterruptedParams,
+    handler: async (params, ctx) => {
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredSessionHost(ctx, params.sessionId)
+      return host.restartResume.continueInterrupted(params.sessionId, params.turnItemId)
+    }
+  }),
+  defineMethod({
+    // Keep published legacy reattach-only RPC answering no resume: agents now start only for work, and removal would break old clients.
+    name: 'agentSession.restartResume',
+    permission: 'workspace',
+    params: RestartResumeParams,
+    handler: async (_params, ctx) => {
+      await ensureStructuredHostInstalled(ctx)
+      requireStructuredHost(ctx)
+      return { results: [] }
+    }
+  })
+]

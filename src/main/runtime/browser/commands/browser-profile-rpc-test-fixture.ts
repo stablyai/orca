@@ -1,8 +1,7 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../../rpc/dispatcher'
-import { BROWSER_PROFILE_METHODS } from '../../rpc/methods/browser-profile-rpc-methods'
+import { BROWSER_PROFILE_METHODS } from '../../rpc/methods/browser/browser-profile-rpc-methods'
 import { RuntimeBrowserProfiles } from './browser-profiles'
 
 export function browserProfileRpcFixture(executorRuntimeId: string, outerRuntimeId = 'D') {
@@ -12,12 +11,25 @@ export function browserProfileRpcFixture(executorRuntimeId: string, outerRuntime
   const profiles = new RuntimeBrowserProfiles(
     {
       getRuntimeId: () => executorRuntimeId,
-      getAuthoritativeWindow: unavailable,
+      getAuthoritativeWindowId: unavailable,
+      getAvailableAuthoritativeWindowId: unavailable,
+      getOffscreenBrowserBackend: unavailable,
       getRuntimeBrowserPageRegistry: unavailable,
-      getBrowserHostLeaseRegistry: unavailable
+      getBrowserHostLeaseRegistry: unavailable,
+      getBrowserHostRequestRegistry: unavailable,
+      getAgentBrowserBridge: unavailable,
+      resolveBrowserWorkspace: unavailable,
+      resolveBrowserNetworkExecutionHost: unavailable
     },
     { requireAgentBrowserBridge: unavailable, resolveBrowserCommandTarget: async () => ({}) },
-    { describeBrowserTab: unavailable, resolveClientHostedBrowserPage: async () => undefined }
+    {
+      describeBrowserTab: unavailable,
+      describeClientHostedBrowserTab: unavailable,
+      resolveClientHostedBrowserPage: async () => undefined
+    },
+    { browserTabCreate: unavailable },
+    { replace: unavailable },
+    { browserTabClose: unavailable }
   )
   const runtime = new OrcaRuntimeService(null)
   vi.spyOn(runtime, 'getRuntimeId').mockReturnValue(outerRuntimeId)

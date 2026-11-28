@@ -1,11 +1,11 @@
-import type { Repo } from '../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   normalizePendingRuntimeRepoRemovals,
   type PendingRuntimeRepoRemoval
-} from '../../../../shared/pending-runtime-repo-removal'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+} from '../../../../shared/remote-runtime/host-catalog/pending-runtime-repo-removal'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
@@ -136,9 +136,4 @@ export function replayPendingRuntimeRepoRemovals(
     }
     return 'settled'
   })
-}
-
-export function resetPendingRuntimeRepoRemovalsForTests(): void {
-  pending = []
-  environmentChains.clear()
 }

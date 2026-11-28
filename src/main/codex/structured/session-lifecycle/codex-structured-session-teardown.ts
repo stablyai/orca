@@ -1,7 +1,7 @@
-import type { AgentSessionCloseObserver } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
-import '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { AgentSessionCloseObserver } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import {
   closeAllCodexSessions,
   closeCodexPublishedSession,
@@ -19,6 +19,7 @@ export type CodexStructuredSessionTeardownDeps = {
   onEvent?: (event: CodexStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
   forgetNotificationRetries: (sessionId: string) => void
+  forgetMcpSignIn?: (sessionId: string) => void
 }
 
 export class CodexStructuredSessionTeardown {
@@ -124,6 +125,7 @@ export class CodexStructuredSessionTeardown {
   private settled(sessionId: string, closed: boolean): boolean {
     if (closed) {
       this.deps.forgetNotificationRetries(sessionId)
+      this.deps.forgetMcpSignIn?.(sessionId)
     }
     return closed
   }

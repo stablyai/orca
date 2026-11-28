@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   searchSessionService,
   sessionSearchServiceStatus
@@ -24,7 +26,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseRoutableExecutionHostId,
   type ParsedExecutionHost
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { clearSessionSearchInService } from '../../ai-vault/scan-service/session-scanner-service-spawn'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'
@@ -32,7 +34,7 @@ import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
 import {
   OPENS_EVERY_STRUCTURED_CHAT,
   searchWithStructuredOwners
-} from '../../ai-vault/structured-session-ownership'
+} from '../../ai-vault/structured-sessions/structured-session-ownership'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,
@@ -52,33 +54,33 @@ const LOCAL_ENABLE_MESSAGE =
 const SSH_ENABLE_MESSAGE = 'unsupported'
 /** Exact text, not a class: the renderer maps this one message to its own copy. */
 const HOST_TOO_OLD_MESSAGE = 'host-too-old'
-const scopeSchema = z.string().min(1).optional()
+const scopeSchema = lazyZodSchema(() => z.string().min(1).optional())
 
 let handlerOptions: AiVaultSearchHandlerOptions = {}
 
-export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptions = {}): void {
+export function registerAiVaultSearchHandlers(
+  options: AiVaultSearchHandlerOptions = {},
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   handlerOptions = options
   // Async so a refused scope reaches the renderer as a rejection, like every other parse failure.
-  ipcMain.handle('aiVault:searchSessions', async (_event, raw: unknown, rawScope?: unknown) => {
+  ipc.handle('aiVault:searchSessions', async (_event, raw: unknown, rawScope?: unknown) => {
     const request = AiVaultSearchRequestSchema.parse(raw)
     // Only the desktop fans out: a runtime or CLI caller would make it two hops.
     if (scopeSchema.parse(rawScope) === ALL_EXECUTION_HOSTS_SCOPE) {
-      return searchAllExecutionHosts(request, allExecutionHostLegs())
+      return searchAllExecutionHosts(request, await allExecutionHostLegs())
     }
     return searchByExecutionHostScope(request, requestedSearchScope(rawScope))
   })
-  ipcMain.handle('aiVault:searchStatus', async (_event, rawScope?: unknown) => {
+  ipc.handle('aiVault:searchStatus', async (_event, rawScope?: unknown) => {
     const scope = requestedSearchScope(rawScope)
     return statusByExecutionHost(scope)
   })
-  ipcMain.handle(
-    'aiVault:setSearchEnabled',
-    async (_event, rawScope: unknown, rawEnabled: unknown) => {
-      const { enabled } = AiVaultSetSearchEnabledParamsSchema.parse({ enabled: rawEnabled })
-      return setSearchEnabledByExecutionHost(requestedSearchScope(rawScope), enabled)
-    }
-  )
-  ipcMain.handle('aiVault:clearSearchIndex', () => clearSessionSearchInService())
+  ipc.handle('aiVault:setSearchEnabled', async (_event, rawScope: unknown, rawEnabled: unknown) => {
+    const { enabled } = AiVaultSetSearchEnabledParamsSchema.parse({ enabled: rawEnabled })
+    return setSearchEnabledByExecutionHost(requestedSearchScope(rawScope), enabled)
+  })
+  ipc.handle('aiVault:clearSearchIndex', () => clearSessionSearchInService())
 }
 
 /** Only paired runtimes support toggling here; local consent belongs to Settings and SSH has no setter. */
@@ -149,12 +151,12 @@ async function searchLocalSessions(request: AiVaultSearchRequest): Promise<AiVau
 }
 
 /** One leg per list-visible host; broken enumeration loses only its own host class. */
-function allExecutionHostLegs(): SessionSearchHostLeg[] {
+async function allExecutionHostLegs(): Promise<SessionSearchHostLeg[]> {
   const localLeg: SessionSearchHostLeg = {
     executionHostId: LOCAL_EXECUTION_HOST_ID,
     search: searchLocalSessions
   }
-  const runtimeLegs = getActiveRuntimeAiVaultHostInfosResult().hostInfos.map((hostInfo) =>
+  const runtimeLegs = (await getActiveRuntimeAiVaultHostInfosResult()).hostInfos.map((hostInfo) =>
     remoteHostLeg({
       kind: 'runtime',
       id: hostInfo.executionHostId,

@@ -45,12 +45,35 @@ export function readAgentSessionUsageLimit(value: unknown): AgentSessionUsageLim
     : undefined
 }
 
+/** A row's short reset: the time today, else weekday and time within the week, else the date. */
+export function formatUsageLimitResetShort(
+  resetsAt: number,
+  now: number = Date.now(),
+  locale?: string
+): string {
+  const at = new Date(resetsAt)
+  if (at.toDateString() === new Date(now).toDateString()) {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at)
+  }
+  const withinWeek = resetsAt > now && resetsAt - now < 6 * 24 * 60 * 60 * 1000
+  return new Intl.DateTimeFormat(
+    locale,
+    withinWeek
+      ? { weekday: 'short', hour: 'numeric', minute: '2-digit' }
+      : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }
+  ).format(at)
+}
+
 /** A reset time in the reader's own clock: the time alone today, else with its day. */
-export function formatUsageLimitResetClock(resetsAt: number, now: number = Date.now()): string {
+export function formatUsageLimitResetClock(
+  resetsAt: number,
+  now: number = Date.now(),
+  locale?: string
+): string {
   const at = new Date(resetsAt)
   const today = at.toDateString() === new Date(now).toDateString()
   return new Intl.DateTimeFormat(
-    undefined,
+    locale,
     today
       ? { hour: 'numeric', minute: '2-digit' }
       : { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }

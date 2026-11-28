@@ -1,12 +1,16 @@
 /** Rehydrate worker identity from durable rows after restart; records, tab index and orchestration state decide custody.
  * Mail reaches agents at rest and starts them, so routing ignores process liveness. Resolve clear successors for every worker-level operation. */
 
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
-import type { RuntimeTerminalState } from '../../../../../shared/runtime-terminal-contracts'
-import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { canonicalOrcaSessionId } from '../../canonical-orca-session-id'
+import type { SessionPartyReader } from '../../addressing/session-party-reader'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
+import type { RuntimeTerminalState } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { OrchestrationError } from '../../orchestration-error'
 import {
@@ -16,7 +20,7 @@ import {
   type AgentSessionRecordReader,
   type LineageRunningSession,
   type RunningStructuredSession
-} from '../../structured-session-lineage'
+} from '../../addressing/session-lineage/structured-session-lineage'
 import {
   captureStructuredWorkerTabVisibility,
   structuredSessionTabRetired,
@@ -24,7 +28,7 @@ import {
 } from './structured-worker-custody'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { isStructuredWorkerHandle } from '../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation,
@@ -89,7 +93,7 @@ export function resolveStructuredWorkerIdentityForSession(
 /** The worker minted for a lineage root session, rehydrated from its durable row after a restart. */
 export function resolveStructuredWorkerIdentityForRoot(
   rootSessionId: string,
-  db: OrchestrationDb | null | undefined
+  db: SessionPartyReader | null | undefined
 ): StructuredWorkerIdentity | null {
   const known = structuredWorkerIdentities.getBySessionId(rootSessionId)
   if (known) {
@@ -104,22 +108,18 @@ export function resolveStructuredWorkerIdentityForRoot(
 /** Recorded workers must retain handle identity; a missing handle cannot turn one into an ordinary chat caller. */
 export function isRecordedStructuredWorkerSession(
   sessionId: OrcaSessionId,
-  db: OrchestrationDb
+  db: SessionPartyReader
 ): boolean {
-  return Boolean(
-    db.db
-      .prepare(
-        `SELECT 1 FROM dispatch_contexts
-         WHERE assignee_orca_session_id = ? AND process_incarnation = ? LIMIT 1`
-      )
-      .get(sessionId, structuredWorkerProcessIncarnation(sessionId))
+  return db.hasRecordedStructuredWorkerSession(
+    sessionId,
+    structuredWorkerProcessIncarnation(sessionId)
   )
 }
 
 /** The session running this worker now: the one minted for it, or its `/clear` successor. */
 export function structuredWorkerSession(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>,
-  context?: StructuredWorkerReadContext
+  context?: Pick<StructuredWorkerReadContext, 'resolveSession'>
 ): LineageRunningSession {
   if (context) {
     return context.resolveSession(identity.sessionId)
@@ -130,7 +130,7 @@ export function structuredWorkerSession(
 /** The worker's running session on this host, or the typed refusal an actor answers instead. */
 function locateStructuredWorker(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>,
-  context?: StructuredWorkerReadContext
+  context?: Pick<StructuredWorkerReadContext, 'resolveSession'>
 ): { running: RunningStructuredSession } | { reason: string; refusal: OrchestrationError } {
   const located = structuredWorkerSession(identity, context)
   if (located.kind === 'here') {
@@ -254,9 +254,10 @@ export function structuredWorkerTerminalState(
 
 /** Read the current session's durable liveness without requiring registry identity, which forget removes before some settlement probes. */
 export function observeStructuredWorker(
-  identity: Pick<StructuredWorkerIdentity, 'sessionId'>
+  identity: Pick<StructuredWorkerIdentity, 'sessionId'>,
+  context?: Pick<StructuredWorkerReadContext, 'resolveSession'>
 ): StructuredWorkerObservation {
-  const located = locateStructuredWorker(identity)
+  const located = locateStructuredWorker(identity, context)
   return 'running' in located
     ? observeStructuredSession(located.running.sessionId)
     : { status: 'unverifiable', reason: located.reason }
@@ -289,7 +290,9 @@ export function observeStructuredSession(sessionId: string): StructuredWorkerObs
   }
   return {
     status: 'unverifiable',
-    reason: 'The session has no attached provider child in this runtime generation.'
+    reason: host.reads.agentStarting(sessionId)
+      ? 'Its agent is still starting; the task is delivered once it is up.'
+      : 'The session has no attached provider child in this runtime generation.'
   }
 }
 

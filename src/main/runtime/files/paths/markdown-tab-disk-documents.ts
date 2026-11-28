@@ -8,18 +8,18 @@ import {
   utf8ByteLength,
   type RuntimeMarkdownReadTabResult,
   type RuntimeMarkdownSaveTabResult
-} from '../../../../shared/mobile-markdown-document'
-import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/editor/markdown/mobile-markdown-document'
+import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../../../shared/file-write-disk-precondition'
-import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+} from '../../../../shared/file-write/file-write-disk-precondition'
+import { getDiskBaselineSignature } from '../../../../shared/file-write/disk-baseline-signature'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
 } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { findListedEditorFile } from '../../mobile-session-editor-projection'
+import { findListedEditorFile } from '../../session-tabs/restoration/headless-editor-tabs'
 
 export type MarkdownDiskFile = { content: string; byteLength: number }
 

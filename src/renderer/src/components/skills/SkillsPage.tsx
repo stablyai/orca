@@ -1,59 +1,60 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Share2, Trash2 } from 'lucide-react'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
+import { useAppStore } from '@/store/index'
+import { discoverSkillsForRuntimeTarget } from '@/runtime/skills/configuration/runtime-skills-client'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/skills/discovery/use-active-skill-discovery-runtime-target'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getRuntimeTargetHostId } from '@/runtime/runtime-client-target'
-import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
-import { MAX_SKILL_DELETE_BATCH } from '../../../../shared/skill-delete-contract'
-import { SkillsList } from './SkillsList'
-import { SkillShareDialog } from './SkillShareDialog'
-import { SkillInstallDialog } from './SkillInstallDialog'
-import { SkillInstallManagementDialog } from './SkillInstallManagementDialog'
-import { SkillsPageHeader } from './SkillsPageHeader'
-import { SkillsFilterToolbar } from './SkillsFilterToolbar'
-import { SkillsSelectionHeader } from './SkillsSelectionHeader'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type {
+  DiscoveredSkill,
+  SkillDiscoveryResult
+} from '../../../../shared/skills/discovery/skills'
+import { MAX_SKILL_DELETE_BATCH } from '../../../../shared/skills/deletion/skill-delete-contract'
+import { SkillsList } from './catalog/SkillsList'
+import { SkillsPageHeader } from './catalog/SkillsPageHeader'
+import { SkillsFilterToolbar } from './catalog/SkillsFilterToolbar'
+import { SkillsSelectionHeader } from './catalog/SkillsSelectionHeader'
 import {
   SkillsEmptyState,
   SkillsListSkeleton,
   SkillsNoMatchesState,
   SkillsRemoteShareNotice,
   SkillsScanErrorBand
-} from './skills-page-states'
-import { SKILLS_PAGE_COLUMN } from './skills-page-column'
-import { scannedSkillSourceCount, summarizeSkillSources } from './skill-source-inventory'
-import { useSkillDiscoveryHostLabel } from './use-skill-discovery-host-label'
-import { countSkillsBySource, filterSkills, type SkillsFilterState } from './skills-filter'
-import { skillAgentByRootPath, skillAgentOptions } from './skill-agent-filter'
-import { SkillSharedLinksView } from './SkillSharedLinksView'
-import { useOwnedSkillShares } from './use-owned-skill-shares'
-import type { SkillsPageView } from './skills-page-view'
-import { useSkillsPageKeyboardNavigation } from './use-skills-page-keyboard-navigation'
-import { translate } from '@/i18n/i18n'
+} from './catalog/skills-page-states'
+import { SkillsPageDialogs } from './SkillsPageDialogs'
+import { RailPage, RailPageScroll } from '@/components/rail-page/RailPage'
+import { RailPageRefreshButton } from '@/components/rail-page/RailPageHeader'
+import { scannedSkillSourceCount, summarizeSkillSources } from './catalog/skill-source-inventory'
+import { useSkillDiscoveryHostLabel } from './catalog/use-skill-discovery-host-label'
+import { countSkillsBySource, filterSkills, type SkillsFilterState } from './catalog/skills-filter'
+import { skillAgentByRootPath, skillAgentOptions } from './catalog/skill-agent-filter'
+import { SkillSharedLinksView } from './sharing/SkillSharedLinksView'
+import { useOwnedSkillShares } from './sharing/use-owned-skill-shares'
+import type { SkillsPageView } from './catalog/skills-page-view'
+import { useSkillsPageKeyboardNavigation } from './catalog/use-skills-page-keyboard-navigation'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
-} from '@/hooks/installed-agent-skills-change-event'
+} from '@/hooks/skills/discovery/installed-agent-skills-change-event'
 import {
   addShareableSkillResults,
   eligibleShareSkillCount,
   retainedShareableSkillSelection,
   updatedSkillSelection
-} from './skill-share-selection'
+} from './sharing/skill-share-selection'
 import {
   addDeletableSkillResults,
   eligibleDeleteSkillCount,
   retainedDeletableSkillSelection
-} from './skill-delete-selection'
-import { skillDeleteActionLabel } from './skill-delete-copy'
-import { shareSelectionActionLabel } from './skill-display-labels'
-import { SkillDeleteResultBand } from './SkillDeleteResultBand'
-import { useSkillDeleteFlow } from './use-skill-delete-flow'
+} from './deletion/skill-delete-selection'
+import { skillDeleteActionLabel } from './deletion/skill-delete-copy'
+import { shareSelectionActionLabel } from './presentation/skill-display-labels'
+import { SkillDeleteResultBand } from './deletion/SkillDeleteResultBand'
+import { useSkillDeleteFlow } from './deletion/use-skill-delete-flow'
 
 const EMPTY_SKILLS: DiscoveredSkill[] = []
 const NO_FILTERS: SkillsFilterState = {
@@ -69,6 +70,7 @@ type SkillScanState = {
 }
 
 export default function SkillsPage(): React.JSX.Element {
+  const t = useTranslate()
   const closeSkillsPage = useAppStore((s) => s.closeSkillsPage)
   const pendingSkillShareId = useAppStore((s) => s.pendingSkillShareId)
   const clearPendingSkillShare = useAppStore((s) => s.clearPendingSkillShare)
@@ -185,12 +187,12 @@ export default function SkillsPage(): React.JSX.Element {
   // Clear search between skills and shared links because their query domains differ.
   const exitSharedLinks = useCallback((): void => {
     setView('skills')
-    setFilters(NO_FILTERS)
+    setFilters((current) => ({ ...NO_FILTERS, sourceKind: current.sourceKind }))
   }, [])
 
   const openSharedLinks = useCallback((): void => {
     setView('shared')
-    setFilters(NO_FILTERS)
+    setFilters((current) => ({ ...NO_FILTERS, sourceKind: current.sourceKind }))
   }, [])
 
   useSkillsPageKeyboardNavigation({
@@ -228,20 +230,52 @@ export default function SkillsPage(): React.JSX.Element {
     setInstallOpen(true)
   }
 
+  const closeShare = (): void => {
+    setShareSkills([])
+    exitSelection()
+  }
+  const changeInstallOpen = (next: boolean): void => {
+    setInstallOpen(next)
+    if (!next) {
+      setInstallLink('')
+    }
+  }
+  const totalCount =
+    result &&
+    !loading &&
+    !scanError &&
+    sourceEntries.every(({ status }) => status !== 'unavailable')
+      ? skills.length
+      : null
+  const refreshing = view === 'shared' ? ownedShares.loading : loading
+  const refreshSkills = (): void => {
+    deleteFlow.reprobe()
+    void loadSkills()
+  }
+  const refresh = view === 'shared' ? ownedShares.refresh : refreshSkills
+  const startSelection = (mode: 'share' | 'delete'): void => {
+    setSelectionMode(mode)
+    setSelectedSkillIds(new Set())
+  }
+
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-background">
+    <RailPage as="main">
       {selectionMode ? (
         <SkillsSelectionHeader
+          refresh={
+            <RailPageRefreshButton
+              label={t('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
+              busy={refreshing}
+              onRefresh={refresh}
+            />
+          }
           title={
             deleting
-              ? translate(
+              ? t(
                   'auto.components.skills.SkillsSelectionHeader.deleteTitle',
                   'Select skills to delete'
                 )
-              : translate(
-                  'auto.components.skills.SkillsSelectionHeader.title',
-                  'Select skills to share'
-                )
+              : t('auto.components.skills.SkillsSelectionHeader.title', 'Select skills to share')
           }
           icon={
             deleting ? (
@@ -253,8 +287,8 @@ export default function SkillsPage(): React.JSX.Element {
           actionIcon={deleting ? <Trash2 className="size-3.5" /> : <Share2 className="size-3.5" />}
           actionLabel={
             deleting
-              ? skillDeleteActionLabel(selectedSkillIds.size)
-              : shareSelectionActionLabel(selectedSkillIds.size)
+              ? skillDeleteActionLabel(selectedSkillIds.size, t)
+              : shareSelectionActionLabel(selectedSkillIds.size, t)
           }
           destructive={deleting}
           busy={deleting && deleteFlow.running}
@@ -274,21 +308,17 @@ export default function SkillsPage(): React.JSX.Element {
         />
       ) : (
         <SkillsPageHeader
-          skillCount={skills.length}
+          skillCount={totalCount}
+          refreshing={refreshing}
+          onRefresh={refresh}
           sourceEntries={sourceEntries}
           scannedSourceCount={scannedSkillSourceCount(sourceEntries)}
-          hostLabel={hostLabel}
+          hostLabel={local ? null : hostLabel}
           onClose={closeSkillsPage}
-          onStartShare={() => {
-            setSelectionMode('share')
-            setSelectedSkillIds(new Set())
-          }}
+          onStartShare={() => startSelection('share')}
           deleteSupported={deleteFlow.supported}
           deleteUnsupportedReason={deleteFlow.unsupportedReason}
-          onStartDelete={() => {
-            setSelectionMode('delete')
-            setSelectedSkillIds(new Set())
-          }}
+          onStartDelete={() => startSelection('delete')}
           onInstallFromLink={openInstallDialog}
           onManageInstalls={() => setManagementOpen(true)}
           onOpenSharedLinks={openSharedLinks}
@@ -299,42 +329,38 @@ export default function SkillsPage(): React.JSX.Element {
         filters={filters}
         agentOptions={agentOptions}
         sourceCounts={sourceCounts}
-        totalCount={skills.length}
+        totalCount={totalCount}
         resultCount={visibleSkills.length}
         linkCount={ownedShares.shares.length}
-        loading={view === 'shared' ? ownedShares.loading : loading}
-        onViewChange={(next) => (next === 'shared' ? openSharedLinks() : exitSharedLinks())}
-        onFiltersChange={setFilters}
-        onRefresh={() => {
+        linkCountKnown={!ownedShares.loading && !ownedShares.error}
+        onOpenSharedLinks={openSharedLinks}
+        onSelectSource={(sourceKind) => {
           if (view === 'shared') {
-            ownedShares.refresh()
-            return
+            exitSharedLinks()
           }
-          deleteFlow.reprobe()
-          void loadSkills()
+          setFilters((current) => ({ ...current, sourceKind }))
         }}
+        onFiltersChange={setFilters}
       />
       {scanError ? (
-        <SkillsScanErrorBand
-          detail={scanError.detail}
-          disabled={loading}
-          onRetry={() => {
-            deleteFlow.reprobe()
-            void loadSkills()
-          }}
-        />
+        <SkillsScanErrorBand detail={scanError.detail} disabled={loading} onRetry={refreshSkills} />
       ) : null}
       {deleteFlow.result ? (
         <SkillDeleteResultBand result={deleteFlow.result} onDismiss={deleteFlow.dismissResult} />
       ) : null}
 
-      <section className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
-        <div className={cn(SKILLS_PAGE_COLUMN, 'py-2')} data-skills-page-list="true">
+      {view === 'skills' && hostLabel && !local ? (
+        <SkillsRemoteShareNotice hostLabel={hostLabel} />
+      ) : null}
+
+      <RailPageScroll as="section" className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
+        <div className="py-2" data-skills-page-list="true">
           {view === 'shared' ? (
-            <SkillSharedLinksView query={filters.query} shares={ownedShares} />
+            <div className="rail-page-row-gutter">
+              <SkillSharedLinksView query={filters.query} shares={ownedShares} />
+            </div>
           ) : (
             <>
-              {hostLabel && !local ? <SkillsRemoteShareNotice hostLabel={hostLabel} /> : null}
               {loading && skills.length === 0 ? (
                 <SkillsListSkeleton />
               ) : visibleSkills.length > 0 ? (
@@ -369,41 +395,22 @@ export default function SkillsPage(): React.JSX.Element {
               ) : skills.length > 0 ? (
                 <SkillsNoMatchesState onClearFilters={() => setFilters(NO_FILTERS)} />
               ) : result ? (
-                <SkillsEmptyState
-                  onRefresh={() => {
-                    deleteFlow.reprobe()
-                    void loadSkills()
-                  }}
-                  onInstallFromLink={openInstallDialog}
-                />
+                <SkillsEmptyState onRefresh={refreshSkills} onInstallFromLink={openInstallDialog} />
               ) : null}
             </>
           )}
         </div>
-      </section>
+      </RailPageScroll>
 
-      <SkillShareDialog
-        skills={shareSkills}
-        open={shareSkills.length > 0}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            setShareSkills([])
-            exitSelection()
-          }
-        }}
+      <SkillsPageDialogs
+        shareSkills={shareSkills}
+        installLink={installLink}
+        installOpen={installOpen}
+        managementOpen={managementOpen}
+        onCloseShare={closeShare}
+        onInstallOpenChange={changeInstallOpen}
+        onManagementOpenChange={setManagementOpen}
       />
-      <SkillInstallDialog
-        key={installLink || 'manual-install'}
-        open={installOpen}
-        initialLink={installLink}
-        onOpenChange={(next) => {
-          setInstallOpen(next)
-          if (!next) {
-            setInstallLink('')
-          }
-        }}
-      />
-      <SkillInstallManagementDialog open={managementOpen} onOpenChange={setManagementOpen} />
-    </main>
+    </RailPage>
   )
 }

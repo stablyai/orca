@@ -1,28 +1,30 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
 import {
   useAllWorktrees,
-  useProjectHostSetupProjection,
-  useRepoMap,
   useWorktreeMap
-} from '@/store/selectors'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getProjectGroupHeaderKey,
   isProjectSectionGroupKey
-} from '../../../../../../shared/sidebar-list/group-keys'
+} from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { SidebarWorktreeListDialogs } from '../rows/ProjectGroupDialogs'
 import { SidebarWorktreeListEmptyState } from './EmptyState'
 import { VirtualizedWorktreeViewport } from '../viewport/VirtualizedWorktreeViewport'
@@ -36,11 +38,10 @@ import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
 import { useWindowSidebarListModel } from './use-window-list-model'
 import { useMainSidebarListModel } from './use-main-list-model'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
-import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
 import { useWorkspaceBoardStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { ProjectsCollapseAllButton } from '../controls/ProjectsCollapseAllButton'
 import { useProjectsCollapseShortcut } from '../controls/use-projects-collapse-shortcut'
@@ -53,7 +54,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -65,6 +66,8 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewCancel?: () => void
   projectsCollapseTarget?: HTMLElement | null
 }
+
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 
 // Desktop windows consume main’s sidebar inputs; paired web clients derive their own view.
 const useSidebarListModel =
@@ -87,7 +90,9 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreeMap = useWorktreeMap()
   const repos = useAppStore((s) => s.repos)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
+  const childrenByParentIdentity = useAppStoreWithHostStatuses(
+    selectSidebarChildrenByParentIdentity
+  )
   const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
@@ -100,18 +105,20 @@ const WorktreeList = React.memo(function WorktreeList({
   const boardStatuses = useWorkspaceBoardStatuses()
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
-  const openModal = useAppStore((s) => s.openModal)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const {
+    openModal,
+    openSettingsPage,
+    openSettingsTarget,
+    clearPendingRevealWorktreeId,
+    clearPendingRevealSidebarRow,
+    toggleCollapsedGroup: toggleGroup,
+    setCollapsedGroups
+  } = getAppStoreState()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
-  const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
-  const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
-  const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const setCollapsedGroups = useAppStore((s) => s.setCollapsedGroups)
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const settings = useAppStore((s) => s.settings)
@@ -133,10 +140,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
     useSidebarWorktreeFilters()
-  const manualOrderCatalog = useMemo(
-    () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
-    [allWorktrees, folderWorkspaces]
-  )
   const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = useSidebarListModel({
     filterState,
     sortBy,
@@ -191,12 +194,15 @@ const WorktreeList = React.memo(function WorktreeList({
       )
     )
   }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
+  // Full-page Tasks/Activity views have no selected worktree card.
+  const activeCardWorktreeId =
+    activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
-    pinnedDisplayPolicy
+    pinnedDisplayPolicy,
+    active: { worktreeId: activeCardWorktreeId, hostId: activeWorkspaceExecutionHostId }
   })
   const statusMutations = useWorktreeStatusMutations({
-    manualOrderCatalog,
     workspaceStatuses: boardStatuses,
     sortBy
   })
@@ -245,7 +251,7 @@ const WorktreeList = React.memo(function WorktreeList({
 
   useSidebarRevealRequests({
     groupBy,
-    renderedSidebarRowKeys: rowModel.renderedSidebarRowKeys,
+    sectionRows: rowModel.sectionRows,
     visibleWorktrees,
     visibleFolderWorkspaces: visibleScope.visibleFolderWorkspacesForRows,
     currentSidebarWorktreeId,
@@ -322,17 +328,14 @@ const WorktreeList = React.memo(function WorktreeList({
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}
-        // Full-page Tasks/Activity views have no selected worktree card.
-        activeWorktreeId={
-          activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
-        }
+        activeWorktreeId={activeCardWorktreeId}
         activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
         currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}
         pinnedDisplayPolicy={pinnedDisplayPolicy}
         projectOrderBy={projectOrderBy}
         toggleGroup={handleToggleGroup}
-        onToggleAllProjects={handleToggleAllProjects}
+        onToggleAllProjects={projectCollapseKeys.length > 0 ? handleToggleAllProjects : undefined}
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={openHeaderCreateComposer}
         handleOpenRepoSettings={handleOpenRepoSettings}
@@ -364,6 +367,9 @@ const WorktreeList = React.memo(function WorktreeList({
         folderWorkspaces={folderWorkspaces}
         selectedWorktreeIds={selection.selectedWorktreeIds}
         selectedWorktrees={selection.selectedWorktrees}
+        focusedWorktree={selection.focusedWorktree}
+        focusedWorkspaceExecutionHostId={selection.focusedWorkspaceExecutionHostId}
+        onKeyboardSelect={selection.selectWorktree}
         onSelectionGesture={selection.updateSelectionForGesture}
         onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
         onContextMenuSelect={selection.selectForContextMenu}
@@ -371,7 +377,7 @@ const WorktreeList = React.memo(function WorktreeList({
         defaultHostId={defaultHostId}
         worktreeMap={worktreeMap}
         worktreeLineageById={worktreeLineageById}
-        workspaceLineageByChildKey={workspaceLineageByChildKey}
+        childrenByParentIdentity={childrenByParentIdentity}
         allRepoIds={rowModel.allRepoIds}
         onReorderHostSections={rowModel.handleReorderHostSections}
         onHostDragActiveChange={rowModel.setHostDragActive}

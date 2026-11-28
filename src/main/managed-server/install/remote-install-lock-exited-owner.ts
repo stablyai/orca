@@ -1,6 +1,6 @@
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import type { InstallLockOwnerFile } from './remote-install-lock-commands'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import {
   posixStateMutationGroupRecord,
   posixStateMutationPidRecord
@@ -81,7 +81,9 @@ function windowsMutationAdmission(exitedOwner: InstallLockExitedOwner | undefine
   return [
     '$heldMutation = $null',
     'if ($currentExited) { $currentExited = $false; try {',
-    `$null = New-Item -ItemType Directory -Force -Path ${mutation} -ErrorAction Stop`,
+    // Not -Force: it reuses an existing lock dir, so the steal could adopt a lock another
+    // owner is creating or removing.
+    `$null = New-Item -ItemType Directory -Path ${mutation} -ErrorAction Stop`,
     `$mutationOwnerTemp = Join-Path ${mutation} "owner.json.$PID.tmp"`,
     "[System.IO.File]::WriteAllText($mutationOwnerTemp, '{\"pid\":' + $PID + '}')",
     `[System.IO.File]::Move($mutationOwnerTemp, (Join-Path ${mutation} 'owner.json'))`,

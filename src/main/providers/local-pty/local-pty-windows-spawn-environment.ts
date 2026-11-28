@@ -2,21 +2,21 @@ import { win32 as pathWin32 } from 'node:path'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV
-} from '../../../shared/claude-profile-routing'
+} from '../../../shared/agent-accounts/claude/claude-profile-routing'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/agent-launch/startup/hermes-startup-query'
 import {
   isHostCodexHomeForWsl,
   isWslCodexHomeForHost
 } from '../../pty/shell-startup/codex-home-wsl-env'
-import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { addTerminalHandleToWslEnv, addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { isWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
-} from '../windows-shell-args'
-import type { PtySpawnOptions } from '../pty-provider-contract'
+} from '../shell-launch/windows/shell-args'
+import type { PtySpawnOptions } from '../pty/provider-contract'
 
 export function finalizeWindowsLocalPtySpawnEnvironment(args: {
   spawn: PtySpawnOptions
@@ -69,11 +69,15 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
       // Import the custom query variable so the WSL startup wrapper can consume it.
       addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
     }
+    if (spawn.env?.KITTY_WINDOW_ID !== undefined && env.KITTY_WINDOW_ID !== undefined) {
+      addWslEnvKeys(env, ['KITTY_WINDOW_ID/u'])
+    }
   } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
     // Windows cannot use guest Codex paths; clear the alias too or shell-ready would restore it.
     delete env.CODEX_HOME
     delete env.ORCA_CODEX_HOME
   }
+  addTerminalHandleToWslEnv(env)
 
   const shellBasename = pathWin32.basename(plan.shellPath).toLowerCase()
   const codexLaunchPreflightCommand = env.ORCA_CODEX_LAUNCH_PREFLIGHT

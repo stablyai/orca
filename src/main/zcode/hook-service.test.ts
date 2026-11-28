@@ -1,196 +1,91 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as NodeOs from 'node:os'
 
-const hoisted = vi.hoisted(() => ({ home: '' }))
-vi.mock('node:os', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeOs>()
-  return { ...actual, homedir: () => hoisted.home }
+const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
+
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<typeof NodeOs>('node:os')
+  return { ...actual, homedir: homedirMock }
 })
-vi.mock('electron', () => ({ app: { getPath: () => hoisted.home } }))
 
 import { zcodeHookService } from './hook-service'
-import {
-  applyZCodeManagedHooks,
-  getZCodeConfigPath,
-  getZCodeManagedCommand,
-  ZCODE_HOOK_EVENTS
-} from './hook-settings'
+import { localDiskSftp } from '../agent-hooks/installation/remote/local-disk-sftp.test-fixture'
 
-type ManagedHookEntry = { type: string; command: string; timeout?: number }
-type ZCodeConfigFile = {
-  hooks?: { enabled?: boolean; events?: Record<string, { hooks: ManagedHookEntry[] }[]> }
-  [key: string]: unknown
+const EVENTS = [
+  'PermissionRequest',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'PreToolUse',
+  'SessionStart',
+  'Stop',
+  'UserPromptSubmit'
+]
+
+function managedEvents(path: string): string[] {
+  const events = JSON.parse(readFileSync(path, 'utf-8')).hooks?.events ?? {}
+  return Object.keys(events)
+    .filter((event) => JSON.stringify(events[event]).includes('zcode-hook.'))
+    .sort()
 }
 
-function readConfig(): ZCodeConfigFile {
-  return JSON.parse(readFileSync(getZCodeConfigPath(), 'utf-8'))
-}
+describe('ZCode managed hooks', () => {
+  let home: string
+  let cliDir: string
 
-beforeEach(() => {
-  hoisted.home = mkdtempSync(join(tmpdir(), 'orca-zcode-'))
-})
-afterEach(() => {
-  rmSync(hoisted.home, { recursive: true, force: true })
-  vi.restoreAllMocks()
-})
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'orca-zcode-hooks-'))
+    cliDir = join(home, '.zcode', 'cli')
+    mkdirSync(cliDir, { recursive: true })
+    homedirMock.mockReturnValue(home)
+    vi.stubEnv('ZCODE_CLI_SETTINGS_FILE', '')
+  })
 
-describe('ZCodeHookService', () => {
-  it('reports not_installed before any install', () => {
-    expect(zcodeHookService.getStatus()).toMatchObject({
-      agent: 'zcode',
-      state: 'not_installed',
-      managedHooksPresent: false
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  // npm zcode-app-cli reads only setting.json and creates it on first launch, so Orca must never create it.
+  it('installs into an existing setting.json, locally and remotely, without creating one', async () => {
+    const configPath = join(cliDir, 'config.json')
+    const settingsPath = join(cliDir, 'setting.json')
+    const userSettings = JSON.stringify({
+      mcp: { servers: {} },
+      hooks: { enabled: false, events: { Stop: [] } }
     })
-  })
+    const keepsUserKeys = { mcp: { servers: {} }, hooks: { enabled: true } }
+    writeFileSync(configPath, '{"theme":"dark"}\n')
 
-  it('creates config.json with every lifecycle event and enables hooks', () => {
-    const status = zcodeHookService.install()
-    expect(status).toMatchObject({ agent: 'zcode', state: 'installed', managedHooksPresent: true })
-    const config = readConfig()
-    // ZCode defaults hooks.enabled to false; events alone never fire (zai-org/feedback#32).
-    expect(config.hooks?.enabled).toBe(true)
-    expect(Object.keys(config.hooks?.events ?? {}).sort()).toEqual([...ZCODE_HOOK_EVENTS].sort())
-    for (const event of ZCODE_HOOK_EVENTS) {
-      expect(config.hooks?.events?.[event]?.[0]?.hooks?.[0]?.command).toContain('zcode-hook')
-    }
-  })
-
-  it('is idempotent — a second install adds no duplicate entries', () => {
     zcodeHookService.install()
-    const first = readFileSync(getZCodeConfigPath(), 'utf-8')
-    zcodeHookService.install()
-    expect(readFileSync(getZCodeConfigPath(), 'utf-8')).toBe(first)
-    const config = readConfig()
-    expect(config.hooks?.events?.Stop).toHaveLength(1)
-  })
+    await zcodeHookService.installRemote(localDiskSftp(), home)
+    expect(existsSync(settingsPath)).toBe(false)
 
-  it("preserves the user's own hooks, key order, and unrelated config", () => {
-    const configPath = getZCodeConfigPath()
-    mkdirSync(join(hoisted.home, '.zcode', 'cli'), { recursive: true })
-    // ZCode strictly parses JSON, so JSONC would discard the config; text editing still preserves order/indentation.
-    writeFileSync(
-      configPath,
-      `{
-  "ui": { "theme": "dark" },
-  "telemetry": { "enabled": false },
-  "hooks": {
-    "enabled": true,
-    "events": {
-      "Stop": [{ "hooks": [{ "type": "command", "command": "my-own-hook.sh" }] }]
-    }
-  }
-}
-`
-    )
-    zcodeHookService.install()
-    const text = readFileSync(configPath, 'utf-8')
-    expect(text).toContain('my-own-hook.sh')
-    expect(text).toContain('"theme": "dark"')
-    expect(text.indexOf('"ui"')).toBeLessThan(text.indexOf('"telemetry"'))
-    expect(text.indexOf('"telemetry"')).toBeLessThan(text.indexOf('"hooks"'))
-    const config = readConfig()
-    expect(config.hooks?.events?.Stop).toHaveLength(2)
-    expect(config.hooks?.events?.Stop?.[0]?.hooks?.[0]?.command).toBe('my-own-hook.sh')
-  })
+    writeFileSync(settingsPath, userSettings)
+    expect(zcodeHookService.getStatus().state).toBe('partial')
+    expect(zcodeHookService.install().state).toBe('installed')
+    expect(JSON.parse(readFileSync(settingsPath, 'utf-8'))).toMatchObject(keepsUserKeys)
+    expect(managedEvents(settingsPath)).toEqual(EVENTS)
+    expect(zcodeHookService.remove().state).toBe('not_installed')
+    expect(managedEvents(settingsPath)).toEqual([])
+    expect(managedEvents(configPath)).toEqual([])
 
-  it('leaves a config ZCode itself can parse (strict JSON, no comments)', () => {
-    zcodeHookService.install()
-    expect(() => JSON.parse(readFileSync(getZCodeConfigPath(), 'utf-8'))).not.toThrow()
-  })
+    writeFileSync(settingsPath, userSettings)
+    expect((await zcodeHookService.installRemote(localDiskSftp(), home)).state).toBe('installed')
+    expect(JSON.parse(readFileSync(settingsPath, 'utf-8'))).toMatchObject(keepsUserKeys)
+    expect(managedEvents(settingsPath)).toEqual(EVENTS)
 
-  it('removes only Orca-managed entries and leaves the user their hooks', () => {
-    const configPath = getZCodeConfigPath()
-    mkdirSync(join(hoisted.home, '.zcode', 'cli'), { recursive: true })
-    writeFileSync(
-      configPath,
-      JSON.stringify({
-        hooks: {
-          enabled: true,
-          events: { Stop: [{ hooks: [{ type: 'command', command: 'my-own-hook.sh' }] }] }
-        }
-      })
-    )
-    zcodeHookService.install()
-    zcodeHookService.remove()
-    const config = readConfig()
-    expect(config.hooks?.events?.Stop).toEqual([
-      { hooks: [{ type: 'command', command: 'my-own-hook.sh' }] }
-    ])
-    expect(config.hooks?.enabled).toBe(true)
-    expect(zcodeHookService.getStatus().managedHooksPresent).toBe(false)
-  })
-
-  it('leaves an unrelated empty event key alone while removing its own', () => {
-    const configPath = getZCodeConfigPath()
-    mkdirSync(join(hoisted.home, '.zcode', 'cli'), { recursive: true })
-    // Keep unrelated empty Notification entries; Orca never owned them.
-    writeFileSync(
-      configPath,
-      JSON.stringify({ hooks: { enabled: true, events: { Notification: [] } } })
-    )
-    zcodeHookService.install()
-    zcodeHookService.remove()
-    const config = readConfig()
-    expect(config.hooks?.events?.Notification).toEqual([])
-    for (const event of ZCODE_HOOK_EVENTS) {
-      expect(config.hooks?.events?.[event]).toBeUndefined()
-    }
-  })
-
-  it('reports partial when the managed events are present but hooks are disabled', () => {
-    zcodeHookService.install()
-    const configPath = getZCodeConfigPath()
-    const config: ZCodeConfigFile = JSON.parse(readFileSync(configPath, 'utf-8'))
-    if (config.hooks) {
-      config.hooks.enabled = false
-    }
-    writeFileSync(configPath, JSON.stringify(config, null, 2))
-    expect(zcodeHookService.getStatus()).toMatchObject({
-      state: 'partial',
-      managedHooksPresent: true,
-      detail: expect.stringContaining('hooks.enabled')
-    })
-  })
-
-  it('registers a forward-slash cmd path on Windows and replaces the legacy backslash entry', () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const scriptPath = 'C:\\Users\\ada\\.orca\\agent-hooks\\zcode-hook.cmd'
-    const command = getZCodeManagedCommand(scriptPath)
-    // Forward slashes survive Git Bash, which strips bare-path backslashes.
-    expect(command).toBe('C:/Users/ada/.orca/agent-hooks/zcode-hook.cmd')
-
-    const next = applyZCodeManagedHooks(
-      {
-        hooks: {
-          events: {
-            Stop: [
-              { hooks: [{ type: 'command', command: scriptPath }] },
-              { hooks: [{ type: 'command', command: 'C:\\tools\\user-hook.cmd' }] }
-            ]
-          }
-        }
-      },
-      command,
-      'zcode-hook.cmd'
-    )
-    expect(next.hooks?.events?.Stop).toEqual([
-      { hooks: [{ type: 'command', command: 'C:\\tools\\user-hook.cmd' }] },
-      { hooks: [expect.objectContaining({ command })] }
-    ])
-  })
-
-  it('writes an executable managed hook script that posts to the ZCode endpoint', () => {
-    zcodeHookService.install()
-    const scriptPath = join(
-      hoisted.home,
-      '.orca',
-      'agent-hooks',
-      process.platform === 'win32' ? 'zcode-hook.cmd' : 'zcode-hook.sh'
-    )
-    expect(existsSync(scriptPath)).toBe(true)
-    expect(readFileSync(scriptPath, 'utf-8')).toContain('/hook/zcode')
+    // A directory stands in for an unreadable setting.json on every platform; config.json still installs.
+    rmSync(settingsPath)
+    mkdirSync(settingsPath)
+    rmSync(configPath)
+    const settingsError = { state: 'error', configPath: settingsPath, managedHooksPresent: true }
+    expect(zcodeHookService.install()).toMatchObject(settingsError)
+    expect(managedEvents(configPath)).toEqual(EVENTS)
+    rmSync(configPath)
+    expect(await zcodeHookService.installRemote(localDiskSftp(), home)).toMatchObject(settingsError)
+    expect(managedEvents(configPath)).toEqual(EVENTS)
   })
 })

@@ -1,17 +1,22 @@
 import { join, posix as pathPosix } from 'node:path'
-import { resolveKiroHomeDir } from '../../shared/kiro-home'
+import { resolveKiroHomeDir } from '../../shared/agent-launch/environment/kiro-home'
 import {
   createManagedCommandMatcher,
-  getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
-  isPlainObject,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
+import {
   MANAGED_HOOK_TIMEOUT_MILLISECONDS,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  removeManagedCommands,
-  wrapPosixHookCommand,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import {
+  wrapWindowsBatchHookCommand,
+  wrapWindowsDirectCmdHookCommand
+} from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 
 const KIRO_SCRIPT_BASE = 'kiro-hook'
 
@@ -75,6 +80,23 @@ export function getKiroManagedCommand(scriptPath: string): string {
 
 export function getKiroRemoteManagedCommand(scriptPath: string): string {
   return wrapPosixHookCommand(scriptPath)
+}
+
+/** V3 runs hook files through Node's shell (cmd.exe on Windows) and ignores unread stdin, so chats and
+ *  other non-pane sessions exit in that shell without starting Orca's script or a stdin drain. */
+export function getKiroStandaloneManagedCommand(scriptPath: string): string {
+  if (process.platform !== 'win32') {
+    return getKiroRemoteStandaloneManagedCommand(scriptPath)
+  }
+  // cmd.exe runs a bare .cmd path in-process, and the script exits on its own pane guard.
+  return (
+    wrapWindowsDirectCmdHookCommand(scriptPath) ??
+    `if defined ORCA_PANE_KEY ${wrapWindowsBatchHookCommand(scriptPath)}`
+  )
+}
+
+export function getKiroRemoteStandaloneManagedCommand(scriptPath: string): string {
+  return wrapPosixHookCommand(scriptPath, {}, { exitOutsideOrca: true })
 }
 
 export function getKiroManagedCommandMatcher(): (command: string | undefined) => boolean {

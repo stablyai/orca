@@ -1,13 +1,14 @@
 /** Stop terminals by handle, then managed-decommission orcad/daemon. Claim stopped only with zero-session census, exact serving-orcad identity and retired daemon evidence. */
 import { z } from 'zod'
-import { errorMessage } from '../../../shared/error-message'
-import type { OrcadDecommissionResult } from '../../../shared/orcad-decommission'
-import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
-import type { RuntimeTerminalListResult } from '../../../shared/runtime-terminal-contracts'
-import { wslHostServerStopReason } from '../../../shared/wsl-host-failure-copy'
-import type { WslHostServerStop } from '../../../shared/wsl-host-types'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
+import { errorMessage } from '../../../shared/errors/error-message'
+import type { OrcadDecommissionResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-decommission'
+import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import type { RuntimeTerminalListResult } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { wslHostServerStopReason } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
+import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { readRemoteOrcadManagedStopTarget } from '../../managed-server/lifecycle/orcad-managed-remote-stop'
 import { managedOrcadSlot } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import { resolveOrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
@@ -121,19 +122,22 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
 
 /** Use saved environment pairing and routed RPC for removal, never the bridge's raw pairing offer. */
 export type WslHostRuntimeAccess = {
-  isReady?: (environmentId: string) => boolean
+  isReady?: (environmentId: string) => boolean | Promise<boolean>
   call: (environmentId: string, method: string, params: unknown) => Promise<unknown>
   census: (environmentId: string) => Promise<OrcadTerminalCensus>
 }
 
 // Only what removal reads from each live terminal.
-const TerminalHandlesSchema = z.object({
-  terminals: z.array(z.object({ handle: z.string().min(1), worktreeId: z.string() }))
-}) satisfies z.ZodType<{
-  terminals: Pick<RuntimeTerminalListResult['terminals'][number], 'handle' | 'worktreeId'>[]
-}>
+const TerminalHandlesSchema = lazyZodSchema(
+  () =>
+    z.object({
+      terminals: z.array(z.object({ handle: z.string().min(1), worktreeId: z.string() }))
+    }) satisfies z.ZodType<{
+      terminals: Pick<RuntimeTerminalListResult['terminals'][number], 'handle' | 'worktreeId'>[]
+    }>
+)
 
-const RuntimeIdSchema = z.object({ runtimeId: z.string().min(1) })
+const RuntimeIdSchema = lazyZodSchema(() => z.object({ runtimeId: z.string().min(1) }))
 
 /** Closing terminals, counting what is left and naming the serving orcad, all through its RPC. */
 export function wslHostRuntimeStopSteps(
@@ -145,7 +149,7 @@ export function wslHostRuntimeStopSteps(
       readWslHostPeerDesktops((method, params) => access.call(environmentId, method, params)),
     endTerminals: async () => {
       const list = TerminalHandlesSchema.parse(
-        await access.call(environmentId, 'terminal.list', { limit: 1000 })
+        await access.call(environmentId, 'terminal.list', { limit: 1000, includePreview: false })
       )
       const leftovers: WslHostTerminalLeftover[] = []
       // Close by handle so deleted-project terminals remain addressable; one refusal must not skip other terminals/server stop.

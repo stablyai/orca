@@ -5,8 +5,11 @@ import type { AgentChildDisplayState } from '../child-work/agent-status-child-wo
 import { formatAgentTypeLabel } from './agent-type-label'
 import { formatAgentToolPreviewLine } from './agent-tool-preview'
 import { agentNoUpdateLabel } from './agent-row-decay-state'
-import type { BackgroundTaskSay } from '../../background-task-copy'
-import { backgroundTaskStateReason, backgroundTaskStateWord } from '../../background-task-roster'
+import type { BackgroundTaskSay } from './background-tasks/background-task-copy'
+import {
+  backgroundTaskStateReason,
+  backgroundTaskStateWord
+} from './background-tasks/background-task-roster'
 
 /** The words each surface supplies: desktop translates them, mobile reads English. */
 export type AgentChildRowCopy = {
@@ -31,15 +34,11 @@ export function agentChildRowName(
 }
 
 export function agentChildRowLeadTrail(
-  row: Pick<AgentChildRowModel, 'displayState'>,
   name: string,
   detail: string
 ): { lead: string; trail: string } {
-  // Lead with monitoring state so truncation still distinguishes passive work.
-  if (row.displayState === 'monitoring' && detail) {
-    return { lead: detail, trail: detail === name ? '' : name }
-  }
-  return { lead: name, trail: detail }
+  // The name leads in every state, monitoring included: its dot glyph already says so.
+  return { lead: name, trail: detail === name ? '' : detail }
 }
 
 /** Reuse CLI row phrasing for the same child-work facts. */

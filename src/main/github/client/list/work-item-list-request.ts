@@ -1,13 +1,13 @@
-import type { ClassifiedError } from '../../../../shared/classified-error'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
-import { shouldProbeGitRemote } from '../../../git/remotes/remote-name-listing'
-import type { LocalGitExecOptions, OwnerRepo } from '../../gh-utils'
+import type { ClassifiedError } from '../../../../shared/errors/classified-error'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import {
   getGitHubApiRepositoryForRemote,
   getOriginGitHubApiRepository
-} from '../../github-api-repository'
+} from '../../repositories/github-api-repository-remote-probe'
 import { WORK_ITEM_PR_LIST_JSON_FIELDS, type MainWorkItem } from './../map/work-item-field-coercion'
 import { WORK_ITEM_NUMBER_SORT_QUALIFIER, quoteGitHubSearchValue } from './work-item-search-query'
 export type WorkItemListRequest = {
@@ -53,8 +53,12 @@ export function buildWorkItemListRequest(args: {
   if (query.assignee) {
     searchParts.push(`assignee:${quoteGitHubSearchValue(query.assignee)}`)
   }
-  if (query.author) {
-    searchParts.push(`author:${quoteGitHubSearchValue(query.author)}`)
+  const authorTerms = query.authors.map((author) => `author:${quoteGitHubSearchValue(author)}`)
+  // search/issues ORs repeated author:, but gh pr list's advanced search ANDs them.
+  if (kind === 'pr' && authorTerms.length > 1) {
+    searchParts.push(`(${authorTerms.join(' OR ')})`)
+  } else {
+    searchParts.push(...authorTerms)
   }
   if (query.labels.length > 0) {
     for (const label of query.labels) {
@@ -144,16 +148,11 @@ export async function resolvePrWorkItemSource(
     connectionId,
     localGitOptions
   )
-  // Skip known-absent upstreams; unknown remote discovery remains fail-open.
-  const upstreamCandidatePromise = shouldProbeGitRemote(
+  const upstreamCandidatePromise = getGitHubApiRepositoryForRemote(
     repoPath,
     'upstream',
     connectionId,
     localGitOptions
-  ).then((shouldProbe) =>
-    shouldProbe
-      ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-      : null
   )
   const [originCandidate, upstreamCandidate] = await Promise.all([
     originCandidatePromise,

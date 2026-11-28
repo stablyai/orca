@@ -19,9 +19,15 @@ export class TerminalArmedInputModes {
   private kittyMainStack: number[] = []
   private kittyAltStack: number[] = []
   private onAlternateScreen = false
+  private focusReportingArmings = 0
 
   get hostOwnsFocusReporting(): boolean {
     return this.owners.get(HOST_ARMABLE_MODE) === 'host'
+  }
+
+  /** Identifies the current ?1004 arming, so a re-arming program counts as unreported; null when off. */
+  get focusReportingArming(): number | null {
+    return this.owners.has(HOST_ARMABLE_MODE) ? this.focusReportingArmings : null
   }
 
   applyPrivateMode(param: number, enabled: boolean): void {
@@ -141,6 +147,9 @@ export class TerminalArmedInputModes {
   }
 
   private setArmed(key: ModeKey, armed: boolean): void {
+    if (armed && key === HOST_ARMABLE_MODE && !this.owners.has(key)) {
+      this.focusReportingArmings += 1
+    }
     if (!armed) {
       this.owners.delete(key)
     } else if (this.owners.get(key) !== 'host') {

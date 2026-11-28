@@ -6,16 +6,16 @@ import type {
   MobileTerminalResumeCommand
 } from '../../terminal/launch/mobile-terminal-startup'
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './build-headless-mobile-session-browser-tabs'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { isUnclaimedRunningSleepRecord, markResumedRecordLive } from './sleep-record-pane-claim'
-import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
+import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { buildHeadlessMobileSessionTerminalTabs } from '../../terminal/surface/mobile-session-terminal-projection'
 import {
   RestoredPaneStarter,
@@ -25,14 +25,14 @@ import {
 } from '../../terminal/recovery/restored-pane-start'
 import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-pane-reopen'
 import { reopenNewerDaemonTerminals } from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
-import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
+import type { NewerDaemonReopenResult } from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
 import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
-import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
-import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { servesWslMovedPaneHistory } from '../../../orcad/migration/orcad-migration-wsl-destination'
+import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -184,7 +184,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
   }
 
   /** The pane's stored terminal; undefined while unbound, null once main no longer holds it. */
-  private storedPaneBinding({
+  protected storedPaneBinding({
     worktreeId,
     tabId,
     leafId

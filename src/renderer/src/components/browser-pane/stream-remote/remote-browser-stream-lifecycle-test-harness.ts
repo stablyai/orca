@@ -3,6 +3,12 @@ import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserPageHandle, RemoteBrowserRpcCall } from './remote-browser-page-session'
 import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
+import type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
+import { createGate, rpcError, type Gate } from './remote-browser-stream-lifecycle-test-support'
+import type {
+  BrowserJavaScriptDialogAnswer,
+  BrowserJavaScriptDialogPrompt
+} from '../../../../../shared/browser/prompts/browser-javascript-dialog'
 import {
   canReconnectRemoteBrowserStream,
   isRemoteBrowserStreamBusy,
@@ -10,23 +16,7 @@ import {
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
 
-export type Gate = {
-  wait: Promise<void>
-  release: () => void
-  fail: (error: unknown) => void
-}
-
-export function createGate(): Gate {
-  let release!: () => void
-  let fail!: (error: unknown) => void
-  const wait = new Promise<void>((resolve, reject) => {
-    release = () => resolve()
-    fail = (error: unknown) => reject(error)
-  })
-  // Why: the gate is released by the test, not by this tick; an unhandled rejection would fail the run.
-  wait.catch(() => {})
-  return { wait, release, fail }
-}
+export { createGate, rpcError, type Gate } from './remote-browser-stream-lifecycle-test-support'
 
 export type FakeScreencastStream = {
   pageId: string
@@ -40,13 +30,20 @@ export type FakeScreencastStream = {
   emitResponseFailure: (code: string, message: string) => void
   emitTransportError: (code: string, message: string) => void
   emitClose: () => void
+  emitDialog: (dialogType: string, message: string) => void
+  emitDialogClosed: () => void
 }
 
-export function rpcError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code })
+export type DialogAsk = {
+  dialog: BrowserJavaScriptDialogPrompt
+  signal: AbortSignal
+  answer: (answer: BrowserJavaScriptDialogAnswer | null) => void
 }
 
-export function createHarness() {
+/** `transport` replaces the fake host calls, e.g. with a real dispatcher; the fakes stay the default. */
+export function createHarness(
+  transport: Partial<Pick<RemoteBrowserStreamLifecycleDeps, 'callRpc' | 'subscribeScreencast'>> = {}
+) {
   const identity = {
     mounted: true,
     active: true,
@@ -59,6 +56,8 @@ export function createHarness() {
   const closedPages: (string | null)[] = []
   const streams: FakeScreencastStream[] = []
   const rpcLog: string[] = []
+  const rpcParams = new Map<string, unknown>()
+  const dialogAsks: DialogAsk[] = []
 
   let capabilities: string[] = ['browser.screencast.v1']
   let storedHandle: RemoteBrowserPageHandle | null = null
@@ -75,6 +74,7 @@ export function createHarness() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake answers each method with the reply shape its caller reads.
   const callRpc = (async (_target: unknown, method: string, params?: { page?: string }) => {
     rpcLog.push(method)
+    rpcParams.set(method, params)
     if (method === 'status.get') {
       if (statusGate) {
         const gate = statusGate
@@ -152,7 +152,9 @@ export function createHarness() {
           _meta: { runtimeId: 'runtime-1' }
         }),
       emitTransportError: (code, message) => callbacks.onError?.({ code, message }),
-      emitClose: () => callbacks.onClose?.()
+      emitClose: () => callbacks.onClose?.(),
+      emitDialog: (dialogType, message) => respond({ type: 'dialog', dialogType, message }),
+      emitDialogClosed: () => respond({ type: 'dialogClosed' })
     }
     streams.push(stream)
     return {
@@ -170,9 +172,10 @@ export function createHarness() {
       getEnvironmentId: () => identity.environmentId,
       browserPageExists: () => identity.pageExists
     },
-    callRpc,
-    subscribeScreencast,
+    callRpc: transport.callRpc ?? callRpc,
+    subscribeScreencast: transport.subscribeScreencast ?? subscribeScreencast,
     getWorktreeSelector: () => 'worktree:wt-1',
+    readCurrentObservation: () => [],
     getCurrentUrl: () => 'https://example.test/',
     readStoredHandle: () => storedHandle,
     writeStoredHandle: (handle) => {
@@ -193,10 +196,19 @@ export function createHarness() {
     },
     readViewportSize: () => viewportSize,
     syncViewport: async () => {},
+    askJavaScriptDialog: (dialog, signal) =>
+      new Promise((answer) => dialogAsks.push({ dialog, signal, answer })),
+    askPagePrompt: () => new Promise(() => {}),
+    openExternalAppLink: async () => false,
+    reportPagePromptFailed: () => {},
+    pickFiles: async () => [],
+    stageFilesOnHost: async () => [],
+    reportFilesNotDelivered: () => {},
     getDeviceScaleFactor: () => 1,
     setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},
-    handleFrameBytes: () => {}
+    handleFrameBytes: () => {},
+    viewerEvents: { onPointer: () => {}, onAgentCursor: () => {}, onDriver: () => {} }
   })
 
   return {
@@ -207,6 +219,14 @@ export function createHarness() {
     closedPages,
     streams,
     rpcLog,
+    dialogAsks,
+    rpcParams: (method: string): unknown => rpcParams.get(method),
+    get storedHandle(): RemoteBrowserPageHandle | null {
+      return storedHandle
+    },
+    seedStoredHandle: (handle: RemoteBrowserPageHandle | null) => {
+      storedHandle = handle
+    },
     get subscribeAttempts(): number {
       return subscribeAttempts
     },

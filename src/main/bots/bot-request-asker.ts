@@ -1,0 +1,376 @@
+// Who a bot's running turn acts for: whom its conversation acts for (recorded when it started), and any
+// person the cloud stamped on a message the turn took, or another bot's request. Never the model's say-so.
+import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
+import {
+  actsForOwner,
+  distinctAskers,
+  OWNER_ACTS_FOR,
+  type AutomationTriggeredBy,
+  type BotRequestAsker
+} from '../../shared/bots/bot-acts-for'
+import { originOf, requestsOriginPlace } from './bot-request-origin-place'
+import { carriedAskersOf, stampedPerson } from './bot-stamped-askers'
+import { personSendsOf, typedInOrcaByOwner, typedOnAnotherDevice } from './bot-typed-in-orca'
+import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
+import { requestTextOf } from './bot-request-text'
+import { requestTurnAskedBy } from './bot-request-askers-of'
+
+/** The conversation a request came in, as Orca Cloud names it. */
+export type BotRequestConversation = { source: ConnectorSource; externalId: string }
+
+/** Where the turn's message was asked: an issue key, owner/repo#N or Slack channel id, with a link
+ *  to the message when the source gave one. */
+export type BotWakingPlace = {
+  source: ConnectorSource
+  placeId: string
+  url?: string
+  /** The message itself as an action ref, from the cloud; a reaction goes on it. */
+  messageRef?: string
+  /** An automation's event whose run posts its results somewhere else (none, its Chat, another
+   *  channel): the owner wants them there, so it is not where the turn's work started. */
+  resultsElsewhere?: true
+}
+
+/** What the running turn acts for. */
+export type BotActingTurn = {
+  /** The message this turn answers: the person's, or the bot request it was woken by. */
+  rootItemId: string | null
+  askers: BotRequestAsker[]
+  /** Who asked this turn: its stamped people, or the owner for a message typed in Orca. Labels and
+   *  answer routes read this; every check reads askers. */
+  askedBy: BotRequestAsker[]
+  /** The text of the person's message, for the record. */
+  request: string | null
+  /** A bot request the turn was woken by: a request it sends continues that request's chain. */
+  actingOnRequestId: string | null
+  /** Every bot request the turn took, the first being actingOnRequestId. */
+  requestIds: string[]
+  /** Where the message that opened the turn was asked; null for the owner's own or a bot request. */
+  wokenAt: BotWakingPlace | null
+  /** The owner typed every message this turn took at the host's own window: it acts for the owner,
+   *  whomever its conversation acts for. */
+  typedByOwner?: true
+  /** A paired device Orca can't place as the owner typed a message this turn took: it never acts
+   *  for the owner, though its conversation does (Home Chat, a chat the owner started). */
+  typedByAnother?: true
+  /** Who did the event behind the automation prompt that opened the turn, for the record only. */
+  triggeredBy?: AutomationTriggeredBy
+  /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
+   *  waking request carries. A request the turn sends carries it on, its text marked as content. */
+  origin?: AutomationTriggeredBy
+  /** The thread, issue or pull request this turn's work started in: where it was woken, or the one
+   *  its waking request carries. Its requests carry it on and `bot item add` links it. */
+  originPlace?: BotWakingPlace
+}
+
+export type BotActingTurnLookups = {
+  /** Whether a message is a bot request Orca admitted. */
+  isBotRequest: (messageId: string) => boolean
+  /** Whom an admitted bot request acts for, from Orca's record of it; null when unreadable. */
+  botRequestActsFor: (messageId: string) => BotRequestActsFor | null
+  /** Whom the conversation acts for, as Orca recorded it when the conversation started. */
+  conversationActsFor: readonly BotRequestAsker[]
+  /** The thread, issue or pull request an automation run's event happened on: the run the prompt
+   *  records, when it records one. */
+  automationPlace?: (run?: AutomationRunMessage) => BotWakingPlace | null
+  /** The workspace of the conversation this session answers, from its link. */
+  conversationWorkspaceId: string | null
+}
+
+/** The people Orca recorded on a bot request: whom the chain acts for, who asked at its start, and
+ *  the event that started the chain when one did. */
+export type BotRequestActsFor = {
+  askers: BotRequestAsker[]
+  askedBy?: BotRequestAsker[]
+  origin?: AutomationTriggeredBy
+  /** A handoff's place only. */
+  originPlace?: BotWakingPlace
+  /** Status mail: no job, so it never makes a turn's place ambiguous. */
+  wantsNothing?: true
+}
+
+type ItemReading =
+  | { kind: 'asker'; asker: BotRequestAsker; wokenAt?: BotWakingPlace | null }
+  /** The owner's own message or an automation's prompt: it acts for the conversation, except an
+   *  automation's run (`run`), which acts for the owner in whichever chat it lands. */
+  | {
+      kind: 'conversation'
+      wokenAt?: BotWakingPlace | null
+      triggeredBy?: AutomationTriggeredBy
+      run?: true
+    }
+  | { kind: 'request'; messageIds: string[] }
+  | { kind: 'agent' }
+
+/** The bot requests a message delivered, by their mail ids; none for any other message. */
+export function botRequestIdsOf(
+  body: AgentJournalItemBody,
+  isBotRequest: (messageId: string) => boolean
+): string[] {
+  const mail = body.kind === 'message' ? body.from?.orchestration : undefined
+  return mail?.message === 'mail-notice'
+    ? mail.messages.map((message) => message.messageId).filter(isBotRequest)
+    : []
+}
+
+function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): ItemReading {
+  if (body.kind !== 'message') {
+    return { kind: 'agent' }
+  }
+  if (body.from) {
+    const messageIds = botRequestIdsOf(body, lookups.isBotRequest)
+    return messageIds.length > 0 ? { kind: 'request', messageIds } : { kind: 'agent' }
+  }
+  if (body.asker) {
+    return { kind: 'asker', ...stampedAsker(body.asker, lookups.conversationWorkspaceId) }
+  }
+  const wokenAt = body.memorySource
+    ? (lookups.automationPlace?.(body.automationRun) ?? null)
+    : undefined
+  // A person's connector message whose asker didn't parse is someone Orca can't name, never the owner;
+  // an event no one asked through acts for its conversation, like an automation's prompt.
+  if (body.origin === 'connector' && !body.memorySource) {
+    return { kind: 'asker', asker: { kind: 'unknown' }, ...(wokenAt ? { wokenAt } : {}) }
+  }
+  return {
+    kind: 'conversation',
+    ...(wokenAt !== undefined ? { wokenAt } : {}),
+    ...(body.memorySource && body.triggeredBy ? { triggeredBy: body.triggeredBy } : {}),
+    // Only Orca writes a run's record on a message; no client can send one.
+    ...(body.automationRun ? { run: true as const } : {})
+  }
+}
+
+function stampedAsker(
+  asker: NonNullable<Extract<AgentJournalItemBody, { kind: 'message' }>['asker']>,
+  workspaceId: string | null
+): { asker: BotRequestAsker; wokenAt: BotWakingPlace } {
+  return {
+    asker: stampedPerson(asker, workspaceId),
+    wokenAt: {
+      source: asker.source,
+      placeId: asker.place.id,
+      ...(asker.url ? { url: asker.url } : {}),
+      ...(asker.messageRef ? { messageRef: asker.messageRef } : {})
+    }
+  }
+}
+
+/**
+ * Whom a conversation Orca has no record for acts for, read from its first message: the person the
+ * cloud stamped, the people a bot request was for, or the owner for the owner's own message, an event
+ * no one asked through and an automation's prompt (from automations made before Orca recorded who made
+ * them). Null before any message.
+ */
+export function firstMessageActsFor(
+  items: readonly AgentJournalRenderItem[],
+  lookups: {
+    botRequestAskers: (messageId: string) => BotRequestAsker[] | null
+    conversationWorkspaceId: string | null
+  }
+): BotRequestAsker[] | null {
+  const first = items.find(isRootUserMessage)
+  if (!first || first.body.kind !== 'message') {
+    return null
+  }
+  const { body } = first
+  if (body.from) {
+    const mail = body.from.orchestration
+    const requested =
+      mail?.message === 'mail-notice'
+        ? mail.messages.flatMap((message) => lookups.botRequestAskers(message.messageId) ?? [])
+        : []
+    return requested.length > 0 ? distinctAskers(requested) : [...OWNER_ACTS_FOR]
+  }
+  const carried = carriedAskersOf(body, lookups.conversationWorkspaceId)
+  const own: BotRequestAsker[] = body.asker
+    ? [stampedAsker(body.asker, lookups.conversationWorkspaceId).asker]
+    : body.origin === 'connector' && !body.memorySource
+      ? [{ kind: 'unknown' }]
+      : [...OWNER_ACTS_FOR]
+  return carried.length > 0 ? distinctAskers([...own, ...carried]) : own
+}
+
+/** Each turn's messages, newest turn first: the one that opened it and those steered into it. A
+ *  message still queued belongs to no turn yet. A host that keeps no turn rows gives each its own.
+ *  The opener is the chat's own anchor: a turn names a sent message by the provider's id for it. */
+function turnWindows(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  newestTurns: number | null
+): AgentJournalRenderItem[][] {
+  // Of a bounded read, only the turns from its newest `newestTurns` root turn records on.
+  const records = items.flatMap((item, index) => (isRootTurnRecord(item) ? [index] : []))
+  const floor = newestTurns === null ? 0 : (records.at(-newestTurns) ?? 0)
+  const turns = records.filter((index) => index >= floor).map((index) => items[index]!)
+  if (turns.length === 0) {
+    return newestTurns === null
+      ? items
+          .filter(isRootUserMessage)
+          .map((message) => [message])
+          .toReversed()
+      : []
+  }
+  // A turn with no message stays as an empty window, so the first window is always the newest turn.
+  return turnMessages(items, submissions, turns.toReversed())
+}
+
+/**
+ * The latest turn's askers: whom the conversation acts for, and every person stamped on the messages it
+ * took, so a mixed turn is held to the least trusted. A turn woken only by agent mail (a worker's report)
+ * reads the turn before it; it never reads a live automation run.
+ */
+export function readBotActingTurn(
+  items: readonly AgentJournalRenderItem[],
+  lookups: BotActingTurnLookups,
+  submissions: readonly AgentJournalSubmission[] = []
+): BotActingTurn {
+  return readBotActingTurnWithin(items, lookups, submissions, null)!
+}
+
+/** `readBotActingTurn` over a conversation's newest `newestTurns` root turn records and the rows that
+ *  place them; null when none of those turns decides it, so the reader widens. Null turns: all. */
+export function readBotActingTurnWithin(
+  items: readonly AgentJournalRenderItem[],
+  lookups: BotActingTurnLookups,
+  submissions: readonly AgentJournalSubmission[],
+  newestTurns: number | null
+): BotActingTurn | null {
+  // One index of the read's sends, built only when a message needs it.
+  const sends = personSendsOf(submissions)
+  // A turn only worker mail woke reads an older turn's askers, never its place: its work is no thread's.
+  for (const [index, window] of turnWindows(items, submissions, newestTurns).entries()) {
+    const readings = window.map((item) => ({ item, reading: readItem(item.body, lookups) }))
+    const carried = window.flatMap((item) =>
+      carriedAskersOf(item.body, lookups.conversationWorkspaceId)
+    )
+    const typedByAnother = window.some(typedOnAnotherDevice)
+    const requestIds = readings.flatMap((entry) =>
+      entry.reading.kind === 'request' ? entry.reading.messageIds : []
+    )
+    const first = readings.find((entry) => entry.reading.kind === 'request')
+    if (first) {
+      // The people each request was for, from Orca's records, never the sending bot's text; with the
+      // conversation's and anyone stamped in the same turn, so a mixed turn is held to the least trusted.
+      const records = requestIds.map((messageId) => lookups.botRequestActsFor(messageId))
+      const origin = records.find((record) => record?.origin)?.origin
+      const originPlace = requestsOriginPlace(
+        records.filter((record) => !record?.wantsNothing).map((record) => record?.originPlace),
+        index > 0 ||
+          readings.some(
+            (entry) => entry.reading.kind === 'asker' || entry.reading.kind === 'conversation'
+          )
+      )
+      const fromRequests = records.flatMap((record): BotRequestAsker[] =>
+        record && record.askers.length > 0 ? record.askers : [{ kind: 'unknown' }]
+      )
+      const stamped = readings.flatMap((entry) =>
+        entry.reading.kind === 'asker' ? [entry.reading.asker] : []
+      )
+      return {
+        rootItemId: first.item.itemId,
+        askers: distinctAskers([
+          ...lookups.conversationActsFor,
+          ...fromRequests,
+          ...stamped,
+          ...carried
+        ]),
+        askedBy: requestTurnAskedBy(records, window, sends, typedByAnother),
+        request: null,
+        actingOnRequestId: requestIds[0] ?? null,
+        requestIds,
+        wokenAt: null,
+        ...(typedByAnother ? { typedByAnother: true as const } : {}),
+        ...(origin ? { origin } : {}),
+        ...(originPlace ? { originPlace } : {})
+      }
+    }
+    const openers = readings.flatMap((entry) =>
+      entry.reading.kind === 'asker' || entry.reading.kind === 'conversation'
+        ? [{ item: entry.item, reading: entry.reading }]
+        : []
+    )
+    const opener = openers[0]
+    if (opener) {
+      const stamped = openers.flatMap((entry): BotRequestAsker[] =>
+        entry.reading.kind === 'asker' ? [entry.reading.asker] : []
+      )
+      // An event's automation prompt acts for the automation's creator; the event itself is content.
+      const [origin] = openers.flatMap((entry) =>
+        entry.reading.kind === 'conversation' && entry.reading.triggeredBy
+          ? [entry.reading.triggeredBy]
+          : []
+      )
+      // An automation's run acts for the owner wherever it lands; an older run's prompt asks for whom its
+      // conversation acts; an unstamped message is the owner's own.
+      const ran = openers.some(
+        (entry) => entry.reading.kind === 'conversation' && entry.reading.run
+      )
+      // Only the newest turn: one a worker's report reads back to is not the turn now running.
+      const typedByOwner = index === 0 && window.every((item) => typedInOrcaByOwner(item, sends))
+      // A paired device Orca can't place as the owner asked as someone it can't name.
+      const askedBy = openers.flatMap((entry): readonly BotRequestAsker[] =>
+        entry.reading.kind === 'asker'
+          ? [entry.reading.asker]
+          : entry.reading.kind === 'conversation' && entry.reading.run
+            ? OWNER_ACTS_FOR
+            : entry.item.body.kind === 'message' && entry.item.body.memorySource
+              ? lookups.conversationActsFor
+              : typedOnAnotherDevice(entry.item)
+                ? [{ kind: 'unknown' }]
+                : OWNER_ACTS_FOR
+      )
+      return {
+        rootItemId: opener.item.itemId,
+        // Anyone stamped in the same turn still holds a mixed turn to the least trusted.
+        askers: distinctAskers([
+          ...(ran ? OWNER_ACTS_FOR : lookups.conversationActsFor),
+          ...stamped,
+          ...carried
+        ]),
+        askedBy: distinctAskers(askedBy),
+        request: requestTextOf(opener.item.body),
+        actingOnRequestId: null,
+        requestIds: [],
+        wokenAt: opener.reading.wokenAt ?? null,
+        ...(index === 0
+          ? originOf(openers.map((entry) => entry.reading.wokenAt ?? undefined))
+          : {}),
+        ...(typedByOwner ? { typedByOwner: true as const } : {}),
+        ...(typedByAnother ? { typedByAnother: true as const } : {}),
+        ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
+          ? { triggeredBy: opener.reading.triggeredBy }
+          : {}),
+        ...(origin ? { origin } : {})
+      }
+    }
+  }
+  if (newestTurns !== null) {
+    return null
+  }
+  // No message has opened a turn: the turn acts for the conversation.
+  return {
+    rootItemId: null,
+    askers: distinctAskers(lookups.conversationActsFor),
+    askedBy: distinctAskers(lookups.conversationActsFor),
+    request: null,
+    actingOnRequestId: null,
+    requestIds: [],
+    wokenAt: null
+  }
+}
+
+/** Whether the turn acts for the owner: the owner typed it at the host's window, or everyone it acts
+ *  for is the owner and no paired device Orca can't place as the owner typed in it. Every Slack
+ *  action's turnFor and the "asked by" line on owner writes read this. */
+export function turnActsForOwner(
+  turn: Pick<BotActingTurn, 'askers' | 'typedByOwner' | 'typedByAnother'>
+): boolean {
+  return turn.typedByAnother !== true && (turn.typedByOwner === true || actsForOwner(turn.askers))
+}

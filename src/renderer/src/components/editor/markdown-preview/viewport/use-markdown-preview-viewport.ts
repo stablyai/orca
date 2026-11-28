@@ -2,10 +2,10 @@ import { revealMarkdownNavigationDetails } from '../../markdown/navigation/markd
 import type { MarkdownPreviewDocument } from '../document-worker/markdown-preview-document-types'
 import type { VirtualMarkdownPreviewNavigation } from './use-markdown-preview-navigation'
 import { useCallback, useEffect, useLayoutEffect, type MutableRefObject } from 'react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { resolveMarkdownPreviewAddReviewNoteKey } from '../review/markdown-preview-annotation-shortcut'
 import {
-  decodeMarkdownPreviewAnchor,
+  findMarkdownPreviewAnchorElement,
   getMarkdownPreviewAnchorScrollTop
 } from './markdown-preview-anchor-navigation'
 import { cancelMarkdownPreviewEditorRevealFrames } from '../links/markdown-preview-editor-reveal'
@@ -14,7 +14,7 @@ import { isMarkdownPreviewFindShortcut } from '../search/markdown-preview-search
 import { useMarkdownPreviewDomSearch } from '../search/use-markdown-preview-dom-search'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 import { useMarkdownPreviewScrollViewport } from './use-markdown-preview-scroll-viewport'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function useMarkdownPreviewViewport({
   foundation,
@@ -151,14 +151,7 @@ export function useMarkdownPreviewViewport({
         return false
       }
 
-      const decodedAnchor = decodeMarkdownPreviewAnchor(rawAnchor)
-      let target: HTMLElement | null = null
-      for (const candidate of body.querySelectorAll<HTMLElement>('[id]')) {
-        if (candidate.id === decodedAnchor) {
-          target = candidate
-          break
-        }
-      }
+      const target = findMarkdownPreviewAnchorElement(body, rawAnchor)
       if (!target) {
         return false
       }

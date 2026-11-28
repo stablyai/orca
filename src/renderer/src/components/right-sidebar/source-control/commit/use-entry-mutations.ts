@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import {
@@ -12,7 +12,7 @@ import {
   requestEditorFileSave,
   requestEditorSaveQuiesce
 } from '@/components/editor/autosave/editor-autosave'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { basename } from '@/lib/path'
 import { useAppStore } from '@/store'
 import {
@@ -22,12 +22,13 @@ import {
   resolveRuntimeGitConflict,
   stageRuntimeGitPath,
   unstageRuntimeGitPath
-} from '@/runtime/runtime-git-working-tree-client'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-working-tree-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useSourceControlEntryMutations({
   activeRepoTarget,
@@ -41,6 +42,7 @@ export function useSourceControlEntryMutations({
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
   // Name the callback so Retry can reenter the same attempt.
+  const scope = useSourceControlScope()
   const runEntryMutation = useCallback(
     async function runEntryMutation(
       operation: 'stage' | 'unstage',
@@ -51,7 +53,7 @@ export function useSourceControlEntryMutations({
         return
       }
       try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, activeWorktreeId ?? null)
         await mutate(
           {
             // Route mutations through workspace ownership rather than focused runtime.
@@ -81,7 +83,7 @@ export function useSourceControlEntryMutations({
       // Refresh outside the mutation catch so its errors cannot be mislabeled as stage failures.
       await refreshActiveGitStatusAfterMutation()
     },
-    [activeRepoTarget, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
+    [activeRepoTarget, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation, scope]
   )
 
   const handleStage = useCallback(
@@ -138,12 +140,15 @@ export function useSourceControlEntryMutations({
         }
         // Hold autosave so an open tab cannot recreate the file the host removes.
         const releaseAutoSave = await requestEditorSaveQuiesce(editorTarget)
-        try {
-          await resolveRuntimeGitConflict(context, filePath, resolution)
-          notifyEditorExternalFileChange(editorTarget)
-        } finally {
-          releaseAutoSave()
-        }
+        await runWithFinally(
+          async () => {
+            await resolveRuntimeGitConflict(context, filePath, resolution)
+            notifyEditorExternalFileChange(editorTarget)
+          },
+          () => {
+            releaseAutoSave()
+          }
+        )
       }
       resolvingConflictKeysRef.current.add(resolvingKey)
       return runEntryMutation('stage', entry.path, resolve).finally(() => {
@@ -169,29 +174,32 @@ export function useSourceControlEntryMutations({
         runtimeEnvironmentId
       })
       // Release in finally so every workspace holds autosave until Git finishes.
-      try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        await discardRuntimeGitPath(
-          {
-            // Route discard through workspace ownership rather than focused runtime.
-            target: requireGitOwnerTarget(activeRepoTarget),
+      await runWithFinally(
+        async () => {
+          const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
+          await discardRuntimeGitPath(
+            {
+              // Route discard through workspace ownership rather than focused runtime.
+              target: requireGitOwnerTarget(activeRepoTarget),
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              connectionId
+            },
+            filePath
+          )
+          notifyEditorExternalFileChange({
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId
-          },
-          filePath
-        )
-        notifyEditorExternalFileChange({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath: filePath,
-          runtimeEnvironmentId
-        })
-      } finally {
-        releaseAutoSave()
-      }
+            relativePath: filePath,
+            runtimeEnvironmentId
+          })
+        },
+        () => {
+          releaseAutoSave()
+        }
+      )
     },
-    [activeRepoTarget, activeWorktreeId, worktreePath]
+    [activeRepoTarget, activeWorktreeId, scope, worktreePath]
   )
 
   const discardMany = useCallback(
@@ -223,33 +231,36 @@ export function useSourceControlEntryMutations({
         }
         throw failed.reason
       }
-      try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        await bulkDiscardRuntimeGitPaths(
-          {
-            // Route discard through workspace ownership rather than focused runtime.
-            target: requireGitOwnerTarget(activeRepoTarget),
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          filePaths
-        )
-        for (const relativePath of filePaths) {
-          notifyEditorExternalFileChange({
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            relativePath,
-            runtimeEnvironmentId
-          })
+      await runWithFinally(
+        async () => {
+          const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
+          await bulkDiscardRuntimeGitPaths(
+            {
+              // Route discard through workspace ownership rather than focused runtime.
+              target: requireGitOwnerTarget(activeRepoTarget),
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              connectionId
+            },
+            filePaths
+          )
+          for (const relativePath of filePaths) {
+            notifyEditorExternalFileChange({
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              relativePath,
+              runtimeEnvironmentId
+            })
+          }
+        },
+        () => {
+          for (const release of releases) {
+            release()
+          }
         }
-      } finally {
-        for (const release of releases) {
-          release()
-        }
-      }
+      )
     },
-    [activeRepoTarget, activeWorktreeId, worktreePath]
+    [activeRepoTarget, activeWorktreeId, scope, worktreePath]
   )
 
   return {

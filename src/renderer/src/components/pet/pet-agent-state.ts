@@ -1,5 +1,9 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  agentAttentionTurnAt,
+  isAgentTurnUnacknowledged
+} from '@/attention/agent-attention-acknowledgement'
 
 export type PetAnimationName =
   | 'idle'
@@ -28,7 +32,7 @@ export function nextPetDragAnimation(
 
 export type PetAnimationInput = {
   entries: AgentStatusEntry[]
-  retainedCount: number
+  acknowledgedAgentsByPaneKey: Record<string, number>
   dragging: boolean
   dragAnimation: PetDragAnimation
   hovering: boolean
@@ -38,7 +42,7 @@ export type PetAnimationInput = {
 
 function agentStateAnimation(
   entries: AgentStatusEntry[],
-  retainedCount: number,
+  acknowledgedAgentsByPaneKey: Record<string, number>,
   now: number,
   staleAfterMs: number
 ): PetAnimationName {
@@ -46,7 +50,7 @@ function agentStateAnimation(
   let hasDone = false
 
   for (const entry of entries) {
-    if (!isExplicitAgentStatusFresh(entry, now, staleAfterMs)) {
+    if (!isAgentStatusFresh(entry, now, staleAfterMs)) {
       continue
     }
     if (entry.state === 'blocked' || entry.state === 'waiting') {
@@ -54,7 +58,14 @@ function agentStateAnimation(
     }
     if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
       hasWorking = true
-    } else if (entry.state === 'done') {
+    } else if (
+      entry.state === 'done' &&
+      // Same unread rule as the dashboard and Dock, so a viewed completion stops the review row.
+      isAgentTurnUnacknowledged(
+        acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0,
+        agentAttentionTurnAt(entry)
+      )
+    ) {
       hasDone = true
     }
   }
@@ -62,7 +73,7 @@ function agentStateAnimation(
   if (hasWorking) {
     return 'running'
   }
-  if (hasDone || retainedCount > 0) {
+  if (hasDone) {
     return 'review'
   }
   return 'idle'
@@ -70,14 +81,14 @@ function agentStateAnimation(
 
 export function selectPetAnimationName({
   entries,
-  retainedCount,
+  acknowledgedAgentsByPaneKey,
   dragging,
   dragAnimation,
   hovering,
   now,
   staleAfterMs
 }: PetAnimationInput): PetAnimationName {
-  const base = agentStateAnimation(entries, retainedCount, now, staleAfterMs)
+  const base = agentStateAnimation(entries, acknowledgedAgentsByPaneKey, now, staleAfterMs)
   // Horizontal drags run toward the pointer; stationary grabs retain live agent state, and plain hover jumps.
   if (dragging) {
     return dragAnimation ?? base

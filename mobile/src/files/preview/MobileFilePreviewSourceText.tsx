@@ -1,0 +1,81 @@
+import { useEffect, useMemo, useRef } from 'react'
+import { ScrollView, Text, type ScrollViewInstance } from 'react-native'
+import { MobileSyntaxSegments } from '../../components/code-presentation/MobileSyntaxSegments'
+import './mobile-file-preview-request'
+import { formatPreviewByteLength } from './mobile-file-preview-response'
+import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
+import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
+import { filePreviewStylesSheet } from './mobile-file-preview-styles'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../theme/themed-styles'
+
+export function MobileFilePreviewSourceText({
+  relativePath,
+  content,
+  truncated,
+  byteLength,
+  initialLine
+}: {
+  relativePath: string
+  content: string
+  truncated?: boolean
+  byteLength?: number
+  initialLine?: number
+}) {
+  const styles = useThemedStyles(filePreviewStylesSheet)
+  const t = useMobileTranslation()
+  const scrollRef = useRef<ScrollViewInstance>(null)
+  const revealedRef = useRef(false)
+  const syntax = useMemo(
+    () => buildMobileFilePreviewSyntax(relativePath, content),
+    [content, relativePath]
+  )
+
+  useEffect(() => {
+    revealedRef.current = false
+  }, [content, initialLine, relativePath])
+
+  const revealInitialLine = () => {
+    if (!initialLine || revealedRef.current) {
+      return
+    }
+    revealedRef.current = true
+    scrollRef.current?.scrollTo({
+      y: scrollOffsetForPreviewLine(initialLine),
+      animated: false
+    })
+  }
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
+      contentContainerStyle={styles.textContent}
+      onContentSizeChange={revealInitialLine}
+    >
+      {truncated ? (
+        <MobileFilePreviewTruncatedNote byteLength={byteLength ?? content.length} />
+      ) : null}
+      <Text
+        selectable
+        style={styles.textPreview}
+        accessibilityLabel={t('files.filePreviewSourceText.previewLabel', 'File preview')}
+      >
+        <MobileSyntaxSegments segments={syntax.segments} />
+      </Text>
+    </ScrollView>
+  )
+}
+
+export function MobileFilePreviewTruncatedNote({ byteLength }: { byteLength: number }) {
+  const styles = useThemedStyles(filePreviewStylesSheet)
+  const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
+  return (
+    <Text style={styles.truncatedNote}>
+      {t('files.filePreviewSourceText.truncatedNote', 'Preview truncated. File size: {{size}}.', {
+        size: formatPreviewByteLength(byteLength, t, locale)
+      })}
+    </Text>
+  )
+}

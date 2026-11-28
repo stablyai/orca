@@ -1,4 +1,3 @@
-import { CalendarClock, Gauge, LayoutList, Settings, type LucideIcon } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
@@ -8,18 +7,12 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { HOME_TAB_ICONS, type HomeTabIconProps } from './home-tab-icons'
 import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
-
-const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
-  feed: LayoutList,
-  usage: Gauge,
-  automations: CalendarClock,
-  settings: Settings
-}
 
 export const HOME_TAB_BAR_HEIGHT = 52
 
@@ -27,31 +20,39 @@ export function MobileHomeTabBar(props: {
   tabs: readonly HomeTabId[]
   active: HomeTabId
   bottomInset: number
-  /** Agents that need you; shown on Feed. */
-  feedBadge: number
+  /** Agents that need you; shown on Agents. */
+  agentsBadge: number
+  /** Bots' Needs you items; shown on Bots. */
+  botsBadge: number
   onSelect: (tab: HomeTabId) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const labels: Record<HomeTabId, string> = {
     feed: t('home.tabs.feed', 'Feed'),
+    bots: t('home.tabs.bots', 'Bots'),
+    agents: t('home.tabs.agents', 'Agents'),
     usage: t('home.tabs.usage', 'Usage'),
-    automations: t('home.tabs.automations', 'Automations'),
-    settings: t('common.settings', 'Settings')
+    automations: t('home.tabs.automations', 'Automations')
+  }
+  const badges: Partial<Record<HomeTabId, number>> = {
+    agents: props.agentsBadge,
+    bots: props.botsBadge
   }
   return (
     <View
-      style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.sm) }]}
+      // Why lg: some Android tablets report a gesture inset smaller than the visible pill (#41969).
+      style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.lg) }]}
       // Android has no 'tabbar' role and crashes on mount; iOS keeps its tab-bar trait.
       accessibilityRole={Platform.OS === 'ios' ? 'tabbar' : 'tablist'}
     >
       {props.tabs.map((tab) => (
         <TabButton
           key={tab}
-          icon={TAB_ICONS[tab]}
+          icon={HOME_TAB_ICONS[tab]}
           label={labels[tab]}
           selected={tab === props.active}
-          badge={tab === 'feed' ? props.feedBadge : 0}
+          badge={badges[tab] ?? 0}
           onPress={() => props.onSelect(tab)}
         />
       ))}
@@ -60,13 +61,14 @@ export function MobileHomeTabBar(props: {
 }
 
 function TabButton(props: {
-  icon: LucideIcon
+  icon: (props: HomeTabIconProps) => React.JSX.Element
   label: string
   selected: boolean
   badge: number
   onPress: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const [pressed, setPressed] = useState(false)
   const Icon = props.icon
   const tint = props.selected ? colors.textPrimary : colors.textMuted
@@ -92,7 +94,7 @@ function TabButton(props: {
           }
         ]}
       >
-        <Icon size={25} strokeWidth={props.selected ? 2.2 : 1.8} color={tint} />
+        <Icon size={24} color={tint} active={props.selected} />
         {props.badge > 0 ? <TabBadge count={props.badge} /> : null}
       </Animated.View>
       <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
@@ -104,7 +106,7 @@ function TabButton(props: {
 
 /** Pops in when it first appears, and nudges when the count changes so a new ask is noticed. */
 function TabBadge({ count }: { count: number }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const reducedMotion = useReducedMotionEnabled() === true
   const scale = useSharedValue(reducedMotion ? 1 : 0.6)
   const opacity = useSharedValue(reducedMotion ? 1 : 0)
@@ -131,7 +133,7 @@ function TabBadge({ count }: { count: number }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   bar: {
     flexDirection: 'row',
     paddingTop: 6,

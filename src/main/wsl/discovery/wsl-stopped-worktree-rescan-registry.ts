@@ -21,10 +21,3 @@ export function releaseWslStoppedWorktreeRescan(repoId: string, cancel?: () => v
 export function _pendingWslStoppedWorktreeRescanCount(): number {
   return pendingByRepoId.size
 }
-
-export function _resetWslStoppedWorktreeRescansForTests(): void {
-  for (const cancel of pendingByRepoId.values()) {
-    cancel()
-  }
-  pendingByRepoId.clear()
-}

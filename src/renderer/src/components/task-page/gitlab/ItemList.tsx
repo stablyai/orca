@@ -1,15 +1,18 @@
+import { RailPageScroll } from '@/components/rail-page/RailPage'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, ExternalLink } from 'lucide-react'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageGitLabItemList({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const {
     gitlabItems,
     gitlabLoading,
@@ -20,20 +23,15 @@ export function TaskPageGitLabItemList({
     handleUseGitLabItem
   } = model
   return (
-    <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
-      <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        <span>{translate('auto.components.TaskPage.eb10c32872', 'ID')}</span>
-        <span>{translate('auto.components.TaskPage.16cba35bee', 'Title')}</span>
-        <span>{translate('auto.components.TaskPage.00b7ffb952', 'Type / State')}</span>
-        <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+    <div className="flex min-h-0 max-h-full flex-col overflow-hidden bg-background">
+      <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] gap-3 border-b border-border/50 rail-page-row-gutter py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <span>{t('auto.components.TaskPage.eb10c32872', 'ID')}</span>
+        <span>{t('auto.components.TaskPage.16cba35bee', 'Title')}</span>
+        <span>{t('auto.components.TaskPage.00b7ffb952', 'Type / State')}</span>
+        <span>{t('auto.components.TaskPage.f362667d55', 'Updated')}</span>
         <span />
       </div>
-      <div
-        className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
-        style={{
-          scrollbarGutter: 'stable'
-        }}
-      >
+      <RailPageScroll className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek">
         {gitlabError ? (
           <div className="border-b border-border px-4 py-4 text-sm text-destructive">
             {gitlabError}
@@ -47,7 +45,7 @@ export function TaskPageGitLabItemList({
             }).map((_, i) => (
               <div
                 key={i}
-                className="grid w-full gap-3 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]"
+                className="grid w-full gap-3 rail-page-row-gutter py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]"
               >
                 <div className="h-4 w-16 animate-pulse rounded bg-muted/70" />
                 <div>
@@ -87,7 +85,7 @@ export function TaskPageGitLabItemList({
                   openGitLabDetailPage(item)
                 }
               }}
-              className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
+              className="grid w-full cursor-pointer gap-3 rail-page-row-gutter py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
             >
               <span className="font-mono text-xs text-muted-foreground">
                 {/* Why: GitLab uses !N for MRs and #N for issues — match gitlab.com so rows map to web links. */}
@@ -97,12 +95,12 @@ export function TaskPageGitLabItemList({
               <span className="min-w-0 truncate text-sm">{item.title}</span>
               <span className="text-xs text-muted-foreground">
                 {item.type === 'mr'
-                  ? translate('auto.components.TaskPage.e224d76876', 'MR')
-                  : translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}{' '}
+                  ? t('auto.components.TaskPage.e224d76876', 'MR')
+                  : t('auto.components.TaskPage.b1eaa18ace', 'Issue')}{' '}
                 · {item.state}
               </span>
               <span className="text-xs text-muted-foreground">
-                {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString(getIntlLocale()) : ''}
+                {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString(intlLocale) : ''}
               </span>
               <div className="flex items-center justify-end gap-1">
                 <Tooltip>
@@ -117,12 +115,12 @@ export function TaskPageGitLabItemList({
                       }}
                       aria-label={
                         item.type === 'mr'
-                          ? translate(
+                          ? t(
                               'auto.components.TaskPage.startWorkspaceFromMr',
                               'Start workspace from MR {{number}}',
                               { number: item.number }
                             )
-                          : translate(
+                          : t(
                               'auto.components.TaskPage.startWorkspaceFromIssue',
                               'Start workspace from issue {{number}}',
                               { number: item.number }
@@ -133,7 +131,7 @@ export function TaskPageGitLabItemList({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    {translate('auto.components.TaskPage.9497f2787c', 'Start workspace')}
+                    {t('auto.components.TaskPage.9497f2787c', 'Start workspace')}
                   </TooltipContent>
                 </Tooltip>
                 <button
@@ -142,7 +140,7 @@ export function TaskPageGitLabItemList({
                     e.stopPropagation()
                     openAppHttpLink(item.url, { event: e })
                   }}
-                  aria-label={translate('auto.components.TaskPage.bcdc1330b2', 'Open in GitLab')}
+                  aria-label={t('auto.components.TaskPage.bcdc1330b2', 'Open in GitLab')}
                   className="text-muted-foreground hover:text-foreground"
                 >
                   <ExternalLink className="size-3.5" />
@@ -151,7 +149,7 @@ export function TaskPageGitLabItemList({
             </div>
           ))}
         </div>
-      </div>
+      </RailPageScroll>
     </div>
   )
 }
