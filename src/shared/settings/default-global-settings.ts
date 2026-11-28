@@ -195,6 +195,7 @@ export function buildDefaultSettings(args: {
     nestedWorkerMaxDepthDefaultedToFour: true,
     orchestrationWorkerAutoReleaseEnabled: true,
     orchestrationCoordinatorApprovalsEnabled: false,
+    showOrchestrationNotices: true,
     showArtifactsButton: false,
     showSkillsButton: false,
     showPluginsButton: false,

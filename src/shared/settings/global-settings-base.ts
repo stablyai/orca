@@ -25,6 +25,7 @@ import type { BotsGlobalSettings } from '../bots-global-settings'
 import type { WindowMaterialSettings } from '../app-lifecycle/windows/window-material'
 import type { EditorSaveSettings } from '../editor/saving/editor-save-settings'
 import type { NestedWorkerDepthSettings } from '../orchestration/workers/nested-worker-depth'
+import type { OrchestrationNoticeDisplaySettings } from '../orchestration/mailbox/orchestration-notice-display-settings'
 import type { SshRemoteControlSettings } from '../remote-runtime/ssh/ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from '../agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from '../keybindings/global-settings'
@@ -75,6 +76,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserMemorySaverGlobalSettings &
   PerfNoticeGlobalSettings &
   NestedWorkerDepthSettings &
+  OrchestrationNoticeDisplaySettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &
   WorkspaceCleanupPolicySettings &
