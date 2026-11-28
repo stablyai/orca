@@ -10,6 +10,7 @@ import {
   type TextInputInstance
 } from 'react-native'
 import { ChevronLeft, Ellipsis, Keyboard, Lock, RotateCw, X } from 'lucide-react-native'
+import { useSessionListLongPressProps } from '../../navigation/session-list-long-press-props'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
@@ -246,6 +247,8 @@ function BarButton({ button, ref }: { button: BarButtonSpec; ref?: Ref<HostInsta
   const styles = useThemedStyles(stylesSheet)
   const colors = useMobileColors()
   const { icon: Icon } = button
+  const sessionListLongPress = useSessionListLongPressProps()
+  const longPress = Icon === ChevronLeft ? sessionListLongPress : undefined
   return (
     <Pressable
       ref={ref}
@@ -255,6 +258,7 @@ function BarButton({ button, ref }: { button: BarButtonSpec; ref?: Ref<HostInsta
       accessibilityRole="button"
       accessibilityLabel={button.accessibilityLabel}
       accessibilityState={{ disabled: button.disabled === true }}
+      {...longPress}
       style={({ pressed }) => [
         styles.button,
         pressed && styles.pressed,

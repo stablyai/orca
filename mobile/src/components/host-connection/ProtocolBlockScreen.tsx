@@ -2,6 +2,7 @@ import { isGooglePlayInstall, useWallAppUpdate } from '../../app-update/use-wall
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { leaveHostRoute } from '../../host-route-exit'
 import { useRouteHandoff } from '../../navigation/route-handoff'
+import { useSessionListLongPressProps } from '../../navigation/session-list-long-press-props'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
@@ -153,6 +154,7 @@ export function useMobileUpdateLink(): { label: string; url: string } {
 export function ProtocolBlockScreen({ verdict }: Props) {
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const sessionListLongPress = useSessionListLongPressProps()
   const router = useRouteHandoff()
   const remedy = blockRemedy(verdict)
   const mobileAction = useMobileUpdateLink()
@@ -202,6 +204,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
             // Back to the Home under this screen, not a second one stacked on it (a page hands this to the shell).
             leaveHostRoute(router)
           }}
+          {...sessionListLongPress}
         >
           <Text style={styles.secondaryButtonText}>
             {t('components.protocolBlockScreen.backToHosts', 'Back to hosts')}

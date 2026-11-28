@@ -36,6 +36,7 @@ import { AppMoveScreen } from '../src/app-move/AppMoveScreen'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { BotLinkRouter } from '../src/bots/BotLinkRouter'
 import { SideRailProvider } from '../src/layout/side-rail'
+import { SessionListLongPressProvider } from '../src/navigation/session-list-long-press'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
@@ -199,6 +200,7 @@ export default function RootLayout() {
         <View style={styles.root} onLayout={onNavigatorLayout}>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           <SideRailProvider>
+            <SessionListLongPressProvider>
             <SideSafeArea>
               <Stack
                 screenOptions={{
@@ -250,8 +252,9 @@ export default function RootLayout() {
                 />
               </Stack>
             </SideSafeArea>
-            {/* Last, so its waiting drawer sits above whatever screen the link landed on. */}
-            <BotLinkRouter />
+              {/* Last, so its waiting drawer sits above whatever screen the link landed on. */}
+              <BotLinkRouter />
+            </SessionListLongPressProvider>
           </SideRailProvider>
           {isRetiredGithubAndroidApp ? <AppMoveScreen /> : null}
         </View>

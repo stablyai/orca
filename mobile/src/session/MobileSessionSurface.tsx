@@ -16,6 +16,7 @@ import { useMobileSessionSidebar } from './tabs/use-mobile-session-sidebar'
 import { SidebarPageDragContext } from './tabs/sidebar-page-drag'
 import { useMobileSessionTabSummaryChannel } from './tabs/use-mobile-session-tab-summaries'
 import { useSessionRouteRequest } from './use-session-route-request'
+import { SessionListLongPressOverride } from '../navigation/session-list-long-press-context'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   const styles = useThemedStyles(stylesSheet)
@@ -74,7 +75,15 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       ),
     [homeChatId, sessionTabs, activeSessionTabId, switchSessionTab, openNativeSession, worktreeId]
   )
+  const { requestLeaveToSessionList, setShowQuickCommands, setShowCustomKeyModal } = controller
+  // Dismiss the originating drawer first so the draft prompt can present over it.
+  const leaveToSessionList = useCallback(() => {
+    setShowQuickCommands(false)
+    setShowCustomKeyModal(false)
+    return requestLeaveToSessionList()
+  }, [requestLeaveToSessionList, setShowQuickCommands, setShowCustomKeyModal])
   return (
+    <SessionListLongPressOverride action={leaveToSessionList}>
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <MobileSessionSidebarStage
         sidebar={sidebar}
@@ -112,5 +121,6 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       </MobileSessionSidebarStage>
       <MobileSessionSheets controller={controller} />
     </View>
+    </SessionListLongPressOverride>
   )
 }
