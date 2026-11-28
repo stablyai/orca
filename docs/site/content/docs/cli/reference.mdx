@@ -88,6 +88,38 @@ orca serve --port 6768 --bind 100.64.1.20 --pairing-address 100.64.1.20 --json
 `orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`. It accepts clients from localhost, LAN and Tailscale addresses; add `--allow-public` to accept public internet addresses too.
 Use `--bind <literal-ip>` to choose the listening interface; `--pairing-address` changes the address advertised to clients.
 
+## MCP server
+
+`orca mcp` serves Orca to any [Model Context Protocol](https://modelcontextprotocol.io) client over stdio, so an agent outside Orca can create worktrees, start agents in them, and follow their progress without shelling out to the CLI. Register it once with your client:
+
+```bash
+# Claude Code
+claude mcp add orca -- orca mcp
+
+# Codex
+codex mcp add orca -- orca mcp
+```
+
+Or add it to a config file by hand, for example a project `.mcp.json` for Claude Code:
+
+```json
+{ "mcpServers": { "orca": { "command": "orca", "args": ["mcp"] } } }
+```
+
+or `~/.codex/config.toml` for Codex:
+
+```toml
+[mcp_servers.orca]
+command = "orca"
+args = ["mcp"]
+```
+
+On Linux use `orca-ide` as the command. Orca must be running (the desktop app or `orca serve`); add `--environment <name>` to the args to drive a paired server instead.
+
+The server exposes `orca_status`, `worktree_list`, `worktree_ps`, `worktree_create`, `agent_launch`, `terminal_list`, `terminal_read`, `terminal_send`, `terminal_wait`, `orchestration_run_list`, and `orchestration_task_list`. Each tool runs the matching `orca … --json` command, so results, selectors and errors are the same as the CLI's. Nothing destructive is exposed: there is no tool to remove worktrees or stop terminals.
+
+Agent launches are asynchronous and return a handle at once while the agent keeps working. A launch that starts a terminal (pass `surface: "terminal"` to make sure) returns a terminal handle: poll it with `worktree_ps` or `terminal_read`, or block briefly with `terminal_wait`. An idle agent has finished its turn and kept its context, so send it a follow-up with `terminal_send` instead of launching a new one. A chat launch returns a chat handle instead, which the `terminal_*` tools do not accept.
+
 ## Repos
 
 ```bash

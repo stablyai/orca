@@ -207,6 +207,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('../computer/computer.js')).COMPUTER_HANDLERS
   },
   {
+    name: 'mcp-stdio-server',
+    keys: ['mcp'],
+    load: async () => (await import('../mcp/mcp-command.js')).MCP_HANDLERS
+  },
+  {
     name: 'mcp',
     keys: ['mcp connect'],
     load: async () => (await import('../mcp/mcp-connect.js')).MCP_HANDLERS
