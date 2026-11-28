@@ -16,7 +16,8 @@ export function setMenuBarHostListener(next: ((host: MenuBarHost | null) => void
 }
 
 export function reportMenuBarHost(host: MenuBarHost | null): void {
-  if (host === current) {
+  // Giving up lasts the whole launch, so a later hide can't erase it from hang reports.
+  if (host === current || current === 'helper-gave-up') {
     return
   }
   current = host
