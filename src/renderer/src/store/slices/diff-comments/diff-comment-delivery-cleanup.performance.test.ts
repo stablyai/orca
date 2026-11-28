@@ -11,7 +11,7 @@ beforeEach(() => {
   host.gate = null
 })
 
-// Counts id reads on the delivered snapshots, the input cleanup checks every shown and saved note against.
+// Counts id reads on copies of the notes, so a scan of every note shows up as reads.
 function countedSnapshots(notes: DiffComment[]): {
   snapshots: DiffComment[]
   idReads: () => number
@@ -60,5 +60,32 @@ it.each([300, 3000])(
     expect(ok).toBe(false)
     expect(left.filter((n) => n.sentAt)).toHaveLength(count)
     expect(reads).toBeLessThanOrEqual(count * 20)
+  }
+)
+
+// PR #51560: a repeated success report for notes already being removed must not index every shown note.
+it.each([300, 3000])(
+  'skips %i shown notes on a repeated report while removal runs',
+  async (count) => {
+    const { snapshots: stored, idReads } = countedSnapshots(
+      Array.from({ length: count }, (_, i) => note(`n${i}`))
+    )
+    const store = createStore(stored)
+    host.ignoresCleanup = false
+    const release = Promise.withResolvers<void>()
+    host.gate = async (updates) => {
+      if (updates.deliveredDiffCommentSnapshots) {
+        await release.promise
+      }
+    }
+    const delivered = [note('n0')]
+    const first = store.getState().clearDeliveredDiffComments(OWNER, delivered)
+    const before = idReads()
+    // Synchronous through the in-flight skip: no await runs before it returns.
+    const repeated = store.getState().clearDeliveredDiffComments(OWNER, delivered)
+    expect(idReads() - before).toBe(0)
+    release.resolve()
+    expect(await Promise.all([first, repeated])).toEqual([true, true])
+    expect(shown(store)).toHaveLength(count - 1)
   }
 )
