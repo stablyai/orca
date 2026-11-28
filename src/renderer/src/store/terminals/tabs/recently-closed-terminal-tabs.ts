@@ -1,25 +1,60 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { buildSavedAgentResumeTabOptions } from '@/lib/agent-session/resume/saved-agent-resume-tab-options'
+import { agentResumeOriginNamesAnotherExecutionHost } from '@/lib/agent-session/resume/sleeping-record-execution-host-scope'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot
 } from '../../../../../shared/file-access/cross-platform-path'
 import {
+  getRecentlyClosedTabPosition,
   restoreRecentlyClosedTabPosition,
   type RecentlyClosedTabPosition
 } from '../../slices/tabs/recently-closed-tab-position'
 
-/** Reopen user-closed terminals as fresh shells at original cwd, never old PTYs, scrollback or agent sessions (Ghostty semantics). */
+/** Reopen in a fresh PTY, resuming the provider session when one was captured. */
 export type ClosedTerminalTabSnapshot = {
   startupCwd?: string
   shellOverride?: string
   customTitle?: string
   color?: string
   position?: RecentlyClosedTabPosition
+  agentSession?: Pick<
+    SleepingAgentSessionRecord,
+    'agent' | 'providerSession' | 'launchConfig' | 'connectionId'
+  >
 }
 
 const MAX_RECENT_CLOSED_TERMINAL_TABS = 10
+
+export function captureClosedTerminalTabSnapshot(
+  state: AppState,
+  worktreeId: string,
+  tab: TerminalTab,
+  session: SleepingAgentSessionRecord | undefined
+): ClosedTerminalTabSnapshot {
+  return {
+    startupCwd: tab.startupCwd,
+    shellOverride: tab.shellOverride,
+    customTitle: tab.customTitle ?? undefined,
+    color: tab.color ?? undefined,
+    position: getRecentlyClosedTabPosition(state, worktreeId, tab.id),
+    ...(session
+      ? {
+          agentSession: {
+            agent: session.agent,
+            providerSession: session.providerSession,
+            launchConfig: session.launchConfig,
+            connectionId: session.connectionId
+          }
+        }
+      : {})
+  }
+}
 
 // Partial single-slice test stores can omit these maps.
 export function pushClosedTerminalTabSnapshot(
@@ -98,7 +133,22 @@ export const createRecentlyClosedTerminalTabsSlice: StateCreator<
       return false
     }
 
-    const tab = get().createTab(worktreeId, snapshot.position?.groupId, snapshot.shellOverride, {
+    const state = get()
+    const agentSession = snapshot.agentSession
+    const resume =
+      agentSession &&
+      !agentResumeOriginNamesAnotherExecutionHost(
+        agentSession.connectionId,
+        getExecutionHostIdForWorktree(state, worktreeId)
+      )
+        ? buildSavedAgentResumeTabOptions(state, worktreeId, agentSession, {
+            launchSource: 'shortcut',
+            startupCwd: snapshot.startupCwd,
+            shellOverride: snapshot.shellOverride
+          })
+        : null
+    const tab = state.createTab(worktreeId, snapshot.position?.groupId, snapshot.shellOverride, {
+      ...resume,
       ...(snapshot.startupCwd ? { startupCwd: snapshot.startupCwd } : {}),
       activate: true
     })
