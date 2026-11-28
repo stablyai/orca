@@ -16,12 +16,8 @@ export async function stopClosedChat(
   const running = session?.child
   await stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, { cause })
   const ended = session?.lastEndedChild
-  if (
-    running &&
-    ended?.cause === 'user-close' &&
-    ended.rootGone &&
-    sameProviderChild(ended, running)
-  ) {
+  // The close's own cause decides: one that only joined another stop (a workspace sleep's) is not a person's.
+  if (cause === 'user-close' && running && ended?.rootGone && sameProviderChild(ended, running)) {
     context.deps.onUserClosedProvider?.({ sessionId, fence: ended.fence })
   }
 }

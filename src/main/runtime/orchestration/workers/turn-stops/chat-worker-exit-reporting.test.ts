@@ -365,15 +365,17 @@ it('fails the Dispatch and tells the coordinator once when a person closes a run
 
 it.each([
   [
-    'worker-stop',
-    async (worker: Awaited<ReturnType<typeof startWorker>>) => {
-      worker.database.beginWorkerStop(worker.dispatch.id, RUNTIME)
-      await worker.current.host.close(SESSION, 'evict')
-    }
-  ],
-  [
     'an Orca eviction',
     (worker: Awaited<ReturnType<typeof startWorker>>) => worker.current.host.close(SESSION, 'evict')
+  ],
+  [
+    'an Orca eviction that joins a workspace sleep stop',
+    async (worker: Awaited<ReturnType<typeof startWorker>>) => {
+      // Sleep stops the provider as a user close without this host close's report.
+      const slept = worker.lifetime.stopAgent(SESSION, { cause: 'user-close' })
+      await worker.current.host.close(SESSION, 'evict')
+      await slept
+    }
   ],
   [
     'quitting Orca',
@@ -393,4 +395,12 @@ it('sends nothing when a person closes a chat worker that already reported worke
   await worker.current.host.close(SESSION, 'user-close')
   expect(await worker.readReports()).toEqual([])
   expect(worker.database.getDispatchContextById(worker.dispatch.id)?.status).toBe('completed')
+})
+
+it('leaves an in-flight worker-stop to settle its own stop when a person closes the chat', async () => {
+  const worker = await startWorker()
+  worker.database.beginWorkerStop(worker.dispatch.id, RUNTIME)
+  await worker.current.host.close(SESSION, 'user-close')
+  expect(await worker.readReports()).toEqual([])
+  expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('stopping')
 })
