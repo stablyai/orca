@@ -29,6 +29,7 @@ import { normalizeOsc52ClipboardDefaultOn } from '../../../../../shared/terminal
 import { normalizeTerminalCursorStyleDefault } from '../../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../../shared/i18n/ui-language'
+import { normalizeTimeFormatPreference } from '../../../../../shared/i18n/time-format-preference'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../../shared/i18n/portuguese-ui-language-migration'
 
 /** A browser-saved settings blob with each load-time migration applied. */
@@ -46,6 +47,9 @@ export function migrateStoredWebSettings(
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
     ...splitLegacyTerminalColorOverrides(stored),
     ...migratePortugueseUiLanguageOnLoad(stored),
+    ...(Object.hasOwn(stored, 'timeFormat')
+      ? { timeFormat: normalizeTimeFormatPreference(stored.timeFormat) }
+      : {}),
     ...(hasLegacyMatchTerminalSidebar(stored) ? syncLegacyMatchTerminalSidebar(stored, true) : {})
   }
 }
@@ -165,7 +169,10 @@ export function mergeSettings(
         ? updates.nativeChatAppearance
         : base.nativeChatAppearance
     ),
-    uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
+    uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage),
+    timeFormat: normalizeTimeFormatPreference(
+      Object.hasOwn(updates, 'timeFormat') ? updates.timeFormat : base.timeFormat
+    )
   }
   return {
     ...merged,

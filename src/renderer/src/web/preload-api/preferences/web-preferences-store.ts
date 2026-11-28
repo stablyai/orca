@@ -70,6 +70,7 @@ export function getStoredSettings(): GlobalSettings {
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
       stored.terminalColorOverridesSplit !== migratedStored.terminalColorOverridesSplit ||
       stored.uiLanguage !== migratedStored.uiLanguage ||
+      stored.timeFormat !== migratedStored.timeFormat ||
       stored.pluginAppThemeLight !== migratedStored.pluginAppThemeLight ||
       stored.pluginAppThemeDark !== migratedStored.pluginAppThemeDark ||
       stored.experimentalAppRail !== migratedStored.experimentalAppRail ||

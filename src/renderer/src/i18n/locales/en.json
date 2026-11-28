@@ -995,6 +995,19 @@
       "uiZoom": {
         "zoomOut": "Zoom out",
         "zoomIn": "Zoom in"
+      },
+      "timeFormat": {
+        "title": "Time format",
+        "system": "System",
+        "24h": "24-hour",
+        "12h": "12-hour",
+        "description": "Show times on a 24-hour or 12-hour clock.",
+        "keyword": {
+          "time": "time",
+          "clock": "clock",
+          "timestamp": "timestamp",
+          "amPm": "AM/PM"
+        }
       }
     },
     "browser": {
@@ -15223,6 +15236,7 @@
             "windows": "window percentage",
             "reset": "time until reset, e.g. 3h 15m",
             "resetAt": "reset clock time, e.g. 20:50",
+            "resetAtClock": "reset clock time, e.g. {{time}}",
             "optional": "dropped when a placeholder inside is empty",
             "namedUsagePools": "named usage pools, e.g. Cursor plan pools"
           }

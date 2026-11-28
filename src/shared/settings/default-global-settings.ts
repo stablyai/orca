@@ -15,6 +15,7 @@ import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/n
 import { DEFAULT_BROWSER_MEMORY_SAVER_HOURS } from '../browser/guest-lifecycle/browser-memory-saver'
 import { DEFAULT_DISABLED_TUI_AGENTS } from '../agent-launch/catalog/tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from '../i18n/ui-language'
+import { DEFAULT_TIME_FORMAT_PREFERENCE } from '../i18n/time-format-preference'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
@@ -63,6 +64,7 @@ export function buildDefaultSettings(args: {
     leftSidebarTintOpacity: DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
     uiLanguage: UI_LANGUAGE_SYSTEM,
     uiLanguagePortugueseMigrationApplied: true,
+    timeFormat: DEFAULT_TIME_FORMAT_PREFERENCE,
     appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: args.appFontFamily,
     editorAutoSave: false,

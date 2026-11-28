@@ -12,6 +12,7 @@ import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-form
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
+import { getTimeFormatEntries } from './appearance-time-format-search'
 
 export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
@@ -295,6 +296,7 @@ export function getAppearancePaneSearchEntries(
     ...getThemeEntries(),
     ...getCodeEditorThemeEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
+    ...getTimeFormatEntries(),
     ...getTypographyEntries(),
     ...getZoomEntries(),
     ...getTerminalAppearanceSearchEntries(options),

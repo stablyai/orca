@@ -4,12 +4,23 @@ import {
   i18n,
   setRendererPluginLanguagePacks,
   loadRendererUiLanguage,
-  RendererLanguageLoadError
+  RendererLanguageLoadError,
+  setRendererTimeFormat
 } from './i18n'
 import { usePluginLanguagePacks } from '../store/plugins/localization/plugin-language-packs'
 import { isPluginUiLanguage } from '../../../shared/i18n/ui-language'
+import { normalizeTimeFormatPreference } from '../../../shared/i18n/time-format-preference'
 import { initializeLanguageDetection, useLanguageReadiness } from './language-readiness'
 import { TranslationScopeProvider } from './translation-scope-provider'
+
+// Sync on store publication so the first render after hydration already uses the saved clock.
+setRendererTimeFormat(normalizeTimeFormatPreference(useAppStore.getState().settings?.timeFormat))
+const unsubscribeTimeFormat = useAppStore.subscribe((state, prevState) => {
+  if (state.settings?.timeFormat !== prevState.settings?.timeFormat) {
+    setRendererTimeFormat(normalizeTimeFormatPreference(state.settings?.timeFormat))
+  }
+})
+import.meta.hot?.dispose(() => unsubscribeTimeFormat())
 
 export function I18nProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const uiLanguage = useAppStore((state) => state.settings?.uiLanguage ?? null)

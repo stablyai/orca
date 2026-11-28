@@ -23,6 +23,14 @@ import type { PluginLanguagePackRegistration } from '../../../shared/plugins/art
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { supportedIntlLocale } from './intl-locale-support'
 import { createOrcaI18n } from '../../../shared/i18n/orca-i18n-instance'
+import {
+  applyTimeFormatHourCycle,
+  DEFAULT_TIME_FORMAT_PREFERENCE,
+  normalizeTimeFormatPreference,
+  timeFormatHourCycle,
+  type TimeFormatHourCycle,
+  type TimeFormatPreference
+} from '../../../shared/i18n/time-format-preference'
 
 // Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
 const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> = {
@@ -181,8 +189,40 @@ export async function setRendererUiLanguage(language: UiLanguage): Promise<void>
   }
 }
 
+let rendererTimeFormat: TimeFormatPreference = DEFAULT_TIME_FORMAT_PREFERENCE
+let hourCycleCache = { locale: '', timeFormat: rendererTimeFormat, result: '' }
+
+export function setRendererTimeFormat(timeFormat: TimeFormatPreference): void {
+  const next = normalizeTimeFormatPreference(timeFormat)
+  if (next === rendererTimeFormat) {
+    return
+  }
+  rendererTimeFormat = next
+  notifyTranslationScope()
+}
+
+export function getRendererHourCycle(): TimeFormatHourCycle | undefined {
+  return timeFormatHourCycle(rendererTimeFormat)
+}
+
+function withRendererHourCycle(locale: string): string {
+  if (hourCycleCache.locale !== locale || hourCycleCache.timeFormat !== rendererTimeFormat) {
+    hourCycleCache = {
+      locale,
+      timeFormat: rendererTimeFormat,
+      result: applyTimeFormatHourCycle(locale, rendererTimeFormat)
+    }
+  }
+  return hourCycleCache.result
+}
+
 /** Resolve an Intl-compatible BCP-47 tag: plugin pack resources use the pack’s declared tag, then the default locale. */
 export function getIntlLocale(): string {
+  return withRendererHourCycle(getUiIntlLocale())
+}
+
+/** getIntlLocale() without the Time format `hc` extension: the UI language contract plugins see. */
+export function getUiIntlLocale(): string {
   const active = i18n.language
   const pack = orcaI18n.getPluginLanguagePacks().find((entry) => entry.resourceLanguage === active)
   return supportedIntlLocale(pack?.locale ?? active, Intl.DateTimeFormat)
@@ -191,7 +231,9 @@ export function getIntlLocale(): string {
 /** getIntlLocale() for values inside `key`'s copy; English when that copy falls back to English. */
 export function getIntlLocaleForCopy(key: string): string {
   const copy = i18n.getResource(i18n.language, 'translation', key)
-  return typeof copy === 'string' && copy !== '' ? getIntlLocale() : DEFAULT_UI_LOCALE
+  return typeof copy === 'string' && copy !== ''
+    ? getIntlLocale()
+    : withRendererHourCycle(DEFAULT_UI_LOCALE)
 }
 
 export function setRendererPluginLanguagePacks(

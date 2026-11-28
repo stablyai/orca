@@ -16,7 +16,7 @@ import {
   pluginHostApiMinorFor
 } from '../../../../../shared/plugins/workers/plugin-host-api'
 import { PLUGIN_HOST_API_MAJOR } from '../../../../../shared/plugins/workers/plugin-host-api-major'
-import { getIntlLocale } from '@/i18n/i18n'
+import { getUiIntlLocale } from '@/i18n/i18n'
 import { currentPluginFrameTheme } from './plugin-panel-design-token-css'
 
 /** Which channel a message came over; only a guest's activation stamp is trustworthy. */
@@ -74,7 +74,7 @@ export function pluginFrameHello(
     api: { major: PLUGIN_HOST_API_MAJOR, minor: pluginHostApiMinorFor(methods) },
     methods,
     theme: currentPluginFrameTheme(),
-    locale: getIntlLocale()
+    locale: getUiIntlLocale()
   }
 }
 

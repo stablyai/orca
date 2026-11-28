@@ -25,6 +25,7 @@ import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/eff
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
+import { normalizeTimeFormatPreference } from '../../../shared/i18n/time-format-preference'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/remote-runtime/host-metadata/machine-name'
@@ -207,6 +208,9 @@ export function updateSettings(
   }
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
+  }
+  if ('timeFormat' in updates) {
+    sanitizedUpdates.timeFormat = normalizeTimeFormatPreference(updates.timeFormat)
   }
   if ('prBotAuthorOverrides' in updates) {
     sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(

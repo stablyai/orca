@@ -37,16 +37,21 @@ const EN_DAY_NAMES = [
 ] as const
 
 /** Clock-time portion of a schedule label; numeric shape follows the OS region by convention. */
-export function formatAutomationScheduleTime(hour: number, minute: number): string {
-  return formatTime(hour, minute)
+export function formatAutomationScheduleTime(
+  hour: number,
+  minute: number,
+  hourCycle?: 'h12' | 'h23'
+): string {
+  return formatTime(hour, minute, hourCycle)
 }
 
-function formatTime(hour: number, minute: number): string {
+function formatTime(hour: number, minute: number, hourCycle?: 'h12' | 'h23'): string {
   const date = new Date()
   date.setHours(hour, minute, 0, 0)
   return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
-    minute: '2-digit'
+    minute: '2-digit',
+    ...(hourCycle ? { hourCycle } : {})
   }).format(date)
 }
 
