@@ -27,10 +27,7 @@ afterEach(() => {
 })
 
 /** An agent's connection to the front; resolves with everything it read once it closed. */
-function agent(
-  port: number,
-  allowHalfOpen = false
-): { socket: Socket; answer: Promise<string> } {
+function agent(port: number, allowHalfOpen = false): { socket: Socket; answer: Promise<string> } {
   const socket = connect({ port, host: '127.0.0.1', allowHalfOpen })
   opened.push(socket)
   let read = ''

@@ -104,7 +104,10 @@ export class ToolRelayFronts {
       if (!Number.isSafeInteger(port) || typeof daemonInstance !== 'string') {
         return null
       }
-      this.noteServed(client, port)
+      const watched = this.watched.get(client)
+      if (watched) {
+        watched.port = port
+      }
       // Served before handing the address out, so its first call has an app to answer it.
       await this.serveOnce(client)
       return { origin: `http://127.0.0.1:${port}`, daemonInstance }
@@ -239,7 +242,7 @@ export class ToolRelayFronts {
         if (this.closed || this.watched.get(client) !== watched) {
           return
         }
-        this.noteServed(client, Number.isSafeInteger(port) ? port : null)
+        watched.port = Number.isSafeInteger(port) ? port : null
         // Before any held connection is answered, so a kept agent's token is already known.
         const live = (Array.isArray(kept) ? kept : []).filter((relay) => !ended.has(relay.relayId))
         this.adopt(client, live)
@@ -284,13 +287,6 @@ export class ToolRelayFronts {
       }
     )
     await served
-  }
-
-  private noteServed(client: DaemonClient, port: number | null): void {
-    const watched = this.watched.get(client)
-    if (watched) {
-      watched.port = port
-    }
   }
 
   private async answer(client: DaemonClient, frontConnectionId: string): Promise<void> {
