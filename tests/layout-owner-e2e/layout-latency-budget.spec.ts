@@ -5,10 +5,10 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/terminal'
 import { waitForSessionReady } from './helpers/store'
-import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 import { percentile, timeLayoutAction } from './helpers/layout-action-latency'
 
-// Lane budget: on the layout-owner build, new tab, split and tab switch keep their p95 within the
+// Lane budget: with the main-owned layout path on, new tab, split and tab switch keep their p95 within the
 // switch-off p95 plus one frame. A switch-off run prints the p95s the baseline file records, per
 // platform and timing (drawn, or committed where the hidden window draws no frames).
 
@@ -87,13 +87,16 @@ test('new tab, split and tab switch stay within the switch-off p95 plus a frame'
     const p95 = Object.fromEntries(
       BUDGETED.map((action) => [action, +percentile(samples[action], 95).toFixed(1)])
     ) as Record<Budgeted, number>
-    const build = LAYOUT_OWNER_BUILD ? 'on' : 'off'
-    const report = { build, platform: process.platform, timing, p95 }
+    const layoutOwner = LAYOUT_OWNER_SWITCH_ON ? 'on' : 'off'
+    const report = { layoutOwner, platform: process.platform, timing, p95 }
     testInfo.annotations.push({ type: 'layout-latency-p95', description: JSON.stringify(report) })
     console.log(`layout-latency-p95 ${JSON.stringify(report)}`)
 
     const baseline = baselines[process.platform]
-    test.skip(!LAYOUT_OWNER_BUILD || !baseline, 'the budget applies to the layout-owner build')
+    test.skip(
+      !LAYOUT_OWNER_SWITCH_ON || !baseline,
+      'the budget applies to the main-owned layout path'
+    )
     expect(timing, 'timed the way the baseline was').toBe(baseline.timing)
     for (const action of BUDGETED) {
       expect

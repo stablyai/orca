@@ -1,6 +1,6 @@
 // On-vs-off latency census for the layout owner: input-to-drawn time per layout action, main's
-// event-loop delay, and relaunch time, written as JSON. Manual: run it on an on and an off build in
-// turn (ORCA_LAYOUT_LATENCY_CENSUS=1); the lane runs layout-latency-budget.spec.ts instead.
+// event-loop delay, and relaunch time, written as JSON. Manual: run it with ORCA_LAYOUT_OWNER=main and without,
+// in turn (ORCA_LAYOUT_LATENCY_CENSUS=1); the lane runs layout-latency-budget.spec.ts instead.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { loadavg } from 'node:os'
 import type * as PerfHooksModule from 'node:perf_hooks'
@@ -10,7 +10,7 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/terminal'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 import { timeLayoutAction as timed } from './helpers/layout-action-latency'
 
 type PerfHooks = typeof PerfHooksModule
@@ -33,7 +33,7 @@ test('layout latency per action', async (// oxlint-disable-next-line no-empty-pa
   test.setTimeout(3_600_000)
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
   const session = createRestartSession(testInfo, { NODE_ENV })
-  const build = LAYOUT_OWNER_BUILD ? 'on' : 'off'
+  const layoutOwner = LAYOUT_OWNER_SWITCH_ON ? 'on' : 'off'
   const samples: Record<string, number[]> = {}
   let launchMs = 0
   let worktreeCount = 0
@@ -263,13 +263,13 @@ test('layout latency per action', async (// oxlint-disable-next-line no-empty-pa
     mkdirSync(OUT, { recursive: true })
     const file = path.join(
       OUT,
-      `${env.ORCA_LAYOUT_LATENCY_TAG ?? 'run'}-${build}-${Date.now()}.json`
+      `${env.ORCA_LAYOUT_LATENCY_TAG ?? 'run'}-${layoutOwner}-${Date.now()}.json`
     )
     writeFileSync(
       file,
       JSON.stringify(
         {
-          build,
+          layoutOwner,
           workspaces: worktreeCount,
           seededTabWorkspaces: SEEDED_TAB_WORKSPACES,
           nodeEnv: NODE_ENV,
