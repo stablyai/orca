@@ -30,11 +30,10 @@ export function loadEditorCore(): Promise<TextMateCore> {
 }
 
 class TextMateTokenizerState implements Monaco.languages.IState {
-  /** `ruleStack` is null once a line was skipped; the lines after it stay plain. */
-  constructor(readonly ruleStack: StateStack | null) {}
+  constructor(readonly ruleStack: StateStack) {}
 
   clone(): TextMateTokenizerState {
-    return new TextMateTokenizerState(this.ruleStack?.clone() ?? null)
+    return new TextMateTokenizerState(this.ruleStack.clone())
   }
 
   equals(other: Monaco.languages.IState): boolean {
@@ -42,9 +41,7 @@ class TextMateTokenizerState implements Monaco.languages.IState {
       return false
     }
     // Why: structural equality is what lets Monaco stop re-tokenizing once an edit's states converge.
-    return this.ruleStack && other.ruleStack
-      ? this.ruleStack.equals(other.ruleStack)
-      : this.ruleStack === other.ruleStack
+    return this.ruleStack.equals(other.ruleStack)
   }
 }
 
@@ -60,25 +57,22 @@ export function createTokensProvider(
     endState: state,
     tokens: [{ startIndex: 0, scopes: fallbackScopeName }]
   })
-  const skipped = new TextMateTokenizerState(null)
   let warm = false
   return {
     getInitialState() {
       return new TextMateTokenizerState(textmate.INITIAL)
     },
     tokenize(line, state) {
-      const ruleStack = state instanceof TextMateTokenizerState ? state.ruleStack : textmate.INITIAL
-      if (!ruleStack) {
-        return plain(skipped)
-      }
+      const incoming =
+        state instanceof TextMateTokenizerState ? state.ruleStack : textmate.INITIAL
       const result = tokenizeLineWithinLimits(
         line,
-        (text, timeLimitMs) => grammar.tokenizeLine(text, ruleStack, timeLimitMs),
+        (text, timeLimitMs) => grammar.tokenizeLine(text, incoming, timeLimitMs),
         lineAttempts ?? (warm ? undefined : COLD_GRAMMAR_LINE_ATTEMPTS)
       )
       if (!result) {
-        // Why: the line's end state is unknown, so continuing would color later lines from a guess.
-        return plain(skipped)
+        // Why: carry the incoming state forward so one skipped line does not turn the rest of the file plain.
+        return plain(new TextMateTokenizerState(incoming))
       }
       warm = true
       onLineTokens?.(line, result.tokens)
