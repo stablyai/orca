@@ -39,6 +39,8 @@ export const PeerMailDeliverParams = lazyZodSchema(() =>
     replyTo: OptionalString,
     /** With a `bot:` address: one of that bot's chats, or `new`; resolved by the receiving Orca. */
     chat: OptionalString,
+    /** A human group mention; its conversation and final answer belong only to that room. */
+    group: z.object({ id: LINE.min(1), threadId: LINE.min(1).optional() }).optional(),
     /** With a `bot:` address: an item number of that bot's. */
     item: OptionalString,
     /** With `item`: files the sender uploaded to this Orca's attachment store for the item's chat. */

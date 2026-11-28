@@ -1,4 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
+import { isRemoteBotGroupSession } from '../../../shared/bots/bot-remote-group-session'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -73,7 +74,7 @@ export function projectStructuredAiVaultSessions(
         // A chat forgotten since the scan: its ACP session no longer opens anywhere.
         return local && isCursorAcpSessionRow(session) ? [] : [{ row: session, ownership }]
       }
-      if (!opensChat(ownership.provider)) {
+      if (isRemoteBotGroupSession(ownership.sessionId) || !opensChat(ownership.provider)) {
         return []
       }
       const row = {
@@ -118,7 +119,7 @@ export function projectStructuredAiVaultSearchResponse(
         if (!ownership) {
           return [{ row: hit, ownership }]
         }
-        if (!opensChat(ownership.provider)) {
+        if (isRemoteBotGroupSession(ownership.sessionId) || !opensChat(ownership.provider)) {
           return []
         }
         const { resumeCommand: _resumeCommand, ...owned } = hit

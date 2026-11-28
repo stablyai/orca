@@ -3,8 +3,12 @@
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { randomUUID } from 'node:crypto'
-import type { z } from 'zod'
 import { runtimeBotChats } from '../../../../../bots/bot-chat-session'
+import {
+  inRemoteGroupSession,
+  remoteBotGroupSessionId
+} from '../../../../../bots/bot-remote-group-session'
+import { isRemoteBotGroupSession } from '../../../../../../shared/bots/bot-remote-group-session'
 import {
   failureHeldChat,
   heldChatSentNext,
@@ -21,36 +25,27 @@ import {
   botRequestRefusal,
   isBotRequestPurpose
 } from '../../../../../bots/bot-request-policy'
-import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { generateId } from '../../../../orchestration/db/generated-id'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { RpcContext } from '../../../core'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { SendParams } from './send-params'
+import type { SendBotRequestArgs, SendParamsInput } from './bot-request-admission-input'
 import {
   botAddressReach,
   readActingSender,
   receivingBot,
   refuse,
   toOtherChat,
-  type ActingMail,
-  type ActingSender,
-  type ReceivingBot
+  type ActingMail
 } from './bot-recipient'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
 import { answersRequest, askedInConversation, botRequestSender } from './bot-request-record'
-import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
-
-type SendParamsInput = Pick<
-  z.infer<typeof SendParams>,
-  'subject' | 'body' | 'type' | 'priority' | 'threadId'
->
 
 /** Whether an address could reach a bot; decided without waiting, so other mail is stored as before. */
 export function mayReachBot(
@@ -75,7 +70,10 @@ export async function sendToBot(
     messageId?: string
     /** The recipient isn't woken until the caller runs `nudge`: an item it names is made first. */
     holdNudge?: boolean
-  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted'>
+  } & Pick<
+      SendBotRequestArgs,
+      'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted' | 'remoteGroup'
+    >
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -86,6 +84,12 @@ export async function sendToBot(
     return null
   }
   const receiving = mail.newChat ? { ...found, newChat: true } : found
+  if (isRemoteBotGroupSession(receiving.chat ?? '')) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'Remote group conversations accept mentions from their originating room.'
+    )
+  }
   const callerSessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId
   if (mail.to.includes('bot-group-member-') && !isBotGroupMemberSession(callerSessionId)) {
     throw new Error(
@@ -109,30 +113,6 @@ export async function sendToBot(
     ...(mail.holdNudge ? { held } : {})
   })
   return { receipt, nudge: () => held.splice(0).forEach((nudge) => nudge()) }
-}
-
-type SendBotRequestArgs = {
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  params: SendParamsInput
-  from: string
-  to: string
-  receiving: ReceivingBot
-  acting: ActingSender
-  senderRunId: string | undefined
-  senderPaneKey: string | undefined
-  recordMutationReceipt: ((receipt: unknown) => void) | undefined
-  messageId?: string
-  /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
-  senderSnapshot?: string
-  /** Its sender is an agent on a computer paired with this one, either side of the pairing. */
-  pairedSender?: PairedSender
-  /** Store images claimed for the receiving chat (`send --item --file`). */
-  images?: readonly string[]
-  /** Nudges the sender runs later instead of now. */
-  held?: (() => void)[]
-  /** Commits with the request's admission, before anyone is woken for it. */
-  onAdmitted?: () => void
 }
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
@@ -173,6 +153,9 @@ async function admitBotRequestMail(
     return { bot, purpose: params.type }
   }
   const { bot: target, purpose } = check()
+  const remoteSessionId = args.remoteGroup
+    ? remoteBotGroupSessionId(args.remoteGroup.peerFingerprint, args.remoteGroup, target.id)
+    : undefined
   const groupScope = isBotGroupMemberSession(acting.sessionId)
     ? await runtimeBotGroups(runtime).peerScope(acting.sessionId, target.id, acting.turn.rootItemId)
     : null
@@ -183,6 +166,7 @@ async function admitBotRequestMail(
     )
   }
   const record: BotRequestRecord = {
+    ...(remoteSessionId ? { remoteGroup: { sessionId: remoteSessionId } } : {}),
     ...(groupScope
       ? {
           group: {
@@ -314,6 +298,14 @@ async function admitBotRequestMail(
   }
   if (groupScope) {
     return admit(sessionAddress(groupScope.target.sessionId)).receipt
+  }
+  if (remoteSessionId) {
+    return inRemoteGroupSession(
+      runtime,
+      target,
+      remoteSessionId,
+      (sessionId) => admit(sessionAddress(sessionId)).receipt
+    )
   }
   // Whoever the sending turn acts for, the request lands where it was addressed; its record says who asked.
   if (receiving.newChat) {

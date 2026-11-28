@@ -24,6 +24,16 @@ export async function deliverPeerMailToBot(
   pulled?: { environmentId: string; serverName: string; alsoOnAdmitted: () => void }
 ): Promise<'delivered' | { to: string; body?: string }> {
   const db = runtime.getOrchestrationDb()
+  if (
+    params.group &&
+    (params.type !== 'question' || !params.to.startsWith('bot:') || params.item !== undefined)
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'A group mention must address a bot with a question.',
+      { effectsApplied: false }
+    )
+  }
   // The label is no party here, so the request reads as the owner's own.
   const sender = {
     address: params.senderLabel,
@@ -76,7 +86,7 @@ export async function deliverPeerMailToBot(
           type: params.type,
           priority: params.priority,
           threadId: params.threadId,
-          chat: params.chat,
+          chat: params.group ? undefined : params.chat,
           item: params.item
         },
         attachments: params.attachments,
@@ -85,6 +95,11 @@ export async function deliverPeerMailToBot(
         sender,
         routing: { run: undefined },
         messageId: params.messageId,
+        ...(params.group
+          ? {
+              remoteGroup: { peerFingerprint, ...params.group }
+            }
+          : {}),
         senderSnapshot,
         carriedAskers: readPeerMailAskers(params.askers ?? []),
         // Who it is from, either side of the pairing: a server this computer pulls from by this
