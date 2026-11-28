@@ -335,14 +335,14 @@ async function createUploadFolder(rootDir: string, uploadDir: string): Promise<v
 }
 
 /** Undoes an upload this store made: its part file, then its folder only if nothing else is in it. */
-async function removeOwnedUpload(upload: { uploadDir: string; owned: boolean }): Promise<void> {
-  if (!upload.owned) {
-    return
+async function removeOwnedUpload({ uploadDir, owned }: { uploadDir: string; owned: boolean }) {
+  if (owned) {
+    await rm(join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE), { force: true }).catch(noop)
+    await rmdir(uploadDir).catch(noop)
   }
-  const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
-  await rm(partPath, { force: true }).catch(() => {})
-  await rmdir(upload.uploadDir).catch(() => {})
 }
+
+function noop(): void {}
 
 export async function removeQuietly(path: string): Promise<void> {
   // Retry cleanup failures at the next sweep.
