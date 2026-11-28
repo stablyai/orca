@@ -23,7 +23,7 @@ import type {
 const WORKER_ENTRY_FILENAME = 'bots-db-worker-entry.js'
 // One call's budget from dispatch: a cold open (migration, WAL) plus a lock wait.
 const OPERATION_TIMEOUT_MS = 10_000
-const IDLE_TEARDOWN_MS = 60_000
+const IDLE_TEARDOWN_MS = 10_000
 const MAX_QUEUED_CALLS = 500
 
 function spawnBotsDbWorker(): WorkerRequestTransport {
