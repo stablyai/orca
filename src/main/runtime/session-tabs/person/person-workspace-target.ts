@@ -74,15 +74,11 @@ export function holderOfTabList(list: string): {
     : { home: list, holder: undefined }
 }
 
-/** A list titled as its reader reads it (a teammate's own workspace as their Home, its chats named
- *  for them), still keyed by the list. */
-export function titledForItsReader<S extends { worktree: string }, R extends { worktree: string }>(
-  snapshot: S,
-  title: (asRead: S, reader: BotHomeOf) => R
-): R {
-  const { home, holder } = holderOfTabList(snapshot.worktree)
-  const reader = holder ? { accountId: tabListTeammate(holder).accountId } : 'owner'
-  return { ...title({ ...snapshot, worktree: home }, reader), worktree: snapshot.worktree }
+/** The reader a tab list is titled for, and the Home its chats are named as: a teammate's own
+ *  workspace is read by them, as their Home; every other list by the owner, as itself. */
+export function readerOfTabList(list: string): { home: string; reader: BotHomeOf } {
+  const { home, holder } = holderOfTabList(list)
+  return { home, reader: holder ? { accountId: tabListTeammate(holder).accountId } : 'owner' }
 }
 
 function tabListOfHolder(workspaceId: string, holder: string | undefined): string {

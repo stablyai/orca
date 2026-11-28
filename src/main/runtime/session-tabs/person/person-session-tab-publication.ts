@@ -32,7 +32,7 @@ import {
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { PersonSessionTabLists } from './person-session-tab-lists'
-import { tabListOfPty, windowOwns } from './person-workspace-target'
+import { readerOfTabList, tabListOfPty, windowOwns } from './person-workspace-target'
 import { HeldTerminalStamps, heldPageOf } from './teammate-workspace-surfaces'
 import { TEAMMATE_HOMES_SESSION_PARTITION } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { PersonSurface } from './person-tab-list-snapshot'
@@ -186,16 +186,18 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
 
   protected readonly heldTerminals = new HeldTerminalStamps()
 
-  /** Chat tabs titled for the list's person, and their Home pinned: the host's list (the owner's), or
+  /** Chat tabs titled for the list's reader (`readerOfTabList`), and their Home pinned: the host's list (the owner's), or
    *  a teammate's own (theirs; no saved tabs). */
   protected titledSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot,
     savedTabs: SavedTabs = () => undefined,
-    of: BotHomeOf = 'owner'
+    of: BotHomeOf = readerOfTabList(snapshot.worktree).reader,
+    /** The workspace its chats are named as: a teammate's own list's is their Home. */
+    home = readerOfTabList(snapshot.worktree).home
   ): RuntimeMobileSessionTabsResult {
-    const namer = structuredConversationTabNamer(snapshot.worktree, savedTabs)
+    const namer = structuredConversationTabNamer(home, savedTabs)
     // On a teammate's list the owner's Home goes by the owner's name, unless renamed.
-    const ownersHome = of === 'owner' ? null : botHomeSessionId(this.store, snapshot.worktree)
+    const ownersHome = of === 'owner' ? null : botHomeSessionId(this.store, home)
     const named = (sessionId: string): string | null => {
       const name = namer(sessionId)
       return sessionId === ownersHome && name === BOT_HOME_NAME

@@ -16,7 +16,7 @@ import { readCreatedWorkspaceLaunch } from '../../../agent-launch/agent-launch-c
 import type { AgentSenderRevision } from '../../../../shared/orchestration/mailbox/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { SessionTabListName } from '../../client/navigation/client-session-tab-selection'
-import { toWireTabList } from '../person/person-workspace-target'
+import { holderOfTabList, toWireTabList } from '../person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
   protected scheduleMobileSessionTabsChanged(worktreeId: string): void {
@@ -286,7 +286,9 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   }
 
   /** Every browser tab clients see: running pages and saved tabs whose page starts on first consume. */
-  protected getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo> {
+  protected getListedBrowserTabsByPageId(list: string): Map<string, BrowserTabInfo> {
+    // A teammate's own list's pages run in, and are kept with, its Home (`holder` names the list).
+    const worktreeId = holderOfTabList(list).home
     const liveTabs = this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []
     const byPageId = new Map(liveTabs.map((tab) => [tab.browserPageId, tab]))
     // Looked up by id from each list's own tabs; a page's index is the one its own list gives it.

@@ -1,4 +1,3 @@
-import { titledForItsReader } from '../../session-tabs/person/person-workspace-target'
 import {
   collectReturnedSessionTabIds,
   sanitizeMobileSessionTabGroups
@@ -38,6 +37,7 @@ import {
 } from '../../session-tabs/chat/structured-conversation-tab-title'
 import { structuredConversationTabNamer } from '../../session-tabs/chat/structured-conversation-tab-namer'
 import { hostMobileTerminalTheme } from './host-mobile-terminal-theme'
+import { tabListOfPty } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
   private readonly hostMobileTerminalTheme = hostMobileTerminalTheme(this.store, () =>
@@ -91,10 +91,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
-    return titledForItsReader(
+    return this.titledSessionTabsResult(
       inlineRuntimeBrowserTabFavicons(this, this.settleOwedMobileSessionSnapshotVersion(snapshot)),
-      (asRead, reader) =>
-        this.titledSessionTabsResult(asRead, this.savedWorkspaceTabs(snapshot.worktree), reader)
+      this.savedWorkspaceTabs(snapshot.worktree)
     )
   }
 
@@ -243,7 +242,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       if (this.mobileTerminalTabMatchesPty(worktreeId, tab, pty, paneKey)) {
         return pty
       }
-      if (options.allowWorktreeOnlyMatch === true && pty.worktreeId === worktreeId) {
+      if (options.allowWorktreeOnlyMatch === true && tabListOfPty(pty) === worktreeId) {
         const recorded = this.paneOfPty(pty)
         if (recorded.tabId === null && recorded.paneKey === null) {
           return pty
@@ -288,7 +287,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     pty: RuntimePtyWorktreeRecord,
     paneKey = this.getMobileTerminalPaneKey(tab)
   ): boolean {
-    if (pty.worktreeId !== worktreeId) {
+    if (tabListOfPty(pty) !== worktreeId) {
       return false
     }
     const recorded = this.paneOfPty(pty)

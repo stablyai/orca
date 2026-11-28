@@ -66,7 +66,9 @@ const CENSUS: Record<string, Record<string, Row>> = {
     }
   },
   'tab-mount-request': {
-    'src/main/runtime/terminal/view/renderer-terminal-snapshot.ts': { notOwner: B_WINDOW_ACT }
+    'src/main/runtime/terminal/view/renderer-terminal-snapshot.ts': { notOwner: B_WINDOW_ACT },
+    // The window relay's own table of the acts it refuses for a teammate's workspace.
+    'src/main/runtime/client/events/window-relay-guard.ts': { notOwner: B_WINDOW_ACT }
   },
   'window-side-effects': {
     'src/main/runtime/terminal/output/terminal-transient-facts.ts': { reader: 'hostListPty' }
