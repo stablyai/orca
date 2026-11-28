@@ -21,8 +21,15 @@ import {
   createStructuredAgentSessionOwnerProbes
 } from '../ownership/structured-agent-session-owner-probe'
 import { installProviderRelayDurability } from '../../../provider-relay/app-provider-relays'
-import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
-import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
+import type {
+  StructuredAgentAdapterContext,
+  StructuredAgentRuntimeAdapter
+} from './structured-agent-runtime-registration-types'
+import {
+  customAcpRuntimeRegistration,
+  STRUCTURED_AGENT_RUNTIME_REGISTRATIONS
+} from './structured-agent-runtime-registrations'
+import { listCustomAcpAgents } from '../../../acp/custom/custom-acp-agent-registry'
 import { createStructuredAgentSessionLifecycleDelivery } from '../lifecycle/structured-agent-session-lifecycle-delivery'
 import { createStructuredAgentSessionDispatchFollowUps } from '../lifecycle/structured-agent-session-dispatch-followups'
 import type { CatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
@@ -43,7 +50,7 @@ export async function installOnJournal(
     // An agent that publishes an observed exit only after its own close work drains it here.
     drainObservedExits: async () => {
       await Promise.all(
-        registrations.map(({ adapter }) => adapter.drainObservedExits?.() ?? Promise.resolve())
+        allAdapters().map((adapter) => adapter.drainObservedExits?.() ?? Promise.resolve())
       )
     }
   })
@@ -62,9 +69,34 @@ export async function installOnJournal(
   const registrations = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
     ({ definition, createAdapter }) => ({ definition, adapter: createAdapter(context) })
   )
-  const agents = new StructuredAgentRegistry(registrations)
+  // Custom ACP agents come from settings, which can change while the host runs.
+  const lateAdapters: StructuredAgentRuntimeAdapter[] = []
+  // Set before shutdown snapshots the adapters, so none is created that it would not close.
+  let closing = false
+  const allAdapters = (): StructuredAgentRuntimeAdapter[] => [
+    ...registrations.map((registration) => registration.adapter),
+    ...lateAdapters
+  ]
+  const agents = new StructuredAgentRegistry(registrations, {
+    definition: (agent) => customAcpRuntimeRegistration(agent)?.definition ?? null,
+    createAdapter: (agent) => {
+      const registration = closing ? null : customAcpRuntimeRegistration(agent)
+      if (!registration) {
+        throw new Error(
+          closing
+            ? `structured agent ${agent} cannot start while the host closes`
+            : `structured agent ${agent} is not defined on this host`
+        )
+      }
+      const created = registration.createAdapter(context)
+      lateAdapters.push(created)
+      return created
+    },
+    agents: () => listCustomAcpAgents().map(({ id }) => id)
+  })
   const adapter = new StructuredAgentSessionAdapterRouter(agents, async () => {
-    await Promise.all(registrations.map((registration) => registration.adapter.closeAll()))
+    closing = true
+    await Promise.all(allAdapters().map((adapter) => adapter.closeAll()))
   })
   const providerNaming = createStructuredAgentSessionProviderNaming({
     adapter,

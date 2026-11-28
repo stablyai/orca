@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ChatAgentId } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import type { ExecutionHostPlatformFact } from '../../../../runtime/hosts/platform/execution-host-platform-fact'
 
 type Recovery = Extract<ExecutionHostPlatformFact, { kind: 'withheld' }>['recovery']
@@ -43,7 +43,7 @@ export function agentLaunchCheckSettingsMessage(): string {
   )
 }
 
-export function notifyAgentLaunchFailure(agent: TuiAgent, description?: string): void {
+export function notifyAgentLaunchFailure(agent: ChatAgentId, description?: string): void {
   toast.error(
     translate(
       'components.agentSessionContinuation.launchFailed',

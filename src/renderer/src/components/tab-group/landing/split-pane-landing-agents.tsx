@@ -35,6 +35,7 @@ import {
   resolveTerminalAgentTabShortcut
 } from '../../terminal/keyboard-shortcuts/terminal-agent-tab-shortcut'
 import { launchAgentTabShortcut } from '../../terminal/keyboard-shortcuts/agent-tab-shortcut-launch'
+import { customAcpDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/custom-acp-default-agent'
 import {
   LandingItemShortcut,
   landingQueryMatches,
@@ -64,9 +65,12 @@ export function LandingDefaultAgentItem({
     readNewAgentTabDefault(state, worktreeId)
   )
   const shortcut = useOptionalShortcutLabel('tab.newAgent')
+  const customDefaultName = useAppStore(
+    (state) => customAcpDefaultAgentForWorktree(state, worktreeId)?.name ?? null
+  )
   const agentLabel = defaultAgent
     ? (getAgentCatalog().find((entry) => entry.id === defaultAgent)?.label ?? defaultAgent)
-    : null
+    : customDefaultName
   const label = agentLabel
     ? t('components.tabGroup.splitPaneLanding.newNamedAgent', 'New {{agent}} agent', {
         agent: agentLabel

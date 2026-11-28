@@ -14,12 +14,16 @@ import {
 } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { chosenAgentChatUnlearned } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { customAcpDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/custom-acp-default-agent'
+import type { CustomAcpAgent } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 
 export type TerminalAgentTabShortcut = {
   actionId: KeybindingActionId | null
   agent: TuiAgent | null
   /** Set when the cached list has no usable agent; settles once the workspace's host answers. */
   pendingAgent?: Promise<TuiAgent | null>
+  /** New Agent opens this custom ACP agent's chat instead: it is this machine's default. */
+  customAgent?: CustomAcpAgent
 }
 
 export function readAgentTabShortcutActions(
@@ -42,6 +46,10 @@ export function readAgentTabShortcutActions(
 
 /** The agent New Agent opens right now, or null while the workspace's host hasn't answered. */
 export function readNewAgentTabDefault(state: AppState, worktreeId: string): TuiAgent | null {
+  // A custom default leaves no built-in agent to open, so the built-in rows carry no shortcut.
+  if (customAcpDefaultAgentForWorktree(state, worktreeId)) {
+    return null
+  }
   const preferences = readAgentLaunchPreferencesForWorktree(state, worktreeId)
   const detectedAgentIds = readDetectedAgentsForWorktree(state, worktreeId)
   const agent = resolveDefaultAgentForNewTab({
@@ -86,6 +94,13 @@ export function resolveTerminalAgentTabShortcut({
     return { actionId: null, agent: null }
   }
   const { actionId, agent } = action
+  const customAgent =
+    actionId === 'tab.newAgent'
+      ? customAcpDefaultAgentForWorktree(useAppStore.getState(), activeWorktreeId)
+      : null
+  if (customAgent) {
+    return { actionId, agent: null, customAgent }
+  }
   return actionId === 'tab.newAgent' && !agent
     ? {
         actionId,

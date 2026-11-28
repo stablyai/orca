@@ -38,10 +38,17 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   kiro: 'Kiro'
 }
 
+let configuredAgentLabel: (agentType: string) => string | null = () => null
+
+/** Names agents a process learns at runtime (custom ACP agents from settings); one per process. */
+export function setConfiguredAgentLabelSource(source: (agentType: string) => string | null): void {
+  configuredAgentLabel = source
+}
+
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
   if (!agentType || agentType === 'unknown') {
     return 'Agent'
   }
   // Capitalize well-known names nicely; pass through custom names as-is
-  return WELL_KNOWN_LABELS[agentType] ?? agentType
+  return WELL_KNOWN_LABELS[agentType] ?? configuredAgentLabel(agentType) ?? agentType
 }

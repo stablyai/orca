@@ -1,3 +1,4 @@
+import { savedCustomAcpDefaultAgent } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
@@ -163,9 +164,10 @@ export function AgentLaunchSettingsCatalog({
       !chatOnly.has(agent.id) &&
       (detectedIds !== null || chatAgents.includes(agent.id))
   )
-  // The agent new sessions get: the saved default when usable, else Auto's pick.
+  // The agent new sessions get: the saved default when usable, else Auto's pick. A custom ACP
+  // default on this machine takes Auto's place, so no built-in row reads as the default then.
   const effectiveDefault =
-    detectedIds === null
+    detectedIds === null || (local && savedCustomAcpDefaultAgent(local.settings))
       ? null
       : pickTuiAgent(chosen, detectedIds, settings.disabledTuiAgents, (agent) =>
           Boolean(defaultOpensAsChat && agent === chosen)

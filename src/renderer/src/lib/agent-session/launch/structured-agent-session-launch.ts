@@ -1,3 +1,4 @@
+import type { ChatAgentId } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import { useAppStore } from '@/store/index'
 import { reserveStructuredLaunchSlot } from './structured-agent-session-launch-surface'
 import {
@@ -57,7 +58,6 @@ import {
 } from './structured-agent-session-launch-options'
 import { releaseStructuredLaunchSource } from './structured-agent-session-launch-source-handoff'
 import * as launchDraft from './structured-agent-session-launch-draft'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
 import { adoptPairedHostSeed } from './structured-agent-session-launch-host-seed'
@@ -171,7 +171,7 @@ function joinStructuredLaunchState(
 
 function structuredAgentLaunchState(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: ChatAgentId,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
   const identity = structuredLaunchIdentity(worktreeId, agent, options)
@@ -258,7 +258,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
 
 export function startStructuredAgentLaunch(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: ChatAgentId,
   options: StructuredAgentLaunchOptions
 ): StructuredAgentLaunchResult {
   const { state, caller, joined } = structuredAgentLaunchState(worktreeId, agent, options)

@@ -1,6 +1,7 @@
 import React from 'react'
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ProjectedAgentMenuItems } from '../../agent/launch-menu/AgentMenuItems'
+import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { OpenAgentSettingsMenuItem } from '../../agent/launch-menu/OpenAgentSettingsMenuItem'
 import { TabBarAgentPickerEntry } from '../create-entry/TabBarAgentPickerEntry'
 import type { TabBarProps } from '../tab-bar-props'
@@ -151,6 +152,12 @@ export function TabBarNewTabMenuContent({
               onSelectPickerAgent={selectPickerAgent}
               hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
               runLaunch={launchAgentRow}
+              customLaunchTarget={{
+                worktreeId,
+                groupId: resolvedGroupId,
+                onFocusChat: (tabId) =>
+                  queueFocusAfterNewTabMenuClose(() => requestNativeChatComposerFocus(tabId))
+              }}
             />
           )}
         </>

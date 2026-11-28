@@ -33,7 +33,7 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
-import type { AcpLaunchSpec } from './acp-launch-contract'
+import { isBuiltinAcpAgent, type AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
 import { homeBeforeFirstTurn } from './acp-launch-home-before-first-turn'
 import {
@@ -175,11 +175,12 @@ async function readAcpLaunchInvocation(
     Object.assign(env, await antigravityChatAuthEnvironment(antigravityChatAuth, env))
     assertStructuredAgentResolutionCurrent(deps.operation)
   }
-  Object.assign(env, spec.env)
-  const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
+  // On Windows a spec's `Path` must replace the base `PATH`, not sit beside it unread.
+  const launchEnv = overlayEnvironmentVariables(env, spec.env, process.platform)
+  const invocation = resolveAcpLaunchCommand(spec, launchEnv, { ...deps, commandSettings })
   return {
     ...invocation,
-    env,
+    env: launchEnv,
     envToDelete,
     spec,
     ...(antigravityChatAuth ? { antigravityChatAuth } : {})
@@ -191,11 +192,15 @@ export function acpStructuredLaunchPart(
   deps: AcpStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return withAcpToolFreeFolder(deps, async (basis, identity) => {
+    // A custom agent's spec changes in place when its settings are saved; one launch reads one
+    // version of the command, environment and arguments however long it awaits in between.
+    // The copy is this launch's alone; the next launch copies the spec as it is then.
+    const launchSpec = { ...agentSpec }
     const { record } = basis
-    const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
+    const movedHome = await homeBeforeFirstTurn(launchSpec, record, basis, deps.dataDirectory)
     const accountHome = movedHome ?? record.accountHome
     const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
-      await resolveAcpLaunchInvocation(agentSpec, accountHome, {
+      await resolveAcpLaunchInvocation(launchSpec, accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
         resolveCommandSettings: basis.commandSettings,
@@ -220,7 +225,8 @@ export function acpStructuredLaunchPart(
       roots.length > 0,
       deps.probeVersion
     )
-    if (launchVersion.status === 'tooOld') {
+    // Custom agents set no minimum, so only a built-in is ever too old.
+    if (launchVersion.status === 'tooOld' && isBuiltinAcpAgent(spec.agent)) {
       throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
     const inherited = deps.inheritedEnv ?? process.env

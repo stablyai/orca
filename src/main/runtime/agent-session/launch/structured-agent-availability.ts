@@ -16,9 +16,10 @@ import {
   type LaunchEnvironmentSettings
 } from './structured-agent-launch-support'
 import {
-  STRUCTURED_AGENT_RUNTIME_METADATA,
+  listStructuredAgentRuntimeMetadata,
   structuredAgentRuntimeMetadata
 } from '../installation/structured-agent-runtime-metadata'
+import { onCustomAcpAgentsChanged } from '../../../acp/custom/custom-acp-agent-registry'
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
@@ -153,7 +154,7 @@ export function installStructuredAgentAvailability(
       .catch(() => undefined)
       .then(() =>
         Promise.all(
-          STRUCTURED_AGENT_RUNTIME_METADATA.map(
+          listStructuredAgentRuntimeMetadata().map(
             async (agent): Promise<AgentSessionAgentAvailability> => ({
               ...(await observeHostAgent(agent, runtime)),
               chatProgram: await observeChatProgram(agent, runtime)
@@ -176,6 +177,7 @@ export function installStructuredAgentAvailability(
   })
   onAgentsRefreshedOnHost(() => derive(false))
   onManagedRuntimeReleasesChanged(() => derive(false))
+  onCustomAcpAgentsChanged(() => derive(false))
   // A host program's new answer (e.g. agy found incompatible at a chat start) changes its chat program.
   ACP_LAUNCH_SPECS.forEach((spec) => spec.hostBackend?.onSelectionChanged?.(() => derive(false)))
   derive()

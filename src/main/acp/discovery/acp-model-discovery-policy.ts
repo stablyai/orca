@@ -40,6 +40,9 @@ export type AcpSessionModelDiscovery = {
   /** A session in the chat's folder still reports the commands that chat gets, so a resting chat
    *  reads them there (current clients ask when a `/` menu opens). */
   listsCommandsInChatFolder?: true
+  /** Lists even when none of the above can remove the listing session, which the agent may keep
+   *  in its history; pair with `inPrivateFolder` and `listsOnDemand` so it only runs on request. */
+  keepsListingSession?: true
 }
 
 export type AcpListingSession = {

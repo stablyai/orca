@@ -46,6 +46,7 @@ export type AgentLaunchSettingsSource = Partial<
     GlobalSettings,
     | 'defaultTuiAgent'
     | 'newWorkspaceSetupOnly'
+    | 'defaultCustomAcpAgent'
     | 'disabledTuiAgents'
     | 'agentCmdOverrides'
     | 'agentLaunchChoices'

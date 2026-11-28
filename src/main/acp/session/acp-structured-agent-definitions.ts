@@ -2,13 +2,14 @@ import type { StructuredAgentDefinition } from '../../native-chat/agent-session-
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import { customAcpAgentName } from '../custom/custom-acp-agent-registry'
 import {
   isManagedAgentCli,
   managedAgentCli
 } from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export function acpAgentName(agent: string): string {
-  return isTuiAgent(agent) ? TUI_AGENT_DISPLAY_NAMES[agent] : agent
+  return isTuiAgent(agent) ? TUI_AGENT_DISPLAY_NAMES[agent] : (customAcpAgentName(agent) ?? agent)
 }
 
 export const ACP_HANDLE_TRANSPORT = 'acp'

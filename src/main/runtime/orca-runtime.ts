@@ -44,6 +44,7 @@ import * as Layout from './terminal/layout/runtime-layout-apply'
 import type { TerminalCreateOptions } from './terminal/launch/terminal-create-options'
 import type { StructuredAgentAvailabilityReader as AvailabilityReader } from './agent-session/launch/structured-agent-availability'
 import { LazyStructuredAgentAvailability } from './agent-session/launch/lazy-structured-agent-availability'
+import { installCustomAcpAgentSettings } from '../acp/custom/custom-acp-agent-registry'
 import { PairedServerRowsProducer } from './sidebar-inputs/workspace-rows/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icons/repo-icon-data-urls'
 import { runtimeIconFetch } from './sidebar-inputs/repo-icons/repo-icon-remote-fetch'
@@ -202,6 +203,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
     publishBotSidebarViewChanges(this.store, () => this.notifyBotsChanged({ kinds: ['bot'] }))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
+    installCustomAcpAgentSettings(this.store)
     announceAgentCliUpdatesFinished((event) => this.emitClientEvent(event))
     this.botSessions = botSessionHooks(this)
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)

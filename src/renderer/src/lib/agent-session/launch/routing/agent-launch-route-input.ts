@@ -298,21 +298,30 @@ export function buildAgentLaunchRouteInput(
       executionHostId
     ),
     // Only custom cwd forces a terminal; workspace-root cwd follows the same rule as host agent-launch-mode.ts.
-    startsOutsideWorkspaceRoot: tuiCustomization?.cwd?.trim()
-      ? requestsCwdOutsideWorkspaceRootForWorkspace({
-          workspaceId: workspace.worktreeId,
-          requestedCwd: tuiCustomization?.cwd,
-          workspacePath: workspace.worktreeId
-            ? findFirstIndexedWorktree<Worktree>(
-                selectWorktreesByRepo(store) ?? {},
-                workspace.worktreeId
-              )?.path
-            : undefined,
-          resolveFolderWorkspacePath: (folderWorkspaceId) =>
-            selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)
-              ?.folderPath
-        })
-      : false,
+    startsOutsideWorkspaceRoot: launchStartsOutsideWorkspaceRoot(
+      store,
+      workspace.worktreeId,
+      tuiCustomization?.cwd
+    ),
     ...hostStructuredAgentsInput(store, executionHostId)
   }
+}
+
+/** Whether `cwd` lies outside the workspace's root, where no chat can start. */
+export function launchStartsOutsideWorkspaceRoot(
+  store: AgentLaunchRouteStore,
+  worktreeId: string | undefined,
+  cwd: string | null | undefined
+): boolean {
+  return cwd?.trim()
+    ? requestsCwdOutsideWorkspaceRootForWorkspace({
+        workspaceId: worktreeId,
+        requestedCwd: cwd,
+        workspacePath: worktreeId
+          ? findFirstIndexedWorktree<Worktree>(selectWorktreesByRepo(store) ?? {}, worktreeId)?.path
+          : undefined,
+        resolveFolderWorkspacePath: (folderWorkspaceId) =>
+          selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
+      })
+    : false
 }

@@ -1,3 +1,7 @@
+import {
+  isCustomAcpAgentId,
+  normalizeCustomAcpAgents
+} from '../../../agent-launch/custom-acp/custom-acp-agent'
 import { resolveAgentChoiceLayers } from '../../../agent-launch/choices/agent-choice-layers'
 import { isTuiAgent } from '../../../agent-launch/catalog/tui-agent-config'
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
@@ -129,6 +133,7 @@ export function structuredLaunchSeedOptions(
         GlobalSettings,
         'nativeChatSessionOptions' | 'nativeChatPermissionMode' | 'agentLaunchChoices'
       > &
+        Partial<Pick<GlobalSettings, 'customAcpAgents'>> &
         NewChatPermissionSettings)
     | null
     | undefined,
@@ -148,9 +153,21 @@ export function structuredLaunchSeedOptions(
         }
       })
     : undefined
+  // Like a built-in agent's Settings default, a custom agent's default model beats the last chat
+  // pick; the options remembered for that model come with it.
+  const customModel = isCustomAcpAgentId(agent)
+    ? normalizeCustomAcpAgents(settings?.customAcpAgents).find(({ id }) => id === agent)
+        ?.defaultModel
+    : undefined
+  const persisted = settings?.nativeChatSessionOptions
   const selection = choices
     ? parseStructuredLaunchSeedOptions({ ...choices.options, model: choices.model })
-    : remembered
+    : customModel
+      ? resolveStructuredLaunchSeedOptions(
+          { ...persisted, [agent]: { ...persisted?.[agent], model: customModel } },
+          agent
+        )
+      : remembered
   const permissionMode = newChatPermissionModeForSettings(agent, settings)
   return permissionMode
     ? { ...selection, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }

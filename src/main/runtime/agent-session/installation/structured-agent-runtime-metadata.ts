@@ -1,6 +1,10 @@
 import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
+import {
+  customAcpLaunchSpecFor,
+  listCustomAcpAgents
+} from '../../../acp/custom/custom-acp-agent-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
@@ -206,15 +210,45 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
   }))
 ]
 
+/** The built-in agents only; `listStructuredAgentRuntimeMetadata` adds the host's custom ones. */
 export const STRUCTURED_AGENT_RUNTIME_METADATA: readonly StructuredAgentRuntimeMetadata[] =
   STRUCTURED_AGENT_RUNTIME_CATALOG.map(({ metadata }) => metadata)
+
+// Keyed by spec object: an edit updates the spec in place, a removal and re-add makes a new one.
+const customEntries = new WeakMap<AcpLaunchSpec, StructuredAgentRuntimeCatalogEntry>()
+
+/** The catalog entry of a custom ACP agent the host's settings define now; null otherwise. */
+export function customAcpRuntimeCatalogEntry(
+  agent: string
+): Extract<StructuredAgentRuntimeCatalogEntry, { kind: 'acp' }> | null {
+  const spec = customAcpLaunchSpecFor(agent)
+  if (!spec) {
+    return null
+  }
+  let entry = customEntries.get(spec)
+  if (!entry) {
+    entry = { kind: 'acp', metadata: acpMetadata(spec), spec }
+    customEntries.set(spec, entry)
+  }
+  return entry.kind === 'acp' ? entry : null
+}
+
+/** Every agent this host drives now: the built-ins, then the custom ACP agents in its settings. */
+export function listStructuredAgentRuntimeMetadata(): readonly StructuredAgentRuntimeMetadata[] {
+  return [
+    ...STRUCTURED_AGENT_RUNTIME_METADATA,
+    ...listCustomAcpAgents().flatMap(({ id }) => customAcpRuntimeCatalogEntry(id)?.metadata ?? [])
+  ]
+}
 
 /** The metadata of `agent`, without constructing its adapter or installing the host. */
 export function structuredAgentRuntimeMetadata(
   agent: string
 ): StructuredAgentRuntimeMetadata | null {
   return (
-    STRUCTURED_AGENT_RUNTIME_METADATA.find(({ definition }) => definition.agent === agent) ?? null
+    STRUCTURED_AGENT_RUNTIME_METADATA.find(({ definition }) => definition.agent === agent) ??
+    customAcpRuntimeCatalogEntry(agent)?.metadata ??
+    null
   )
 }
 

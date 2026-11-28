@@ -9,8 +9,8 @@ import {
   useAppStateViewActive,
   useAppStateValue
 } from '@/store/retained-views/app-state-view'
-import { nativeChatPreferenceFor } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
+import { newTabMenuChatAgents } from './new-tab-menu-chat-agents'
 
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -18,15 +18,11 @@ import { readRuntimeStatusesForView } from '@/store/slices/runtime-status/views/
 import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import * as ExecutionHost from '../../../../../shared/execution-host/execution-host'
-import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import {
-  readHostStructuredAgents,
-  hostStructuredAgentsCatalogUnlearned as catalogUnlearned
-} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import { hostStructuredAgentsCatalogUnlearned as catalogUnlearned } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { useHostStructuredAgentAvailability } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
@@ -156,26 +152,17 @@ export function useAgentMenuObservation(
       : null
   )
   const roster = availability?.state === 'received' ? [...availability.byAgent.keys()] : undefined
-  const localCatalog =
-    local && roster
-      ? roster
-      : readHostStructuredAgents(ExecutionHost.LOCAL_EXECUTION_HOST_ID, hostStatuses)?.map(
-          ({ agent }) => agent
-        )
-  const hostCatalog =
-    roster ??
-    readHostStructuredAgents(facts.executionHostId, hostStatuses)?.map(({ agent }) => agent)
-  const chatAgents = [
-    ...new Set([
-      'claude',
-      'codex',
-      ...(localCatalog ?? []),
-      ...(hostCatalog ?? []),
-      ...Object.keys(settings?.nativeChatProviders ?? {})
-        .filter(isTuiAgent)
-        .filter((agent) => nativeChatPreferenceFor(settings, agent))
-    ])
-  ].filter(isTuiAgent)
+  const executionHostId = unresolvedTarget
+    ? undefined
+    : ExecutionHost.parseExecutionHostId(facts.executionHostId)?.id
+  const { chatAgents, customAgents } = newTabMenuChatAgents({
+    local,
+    published: availability?.state === 'received' ? availability.byAgent : undefined,
+    hostStatuses,
+    hostKey: facts.executionHostId,
+    settings,
+    customAgentsHost: plain || launchCwd ? undefined : executionHostId
+  })
   const inventoryFailed =
     detection.detectedIds === null && (detection.detectionFailed || detection.needsServerUpdate)
   const localAcquiring = ['unlearned', 'pending'].includes(localCapabilities.state)
@@ -229,9 +216,6 @@ export function useAgentMenuObservation(
     // Missing/refused published availability overrides a preliminary route that would otherwise allow launch.
     return !published || published.state === 'refused' ? 'not-on-host' : preliminary
   }
-  const executionHostId = unresolvedTarget
-    ? undefined
-    : ExecutionHost.parseExecutionHostId(facts.executionHostId)?.id
   const { detectedIds } = detection
   const rows = buildNewTabAgentMenuRows({
     settings,
@@ -251,6 +235,7 @@ export function useAgentMenuObservation(
     : {
         state: 'settled',
         rows,
+        ...(customAgents.length > 0 ? { customAgents } : {}),
         detection,
         defaultTuiAgent: settings?.defaultTuiAgent,
         terminalPending,
