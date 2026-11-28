@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { NativeChatThreadGoalBanner } from '../../../session/goals/NativeChatThreadGoalBanner'
 import { NativeChatFindBar } from '../../../viewport/find/NativeChatFindBar'
 import { NativeChatBackgroundTasksStatus } from '../NativeChatBackgroundTasksStatus'
@@ -48,7 +48,19 @@ export const many = Array.from({ length: 20 }, (_, index) => {
   return index < 3 ? fail(row, index) : row
 })
 
+export const single = [
+  {
+    ...running[0],
+    id: 'stack:single',
+    title:
+      'Remove the old-homes guard from the worktree creation path and add a regression test for symlinked homes'
+  }
+]
+export const waiting = running.map((row) => ({ ...row, state: 'waiting' as const }))
+export const done = running.map((row) => ({ ...row, state: 'idle' as const }))
+
 export function Tray({ open, rows }: { open: boolean; rows: readonly WorkerDockRowView[] }) {
+  const [expanded, setExpanded] = useState(open)
   return (
     <NativeChatBackgroundTasksStatus
       sessionId={SOURCE}
@@ -60,8 +72,8 @@ export function Tray({ open, rows }: { open: boolean; rows: readonly WorkerDockR
       stoppingAll={false}
       indicatorActive
       isVisible
-      expanded={open}
-      onExpandedChange={() => {}}
+      expanded={expanded}
+      onExpandedChange={setExpanded}
       onStop={() => {}}
       workerRows={new Map(rows.map((row) => [row.id, row]))}
       workerIdentities={rows}

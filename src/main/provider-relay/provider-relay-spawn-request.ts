@@ -6,17 +6,24 @@ import {
 } from '../provider-process/provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../shared/agent-launch/startup/parent-agent-session-env'
 import { resolveProviderExecPath } from '../provider-process/provider-exec-path'
+import {
+  missingProviderRelayCapability,
+  traceProviderRelayCapabilityFallback
+} from './provider-relay-capability-fallback'
 
 /** What the daemon is asked to spawn for a chat's agent; null where it can't relay. */
 export function providerRelaySpawnSpec(
   launch: ProviderProcessLaunch,
   client: DaemonClient,
   appVersion: ProviderRelaySpawnSpec['appVersion'],
-  { inheritedEnv }: { inheritedEnv?: Record<string, string> } = {}
+  { inheritedEnv, keep }: { inheritedEnv?: Record<string, string>; keep?: unknown } = {}
 ): ProviderRelaySpawnSpec | null {
   const identity = client.getDaemonIdentity()
-  // A daemon kept from another bundle relays too, when it speaks the relay protocol.
-  if (!identity?.providerRelay) {
+  // A daemon kept from another bundle relays too, when it speaks the relay protocol. Without kept
+  // state a reattach would have nothing to restore, so such a launch goes as today.
+  const missing = missingProviderRelayCapability(identity, keep !== undefined)
+  if (!identity || missing) {
+    traceProviderRelayCapabilityFallback(identity, missing ?? 'providerRelay')
     return null
   }
   if (!launch.cwd) {

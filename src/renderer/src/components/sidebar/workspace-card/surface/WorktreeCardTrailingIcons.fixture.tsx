@@ -291,3 +291,5 @@ export const referencePeek = defineFixture({
     glyphs.item(glyphs.length - 1)?.focus()
   }
 })
+
+export const referencePeekWide = defineFixture({ ...referencePeek, width: 320 })

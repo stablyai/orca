@@ -2,7 +2,7 @@
 import { BotAgentLaunchPicker } from '@/components/bots/BotAgentLaunchPicker'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
 import { useBotAgentMenu } from '@/components/bots/use-bot-agent-choices'
-import { launchModelLabel } from '@/components/agent/AgentLaunchPicker'
+import { launchModelLabel } from '@/components/agent/agent-launch-model-label'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationBotTarget } from '../../../../../shared/automations/automation-definition'
 import type { Bot } from '../../../../../shared/bot-types'

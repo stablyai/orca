@@ -42,7 +42,7 @@ function Chat(_props: { update: number }) {
       contextClear: NO_CLEARS
     }
   })
-  return subagents.dock
+  return subagents.chip
 }
 
 it('keeps the agents strip still while its session updates and its work does not change', () => {
