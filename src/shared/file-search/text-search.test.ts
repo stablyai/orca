@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSubmatchRegex,
   createAccumulator,
+  finalize,
   ingestGitGrepLine,
   ingestRgJsonLine
 } from './text-search'
@@ -146,6 +147,34 @@ describe('ingestGitGrepLine', () => {
         matchLength: 'git reported this line'.length,
         lineContent: 'git reported this line'
       }
+    ])
+  })
+})
+
+describe('finalize', () => {
+  it('lists files in path order whatever order ripgrep emitted them', () => {
+    const acc = createAccumulator()
+    for (const path of ['b/note-10.md', 'a/z.md', 'b/note-2.md', 'a/b.md']) {
+      ingestRgJsonLine(
+        JSON.stringify({
+          type: 'match',
+          data: {
+            path: { text: `/root/${path}` },
+            line_number: 1,
+            lines: { text: 'hit\n' },
+            submatches: [{ match: { text: 'hit' }, start: 0, end: 3 }]
+          }
+        }),
+        '/root',
+        acc,
+        100
+      )
+    }
+    expect(finalize(acc).files.map((file) => file.relativePath)).toEqual([
+      'a/b.md',
+      'a/z.md',
+      'b/note-10.md',
+      'b/note-2.md'
     ])
   })
 })
