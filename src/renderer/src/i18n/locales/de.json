@@ -27221,6 +27221,12 @@
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   },
   "bots": {
+    "deepLink": {
+      "missing": "Diese Unterhaltung ist auf diesem Computer nicht geöffnet.",
+      "unreachable": "Konnte {{hosts}} nicht erreichen. Der Bot ist vielleicht dort; öffne den Link erneut, sobald er wieder erreichbar ist.",
+      "pick": "Mehr als ein Computer hat einen Bot für diesen Link: {{hosts}}. Öffne ihn über die Seitenleiste.",
+      "updateNeeded": "Aktualisiere Orca auf {{hosts}}, um diesen Bot hier zu öffnen."
+    },
     "activity": {
       "title": "Aktivität",
       "waitsOnBackground": "Wartet auf seine Hintergrundaufgabe"
