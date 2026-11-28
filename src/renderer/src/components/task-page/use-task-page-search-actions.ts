@@ -17,6 +17,8 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     setTaskResumeState,
     updateSettings,
     taskSearchInput,
+    appliedTaskSearch,
+    filteredDraftResumeRef,
     setTaskSearchInput,
     setAppliedTaskSearch,
     setActiveTaskPreset,
@@ -26,15 +28,27 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
   } = model
   const applyPRFilterChange = useCallback(
     (change: PRFilterChange): void => {
-      // Round-trip through parseTaskQuery so dropdown patches preserve other filters and free text.
-      const next = patchGitHubTaskQuery(
-        scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind),
-        change
-      )
+      const applied = scopeGitHubTaskSearch(appliedTaskSearch, activeGithubTaskKind)
+      const next = patchGitHubTaskQuery(applied, change)
       // Why: a query equal to a saved PR preset is applied as that preset, or restore, prefetch keys and the phone see an unknown string.
       const preset = activeGithubTaskKind === 'prs' ? matchGitHubPRPreset(next) : null
       const query = preset ? getTaskPresetQuery(preset) : next
-      setTaskSearchInput(query)
+      // Carry the filter change into a pending draft so its idle submit keeps the filter and the edits.
+      const draft = taskSearchInput.trim()
+        ? scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+        : applied
+      const patchedDraft = draft === applied ? query : patchGitHubTaskQuery(draft, change)
+      const draftPreset =
+        activeGithubTaskKind !== 'prs' || patchedDraft === query
+          ? preset
+          : matchGitHubPRPreset(patchedDraft)
+      const draftQuery = draftPreset ? getTaskPresetQuery(draftPreset) : patchedDraft
+      // A filter click used to commit the draft immediately, so resume that click if we leave before idle.
+      filteredDraftResumeRef.current =
+        draftQuery === query
+          ? null
+          : { appliedQuery: query, githubItemsPreset: draftPreset, githubItemsQuery: draftQuery }
+      setTaskSearchInput(draftQuery)
       setAppliedTaskSearch(query)
       setActiveTaskPreset(preset)
       setTaskResumeState({
@@ -47,6 +61,8 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     },
     [
       activeGithubTaskKind,
+      appliedTaskSearch,
+      filteredDraftResumeRef,
       setTaskResumeState,
       taskSearchInput,
       setActiveTaskPreset,
@@ -58,6 +74,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
   )
   const handleApplyTaskSearch = useCallback((): void => {
     const scoped = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+    filteredDraftResumeRef.current = null
     setTaskSearchInput(scoped)
     setAppliedTaskSearch(scoped)
     setActiveTaskPreset(null)
@@ -69,6 +86,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     setTaskRefreshNonce((current) => current + 1)
   }, [
     activeGithubTaskKind,
+    filteredDraftResumeRef,
     setTaskResumeState,
     taskSearchInput,
     setTasksFiltering,
@@ -101,6 +119,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     (kind: GitHubTaskKind): void => {
       const preset = getDefaultPresetForGitHubTaskKind(kind)
       const query = getTaskPresetQuery(preset)
+      filteredDraftResumeRef.current = null
       setTaskSearchInput(query)
       setAppliedTaskSearch(query)
       setActiveTaskPreset(preset)
@@ -112,6 +131,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
       setTaskRefreshNonce((current) => current + 1)
     },
     [
+      filteredDraftResumeRef,
       setTaskResumeState,
       setActiveTaskPreset,
       setTasksFiltering,
@@ -144,22 +164,15 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     },
     [handleApplyTaskSearch]
   )
-  const nextModel = model as typeof model & {
-    applyPRFilterChange: typeof applyPRFilterChange
-    handleApplyTaskSearch: typeof handleApplyTaskSearch
-    handleTaskSearchChange: typeof handleTaskSearchChange
-    handleSetDefaultTaskPreset: typeof handleSetDefaultTaskPreset
-    handleSelectGithubTaskKind: typeof handleSelectGithubTaskKind
-    handleResetGithubTaskSearch: typeof handleResetGithubTaskSearch
-    handleTaskSearchKeyDown: typeof handleTaskSearchKeyDown
+  return {
+    ...model,
+    applyPRFilterChange,
+    handleApplyTaskSearch,
+    handleTaskSearchChange,
+    handleSetDefaultTaskPreset,
+    handleSelectGithubTaskKind,
+    handleResetGithubTaskSearch,
+    handleTaskSearchKeyDown
   }
-  nextModel.applyPRFilterChange = applyPRFilterChange
-  nextModel.handleApplyTaskSearch = handleApplyTaskSearch
-  nextModel.handleTaskSearchChange = handleTaskSearchChange
-  nextModel.handleSetDefaultTaskPreset = handleSetDefaultTaskPreset
-  nextModel.handleSelectGithubTaskKind = handleSelectGithubTaskKind
-  nextModel.handleResetGithubTaskSearch = handleResetGithubTaskSearch
-  nextModel.handleTaskSearchKeyDown = handleTaskSearchKeyDown
-  return nextModel
 }
 export type TaskPageSearchActionsModel = ReturnType<typeof useTaskPageSearchActions>

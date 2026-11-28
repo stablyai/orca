@@ -16,6 +16,7 @@ export type PRFilterChange = {
   assignee?: string | null
   reviewer?: { kind: 'requested' | 'reviewed-by'; login: string } | null
   labels?: string[]
+  selection?: { qualifier: 'authors' | 'labels'; value: string; selected: boolean }
   state?: 'open' | 'closed' | 'merged' | 'all'
   draft?: boolean
 }
@@ -195,7 +196,11 @@ export function SectionDetail({
           emptyText={t('auto.components.github.PRFilterSections.458ea3602b', 'No authors')}
           allowCustomValue
           renderOption={(opt) => <UserOptionRow option={opt} />}
-          onChange={(next) => onSelect({ authors: next })}
+          onChange={(next, selection) =>
+            onSelect(
+              selection ? { selection: { qualifier: 'authors', ...selection } } : { authors: next }
+            )
+          }
         />
       ) : null}
       {section === 'assignee' ? (
@@ -225,7 +230,11 @@ export function SectionDetail({
             'Filter labels...'
           )}
           emptyText={t('auto.components.github.PRFilterSections.de26e2eb06', 'No labels')}
-          onChange={(next) => onSelect({ labels: next })}
+          onChange={(next, selection) =>
+            onSelect(
+              selection ? { selection: { qualifier: 'labels', ...selection } } : { labels: next }
+            )
+          }
         />
       ) : null}
       {section === 'reviewer' ? (

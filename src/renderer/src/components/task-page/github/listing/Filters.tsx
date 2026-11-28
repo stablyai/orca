@@ -167,6 +167,7 @@ export function TaskPageGitHubListChrome({
                 label={label}
                 active={highlightedPreset === id}
                 onSelect={() => {
+                  model.filteredDraftResumeRef.current = null
                   setTaskSearchInput(query)
                   setAppliedTaskSearch(query)
                   setActiveTaskPreset(id)

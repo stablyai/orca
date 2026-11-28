@@ -221,7 +221,7 @@ export function MultiSelectList({
   emptyText?: string
   renderOption?: (opt: PickerOption) => React.ReactNode
   allowCustomValue?: boolean
-  onChange: (next: string[]) => void
+  onChange: (next: string[], selection?: { value: string; selected: boolean }) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [query, setQuery] = useState('')
@@ -232,14 +232,15 @@ export function MultiSelectList({
   const customValue = customPickerValue(filtered, queryState, allowCustomValue)
   const fallback = pickerFallbackText({ customValue, loading, queryTooLarge, error, emptyText }, t)
 
-  const toggle = (key: string): void => {
+  const toggle = (value: string): void => {
     const next = new Set(selectedSet)
-    if (next.has(key)) {
-      next.delete(key)
+    const selected = !selectedSet.has(value)
+    if (selected) {
+      next.add(value)
     } else {
-      next.add(key)
+      next.delete(value)
     }
-    onChange([...next])
+    onChange([...next], { value, selected })
   }
 
   return (
