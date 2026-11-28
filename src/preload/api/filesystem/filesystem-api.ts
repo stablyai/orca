@@ -256,7 +256,12 @@ export type FilesystemApi = {
       worktreePath: string
       connectionId?: string
     }) => Promise<WatchWorktreeResult | undefined>
-    unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    /** With `handOver`, a local root resolves with the events queued for this window that it would otherwise miss. */
+    unwatchWorktree: (args: {
+      worktreePath: string
+      connectionId?: string
+      handOver?: boolean
+    }) => Promise<FsChangedPayload | undefined>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   notebook: {

@@ -1,6 +1,11 @@
 import { app } from 'electron'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
+import {
+  clearRuntimeRestartMarker,
+  writeRuntimeRestartMarker
+} from '../runtime/rpc/server/runtime-restart-marker-file'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 
 // Leave time for normal checkpoints, but do not strand the installer behind a wedged shutdown.
 export const UPDATE_INSTALL_EXIT_TIMEOUT_MS = 20_000
@@ -19,6 +24,11 @@ let exitTimer: ReturnType<typeof setTimeout> | null = null
 export function armUpdateInstallExitWatchdog(timeoutMs = updateInstallExitTimeoutMs()): void {
   if (exitTimer) {
     return
+  }
+  // The install is committed, so CLI callers in surviving terminals should wait, not reopen Orca.
+  const userDataPath = restartMarkerUserDataPath()
+  if (userDataPath) {
+    void writeRuntimeRestartMarker(userDataPath, 'update')
   }
   exitTimer = setTimeout(() => {
     recordUpdaterLifecycle(
@@ -41,5 +51,18 @@ export function disarmUpdateInstallExitWatchdog(): void {
   if (exitTimer) {
     clearTimeout(exitTimer)
     exitTimer = null
+    const userDataPath = restartMarkerUserDataPath()
+    if (userDataPath) {
+      void clearRuntimeRestartMarker(userDataPath)
+    }
+  }
+}
+
+// No app environment means no profile for a CLI to read.
+function restartMarkerUserDataPath(): string | null {
+  try {
+    return getCanonicalUserDataPath()
+  } catch {
+    return null
   }
 }

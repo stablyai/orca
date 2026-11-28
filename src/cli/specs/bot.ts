@@ -129,7 +129,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       "Run it from a bot's chat. GitHub and Linear act as the bot's owner (gh, orca linear); Slack is the bot itself (orca slack). A service that isn't signed in prints the one line to tell its owner.",
       "Lists each workspace the bot is in (and each Linear workspace's teams) as refs for automations.",
-      '--offer shows the owner a Connect card in this chat; --workspace names a workspace or org they asked for that is not listed. Already connected: it says so and shows no card. Signed out of Orca: a connector the bot has, or webhook, shows a Sign in line instead.'
+      '--offer shows the owner a Connect card in this chat; when the turn answers a Slack, Linear or GitHub thread, the answer says what to tell the owner there (on Slack, a line that gets an Open in Orca link). --workspace names a workspace or org they asked for that is not listed. Already connected: it says so and shows no card. Signed out of Orca: a connector the bot has, or webhook, shows a Sign in line instead.'
     ]
   },
   {

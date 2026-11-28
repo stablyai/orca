@@ -5,7 +5,11 @@ import type {
   FsChangedPayload
 } from '../../../../shared/file-watch/filesystem-change-event'
 import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'
-import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
+import {
+  MAX_BATCHED_WATCHER_EVENTS,
+  queueWatcherEvents,
+  type WatcherEventBatchState
+} from './filesystem-watcher-event-batch'
 // Filter high-churn events at source; Explorer display filters only hide rows.
 import { buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 import { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/watcher-ignore-dirs'
@@ -97,12 +101,15 @@ async function tryStatIsDirectory(
   }
 }
 
-function emitOverflowPayload(root: WatchedRoot): void {
-  const { rootPath } = root
-  const payload: FsChangedPayload = {
-    worktreePath: rootPath,
-    events: [{ kind: 'overflow', absolutePath: rootPath }]
+function overflowPayload(root: WatchedRoot): FsChangedPayload {
+  return {
+    worktreePath: root.rootPath,
+    events: [{ kind: 'overflow', absolutePath: root.rootPath }]
   }
+}
+
+function emitOverflowPayload(root: WatchedRoot): void {
+  const payload = overflowPayload(root)
   for (const [, wc] of root.listeners) {
     if (!wc.isDestroyed()) {
       wc.send('fs:changed', payload)
@@ -128,6 +135,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
   root.batch.lastFlushAt = Date.now()
+  root.batch.flushing = { events: rawEvents, overflowed }
 
   try {
     if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
@@ -178,6 +186,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       }
     }
   } finally {
+    root.batch.flushing = null
     root.batch.flushInFlight = false
     if (root.batch.flushQueued) {
       root.batch.flushQueued = false
@@ -191,6 +200,34 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
         void flushBatch(root)
       }
     }
+  }
+}
+
+/** What a listener leaving now would never receive: the queued batch and any flush still statting, without directory stats. */
+export function undeliveredBatchPayload(root: WatchedRoot): FsChangedPayload | undefined {
+  const { cancelled, events, overflowed, flushing } = root.batch
+  if (cancelled || (events.length === 0 && !overflowed && !flushing)) {
+    return undefined
+  }
+  const pending: WatcherEventBatchState = {
+    events: flushing ? [...flushing.events] : events,
+    overflowed: overflowed || flushing?.overflowed === true
+  }
+  if (flushing) {
+    // Why the queue's rule: past the batch cap the merged hand-over is an overflow, as a flush of it would be.
+    queueWatcherEvents(pending, events)
+  }
+  if (pending.overflowed) {
+    return overflowPayload(root)
+  }
+  const coalesced = coalesceEvents(pending.events)
+  // Why: a create then delete of one path cancels out, leaving nothing worth a renderer pass.
+  if (coalesced.length === 0) {
+    return undefined
+  }
+  return {
+    worktreePath: root.rootPath,
+    events: coalesced.map(({ type, path }) => ({ kind: type, absolutePath: path }))
   }
 }
 

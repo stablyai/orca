@@ -3,14 +3,27 @@ import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import {
+  matchesDeliveredDiffComment,
+  type DiffCommentDeliverySnapshot
+} from '../../../../../shared/file-review/diff-comment-mutation'
+import {
+  diffCommentSendKey,
+  holdNotesForSend
+} from '@/components/notes/delivery/notes-send-in-flight'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
-import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   enqueueDiffCommentPersist,
   mutateDiffComments,
   normalizeDiffComment
 } from './diff-comment-persistence'
+import { enqueueDeliveredDiffCommentCleanup } from './diff-comment-delivery-cleanup'
 import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
+import { showClearNotesFailedToast } from './clear-notes-failed-toast'
+import {
+  dismissSentNotesStillListedToast,
+  showSentNotesStillListedToast
+} from './sent-notes-still-listed-toast'
 import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 
 export type DiffCommentsSlice = {
@@ -30,40 +43,45 @@ export type DiffCommentsSlice = {
     sentAt?: number
   ) => Promise<boolean>
   deleteDiffComment: (owner: DiffCommentOwner, commentId: string) => Promise<void>
-  clearDiffComments: (
+  /** Removes the listed notes that still exist; notes added since the list was taken stay. */
+  deleteDiffCommentsByIds: (
     owner: DiffCommentOwner,
-    options?: DiffCommentsClearOptions
-  ) => Promise<boolean>
-  clearDiffCommentsForFile: (
-    owner: DiffCommentOwner,
-    filePath: string,
-    options?: DiffCommentsClearOptions
+    commentIds: readonly string[]
   ) => Promise<boolean>
 }
 
-export type DiffCommentsClearOptions = {
-  // Why: markdown notes hidden by the Markdown Review Notes setting must survive a clear the user can't see them in.
-  keepMarkdownNotes?: boolean
-}
+export type { DiffCommentDeliverySnapshot } from '../../../../../shared/file-review/diff-comment-mutation'
 
-export type DiffCommentDeliverySnapshot = Pick<
-  DiffComment,
-  'body' | 'filePath' | 'id' | 'lineNumber' | 'selectedText' | 'source' | 'startLine'
->
+// Exact snapshots whose host removal is queued or running, so a repeated success report adds no second command.
+const cleanupsInFlight = new Set<string>()
 
-function deliverySnapshotMatches(
-  comment: DiffComment,
-  snapshot: DiffCommentDeliverySnapshot
-): boolean {
-  return (
-    comment.id === snapshot.id &&
-    comment.body === snapshot.body &&
-    comment.filePath === snapshot.filePath &&
-    comment.lineNumber === snapshot.lineNumber &&
-    comment.startLine === snapshot.startLine &&
-    comment.selectedText === snapshot.selectedText &&
-    comment.source === snapshot.source
-  )
+function markDeliveredDiffCommentsSent(
+  set: Parameters<StateCreator<AppState>>[0],
+  get: () => AppState,
+  owner: DiffCommentOwner,
+  snapshots: readonly DiffCommentDeliverySnapshot[]
+): void {
+  const sentAt = Date.now()
+  const mutation = mutateDiffComments(set, owner, (existing) => {
+    let changed = false
+    const next = existing.map((note) => {
+      // Only the delivered revision: a note edited since keeps its new text sendable.
+      if (
+        note.sentAt ||
+        !snapshots.some((snapshot) => matchesDeliveredDiffComment(note, snapshot))
+      ) {
+        return note
+      }
+      changed = true
+      return { ...note, sentAt }
+    })
+    return changed ? next : null
+  })
+  if (mutation) {
+    enqueueDiffCommentPersist(set, owner.worktreeId, get, mutation).catch((err: unknown) => {
+      console.error('Failed to persist diff comments:', err)
+    })
+  }
 }
 
 // Why: best-effort telemetry runs only after the note is on disk, so a throw here must not report a failed save.
@@ -78,14 +96,11 @@ function recordReviewNoteInteraction(get: () => AppState): void {
 // Why: a copy gone since the user acted fails once, never on another copy. Add and clear callers already report their failures.
 function reportLostDiffCommentOwner(action: 'save' | 'clear'): void {
   console.error('Review notes were not changed: the workspace copy they belong to is gone.')
-  toast.error(
-    action === 'save'
-      ? translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
-      : translate(
-          'auto.components.right.sidebar.SourceControl.eae7a1da5f',
-          'Failed to clear notes.'
-        )
-  )
+  if (action === 'clear') {
+    showClearNotesFailedToast()
+    return
+  }
+  toast.error(translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
 }
 
 export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffCommentsSlice> = (
@@ -168,34 +183,47 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   },
 
   clearDeliveredDiffComments: async (owner, comments) => {
-    if (!readOwnedDiffComments(get(), owner)) {
+    const shown = readOwnedDiffComments(get(), owner)
+    if (!shown) {
       reportLostDiffCommentOwner('clear')
       return false
     }
-    const worktreeId = owner.worktreeId
-    if (comments.length === 0) {
+    // Why: some launch paths report one success twice; only unchanged notes not already being removed need the host.
+    const pending = comments.filter(
+      (snapshot) =>
+        !cleanupsInFlight.has(diffCommentSendKey(owner, snapshot)) &&
+        shown.some((note) => matchesDeliveredDiffComment(note, snapshot))
+    )
+    if (pending.length === 0) {
       return true
     }
-    const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
-    const result = mutateDiffComments(set, owner, (existing) => {
-      const next = existing.filter((comment) => {
-        const snapshot = snapshotsById.get(comment.id)
-        // Why: delivery is async; a note edited after its snapshot was sent is a fresh pending note that must stay visible.
-        return !snapshot || !deliverySnapshotMatches(comment, snapshot)
-      })
-      return next.length === existing.length ? null : next
-    })
-    if (!result) {
-      return true
+    const keys = pending.map((note) => diffCommentSendKey(owner, note))
+    for (const key of keys) {
+      cleanupsInFlight.add(key)
     }
-    try {
-      await enqueueDiffCommentPersist(set, worktreeId, get, result)
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      return false
+    const outcome = enqueueDeliveredDiffCommentCleanup(set, get, owner, pending).then(
+      () => {
+        dismissSentNotesStillListedToast()
+        return true
+      },
+      (err: unknown) => {
+        console.error('Failed to remove delivered review notes:', err)
+        // Why: the recipient already has these notes. Mark them sent before the hold releases so they never
+        // return to Send; an edit clears the mark, and Remove asks the host again.
+        markDeliveredDiffCommentsSent(set, get, owner, pending)
+        showSentNotesStillListedToast(() => void get().clearDeliveredDiffComments(owner, pending))
+        return false
+      }
+    )
+    holdNotesForSend(keys, outcome)
+    const ok = await outcome
+    for (const key of keys) {
+      cleanupsInFlight.delete(key)
     }
-    recordReviewNoteInteraction(get)
-    return true
+    if (ok) {
+      recordReviewNoteInteraction(get)
+    }
+    return ok
   },
 
   markDiffCommentsSent: async (owner, commentIds, sentAt = Date.now()) => {
@@ -252,44 +280,20 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
   },
 
-  clearDiffComments: async (owner, options) => {
+  deleteDiffCommentsByIds: async (owner, commentIds) => {
     if (!readOwnedDiffComments(get(), owner)) {
       return false
     }
-    const worktreeId = owner.worktreeId
+    const ids = new Set(commentIds)
     const result = mutateDiffComments(set, owner, (existing) => {
-      const next = options?.keepMarkdownNotes ? existing.filter(isMarkdownComment) : []
+      const next = existing.filter((c) => !ids.has(c.id))
       return next.length === existing.length ? null : next
     })
     if (!result) {
       return true
     }
     try {
-      await enqueueDiffCommentPersist(set, worktreeId, get, result)
-      return true
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      return false
-    }
-  },
-
-  clearDiffCommentsForFile: async (owner, filePath, options) => {
-    if (!readOwnedDiffComments(get(), owner)) {
-      return false
-    }
-    const worktreeId = owner.worktreeId
-    const result = mutateDiffComments(set, owner, (existing) => {
-      const next = existing.filter(
-        (c) =>
-          c.filePath !== filePath || (options?.keepMarkdownNotes === true && isMarkdownComment(c))
-      )
-      return next.length === existing.length ? null : next
-    })
-    if (!result) {
-      return true
-    }
-    try {
-      await enqueueDiffCommentPersist(set, worktreeId, get, result)
+      await enqueueDiffCommentPersist(set, owner.worktreeId, get, result)
       return true
     } catch (err) {
       console.error('Failed to persist diff comments:', err)

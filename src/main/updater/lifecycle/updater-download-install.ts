@@ -22,7 +22,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
 
   protected quitAndInstall(
-    trigger: UpdateInstallTrigger = 'manual',
+    trigger: UpdateInstallTrigger,
     isCurrentTeamRestart?: () => boolean
   ): void {
     if (

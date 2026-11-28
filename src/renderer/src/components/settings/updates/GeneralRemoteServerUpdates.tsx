@@ -7,7 +7,7 @@ import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
-import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
+import { getRemoteServerNewerThanClientVersion } from '../../../../../shared/remote-runtime/host-updates/remote-server-version-skew'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {

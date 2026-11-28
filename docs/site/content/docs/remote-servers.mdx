@@ -281,6 +281,8 @@ orca-ide pair --mobile --address 100.64.1.20
 
 It works the same against the desktop app, a foreground `orca serve`, or `orca serve service install`. Only the machine's own user can run it; paired clients and phones cannot create pairings.
 
+A server bound to loopback, such as one Orca manages over SSH or `--bind 127.0.0.1`, stays on loopback. Pair a phone with it through Orca Relay: sign the server in with `orca auth login`, then run `orca pair --mobile --relay`. Or pass `--address` for a tunnel that forwards to it.
+
 ### A Mac reached only over SSH
 
 On a packaged macOS app, `orca serve` uses the desktop app's server, which needs a desktop login: started from an SSH session with nobody logged in, it aborts at startup. To serve such a Mac, ask for Orca's Node server instead. It has no in-app updater, so update the app yourself (for example with `brew upgrade --cask stablyai/orca/orca`) and restart the server:

@@ -1109,7 +1109,9 @@
         "tools_many": "{{count}} herramientas",
         "tools_one": "{{count}} herramienta",
         "tools_other": "{{count}} herramientas",
-        "waitingForSignIn": "Esperando el inicio de sesión…"
+        "waitingForSignIn": "Esperando el inicio de sesión…",
+        "orcaRemoved": "Eliminado: se reinicia con el próximo mensaje",
+        "orcaChanged": "Cambiado: se reinicia con el próximo mensaje"
       },
       "source": {
         "project": "Proyecto",
@@ -1142,7 +1144,8 @@
         "needsAuth_many": "{{count}} requieren iniciar sesión"
       },
       "pasteHint": "Cuando el navegador llegue a una página que no se carga, copia su dirección y pégala aquí.",
-      "manage": "Gestionar servidores MCP"
+      "manage": "Gestionar servidores MCP",
+      "stillFailing": "Sigue fallando tras reconectar."
     },
     "agentMessage": {
       "unnamedRecipient": "un agente",
@@ -1768,7 +1771,9 @@
         "permissionAcceptEditsDescription": "Aprueba ediciones y comandos de archivos; pregunta por lo demás",
         "permissionAutoDescription": "Revisa las solicitudes de aprobación por ti",
         "permissionFullAccessCodexDescription": "Nunca pregunta; puede editar cualquier archivo y usar la red",
-        "permissionFullAccessDescription": "Nunca pregunta antes de ediciones o comandos"
+        "permissionFullAccessDescription": "Nunca pregunta antes de ediciones o comandos",
+        "permissionAgentSettings": "Configuración de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, según la configuración de {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Enviado como objetivo"
@@ -3240,7 +3245,7 @@
       "collapse": "Contraer"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Reanudar en una nueva CLI"
+      "continueInTerminal": "Continuar en terminal"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "Ir a lo más reciente"
@@ -3796,6 +3801,18 @@
       "terminalTitle": "Texto de la terminal",
       "pointsAndColumns": "{{points}} · {{count}} columnas",
       "moreTerminal": "Más ajustes de la terminal"
+    },
+    "terminalChatContinuation": {
+      "busy": "Se está abriendo otro chat o terminal. Espera y vuelve a intentarlo.",
+      "continueInChat": "Continuar en el chat",
+      "failed": "No se pudo continuar en el chat. {{detail}}",
+      "failedAfterClose": "No se pudo continuar en el chat. {{detail}} La conversación está en el historial de agentes.",
+      "otherJob": "{{process}} se está ejecutando en esta terminal. Ciérralo y luego continúa en el chat.",
+      "terminalChanged": "Esta terminal cambió mientras Orca la comprobaba. Vuelve a intentarlo.",
+      "tryAgain": "Vuelve a intentarlo.",
+      "unavailable": "Los chats de {{agent}} no están disponibles en este equipo.",
+      "uncheckable": "Orca no pudo comprobar qué se está ejecutando en esta terminal. Vuelve a intentarlo.",
+      "unconfirmed": "Orca no pudo confirmar que el chat se abrió. Revisa tus pestañas antes de volver a intentarlo."
     }
   },
   "settings": {
@@ -3957,9 +3974,6 @@
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
-    },
-    "agents": {
-      "permissionOwnAll": "Configuración propia de los agentes"
     },
     "voiceTranscribeOn": {
       "heading": "Transcribir en",
@@ -4402,6 +4416,9 @@
       "agentCouldNotStart": "No se pudo iniciar {{label}}. Revisa el comando del agente en Ajustes y vuelve a intentarlo.",
       "agentFailedToStart": "No se pudo iniciar {{label}}. Revisa el comando del agente en Ajustes y vuelve a intentarlo.",
       "agentReportedError": "{{label}} informó de un error.",
+      "antigravityInvalidEvents": "Antigravity devolvió eventos JSON no válidos.",
+      "antigravityInvalidResult": "Antigravity devolvió un resultado no válido.",
+      "antigravityNoFinalResult": "Antigravity no devolvió ningún resultado final.",
       "chatNameAgentUnsupported": "Elige un agente compatible para generar nombres de chats en esta acción en Ajustes -> Chat -> Nombres de chats. Agentes compatibles: {{agents}}, o «Comando personalizado».",
       "chatNameCustomCommandEmpty": "El comando personalizado está vacío. Añade uno en Ajustes -> Chat -> Nombres de chats.",
       "cliFailed": "El comando CLI de {{label}} falló con el código {{exitCode}}.",
@@ -7415,6 +7432,7 @@
     "workspacesCount": "{{count}} espacios de trabajo",
     "workspacesAllButCount": "Todos menos {{count}}",
     "headerMissing": "Rellena {{header}} para añadir este servidor.",
-    "servers": "Servidores"
+    "servers": "Servidores",
+    "unreadable": "El inicio de sesión o la clave guardados no se pueden abrir. Vuelve a iniciar sesión."
   }
 }

@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { WorkerDockRowView } from './WorkerDockRow'
+import { workerDockClearable } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import { workerDockIsAgentKind } from './worker-dock-labels'
 import { compareWorkerDockCardRows } from './worker-dock-card-order'
-import type { WorkerDockStopAllScope } from './WorkerDockCardFooter'
+import type { WorkerDockStopAllScope } from './WorkerDockHeadActions'
 
 export type WorkerDockIdentity = {
   id: string
@@ -63,6 +64,8 @@ export function useWorkerDockGroupedOrder(identities: readonly WorkerDockIdentit
   return {
     sorted,
     items,
+    /** An order is being held. */
+    holding: held !== null,
     setHeld,
     isCommand,
     counts: { workers, commands: items.length - workers }
@@ -95,4 +98,35 @@ export function workerDockStopAllScope(
   rows: Rows
 ): WorkerDockStopAllScope {
   return items.some((row) => kindOf(row, rows) === 'worker') ? 'subagents-and-commands' : 'all'
+}
+
+/** A failed command is listed that Clear never removes: the bulk Clear then says it clears workers. */
+export function workerDockClearNamesWorkers(
+  items: readonly WorkerDockIdentity[],
+  isCommand: (row: WorkerDockIdentity) => boolean
+): boolean {
+  return items.some(
+    (row) =>
+      isCommand(row) &&
+      (row.state === 'failed' || row.state === 'unexpected') &&
+      !workerDockClearable(row)
+  )
+}
+
+/** The row the pill names, and its details: the pill names a worker the host has not sent yet, so
+ *  this asks for the window around it. */
+export function useWorkerDockTop(
+  identities: readonly WorkerDockIdentity[],
+  rows: Rows,
+  loadWindow: (anchor: string) => void
+): { top: WorkerDockIdentity | undefined; topRow: WorkerDockRowView | undefined } {
+  const top = useMemo(() => workerDockTopRow(identities, rows), [identities, rows])
+  const topRow = top ? rows.get(top.id) : undefined
+  const missingTop = top && !topRow ? top.id : null
+  useEffect(() => {
+    if (missingTop) {
+      loadWindow(missingTop)
+    }
+  }, [missingTop, loadWindow])
+  return { top, topRow }
 }
