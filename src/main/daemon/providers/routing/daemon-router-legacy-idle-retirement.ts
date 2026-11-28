@@ -172,9 +172,12 @@ export class DaemonRouterLegacyIdleRetirement {
         this.options.drop(adapter)
         return
       }
-      // An unanswered request proves nothing: another client may have given it work, so it stays known.
-      if (result.state === 'busy' || result.state === 'unverifiable') {
+      if (result.state === 'busy') {
         this.checkAgainLater(adapter)
+      }
+      // Unanswered proves nothing (another client may have given it work); asking again soon also reopens its admission.
+      if (result.state === 'unverifiable') {
+        this.schedule(adapter, this.options.timing?.fenceMaxMs ?? DECISION_FENCE_MAX_MS)
       }
     } finally {
       clearTimeout(fenceTimer)
