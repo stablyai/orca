@@ -34,18 +34,14 @@ export function openDirectorySync(path: string, options?: OpenDirectoryOptions):
 
 class ListedDirectory implements DirectoryHandle {
   private next = 0
-  private closed = false
 
   constructor(
     readonly path: string,
-    private readonly entries: Dirent[]
+    private entries: Dirent[]
   ) {}
 
   readSync(): Dirent | null {
-    if (this.closed || this.next >= this.entries.length) {
-      return null
-    }
-    return this.entries[this.next++]
+    return this.next < this.entries.length ? this.entries[this.next++] : null
   }
 
   async read(): Promise<Dirent | null> {
@@ -53,7 +49,8 @@ class ListedDirectory implements DirectoryHandle {
   }
 
   closeSync(): void {
-    this.closed = true
+    // Drop the listing now; a caller may keep the handle after an early break.
+    this.entries = []
   }
 
   async close(): Promise<void> {

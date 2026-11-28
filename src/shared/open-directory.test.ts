@@ -2,7 +2,25 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, opendir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// The Windows path must never reach opendir, which is what crashes there.
+function refuseOnWindows<T extends (...args: never[]) => unknown>(real: T): T {
+  return ((...args: Parameters<T>) => {
+    if (process.platform === 'win32') {
+      throw new Error('opendir called on Windows')
+    }
+    return real(...args)
+  }) as T
+}
+vi.mock('node:fs', async (original) => {
+  const fs = await original<typeof import('node:fs')>()
+  return { ...fs, opendirSync: refuseOnWindows(fs.opendirSync) }
+})
+vi.mock('node:fs/promises', async (original) => {
+  const fs = await original<typeof import('node:fs/promises')>()
+  return { ...fs, opendir: refuseOnWindows(fs.opendir) }
+})
 import { openDirectory, openDirectorySync, type DirectoryHandle } from './open-directory'
 
 const originalPlatform = process.platform
