@@ -1,5 +1,13 @@
 import React from 'react'
-import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import {
+  Ellipsis,
+  FilePlus,
+  FolderPlus,
+  ListCollapse,
+  Loader2,
+  RefreshCw,
+  type LucideIcon
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -29,6 +37,8 @@ type FileExplorerToolbarProps = {
     handleRefresh: () => void
   }
   canRefresh: boolean
+  canCreate: boolean
+  onStartNew: (type: 'file' | 'folder') => void
   canCollapseAll: boolean
   onCollapseAll: () => void
   showGitIgnoredFilesToggle: boolean
@@ -48,6 +58,52 @@ function formatOpenInAppLabel(appName: string): string {
   )
 }
 
+function CreateButton({
+  icon: Icon,
+  labelKey,
+  label,
+  enabled,
+  onClick
+}: {
+  icon: LucideIcon
+  labelKey: string
+  label: string
+  enabled: boolean
+  onClick: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className={cn(
+            'text-muted-foreground hover:text-foreground',
+            !enabled && 'cursor-not-allowed'
+          )}
+          aria-label={t(labelKey, label)}
+          aria-disabled={!enabled}
+          // Native disabled buttons suppress Radix tooltip triggers in Chromium.
+          onClick={(event) => {
+            if (!enabled) {
+              event.preventDefault()
+              return
+            }
+            onClick()
+          }}
+        >
+          <Icon className="size-3" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {t(labelKey, label)}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function FileExplorerToolbar({
   repoName,
   worktreePath,
@@ -57,6 +113,8 @@ export function FileExplorerToolbar({
   workspaceId,
   refresh,
   canRefresh,
+  canCreate,
+  onStartNew,
   canCollapseAll,
   onCollapseAll,
   showGitIgnoredFilesToggle,
@@ -75,6 +133,20 @@ export function FileExplorerToolbar({
       >
         {repoName}
       </span>
+      <CreateButton
+        icon={FilePlus}
+        labelKey="auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36"
+        label="New File"
+        enabled={canCreate}
+        onClick={() => onStartNew('file')}
+      />
+      <CreateButton
+        icon={FolderPlus}
+        labelKey="auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d"
+        label="New Folder"
+        enabled={canCreate}
+        onClick={() => onStartNew('folder')}
+      />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

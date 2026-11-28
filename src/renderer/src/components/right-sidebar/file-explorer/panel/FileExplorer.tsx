@@ -219,6 +219,20 @@ function FileExplorerFiles(): React.JSX.Element {
     startNew: inlineInputState.startNew
   })
 
+  const { inlineInput, startNew } = inlineInputState
+  // Why: with a name filter active the new row would render under "No files match" and
+  // creating the file would clear the filter, so creation waits until the filter is cleared.
+  const canCreate = isFilesViewActive && displayRootPath !== null && !hasNameFilter
+  const handleToolbarStartNew = useCallback(
+    (type: 'file' | 'folder') => {
+      if (!canCreate || !displayRootPath || inlineInput) {
+        return
+      }
+      startNew(type, displayRootPath, displayDepth)
+    },
+    [canCreate, displayDepth, displayRootPath, inlineInput, startNew]
+  )
+
   useFileExplorerScopeTransition({
     displayRootPath,
     activeWorktreeId,
@@ -257,6 +271,8 @@ function FileExplorerFiles(): React.JSX.Element {
           workspaceId={activeWorktreeId}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
+          canCreate={canCreate}
+          onStartNew={handleToolbarStartNew}
           canCollapseAll={canCollapseAll}
           onCollapseAll={handleCollapseAll}
           showGitIgnoredFilesToggle={activeRepoSupportsGit}
