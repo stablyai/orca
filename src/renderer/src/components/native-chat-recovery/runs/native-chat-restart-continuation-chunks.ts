@@ -20,6 +20,13 @@ export type RestartContinuationBatchResult = {
   failed?: readonly ResumeFailure[]
 }
 
+/** What an action that never reached the host settles with. Read only. */
+export const NO_RESTART_CONTINUATION: RestartContinuationBatchResult = {
+  attempted: [],
+  continued: [],
+  skipped: new Set()
+}
+
 /** One immutable selection; uncertainty ends dispatch without attributing an outcome to its tail.
  *  `followHostLaunch`: the host's own launch action took the selection; wait for its answer instead. */
 export async function continueRestartChunks(

@@ -126,7 +126,7 @@ export abstract class UpdaterRequiredRestart extends UpdaterRemoteStatus {
   }
 
   protected abstract quitAndInstall(
-    trigger?: UpdateInstallTrigger,
+    trigger: UpdateInstallTrigger,
     isCurrentTeamRestart?: () => boolean
   ): void
 }

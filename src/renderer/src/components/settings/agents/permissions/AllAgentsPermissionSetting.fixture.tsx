@@ -6,14 +6,20 @@ import { AgentPermissionModeMenu } from './AgentPermissionModeMenu'
 
 const noop = (): void => {}
 
-/** Opens the first menu like a mouse press; optionally focuses a row so its tooltip shows. */
-async function openMenu(frame: HTMLElement, focusRow?: string): Promise<void> {
+/** Opens the first menu like a press; optionally focuses a row so its tooltip shows. */
+async function openMenu(
+  frame: HTMLElement,
+  focusRow?: string,
+  pointerType: 'mouse' | 'touch' = 'mouse'
+): Promise<void> {
   frame
     .querySelector('button[aria-haspopup="menu"]')
-    ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+    ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType }))
   await new Promise(requestAnimationFrame)
   await new Promise(requestAnimationFrame)
   if (focusRow) {
+    // Tooltips open on keyboard focus, not on focus that follows a pointer press.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
     ;[...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')]
       .find((row) => row.textContent?.startsWith(focusRow))
       ?.focus()
@@ -81,6 +87,13 @@ export const legacyHostAutoDisabled = defineFixture({
   interact: (frame) => openMenu(frame, 'Approve for me')
 })
 
+// A menu opened by touch (or in a narrow window) shows every description inline.
+export const settingsMenuTouch = defineFixture({
+  width: 800,
+  render: () => <Settings />,
+  interact: (frame) => openMenu(frame, undefined, 'touch')
+})
+
 export const composerMenu = defineFixture({
   width: 800,
   render: () => (
@@ -94,4 +107,19 @@ export const composerMenu = defineFixture({
     </div>
   ),
   interact: (frame) => openMenu(frame, 'Accept edits')
+})
+
+export const composerMenuTouch = defineFixture({
+  width: 800,
+  render: () => (
+    <div className="flex h-[420px] items-end p-4">
+      <NativeChatPermissionModePicker
+        current="ask"
+        modes={['ask', 'accept-edits', 'auto', 'full-access']}
+        agent="claude"
+        onSelect={noop}
+      />
+    </div>
+  ),
+  interact: (frame) => openMenu(frame, undefined, 'touch')
 })

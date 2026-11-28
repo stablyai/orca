@@ -202,9 +202,13 @@ export type RpcContext = {
     /** Tags this socket with the caller's installation until it closes. */
     declare(clientInstanceId: string): void
   }
-  // Authenticated runtime devices may manage only their own delegated phones.
+  // Authenticated runtime devices manage the phones of the installation they name. A claim is enough:
+  // the same device can already open a terminal here and revoke any device as this host's owner.
   delegatedMobileDevices?: {
-    sync(phones: readonly DelegatedPhone[]): DelegatedMobileDeviceSyncResult
+    sync(
+      phones: readonly DelegatedPhone[],
+      clientInstanceId?: string
+    ): DelegatedMobileDeviceSyncResult
   }
   // Binary terminal transport is absent on Unix and non-E2EE WebSocket paths.
   sendBinary?: RpcBinarySender

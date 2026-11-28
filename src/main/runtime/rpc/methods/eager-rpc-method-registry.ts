@@ -4,15 +4,11 @@ import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { SIDEBAR_REPO_ICON_METHODS } from './sidebar-inputs/sidebar-repo-icons'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
-import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
 import { TERMINAL_METHODS } from './terminal/terminal'
-import { TERMINAL_DAEMON_METHODS } from './terminal/terminal-daemon'
 import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
-import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
 import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './client-events/runtime-client-capabilities'
-import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import {
   LAYOUT_APPLY_METHODS,
@@ -30,14 +26,11 @@ export const EAGER_CORE_RPC_METHODS = [
   ...DESKTOP_WINDOW_METHODS,
   ...AGENT_HOOK_METHODS,
   ...REPO_METHODS,
-  ...WORKTREE_METHODS,
-  ...AGENT_ACTIVITY_METHODS,
-  ...STRUCTURED_AGENT_SESSION_METHODS
+  ...WORKTREE_METHODS
 ] as const
 
 export const EAGER_SERVICE_RPC_METHODS = [
   ...TERMINAL_METHODS,
-  ...TERMINAL_DAEMON_METHODS,
   ...SESSION_TAB_METHODS,
   ...WORKSPACE_LAYOUT_METHODS,
   // Switch point: a window-owned build registers no layout command.
@@ -45,7 +38,6 @@ export const EAGER_SERVICE_RPC_METHODS = [
   ...HOST_CAPABILITY_METHODS,
   ...RUNTIME_CLIENT_CAPABILITY_METHODS,
   ...CLIENT_EVENT_METHODS,
-  ...CLIENT_UI_METHODS,
   // Switch point: a window-fed build publishes no sidebar input.
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? SIDEBAR_INPUT_METHODS : []),
   ...SIDEBAR_REPO_ICON_METHODS

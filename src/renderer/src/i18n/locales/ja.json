@@ -1526,8 +1526,6 @@
           "localBaseRefNotUpdatedDirty": "{{value0}} に未コミットの変更があります。",
           "localBaseRefNotUpdatedNotFastForward": "{{value0}} にローカルのみのコミットがあります。",
           "localBaseRefNotUpdatedError": "Git エラー。",
-          "localBaseRefHideDetails": "詳細を隠す",
-          "localBaseRefShowDetails": "詳細",
           "0216895fb5": "ブランチの削除に失敗しました",
           "5366d13eec": "ワークスペースを削除しました、ブランチは保持されました",
           "2e17f825d4": "ワークツリーを削除しました、ブランチは保持されました",
@@ -1563,6 +1561,9 @@
           "localBaseRefShallowHistory": "ワークスペースは {{value0}} から作成されており、影響はありません。このクローンには最近の履歴しかないため、Git はローカルの {{value1}} が単に遅れているだけかを確認できず、Orca はローカルの {{value1}} ブランチを更新できませんでした。すべての新しいワークスペースでこれを解決するには、次を一度実行してください:",
           "localBaseRefRefreshTurnOff": "チェックを無効化",
           "localBaseRefRefreshTurnOffHelp": "「チェックを無効化」の動作",
+          "localBaseRefRefreshDisable": "無効化",
+          "localBaseRefRefreshDisableTooltip": "{{value0}} のチェックを停止",
+          "localBaseRefClose": "閉じる",
           "localBaseRefRefreshTurnOffTooltip": "Orca の設定 {{value0}} をオフにします。ワークスペースの作成時に Orca はローカルの {{value1}} を更新しなくなり、この警告も表示されなくなります。新しいワークスペースには影響しません。設定 › Git からいつでも再度オンにできます。",
           "localBaseRefUnshallow": "完全な履歴を取得",
           "localBaseRefUnshallowFailed": "このワークスペースのターミナルを開けませんでした",
@@ -14546,10 +14547,7 @@
             "keepFile": "ファイルを残す",
             "keepDeletion": "削除を維持",
             "refreshAll": "すべて更新",
-            "rebaseConflictCount_other": "{{count}} 件の競合",
-            "rebasePaused": "リベースを一時停止中",
             "rebaseResolveConflictsFirst": "先に競合を解決してください",
-            "rebaseAbort": "中止",
             "rebaseContinue": "続行",
             "continueRebasePausedAgain": "次の競合でリベースを一時停止しました",
             "continueRebaseFailed": "リベースの続行に失敗しました",
@@ -14560,7 +14558,6 @@
             "rebaseStopMovedOn": "リベースはすでに先へ進んでいます。パネルを確認してもう一度お試しください。",
             "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。",
             "rebaseStepUnreadableShort": "確認失敗",
-            "rebaseCheckAgain": "再確認",
             "rebaseRetryInspect": "再試行",
             "rebaseRetryInspectLabel": "リベースステップを再確認",
             "rebaseStoppedFinishInTerminal": "Git がこのステップで一時停止しました。ターミナルで完了するか、中止してください。",
@@ -14592,7 +14589,11 @@
             "scopeNoUncommitted": "未コミットの変更はありません。",
             "scopeCommitFiles": "ファイル",
             "gitGraphButton": "グラフ",
-            "compareLoadingAgainst": "{{base}} と比較中"
+            "compareLoadingAgainst": "{{base}} と比較中",
+            "operationResolve": "解決",
+            "operationResolveLabel": "AI で競合を解決する",
+            "operationMoreActions": "その他の操作",
+            "operationAbortConfirm": "もう一度選択すると中止します"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -15196,15 +15197,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "マージ競合",
-                    "7f3af87549": "リベースの競合",
-                    "6a8e9ad490": "チェリーピックの競合",
-                    "bdf8772106": "競合",
-                    "edc2d82a2b": "結合が進行中です",
-                    "5c3707aa44": "リベースが進行中です",
-                    "ffe53a1da6": "チェリーピック進行中",
-                    "35eb76d323": "操作が進行中です",
-                    "completeMerge": "マージを完了"
+                    "bdf8772106": "競合"
                   }
                 }
               },
@@ -19714,7 +19707,8 @@
         "failedSome_other": "再開できませんでした：{{total}} 件中 {{count}} 件",
         "resumedOne": "再開済み：{{name}}",
         "resumedMany_other": "再開済み：{{count}} 件の Agent",
-        "needYou_other": "{{count}} 件は対応が必要です"
+        "needYou_other": "{{count}} 件が対応待ち",
+        "resumedCount_other": "再開済み：{{count}} 件"
       },
       "RunTargetCombobox": {
         "noWslDistros": "WSL ディストリビューションが見つかりません",
@@ -26984,13 +26978,10 @@
     "loadFailed": "Git履歴を読み込めませんでした",
     "updateHost": "Gitグラフを開くには{{host}}のOrcaを更新してください",
     "title": "Gitグラフ",
-    "revertConflicts": "取り消しの競合",
-    "revertInProgress": "取り消し中",
     "abortOperationTitle": "{{operation}}を中止しますか？",
     "abortOperationDescription": "進行中の操作を中止します。この操作中に行った競合の解決が失われる場合があります。",
     "abortOperation": "{{operation}}を中止",
     "recoveryFailed": "操作を完了できませんでした。ソース管理を更新して、もう一度お試しください。",
-    "continueOperation": "{{operation}}を続行",
     "reverting": "取り消し中",
     "updateActionsHost": "コミットを操作するには、{{host}}のOrcaを更新してください",
     "thisHost": "このホスト",
@@ -27144,15 +27135,11 @@
       "colorSlate": "スレート",
       "colorGraphite": "グラファイト",
       "colorInk": "インク",
-      "noChatAgents": "このコンピュータで利用できるチャット Agent はありません。",
-      "change": "変更",
       "computer": "コンピュータ",
-      "computerHint": "ボットの実行場所です。",
       "computerAccountHint": "ボットの実行場所です。Orca には {{account}} としてサインインしています。",
       "useChatDefaults": "チャットのデフォルトを使用",
       "chatDefault": "チャット既定",
       "agent": "Agent",
-      "folder": "フォルダー: {{path}}",
       "name": "名前",
       "validation": {
         "addName": "名前を入力",

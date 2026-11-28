@@ -11,7 +11,14 @@ import { WorkerDockGlyph } from './WorkerDockGlyph'
 import { workerDockGlyph } from './worker-dock-card-order'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import {
+  NativeChatEventIcon,
+  type NativeChatEventBadge
+} from '../../../messages/events/NativeChatEventRow'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import { formatAgentTypeLabel } from '../../../../../../../shared/agent-status/presentation/agent-type-label'
 
 export type WorkerDockRowView = WorkerDockEntry & {
   retired?: boolean
@@ -24,6 +31,27 @@ export type WorkerDockRowView = WorkerDockEntry & {
  *  once (the ticket name stays in the tooltip, so it is never repeated in front of the title). */
 export function workerDockRowTitle(row: WorkerDockRowView): string {
   return (row.state === 'needs-you' && row.question) || row.title || row.name
+}
+
+function workerDockBadge(row: WorkerDockRowView | undefined): NativeChatEventBadge | null {
+  switch (row && workerDockGlyph(row)) {
+    case 'ask':
+      return 'needs-input'
+    case 'running':
+      return 'running'
+    case 'failed':
+      return 'failed'
+    case 'queued':
+      return 'queued'
+    case 'done':
+      return 'done'
+    case undefined:
+      return null
+  }
+}
+
+function workerDockAgentLabel(agent: AgentType | null | undefined): string {
+  return formatAgentTypeLabel(agent)
 }
 
 function Age({ at, visible }: { at: number | null; visible: boolean }) {
@@ -89,6 +117,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   const label = [
     mixed && row ? workerDockKindLabel(t, row.kind) : '',
     row ? workerDockSpokenTitle(row.kind, title) : title,
+    row?.kind === 'worker' ? workerDockAgentLabel(row.agent) : '',
     state,
     progress,
     remote
@@ -119,8 +148,17 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           }
         }}
       >
-        <span className="flex h-5 shrink-0 items-center">
-          <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
+        <span className="flex h-5 w-3 shrink-0 items-center justify-center">
+          {row?.kind === 'worker' ? (
+            <NativeChatEventIcon
+              badge={workerDockBadge(row)}
+              badgeClassName="group-hover/worker:bg-accent group-focus-within/worker:bg-accent"
+            >
+              <AgentTypeIcon agentType={row.agent ?? null} size={14} />
+            </NativeChatEventIcon>
+          ) : (
+            <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
+          )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           {/* A command is one mono line; the tooltip carries the whole of it. */}

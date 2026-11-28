@@ -1552,8 +1552,6 @@
           "localBaseRefNotUpdatedDirty": "Cambios sin confirmar en {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits solo locales en {{value0}}.",
           "localBaseRefNotUpdatedError": "Error de Git.",
-          "localBaseRefHideDetails": "Ocultar detalles",
-          "localBaseRefShowDetails": "Detalles",
           "0216895fb5": "No se pudo eliminar la rama",
           "5366d13eec": "Espacio de trabajo eliminado, rama conservada",
           "2e17f825d4": "Worktree eliminado, rama conservada",
@@ -1589,6 +1587,9 @@
           "localBaseRefShallowHistory": "Tu espacio de trabajo se creó a partir de {{value0}} y no se ve afectado. Orca no pudo actualizar además tu rama local {{value1}} porque este clon solo tiene el historial reciente, así que Git no puede confirmar que {{value1}} local solo esté atrasada. Para solucionarlo en todos los espacios de trabajo nuevos, ejecuta una vez:",
           "localBaseRefRefreshTurnOff": "Desactivar comprobación",
           "localBaseRefRefreshTurnOffHelp": "Qué hace Desactivar comprobación",
+          "localBaseRefRefreshDisable": "Desactivar",
+          "localBaseRefRefreshDisableTooltip": "Dejar de comprobar {{value0}}",
+          "localBaseRefClose": "Cerrar",
           "localBaseRefRefreshTurnOffTooltip": "Desactiva el ajuste de Orca {{value0}}. Orca dejará de actualizar {{value1}} local al crear un espacio de trabajo y esta advertencia dejará de aparecer. Los espacios de trabajo nuevos no se ven afectados. Vuelve a activarlo cuando quieras en Ajustes › Git.",
           "localBaseRefUnshallow": "Obtener historial completo",
           "localBaseRefUnshallowFailed": "No se pudo abrir una terminal para este espacio de trabajo",
@@ -14899,12 +14900,7 @@
             "keepFile": "Conservar archivo",
             "keepDeletion": "Mantener eliminación",
             "refreshAll": "Actualizar todo",
-            "rebaseConflictCount_one": "{{count}} conflicto",
-            "rebaseConflictCount_other": "{{count}} conflictos",
-            "rebaseConflictCount_many": "{{count}} conflictos",
-            "rebasePaused": "Rebase en pausa",
             "rebaseResolveConflictsFirst": "Resuelve primero los conflictos",
-            "rebaseAbort": "Abortar",
             "rebaseContinue": "Continuar",
             "continueRebasePausedAgain": "Rebase en pausa en el siguiente conflicto",
             "continueRebaseFailed": "Error al continuar el rebase",
@@ -14915,7 +14911,6 @@
             "rebaseStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo.",
             "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal.",
             "rebaseStepUnreadableShort": "Comprobación fallida",
-            "rebaseCheckAgain": "Comprobar de nuevo",
             "rebaseRetryInspect": "Reintentar",
             "rebaseRetryInspectLabel": "Volver a comprobar el paso del rebase",
             "rebaseStoppedFinishInTerminal": "Git pausó este paso. Termínalo en una terminal o aborta.",
@@ -14949,7 +14944,11 @@
             "scopeNoUncommitted": "No hay cambios sin confirmar.",
             "scopeCommitFiles": "Archivos",
             "gitGraphButton": "Grafo",
-            "compareLoadingAgainst": "Comparando con {{base}}"
+            "compareLoadingAgainst": "Comparando con {{base}}",
+            "operationResolve": "Resolver",
+            "operationResolveLabel": "Resolver conflictos con IA",
+            "operationMoreActions": "Más acciones",
+            "operationAbortConfirm": "Vuelve a seleccionar para abortar"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -15575,15 +15574,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Fusionar conflictos",
-                    "7f3af87549": "Rebase de conflictos",
-                    "6a8e9ad490": "Conflictos selectos",
-                    "bdf8772106": "Conflictos",
-                    "edc2d82a2b": "Fusión en progreso",
-                    "5c3707aa44": "Rebase en progreso",
-                    "ffe53a1da6": "Selección en progreso",
-                    "35eb76d323": "Operación en curso",
-                    "completeMerge": "Completar fusión"
+                    "bdf8772106": "Conflictos"
                   }
                 }
               },
@@ -20214,7 +20205,10 @@
         "resumedMany_other": "Reanudados: {{count}} agentes",
         "needYou_one": "{{count}} te necesita",
         "needYou_many": "{{count}} te necesitan",
-        "needYou_other": "{{count}} te necesitan"
+        "needYou_other": "{{count}} te necesitan",
+        "resumedCount_one": "Reanudado: {{count}}",
+        "resumedCount_many": "Reanudados: {{count}}",
+        "resumedCount_other": "Reanudados: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "No se encontraron distribuciones WSL",
@@ -27732,13 +27726,10 @@
     "loadFailed": "No se pudo cargar el historial de Git",
     "updateHost": "Actualiza Orca en {{host}} para abrir el grafo de Git",
     "title": "Grafo de Git",
-    "revertConflicts": "Conflictos de reversión",
-    "revertInProgress": "Reversión en curso",
     "abortOperationTitle": "¿Abortar {{operation}}?",
     "abortOperationDescription": "Esto cancela la operación en curso y puede descartar las resoluciones de conflictos realizadas durante ella.",
     "abortOperation": "Abortar {{operation}}",
     "recoveryFailed": "No se pudo finalizar la operación. Actualiza el control de código fuente e inténtalo de nuevo.",
-    "continueOperation": "Continuar {{operation}}",
     "reverting": "Revirtiendo",
     "updateActionsHost": "Actualiza Orca en {{host}} para realizar acciones sobre commits",
     "thisHost": "este host",
@@ -27898,15 +27889,11 @@
       "colorSlate": "Pizarra",
       "colorGraphite": "Grafito",
       "colorInk": "Tinta",
-      "noChatAgents": "No hay agentes de chat disponibles en este ordenador.",
-      "change": "Cambiar",
       "computer": "Ordenador",
-      "computerHint": "Dónde se ejecuta el bot.",
       "computerAccountHint": "Dónde se ejecuta el bot, con la sesión de Orca iniciada como {{account}}.",
       "useChatDefaults": "Usar los valores predeterminados del chat",
       "chatDefault": "Del chat",
       "agent": "Agente",
-      "folder": "Carpeta: {{path}}",
       "name": "Nombre",
       "validation": {
         "addName": "Añade un nombre",

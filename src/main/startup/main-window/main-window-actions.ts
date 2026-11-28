@@ -14,7 +14,7 @@ import type { AppMenuQuitHandlers } from '../../menu/app-menu-quit-item'
 import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import { recordCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../../updater/updater-service'
+import { isQuittingForUpdate, loadUpdaterService } from '../../updater/updater-service-slot'
 import {
   createSystemTray,
   setMacMenuBarIconVisible,
@@ -213,8 +213,12 @@ export async function quitAfterRendererStoppedAllSessions(
 }
 
 export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
-  ensureAutoUpdaterConfigured()
-  checkForUpdatesFromMenu(options)
+  void ensureAutoUpdaterConfigured()
+    .then(() => loadUpdaterService())
+    .then((updaterService) => updaterService.checkForUpdatesFromMenu(options))
+    .catch((error: unknown) => {
+      console.warn('[updater] menu update check failed:', error)
+    })
 }
 
 export function getSystemTrayOptions(): SystemTrayOptions | null {

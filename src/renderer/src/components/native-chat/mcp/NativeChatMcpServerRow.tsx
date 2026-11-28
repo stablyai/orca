@@ -45,6 +45,8 @@ const DETAIL_INSET = 'mr-2 mb-1.5 ml-8'
 export function NativeChatMcpServerRow({
   server,
   runtime,
+  hostName,
+  signInWithOrca,
   signIn,
   pending,
   busy,
@@ -57,6 +59,9 @@ export function NativeChatMcpServerRow({
   server: AgentSessionMcpServer
   /** Where the agent runs: only an agent on this computer receives the browser's sign-in callback. */
   runtime: 'local' | 'remote'
+  hostName?: string
+  /** Orca signs in to this server itself, in its own sign-in dialog. */
+  signInWithOrca?: () => void
   /** This row's sign-in in progress. */
   signIn: AgentSessionMcpSignIn | null
   /** This row's action in flight. */
@@ -83,7 +88,7 @@ export function NativeChatMcpServerRow({
         : t('components.native-chat.mcp.signIn.waiting', 'Waiting for sign-in…')
     : atRest && server.status === 'not-started'
       ? ''
-      : mcpServerStatusLine(server, t)
+      : mcpServerStatusLine(server, t, hostName)
   const cancel = (
     <Button type="button" variant="ghost" size="xs" onClick={dismissSignIn}>
       {t('components.native-chat.mcp.cancel', 'Cancel')}
@@ -110,12 +115,12 @@ export function NativeChatMcpServerRow({
       )}
       {cancel}
     </>
-  ) : server.canSignIn && server.status === 'needs-auth' ? (
+  ) : (server.canSignIn || signInWithOrca) && server.status === 'needs-auth' ? (
     <Button
       type="button"
       size="xs"
       disabled={busy}
-      onClick={() => run({ action: 'signIn', server: name })}
+      onClick={signInWithOrca ?? (() => run({ action: 'signIn', server: name }))}
     >
       <PendingLabel pending={pending?.action === 'signIn'}>
         {t('components.native-chat.mcp.signIn.action', 'Sign in')}
