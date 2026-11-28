@@ -5,6 +5,8 @@ import {
   unpinLocalImageCacheKey
 } from './local-image-cache-pinning'
 import { isCommittedAgentSessionAttachmentPath } from '../../../../../shared/agent-session/agent-session-attachments'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/runtime/files/watching/worktree-file-change-event'
+import { IMAGE_AND_PDF_PREVIEW_MIME_TYPES } from '../../../../../shared/file-preview/file-preview-kind'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
 // Bound retained encoded image payload separately from the reusable entry target.
@@ -151,20 +153,41 @@ export function isImmutableLocalImageCacheKey(key: string): boolean {
   return isCommittedAgentSessionAttachmentPath(key.slice(key.lastIndexOf('\0') + 1))
 }
 
-export function invalidateLocalImageCache(): void {
+function matchesCacheKeyPath(key: string, targetPath: string): boolean {
+  if (key === targetPath || key.endsWith(`\0${targetPath}`)) {
+    return true
+  }
+  const normalizedTarget = targetPath.replace(/\\/g, '/')
+  const lastIndex = key.lastIndexOf('\0')
+  const keyPath = lastIndex === -1 ? key : key.slice(lastIndex + 1)
+  return keyPath.replace(/\\/g, '/') === normalizedTarget
+}
+
+function isImageFilePath(filePath: string): boolean {
+  const dotIndex = filePath.lastIndexOf('.')
+  if (dotIndex === -1) {
+    return false
+  }
+  const mime = IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePath.slice(dotIndex).toLowerCase()]
+  return mime !== undefined && mime !== 'application/pdf'
+}
+
+export function invalidateLocalImageCache(targetPath?: string): void {
   const staleUrls: string[] = []
-  for (const [key, url] of blobUrlCache) {
-    if (!isImmutableLocalImageCacheKey(key)) {
+  const shouldInvalidate = (key: string): boolean =>
+    !isImmutableLocalImageCacheKey(key) &&
+    (targetPath === undefined || matchesCacheKeyPath(key, targetPath))
+  for (const [key, url] of blobUrlCache.entries()) {
+    if (shouldInvalidate(key)) {
       staleUrls.push(url)
       blobUrlCache.delete(key)
       blobUrlCacheBytes.delete(key)
     }
   }
-  for (const key of inFlightBlobUrlLoads.keys()) {
-    if (!isImmutableLocalImageCacheKey(key)) {
-      inFlightBlobUrlLoads.delete(key)
-    }
-  }
+  // The generation bump below rejects every in-flight load, not just matching
+  // keys. Drop them all so listener re-runs start fresh reads instead of
+  // reusing promises that are doomed to resolve null (blank unrelated images).
+  inFlightBlobUrlLoads.clear()
   cacheGeneration += 1
   for (const listener of cacheListeners) {
     listener()
@@ -199,18 +222,46 @@ function invalidateWhenShownUnfocused(): void {
   }
 }
 
+function handleWorktreeFileChange(
+  event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]
+): void {
+  const { payload } = event.detail
+  if (payload.resync) {
+    invalidateLocalImageCache()
+    return
+  }
+  for (const fsEvent of payload.events) {
+    if (fsEvent.kind === 'overflow') {
+      invalidateLocalImageCache()
+      return
+    }
+    if (isImageFilePath(fsEvent.absolutePath)) {
+      invalidateLocalImageCache(fsEvent.absolutePath)
+    }
+    if (fsEvent.oldAbsolutePath && isImageFilePath(fsEvent.oldAbsolutePath)) {
+      invalidateLocalImageCache(fsEvent.oldAbsolutePath)
+    }
+  }
+}
+
+function onWindowFocus(): void {
+  invalidateLocalImageCache()
+}
+
 export function disposeLocalImageCacheState(): void {
   if (typeof window !== 'undefined') {
-    window.removeEventListener('focus', invalidateLocalImageCache)
+    window.removeEventListener('focus', onWindowFocus)
     document.removeEventListener('visibilitychange', invalidateWhenShownUnfocused)
+    window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleWorktreeFileChange)
   }
   resetLocalImageCacheState()
 }
 
 // Every shown image, including one whose read failed, reads again when the window comes back.
 if (typeof window !== 'undefined') {
-  window.addEventListener('focus', invalidateLocalImageCache)
+  window.addEventListener('focus', onWindowFocus)
   document.addEventListener('visibilitychange', invalidateWhenShownUnfocused)
+  window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleWorktreeFileChange)
 }
 
 if (import.meta !== undefined && import.meta.hot) {
