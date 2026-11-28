@@ -4,7 +4,10 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi, type Mock } from 'vitest'
 import { toast } from 'sonner'
 import { useNativeChatComposerAttachments } from '../../attachments/chips/use-native-chat-composer-attachments'
-import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
 import { useNativeChatComposerPaste } from '../../paste/use-native-chat-composer-paste'
 import {
@@ -15,7 +18,6 @@ import type { NativeChatAttachmentOwner } from '../../attachments/uploads/native
 import { translate } from '@/i18n/i18n'
 import { nativeChatImageOnlyPendingCountForTests } from '../../attachments/chips/use-native-chat-image-only-pending'
 import type { NativeChatComposerInput } from '../../composer/editor/native-chat-composer-input'
-import { updateNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import {
   nativeChatNotesCloseErrorText,
   nativeChatNotesHandOffErrorText

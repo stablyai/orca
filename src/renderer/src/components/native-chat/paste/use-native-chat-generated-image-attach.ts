@@ -2,10 +2,7 @@ import { useCallback } from 'react'
 import type { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
 import { ownerAcceptsClipboardImage } from './native-chat-clipboard-image-save'
-import {
-  markNativeChatImageOnlyPending,
-  releaseNativeChatImageOnlyPending
-} from '../attachments/chips/use-native-chat-image-only-pending'
+import { settleNativeChatImageOnlyPending } from '../attachments/chips/use-native-chat-image-only-pending'
 import type { NativeChatComposerInput } from '../composer/editor/native-chat-composer-input'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
@@ -55,14 +52,11 @@ export function useNativeChatGeneratedImageAttach(
       if (!pendingId) {
         return null
       }
-      markNativeChatImageOnlyPending(pendingId)
-      try {
-        return (await saveClipboardImage(owner, pendingId, false, undefined, undefined, png))
+      return settleNativeChatImageOnlyPending(pendingId, async () =>
+        (await saveClipboardImage(owner, pendingId, false, undefined, undefined, png))
           ? pendingId
           : null
-      } finally {
-        releaseNativeChatImageOnlyPending(pendingId)
-      }
+      )
     },
     [canPaste, input, resolveAttachmentOwner, saveClipboardImage, startImageChip]
   )

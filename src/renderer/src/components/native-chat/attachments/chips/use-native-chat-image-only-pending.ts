@@ -5,14 +5,18 @@ import type { NativeChatPendingAttachmentChips } from '../intake/native-chat-ses
 // a message box that takes no images drops it rather than keep its path as a file reference.
 const imageOnly = new Set<string>()
 
-/** Marks a pending chip as an image or nothing, until its attach settles (see the release). */
-export function markNativeChatImageOnlyPending(id: string): void {
+/** Marks a pending chip as an image or nothing while `settle` runs, and ends the mark however
+ *  it ends: attached, dropped or failed. */
+export async function settleNativeChatImageOnlyPending<T>(
+  id: string,
+  settle: () => Promise<T>
+): Promise<T> {
   imageOnly.add(id)
-}
-
-/** Ends the mark, however the attach ended: attached, dropped or failed. */
-export function releaseNativeChatImageOnlyPending(id: string): void {
-  imageOnly.delete(id)
+  try {
+    return await settle()
+  } finally {
+    imageOnly.delete(id)
+  }
 }
 
 export function nativeChatImageOnlyPendingCountForTests(): number {
