@@ -71,29 +71,49 @@ async function holderWithRequest(): Promise<{ exited: Promise<number | null> }> 
   return { exited }
 }
 
-describe.skipIf(process.platform === 'win32')(
-  'WSL distro holder script',
-  { timeout: 30_000 },
-  () => {
-    // QA repro (systemd distro): WSL parks `-bash` under a root `/bin/login -f` for the holder's
-    // own account; the holder counted it and wrote `bash` to its blocked note forever.
-    it("lets go despite the idle shell WSL's systemd login parks for the account", async () => {
-      fakeProcess(500, { name: 'login', uid: 0 })
-      fakeProcess(501, { name: 'bash', ppid: 500 })
-      fakeProcess(502, { name: 'systemd' })
-      const { exited } = await holderWithRequest()
-      await expect(exited).resolves.toBe(0)
-    })
+/** Whichever comes first: the holder's exit, or the busy note it writes when it decides to hold. */
+async function outcome(exited: Promise<number | null>): Promise<string> {
+  let code: number | null | undefined
+  void exited.then((value) => {
+    code = value
+  })
+  await expect
+    .poll(() => code !== undefined || readBlocked() !== '', { timeout: RELEASE_BOUND_MS })
+    .toBe(true)
+  return code !== undefined ? `exit ${code}` : readBlocked()
+}
 
-    it("still holds for the user's own shell, and for work started under the login's shell", async () => {
-      fakeProcess(500, { name: 'login', uid: 0 })
-      fakeProcess(501, { name: 'bash', ppid: 500 })
-      // Another wsl.exe session's shell runs under WSL's init (a root `init`), not under login.
-      fakeProcess(600, { name: 'init', uid: 0 })
-      fakeProcess(601, { name: 'bash', ppid: 600 })
-      fakeProcess(502, { name: 'tmux', ppid: 501 })
-      await holderWithRequest()
-      await expect.poll(readBlocked, { timeout: RELEASE_BOUND_MS }).toBe('tmux bash\n')
-    })
-  }
-)
+async function holderOutcome(): Promise<string> {
+  return outcome((await holderWithRequest()).exited)
+}
+
+describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => {
+  // QA repro (systemd distro): WSL parks `-bash` under a root `/bin/login -f` for the holder's
+  // own account; the holder counted it and wrote `bash` to its blocked note forever.
+  it("lets go despite the idle shell WSL's systemd login parks for the account", async () => {
+    fakeProcess(500, { name: 'login', uid: 0 })
+    fakeProcess(501, { name: 'bash', ppid: 500 })
+    fakeProcess(502, { name: 'systemd' })
+    expect(await holderOutcome()).toBe('exit 0')
+  })
+
+  it("still holds for another session's shell and for work under the login's shell", async () => {
+    fakeProcess(500, { name: 'login', uid: 0 })
+    fakeProcess(501, { name: 'bash', ppid: 500 })
+    // Another wsl.exe session's shell runs under WSL's init (a root `init`), not under login.
+    fakeProcess(600, { name: 'init', uid: 0 })
+    fakeProcess(601, { name: 'bash', ppid: 600 })
+    fakeProcess(502, { name: 'tmux', ppid: 501 })
+    expect(await holderOutcome()).toBe('tmux bash\n')
+  })
+
+  it('still holds for a login that is not root, or a non-shell a login profile exec-ed', async () => {
+    // A user-run `login` is the user's own: it and its shell both count.
+    fakeProcess(500, { name: 'login' })
+    fakeProcess(501, { name: 'bash', ppid: 500 })
+    // A profile's `exec node server.js` replaces the login shell with real work.
+    fakeProcess(700, { name: 'login', uid: 0 })
+    fakeProcess(701, { name: 'node', ppid: 700 })
+    expect(await holderOutcome()).toBe('login bash node\n')
+  })
+})
