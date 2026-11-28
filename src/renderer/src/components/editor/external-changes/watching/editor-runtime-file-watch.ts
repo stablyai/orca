@@ -2,10 +2,7 @@ import type { FsChangedPayload } from '../../../../../../shared/file-watch/files
 import { subscribeRuntimeFileChanges } from '@/runtime/files/watching/runtime-file-watch-client'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import {
-  isRuntimeEnvironmentPairingChangedError,
-  refreshRuntimeEnvironmentsAfterPairingChange
-} from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { isRuntimeEnvironmentPairingChangedError } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
@@ -39,15 +36,11 @@ export function subscribeEditorRuntimeFileWatch(
       return false
     }
     pairingRetries += 1
+    // No per-watch catalog read: a real re-pairing republishes the catalog, and that restarts this watch.
     retryTimer = setTimeout(() => {
       retryTimer = null
       if (!disposed && attempt === failedAttempt) {
-        // Catalog first, so a real re-pairing retries with the new revision.
-        void refreshRuntimeEnvironmentsAfterPairingChange(error).finally(() => {
-          if (!disposed && attempt === failedAttempt) {
-            start(true)
-          }
-        })
+        start(true)
       }
     }, delayMs)
     return true
