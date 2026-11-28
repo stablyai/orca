@@ -42,6 +42,7 @@ export type RuntimeRepositoryCommandSurface = {
   updateFolderWorkspace: RuntimeProjectGroupController['updateFolderWorkspace']
   deleteFolderWorkspace: RuntimeProjectGroupController['deleteFolderWorkspace']
   scanNestedRepos: RuntimeNestedRepoImport['scan']
+  findExistingProjectCheckouts: RuntimeNestedRepoImport['findExistingCheckouts']
   importNestedRepos: RuntimeNestedRepoImport['import']
   browseServerDir: RuntimeServerEnvironmentCommands['browseDirectory']
   isGitAvailable: RuntimeServerEnvironmentCommands['isGitAvailable']
@@ -128,6 +129,7 @@ export function installRuntimeRepositoryCommandSurface(
     updateFolderWorkspace: groups.updateFolderWorkspace.bind(groups),
     deleteFolderWorkspace: groups.deleteFolderWorkspace.bind(groups),
     scanNestedRepos: nested.scan.bind(nested),
+    findExistingProjectCheckouts: nested.findExistingCheckouts.bind(nested),
     importNestedRepos: nested.import.bind(nested),
     browseServerDir: server.browseDirectory.bind(server),
     isGitAvailable: server.isGitAvailable.bind(server),

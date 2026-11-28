@@ -40,6 +40,16 @@ export const ProjectHostSetupExistingFolder = lazyZodSchema(() =>
   })
 )
 
+// Bounded so a client cannot turn one lookup into a broad filesystem walk.
+export const ProjectHostSetupFindExistingCheckouts = lazyZodSchema(() =>
+  z.object({
+    projectName: requiredString('Missing project name').pipe(z.string().max(256)),
+    remoteUrl: OptionalString,
+    kind: z.enum(['git', 'folder']),
+    extraRoots: z.array(z.string().min(1).max(4096)).max(4).optional()
+  })
+)
+
 export const ProjectHostSetupClone = lazyZodSchema(() =>
   z.object({
     projectId: requiredString('Missing project ID'),

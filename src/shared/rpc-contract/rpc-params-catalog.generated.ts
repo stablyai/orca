@@ -815,6 +815,7 @@ import {
   ProjectHostSetupCreate,
   ProjectHostSetupDelete,
   ProjectHostSetupExistingFolder,
+  ProjectHostSetupFindExistingCheckouts,
   ProjectHostSetupUpdate,
   ProjectUpdate
 } from './projects/project-runtime-params'
@@ -2139,6 +2140,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectHostSetup.clone': ProjectHostSetupClone,
   'projectHostSetup.create': ProjectHostSetupCreate,
   'projectHostSetup.delete': ProjectHostSetupDelete,
+  'projectHostSetup.findExistingCheckouts': ProjectHostSetupFindExistingCheckouts,
   'projectHostSetup.list': null,
   'projectHostSetup.setupExistingFolder': ProjectHostSetupExistingFolder,
   'projectHostSetup.update': ProjectHostSetupUpdate,

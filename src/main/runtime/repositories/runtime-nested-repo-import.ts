@@ -17,6 +17,10 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
+import type {
+  ExistingCheckoutSuggestion,
+  FindExistingCheckoutsArgs
+} from '../../../shared/project/host-setup/existing-checkout-suggestions'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
 
@@ -43,6 +47,15 @@ export class RuntimeNestedRepoImport {
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     const { scanNestedRepos } = await import('../../project-groups/nested-repo-discovery')
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
+  }
+
+  async findExistingCheckouts(
+    args: FindExistingCheckoutsArgs
+  ): Promise<{ suggestions: ExistingCheckoutSuggestion[] }> {
+    const workspaceDir = this.deps.getStore()?.getSettings().workspaceDir
+    const { findExistingCheckouts } =
+      await import('../../git/repositories/discovery/existing-checkout-discovery')
+    return { suggestions: await findExistingCheckouts({ ...args, workspaceDir }) }
   }
 
   async import(args: {
