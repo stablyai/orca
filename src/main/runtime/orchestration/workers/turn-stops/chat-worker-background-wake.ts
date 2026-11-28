@@ -47,7 +47,7 @@ export function wakeChatWorkerAfterBackgroundExit(
     from: BACKGROUND_WAKE_SENDER,
     to,
     subject: 'Your background task finished',
-    body: `Orca: the background task you left running has ended.${commands}\n\nRead its output and continue your task. This is not coordinator mail; don't reply to it.`,
+    body: `Orca: the background task you left running has ended.${commands}\n\nRead its output and continue your task; if the output can't be read any more, say so rather than guess what it printed. This is not coordinator mail; don't reply to it.`,
     runId: dispatch.run_id
   })
   deps.notify(message.to_handle, message.type)

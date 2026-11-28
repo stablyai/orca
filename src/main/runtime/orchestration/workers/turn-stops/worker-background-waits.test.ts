@@ -57,6 +57,7 @@ describe('a worker waiting on its own background task', () => {
   let runId: string
   let timers: Timer[]
   let row: AgentStatusIpcPayload | null
+  let stopRequestedSince: (sessionId: string, since: number) => boolean
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -78,6 +79,7 @@ describe('a worker waiting on its own background task', () => {
     }).id
     timers = []
     row = null
+    stopRequestedSince = () => false
   })
 
   afterEach(() => {
@@ -91,6 +93,7 @@ describe('a worker waiting on its own background task', () => {
       getDb: () => db,
       isWaitingForMail: () => false,
       notify: () => {},
+      backgroundStopRequestedSince: (sessionId, since) => stopRequestedSince(sessionId, since),
       readHookRow: () => row,
       getHandle: () => HANDLE,
       getProcessIncarnation: () => incarnation,
@@ -421,6 +424,12 @@ describe('a worker waiting on its own background task', () => {
       })
       endWait('codex')
       expect(workerMail().map((m) => m.from)).toEqual(['orca-bg-wake'])
+    })
+
+    it('does not wake a worker whose background task a person stopped', () => {
+      stopRequestedSince = (sessionId, since) => sessionId === SESSION && since === TURN_END
+      endWait('codex')
+      expect(workerMail()).toEqual([])
     })
 
     it('does not wake a worker whose turn was stopped', () => {

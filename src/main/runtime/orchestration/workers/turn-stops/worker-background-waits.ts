@@ -200,7 +200,12 @@ export class WorkerBackgroundWaits {
     wait: { since: number; commands?: string[] }
   ): void {
     try {
-      if (!heldTurnFinished(row, wait.since)) {
+      const sessionId = row.tabId ? structuredAgentSessionIdOfTab(row.tabId) : null
+      // A task the person stopped ended by their hand: there's nothing for the agent to pick up.
+      if (
+        !heldTurnFinished(row, wait.since) ||
+        (sessionId && this.deps.backgroundStopRequestedSince?.(sessionId, wait.since))
+      ) {
         return
       }
       // One chat runs one turn: its first open Dispatch's mail starts it.
