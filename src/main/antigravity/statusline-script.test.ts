@@ -20,6 +20,7 @@ let posts: Post[]
 let holdResponses: boolean
 let releaseResponses: (() => void)[]
 let responded: number
+let closedRequests: number
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'orca-agy-script-'))
@@ -27,7 +28,9 @@ beforeEach(async () => {
   holdResponses = false
   releaseResponses = []
   responded = 0
+  closedRequests = 0
   server = createServer((req, res) => {
+    req.socket.on('close', () => (closedRequests += 1))
     let body = ''
     req.on('data', (chunk) => (body += chunk))
     req.on('end', () => {
@@ -170,13 +173,32 @@ describe.skipIf(process.platform === 'win32')('Antigravity status-line script', 
     expect(result.stdout.startsWith('? for shortcuts')).toBe(true)
   })
 
-  it('exits while the server has not answered yet', async () => {
+  it('leaves the post running in the background when the script exits', async () => {
     holdResponses = true
     const result = await run(writeScript("printf 'x'"), JSON.stringify({ quota: QUOTA }), orcaEnv())
-    // The run closed its pipes, yet the server is still holding the request it received.
-    expect(responded).toBe(0)
+    // A post made in the foreground would time out and hang up before the script returned.
+    expect(closedRequests).toBe(0)
     expect(result.stdout).toBe('x')
     await expect.poll(() => posts.length).toBe(1)
-    expect(responded).toBe(0)
+  })
+
+  it('does not mistake a string value for the model key', async () => {
+    const payload = {
+      conversation_title: 'model',
+      cycle_mode: 'auto',
+      model: MODEL,
+      terminal_width: 60
+    }
+    const result = await run(writeScript(null), JSON.stringify(payload))
+    expect(result.stdout).toBe(`? for shortcuts${' '.repeat(18)}auto · Gemini 4 Neon · high\n`)
+  })
+
+  it('stops posting once the feature is off while still running the user command', async () => {
+    const script = join(dir, 'passthrough.sh')
+    writeFileSync(script, getAntigravityStatusLineScript("printf 'mine'", { forwardQuota: false }))
+    const result = await run(script, JSON.stringify({ quota: QUOTA }), orcaEnv())
+    await settle()
+    expect(result.stdout).toBe('mine')
+    expect(posts).toHaveLength(0)
   })
 })

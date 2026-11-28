@@ -9,11 +9,15 @@ const DEFAULT_FOOTER_LEFT = '? for shortcuts'
 const JSON_FIELD_LINES = [
   "orca_agy_q='\"'",
   "orca_agy_rb='}'",
+  // A key is a quoted name followed by a colon, so a string value that merely says "model" is skipped.
   'orca_agy_json_field() {',
-  '  case "$1" in *"$orca_agy_q$2$orca_agy_q"*) ;; *) return 1 ;; esac',
-  '  orca_agy_rest=${1#*"$orca_agy_q$2$orca_agy_q"}',
-  '  orca_agy_rest=${orca_agy_rest#"${orca_agy_rest%%[![:space:]]*}"}',
-  '  case "$orca_agy_rest" in \':\'*) ;; *) return 1 ;; esac',
+  '  orca_agy_scan=$1',
+  '  while :; do',
+  '    case "$orca_agy_scan" in *"$orca_agy_q$2$orca_agy_q"*) ;; *) return 1 ;; esac',
+  '    orca_agy_scan=${orca_agy_scan#*"$orca_agy_q$2$orca_agy_q"}',
+  '    orca_agy_rest=${orca_agy_scan#"${orca_agy_scan%%[![:space:]]*}"}',
+  '    case "$orca_agy_rest" in \':\'*) break ;; esac',
+  '  done',
   '  orca_agy_rest=${orca_agy_rest#:}',
   '  orca_agy_rest=${orca_agy_rest#"${orca_agy_rest%%[![:space:]]*}"}',
   '}',
@@ -109,7 +113,10 @@ const READ_PAYLOAD_LINES = [
 ]
 
 // POSIX only: agy's status line runs through `sh -c`; Windows, WSL and SSH hosts are not supported.
-export function getAntigravityStatusLineScript(originalCommand: string | null): string {
+export function getAntigravityStatusLineScript(
+  originalCommand: string | null,
+  options: { forwardQuota?: boolean } = {}
+): string {
   const original = originalCommand?.trim() ? originalCommand : null
   const body = original
     ? [
@@ -124,7 +131,8 @@ export function getAntigravityStatusLineScript(originalCommand: string | null): 
     '#!/bin/sh',
     ...JSON_FIELD_LINES,
     ...(original ? [] : DEFAULT_FOOTER_LINES),
-    ...POST_QUOTA_LINES,
+    // A script kept after the feature is off still draws the row but never posts.
+    ...(options.forwardQuota === false ? ['orca_agy_post_quota() { :; }'] : POST_QUOTA_LINES),
     ...body,
     ''
   ].join('\n')
