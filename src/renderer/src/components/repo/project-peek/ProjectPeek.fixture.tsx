@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import type { RepoUpdate } from '@/store/repos/repo-state'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { RepoMark } from '../RepoMark'
@@ -94,9 +96,27 @@ const lettersRepo: Repo = {
 
 const REPOS = [githubRepo, forkRepo, gitlabRepo, folderRepo, longRepo, lettersRepo]
 
-const STORE = { repos: REPOS }
+// Fixtures have no runtime to persist to, so edits land in the store directly and the card shows them.
+const STORE = {
+  repos: REPOS,
+  updateRepo: async (repoId: string, updates: RepoUpdate): Promise<boolean> => {
+    // Only the card's appearance fields are applied; that is all it writes.
+    const appearance: Partial<Repo> = {}
+    if ('repoIcon' in updates) {
+      appearance.repoIcon = updates.repoIcon
+    }
+    if (updates.badgeColor !== undefined) {
+      appearance.badgeColor = updates.badgeColor
+    }
+    useAppStore.setState((state) => ({
+      repos: state.repos.map((repo) => (repo.id === repoId ? { ...repo, ...appearance } : repo))
+    }))
+    return true
+  }
+}
 
-function Peek({ repo }: { repo: Repo }): React.JSX.Element {
+function Peek({ repo: seeded }: { repo: Repo }): React.JSX.Element {
+  const repo = useAppStore((state) => state.repos.find((item) => item.id === seeded.id)) ?? seeded
   return (
     <div className="h-[640px] p-3">
       <ProjectPeekPopover repo={repo}>

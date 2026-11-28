@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   githubAvatarIcon,
@@ -125,6 +126,13 @@ export function ProjectImageSourceList({
   const [website, setWebsite] = React.useState(activeDomain)
   const [status, setStatus] = React.useState<FetchStatus>('idle')
   const focusFieldRef = React.useRef(false)
+  const fetchIdRef = React.useRef(0)
+  const currentIconKey = useLatestHandler(() => JSON.stringify(repo.repoIcon ?? null))
+  // Any other pick drops a fetch still in flight, so its late result cannot replace that pick.
+  const cancelFetch = (): void => {
+    fetchIdRef.current += 1
+    setStatus('idle')
+  }
 
   const githubPreview =
     remote?.owner && remote.name
@@ -134,8 +142,15 @@ export function ProjectImageSourceList({
   const fetchIcon = async (): Promise<void> => {
     setSizeError(false)
     setStatus('fetching')
-    const result = await fetchWebsiteFavicon(website)
-    setStatus(result === 'applied' ? 'idle' : result)
+    const fetchId = ++fetchIdRef.current
+    const startedFrom = currentIconKey()
+    const result = await fetchWebsiteFavicon(
+      website,
+      () => fetchId === fetchIdRef.current && currentIconKey() === startedFrom
+    )
+    if (fetchId === fetchIdRef.current) {
+      setStatus(result === 'applied' || result === 'superseded' ? 'idle' : result)
+    }
   }
 
   const fieldError =
@@ -160,6 +175,7 @@ export function ProjectImageSourceList({
           disabled={loadingGitHub}
           onClick={() => {
             setSizeError(false)
+            cancelFetch()
             if (source !== 'github') {
               onUseGitHubAvatar()
             }
@@ -180,6 +196,7 @@ export function ProjectImageSourceList({
         expanded={websiteOpen}
         onClick={() => {
           setSizeError(false)
+          cancelFetch()
           focusFieldRef.current = !websiteOpen
           setWebsiteOpen(!websiteOpen)
         }}
@@ -269,6 +286,7 @@ export function ProjectImageSourceList({
         error={sizeError}
         onClick={() => {
           setSizeError(false)
+          cancelFetch()
           void uploadImage()
         }}
       />

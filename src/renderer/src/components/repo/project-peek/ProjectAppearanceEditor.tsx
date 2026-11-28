@@ -48,7 +48,7 @@ export function ProjectAppearanceEditor({
   const [style, setStyle] = React.useState<IconStyle>(() => iconStyleOf(repo.repoIcon))
   const suggestedLetters = useSuggestedMonogram(repo)
   // Why: opening Letters previews a suggestion; browsing away untouched must give the old icon back.
-  const previewedFromRef = React.useRef<{ icon: RepoIcon | null } | null>(null)
+  const previewedFromRef = React.useRef<{ icon: RepoIcon | null; preview: string } | null>(null)
   const setIcon = (repoIcon: RepoIcon | null): void => {
     previewedFromRef.current = null
     updateRepo(repo.id, { repoIcon })
@@ -60,11 +60,17 @@ export function ProjectAppearanceEditor({
     if (next === 'letters' && repo.repoIcon != null && repo.repoIcon.type !== 'letters') {
       const previous = repo.repoIcon ?? null
       setIcon({ type: 'letters', text: suggestedLetters })
-      previewedFromRef.current = { icon: previous }
+      previewedFromRef.current = { icon: previous, preview: suggestedLetters }
       return
     }
     const previewed = previewedFromRef.current
-    if (previewed) {
+    previewedFromRef.current = null
+    // Only an untouched preview is undone; a reset or any other change since then stays.
+    if (
+      previewed &&
+      repo.repoIcon?.type === 'letters' &&
+      repo.repoIcon.text === previewed.preview
+    ) {
       setIcon(previewed.icon)
     }
   }

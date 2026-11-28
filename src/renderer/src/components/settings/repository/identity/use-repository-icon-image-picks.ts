@@ -24,7 +24,7 @@ function probeImage(src: string): Promise<boolean> {
   })
 }
 
-export type WebsiteFaviconFetchResult = 'applied' | 'invalid' | 'notFound'
+export type WebsiteFaviconFetchResult = 'applied' | 'invalid' | 'notFound' | 'superseded'
 
 /** Image-sourced repo icons (uploaded PNG, website favicon), shared by Settings and the project card. */
 export function useRepositoryIconImagePicks(
@@ -37,8 +37,11 @@ export function useRepositoryIconImagePicks(
   uploadImage: () => Promise<void>
   /** Returns whether the URL resolved to a favicon. */
   applyWebsiteFavicon: (website: string) => boolean
-  /** Loads the favicon first and only applies it once it does. */
-  fetchWebsiteFavicon: (website: string) => Promise<WebsiteFaviconFetchResult>
+  /** Loads the favicon first and applies it only if it loaded and `isCurrent` still holds. */
+  fetchWebsiteFavicon: (
+    website: string,
+    isCurrent: () => boolean
+  ) => Promise<WebsiteFaviconFetchResult>
 } {
   const t = useTranslate()
   const mountedRef = useMountedRef()
@@ -91,7 +94,10 @@ export function useRepositoryIconImagePicks(
     return true
   }
 
-  const fetchWebsiteFavicon = async (website: string): Promise<WebsiteFaviconFetchResult> => {
+  const fetchWebsiteFavicon = async (
+    website: string,
+    isCurrent: () => boolean
+  ): Promise<WebsiteFaviconFetchResult> => {
     const src = faviconUrlFromWebsite(website)
     if (!src) {
       return 'invalid'
@@ -100,9 +106,11 @@ export function useRepositoryIconImagePicks(
     if (!loaded) {
       return 'notFound'
     }
-    if (mountedRef.current) {
-      setFavicon(src)
+    // A newer pick, reset or fetch made while this one loaded wins over it.
+    if (!mountedRef.current || !isCurrent()) {
+      return 'superseded'
     }
+    setFavicon(src)
     return 'applied'
   }
 
