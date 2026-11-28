@@ -165,7 +165,7 @@ export default function ArtifactsPage(): React.JSX.Element {
           deletingSlugs={deletingSlugs}
           selectedSlug={selectedSlug}
           selectArtifact={setSelectedSlug}
-          deleteArtifacts={(targets) => void deleteArtifacts(targets)}
+          deleteArtifacts={deleteArtifacts}
           clearSelectionRef={clearSelectionRef}
           hasMore={Boolean(nextCursor)}
           loadingMore={loadingMore}

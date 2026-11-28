@@ -55,7 +55,7 @@ function Scene(): React.JSX.Element {
           deletingSlugs={new Set()}
           selectedSlug={null}
           selectArtifact={() => {}}
-          deleteArtifacts={() => {}}
+          deleteArtifacts={async () => {}}
           clearSelectionRef={clearSelectionRef}
           hasMore={false}
           loadingMore={false}

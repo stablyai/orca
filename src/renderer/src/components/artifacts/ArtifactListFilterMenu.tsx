@@ -69,12 +69,15 @@ function expiresLabel(t: Translate): string {
 export function ArtifactListFilterMenu({
   filter,
   typeOptions,
-  onChange
+  onChange,
+  triggerRef
 }: {
   filter: ArtifactListFilter
   /** Types present in the loaded list, with counts. */
   typeOptions: readonly ArtifactTypeOption[]
   onChange: (next: ArtifactListFilter) => void
+  /** Focus lands here when the control the user pressed (a pill, Clear, Delete) goes away. */
+  triggerRef: React.Ref<HTMLButtonElement>
 }): React.JSX.Element {
   const t = useTranslate()
   const activeCount = countArtifactListFilters(filter)
@@ -95,7 +98,7 @@ export function ArtifactListFilterMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <RailPageFilterButton activeCount={activeCount} />
+        <RailPageFilterButton ref={triggerRef} activeCount={activeCount} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuSub>

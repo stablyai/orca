@@ -50,6 +50,7 @@ export function ArtifactListTableHeader({
   onSort,
   selectAllState,
   selecting,
+  canSelectAll,
   onToggleAll
 }: {
   sort: ArtifactListSort | null
@@ -57,6 +58,8 @@ export function ArtifactListTableHeader({
   selectAllState: boolean | 'indeterminate'
   /** Any row is checked, so every checkbox stays shown instead of only on hover. */
   selecting: boolean
+  /** False when no row matches, so Select all has nothing to act on. */
+  canSelectAll: boolean
   onToggleAll: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -85,6 +88,7 @@ export function ArtifactListTableHeader({
             >
               <Checkbox
                 checked={selectAllState}
+                disabled={!canSelectAll}
                 aria-label={t(
                   'auto.components.artifacts.ArtifactListTableHeader.selectAll',
                   'Select all'

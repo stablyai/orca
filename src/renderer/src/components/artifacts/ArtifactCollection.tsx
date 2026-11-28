@@ -25,6 +25,16 @@ import { RailPageBody, RailPageNotice, RailPageScroll } from '@/components/rail-
 import { RailPageToolbar } from '@/components/rail-page/RailPageToolbar'
 import { RailPageSearch } from '@/components/rail-page/RailPageSearch'
 
+/** Why after a frame: the pressed control (pill ×, Clear, Delete) unmounts on commit and drops focus to body. */
+function focusIfDropped(target: React.RefObject<HTMLButtonElement | null>): void {
+  requestAnimationFrame(() => {
+    const active = document.activeElement
+    if (!active || active === document.body) {
+      target.current?.focus({ preventScroll: true })
+    }
+  })
+}
+
 export function ArtifactCollection({
   artifacts,
   deletingSlugs,
@@ -41,7 +51,7 @@ export function ArtifactCollection({
   deletingSlugs: ReadonlySet<string>
   selectedSlug: string | null
   selectArtifact: (slug: string) => void
-  deleteArtifacts: (items: readonly ArtifactListItem[]) => void
+  deleteArtifacts: (items: readonly ArtifactListItem[]) => Promise<void>
   /** The page's Esc handler clears checked rows through this before it would close the page. */
   clearSelectionRef: React.RefObject<(() => boolean) | null>
   hasMore: boolean
@@ -62,6 +72,8 @@ export function ArtifactCollection({
     setFilterState({ filter: next, nowMs: Date.now() })
   const [sort, setSort] = useState<ArtifactListSort>(DEFAULT_ARTIFACT_LIST_SORT)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const filterButtonRef = useRef<HTMLButtonElement>(null)
+  const restoreFocusToFilter = (): void => focusIfDropped(filterButtonRef)
   // Clamp before state/filtering so multi-MB pastes cannot reach either.
   const onQueryChange = (next: string): void => setQuery(clampArtifactListSearchQuery(next))
   const typeOptions = useMemo(() => artifactTypeOptions(artifacts, t), [artifacts, t])
@@ -92,6 +104,7 @@ export function ArtifactCollection({
     clearSelectionRef.current = selecting
       ? () => {
           clearSelection()
+          focusIfDropped(filterButtonRef)
           return true
         }
       : null
@@ -106,6 +119,7 @@ export function ArtifactCollection({
         start={
           <div className="flex min-w-0 items-center gap-3">
             <ArtifactListFilterMenu
+              triggerRef={filterButtonRef}
               filter={filter}
               typeOptions={typeOptions}
               onChange={setFilter}
@@ -116,8 +130,11 @@ export function ArtifactCollection({
                 deleteDisabled={checkedItems.every(({ artifact }) =>
                   deletingSlugs.has(artifact.slug)
                 )}
-                onDelete={() => deleteArtifacts(checkedItems)}
-                onClear={selection.clear}
+                onDelete={() => void deleteArtifacts(checkedItems).then(restoreFocusToFilter)}
+                onClear={() => {
+                  selection.clear()
+                  restoreFocusToFilter()
+                }}
               />
             ) : null}
           </div>
@@ -145,7 +162,14 @@ export function ArtifactCollection({
       {notice}
       {countArtifactListFilters(filter) > 0 ? (
         <RailPageNotice>
-          <ArtifactListFilterPills filter={filter} typeOptions={typeOptions} onChange={setFilter} />
+          <ArtifactListFilterPills
+            filter={filter}
+            typeOptions={typeOptions}
+            onChange={(next) => {
+              setFilter(next)
+              restoreFocusToFilter()
+            }}
+          />
         </RailPageNotice>
       ) : null}
       <RailPageBody>
@@ -158,6 +182,7 @@ export function ArtifactCollection({
             sort={sort}
             onSort={(field) => setSort(nextArtifactListSort(sort, field))}
             selectAllState={selection.headerState}
+            canSelectAll={matches.length > 0}
             selecting={selecting}
             onToggleAll={selection.toggleAllVisible}
           />
@@ -172,7 +197,7 @@ export function ArtifactCollection({
               hasMore={hasMore}
               selectArtifact={selectArtifact}
               toggleChecked={selection.toggle}
-              deleteArtifact={(item) => deleteArtifacts([item])}
+              deleteArtifact={(item) => void deleteArtifacts([item])}
             />
           ) : (
             <div className="flex flex-col items-center gap-1 px-3 py-6 text-sm text-muted-foreground">
@@ -190,6 +215,7 @@ export function ArtifactCollection({
                   onClick={() => {
                     setFilter(EMPTY_ARTIFACT_LIST_FILTER)
                     onQueryChange('')
+                    restoreFocusToFilter()
                   }}
                 >
                   {t(

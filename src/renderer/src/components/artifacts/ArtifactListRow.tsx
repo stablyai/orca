@@ -29,10 +29,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import {
-  isPortaledRowMenuClick,
-  isRowActivationKey
-} from '@/lib/list-interaction/list-row-interaction'
+import { isPortaledRowMenuClick } from '@/lib/list-interaction/list-row-interaction'
 import { getSelectionIntent } from '@/lib/list-interaction/list-multi-selection'
 import {
   artifactName,
@@ -133,9 +130,9 @@ export function ArtifactListRow({
     // Non-modal, so scrolling is never blocked: windowing unmounting an open menu mid-scroll reads as dismissal.
     <ContextMenu>
       <ContextMenuTrigger asChild>
+        {/* Not itself a button: the checkbox, the name and the actions menu are sibling controls,
+            so none is nested in another; a click anywhere on the row still opens it. */}
         <div
-          role="button"
-          tabIndex={0}
           data-current={isSelected ? 'true' : undefined}
           onMouseDown={(event) => {
             // Shift-click extends the check range; keep it from also selecting row text.
@@ -154,18 +151,11 @@ export function ArtifactListRow({
             }
             selectArtifact(item.artifact.slug)
           }}
-          onKeyDown={(event) => {
-            if (!isRowActivationKey(event)) {
-              return
-            }
-            event.preventDefault()
-            selectArtifact(item.artifact.slug)
-          }}
           className={cn(
             ARTIFACTS_TABLE_GRID_CLASS,
             LIST_TABLE_ROW_CLASS,
             showDivider && LIST_TABLE_ROW_DIVIDER_CLASS,
-            isSelected && LIST_TABLE_ROW_SELECTED_CLASS
+            (isSelected || checked) && LIST_TABLE_ROW_SELECTED_CLASS
           )}
         >
           <div className="flex min-w-0 items-center gap-2">
@@ -204,9 +194,14 @@ export function ArtifactListRow({
                 />
               </span>
             </span>
-            <span className="min-w-0 truncate font-medium" title={name}>
+            {/* The keyboard path to open the row: Enter/Space click it and the click reaches the row. */}
+            <button
+              type="button"
+              className="min-w-0 truncate rounded-sm text-left font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              title={name}
+            >
               {name}
-            </span>
+            </button>
           </div>
           <span
             className={cn(
