@@ -281,6 +281,8 @@ export type WebSessionTabsSyncState = Pick<
       | 'pendingStartupByTabId'
       | 'runtimePaneTitlesByTabId'
       | 'sleepingAgentSessionsByPaneKey'
+      | 'unreadTerminalPanes'
+      | 'unreadAgentCompletionPanes'
     >
   >
 
