@@ -1,4 +1,5 @@
 import { ownRetainedString } from '../text/own-retained-string'
+import { boundedUtf8Prefix } from './bounded-utf8-prefix'
 
 export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
 
@@ -37,25 +38,10 @@ export type IncrementalNdjsonFramer = {
 export type IncrementalNdjsonFramerOptions = {
   maxLineBytes?: number
   shouldPause?: () => boolean
+  /** Read before each new line, unparsed; true pauses ahead of it, as `shouldPause` does after. */
+  beforeLine?: (input: string, lineStart: number) => boolean
   /** Skips parsing lines the consumer can rule out from their text. */
   acceptLine?: (line: string) => boolean
-}
-
-function boundedUtf8Prefix(value: string, maxBytes: number): string {
-  if (Buffer.byteLength(value, 'utf8') <= maxBytes) {
-    return value
-  }
-  let low = 0
-  let high = Math.min(value.length, maxBytes)
-  while (low < high) {
-    const midpoint = Math.ceil((low + high) / 2)
-    if (Buffer.byteLength(value.slice(0, midpoint), 'utf8') <= maxBytes) {
-      low = midpoint
-    } else {
-      high = midpoint - 1
-    }
-  }
-  return value.slice(0, low)
 }
 
 // Why: a strict slice is a V8 SlicedString that pins all of `source`; the whole string needs no copy.
@@ -155,6 +141,14 @@ export function createIncrementalNdjsonFramer(
   const process = (input: string): void => {
     let cursor = 0
     while (cursor < input.length) {
+      if (
+        lineSegments.length === 0 &&
+        !discardingOversizedLine &&
+        options.beforeLine?.(input, cursor)
+      ) {
+        retainPausedInput(input.slice(cursor), input)
+        return
+      }
       const newlineIndex = input.indexOf('\n', cursor)
       const hasNewline = newlineIndex !== -1
       const end = hasNewline ? newlineIndex : input.length

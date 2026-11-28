@@ -18,6 +18,9 @@ export type ResumeRun = Readonly<{
   inFlight: boolean
   continued?: readonly RestartContinuationOutcome[]
   finishedViewShown?: boolean
+  /** While a retry is in flight: chats earlier runs resumed that it does not retry. Settling folds
+   *  them back into entries, so a settled run reads like any other. */
+  resumedBefore?: readonly ResumeCandidate[]
 }>
 
 function progressRank(status: ResumeRunHostStatus | undefined): number {
@@ -94,6 +97,75 @@ export function beginResumeRun(
     startedBy,
     entries: candidates.map((candidate) => ({ candidate })),
     inFlight: true
+  }
+}
+
+/** A retry replaces the run; what earlier runs already resumed stays reported unless retried. */
+export function nextResumeRun(
+  previous: ResumeRun | null,
+  candidates: readonly ResumeCandidate[],
+  now: number,
+  startedBy: ResumeRunStarter
+): ResumeRun {
+  const next = beginResumeRun(candidates, now, startedBy)
+  if (!previous) {
+    return next
+  }
+  const retried = new Set(candidates.map((candidate) => candidate.sessionId))
+  const continued = new Set(
+    previous.inFlight
+      ? []
+      : previous.continued
+          ?.filter((entry) => entry.outcome === 'continued')
+          .map((entry) => entry.sessionId)
+  )
+  const carried = new Map<string, ResumeCandidate>()
+  for (const candidate of [
+    ...(previous.resumedBefore ?? []),
+    ...previous.entries
+      .map((entry) => entry.candidate)
+      .filter((candidate) => continued.has(candidate.sessionId))
+  ]) {
+    if (!retried.has(candidate.sessionId)) {
+      carried.set(candidate.sessionId, candidate)
+    }
+  }
+  return carried.size > 0 ? { ...next, resumedBefore: [...carried.values()] } : next
+}
+
+/** One action owns the occurrence: while it is in flight nothing else is sent, even a repeat. */
+export function unsentResumeIds(
+  run: ResumeRun | null,
+  sessionIds: readonly string[]
+): readonly string[] {
+  return run?.inFlight ? [] : [...new Set(sessionIds)]
+}
+
+/** The action's reply: what it skipped leaves the run, and earlier successes rejoin it. */
+export function settledResumeRun(
+  run: ResumeRun,
+  attempted: ReadonlySet<string>,
+  skipped: ReadonlySet<string>,
+  continued: readonly RestartContinuationOutcome[]
+): ResumeRun {
+  const { resumedBefore = [], ...rest } = run
+  return {
+    ...rest,
+    entries: [
+      ...resumedBefore.map((candidate) => ({ candidate })),
+      ...run.entries.filter(
+        (entry) =>
+          attempted.has(entry.candidate.sessionId) && !skipped.has(entry.candidate.sessionId)
+      )
+    ],
+    inFlight: false,
+    continued: [
+      ...resumedBefore.map((candidate) => ({
+        sessionId: candidate.sessionId,
+        outcome: 'continued' as const
+      })),
+      ...continued
+    ]
   }
 }
 

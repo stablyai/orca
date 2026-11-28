@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import {
   resolveConflict,
   stageFile,
@@ -27,9 +28,12 @@ import {
   type ConflictResolution
 } from '../../../../shared/source-control/listing/source-control-entry-actions'
 
-export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerContext): void {
+export function registerFilesystemGitIndexHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
-  ipcMain.handle(
+  ipc.handle(
     'git:stage',
     async (
       _event,
@@ -47,7 +51,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:resolveConflict',
     async (
       _event,
@@ -76,7 +80,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:unstage',
     async (
       _event,
@@ -94,7 +98,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:discard',
     async (
       _event,
@@ -112,7 +116,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:bulkDiscard',
     async (
       _event,
@@ -133,7 +137,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:bulkStage',
     async (
       _event,
@@ -164,7 +168,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:bulkUnstage',
     async (
       _event,

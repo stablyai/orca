@@ -15,9 +15,9 @@ import {
 import { Check } from 'lucide-react-native'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../sheets/ActionSheetModal'
 
@@ -42,7 +42,8 @@ type PullDownMenuProps = {
 
 // The iOS pull-down: a small menu dropping from the button that opened it, instead of a sheet from the bottom.
 export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMenuProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const window = useWindowDimensions()
   const reducedMotion = useReducedMotionEnabled()
@@ -240,7 +241,7 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   menu: {
     position: 'absolute',
     width: MENU_WIDTH,

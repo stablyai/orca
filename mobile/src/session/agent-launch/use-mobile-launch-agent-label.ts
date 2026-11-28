@@ -9,6 +9,7 @@ import {
   resolveMobileSourceControlLaunchAgent
 } from '../../source-control/review/agent-launch/mobile-source-control-launch-agent'
 import { useMobileRegisteredAgents } from '../native-chat/agent-session/use-mobile-registered-agent'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 // The agent a Fix button would start, by the same resolution the launch uses, so it can say "Fix with Claude".
 export function useMobileLaunchAgentLabel(args: {
@@ -19,6 +20,7 @@ export function useMobileLaunchAgentLabel(args: {
   enabled: boolean
 }): string | null {
   const { client, worktreeId, hostCapabilities, actionId, enabled } = args
+  const t = useMobileTranslation()
   const context = agentLaunchContextOf(
     useMobileAgentLaunchQueries({
       hostId: useRouteHostId(),
@@ -36,7 +38,7 @@ export function useMobileLaunchAgentLabel(args: {
     return null
   }
   // An unknown agent keeps the generic label; the launch itself reports the real failure.
-  const agent = resolveMobileSourceControlLaunchAgent(context, actionId, {
+  const agent = resolveMobileSourceControlLaunchAgent(context, actionId, t, {
     hostCapabilities,
     registeredAgents
   })

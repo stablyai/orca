@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router'
 import { ListRow } from '../components/list/ListGroup'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   setMobileAppearancePreference,
   useMobileAppearancePreference,
@@ -16,7 +15,9 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsScreen, SettingsSection } from './settings-screen-frame'
 import { UiLanguageSettingsSection } from './ui-language-settings-section'
 
-function appearanceOptions(t: Translate): { value: MobileAppearancePreference; label: string }[] {
+export function appearanceOptions(
+  t: Translate
+): { value: MobileAppearancePreference; label: string }[] {
   return [
     { value: 'system', label: t('settings.appearance.theme.system', 'System') },
     { value: 'light', label: t('settings.appearance.theme.light', 'Light') },
@@ -32,7 +33,6 @@ function usageDisplayOptions(t: Translate): { value: UsagePercentageDisplay; lab
 }
 
 export default function AppearanceSettingsScreen() {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
   const preference = useMobileAppearancePreference()
@@ -46,7 +46,7 @@ export default function AppearanceSettingsScreen() {
       <SettingsSection
         first
         radioGroup
-        title={t('settings.appearance.theme.heading', 'THEME')}
+        title={t('settings.appearance.theme.heading', 'Theme')}
         footer={t(
           'settings.appearance.theme.description',
           'System follows this device’s light or dark setting.'
@@ -66,7 +66,7 @@ export default function AppearanceSettingsScreen() {
 
       <SettingsSection
         radioGroup
-        title={t('settings.appearance.usage.heading', 'USAGE PERCENTAGES')}
+        title={t('settings.appearance.usage.heading', 'Usage percentages')}
         footer={t(
           'settings.appearance.usage.description',
           'Usage bars on Home and Accounts show how much of each limit is used or left. Saved on this phone.'

@@ -43,11 +43,10 @@ export function mountedMention(
       disabled: false,
       caret: 6,
       resolveAttachmentOwner: () => ({ kind: 'local' }),
-      attachResolvedPaths: () => {},
       attachCopiedFiles: () => {},
       captureCopiedFiles: () => async () => {},
       beginPendingImageAttachment: () => null,
-      resolvePendingImageAttachment: () => {},
+      resolvePendingImageAttachment: () => false,
       dropPendingImageAttachment: () => {},
       setNotice: () => {},
       pastedTextEditor: () => input.current

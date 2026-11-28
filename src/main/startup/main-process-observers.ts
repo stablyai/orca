@@ -24,6 +24,7 @@ import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-g
 import { initObservability } from '../observability/index'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import { trackUnrecoveredStallImport } from '../hang-watchdog/previous-unrecovered-stall-import'
 import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { mainProcessState as state } from './main-process-state'
@@ -117,13 +118,31 @@ export function initializeMainProcessObservers(store: Store): void {
     packaged: app.isPackaged,
     platform: process.platform
   })
-  state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
+  const previousHang = reportPreviousHangDetection(getCanonicalUserDataPath())
+  state.hangDetection = previousHang.marker
+  const { unrecoveredStall } = previousHang
+  if (unrecoveredStall && state.crashReports) {
+    const store = state.crashReports
+    trackUnrecoveredStallImport(
+      import('../hang-watchdog/unrecovered-stall-report')
+        .then(async ({ importUnrecoveredStallReport }) =>
+          (await importUnrecoveredStallReport(store, unrecoveredStall))
+            ? unrecoveredStall.detectedAt
+            : null
+        )
+        .catch((error) => {
+          console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
+          return null
+        })
+    )
+  }
   if (state.hangDetection) {
     const marker = state.hangDetection
     const report = (details: NativeHangTelemetry): void => {
       track('main_thread_hang_detected', {
         unresponsive_ms: Math.round(marker.unresponsiveMs),
         self_recovered: marker.selfRecovered,
+        ...(marker.appVersion ? { detected_app_version: marker.appVersion } : {}),
         ...details
       })
     }

@@ -2,6 +2,7 @@ import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-prot
 import { SpoolFile } from './provider-relay-spool-file'
 import { RECORD_OVERHEAD_BYTES, SpoolMemory, type HeldRecord } from './provider-relay-spool-memory'
 import { SpoolReaderSlot } from './provider-relay-spool-reader-slot'
+import { SpoolKeptTail } from './provider-relay-spool-kept-tail'
 import { replayMemoryTail, replaySpoolFileRecords } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
@@ -45,14 +46,20 @@ export class ProviderRelaySpool {
   private ackAskedSeq = 0
   /** The highest seq the client said it received; acked may stay below it while lines are kept. */
   private clientAcked = 0
-  /** The client's last ack named a floor to keep (an open streamed item), so lines go to the file too. */
+  /** The client's last ack named a floor to keep (an open streamed item), held in memory first. */
   private keeping = false
-  /** The last seq of kept lines dropped at the file cap, so an attach can say its replay starts mid-item. */
-  private truncatedThroughSeq = 0
+  /**
+   * A held replay's keep (the client can't save it yet): it moves to the file past the memory cap.
+   * Any other attached keep stays in memory and is released as a cut at the cap.
+   */
+  private heldSpill: 'off' | 'memory' | 'file' = 'off'
+  /** The last seq of kept lines dropped at a cap, so an attach can say its replay starts mid-item. */
+  truncatedThrough = 0
   private disposed = false
   /** Ends the current attach's waits once it is superseded, so its call returns even on a stalled disk. */
   private cancelWait: (() => void) | null = null
   private readonly reader = new SpoolReaderSlot()
+  private readonly keptTail = new SpoolKeptTail()
   private readonly memoryCap: number
   private readonly fileCap: number
 
@@ -76,10 +83,6 @@ export class ProviderRelaySpool {
 
   get ackedSeq(): number {
     return this.acked
-  }
-
-  get truncatedThrough(): number {
-    return this.truncatedThroughSeq
   }
 
   get drained(): boolean {
@@ -118,42 +121,46 @@ export class ProviderRelaySpool {
    * The client received through `seq`. With `keepFrom`, lines from it on stay for a later attach to
    * replay: memory is freed through `seq`, and the kept lines move to the spool file.
    */
-  ack(seq: number, keepFrom?: number): void {
+  ack(seq: number, keepFrom?: number, held = false): number {
     if (!Number.isSafeInteger(seq)) {
-      return
+      return this.acked
     }
     const through = Math.min(seq, this.nextSeqValue - 1)
     // A late, older ack says nothing new and must not undo a later keep.
     if (through < this.clientAcked) {
-      return
+      return this.acked
     }
     this.clientAcked = through
+    this.keptTail.ackThrough(through)
     const floor = keepFrom !== undefined && Number.isSafeInteger(keepFrom) ? keepFrom : null
     this.keeping = floor !== null
+    this.heldSpill = held && this.keeping ? (this.heldSpill === 'file' ? 'file' : 'memory') : 'off'
     // A floor past `seq` keeps nothing the client has; with a broken file, kept lines stay in memory.
     this.releaseThrough(floor === null ? through : Math.min(floor, through + 1) - 1)
-    if (this.keepingLive) {
-      this.spillMemory()
-    }
     this.file.compactIfWasteful(this.fileCap)
     // An answer to the last ask that leaves half the cap held asks again, so the client never stalls.
     this.ackAsked = this.ackAsked && this.clientAcked < this.ackAskedSeq
     this.updatePressure()
+    return this.acked
   }
 
-  /** Attached and keeping: new and still-held lines go to the file as well as to the client. */
+  /** Records after the client's ack, in seq order; null when some of them are only in the file. */
+  readonly unacked = (): readonly ProviderRelayRecord[] | null =>
+    this.lostThrough > this.clientAcked
+      ? null
+      : this.keptTail.after(this.clientAcked, this.memory.after(this.clientAcked, 0) ?? [])
+
+  /** Attached and keeping past the memory cap: new and held lines go to the file as well. */
   private get keepingLive(): boolean {
-    return this.keeping && this.mode === 'attached' && !this.file.failed
+    return (
+      this.keeping && this.heldSpill === 'file' && this.mode === 'attached' && !this.file.failed
+    )
   }
 
   /** Memory records the client hasn't released move to the file in seq order, as on detach. */
   private spillMemory(): void {
     for (const record of this.memory.takeAll()) {
-      if (this.file.failed) {
-        this.memory.push(record)
-      } else {
-        this.writeToFile(record)
-      }
+      void (this.file.failed ? this.memory.push(record) : this.writeToFile(record))
     }
   }
 
@@ -178,6 +185,7 @@ export class ProviderRelaySpool {
     this.stopWaiting()
     const generation = ++this.attachGeneration
     this.mode = 'replaying'
+    this.heldSpill = 'off'
     // A new client has confirmed nothing yet, so kept lines can't be released past the floor for it,
     // and it hasn't been asked to ack anything.
     this.clientAcked = this.acked
@@ -289,6 +297,7 @@ export class ProviderRelaySpool {
       return this.file.io
     }
     this.mode = 'detached'
+    this.heldSpill = 'off'
     this.attachGeneration++
     this.stopWaiting()
     if (!this.file.failed) {
@@ -312,6 +321,11 @@ export class ProviderRelaySpool {
 
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
+    // A held replay's keep moves to the file at the memory cap, so the open's answer isn't stuck.
+    if (this.heldSpill === 'memory' && this.memory.bytes >= this.memoryCap && !this.file.failed) {
+      this.heldSpill = 'file'
+      this.spillMemory()
+    }
     // A kept span is released through the live client's own acks only when it alone holds the
     // agent paused (or would pause it): queued writes drain by themselves, and lines the client hasn't
     // acked can't be released. Only this client's acks count, so a takeover never loses lines.
@@ -322,7 +336,7 @@ export class ProviderRelaySpool {
       this.holdsPause(this.pressure(0)) &&
       !this.holdsPause(this.pressure(this.clientAcked))
     ) {
-      this.truncatedThroughSeq = this.clientAcked
+      this.truncatedThrough = this.clientAcked
       this.releaseThrough(this.clientAcked)
     }
     const [held, cap] = this.pressure(0)
@@ -331,6 +345,7 @@ export class ProviderRelaySpool {
     // Only while streaming live: during a replay the client has nothing new to ack yet. While
     // keeping, lines are on disk, so the ask comes near the file cap rather than the memory cap.
     // An ask with nothing new since the last one is skipped, and asked again once output arrives.
+    // A kept span still in memory spills at the cap rather than asking the client to let it go.
     const ackWanted = this.mode === 'attached' && held >= cap / 2
     if (!ackWanted) {
       this.ackAsked = false
@@ -361,10 +376,12 @@ export class ProviderRelaySpool {
       return [memory + (this.mode === 'attached' ? queued : 0), this.memoryCap]
     }
     const unacked = this.file.index.unackedBytes - this.file.index.bytesThrough(releasedThrough)
-    return [Math.max(unacked, queued) + memory, this.fileCap]
+    // A held replay keeps to 4× the cap: a reopening chat can't save it yet, and a pause would stall it.
+    return [Math.max(unacked, queued) + memory, this.fileCap * (this.keepingLive ? 4 : 1)]
   }
 
   private writeToFile(record: HeldRecord): void {
+    this.keptTail.wrote(record, this.keepingLive && record.seq > this.clientAcked)
     // Past the engine's string limit: it and every later record stay in memory, so seq order holds.
     if (!this.file.write(record)) {
       this.memory.push(record)

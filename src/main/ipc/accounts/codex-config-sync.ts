@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { join } from 'node:path'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { getSystemCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
 import { getCodexConfigSyncStatus } from '../../codex/configuration/settings/config-sync-stall'
 import type { CodexConfigSyncStatus } from '../../../shared/agent-accounts/codex/codex-config-sync-types'
@@ -10,9 +11,14 @@ type CodexMirroredHomeResolver = {
   getMirroredHostHomePathForStatus: () => CodexMirroredHomeStatus
 }
 
-export function registerCodexConfigSyncHandlers(runtimeHome: CodexMirroredHomeResolver): void {
-  ipcMain.removeHandler('codexConfigSync:status')
-  ipcMain.handle('codexConfigSync:status', (): CodexConfigSyncStatus => {
+export function registerCodexConfigSyncHandlers(
+  runtimeHome: CodexMirroredHomeResolver,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('codexConfigSync:status')
+  }
+  ipc.handle('codexConfigSync:status', (): CodexConfigSyncStatus => {
     const systemHomePath = getSystemCodexHomePath()
     const mirrored = runtimeHome.getMirroredHostHomePathForStatus()
     if (mirrored.kind === 'unavailable') {

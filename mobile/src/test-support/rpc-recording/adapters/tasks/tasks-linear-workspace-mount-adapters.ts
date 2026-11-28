@@ -1,20 +1,19 @@
-import type * as MobileTasksFilterPickersModule from '../../../../tasks/screen/mobile-tasks-filter-pickers'
-import { isValidElement } from 'react'
+import type * as MobileTasksFilterSelectionModule from '../../../../tasks/screen/mobile-tasks-filter-selection'
 import { performHookAction } from '../../react-mounting/hook-mount'
 import { mountFixture } from '../../react-mounting/recorder-fixture-shape'
 import type { operationModuleLoader } from '../../module-mounting/operation-module-loader'
 import type { MountAdapter } from '../../scenarios/recording-scenario'
 import type { ConnectionPresentationModel } from '../../../../tasks/screen-state/use-mobile-tasks-connection-presentation'
 
-// Invoke the render helper’s actual onSelect without mounting BottomDrawer’s native gesture/timing drivers; the scenario declares its workspace.
+// Invoke the Filter sheet's actual workspace selection without mounting BottomDrawer’s native gesture/timing drivers; the scenario declares its workspace.
 export function tasksLinearWorkspaceMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'linear.select-workspace-picker': ({ client, effect }) => {
-      const renderPicker = modules.load<typeof MobileTasksFilterPickersModule>(
-        'mobile/src/tasks/screen/mobile-tasks-filter-pickers.tsx'
-      ).renderMobileTasksLinearWorkspacePicker
+      const selectWorkspace = modules.load<typeof MobileTasksFilterSelectionModule>(
+        'mobile/src/tasks/screen/mobile-tasks-filter-selection.ts'
+      ).selectMobileTasksLinearWorkspace
       let selectedWorkspaceId: ConnectionPresentationModel['selectedLinearWorkspaceId'] =
         'workspace-a'
       let teamCount = 2
@@ -23,6 +22,7 @@ export function tasksLinearWorkspaceMountAdapters(
       const model = (): ConnectionPresentationModel =>
         mountFixture<ConnectionPresentationModel>({
           client,
+          linearAccountBindingRef: { current: null },
           linearWorkspaceOptions: [
             { value: 'workspace-a', label: 'Acme' },
             { value: 'workspace-b', label: 'Beta' }
@@ -42,8 +42,6 @@ export function tasksLinearWorkspaceMountAdapters(
           setSelectedLinearWorkspaceId: (next) => {
             selectedWorkspaceId = typeof next === 'function' ? next(selectedWorkspaceId) : next
           },
-          setShowLinearWorkspacePicker: () => {},
-          showLinearWorkspacePicker: true,
           taskUiReady: true
         })
       return {
@@ -51,19 +49,11 @@ export function tasksLinearWorkspaceMountAdapters(
           if (name !== 'select-workspace') {
             throw new Error(`Unknown linear workspace action: ${name}`)
           }
-          const element = renderPicker(model())
-          if (!isValidElement<{ onSelect?: unknown }>(element)) {
-            throw new Error('The workspace picker rendered no element')
-          }
-          const select = element.props.onSelect
-          if (typeof select !== 'function') {
-            throw new Error('The workspace picker carries no onSelect')
-          }
           const workspace = args.workspace
           if (typeof workspace !== 'string') {
             throw new Error('A workspace selection names the workspace it picks')
           }
-          return performHookAction(() => select(workspace))
+          return performHookAction(() => selectWorkspace(model(), workspace))
         },
         state: () => ({ selectedWorkspaceId, teamCount, error, contextLoads }),
         dispose: () => {}

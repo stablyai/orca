@@ -6,7 +6,8 @@ import { splitRemoteBranchName } from '../../../../shared/git/remotes/git-remote
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
 import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
-import { getCanonicalRepoKey } from '../../../git/repositories/canonical-repo-key'
+import { predictLocalGitRunsIn } from '../../../git/command-runner/host-routing/git-runs-in'
+import { stripWin32LongPathPrefix } from '../../../../shared/file-access/windows-path-access'
 export type TrackedUpstreamBranch = {
   remoteName: string
   branchName: string
@@ -14,24 +15,30 @@ export type TrackedUpstreamBranch = {
 
 export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
 
-// Keyed per canonical repository (git common dir) rather than per worktree.
-export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 64
+// Keyed per worktree route: linked worktrees can differ in effective config (config.worktree, onbranch includes).
+export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
 
 export type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
   gitConfigSignature?: string
-  /** Signatures embed per-worktree config paths; they only compare equal against the worktree that recorded them. */
-  gitConfigSignatureRepoPath?: string
+  /** Publication order; a superseded probe may only adopt an entry published after it started. */
+  publishedSeq: number
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  /** Raw %(upstream) refs keyed by local branch name; parsed lazily on lookup to avoid allocating thousands of objects per repo. */
+  rawUpstreamsByBranchName?: Map<string, string>
   reviewSources?: Map<string, GitReviewBranchSource | Error>
   reviewSourceResolver?: GitReviewBranchSourceResolver
 }
 
 export type TrackedUpstreamSnapshotProbeResult = {
+  expiresAt: number
   cacheable: boolean
+  /** False when config or the Git route changed during the probe: its commands may disagree. */
+  coherent: boolean
   gitConfigSignature?: string
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  rawUpstreamsByBranchName?: Map<string, string>
   reviewSources?: Map<string, GitReviewBranchSource | Error>
   reviewSourceResolver?: GitReviewBranchSourceResolver
 }
@@ -44,6 +51,35 @@ export const trackedUpstreamSnapshotInFlight = new Map<
 >()
 
 export const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
+
+let trackedUpstreamSnapshotPublishSeq = 0
+
+export function currentTrackedUpstreamSnapshotPublishSeq(): number {
+  return trackedUpstreamSnapshotPublishSeq
+}
+
+export function publishTrackedUpstreamSnapshot(
+  cacheKey: string,
+  entry: Omit<TrackedUpstreamSnapshotCacheEntry, 'publishedSeq'>
+): void {
+  // Re-insert so Map order is publication order, which the FIFO bound below relies on.
+  trackedUpstreamSnapshotCache.delete(cacheKey)
+  trackedUpstreamSnapshotCache.set(cacheKey, {
+    ...entry,
+    publishedSeq: ++trackedUpstreamSnapshotPublishSeq
+  })
+  pruneTrackedUpstreamSnapshotCache(Date.now())
+}
+
+/** Drop only the entry the caller judged stale; another probe may have replaced it meanwhile. */
+export function deleteTrackedUpstreamSnapshot(
+  cacheKey: string,
+  entry: TrackedUpstreamSnapshotCacheEntry
+): void {
+  if (trackedUpstreamSnapshotCache.get(cacheKey) === entry) {
+    trackedUpstreamSnapshotCache.delete(cacheKey)
+  }
+}
 
 export function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
   const generation = Symbol()
@@ -108,44 +144,77 @@ export function canUseCachedTrackedUpstreamBranch(
   cached: TrackedUpstreamSnapshotCacheEntry,
   branchName: string
 ): boolean {
-  return cached.upstreamsByBranchName.has(branchName)
+  return (
+    cached.rawUpstreamsByBranchName?.has(branchName) === true ||
+    cached.upstreamsByBranchName.has(branchName)
+  )
 }
 
-export async function doesTrackedUpstreamCacheConfigSignatureMatch(
-  cached: TrackedUpstreamSnapshotCacheEntry,
+export type TrackedUpstreamRoute = {
+  cacheKey: string
+  /** `ssh:<id>`, `host` or `wsl:<distro>`: the Git that runs this worktree's commands. */
+  runsIn: string
+  /** Host filesystem signatures describe only host Git on a host path; UNC and WSL rely on TTL. */
+  signed: boolean
+}
+
+/** Effective config is per worktree and per Git runtime, so both name the entry. */
+export function getTrackedUpstreamRoute(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
+): TrackedUpstreamRoute {
+  const runsIn = connectionId
+    ? `ssh:${connectionId}`
+    : predictLocalGitRunsIn(repoPath, localGitOptions.wslDistro)
+  const unc = process.platform === 'win32' && /^[\\/]{2}/.test(stripWin32LongPathPrefix(repoPath))
+  return {
+    cacheKey: [runsIn, repoPath].join('\0'),
+    runsIn,
+    signed: runsIn === 'host' && !unc
+  }
+}
+
+export function readTrackedUpstreamConfigSignature(
+  repoPath: string,
+  route: TrackedUpstreamRoute
+): Promise<string | undefined> {
+  return route.signed
+    ? readLocalGitConfigSignature({ repoPath, connectionId: null })
+    : Promise.resolve(undefined)
+}
+
+/** Signatures cover the caller's own common config, config.worktree, includes and onbranch HEAD. */
+export async function doesTrackedUpstreamCacheConfigSignatureMatch(
+  cached: Pick<TrackedUpstreamSnapshotCacheEntry, 'gitConfigSignature'>,
+  repoPath: string,
+  route: TrackedUpstreamRoute,
+  allowUnsignedHit = false
 ): Promise<boolean> {
-  if (!cached.gitConfigSignature) {
+  if (!route.signed) {
     return true
   }
-  const currentSignature = await readLocalGitConfigSignature({
-    repoPath: cached.gitConfigSignatureRepoPath ?? repoPath,
-    connectionId: connectionId ?? null,
-    ...localGitOptions
-  })
-  return currentSignature === cached.gitConfigSignature
-}
-
-export function getTrackedUpstreamBranchCacheKey(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: { wslDistro?: string } = {}
-): string {
-  const runtimeKey = connectionId
-    ? `ssh:${connectionId}`
-    : `local:${localGitOptions.wslDistro ?? 'host'}`
-  return [runtimeKey, repoPath].join('\0')
-}
-
-export async function resolveTrackedUpstreamBranchCacheKey(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: { wslDistro?: string } = {}
-): Promise<string> {
-  if (connectionId) {
-    return getTrackedUpstreamBranchCacheKey(repoPath, connectionId, localGitOptions)
+  if (!cached.gitConfigSignature) {
+    return allowUnsignedHit
   }
-  return getCanonicalRepoKey(repoPath, localGitOptions)
+  return (await readTrackedUpstreamConfigSignature(repoPath, route)) === cached.gitConfigSignature
+}
+
+export function parseRawTrackedUpstreamBranches(stdout: string): Map<string, string> {
+  const rawByBranchName = new Map<string, string>()
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) {
+      continue
+    }
+    const sep = line.indexOf('\0')
+    const rawBranch = sep === -1 ? line : line.slice(0, sep)
+    const localBranchName = rawBranch.startsWith('refs/heads/')
+      ? rawBranch.slice('refs/heads/'.length)
+      : rawBranch
+    if (!localBranchName) {
+      continue
+    }
+    rawByBranchName.set(localBranchName, sep === -1 ? '' : line.slice(sep + 1))
+  }
+  return rawByBranchName
 }

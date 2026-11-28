@@ -10,7 +10,12 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../../../shared/mcp-servers/mcp-servers'
 import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { remoteRestartRuntimeId } from '../../native-chat-recovery/offers/native-chat-remote-restart-offer'
-import { mcpStaleTerminalsToastId, showMcpStaleTerminalsToast } from './mcp-server-change-toast'
+
+const MCP_STALE_TERMINALS_TOAST_PREFIX = 'mcp-stale-terminals:'
+
+function mcpStaleTerminalsToastIdForHost(hostKey: string): string {
+  return `${MCP_STALE_TERMINALS_TOAST_PREFIX}${hostKey}`
+}
 
 // A host that just started can refuse until it has taken its terminals back (orcad waits 10 s).
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000] as const
@@ -35,6 +40,7 @@ function askOnce(
   // A newer run of the host, or its removal, takes over.
   const current = () => asks.get(hostKey) === ask
   void (async () => {
+    const { showMcpStaleTerminalsToast } = await import('./mcp-server-change-toast')
     for (const delay of [0, ...RETRY_DELAYS_MS]) {
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay))
@@ -71,7 +77,7 @@ export function McpStaleTerminalsStartupOffer(): null {
     for (const hostKey of asks.keys()) {
       if (hostKey !== 'local' && !enrolled.has(hostKey)) {
         asks.delete(hostKey)
-        toast.dismiss(mcpStaleTerminalsToastId({ kind: 'environment', environmentId: hostKey }))
+        toast.dismiss(mcpStaleTerminalsToastIdForHost(hostKey))
       }
     }
     for (const environment of environments) {

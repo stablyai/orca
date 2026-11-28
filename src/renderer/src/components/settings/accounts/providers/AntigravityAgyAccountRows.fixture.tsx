@@ -11,12 +11,15 @@ const saved = {
   updatedAt: 0
 }
 
-function rows(state: AntigravityAccountState): React.JSX.Element {
+function rows(
+  state: AntigravityAccountState | null,
+  error: string | null = null
+): React.JSX.Element {
   return (
     <div className="bg-background px-5">
       <AntigravityAgyAccountRows
         state={state}
-        error={null}
+        error={error}
         busy={false}
         windowsHost={false}
         run={() => {}}
@@ -55,4 +58,51 @@ export const selectedAccountActive = defineFixture({
         identityKnown: true
       }
     })
+})
+
+const personal = { ...saved, id: 'personal', email: 'personal@example.com', subject: 'personal' }
+
+export const otherSavedAccountHoldsLogin = defineFixture({
+  width: 640,
+  render: () =>
+    rows({
+      accounts: [saved, personal],
+      activeAccountId: personal.id,
+      selectedAccountId: saved.id,
+      restoresSelectionAtLaunch: true,
+      currentAccount: {
+        email: personal.email,
+        subject: personal.subject,
+        authMethod: 'consumer',
+        identityKnown: true
+      }
+    })
+})
+
+const unread: AntigravityAccountState = {
+  accounts: [saved, personal],
+  activeAccountId: null,
+  selectedAccountId: saved.id,
+  currentAccount: { email: null, subject: null, authMethod: '', identityKnown: false, unread: true }
+}
+
+export const signedInUnread = defineFixture({
+  width: 640,
+  render: () => rows({ ...unread, restoresSelectionAtLaunch: true })
+})
+
+// Show account, then Deny (or Cancel) in the keychain dialog.
+export const keychainDenied = defineFixture({
+  width: 640,
+  render: () =>
+    rows(
+      unread,
+      "Orca was denied access to agy's login in the keychain. Allow it when asked to show or switch accounts."
+    )
+})
+
+// Even the attribute read got no answer, so nothing could be listed.
+export const keychainDidNotAnswer = defineFixture({
+  width: 640,
+  render: () => rows(null, "The keychain didn't answer. Unlock it and try again.")
 })

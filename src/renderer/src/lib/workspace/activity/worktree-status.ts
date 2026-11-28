@@ -1,12 +1,23 @@
 import { translate } from '@/i18n/i18n'
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
+import {
+  processReadAgent,
+  type TitleDerivedPaneForeground
+} from '@/components/sidebar/workspace-card/activity/title-derived-pane-agent-identity'
+import { collectLeafIdsInReplayCreationOrder } from '@/components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
 import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import {
   collectRuntimePaneLeafIds,
   isRuntimePaneTitleOrphan,
+  liveSlotIdsAreDense,
   resolveRuntimePaneTitleLeafIdFromRoot
 } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import { FIRST_PANE_ID } from '../../../../../shared/workspace-layout/pane-key'
+import {
+  isTerminalLeafId,
+  makePaneKey
+} from '../../../../../shared/workspace-layout/stable-pane-id'
 import { containsAgentSpinnerGlyph } from '../../../../../shared/agent-status/title/agent-title-glyphs'
 import { isSyntheticAgentPermissionTitle } from '../../../../../shared/agent-status/title/synthetic-agent-title'
 import type {
@@ -30,6 +41,8 @@ type WorktreeStatusHeuristicOptions = {
   stalePaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
+  /** Live process reads name a hand-started agent that has no launchAgent and no provider in its title. */
+  paneForegroundAgentByPaneKey?: Record<string, TitleDerivedPaneForeground>
 }
 
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
@@ -107,6 +120,7 @@ function tabHasStatus(
     const paneTitleEntries = Object.entries(paneTitles)
     const layoutLeafIds = tabLayoutRoot ? new Set(collectRuntimePaneLeafIds(tabLayoutRoot)) : null
     let hasCurrentPaneTitle = false
+    let attributableLeafIdBySlot: ReadonlyMap<string, string> | undefined
     for (const [runtimePaneId, title] of paneTitleEntries) {
       const agentStatusPaneIds =
         status === 'permission' && isSyntheticAgentPermissionTitle(title)
@@ -128,11 +142,23 @@ function tabHasStatus(
       ) {
         continue
       }
-      if (
-        detectAgentStatusFromTitle(title) === status &&
-        titleStatusIsAgentAttributable(title, tab.launchAgent)
-      ) {
+      if (detectAgentStatusFromTitle(title) !== status) {
+        continue
+      }
+      if (titleStatusIsAgentAttributable(title, tab.launchAgent)) {
         return true
+      }
+      const foreground = options.paneForegroundAgentByPaneKey
+      if (!tab.launchAgent && foreground && containsAgentSpinnerGlyph(title)) {
+        attributableLeafIdBySlot ??= collectProcessReadLeafIdsBySlot(
+          paneTitles,
+          tabLayoutRoot,
+          layoutLeafIds
+        )
+        const paneLeafId = attributableLeafIdBySlot.get(runtimePaneId)
+        if (paneLeafId && processReadAgent(foreground[makePaneKey(tab.id, paneLeafId)], title)) {
+          return true
+        }
       }
     }
     if (hasCurrentPaneTitle) {
@@ -183,7 +209,40 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
     return true
   }
   // Spinner proves activity, not provider (Claude titles lack it, #9040); use launch identity like sidebar rows (#9647).
-  return containsAgentSpinnerGlyph(title) && Boolean(launchAgent)
+  return Boolean(launchAgent) && containsAgentSpinnerGlyph(title)
+}
+
+/** Only slots the title-derived row builder maps the same way (lone leaf, or dense live ids in creation
+ *  order) are attributable, so a process-attributed spin always has a matching row. Sparse and parked slots stay out. */
+function collectProcessReadLeafIdsBySlot(
+  paneTitles: Record<number, string>,
+  layoutRoot: TerminalPaneLayoutNode | null | undefined,
+  layoutLeafIds: ReadonlySet<string> | null
+): ReadonlyMap<string, string> {
+  const leafIdBySlot = new Map<string, string>()
+  if (!layoutRoot || !layoutLeafIds) {
+    return leafIdBySlot
+  }
+  // Integer keys enumerate ascending, matching the row builder's live-slot order.
+  const liveSlotIds = Object.keys(paneTitles).filter((paneId) => Number(paneId) >= FIRST_PANE_ID)
+  if (layoutRoot.type === 'leaf') {
+    const [firstSlot] = liveSlotIds
+    if (firstSlot !== undefined && isTerminalLeafId(layoutRoot.leafId)) {
+      leafIdBySlot.set(firstSlot, layoutRoot.leafId)
+    }
+    return leafIdBySlot
+  }
+  if (!liveSlotIdsAreDense(liveSlotIds.map(Number), layoutLeafIds.size)) {
+    return leafIdBySlot
+  }
+  const replayLeafIds = collectLeafIdsInReplayCreationOrder(layoutRoot)
+  liveSlotIds.forEach((slot, index) => {
+    const leafId = replayLeafIds[index]
+    if (leafId && isTerminalLeafId(leafId)) {
+      leafIdBySlot.set(slot, leafId)
+    }
+  })
+  return leafIdBySlot
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {
@@ -207,6 +266,7 @@ type ResolveWorktreeStatusArgs = {
   stalePaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
+  paneForegroundAgentByPaneKey?: Record<string, TitleDerivedPaneForeground>
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
@@ -231,7 +291,8 @@ export function resolveWorktreeStatusParts(args: ResolveWorktreeStatusArgs): {
       agentStatusPaneIdsByTabId: args.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: args.stalePaneIdsByTabId,
       terminalLayoutsByTabId: args.terminalLayoutsByTabId,
-      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
+      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId,
+      paneForegroundAgentByPaneKey: args.paneForegroundAgentByPaneKey
     }
   )
   return { heuristic, status: rankWorktreeStatus(heuristic, args) }

@@ -111,11 +111,10 @@ it.each([false, true])(
         disabled: false,
         caret: 0,
         resolveAttachmentOwner: () => ({ kind: 'local' }),
-        attachResolvedPaths: () => {},
         attachCopiedFiles: () => {},
         captureCopiedFiles: () => async () => {},
         beginPendingImageAttachment: () => null,
-        resolvePendingImageAttachment: () => {},
+        resolvePendingImageAttachment: () => false,
         dropPendingImageAttachment: () => {},
         pastedTextEditor: () => input,
         setNotice: () => {}

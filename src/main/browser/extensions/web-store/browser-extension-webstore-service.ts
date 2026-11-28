@@ -13,7 +13,10 @@ import { removeBrowserExtension } from '../browser-extension-management'
 import { readBrowserExtensionIconDataUrl } from '../installation/browser-extension-manifest'
 import { samePermissionSummary } from '../permissions/browser-extension-permission-summary'
 import type { BrowserExtensionAccessLists as BrowserExtensionPermissionSummary } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
-import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
+import {
+  BROWSER_EXTENSION_SUPPORT_DISABLED_ERROR,
+  isBrowserExtensionSupportEnabled
+} from '../browser-extension-support'
 import {
   downloadWebStoreCrx,
   fetchWebStoreIconDataUrl,
@@ -135,22 +138,32 @@ export async function installBrowserExtensionFromWebStore(
   if (!isBrowserExtensionSupportEnabled()) {
     return {
       status: 'failed',
-      error: 'Turn on browser extensions in Settings › Browser › Extensions'
+      error: BROWSER_EXTENSION_SUPPORT_DISABLED_ERROR,
+      failure: { reason: 'support-disabled' }
     }
   }
   const extensionId = parseChromeWebStoreExtensionInput(input)
   if (!extensionId) {
     return {
       status: 'failed',
-      error: 'Paste a Chrome Web Store link or a 32-letter extension ID'
+      error: 'Paste a Chrome Web Store link or a 32-letter extension ID',
+      failure: { reason: 'invalid-web-store-input' }
     }
   }
   if (!browserSessionRegistry.getProfile(profileId)) {
-    return { status: 'failed', error: 'Browser profile is not available for extensions' }
+    return {
+      status: 'failed',
+      error: 'Browser profile is not available for extensions',
+      failure: { reason: 'profile-unavailable' }
+    }
   }
   const existing = getBrowserExtensionInstallStore().get(extensionId)
   if (existing && isBrowserExtensionEnabledInProfile(profileId, extensionId)) {
-    return { status: 'failed', error: `${existing.name} is already added` }
+    return {
+      status: 'failed',
+      error: `${existing.name} is already added`,
+      failure: { reason: 'already-added', name: existing.name }
+    }
   }
   try {
     return await withBrowserExtensionLock(extensionId, async () => {

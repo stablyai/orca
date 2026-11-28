@@ -1,6 +1,7 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { useCallback, useEffect } from 'react'
+import React, { useCallback, useEffect } from 'react'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { Minimize2 } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
@@ -19,7 +20,6 @@ import {
 import { preventMiddleButtonDefault } from '../strip/middle-button-default-guard'
 import { useSortableTabRename } from './use-sortable-tab-rename'
 import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
-import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { SortableTabCloseButton } from './SortableTabCloseButton'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
 import { useSortableTabDrag } from './use-sortable-tab-drag'
@@ -29,7 +29,6 @@ import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
-import { useTabHasDownServer } from '../../terminal-pane/pty-transport/recovery/server-outage/remote-server-outage-signals'
 import {
   isTerminalTabActivityLive,
   terminalTabHasUnreadActivity
@@ -38,12 +37,14 @@ import { useTerminalTabActivity } from './use-terminal-tab-activity'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 
 import { useNativeChatNamingFailure } from '../session-actions/use-native-chat-naming-failure'
-import {
-  NativeChatNamingErrorBlock,
-  NativeChatNamingFailedDialog
-} from '../session-actions/NativeChatNamingFailure'
 import { ForkMarkedName } from '../../native-chat/fork/ForkMarkedName'
 import { BOT_HOME_TAB_LABEL_CLASSES, BotHomeTabAccent } from '../../bots/home-chat/BotHomeTabAccent'
+
+import {
+  LazyNativeChatNamingErrorBlock,
+  LazyNativeChatNamingFailedDialog,
+  LazySortableTabContextMenu
+} from './sortable-tab-lazy-surfaces'
 
 export default function SortableTab({
   tab,
@@ -129,6 +130,7 @@ export default function SortableTab({
     onOpenChange: setMenuOpen,
     onComplete
   } = useSortableTabContextMenu()
+  const hasOpenedMenu = useLatchedOpen(menuOpen)
   const {
     isEditing,
     renameValue,
@@ -186,14 +188,6 @@ export default function SortableTab({
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
-  const hasDownServer = useTabHasDownServer(tab.id)
-  const identityLabel = identityDetail ? `${tabTitle}, ${identityDetail}` : undefined
-  const outageStatus = hasDownServer
-    ? t('auto.components.sidebar.WorktreeCard.runtimeHostDisconnected', 'Server disconnected')
-    : null
-  const accessibleLabel = outageStatus
-    ? `${identityLabel ?? fork?.markedTitle ?? displayTitle}, ${outageStatus}`
-    : identityLabel
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
     <div
@@ -207,7 +201,7 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       data-bot-home={isBotHome ? '' : undefined}
       // The drag handle's describedby owns the description, so the names join the tab's name.
-      aria-label={accessibleLabel}
+      aria-label={identityDetail ? `${tabTitle}, ${identityDetail}` : undefined}
       {...attributes}
       {...dragListeners}
       className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
@@ -282,20 +276,11 @@ export default function SortableTab({
           spellCheck={false}
         />
       ) : (
-        <>
-          {hasDownServer ? (
-            <span
-              aria-hidden
-              data-tab-server-down=""
-              className="mr-1 size-1.5 shrink-0 rounded-full bg-status-warning"
-            />
-          ) : null}
-          <span
-            className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${isBotHome ? BOT_HOME_TAB_LABEL_CLASSES : ''}`}
-          >
-            {titleNode}
-          </span>
-        </>
+        <span
+          className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${isBotHome ? BOT_HOME_TAB_LABEL_CLASSES : ''}`}
+        >
+          {titleNode}
+        </span>
       )}
       {tab.color && !isEditing && (
         <span
@@ -375,7 +360,11 @@ export default function SortableTab({
               }
               alert={
                 naming
-                  ? (dismiss) => <NativeChatNamingErrorBlock naming={naming} onDismiss={dismiss} />
+                  ? (dismiss) => (
+                      <React.Suspense fallback={null}>
+                        <LazyNativeChatNamingErrorBlock naming={naming} onDismiss={dismiss} />
+                      </React.Suspense>
+                    )
                   : undefined
               }
             >
@@ -385,37 +374,45 @@ export default function SortableTab({
         </div>
       </ContextMenuTrigger>
 
-      <SortableTabContextMenu
-        open={menuOpen}
-        sessionSwitchOpening={openingId}
-        onSessionSwitchComplete={onComplete}
-        tab={tab}
-        unifiedTabId={unifiedTabId}
-        groupId={groupId}
-        isActive={isActive}
-        tabCount={tabCount}
-        hasTabsToRight={hasTabsToRight}
-        hasTabsToLeft={hasTabsToLeft}
-        isPinned={isPinned}
-        closable={closable}
-        canPin={canPin}
-        canContinueInTerminal={canContinueInTerminal}
-        onActivate={onActivate}
-        onClose={onClose}
-        onCloseOthers={onCloseOthers}
-        onCloseToRight={onCloseToRight}
-        onCloseToLeft={onCloseToLeft}
-        onCloseSplitPane={onCloseSplitPane}
-        onRenameOpen={handleRenameOpen}
-        onSetTabColor={onSetTabColor}
-        onTogglePin={onTogglePin}
-        canToggleViewMode={canToggleViewMode}
-        isChatView={isChatView}
-        onToggleViewMode={onToggleViewMode}
-        canSplitTerminal={canSplitTerminal}
-        nativeChat={nativeChat}
-      />
-      {naming ? <NativeChatNamingFailedDialog naming={naming} chatName={displayTitle} /> : null}
+      {hasOpenedMenu ? (
+        <React.Suspense fallback={null}>
+          <LazySortableTabContextMenu
+            open={menuOpen}
+            sessionSwitchOpening={openingId}
+            onSessionSwitchComplete={onComplete}
+            tab={tab}
+            unifiedTabId={unifiedTabId}
+            groupId={groupId}
+            isActive={isActive}
+            tabCount={tabCount}
+            hasTabsToRight={hasTabsToRight}
+            hasTabsToLeft={hasTabsToLeft}
+            isPinned={isPinned}
+            closable={closable}
+            canPin={canPin}
+            canContinueInTerminal={canContinueInTerminal}
+            onActivate={onActivate}
+            onClose={onClose}
+            onCloseOthers={onCloseOthers}
+            onCloseToRight={onCloseToRight}
+            onCloseToLeft={onCloseToLeft}
+            onCloseSplitPane={onCloseSplitPane}
+            onRenameOpen={handleRenameOpen}
+            onSetTabColor={onSetTabColor}
+            onTogglePin={onTogglePin}
+            canToggleViewMode={canToggleViewMode}
+            isChatView={isChatView}
+            onToggleViewMode={onToggleViewMode}
+            canSplitTerminal={canSplitTerminal}
+            nativeChat={nativeChat}
+          />
+        </React.Suspense>
+      ) : null}
+      {naming ? (
+        <React.Suspense fallback={null}>
+          <LazyNativeChatNamingFailedDialog naming={naming} chatName={displayTitle} />
+        </React.Suspense>
+      ) : null}
     </ContextMenu>
   )
 }

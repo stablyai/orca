@@ -1,7 +1,8 @@
 import type { AppState } from '@/store/types'
-import type {
-  AgentSenderPublication,
-  AgentSenderRevision
+import {
+  sameAgentSenderContent,
+  type AgentSenderPublication,
+  type AgentSenderRevision
 } from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 
 export type AgentSenderPublications = Record<string, Record<string, AgentSenderPublication>>
@@ -21,18 +22,6 @@ export function deliveredAgentSenderRevision(
   publication: AgentSenderPublication
 ): AgentSenderRevision {
   return deliveredRevisions.get(publication) ?? publication.revision
-}
-
-/** Field by field, as the index reads them; the revision stamp never counts. */
-function sameContent(a: AgentSenderPublication, b: AgentSenderPublication): boolean {
-  return (
-    a.peerFingerprint === b.peerFingerprint &&
-    a.associations.length === b.associations.length &&
-    a.attachments.length === b.attachments.length &&
-    JSON.stringify(a.principals) === JSON.stringify(b.principals) &&
-    JSON.stringify(a.associations) === JSON.stringify(b.associations) &&
-    JSON.stringify(a.attachments) === JSON.stringify(b.attachments)
-  )
 }
 
 /** A host publishes once any frame carries the field; a frame without it changes only its own
@@ -90,7 +79,7 @@ export function agentSenderPublicationPatch(
     const newer = entries.filter(([, value]) => later(value))
     const whole = scopes?.['*']
     // Every scope stays, and the baseline reads the same: nothing derived from it moves.
-    if (whole && newer.length === entries.length && sameContent(whole, publication)) {
+    if (whole && newer.length === entries.length && sameAgentSenderContent(whole, publication)) {
       return unchanged(whole)
     }
     return set({ ...Object.fromEntries(newer), '*': stored(publication) })
@@ -99,7 +88,7 @@ export function agentSenderPublicationPatch(
   if (newerOrEqual(delivered(current))) {
     return {}
   }
-  return current && sameContent(current, publication)
+  return current && sameAgentSenderContent(current, publication)
     ? unchanged(current)
     : set({ ...scopes, [scope]: stored(publication) })
 }

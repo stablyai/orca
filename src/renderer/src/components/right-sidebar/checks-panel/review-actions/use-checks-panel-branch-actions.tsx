@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 
 import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type ChecksPanelBranchActionsInput = Pick<
   ChecksPanelControllerState,
@@ -76,29 +77,34 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     }
     const connectionId = activeConnectionId ?? undefined
     setIsPublishingBranch(true)
-    try {
-      await pushBranch(
-        activeWorktreeId,
-        activeWorktree.path,
-        true,
-        connectionId,
-        activeWorktree.pushTarget,
-        { runtimeTarget: ownerTarget }
-      )
-      await fetchUpstreamStatus(
-        activeWorktreeId,
-        activeWorktree.path,
-        connectionId,
-        activeWorktree.pushTarget,
-        { runtimeTarget: ownerTarget }
-      )
-    } catch {
-      // Store remote actions already surface the publish failure toast.
-    } finally {
-      // Publishing changes the upstream boundary used to choose Publish/Create/Push & Create.
-      setGitStatusRefreshNonce((value) => value + 1)
-      setIsPublishingBranch(false)
-    }
+    await runWithFinally(
+      async () => {
+        try {
+          await pushBranch(
+            activeWorktreeId,
+            activeWorktree.path,
+            true,
+            connectionId,
+            activeWorktree.pushTarget,
+            { runtimeTarget: ownerTarget }
+          )
+          await fetchUpstreamStatus(
+            activeWorktreeId,
+            activeWorktree.path,
+            connectionId,
+            activeWorktree.pushTarget,
+            { runtimeTarget: ownerTarget }
+          )
+        } catch {
+          // Store remote actions already surface the publish failure toast.
+        }
+      },
+      () => {
+        // Publishing changes the upstream boundary used to choose Publish/Create/Push & Create.
+        setGitStatusRefreshNonce((value) => value + 1)
+        setIsPublishingBranch(false)
+      }
+    )
   }, [
     activeWorktree,
     activeWorktreeId,
@@ -119,30 +125,33 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     }
     const connectionId = activeConnectionId ?? undefined
     setIsSyncingBranch(true)
-    try {
-      await syncBranch(
-        activeWorktreeId,
-        activeWorktree.path,
-        connectionId,
-        activeWorktree.pushTarget,
-        {
-          runtimeTarget: ownerTarget
+    await runWithFinally(
+      async () => {
+        try {
+          await syncBranch(
+            activeWorktreeId,
+            activeWorktree.path,
+            connectionId,
+            activeWorktree.pushTarget,
+            { runtimeTarget: ownerTarget }
+          )
+          await fetchUpstreamStatus(
+            activeWorktreeId,
+            activeWorktree.path,
+            connectionId,
+            activeWorktree.pushTarget,
+            { runtimeTarget: ownerTarget }
+          )
+        } catch {
+          // Store remote actions already surface the sync failure toast.
         }
-      )
-      await fetchUpstreamStatus(
-        activeWorktreeId,
-        activeWorktree.path,
-        connectionId,
-        activeWorktree.pushTarget,
-        { runtimeTarget: ownerTarget }
-      )
-    } catch {
-      // Store remote actions already surface the sync failure toast.
-    } finally {
-      // Sync changes ahead/behind and therefore the available review-creation action.
-      setGitStatusRefreshNonce((value) => value + 1)
-      setIsSyncingBranch(false)
-    }
+      },
+      () => {
+        // Sync changes ahead/behind and therefore the available review-creation action.
+        setGitStatusRefreshNonce((value) => value + 1)
+        setIsSyncingBranch(false)
+      }
+    )
   }, [
     activeWorktree,
     activeWorktreeId,

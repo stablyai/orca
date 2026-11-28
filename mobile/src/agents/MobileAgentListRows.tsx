@@ -9,12 +9,12 @@ import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { mobileBotAvatarSource } from '../bots/host-bot-row-facts'
 import { SwipeRowActions } from '../components/list/SwipeRowActions'
-import { HOME_ROW_TEXT_INSET, homeListStyles } from '../home/home-list-styles'
+import { HOME_ROW_TEXT_INSET, homeListStylesSheet } from '../home/home-list-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerMediumImpact } from '../platform/haptics/haptics'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../host-catalog/host-profile'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import {
@@ -73,7 +73,9 @@ export function MobileAgentListRows(props: {
   idleKey?: string
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   // Disclosures live in a module cache so they survive remounts; this only redraws after a toggle.
   const [, setRevision] = useState(0)
   const toggle = useCallback((key: string) => {
@@ -157,7 +159,9 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   onToggleWorkers: (key: string) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const { row } = props
   const { agent } = row.entry
   const desktop = useHostDisplay(props.host).title
@@ -165,16 +169,15 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const group = row.stale ? null : agentStatusGroup(row.dotState)
   const preview = agentListPreview(agent, group, title)
   const needsYou = group === 'needs-you'
-  const stateWord = needsYou ? agentStateLabel(row.dotState) : ''
-  const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState) : stateWord
+  const stateWord = needsYou ? agentStateLabel(row.dotState, t) : ''
+  const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState, t) : stateWord
   const place = [
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
-    row.entry.executionHost?.label,
     props.nameDesktop ? desktop : null
   ]
     .filter(Boolean)
     .join(' · ')
-  const time = row.timeAt > 0 ? formatTimeAgo(row.timeAt, props.now) : ''
+  const time = row.timeAt > 0 ? formatTimeAgo(row.timeAt, props.now, t) : ''
   const workerCount = row.workers.length
   const workersLabel =
     workerCount === 1
@@ -239,7 +242,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={[
-            row.forked ? mobileForkAccessibleName(title) : title,
+            row.forked ? mobileForkAccessibleName(title, t) : title,
             unread ? t('agents.list.unread', 'Unread') : null,
             spokenState || null,
             preview || null,
@@ -343,12 +346,12 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   )
 }, areStructurallyEqual)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   text: { flex: 1, minWidth: 0, paddingTop: 9, paddingBottom: 10, paddingRight: 14, gap: 3 },
   titleLine: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
   // Opaque so a swipe's actions stay hidden until the row slides off them.
   row: { backgroundColor: colors.bgPanel },
-  title: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 20, color: colors.textPrimary },
+  title: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 20, color: colors.textPrimary },
   titleUnread: { fontWeight: '600' },
   time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   preview: { fontSize: 14, lineHeight: 19, color: colors.textSecondary },

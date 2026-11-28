@@ -3,7 +3,7 @@ import {
   type ExecutionHostId
 } from '../../../src/shared/execution-host/execution-host'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 import type { BotComputerAnswer } from './bot-link-host-reads'
 import { hostBotsKey } from './host-bots-read'
 import { serverHostDownWord, type HostBotListing, type NewBotRefusal } from './host-bot-listing'
@@ -19,18 +19,23 @@ export type NewBotComputer = {
   templatePackages?: boolean
 }
 
-function updateOrcaOn(host: string): string {
-  return translate('bots.list.updateOrcaOn', 'Update Orca on {{host}}', { host })
+function updateOrcaOn(host: string, t: Translate): string {
+  return t('bots.list.updateOrcaOn', 'Update Orca on {{host}}', { host })
 }
 
-function refusalWords(refusal: NewBotRefusal, label: string, desktopLabel: string): string {
+function refusalWords(
+  refusal: NewBotRefusal,
+  label: string,
+  desktopLabel: string,
+  t: Translate
+): string {
   switch (refusal) {
     case 'bots-off':
-      return translate('bots.new.botsOffOn', 'Bots are off on {{host}}', { host: label })
+      return t('bots.new.botsOffOn', 'Bots are off on {{host}}', { host: label })
     case 'update':
-      return updateOrcaOn(label)
+      return updateOrcaOn(label, t)
     case 'update-desktop':
-      return translate('bots.new.updateDesktopFirst', 'Update Orca on {{host}} first', {
+      return t('bots.new.updateDesktopFirst', 'Update Orca on {{host}} first', {
         host: desktopLabel
       })
   }
@@ -39,16 +44,17 @@ function refusalWords(refusal: NewBotRefusal, label: string, desktopLabel: strin
 function listingRefusal(
   listing: HostBotListing | undefined,
   label: string,
-  desktopLabel: string
+  desktopLabel: string,
+  t: Translate
 ): string | undefined {
   if (listing?.kind === 'update-needed') {
-    return updateOrcaOn(label)
+    return updateOrcaOn(label, t)
   }
   if (listing?.kind !== 'listed') {
     // Not read yet, or its read failed: nothing says it takes a bot yet; the list reads it again.
-    return translate('bots.new.checking', 'Checking…')
+    return t('bots.new.checking', 'Checking…')
   }
-  return listing.createRefusal && refusalWords(listing.createRefusal, label, desktopLabel)
+  return listing.createRefusal && refusalWords(listing.createRefusal, label, desktopLabel, t)
 }
 
 /** Runs on's computers: this one first, then each server in the desktop's order, each disabled
@@ -57,8 +63,9 @@ export function newBotComputers(args: {
   desktopLabel: string
   listings: readonly HostBotListing[]
   serverHosts: readonly MobileRelayHost[]
+  t: Translate
 }): NewBotComputer[] {
-  const { desktopLabel, listings } = args
+  const { desktopLabel, listings, t } = args
   const listingOf = (hostId: ExecutionHostId) =>
     listings.find((listing) => listing.hostId === hostId)
   const computer = (
@@ -80,16 +87,16 @@ export function newBotComputers(args: {
     computer(
       LOCAL_EXECUTION_HOST_ID,
       desktopLabel,
-      listingRefusal(listingOf(LOCAL_EXECUTION_HOST_ID), desktopLabel, desktopLabel)
+      listingRefusal(listingOf(LOCAL_EXECUTION_HOST_ID), desktopLabel, desktopLabel, t)
     ),
     ...args.serverHosts.map((host) =>
       computer(
         host.hostId,
         host.label,
         host.relay === 'update-needed'
-          ? updateOrcaOn(host.label)
-          : (serverHostDownWord(host) ??
-              listingRefusal(listingOf(host.hostId), host.label, desktopLabel))
+          ? updateOrcaOn(host.label, t)
+          : (serverHostDownWord(host, t) ??
+              listingRefusal(listingOf(host.hostId), host.label, desktopLabel, t))
       )
     )
   ]
@@ -99,16 +106,17 @@ export function newBotComputers(args: {
 function answerRefusal(
   answer: BotComputerAnswer['answer'],
   label: string,
-  desktop: { label: string; takesCreate: boolean } | null
+  desktop: { label: string; takesCreate: boolean } | null,
+  t: Translate
 ): string | undefined {
   if (answer.kind === 'no-capability') {
-    return updateOrcaOn(label)
+    return updateOrcaOn(label, t)
   }
   if (answer.kind === 'unreachable') {
-    return translate('bots.list.offline', 'Offline')
+    return t('bots.list.offline', 'Offline')
   }
   if (answer.kind !== 'bots') {
-    return translate('bots.new.checking', 'Checking…')
+    return t('bots.new.checking', 'Checking…')
   }
   const refusal: NewBotRefusal | undefined = !answer.enabled
     ? 'bots-off'
@@ -117,14 +125,15 @@ function answerRefusal(
       : desktop && !desktop.takesCreate
         ? 'update-desktop'
         : undefined
-  return refusal && refusalWords(refusal, label, desktop?.label ?? label)
+  return refusal && refusalWords(refusal, label, desktop?.label ?? label, t)
 }
 
 /** Runs on's computers across paired computers, in Home's order: each computer, then the servers it
  *  relays. `labelOf` names a computer as Home's rows do. */
 export function pairedNewBotComputers(
   computers: readonly BotComputerAnswer[],
-  labelOf: (computer: BotComputerAnswer) => string
+  labelOf: (computer: BotComputerAnswer) => string,
+  t: Translate
 ): NewBotComputer[] {
   const isOwn = (computer: BotComputerAnswer) => computer.key === hostBotsKey(computer.pairedHostId)
   const own = new Map(
@@ -146,7 +155,7 @@ export function pairedNewBotComputers(
               takesCreate: paired?.answer.kind === 'bots' && paired.answer.takesCreate
             }
           })()
-    const refusal = answerRefusal(computer.answer, label, desktop)
+    const refusal = answerRefusal(computer.answer, label, desktop, t)
     return [
       {
         id: computer.key,

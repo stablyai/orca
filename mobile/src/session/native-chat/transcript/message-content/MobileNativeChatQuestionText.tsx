@@ -1,8 +1,9 @@
 import type { ComponentProps } from 'react'
 import { View, type StyleProp, type ViewStyle } from 'react-native'
-import { styles as markdownStyles } from '../../../../components/markdown/mobile-markdown-styles'
+import { stylesSheet } from '../../../../components/markdown/mobile-markdown-styles'
 import { typography } from '../../../../theme/mobile-theme'
 import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 type Props = Pick<
   ComponentProps<typeof MobileNativeChatMarkdown>,
@@ -24,6 +25,7 @@ export function MobileNativeChatQuestionText({
   content,
   rangeSelectable
 }: Props): React.JSX.Element {
+  const markdownStyles = useThemedStyles(stylesSheet)
   const size = title ? typography.bodySize + 1 : fontSize
   return (
     <View style={style}>

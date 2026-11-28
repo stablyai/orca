@@ -1,10 +1,10 @@
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { PRCheckRunDetails } from '../../../../../../src/shared/github/checks/check-types'
 import { presentCheckDetail, type CheckDetailJob } from './pr-check-detail-content'
-import { mobilePrSidebarStyles as styles } from '../mobile-pr-sidebar-styles'
+import { mobilePrSidebarStylesSheet } from '../mobile-pr-sidebar-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 // Cache detail after first expansion; loading/error track only in-flight read.
 export type DetailEntry =
@@ -14,7 +14,8 @@ export type DetailEntry =
 
 // Match desktop check conclusion/summary/annotations/failed jobs; keep output muted and scrollable to bound sidebar layout.
 export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobilePrSidebarStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   if (!entry || entry.status === 'loading') {
     return (
@@ -40,7 +41,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
     )
   }
 
-  const content = presentCheckDetail(entry.details)
+  const content = presentCheckDetail(entry.details, t)
   const isEmpty =
     content.summaryLines.length === 0 &&
     content.annotations.length === 0 &&
@@ -106,7 +107,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
 }
 
 function JobRow({ job }: { job: CheckDetailJob }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobilePrSidebarStylesSheet)
   return (
     <View>
       <View style={styles.checkDetailStepRow}>

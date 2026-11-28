@@ -1,12 +1,12 @@
 import { ArrowUp } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobilePendingButton } from '../controls/MobilePendingButton'
 import {
   COMPOSER_COMPACT_CONTROL_HIT_SLOP,
   COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as styles
+  composerInputStylesSheet
 } from './composer-input-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export function ComposerSendButton({
   onPress,
@@ -25,7 +25,8 @@ export function ComposerSendButton({
   /** `compact` fits a one-line box's text row. */
   size?: 'default' | 'compact'
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const compact = size === 'compact'
   return (
     <MobilePendingButton

@@ -5,7 +5,7 @@ import {
 } from './native-chat-tool-preview-prefix'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
-import { sliceAtCodeUnitLimit } from '../../text/surrogate-safe-text-slice'
+import { ellipsizeCodeUnits, sliceAtCodeUnitLimit } from '../../text/surrogate-safe-text-slice'
 
 const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8
@@ -38,7 +38,7 @@ export function summarizeToolInput(input: unknown): string {
   const collapsed = collapsedToolInputPrefix(unwrapLoginShellCommand(formatToolInputPreview(input)))
   return collapsed.length <= MAX_TOOL_PREVIEW_LENGTH
     ? collapsed
-    : `${collapsed.slice(0, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
+    : `${sliceAtCodeUnitLimit(collapsed, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
 }
 
 /** Normalize row display once; format details lazily because collapsed mobile rows never need them. */
@@ -55,7 +55,7 @@ export function createToolInputDisplay(input: unknown): ToolInputDisplay {
 }
 
 export function truncateToolDetail(text: string): string {
-  return text.length > MAX_TOOL_DETAIL_LENGTH ? `${text.slice(0, MAX_TOOL_DETAIL_LENGTH)}…` : text
+  return ellipsizeCodeUnits(text, MAX_TOOL_DETAIL_LENGTH)
 }
 
 /** Prefer target path, then primary string argument, then bounded JSON; keep serialized file_path objects out of tappable labels. */
@@ -303,9 +303,7 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
     return undefined
   }
   if (typeof value === 'string') {
-    return value.length > MAX_PREVIEW_STRING_INPUT
-      ? `${sliceAtCodeUnitLimit(value, MAX_PREVIEW_STRING_INPUT)}…`
-      : value
+    return ellipsizeCodeUnits(value, MAX_PREVIEW_STRING_INPUT)
   }
   if (!value || typeof value !== 'object') {
     return value

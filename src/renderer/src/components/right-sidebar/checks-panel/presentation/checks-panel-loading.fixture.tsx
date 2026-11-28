@@ -6,6 +6,10 @@ import type { PRCheckDetail } from '../../../../../../shared/github/checks/check
 import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 
 // Synthetic data only: invented check names, authors and paths.
+// Why: an empty avatar URL falls back to github.com/<login>.png, which can fetch a real account's picture;
+// an inline neutral circle keeps the fixture offline and free of anyone's picture.
+const noAvatar =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='10' fill='%23888'/%3E%3C/svg%3E"
 const checks: PRCheckDetail[] = [
   { name: 'lint', status: 'completed', conclusion: 'success', url: 'https://example.com/1' },
   {
@@ -32,8 +36,8 @@ const checks: PRCheckDetail[] = [
 const comments: PRComment[] = [
   {
     id: 1,
-    author: 'river-dev',
-    authorAvatarUrl: '',
+    author: 'sample-dev',
+    authorAvatarUrl: noAvatar,
     body: 'Could this read the cached value first? The panel flickers on every switch.',
     createdAt: '2026-01-05T10:00:00Z',
     url: 'https://example.com/c1',
@@ -45,7 +49,7 @@ const comments: PRComment[] = [
   {
     id: 2,
     author: 'sample-reviewer',
-    authorAvatarUrl: '',
+    authorAvatarUrl: noAvatar,
     body: 'Looks good once the empty state keeps its copy.',
     createdAt: '2026-01-05T11:00:00Z',
     url: 'https://example.com/c2'

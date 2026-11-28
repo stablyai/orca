@@ -12,7 +12,9 @@ export function captureProjectionState(
     revision: data.tabProjection.revision
   }
   captured.display = data.display.capture()
-  captured.activeDashboardOwners = new Set(data.activeDashboardOwners)
+  captured.activeDashboardOwners = data.activeDashboardOwners
+    ? new Set(data.activeDashboardOwners)
+    : null
   captured.dashboardTotals = data.dashboardTotals
   captured.inputs = data.inputs
   captured.remoteRows = data.remoteRows

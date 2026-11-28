@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   getRepoDialableSshTargetId,
   isRepoOnCatalogHost,
@@ -12,10 +13,13 @@ import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hook
 import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
 import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 
-export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): void {
+export function registerWorktreeHookCheckHandler(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store, runtime } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'hooks:check',
     async (
       _event,

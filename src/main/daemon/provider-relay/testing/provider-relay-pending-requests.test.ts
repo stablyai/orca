@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedProviderProcess } from '../../../provider-process/managed-provider-process'
 import { ProviderRelay } from '../provider-relay'
+import { ProviderRelayPendingRequests } from '../provider-relay-pending-requests'
 
 function fakeManaged(): {
   managed: ManagedProviderProcess
@@ -78,6 +79,118 @@ describe('provider relay pending requests', () => {
       '{"type":"control_response","response":{"subtype":"success","request_id":"perm-1"}}\n'
     )
     await vi.waitFor(() => expect(relay.info().pendingCount).toBe(0))
+    await relay.dispose()
+  })
+
+  it('tells the next attach its replay starts inside a cut item only when an ack gave one up', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-cut',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-cut.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    const stream = { socket: new PassThrough() }
+    await relay.attach('app-1', stream, 0)
+    stdout.write('a\nb\nc\n')
+    await tick()
+    relay.ack(3, 2)
+    await relay.detach()
+    expect((await relay.attach('app-2', stream, relay.info().ackedSeq)).truncatedThrough).toBe(
+      undefined
+    )
+    // The client gives up its kept span (the daemon's ask at the file cap): the cursor moves past it.
+    relay.ack(3, undefined, { cut: true })
+    await relay.detach()
+    expect(relay.info().ackedSeq).toBe(3)
+    expect((await relay.attach('app-3', stream, 3)).truncatedThrough).toBe(3)
+    // A floor that rose past an open item's start on purpose: the cut is just before what it keeps.
+    stdout.write('d\ne\nf\n')
+    await tick()
+    relay.ack(6, 5, { cut: true })
+    await relay.detach()
+    expect((await relay.attach('app-4', stream, relay.info().ackedSeq)).truncatedThrough).toBe(4)
+    await relay.dispose()
+  })
+
+  it("asks a paused relay's client again until it acks, so one short answer never stalls the agent", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const { managed, stdout } = fakeManaged()
+      const relay = new ProviderRelay({
+        relayId: 'r-nudge',
+        chatKey: 'chat',
+        managed,
+        spoolPath: join(dir, 'r-nudge.ndjson'),
+        onSettled: () => {},
+        onDetached: () => {}
+      })
+      const socket = new PassThrough()
+      let asks = 0
+      socket.on('data', (chunk: Buffer) => {
+        asks += chunk.toString().split('"relayAckWanted"').length - 1
+      })
+      await relay.attach('app-1', { socket }, 0)
+      const line = `${'x'.repeat(64 * 1024)}\n`
+      for (let i = 0; i < 20; i++) {
+        stdout.write(line)
+      }
+      await vi.waitFor(() => expect(stdout.isPaused()).toBe(true))
+      expect(asks).toBe(1)
+      // The answer falls short: half the cap is still held, so the spool alone would not ask again.
+      relay.ack(2)
+      vi.advanceTimersByTime(2_000)
+      expect(asks).toBe(2)
+      relay.ack(relay.info().nextSeq - 1)
+      await vi.waitFor(() => expect(stdout.isPaused()).toBe(false))
+      const resumed = asks
+      vi.advanceTimersByTime(60_000)
+      expect(asks).toBe(resumed)
+      await relay.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never replays a request the client already answered, while an unanswered one is still asked', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-5',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-5.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    await relay.attach('app-1', { socket: new PassThrough() }, 0)
+    stdout.write(
+      '{"id":0,"method":"item/commandExecution/requestApproval","params":{"n":"answered-rpc"}}\n'
+    )
+    stdout.write(
+      '{"type":"control_request","request_id":"p1","request":{"n":"answered-control"}}\n'
+    )
+    stdout.write('{"id":1,"method":"session/request_permission","params":{"n":"still-owed"}}\n')
+    stdout.write('{"method":"item/agentMessage/delta","params":{"n":"plain-line"}}\n')
+    await tick()
+    relay.write('{"id":0,"result":{"decision":"accept"}}\n')
+    relay.write('{"type":"control_response","response":{"subtype":"success","request_id":"p1"}}\n')
+    await vi.waitFor(() => expect(relay.info().pendingCount).toBe(1))
+    // Quit before any ack: the whole spool replays to the next app.
+    await relay.detach()
+
+    const socket = new PassThrough()
+    const sent: Buffer[] = []
+    socket.on('data', (chunk: Buffer) => sent.push(chunk))
+    const reattached = await relay.attach('app-2', { socket }, 0)
+    await tick()
+    const replay = Buffer.concat(sent).toString()
+    expect(reattached.pending).toEqual([3])
+    expect(replay).not.toContain('answered-rpc')
+    expect(replay).not.toContain('answered-control')
+    expect(replay).toContain('still-owed')
+    expect(replay).toContain('plain-line')
     await relay.dispose()
   })
 
@@ -221,5 +334,197 @@ describe('provider relay pending requests', () => {
       })
     expect(dataSeqs).toEqual([2])
     await relay.dispose()
+  })
+})
+
+/** One JSON-RPC line as the agent or client writes it. */
+type RpcLine = Record<string, unknown>
+
+describe('provider relay kept lines', () => {
+  const agent = (pending: ProviderRelayPendingRequests, seq: number, message: RpcLine): void =>
+    pending.observeAgentLine({ seq, line: JSON.stringify(message) })
+  const client = (pending: ProviderRelayPendingRequests, message: RpcLine): void => {
+    pending.releaseAnswered(pending.observeClientData(`${JSON.stringify(message)}\n`))
+  }
+  const configUpdate = (value: string): RpcLine => ({
+    method: 'session/update',
+    params: { update: { sessionUpdate: 'config_option_update', configOptions: [value] } }
+  })
+
+  it('keeps the latest start answer and state line, and lists unanswered work requests', () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({
+      answers: ['session/new', 'session/load'],
+      lines: ['"config_option_update"'],
+      outstanding: ['session/prompt']
+    })
+    pending.workMethods = new Set(['session/prompt'])
+    // The attaching app's first reattach asks for kept lines.
+    pending.kept.sendOnAttach = true
+    client(pending, { id: 1, method: 'session/new', params: {} })
+    agent(pending, 1, { id: 1, result: { sessionId: 's1' } })
+    agent(pending, 2, configUpdate('a'))
+    agent(pending, 3, configUpdate('b'))
+    // A refused reload leaves the start that stands.
+    client(pending, { id: 2, method: 'session/load', params: {} })
+    agent(pending, 4, { id: 2, error: { code: -32000, message: 'no' } })
+    client(pending, { id: 3, method: 'session/prompt', params: {} })
+
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])
+    expect(pending.kept.attachDetails(0)).toEqual({
+      kept: [
+        { seq: 1, name: 'a:session/new' },
+        { seq: 3, name: 'l:"config_option_update"' }
+      ],
+      // Every line since the prompt is in a replay after seq 4; once one is acked, not.
+      outstanding: [{ id: 3, method: 'session/prompt', replayedWhole: true }]
+    })
+    expect(pending.kept.attachDetails(5).outstanding).toEqual([{ id: 3, method: 'session/prompt' }])
+    expect(pending.working.size).toBe(1)
+    // Kept lines are never held requests, so spool acks and answers can't release them.
+    expect(pending.size).toBe(0)
+
+    agent(pending, 5, { id: 3, result: { stopReason: 'end_turn' } })
+    expect(pending.working.size).toBe(0)
+    // Answered within the replay after seq 4, so the next app can wait on it by id.
+    expect(pending.kept.attachDetails(4).outstanding).toEqual([
+      { id: 3, method: 'session/prompt', answered: true, replayedWhole: true }
+    ])
+    expect(pending.kept.attachDetails(5).outstanding).toBeUndefined()
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])
+    // The agent's exit clears held requests, never what the next app needs to open it.
+    pending.clear()
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])
+  })
+
+  it('keeps nothing for a malformed spec, and drops a kept line its too-large successor replaced', () => {
+    const malformed = new ProviderRelayPendingRequests()
+    malformed.kept.configure({ answers: ['session/new'], lines: 'config' })
+    malformed.kept.sendOnAttach = true
+    client(malformed, { id: 1, method: 'session/new', params: {} })
+    agent(malformed, 1, { id: 1, result: { sessionId: 's1' } })
+    expect(malformed.kept.records()).toEqual([])
+
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({ answers: [], lines: ['"config_option_update"'], outstanding: [] })
+    pending.kept.sendOnAttach = true
+    agent(pending, 1, configUpdate('a'))
+    agent(pending, 2, configUpdate('x'.repeat(1024 * 1024 + 1)))
+    expect(pending.kept.records()).toEqual([])
+  })
+  it('answers a housekeeping request itself only while no app is attached, and never replays it', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const replies = { 'craft/drainMidTurnQueue': { messages: [], hasQueuedPrompt: false } }
+    pending.kept.configure({ answers: [], lines: [], outstanding: ['session/prompt'], replies })
+    const written: string[] = []
+    let attached = false
+    pending.toAgent = (line) => !attached && written.push(line) > 0
+    const drain = { id: 9, method: 'craft/drainMidTurnQueue', params: {} }
+    agent(pending, 1, drain)
+    expect(written.map((line) => JSON.parse(line))).toEqual([
+      { jsonrpc: '2.0', id: 9, result: replies['craft/drainMidTurnQueue'] }
+    ])
+    expect(pending.records()).toEqual([])
+    expect(pending.answered.replayed({ seq: 1, line: JSON.stringify(drain) }).line).toBe('')
+    // An attached app answers it as usual.
+    attached = true
+    agent(pending, 2, { ...drain, id: 10 })
+    expect(pending.records().map((record) => record.seq)).toEqual([2])
+  })
+
+  it('answers a held housekeeping request once the app lets go, unless its answer is being written', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const replies = { 'craft/drainMidTurnQueue': { messages: [], hasQueuedPrompt: false } }
+    pending.kept.configure({ answers: [], lines: [], outstanding: [], replies })
+    const written: string[] = []
+    let attached = true
+    // An empty line is the daemon ending an app's cut-off line, a no-op when it ended.
+    pending.toAgent = (line) => !attached && (line === '' || written.push(line) > 0)
+    // Both arrive while the app still holds the relay; the app is writing its answer to id 2.
+    agent(pending, 1, { id: 1, method: 'craft/drainMidTurnQueue', params: {} })
+    agent(pending, 2, { id: 2, method: 'craft/drainMidTurnQueue', params: {} })
+    const answering = pending.observeClientData(`${JSON.stringify({ id: 2, result: {} })}\n`)
+    attached = false
+    pending.answerHeld()
+    expect(written.map((line) => JSON.parse(line).id)).toEqual([1])
+    pending.releaseAnswered(answering)
+    expect(pending.records()).toEqual([])
+  })
+
+  it('never answers a request that asks the person, whatever the spec names', () => {
+    for (const method of [
+      'session/request_permission',
+      '_x.ai/exit_plan_mode',
+      'cursor/ask_question'
+    ]) {
+      const pending = new ProviderRelayPendingRequests()
+      pending.kept.configure({ answers: [], lines: [], outstanding: [], replies: { [method]: {} } })
+      const written: string[] = []
+      pending.toAgent = (line) => written.push(line) > 0
+      agent(pending, 1, { id: 3, method, params: {} })
+      expect(written).toEqual([])
+      expect(pending.records().map((record) => record.seq)).toEqual([1])
+    }
+  })
+
+  it("never keeps a tool's output that quotes a kept update kind in place of the real update", () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({
+      answers: [],
+      lines: [
+        '"sessionUpdate":"config_option_update"',
+        '"sessionUpdate":"available_commands_update"'
+      ],
+      outstanding: []
+    })
+    pending.kept.sendOnAttach = true
+    agent(pending, 1, configUpdate('a'))
+    const quoted = { sessionUpdate: 'config_option_update', configOptions: ['forged'] }
+    agent(pending, 2, {
+      method: 'session/update',
+      params: { update: { sessionUpdate: 'tool_call_update', rawOutput: quoted } }
+    })
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1])
+  })
+  it('keeps an accepted request whose answer says nothing, at its answer', () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({
+      answers: [],
+      lines: [],
+      outstanding: [],
+      requests: ['session/set_model']
+    })
+    pending.kept.sendOnAttach = true
+    client(pending, { id: 1, method: 'session/set_model', params: { modelId: 'refused' } })
+    agent(pending, 1, { id: 1, error: { code: -32000, message: 'no' } })
+    client(pending, { id: 2, method: 'session/set_model', params: { modelId: 'picked' } })
+    agent(pending, 2, { id: 2, result: {} })
+    expect(pending.kept.records().map(({ seq, line }) => [seq, JSON.parse(line).params])).toEqual([
+      [2, { modelId: 'picked' }]
+    ])
+  })
+})
+
+describe('a request asking to start an item', () => {
+  it('marks only a whole-item approval as not started, until it is answered', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const ask = (id: number, params: Record<string, unknown>) =>
+      pending.observeAgentLine({
+        seq: id,
+        line: JSON.stringify({ method: 'item/commandExecution/requestApproval', id, params })
+      })
+    ask(1, { itemId: 'cmd-new' })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
+    // A policy naming the start method later reclassifies the request already held.
+    pending.setStartMethods(['item/commandExecution/requestApproval'])
+    // Writing to a command that already runs names it too, with its own approval id.
+    ask(2, { itemId: 'cmd-running', approvalId: 'stdin-1' })
+    expect(pending.awaitingStart('cmd-new')).toBe(true)
+    expect(pending.awaitingStart('cmd-running')).toBe(false)
+    pending.observeAgentLine({
+      seq: 3,
+      line: JSON.stringify({ method: 'serverRequest/resolved', params: { requestId: 1 } })
+    })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
   })
 })

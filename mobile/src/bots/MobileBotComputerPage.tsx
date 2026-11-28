@@ -7,9 +7,9 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
 import { SettingsSection } from '../settings/settings-screen-frame'
-import { colors, feedback, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { feedback, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { readOrcaAccount } from './new-bot-host-reads'
 
@@ -22,7 +22,8 @@ export function MobileBotComputerPage(props: {
   showToast: (message: string) => void
   onBack: { label: string; onPress: () => void }
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const { client, online, folderPath } = props
@@ -113,7 +114,7 @@ export function MobileBotComputerPage(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   copy: { padding: spacing.xs },
   pressed: { opacity: feedback.pressedOpacity }
 }))

@@ -3,6 +3,7 @@ import { hashMarkdownContent } from '../../../src/shared/editor/markdown/mobile-
 import {
   holdDocumentEditDraftOffer,
   loadDocumentEditDraft,
+  releaseDocumentEditDraft,
   saveDocumentEditDraft,
   type DocumentEditDraft
 } from './document-edit-draft-rows'
@@ -81,6 +82,9 @@ export function useDocumentEditDraft({
       active = false
     }
   }, [canDecide, draftKey, live])
+
+  // A document left clean lets its row go once nothing is pending.
+  useEffect(() => (draftKey ? () => releaseDocumentEditDraft(draftKey) : undefined), [draftKey])
 
   useEffect(() => {
     if (state.phase !== 'ready' || state.offer || !editable || !draftKey || baseHash === null) {
