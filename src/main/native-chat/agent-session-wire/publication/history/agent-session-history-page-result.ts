@@ -1,6 +1,6 @@
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { snapshotLatestTurn } from './agent-session-history-latest-turn'
+import { pageSnapshotTail } from './agent-session-history-latest-turn'
 import type { HistoryPageInput } from './agent-session-history-page-bounds'
 
 export function buildAgentSessionHistoryPage(input: HistoryPageInput): AgentSessionHistoryPage {
@@ -28,6 +28,6 @@ export function buildAgentSessionHistoryPage(input: HistoryPageInput): AgentSess
     hasNewer: input.hasNewer,
     ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster }),
     // Read the whole timeline: long turns can begin below this page.
-    latestTurn: snapshotLatestTurn(input.snapshot)
+    ...pageSnapshotTail(input.snapshot)
   }
 }

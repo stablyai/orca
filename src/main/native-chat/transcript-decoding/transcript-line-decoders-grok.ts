@@ -80,10 +80,18 @@ export function decodeGrokTranscriptLine(
       extractString(record.name) ??
       extractString(record.tool) ??
       'tool'
+    const callId = extractString(record.id) ?? extractString(record.tool_call_id)
     return {
       id,
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name, input: record.kind ?? record.arguments ?? record.input }],
+      blocks: [
+        {
+          type: 'tool-call',
+          name,
+          input: record.kind ?? record.arguments ?? record.input,
+          ...(callId ? { callId } : {})
+        }
+      ],
       timestamp,
       source: 'transcript'
     }
@@ -91,6 +99,7 @@ export function decodeGrokTranscriptLine(
 
   if (type === 'tool_result') {
     const output = toolResultOutput(record.content ?? record.output ?? record.result)
+    const callId = extractString(record.tool_call_id) ?? extractString(record.tool_use_id)
     return {
       id,
       role: 'tool',
@@ -98,7 +107,8 @@ export function decodeGrokTranscriptLine(
         {
           type: 'tool-result',
           output,
-          ...(record.is_error === true || record.isError === true ? { isError: true } : {})
+          ...(callId ? { callId } : {}),
+          ...(grokToolFailed(record, output) ? { isError: true } : {})
         }
       ],
       timestamp,
@@ -120,6 +130,7 @@ function grokToolCallBlocks(value: unknown): NativeChatBlock[] {
       continue
     }
     const name = extractString(record.name) ?? extractString(record.tool) ?? 'tool'
+    const callId = extractString(record.id)
     let input: unknown = record.arguments ?? record.input ?? record.args
     if (typeof input === 'string') {
       try {
@@ -128,9 +139,15 @@ function grokToolCallBlocks(value: unknown): NativeChatBlock[] {
         // Preserve unparseable arguments as text.
       }
     }
-    blocks.push({ type: 'tool-call', name, input })
+    blocks.push({ type: 'tool-call', name, input, ...(callId ? { callId } : {}) })
   }
   return blocks
+}
+
+function grokToolFailed(record: Record<string, unknown>, output: string): boolean {
+  return (
+    record.is_error === true || record.isError === true || /^Tool `[^`]+` failed\b/.test(output)
+  )
 }
 
 function grokSummaryText(value: unknown): string | null {

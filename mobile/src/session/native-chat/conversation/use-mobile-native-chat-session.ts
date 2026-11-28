@@ -1,5 +1,10 @@
 import type { MobileSessionItemPresentation } from '../../mobile-session-item-target'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { NativeChatTaskSeedList } from '../../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
+import {
+  nextMobileNativeChatTaskSeed,
+  type MobileNativeChatTaskSeed
+} from '../mobile-native-chat-task-seed'
 import { EMPTY_NATIVE_CHAT_TRANSCRIPT } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import {
   createNativeChatMerger,
@@ -9,8 +14,12 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatTranscriptPage } from '../../../../../src/shared/native-chat/transcript/streaming/native-chat-transcript-frames'
 import { buildNativeChatSubscriptionId } from '../../../../../src/shared/native-chat/transcript/streaming/native-chat-stream-unsubscribe'
+import {
+  MAX_MESSAGES,
+  nextPageWindow,
+  type ReadSessionResult
+} from './mobile-native-chat-session-page'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { nativeChatSessionPageRead } from '../agent-session/mobile-native-chat-page-read-operations'
 import {
@@ -52,28 +61,14 @@ export type MobileNativeChatSession = MobileSessionItemPresentation & {
   loadEarlier: () => void
   /** Latest provider turn boundary from the transcript feed; absent from older hosts. */
   transcriptLifecycle?: NativeChatTurnLifecycle
+  /** Tasks from history outside the loaded tail. */
+  taskList?: NativeChatTaskSeedList | null
   /** When the rows on screen were saved, while they are an earlier launch's copy no read has confirmed. */
   savedAt?: number | null
 }
 
 const INITIAL_LIMIT = 40
-const PAGE = 60
-const MAX_MESSAGES = 2000
 
-function nextPageWindow(
-  limit: number,
-  listLength: number
-): { nextLimit: number; pageLimit: number } | null {
-  // Live output grows the list past the last read, so the next page counts from what is held.
-  const held = Math.max(limit, listLength)
-  const nextLimit = Math.min(held + PAGE, MAX_MESSAGES)
-  return nextLimit > held ? { nextLimit, pageLimit: nextLimit - held } : null
-}
-
-type ReadSessionResult =
-  | (Pick<NativeChatTranscriptPage, 'messages'> &
-      Partial<Pick<NativeChatTranscriptPage, 'hasMore' | 'beforeOffset'>>)
-  | { error: string }
 // Retain paged history across contiguous replay; ordered read windows replace while live appends merge by id.
 export function useMobileNativeChatSession(args: {
   client: RpcClient | null
@@ -110,6 +105,7 @@ export function useMobileNativeChatSession(args: {
     identity: string
     lifecycle: NativeChatTurnLifecycle | undefined
   } | null>(null)
+  const [taskSeed, setTaskSeed] = useState<MobileNativeChatTaskSeed | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const beforeOffsetRef = useRef<number | null>(null)
@@ -177,7 +173,7 @@ export function useMobileNativeChatSession(args: {
         limit: limitRef.current,
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
-        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
+        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, taskList: 1 },
         ...(transcriptPath ? { transcriptPath } : {}),
         ...(resumeAfter ? { resumeAfter } : {})
       },
@@ -186,6 +182,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         const frame = raw as MobileNativeChatStreamFrame
+        setTaskSeed((seed) => nextMobileNativeChatTaskSeed(frame, identity, seed))
         // No file yet says nothing about rows this subscription already holds: unsettle the read, keep the rows.
         if (resumeAfter && frame.type === 'snapshot' && frame.pending) {
           setRead({ client, identity, status: 'awaiting-transcript' })
@@ -341,6 +338,7 @@ export function useMobileNativeChatSession(args: {
     olderPages,
     loadEarlier,
     transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined,
+    taskList: taskSeed?.identity === identity ? taskSeed.taskList : undefined,
     savedAt: held?.savedAt ?? null
   }
 }

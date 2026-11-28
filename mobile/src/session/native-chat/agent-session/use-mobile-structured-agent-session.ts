@@ -108,10 +108,7 @@ export function useMobileStructuredAgentSession(
   const { contextUsageSupport, accountUsageReported, ...optionFields } = options
 
   const { status, epoch } = state
-  const linked = useMemo(
-    () => mobileStructuredLinkedPrompts(state, args.itemLink, sessionId),
-    [state, args.itemLink, sessionId]
-  )
+  const linked = mobileStructuredLinkedPrompts(state, args.itemLink, sessionId)
   const { approvalPrompt, questionPrompt } = linked
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     approvalItemId: approvalPrompt?.itemId,
@@ -264,6 +261,7 @@ export function useMobileStructuredAgentSession(
     session: {
       itemNavigation: savedAt === null ? linked.navigation : null,
       messages,
+      taskList: state.taskList,
       status,
       // A stored copy can't answer "is this ask still open?" until a live frame confirms it.
       transcriptLoading: status === 'loading' || savedAt !== null,

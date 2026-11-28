@@ -9,6 +9,7 @@ import type { MobileNativeChatController } from '../mobile-native-chat-controlle
 import type { StructuredAgentSessionHostSupport } from '../agent-session/mobile-structured-agent-session-host-support'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import { useMobileTranscriptTaskList } from '../use-mobile-transcript-task-list'
 import { useMobileStructuredAgentSession } from '../agent-session/use-mobile-structured-agent-session'
 import { useMobileStructuredSessionCommands } from '../composer/commands/use-mobile-structured-session-commands'
 import type { MobileNativeChatResolution } from './mobile-native-chat-eligibility'
@@ -100,6 +101,23 @@ export function useMobileNativeChatSessionLane({
     onQueuedEditNotice,
     ...(onActionResolved ? { onActionResolved } : {})
   })
+  // Claude's journal import stops at 1024 ops, so older tasks live only in the transcript file.
+  const journal = structuredSession.session
+  const fileTaskList = useMobileTranscriptTaskList({
+    client:
+      structured &&
+      agent === 'claude' &&
+      (journal.status === 'ready' || journal.status === 'error') &&
+      !journal.taskList
+        ? client
+        : null,
+    agent,
+    sessionId,
+    transcriptPath: resolution?.transcriptPath ?? null
+  })
+  const baseSession = structured ? journal : bridgeSession
+  const sessionWithTasks =
+    baseSession.taskList || !fileTaskList ? baseSession : { ...baseSession, taskList: fileTaskList }
   // A coordinator's workers report to its session, on the host that runs them.
   const workerApprovals = useMobileWorkerApprovals({
     client,
@@ -124,7 +142,7 @@ export function useMobileNativeChatSessionLane({
   })
   return {
     structuredSession,
-    session: structured ? structuredSession.session : bridgeSession,
+    session: sessionWithTasks,
     sessionCommands,
     controllerFields: {
       nativeChatSessionCommands: sessionCommands,

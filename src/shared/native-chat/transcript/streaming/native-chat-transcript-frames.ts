@@ -21,4 +21,5 @@ export type NativeChatTranscriptFrame =
       })
   | (NativeChatTranscriptPage & { type: 'replacement'; lifecycle?: NativeChatTurnLifecycle })
   | { type: 'appended'; messages: NativeChatMessage[]; lifecycle?: NativeChatTurnLifecycle }
+  | { type: 'task-list'; taskList: unknown }
   | { type: 'end' }
