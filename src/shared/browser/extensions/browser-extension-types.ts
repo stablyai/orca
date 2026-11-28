@@ -43,7 +43,16 @@ export type BrowserExtensionListResult = {
   extensions: BrowserExtensionListing[]
 }
 
-export type BrowserExtensionActionResult = { ok: true } | { ok: false; error: string }
+/** App-owned failures the renderer words itself; `error` stays English for CLI, extension APIs and logs. */
+export type BrowserExtensionFailure =
+  | { reason: 'support-disabled' }
+  | { reason: 'invalid-web-store-input' }
+  | { reason: 'profile-unavailable' }
+  | { reason: 'already-added'; name: string }
+
+export type BrowserExtensionActionResult =
+  | { ok: true }
+  | { ok: false; error: string; failure?: BrowserExtensionFailure }
 
 /** Main → trusted renderer: the installed list, a load error or a held update changed; Settings refetches. */
 export const BROWSER_EXTENSIONS_CHANGED_CHANNEL = 'browserExtensions:changed'

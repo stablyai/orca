@@ -68,7 +68,8 @@ export function BotPreviewPip({
   signal: BotPreviewSignal
   onEdge?: boolean
 }) {
-  if (signal === null) {
+  // A face that needs you shows the attention ring instead; only the edge keeps the glyph.
+  if (signal === null || (signal === 'attention' && !onEdge)) {
     return null
   }
   if (signal === 'unread') {
@@ -84,12 +85,11 @@ export function BotPreviewPip({
       aria-hidden="true"
       className={cn(
         'pointer-events-none absolute z-10 flex size-3 items-center justify-center rounded-full',
-        onEdge ? 'right-0 -bottom-1 bg-worktree-sidebar' : '-right-1 -bottom-1 bg-sidebar',
-        !onEdge && signal === 'attention' && 'size-3.5'
+        onEdge ? 'right-0 -bottom-1 bg-worktree-sidebar' : '-right-1 -bottom-1 bg-sidebar'
       )}
     >
       {signal === 'attention' ? (
-        <AgentQuestionIcon className={onEdge ? 'size-2.5' : 'size-3'} />
+        <AgentQuestionIcon className="size-2.5" />
       ) : onEdge ? (
         <CircleDashed aria-hidden className="size-2.5 text-agent-working" />
       ) : (

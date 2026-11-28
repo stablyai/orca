@@ -1,3 +1,8 @@
+import {
+  clipboardFormatSnapshot,
+  writeClipboardBuffer,
+  writeClipboardPng
+} from './clipboard-formats'
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
@@ -6,14 +11,19 @@ import { PATH_ACCESS_DENIED_MESSAGE } from '../../ipc/filesystem/access/filesyst
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   assertTrustedClipboardSender,
-  assertTrustedClipboardTextSender
+  assertTrustedClipboardTextSender,
+  isTrustedClipboardSender
 } from './clipboard-ipc-sender-trust'
+import { readClipboardPasteContent } from './clipboard-paste-content'
+import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../shared/clipboard/clipboard-paste-content'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
   type ReadClipboardTextOptions
 } from '../../../shared/clipboard/clipboard-text'
-import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard/clipboard-link-html'
 import {
   saveClipboardImageBufferAsTempFile,
   type SaveClipboardImageAsTempFileArgs
@@ -38,11 +48,10 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-attachments/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
-import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
-import { encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
+import { clipboardImagePngBytes, encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
 import {
   ClipboardPublisherBusyError,
   publishClipboardOperation,
@@ -105,8 +114,8 @@ export function registerClipboardHandlers(
   handlerOptions: ClipboardHandlerOptions = {}
 ): void {
   ipcMain.removeHandler('clipboard:readText')
+  ipcMain.removeHandler('clipboard:readPasteContent')
   ipcMain.removeHandler('clipboard:readSelectionText')
-  ipcMain.removeHandler('clipboard:readLinkHtml')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeTerminalText')
   ipcMain.removeHandler('clipboard:writeSecretText')
@@ -117,7 +126,6 @@ export function registerClipboardHandlers(
   ipcMain.removeHandler('clipboard:savePastedTextAsFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
   ipcMain.removeHandler('clipboard:hasImage')
-  ipcMain.removeHandler('clipboard:readFilePaths')
   ipcMain.removeHandler('clipboard:restoreNativeChatPastes')
 
   void cleanupExpiredRemoteClipboardFiles()
@@ -125,19 +133,29 @@ export function registerClipboardHandlers(
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
-    return assertClipboardTextWithinLimitWithYield(readClipboardPlainText(clipboard), options)
+    return assertClipboardTextWithinLimitWithYield(
+      await readClipboardPlainText({
+        ...clipboardFormatSnapshot(),
+        readText: () => clipboard.readText()
+      }),
+      options
+    )
   })
-  // Rich-text copies keep their links only in the HTML flavor; skip shipping HTML that has none.
-  ipcMain.handle('clipboard:readLinkHtml', (event): string => {
-    assertTrustedClipboardSender(event)
-    const html = clipboard.readHTML()
-    return clipboardHtmlMayHaveLinks(html) ? html : ''
-  })
+  ipcMain.handle(
+    'clipboard:readPasteContent',
+    async (event, options?: ReadClipboardPasteContentOptions): Promise<ClipboardPasteContent> => {
+      assertTrustedClipboardTextSender(event)
+      return readClipboardPasteContent(options, !isTrustedClipboardSender(event))
+    }
+  )
   ipcMain.handle(
     'clipboard:readSelectionText',
     async (event, options?: ReadClipboardTextOptions) => {
       assertTrustedClipboardSender(event)
-      return assertClipboardTextWithinLimitWithYield(clipboard.readText('selection'), options)
+      return assertClipboardTextWithinLimitWithYield(
+        process.platform === 'linux' ? await clipboard.selection.readText() : '',
+        options
+      )
     }
   )
   ipcMain.handle('clipboard:restoreNativeChatPastes', (event, paths: unknown) => {
@@ -145,34 +163,35 @@ export function registerClipboardHandlers(
     return restoreNativeChatPastes(paths)
   })
   // Preview in memory so the composer responds before the slower save completes.
-  ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
-    assertTrustedClipboardSender(event)
-    try {
-      return buildClipboardImageThumbnail(readClipboardNativeImage())
-    } catch {
-      // The save call reports rejected source data; the preview is best effort.
-      return null
+  ipcMain.handle(
+    'clipboard:readImageThumbnail',
+    async (event): Promise<ClipboardImageThumbnail | null> => {
+      assertTrustedClipboardSender(event)
+      try {
+        return buildClipboardImageThumbnail(
+          await readClipboardNativeImage(clipboardFormatSnapshot())
+        )
+      } catch {
+        // The save call reports rejected source data; the preview is best effort.
+        return null
+      }
     }
-  })
-  ipcMain.handle('clipboard:hasImage', (event): boolean => {
+  )
+  ipcMain.handle('clipboard:hasImage', async (event): Promise<boolean> => {
     assertTrustedClipboardSender(event)
-    return readClipboardImageSource(clipboard) !== null
-  })
-  // File-manager copies include text labels that paste must not type.
-  ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
-    assertTrustedClipboardSender(event)
-    return readClipboardCopiedFilePaths(clipboard)
+    return (await readClipboardImageSource(clipboardFormatSnapshot())) !== null
   })
   // Give image-aware terminal tools a saved image path, or null when no image exists.
   ipcMain.handle(
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
-      const source = readClipboardImageSource(clipboard)
+      const reader = clipboardFormatSnapshot()
+      const source = await readClipboardImageSource(reader)
       if (!source) {
         return null
       }
-      const image = readClipboardNativeImage()
+      const image = await readClipboardNativeImage(reader)
       let png: Buffer | null = null
       if (!image.isEmpty()) {
         png = await encodeClipboardNativeImagePng(image)
@@ -218,7 +237,7 @@ export function registerClipboardHandlers(
           platform: process.platform,
           desktop: process.env.XDG_CURRENT_DESKTOP,
           resolveFilePath,
-          writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
+          writeBuffer: writeClipboardBuffer,
           runProcess
         })
       ).catch((error: unknown) => {
@@ -252,10 +271,10 @@ export function registerClipboardHandlers(
   })
   ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
-    return clipboard.writeText(
-      await assertClipboardTextWriteWithinLimitWithYield(text),
-      'selection'
-    )
+    const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
+    if (process.platform === 'linux') {
+      await clipboard.selection.writeText(safeText)
+    }
   })
   ipcMain.handle('clipboard:writeImage', (event, dataUrl: string) => {
     assertTrustedClipboardSender(event)
@@ -267,7 +286,7 @@ export function registerClipboardHandlers(
     }
     const contentBase64 = dataUrl.slice(prefix.length)
     assertClipboardImageBase64LengthWithinLimit(contentBase64.length)
-    return publishClipboardOperation(contentBase64.length * 2, () => {
+    return publishClipboardOperation(contentBase64.length * 2, async () => {
       // createFromDataURL silently fails on large images in some macOS/Electron versions; decode base64 then use createFromBuffer.
       const buffer = Buffer.from(contentBase64, 'base64')
       assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
@@ -276,7 +295,7 @@ export function registerClipboardHandlers(
         throw new Error('Clipboard image could not be decoded')
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
-      clipboard.writeImage(image)
+      await writeClipboardPng(clipboardImagePngBytes(buffer, image))
     })
   })
 }

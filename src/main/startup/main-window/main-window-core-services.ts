@@ -2,7 +2,6 @@ import type { BrowserWindow } from 'electron'
 import { registerCoreHandlers } from '../../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../../window/attach-main-window-services'
 import { initTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
-import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
@@ -108,7 +107,10 @@ async function installMainWindowCoreServices(
       onBeforeRelaunch: async () => {
         state.isQuitting = true
         fenceMainProcessCloudOnQuit()
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
+        await Promise.all([
+          preserveAgentAuthBeforeRestart({ codexRuntimeHome, store }),
+          state.core.runtime?.bots.slackIcons.shownRecords.finalSave()
+        ])
       },
       onQuit: quitFromUserCommand,
       orcaAccount,
@@ -158,7 +160,7 @@ async function installMainWindowCoreServices(
       onPtyExit: handlePtyExit,
       onBeforeUpdateQuit: () => preserveStateBeforeUpdateRestart({ codexRuntimeHome, store }),
       onBeforeUpdateQuitFailure: 'abort',
-      updateInstallMode: resolveUpdateInstallMode(state.isServeMode),
+      isServeMode: state.isServeMode,
       onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }
   )

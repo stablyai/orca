@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { ListRow } from '../components/list/ListGroup'
+import { PickerModal } from '../components/sheets/PickerModal'
 import { SUPPORTED_UI_LOCALES } from '../../../src/shared/i18n/ui-locale'
 import { UI_LANGUAGE_NATIVE_NAMES, UI_LANGUAGE_SYSTEM } from '../../../src/shared/i18n/ui-language'
 import { isMobilePseudoLocalizationEnabled, setMobilePseudoLocalization } from '../i18n/mobile-i18n'
@@ -9,19 +11,21 @@ import {
   type MobileUiLanguagePreference
 } from '../i18n/ui-language-preference'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsSection } from './settings-screen-frame'
 
 const LANGUAGE_CHOICES: readonly MobileUiLanguagePreference[] = [
   UI_LANGUAGE_SYSTEM,
   ...SUPPORTED_UI_LOCALES
 ]
+// Development-only layout check; never shipped.
+const PSEUDO = 'pseudo'
 
+/** One Language row; the eleven choices open in a picker instead of filling the page. */
 export function UiLanguageSettingsSection() {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const preference = useMobileUiLanguagePreference()
   const pseudo = isMobilePseudoLocalizationEnabled()
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   function label(choice: MobileUiLanguagePreference): string {
     if (choice !== UI_LANGUAGE_SYSTEM) {
@@ -32,38 +36,51 @@ export function UiLanguageSettingsSection() {
     })
   }
 
+  const options = [
+    ...LANGUAGE_CHOICES.map((choice) => ({ value: choice, label: label(choice) })),
+    ...(__DEV__
+      ? [
+          {
+            value: PSEUDO,
+            label: t('settings.uiLanguageSettingsSection.pseudoLanguage', 'Pseudo (en-XA)')
+          }
+        ]
+      : [])
+  ]
+  const selected = pseudo ? PSEUDO : preference
+  const title = t('settings.appearance.language.heading', 'Language')
+
   return (
-    <SettingsSection
-      radioGroup
-      title={t('settings.appearance.language.heading', 'LANGUAGE')}
-      footer={t(
-        'settings.appearance.language.description',
-        'System follows this device’s language. Permission prompts always use the device language.'
-      )}
-    >
-      {LANGUAGE_CHOICES.map((choice) => (
+    <>
+      <SettingsSection
+        footer={t(
+          'settings.appearance.language.footer',
+          'Permission prompts use the device language.'
+        )}
+      >
         <ListRow
-          key={choice}
-          title={label(choice)}
-          selected={preference === choice && !pseudo}
-          onPress={() => {
-            setMobilePseudoLocalization(false)
-            void setMobileUiLanguagePreference(choice).catch(() => {})
-          }}
+          key="language"
+          title={title}
+          value={options.find((option) => option.value === selected)?.label}
+          navigates
+          onPress={() => setPickerOpen(true)}
         />
-      ))}
-      {/* Development-only layout check; never shipped. */}
-      {__DEV__ ? (
-        <ListRow
-          key="pseudo"
-          title={t('settings.uiLanguageSettingsSection.pseudoLanguage', 'Pseudo (en-XA)')}
-          selected={pseudo}
-          onPress={() => {
-            setMobilePseudoLocalization(true)
-            void setMobileUiLanguagePreference('en').catch(() => {})
-          }}
-        />
-      ) : null}
-    </SettingsSection>
+      </SettingsSection>
+      <PickerModal<string>
+        visible={pickerOpen}
+        title={title}
+        options={options}
+        selected={selected}
+        onSelect={(choice) => {
+          const isPseudo = choice === PSEUDO
+          setMobilePseudoLocalization(isPseudo)
+          const next = LANGUAGE_CHOICES.find((option) => option === choice)
+          void setMobileUiLanguagePreference(isPseudo ? 'en' : (next ?? UI_LANGUAGE_SYSTEM)).catch(
+            () => {}
+          )
+        }}
+        onClose={() => setPickerOpen(false)}
+      />
+    </>
   )
 }

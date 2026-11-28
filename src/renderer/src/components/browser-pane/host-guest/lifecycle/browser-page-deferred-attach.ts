@@ -1,11 +1,13 @@
 import type { MutableRefObject } from 'react'
 import { issueBrowserGuestNavigation } from '../metadata/browser-guest-metadata-cache'
+import { takeKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
+import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'
 
 /**
  * Attaches a new tab's page once main answers, which it does when the page's profile has started
  * its extensions: until then there is no guest, so nothing can make a request an extension loading
  * would drop, and Stop and Reload have nothing to act on (at most 5 s). An address entered
- * meanwhile (kept unredacted) is the one the page opens with.
+ * meanwhile is the one the page opens with.
  */
 export function startBrowserPageDeferredAttach({
   webview,
@@ -31,16 +33,14 @@ export function startBrowserPageDeferredAttach({
   // The first answer ends the page's one wait, so a newer address entered meanwhile opens at once.
   const prepareLatest = async (): Promise<string> => {
     let marker = await prepare(initialUrl, true)
-    let preparedUrl = initialUrl
-    for (
-      let requestedUrl = webview.dataset.orcaAttachRequestedUrl;
-      // A closed or replaced tab's webview leaves the document; re-preparing would recreate its page.
-      requestedUrl && requestedUrl !== preparedUrl && webview.isConnected;
-      requestedUrl = webview.dataset.orcaAttachRequestedUrl
-    ) {
-      lastKnownWebviewUrlRef.current = requestedUrl
-      preparedUrl = requestedUrl
-      marker = await prepare(requestedUrl, false)
+    while (webview.dataset.orcaAttachRequestedUrl && webview.isConnected) {
+      const requestedUrl = webview.dataset.orcaAttachRequestedUrl
+      delete webview.dataset.orcaAttachRequestedUrl
+      lastKnownWebviewUrlRef.current = redactKagiSessionToken(requestedUrl)
+      marker = await prepare(
+        takeKagiPrivateInitialNavigation(browserTabId, requestedUrl, requestedUrl),
+        false
+      )
     }
     delete webview.dataset.orcaAttachRequestedUrl
     return marker

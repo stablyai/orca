@@ -1,4 +1,5 @@
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { noteAiVaultScanContentRead } from '../scan-lifecycle/ai-vault-scan-progress'
 import {
   openTranscriptReadStream,
   readTranscriptSlice,
@@ -82,6 +83,7 @@ async function readDocumentCwd(
   if (content === null) {
     return null
   }
+  noteAiVaultScanContentRead(signal, Buffer.byteLength(content))
   try {
     return { cwd: cwdOf(content) }
   } catch {
@@ -124,7 +126,6 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
   'prime-agent': SESSION_HEADER,
   openclaw: SESSION_HEADER,
   droid: head((record) => (record.type === 'session_start' ? record.cwd : undefined)),
-  gemini: { kind: 'none' },
   grok: document((content) => {
     const summary = jsonRecord(content)
     return summary ? grokSessionCwd(summary) : null
@@ -210,6 +211,7 @@ export async function readTranscriptHeadCwd(
       }
       return null
     }
+    noteAiVaultScanContentRead(signal, head.length)
     const lines = head.toString('utf8').split(/\r?\n/)
     // A slice shorter than asked ended at EOF, so its last line is complete too.
     const complete = head.length < length ? lines : lines.slice(0, -1)

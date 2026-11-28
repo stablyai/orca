@@ -39,6 +39,9 @@ export async function nodeFileContentsEqual(
   }
 }
 
+let syncCompareChunk: Buffer | null = null
+const syncCompareProbe = Buffer.allocUnsafe(1)
+
 export function nodeFileContentsEqualSync(
   filePath: string,
   expectedContents: string | Buffer
@@ -49,23 +52,25 @@ export function nodeFileContentsEqualSync(
     if (fstatSync(descriptor).size !== expected.length) {
       return false
     }
-    const chunk = Buffer.allocUnsafe(
-      Math.min(NODE_FILE_CONTENT_COMPARE_CHUNK_BYTES, expected.length)
-    )
-    let offset = 0
-    while (offset < expected.length) {
-      const length = Math.min(chunk.length, expected.length - offset)
-      const bytesRead = readSync(descriptor, chunk, 0, length, offset)
-      if (
-        bytesRead === 0 ||
-        !chunk.subarray(0, bytesRead).equals(expected.subarray(offset, offset + bytesRead))
-      ) {
-        return false
+    if (expected.length > 0) {
+      // Synchronous readSync cannot re-enter; reuse one scratch chunk across startup sweeps.
+      syncCompareChunk ??= Buffer.allocUnsafe(NODE_FILE_CONTENT_COMPARE_CHUNK_BYTES)
+      let offset = 0
+      while (offset < expected.length) {
+        const length = Math.min(syncCompareChunk.length, expected.length - offset)
+        const bytesRead = readSync(descriptor, syncCompareChunk, 0, length, offset)
+        if (
+          bytesRead === 0 ||
+          !syncCompareChunk
+            .subarray(0, bytesRead)
+            .equals(expected.subarray(offset, offset + bytesRead))
+        ) {
+          return false
+        }
+        offset += bytesRead
       }
-      offset += bytesRead
     }
-    const probe = Buffer.allocUnsafe(1)
-    return readSync(descriptor, probe, 0, 1, offset) === 0
+    return readSync(descriptor, syncCompareProbe, 0, 1, expected.length) === 0
   } finally {
     closeSync(descriptor)
   }

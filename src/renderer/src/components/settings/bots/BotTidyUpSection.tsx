@@ -13,8 +13,7 @@ import {
 } from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import type { Bot } from '../../../../../shared/bot-types'
-import { lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
+import { tidyUpSupported, type Bot } from '../../../../../shared/bot-types'
 import {
   botTidyUp,
   TIDY_UP_EVERY_CHOICES,
@@ -52,7 +51,7 @@ export function BotTidyUpSection({
   const change = (next: Partial<BotTidyUp>): void => {
     void update({ tidyUp: next })
   }
-  if (!lookAroundSupported(bot.agent)) {
+  if (!tidyUpSupported(bot.agent)) {
     return null
   }
   const last = view?.last ?? null

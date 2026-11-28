@@ -1,5 +1,6 @@
 // Let the active slot gather lock evidence and apply nonce-pinned confirmation; clients only relay it.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   ORCAD_RECLAIM_STALE_LOCK_FLAG,
@@ -27,24 +28,28 @@ import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
 import { errorMessage } from '../../../shared/errors/error-message'
 
-const ReclaimStatusSchema = z.enum(['none', 'eligible', 'refused', 'reclaimed'])
+const ReclaimStatusSchema = lazyZodSchema(() =>
+  z.enum(['none', 'eligible', 'refused', 'reclaimed'])
+)
 
 // Unknown newer statuses map to no-answer rather than failing reply parsing.
-const ReclaimAnswerSchema = z.object({
-  status: z.string(),
-  lockPath: z.string(),
-  message: z.string(),
-  evidence: z
-    .object({
-      pid: z.number(),
-      host: z.string(),
-      bootId: z.string(),
-      currentBootId: z.string(),
-      ageMinutes: z.number(),
-      nonce: z.string().optional()
-    })
-    .optional()
-})
+const ReclaimAnswerSchema = lazyZodSchema(() =>
+  z.object({
+    status: z.string(),
+    lockPath: z.string(),
+    message: z.string(),
+    evidence: z
+      .object({
+        pid: z.number(),
+        host: z.string(),
+        bootId: z.string(),
+        currentBootId: z.string(),
+        ageMinutes: z.number(),
+        nonce: z.string().optional()
+      })
+      .optional()
+  })
+)
 
 const RECLAIM_UNSUPPORTED_SENTINEL = 'ORCA_STALE_LOCK_RECLAIM_UNSUPPORTED'
 const RECLAIM_UNPINNED_SENTINEL = 'ORCA_STALE_LOCK_RECLAIM_UNPINNED'

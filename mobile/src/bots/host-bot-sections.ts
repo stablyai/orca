@@ -24,7 +24,7 @@ import {
   type HostBotSectionInputs
 } from './host-bot-entries'
 import { lazyHostBotLineage } from './host-bot-worker-lines'
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 
 export type { HostBotListing } from './host-bot-listing'
 export type { HostBotSectionInputs } from './host-bot-entries'
@@ -55,7 +55,7 @@ export function defaultNewBotHostId(listings: readonly HostBotListing[]): Execut
 /** The one Bots section over this computer and every server it relays, and the rows it lists,
  *  which the project list leaves out as the desktop's does. */
 export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSections {
-  const { listings } = inputs
+  const { listings, t } = inputs
   if (listings.length === 0) {
     return NO_BOTS
   }
@@ -87,12 +87,12 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     ).forEach((identity) => listedIdentities.add(identity))
     unlisted(
       LOCAL_EXECUTION_HOST_ID,
-      translate('bots.list.offEnd', 'Bots are off on {{host}}.', { host: local.hostLabel }),
+      t('bots.list.offEnd', 'Bots are off on {{host}}.', { host: local.hostLabel }),
       false
     )
     // A search shows only what matches, so its line waits.
     return endLines.length > 0 && !searching
-      ? { sections: [botsSection({ count: 0, lines: endLines, data: [] })], listedIdentities }
+      ? { sections: [botsSection(t, { count: 0, lines: endLines, data: [] })], listedIdentities }
       : { sections: [], listedIdentities }
   }
   const lineageOf = lazyHostBotLineage(
@@ -122,7 +122,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     if (listing.kind === 'update-needed') {
       unlisted(
         listing.hostId,
-        translate('bots.list.updateToSee', 'Update Orca on {{host}} to see its bots.', { host }),
+        t('bots.list.updateToSee', 'Update Orca on {{host}} to see its bots.', { host }),
         true
       )
       continue
@@ -130,7 +130,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     if (listing.kind === 'read-failed') {
       unlisted(
         listing.hostId,
-        translate('bots.list.readFailed', 'Couldn’t load the bots on {{host}}.', { host }),
+        t('bots.list.readFailed', 'Couldn’t load the bots on {{host}}.', { host }),
         false
       )
       continue
@@ -139,7 +139,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       // Its bots aren't listed until it connects, and their homes don't show as folders meanwhile.
       unlisted(
         listing.hostId,
-        translate('bots.list.cantReach', 'Can’t reach {{host}}. Its bots show when it’s back.', {
+        t('bots.list.cantReach', 'Can’t reach {{host}}. Its bots show when it’s back.', {
           host
         }),
         true
@@ -179,17 +179,17 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
   }
   const lines = searching
     ? pausedMatches > 0
-      ? [{ key: 'paused-matches', text: pausedMatchesLine(pausedMatches) }]
+      ? [{ key: 'paused-matches', text: pausedMatchesLine(pausedMatches, t) }]
       : []
     : [
         ...(total === 0 && newBotHostId
-          ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
+          ? [{ key: 'no-bots', text: t('bots.list.noBotsYet', 'No bots yet.') }]
           : []),
         ...endLines
       ]
   return {
     sections: [
-      botsSection({
+      botsSection(t, {
         // Paused bots the options hide leave the count too, as on the desktop; a search counts its matches.
         count: searching ? arranged.length : view.hidePausedBots ? shownTotal : total,
         lines,
@@ -213,18 +213,21 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
   }
 }
 
-function botsSection(parts: {
-  count: number
-  lines: BotsListEndLine[]
-  newBotHostId?: ExecutionHostId
-  botCount?: number
-  botPreview?: NonNullable<Section['botPreview']>
-  data: Section['data']
-}): Section {
+function botsSection(
+  t: Translate,
+  parts: {
+    count: number
+    lines: BotsListEndLine[]
+    newBotHostId?: ExecutionHostId
+    botCount?: number
+    botPreview?: NonNullable<Section['botPreview']>
+    data: Section['data']
+  }
+): Section {
   const { lines, botPreview = [], ...rest } = parts
   return {
     key: BOTS_GROUP_KEY,
-    title: translate('bots.section.title', 'Bots'),
+    title: t('bots.section.title', 'Bots'),
     ...rest,
     ...(lines.length > 0 ? { endLines: lines } : {}),
     botPreview
@@ -246,10 +249,10 @@ function groupHomes(listing: ListedHostBots, hostRows: readonly Worktree[]): str
   })
 }
 
-function pausedMatchesLine(count: number): string {
+function pausedMatchesLine(count: number, t: Translate): string {
   return count === 1
-    ? translate('bots.search.pausedMatches_one', '{{count}} paused match', { count })
-    : translate('bots.search.pausedMatches_other', '{{count}} paused matches', { count })
+    ? t('bots.search.pausedMatches_one', '{{count}} paused match', { count })
+    : t('bots.search.pausedMatches_other', '{{count}} paused matches', { count })
 }
 
 /** Whether a row stays in the project list: not one the Bots section lists. */

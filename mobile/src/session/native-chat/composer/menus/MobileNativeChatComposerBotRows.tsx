@@ -5,9 +5,9 @@ import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { ChatBadgedIcon } from '../../../../bots/MobileBotChatLeading'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../../../../worktree/agent-lineage/agent-row-display'
 import type { ComposerMenuRow, MentionBotRow } from './MobileNativeChatComposerMenu'
 
@@ -22,21 +22,18 @@ export function MobileNativeChatComposerBotRow({
   onPick: (row: ComposerMenuRow) => void
   onOpenChats?: (row: BotRow) => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const now = useNow(30_000, row.kind === 'bot-chat')
   const { bot } = row
   switch (row.kind) {
     case 'bot': {
-      const purpose = row.detail
-        ? t('components.native-chat.composer.botFor', 'For: {{detail}}', { detail: row.detail })
-        : null
-      // A paused bot keeps what it is for, which may be what `@` found it by, as on the desktop.
       const note = bot.paused
-        ? [t('bots.chat.mentionPaused', 'Paused'), purpose].filter(Boolean).join(' · ')
+        ? t('bots.chat.mentionPaused', 'Paused')
         : bot.own
           ? t('bots.chat.mentionOwnChats', 'Your other chats')
-          : purpose
+          : null
       return (
         <View style={[styles.row, bot.paused && styles.dimmed]}>
           <Pressable
@@ -116,7 +113,7 @@ export function MobileNativeChatComposerBotRow({
             ) : null}
           </View>
           {chat.lastActivityAt > 0 ? (
-            <Text style={styles.muted}>{formatTimeAgo(chat.lastActivityAt, now)}</Text>
+            <Text style={styles.muted}>{formatTimeAgo(chat.lastActivityAt, now, t)}</Text>
           ) : null}
         </Pressable>
       )
@@ -154,7 +151,7 @@ export function MobileNativeChatComposerBotRow({
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

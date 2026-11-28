@@ -1,19 +1,19 @@
-// One comment in an item's Activity, as a chat-style row on the Activity's grid: a glyph, who and when,
-// the reply it quotes, its words with its images and files, a question's lines, and for a comment sent
+// One comment in an item's Activity, as a chat-style row on the Activity's grid: a glyph, who, Quote and
+// when, the reply it quotes, its words with its images and files, a question's lines, and for a comment sent
 // from the box that didn't reach the host, Not sent · Retry · Discard.
 import { useEffect, useRef, type Ref } from 'react'
 import { Animated, Pressable, Text, View, type HostInstance } from 'react-native'
-import { CircleAlert, MessageSquare } from 'lucide-react-native'
+import { CircleAlert, MessageSquare, Quote } from 'lucide-react-native'
 import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
-import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import {
   mobileBotItemCommentWords,
   MobileBotItemCommentAttachments,
@@ -22,6 +22,7 @@ import {
 import { MobileBotItemQuestionLines } from './MobileBotItemQuestionLines'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 const ICON = 13
 
@@ -35,12 +36,16 @@ export function MobileBotItemCommentCard({
   onShowLive,
   flash,
   sent,
-  asking = false
+  asking = false,
+  onQuote
 }: {
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
     Partial<
-      Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder' | 'ended'>
+      Pick<
+        Extract<BotItemActivityEntry, { kind: 'comment' }>,
+        'answers' | 'byOrder' | 'ended' | 'beside'
+      >
     >
   attachments: MobileBotItemAttachmentSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
@@ -56,12 +61,22 @@ export function MobileBotItemCommentCard({
   sent?: BotItemSentAnswers | null
   /** The docked answer card asks this comment's open lines now. */
   asking?: boolean
+  /** Puts the comment's words in the comment box as a quote. */
+  onQuote?: (text: string) => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
   const time = useMobileMessageTime()
   const shape = botItemQuestionShape(event.data)
-  const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
+  const text = mobileBotItemCommentWords({ ...event.data, text: entry.beside ?? shape.body })
+  // A question's lines too, as the agent wrote them.
+  const quoted = onQuote
+    ? mobileBotItemCommentWords(
+        entry.beside === undefined ? event.data : { ...event.data, text: entry.beside }
+      ).trim()
+    : ''
   return (
     <View ref={ref} style={styles.row}>
       {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}
@@ -77,6 +92,17 @@ export function MobileBotItemCommentCard({
           <Text style={styles.author} numberOfLines={1}>
             {botItemActorName(event, item, t)}
           </Text>
+          {onQuote && quoted ? (
+            <Pressable
+              style={({ pressed }) => [styles.quote, pressed && styles.pressed]}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.selectionQuote.action', 'Quote')}
+              onPress={() => onQuote(quoted)}
+            >
+              <Quote size={14} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
           <Text style={styles.meta} accessibilityLabel={time.full(event.at)}>
             {time.label(event.at)}
           </Text>
@@ -86,7 +112,7 @@ export function MobileBotItemCommentCard({
         ) : null}
         <MobileBotItemCommentAttachments data={event.data} {...attachments}>
           {text.trim() ? (
-            <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+            <MobileNativeChatMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
           ) : null}
         </MobileBotItemCommentAttachments>
         {shape.decisions.length > 0 ? (
@@ -133,6 +159,7 @@ const FLASH_STILL_MS = 1600
 
 /** The desktop's ring and tint, under the card's content. */
 function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
+  const styles = useThemedStyles(stylesSheet)
   const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
     const run = still
@@ -152,7 +179,7 @@ function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
 }
 
 // The Activity event line's grid (MobileBotItemActivity): its glyph column, gap and time.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   flash: {
     position: 'absolute',
     top: 0,
@@ -172,6 +199,18 @@ const styles = themedStyleSheet(() => ({
   icon: { width: 16, height: 18, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, minWidth: 0, gap: spacing.xxs },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // Chat's 24 pt message action box around its 14 pt glyph, pulled back so the 18 pt line keeps its height
+  // and the glyph sits the line's gap from the name and the time.
+  quote: {
+    width: 24,
+    height: 24,
+    marginVertical: -3,
+    marginHorizontal: -5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.control
+  },
+  pressed: { backgroundColor: colors.bgRaised },
   author: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.textPrimary },
   failed: {
     flexDirection: 'row',

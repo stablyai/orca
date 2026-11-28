@@ -26,20 +26,11 @@ export function rowsShowWait(
     : rows.some((row) => agentBackgroundWait(row)?.since === wait.since)
 }
 
-/** Whether a recorded wait's pane still shows it, by this host's status rows. */
-export function backgroundWaitShown(
-  rows: StatusRows,
-  wait: { since: number; paneKey?: string; chat?: true }
-): boolean {
-  return !wait.paneKey || rowsShowWait(rows.getStatusSnapshotForPane(wait.paneKey), wait)
-}
-
 /** The report deps that read background waits from this host's status rows. */
 export function backgroundWaitReportDeps(
   rows: StatusRows = agentHookServer
-): Pick<WorkerTurnStopReportDeps, 'chatWaitsOnBackground' | 'backgroundWaitShown'> {
+): Pick<WorkerTurnStopReportDeps, 'chatWaitsOnBackground'> {
   return {
-    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(rows, sessionId),
-    backgroundWaitShown: (wait) => backgroundWaitShown(rows, wait)
+    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(rows, sessionId)
   }
 }

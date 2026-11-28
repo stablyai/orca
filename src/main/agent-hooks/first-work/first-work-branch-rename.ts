@@ -29,10 +29,7 @@ import {
   resolveUniqueBranchName,
   type GitExec
 } from '../../git/worktrees/checkout/branch-rename'
-import {
-  generateBranchNameFromContext,
-  resolveCommitMessageSettings as resolveTextGenerationParams
-} from '../../text-generation/commit-message-text-generation'
+import type { resolveCommitMessageSettings as resolveTextGenerationParams } from '../../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
@@ -213,6 +210,10 @@ async function runAutoRename(
 
   const settings = deps.getSettings()
   const hostKey = getCommitMessageModelDiscoveryHostKey(null)
+  const {
+    generateBranchNameFromContext,
+    resolveCommitMessageSettings: resolveTextGenerationParams
+  } = await import('../../text-generation/commit-message-text-generation')
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
     deps.setRenameError(worktreeId, resolvedParams.error)

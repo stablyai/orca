@@ -3,6 +3,7 @@ import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-
 import { isUnambiguousSearchQuery } from './tab-create-entry-file-matches'
 import { classifyExplicitUrl } from './tab-create-entry-url-classification'
 import { useTranslate } from '../../../i18n/use-translate'
+import { BOT_CHAT_OPTION_ID_PREFIX } from './tab-agent-launch-options'
 
 type NetworkSelectionArgs = {
   activeOptions: ActiveOption[]
@@ -30,9 +31,12 @@ export function useNetworkSafeTabEntrySelection({
   const pinnedOptionIndex = pinnedOptionId
     ? activeOptions.findIndex((option) => getActiveOptionId(option) === pinnedOptionId)
     : -1
+  // A picked agent or bot chat that drops out must not hand Enter to whatever now ranks first.
   const missingPinnedAgent =
     pinnedOptionIndex < 0 &&
-    (pinnedOptionId?.startsWith('chat:') || pinnedOptionId?.startsWith('cli:'))
+    (pinnedOptionId?.startsWith('chat:') ||
+      pinnedOptionId?.startsWith('cli:') ||
+      pinnedOptionId?.startsWith(BOT_CHAT_OPTION_ID_PREFIX))
   const rankedOption = pinnedOptionIndex < 0 ? activeOptions[0] : undefined
   const rankedClassification =
     rankedOption?.kind === 'entry' ? rankedOption.option.classification : null

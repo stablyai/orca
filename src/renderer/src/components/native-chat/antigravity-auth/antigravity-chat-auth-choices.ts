@@ -4,6 +4,7 @@ import {
   ANTIGRAVITY_ACCOUNT_INELIGIBLE,
   ANTIGRAVITY_SUBSCRIPTION_REQUIRED
 } from '../../../../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
+import { ANTIGRAVITY_QUOTA_WORDS } from '../../../../../shared/agent-accounts/antigravity/antigravity-quota-words'
 
 type Method = AntigravityChatAuthConfig['method']
 
@@ -90,7 +91,6 @@ export type AntigravityAuthFailureReason =
 
 const SUBSCRIPTION = /SUBSCRIPTION_REQUIRED|eligible Antigravity subscription/i
 const INELIGIBLE = /ineligible|can't use Antigravity|can’t use Antigravity/i
-const USAGE_LIMIT = /usage limit reached|RESOURCE_EXHAUSTED|quota exceeded/i
 // A bare status code could be a tool's request; only Google's auth words name the chat's credentials.
 const REFUSED =
   /PERMISSION_DENIED|UNAUTHENTICATED|API key not valid|\b40[13]\b[^\n]{0,40}\b(?:unauthori[sz]ed|forbidden)\b/i
@@ -98,13 +98,8 @@ const REFUSED =
 /** Classifies a sign-in error or a failed turn; null when switching methods wouldn't help. */
 export function antigravityAuthFailureReason(input: {
   failureKind?: string
-  /** `system`: the host's own agy, whose sign-in Orca doesn't manage. */
-  account?: string
   text: string
 }): AntigravityAuthFailureReason | null {
-  if (input.account === 'system') {
-    return null
-  }
   const { text } = input
   if (text === ANTIGRAVITY_SUBSCRIPTION_REQUIRED || SUBSCRIPTION.test(text)) {
     return 'noSubscription'
@@ -112,7 +107,7 @@ export function antigravityAuthFailureReason(input: {
   if (text === ANTIGRAVITY_ACCOUNT_INELIGIBLE || INELIGIBLE.test(text)) {
     return 'ineligible'
   }
-  if (input.failureKind === 'usageLimitReached' || USAGE_LIMIT.test(text)) {
+  if (input.failureKind === 'usageLimitReached' || ANTIGRAVITY_QUOTA_WORDS.test(text)) {
     return 'usageLimit'
   }
   if (input.failureKind === 'notSignedIn') {

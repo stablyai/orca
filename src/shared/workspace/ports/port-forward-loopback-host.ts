@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export type LoopbackPortForwardDialHost = 'localhost' | '127.0.0.1' | '::1'
 
@@ -14,5 +15,13 @@ export function loopbackPortForwardDialHost(host: string): LoopbackPortForwardDi
   return DIAL_HOSTS.get(host.trim().toLowerCase()) ?? null
 }
 
+export function requireLoopbackPortForwardDialHost(host: string): LoopbackPortForwardDialHost {
+  const dialHost = loopbackPortForwardDialHost(host)
+  if (!dialHost) {
+    throw new Error('Only localhost ports on a paired server can be forwarded.')
+  }
+  return dialHost
+}
+
 // The attach names no destination: each stream's Open frame does, and the host checks it.
-export const NetworkPortForwardAttachParams = z.object({}).strict()
+export const NetworkPortForwardAttachParams = lazyZodSchema(() => z.object({}).strict())

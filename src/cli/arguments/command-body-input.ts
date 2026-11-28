@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute } from 'node:path'
+import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
+import { resolveCallerFilePath } from './caller-file-path'
 import { readStdin } from './flag-or-stdin-payload'
 import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from './flags'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -65,7 +67,11 @@ export async function readTextOrFileFlag(
 
 async function readBodyFile(path: string, cwd: string): Promise<string> {
   if (path !== '-') {
-    const resolved = isAbsolute(path) ? path : join(cwd, path)
+    const isWslLinuxPath = Boolean(
+      getWslCallerDistro(cwd) && path.startsWith('/') && !path.startsWith('//')
+    )
+    // Native absolute paths stay verbatim as before; WSL Linux paths are normalized while translating.
+    const resolved = !isWslLinuxPath && isAbsolute(path) ? path : resolveCallerFilePath(path, cwd)
     try {
       return await readFile(resolved, 'utf8')
     } catch (error) {

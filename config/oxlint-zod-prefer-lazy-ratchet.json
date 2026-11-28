@@ -1,0 +1,34 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "jsPlugins": [
+    {
+      "name": "zod-prefer-lazy-schema",
+      "specifier": "./oxlint-plugins/zod-prefer-lazy-schema.mjs"
+    }
+  ],
+  "rules": {
+    "zod-prefer-lazy-schema/prefer-lazy-schema": "warn"
+  },
+  "ignorePatterns": [
+    "**/node_modules",
+    "**/dist",
+    "**/out",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/*.fixture.*",
+    "**/__fixtures__/**",
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "**/*.test-support.*"
+  ]
+}

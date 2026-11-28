@@ -32,9 +32,9 @@ import { useOpenMobileAutomations } from '../automations/use-open-mobile-automat
 import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
 import {
   PhoneConnectTripContext,
-  usePhoneConnectTrips,
-  type ConnectSignInPage
+  usePhoneConnectTrips
 } from '../bots/connectors/use-phone-connect-trip'
+import type { ConnectSignInPage } from '../bots/connectors/connect-host-trip'
 import { MobileConnectSignInSheet } from '../bots/connectors/MobileConnectSignInSheet'
 import type { MobileBrowserTab, MobileSessionTab } from './tabs/mobile-session-tabs'
 

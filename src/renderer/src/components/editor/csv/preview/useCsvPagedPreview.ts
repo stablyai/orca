@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CsvFilePreview } from './csv-file-content'
 import { CsvPagedPreview } from './csv-paged-preview'
 import type { CsvIndex } from '../document/csv-byte-index'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type PreviewState = {
   index: CsvIndex | null
@@ -63,23 +64,26 @@ export function useCsvPagedPreview(file: CsvFilePreview, delimiter: string) {
           return
         }
         loading = true
-        try {
-          while (wanted && !canceled) {
-            const range = wanted
-            wanted = null
-            const rows = await preview.rows(
-              index,
-              range.first,
-              range.last,
-              () => canceled || wanted !== null
-            )
-            if (rows && !canceled && !wanted) {
-              setState((previous) => ({ ...previous, rows }))
+        await runWithFinally(
+          async () => {
+            while (wanted && !canceled) {
+              const range = wanted
+              wanted = null
+              const rows = await preview.rows(
+                index,
+                range.first,
+                range.last,
+                () => canceled || wanted !== null
+              )
+              if (rows && !canceled && !wanted) {
+                setState((previous) => ({ ...previous, rows }))
+              }
             }
+          },
+          () => {
+            loading = false
           }
-        } finally {
-          loading = false
-        }
+        )
       }
       requestRows.current = (first, last) => {
         wanted = { first, last }

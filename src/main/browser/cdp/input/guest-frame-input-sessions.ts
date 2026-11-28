@@ -19,8 +19,11 @@ type FrameSessions = {
   ownedSessionIds: Set<string>
   emulatedSessionIds: Set<string>
   attachByTargetId: Map<string, Promise<string | null>>
-  crossSiteTargets: { ids: Set<string>; at: number } | null
+  crossSiteTargets: { ids: CrossSiteFrameTargets; at: number } | null
 }
+
+/** Cross-site frame target ids, each with the id of the frame that hosts it. */
+export type CrossSiteFrameTargets = ReadonlyMap<string, string | null>
 
 const frameSessionsByGuest = new WeakMap<WebContents, FrameSessions>()
 
@@ -116,6 +119,11 @@ export function forgetFrameSession(webContents: WebContents, sessionId: string):
   }
 }
 
+/** After a debugger detach, which ends every session it opened. */
+export function forgetGuestFrameSessions(webContents: WebContents): void {
+  frameSessionsByGuest.delete(webContents)
+}
+
 /** Share concurrent attaches and retain sessions that answer after the caller times out. */
 export async function frameSessionFor(
   webContents: WebContents,
@@ -151,35 +159,67 @@ export async function frameSessionFor(
   return await settleWithin(attach, null)
 }
 
+function cachedCrossSiteFrameTargets(sessions: FrameSessions): CrossSiteFrameTargets | null {
+  const cached = sessions.crossSiteTargets
+  return cached && Date.now() - cached.at < TARGET_LIST_TTL_MS ? cached.ids : null
+}
+
 export async function crossSiteFrameTargets(
   webContents: WebContents,
   send: GuestSessionCdpSender,
   { refresh }: { refresh: boolean }
-): Promise<Set<string>> {
+): Promise<CrossSiteFrameTargets> {
   const sessions = frameSessionsFor(webContents)
-  const cached = sessions.crossSiteTargets
-  if (!refresh && cached && Date.now() - cached.at < TARGET_LIST_TTL_MS) {
-    return cached.ids
+  const cached = refresh ? null : cachedCrossSiteFrameTargets(sessions)
+  if (cached) {
+    return cached
   }
-  const response = await settleWithin(send('Target.getTargets', {}), null)
+  // Chromium lists every page's targets; the filter keeps other pages' and workers' out of the reply.
+  const response = await settleWithin(
+    send('Target.getTargets', { filter: [{ type: 'iframe' }] }),
+    null
+  )
   const infos =
     response !== null && typeof response === 'object' && 'targetInfos' in response
       ? Object.getOwnPropertyDescriptor(response, 'targetInfos')?.value
       : null
-  const ids = new Set<string>()
+  // Still every page's frames, not only this guest's.
+  const ids = new Map<string, string | null>()
   if (Array.isArray(infos)) {
     for (const info of infos) {
       if (info !== null && typeof info === 'object') {
         const record = Object.fromEntries(Object.entries(info))
         const targetId = readString(record, 'targetId')
         if (record.type === 'iframe' && targetId) {
-          ids.add(targetId)
+          ids.set(targetId, readString(record, 'parentFrameId'))
         }
+      }
+    }
+  }
+  if (Array.isArray(infos)) {
+    // Detach events only reach a proxy client, so drop sessions of frames that are gone here.
+    for (const [targetId, sessionId] of sessions.sessionIdByTargetId) {
+      if (!ids.has(targetId)) {
+        sessions.sessionIdByTargetId.delete(targetId)
+        sessions.ownedSessionIds.delete(sessionId)
+        sessions.emulatedSessionIds.delete(sessionId)
       }
     }
   }
   sessions.crossSiteTargets = { ids, at: Date.now() }
   return ids
+}
+
+/** Whether the frame is out of process: a cached hit, or else one fresh listing, which sees a frame that just loaded. */
+export async function isCrossSiteFrameTarget(
+  webContents: WebContents,
+  send: GuestSessionCdpSender,
+  frameId: string
+): Promise<boolean> {
+  return (
+    cachedCrossSiteFrameTargets(frameSessionsFor(webContents))?.has(frameId) ||
+    (await crossSiteFrameTargets(webContents, send, { refresh: true })).has(frameId)
+  )
 }
 
 export async function sendFrameSessionInput(

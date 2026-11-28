@@ -1,6 +1,7 @@
 // The CLI version each model on Orca's list needs, read from Orca's repo at most hourly.
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../network/http-client'
 import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import type {
@@ -16,16 +17,18 @@ const REFRESH_MS = 60 * 60_000
 const LIST_TIMEOUT_MS = 10_000
 
 // Agents an older app doesn't know are kept here and skipped on lookup, so the file can grow.
-const listSchema = z.object({
-  models: z.array(
-    z.object({
-      agent: z.string(),
-      id: z.string().min(1),
-      name: z.string().min(1),
-      minVersion: z.string().regex(/^\d+\.\d+\.\d+$/)
-    })
-  )
-})
+const listSchema = lazyZodSchema(() =>
+  z.object({
+    models: z.array(
+      z.object({
+        agent: z.string(),
+        id: z.string().min(1),
+        name: z.string().min(1),
+        minVersion: z.string().regex(/^\d+\.\d+\.\d+$/)
+      })
+    )
+  })
+)
 export type AgentCliModelRequirementList = z.infer<typeof listSchema>
 
 const BUNDLED_LIST = listSchema.parse(bundled)

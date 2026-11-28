@@ -2,21 +2,27 @@ import { getHeapSpaceStatistics, getHeapStatistics } from 'node:v8'
 import type { CrashReportDetailValue } from '../../shared/crash-reporting/crash-reporting'
 import { hasActiveTraceSink, startSpan } from '../observability/tracer'
 import { readWorkerThreadMemoryData } from '../worker-threads/worker-thread-diagnostics'
+import { MAIN_ALLOCATION_SAMPLING_ENV, sampleMainAllocations } from './main-allocation-sampler'
 
 /**
  * Main's footprint jumping by hundreds of MB names no owner after the fact, so a rise this large
- * within this window writes one breakdown to the local trace log. Fed by the process-metrics
- * sampler, so an idle app pays one comparison per sample and no reads of its own.
+ * within this window writes one breakdown to the local trace log. Triggers on the OS footprint
+ * (macOS phys_footprint, Windows private bytes, Linux anonymous RSS plus swap) because the working
+ * set misses memory the OS compresses or swaps out. Rides the 10 s host-memory tick, which catches
+ * a 60 s spike that a once-a-minute sample can miss.
  */
 export const MAIN_MEMORY_SPIKE_RISE_MB = 300
 export const MAIN_MEMORY_SPIKE_WINDOW_MS = 2 * 60_000
-/** Ticks fire late (more so on a busy main), so the sample from two ticks ago can be just past the window. */
-const SAMPLE_LATENESS_SLACK_MS = 30_000
+/** 10 s ticks fire late (more so on a busy main), so the oldest sample can be just past the window. */
+const SAMPLE_LATENESS_SLACK_MS = 10_000
+/** A read that never settles must not stop sampling for the rest of the session. */
+const STUCK_READ_MS = 60_000
 export const MAIN_MEMORY_SPIKE_MIN_INTERVAL_MS = 60 * 60_000
 const MB = 2 ** 20
 
 type Details = Record<string, CrashReportDetailValue>
-type Sample = { atMs: number; mb: number }
+/** Heap read with each sample, so a spike record carries the heap at its quiet baseline. */
+type Sample = { atMs: number; mb: number; heap: Details }
 
 /** Counts only, never names or paths. */
 export type MainMemorySpikeCounts = () => Record<string, number>
@@ -25,16 +31,42 @@ const recent: Sample[] = []
 let armedAtMs: number | null = null
 let lastCaptureAtMs = Number.NEGATIVE_INFINITY
 let readCounts: MainMemorySpikeCounts | null = null
+let readProcessMetrics: (() => Details) | null = null
+let readStartedAtMs: number | null = null
 
 export function setMainMemorySpikeCounts(counts: MainMemorySpikeCounts | null): void {
   readCounts = counts
 }
 
-export function observeMainMemorySample(
-  mainMB: number,
-  nowMs: number,
-  processMetrics: Details
-): void {
+/** Read at capture time, so the per-process breakdown describes the spike rather than a minute before. */
+export function setMainMemorySpikeProcessMetrics(read: (() => Details) | null): void {
+  readProcessMetrics = read
+}
+
+/** One in-process OS footprint read; skipped while tracing is off or the last read is pending (up to a minute). */
+export async function sampleMainMemoryFootprint(): Promise<void> {
+  const startedAtMs = Date.now()
+  if (
+    (readStartedAtMs !== null && startedAtMs - readStartedAtMs < STUCK_READ_MS) ||
+    !hasActiveTraceSink() ||
+    typeof process.getProcessMemoryInfo !== 'function'
+  ) {
+    return
+  }
+  readStartedAtMs = startedAtMs
+  try {
+    const info = await process.getProcessMemoryInfo()
+    observeMainMemorySample(Math.round(info.private / 1024), Date.now())
+  } catch {
+    // A failed read skips one sample.
+  } finally {
+    if (readStartedAtMs === startedAtMs) {
+      readStartedAtMs = null
+    }
+  }
+}
+
+export function observeMainMemorySample(footprintMB: number, nowMs: number): void {
   // Launch loads the profile in its first minutes; that ramp is expected, not a spike.
   armedAtMs ??= nowMs + MAIN_MEMORY_SPIKE_WINDOW_MS
   if (nowMs < armedAtMs) {
@@ -46,15 +78,16 @@ export function observeMainMemorySample(
   ) {
     recent.shift()
   }
-  let baseline: Sample = { atMs: nowMs, mb: mainMB }
-  for (const sample of recent) {
-    if (sample.mb < baseline.mb) {
-      baseline = sample
+  const sample: Sample = { atMs: nowMs, mb: footprintMB, heap: v8Heap() }
+  let baseline = sample
+  for (const prior of recent) {
+    if (prior.mb < baseline.mb) {
+      baseline = prior
     }
   }
-  recent.push({ atMs: nowMs, mb: mainMB })
+  recent.push(sample)
   if (
-    mainMB - baseline.mb < MAIN_MEMORY_SPIKE_RISE_MB ||
+    footprintMB - baseline.mb < MAIN_MEMORY_SPIKE_RISE_MB ||
     nowMs - lastCaptureAtMs < MAIN_MEMORY_SPIKE_MIN_INTERVAL_MS ||
     !hasActiveTraceSink()
   ) {
@@ -62,26 +95,28 @@ export function observeMainMemorySample(
   }
   lastCaptureAtMs = nowMs
   void captureMainMemorySpike({
-    mainMB,
+    footprintMB,
     baselineMB: baseline.mb,
     baselineAgeMs: nowMs - baseline.atMs,
-    processMetrics
+    baselineHeap: baseline.heap
   })
 }
 
 async function captureMainMemorySpike(trigger: {
-  mainMB: number
+  footprintMB: number
   baselineMB: number
   baselineAgeMs: number
-  processMetrics: Details
+  baselineHeap: Details
 }): Promise<void> {
   const span = startSpan('memory.main-spike', {
     attributes: {
-      mainWorkingSetMB: trigger.mainMB,
-      baselineWorkingSetMB: trigger.baselineMB,
-      riseMB: trigger.mainMB - trigger.baselineMB,
+      mainFootprintMB: trigger.footprintMB,
+      baselineFootprintMB: trigger.baselineMB,
+      riseMB: trigger.footprintMB - trigger.baselineMB,
       baselineAgeMs: trigger.baselineAgeMs,
-      ...trigger.processMetrics
+      ...Object.fromEntries(
+        Object.entries(trigger.baselineHeap).map(([key, value]) => [`baseline_${key}`, value])
+      )
     }
   })
   const record = (attributes: Details): void => {
@@ -93,7 +128,8 @@ async function captureMainMemorySpike(trigger: {
   for (const [part, read] of [
     ['node', nodeMemory],
     ['v8', v8Heap],
-    ['counts', countsData]
+    ['counts', countsData],
+    ['processMetrics', () => readProcessMetrics?.() ?? {}]
   ] as const) {
     try {
       record(read())
@@ -108,6 +144,17 @@ async function captureMainMemorySpike(trigger: {
   record(allocator.status === 'fulfilled' ? allocator.value : { chromiumError: true })
   record(workers.status === 'fulfilled' ? workers.value : { workersError: true })
   span.end()
+  if (process.env[MAIN_ALLOCATION_SAMPLING_ENV] !== '1') {
+    return
+  }
+  // A separate record, so a crash during the sampling window still leaves the spike breakdown.
+  const allocations = startSpan('memory.main-spike.allocations', {
+    attributes: { spikeSpanId: span.spanId }
+  })
+  for (const [key, value] of Object.entries(await sampleMainAllocations())) {
+    allocations.setAttribute(key, value)
+  }
+  allocations.end()
 }
 
 function toMB(bytes: number): number {
@@ -151,7 +198,6 @@ async function allocatorTotals(): Promise<Details> {
   }
   const info = await process.getProcessMemoryInfo()
   return {
-    chromiumPrivateMB: Math.round(info.private / 1024),
     chromiumSharedMB: Math.round(info.shared / 1024),
     ...(info.residentSet ? { chromiumResidentSetMB: Math.round(info.residentSet / 1024) } : {})
   }
@@ -167,4 +213,6 @@ export function resetMainMemorySpikeCaptureForTest(): void {
   armedAtMs = null
   lastCaptureAtMs = Number.NEGATIVE_INFINITY
   readCounts = null
+  readProcessMetrics = null
+  readStartedAtMs = null
 }

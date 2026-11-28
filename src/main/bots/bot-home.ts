@@ -11,6 +11,7 @@ import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
 import { getDiskBaselineSignature } from '../../shared/file-write/disk-baseline-signature'
 import { writeLocalTextFileWithDiskPrecondition } from '../filesystem/local-file-io/local-disk-write-precondition'
+import { durableWriteTempPath, writeFileDurable } from '../filesystem/durable-file-write'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 
 /** The disk a bot home lives on; only this computer's today, an SSH/WSL adapter later. */
@@ -24,6 +25,8 @@ export type BotHomeFilesystem = {
   /** A file's size and last change; null when it is missing or unreadable. */
   statFile(path: string): Promise<{ size: number; mtimeMs: number } | null>
   writeBytes(path: string, bytes: Uint8Array): Promise<void>
+  /** Replaces the file whole or not at all: a crash mid-write leaves the old one. */
+  replaceBytes(path: string, bytes: Uint8Array): Promise<void>
   /** `exclusive` leaves an existing file untouched and reports false. */
   writeText(path: string, text: string, options?: { exclusive?: boolean }): Promise<boolean>
   /** Writes `text` only if the file still holds `expected`; false when it changed meanwhile. */
@@ -44,6 +47,7 @@ export const localBotHomeFilesystem: BotHomeFilesystem = {
       () => null
     ),
   writeBytes: (path, bytes) => writeFile(path, bytes),
+  replaceBytes: (path, bytes) => writeFileDurable(durableWriteTempPath(path), path, bytes),
   writeText: async (path, text, options) => {
     try {
       await writeFile(path, text, options?.exclusive ? { flag: 'wx' } : undefined)

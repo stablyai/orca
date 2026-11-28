@@ -20,7 +20,7 @@ type PageEvent = {
   type?: unknown
   request?: MobileBrowserPagePromptRequest
   requestId?: unknown
-  download?: { savePath?: unknown; status?: unknown }
+  download?: { savePath?: unknown; claimLabel?: unknown; status?: unknown }
 }
 
 const PROMPT_KINDS: ReadonlySet<string> = new Set(['site-permission', 'http-auth', 'external-app'])
@@ -31,7 +31,10 @@ function phoneCanOpen(url: string | undefined): url is string {
 }
 
 function downloadNotice(event: PageEvent): string | null {
-  const path = typeof event.download?.savePath === 'string' ? event.download.savePath : ''
+  // A feature in Orca took it (e.g. Google setup): name that, never its private file.
+  const claimed = event.download?.claimLabel
+  const saved = event.download?.savePath
+  const path = typeof claimed === 'string' ? claimed : typeof saved === 'string' ? saved : ''
   if (event.type === 'downloadRequested' && path) {
     return translate('browser.pagePrompt.downloadStarted', 'Downloading to {{path}} on the host', {
       path

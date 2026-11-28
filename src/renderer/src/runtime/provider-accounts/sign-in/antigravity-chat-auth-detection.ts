@@ -26,6 +26,7 @@ const UNOBSERVED_KEEP_MS = 10 * 60_000
 
 const entries = new Map<string, Entry>()
 const listeners = new Set<() => void>()
+const subscribeToNothing = (): (() => void) => () => {}
 let observedHosts = 0
 let removeFocusListener: (() => void) | null = null
 
@@ -177,5 +178,6 @@ export function useAntigravityChatAuthDetection(
     [shown, environmentId]
   )
   const read = (): AntigravityChatAuthDetection | null => readAntigravityChatAuthDetection(owner)
-  return useSyncExternalStore(subscribe, read, read)
+  // Panes that follow no host (every non-Antigravity chat) skip this store's publications.
+  return useSyncExternalStore(shown ? subscribe : subscribeToNothing, read, read)
 }

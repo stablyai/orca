@@ -1,4 +1,4 @@
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 import { parsePairingCode } from './pairing'
 import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
@@ -7,13 +7,14 @@ export type PairConfirmRouteState =
   | { kind: 'error'; offer: null; errorMessage: string }
 
 export function resolvePairConfirmRouteState(
-  code: string | string[] | undefined
+  code: string | string[] | undefined,
+  t: Translate
 ): PairConfirmRouteState {
   if (!code) {
     return {
       kind: 'error',
       offer: null,
-      errorMessage: translate('connection.pairConfirmState.missingCode', 'Missing pairing code')
+      errorMessage: t('connection.pairConfirmState.missingCode', 'Missing pairing code')
     }
   }
 
@@ -22,7 +23,7 @@ export function resolvePairConfirmRouteState(
     return {
       kind: 'error',
       offer: null,
-      errorMessage: translate('connection.pairConfirmState.invalidCode', 'Not a valid pairing code')
+      errorMessage: t('connection.pairConfirmState.invalidCode', 'Not a valid pairing code')
     }
   }
 

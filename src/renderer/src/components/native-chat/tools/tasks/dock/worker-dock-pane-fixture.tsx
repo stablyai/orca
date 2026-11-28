@@ -11,19 +11,27 @@ import {
 } from '../../../appearance/native-chat-appearance-style'
 import { NativeChatJumpToLatest } from '../../../viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatWorkerDockFrame } from './NativeChatWorkerDockFrame'
+import {
+  NativeChatWorkerChipHost,
+  NativeChatWorkerChipSlot,
+  WorkerChipPortal
+} from './worker-chip-slot'
+import { NativeChatTaskList } from '../NativeChatTaskList'
 
 // Dev-only: the chat pane the worker dock fixtures render their strip in.
 /** The strip in a full-height chat pane above a message box, as a chat shows it. */
-const queue: StructuredAgentSessionQueuedMessagesController = {
-  cards: [
-    {
-      messageId: 'fixture-queued',
-      position: 0,
-      state: 'waiting',
-      hold: 'turn',
-      text: 'Check the release notes.'
-    }
-  ],
+const queued = [
+  'Check the release notes.',
+  'Then open the PR against main and ask for a review from the dock owners.'
+]
+const queue = (count: number): StructuredAgentSessionQueuedMessagesController => ({
+  cards: queued.slice(0, count).map((text, position) => ({
+    messageId: `fixture-queued-${position}`,
+    position,
+    state: 'waiting' as const,
+    hold: 'turn' as const,
+    text
+  })),
   queueCapable: true,
   holds: () => false,
   agentMail: [],
@@ -43,10 +51,18 @@ const queue: StructuredAgentSessionQueuedMessagesController = {
   edit: async () => {},
   steerHead: undefined,
   isWorking: true
+})
+
+const FIXTURE_TASKS = {
+  tasks: [
+    { content: 'Move the worker chip above the task list', status: 'completed' as const },
+    { content: 'Let the transcript run under the chip', status: 'in_progress' as const },
+    { content: 'Check every width and theme', status: 'pending' as const }
+  ]
 }
 
 // The chat's own transcript end padding and Jump to latest, so the pill's clearance is real.
-function FixtureTranscript() {
+function FixtureTranscript({ overlay }: { overlay?: React.ReactNode }) {
   const [away, setAway] = useState(false)
   const scroller = useRef<HTMLDivElement>(null)
   // Starts at the end once the pill has reserved its room, as a following reader rests.
@@ -60,7 +76,7 @@ function FixtureTranscript() {
     return () => cancelAnimationFrame(frame)
   }, [])
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-[var(--native-chat-worker-chip-room,0px)] flex-1 flex-col">
       <div
         ref={scroller}
         data-fixture-transcript=""
@@ -81,6 +97,7 @@ function FixtureTranscript() {
           </div>
         </div>
       </div>
+      {overlay}
       <NativeChatJumpToLatest
         visible={away}
         onJump={() => {
@@ -94,21 +111,90 @@ function FixtureTranscript() {
   )
 }
 
+function FixtureTasks() {
+  return (
+    <div className="shrink-0 px-3 pb-2 sm:px-4 [:is([data-native-chat-worker-dock],[data-native-chat-worker-chip-slot]):has([data-native-chat-background-tasks])+&]:pt-2">
+      <div className="mx-auto w-full max-w-(--chat-content-max-width)">
+        <NativeChatTaskList list={FIXTURE_TASKS} presentation="composer" />
+      </div>
+    </div>
+  )
+}
+
+/** As a chat draws it: the chip's owner stays mounted while the message list it draws in is
+ *  replaced (history turning ready, a /clear); the hidden button replaces it. */
+function HostedMessageList(props: {
+  strip: React.ReactNode
+  find?: React.ReactNode
+  tasks?: boolean
+}) {
+  const [epoch, setEpoch] = useState(0)
+  return (
+    <NativeChatWorkerChipHost
+      chip={
+        <WorkerChipPortal>
+          <NativeChatWorkerDockFrame overlay>{props.strip}</NativeChatWorkerDockFrame>
+        </WorkerChipPortal>
+      }
+    >
+      <button
+        type="button"
+        hidden
+        data-fixture-remount-list=""
+        onClick={() => setEpoch((value) => value + 1)}
+      />
+      <div
+        key={epoch}
+        data-fixture-list-epoch={epoch}
+        className="relative flex min-h-[var(--native-chat-worker-chip-floor,0px)] flex-1 flex-col"
+      >
+        <FixtureTranscript overlay={props.find} />
+        <NativeChatWorkerChipSlot />
+        {props.tasks ? <FixtureTasks /> : null}
+      </div>
+    </NativeChatWorkerChipHost>
+  )
+}
+
 export function workerDockFixturePane(
   strip: React.ReactNode,
-  sections?: 'question' | 'queue' | 'both'
+  sections?: 'question' | 'queue' | 'both',
+  /** The rest of the chat's stack: a goal, more queued messages, the find bar, and a prompt card
+   *  that stands in for the message box as a chat's does. */
+  more: {
+    goal?: React.ReactNode
+    find?: React.ReactNode
+    queued?: number
+    promptReplacesComposer?: boolean
+    /** The real message box in place of the stand-in. */
+    composer?: React.ReactNode
+    /** A docked task list under the chip's row, as a chat with a plan shows it. */
+    tasks?: boolean
+    /** The chip drawn through its slot, with a list that can be replaced under it. */
+    hosted?: boolean
+  } = {}
 ) {
+  const prompt = sections === 'question' || sections === 'both'
   return (
     <div
       data-native-chat-root=""
       className="native-chat-appearance flex h-[calc(100vh-2rem)] flex-col bg-chat-canvas"
       style={nativeChatAppearanceStyle({})}
     >
-      <FixtureTranscript />
+      {more.hosted ? (
+        <HostedMessageList strip={strip} find={more.find} tasks={more.tasks} />
+      ) : (
+        // As a chat's message list: the transcript, the chip's row at its end, then the task list.
+        <div className="relative flex min-h-[var(--native-chat-worker-chip-floor,0px)] flex-1 flex-col">
+          <FixtureTranscript overlay={more.find} />
+          <NativeChatWorkerDockFrame overlay>{strip}</NativeChatWorkerDockFrame>
+          {more.tasks ? <FixtureTasks /> : null}
+        </div>
+      )}
       <Toaster />
       <NativeChatDock>
-        <NativeChatWorkerDockFrame>{strip}</NativeChatWorkerDockFrame>
-        {sections === 'question' || sections === 'both' ? (
+        {prompt ? null : more.goal}
+        {prompt ? (
           <NativeChatQuestionCard
             prompt={{
               questions: [
@@ -134,20 +220,27 @@ export function workerDockFixturePane(
           />
         ) : null}
         {sections === 'queue' || sections === 'both' ? (
-          <NativeChatQueuedMessageList controller={queue} chatWorktreeId={null} />
+          <NativeChatQueuedMessageList controller={queue(more.queued ?? 1)} chatWorktreeId={null} />
         ) : null}
-        <div data-native-chat-composer-scope="fixture" className="shrink-0 px-3 pt-2 pb-4 sm:px-4">
-          <div className="rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs">
-            <textarea
-              data-fixture-composer=""
-              data-native-chat-prompt-editor="true"
-              aria-label="Message"
-              className="block min-h-12 w-full resize-none bg-transparent px-2 py-2 text-sm text-chat-foreground outline-none"
-              defaultValue=""
-              placeholder="Ask anything, / for commands, @ for context"
-            />
+        {prompt && more.promptReplacesComposer ? null : more.composer ? (
+          more.composer
+        ) : (
+          <div
+            data-native-chat-composer-scope="fixture"
+            className="shrink-0 px-3 pt-2 pb-4 sm:px-4"
+          >
+            <div className="mx-auto max-w-(--chat-content-max-width) rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs">
+              <textarea
+                data-fixture-composer=""
+                data-native-chat-prompt-editor="true"
+                aria-label="Message"
+                className="block min-h-12 w-full resize-none bg-transparent px-2 py-2 text-sm text-chat-foreground outline-none"
+                defaultValue=""
+                placeholder="Ask anything, / for commands, @ for context"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </NativeChatDock>
     </div>
   )

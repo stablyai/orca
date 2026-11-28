@@ -1,4 +1,4 @@
-// Connect Linear's or GitHub's sign-in on the phone: the page open in Orca's browser on the computer, with
+// Linear's, GitHub's or Google's sign-in on the phone: the page open in Orca's browser on the computer, with
 // only typing under it. The setup reopens once the sign-in ends.
 import type { ComponentProps } from 'react'
 import { View } from 'react-native'
@@ -9,7 +9,7 @@ import { TransientToast, useTransientToast } from '../../components/feedback/Tra
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 
 function pageHost(url: string): string | undefined {
   try {
@@ -26,10 +26,11 @@ export function MobileConnectSignInSheet(
   > & {
     /** The sign-in's tab; null while none shows. */
     tab: MobileBrowserTab | null
-    source: 'linear' | 'github'
+    source: 'linear' | 'github' | 'google'
     onCancel: () => void
   }
 ) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   // The session's toast sits under this sheet's modal, so the page's notices show here.
   const { message, showToast } = useTransientToast()
@@ -69,7 +70,7 @@ export function MobileConnectSignInSheet(
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   root: { flex: 1 },
   page: { flex: 1, overflow: 'hidden' }
 }))

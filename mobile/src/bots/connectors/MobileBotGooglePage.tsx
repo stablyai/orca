@@ -1,10 +1,14 @@
 // Google's page in Connectors: the desktop's BotGoogleCard with GoogleAccountSettings' readiness, default,
-// Share setup and Disconnect, each account on its own page. Each fix runs here, except Allow again: that is
-// Google's sign-in, which returns to the host's loopback and isn't on the phone's allowlist.
+// Share setup and Disconnect, each account on its own page. Each fix runs here; Allow again, Reconnect and
+// Add another Google account open Google's sign-in page (MobileBotGoogleSignIn).
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
-import { Ellipsis, Share } from 'lucide-react-native'
+import { ArrowUpRight, Ellipsis, Plus, Share } from 'lucide-react-native'
+import {
+  GOOGLE_CHOICE_SERVICES,
+  GOOGLE_SERVICE_CHOICES
+} from '../../../../src/shared/google/google-scopes'
 import { ListRow } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
@@ -14,7 +18,10 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
+import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import type { PhoneBot } from '../host-bots-operations'
+import type { GoogleSignInAsk } from './connector-pages'
 import { googleBotSet } from './bot-connector-account-operations'
 import {
   GoogleReadinessGroup,
@@ -26,6 +33,17 @@ import {
   useGoogleAccountCalls,
   type PhoneGoogle
 } from './phone-google-accounts'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+
+/** What a new account asks for: what this one has, as the desktop's Add another Google account. */
+function accountChoices(account: GoogleAccount) {
+  const choices = GOOGLE_SERVICE_CHOICES.filter((choice) =>
+    GOOGLE_CHOICE_SERVICES[choice].some((service) =>
+      account.services.some((entry) => entry.service === service)
+    )
+  )
+  return choices.length > 0 ? choices : undefined
+}
 
 export function MobileBotGooglePage(props: {
   client: RpcClient | null
@@ -38,14 +56,21 @@ export function MobileBotGooglePage(props: {
   onBack: () => void
   /** No account signed in: Connect Google, as Add a connector starts it. */
   onConnect: () => void
+  /** The account whose page opens first. */
+  account?: string
+  /** Google's sign-in; `account`: the account page to come back to. */
+  onSignIn: (ask: GoogleSignInAsk, account?: string) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, google, hostName } = props
+  // An older host signs Google in only itself, so its pages say so instead.
+  const signsIn = useRouteCapability(BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [disconnecting, setDisconnecting] = useState<{ email: string; revoke: boolean } | null>(
     null
   )
-  const [openAccount, setOpenAccount] = useState<string | null>(null)
+  const [openAccount, setOpenAccount] = useState<string | null>(props.account ?? null)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuAnchor = useRef(null)
   const [busy, setBusy] = useState(false)
@@ -144,13 +169,35 @@ export function MobileBotGooglePage(props: {
         online={props.online}
         first={first}
         showToast={props.showToast}
+        onAllowAgain={
+          signsIn
+            ? () => props.onSignIn({ account: account.email }, first ? account.email : undefined)
+            : null
+        }
       />
     )
-  const ended = t(
-    'bots.google.headline.endedOnHost',
-    'Google access ended. Sign in again on {{host}}.',
-    { host: hostName }
-  )
+  const ended = signsIn
+    ? t('bots.google.headline.ended', 'Google access ended.')
+    : t('bots.google.headline.endedOnHost', 'Google access ended. Sign in again on {{host}}.', {
+        host: hostName
+      })
+  // Google's own reason, when it gave one, follows Orca's sentence.
+  const endedText = (account: GoogleAccount) =>
+    account.googleError ? `${ended}\n${account.googleError}` : ended
+  // An ended sign-in's one fix, in the slot its services had.
+  const reconnectGroup = (account: GoogleAccount, back: string | undefined) =>
+    signsIn ? (
+      <SettingsSection>
+        <ListRow
+          leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+          accent
+          title={t('bots.google.reconnect', 'Reconnect')}
+          accessibilityRole="link"
+          disabled={!props.online}
+          onPress={() => props.onSignIn({ account: account.email }, back)}
+        />
+      </SettingsSection>
+    ) : null
   if (opened) {
     const canSetDefault = several && defaultAccount !== undefined && opened.email !== defaultAccount
     return (
@@ -164,10 +211,16 @@ export function MobileBotGooglePage(props: {
           }}
         />
         {props.banner}
-        {opened.status === 'reconnect' ? <SettingsNote>{ended}</SettingsNote> : null}
-        {opened === shown ? null : servicesGroup(opened, true)}
+        {opened.status === 'reconnect' ? (
+          <>
+            <SettingsNote>{endedText(opened)}</SettingsNote>
+            {reconnectGroup(opened, opened.email)}
+          </>
+        ) : opened === shown ? null : (
+          servicesGroup(opened, true)
+        )}
         {canSetDefault ? (
-          <SettingsSection first={opened === shown}>
+          <SettingsSection first={opened === shown && opened.status !== 'reconnect'}>
             <ListRow
               title={t('bots.google.setDefault', 'Set as default')}
               accent
@@ -180,7 +233,9 @@ export function MobileBotGooglePage(props: {
             />
           </SettingsSection>
         ) : null}
-        <SettingsSection first={opened === shown && !canSetDefault}>
+        <SettingsSection
+          first={opened === shown && opened.status !== 'reconnect' && !canSetDefault}
+        >
           {[false, true].map((revoke) => (
             <ListRow
               key={String(revoke)}
@@ -208,7 +263,7 @@ export function MobileBotGooglePage(props: {
       ? t('bots.google.headline.noDefault', 'Choose a default account')
       : null
     : shown.status === 'reconnect'
-      ? ended
+      ? endedText(shown)
       : shownProblems === 0
         ? t('bots.google.headline.connected', 'Google is connected')
         : shownProblems === 1
@@ -230,17 +285,32 @@ export function MobileBotGooglePage(props: {
         ? t('bots.google.headline.toFixOne', 'Almost there: 1 thing to fix')
         : t('bots.google.headline.toFix', 'Almost there: {{count}} things to fix', { count })
   }
-  const menu = google.status?.client
-    ? [
-        {
-          label: t('bots.google.shareButton', 'Share setup'),
-          icon: Share,
-          disabled: !props.online,
-          closeBeforePress: true,
-          onPress: shareSetup
-        }
-      ]
-    : []
+  // A host too old to keep a default can't take a second account.
+  const canAdd = signsIn && accounts.length > 0 && defaultAccount !== undefined
+  const menu = [
+    ...(canAdd
+      ? [
+          {
+            label: t('bots.google.addAccount', 'Add another account'),
+            icon: Plus,
+            disabled: !props.online,
+            onPress: () =>
+              props.onSignIn(shown ? { services: accountChoices(shown) } : {}, undefined)
+          }
+        ]
+      : []),
+    ...(google.status?.client
+      ? [
+          {
+            label: t('bots.google.shareButton', 'Share setup'),
+            icon: Share,
+            disabled: !props.online,
+            closeBeforePress: true,
+            onPress: shareSetup
+          }
+        ]
+      : [])
+  ]
   return (
     <>
       <SheetHeader
@@ -277,7 +347,11 @@ export function MobileBotGooglePage(props: {
         </>
       ) : null}
       {status ? <SettingsNote>{status}</SettingsNote> : null}
-      {shown ? servicesGroup(shown, false) : null}
+      {shown
+        ? shown.status === 'reconnect'
+          ? reconnectGroup(shown, undefined)
+          : servicesGroup(shown, false)
+        : null}
       {accounts.length > 0 ? (
         <SettingsSection
           title={

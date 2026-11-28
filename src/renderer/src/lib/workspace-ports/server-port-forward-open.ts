@@ -11,7 +11,9 @@ import type { PortForwardEntry } from '../../../../shared/remote-runtime/ssh/ssh
 import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 import { isLoopbackBrowserUrl } from '../../../../shared/browser/navigation/loopback-browser-url'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { forwardedUrlForRemoteUrl } from './workspace-port-urls'
+import type { RestoredPortForwardMove } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-port-forward-channel'
+import { forwardedTargetForRemoteUrl } from './workspace-port-urls'
+import { openForwardedUrlInSystemBrowser } from './forwarded-url-system-browser-open'
 import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import {
   serverForwardsPorts,
@@ -71,12 +73,12 @@ export async function openServerLoopbackInSystemBrowser(
     await openSshTargetLoopback(rawUrl, port, sshTargetId, host)
     return
   }
-  const known = forwardedUrlForRemoteUrl(
+  const known = forwardedTargetForRemoteUrl(
     rawUrl,
     state.portForwardsByConnection[environmentId] ?? []
   )
   if (known) {
-    await openSystemHttpLink(known)
+    await openForwardedUrlInSystemBrowser(known.url, known.forward, 'paired')
     return
   }
   const api = window.api.runtimeEnvironments.portForwards
@@ -96,7 +98,7 @@ export async function openServerLoopbackInSystemBrowser(
     )
     return
   }
-  await openThroughNewForward(rawUrl, port, host, () =>
+  await openThroughNewForward(rawUrl, port, host, 'paired', () =>
     api.ensure({ environmentId, remotePort: port })
   )
 }
@@ -124,12 +126,12 @@ async function openSshTargetLoopback(
   targetId: string,
   host: string
 ): Promise<void> {
-  const known = forwardedUrlForRemoteUrl(
+  const known = forwardedTargetForRemoteUrl(
     rawUrl,
     useAppStore.getState().portForwardsByConnection[targetId] ?? []
   )
   if (known) {
-    await openSystemHttpLink(known)
+    await openForwardedUrlInSystemBrowser(known.url, known.forward, 'ssh')
     return
   }
   const ensure = window.api.ssh?.ensurePortForward
@@ -143,7 +145,9 @@ async function openSshTargetLoopback(
     )
     return
   }
-  await openThroughNewForward(rawUrl, port, host, () => ensure({ targetId, remotePort: port }))
+  await openThroughNewForward(rawUrl, port, host, 'ssh', () =>
+    ensure({ targetId, remotePort: port })
+  )
 }
 
 function remoteUrlPort(rawUrl: string): number | null {
@@ -159,13 +163,14 @@ async function openThroughNewForward(
   rawUrl: string,
   port: number,
   host: string,
+  forwardKind: 'ssh' | 'paired',
   ensure: () => Promise<{ entry: PortForwardEntry; created: boolean }>
 ): Promise<void> {
-  let target: string | null
+  let target: { url: string; forward: PortForwardEntry } | null
   let created: boolean
   try {
     const result = await ensure()
-    target = forwardedUrlForRemoteUrl(rawUrl, [result.entry])
+    target = forwardedTargetForRemoteUrl(rawUrl, [result.entry])
     created = result.created
   } catch {
     target = null
@@ -181,8 +186,8 @@ async function openThroughNewForward(
     )
     return
   }
-  await openSystemHttpLink(target)
-  if (created) {
+  const opened = await openForwardedUrlInSystemBrowser(target.url, target.forward, forwardKind)
+  if (opened && created) {
     toast.success(
       translate(
         'auto.lib.workspace.ports.serverPortForward.forwarded',
@@ -193,7 +198,47 @@ async function openThroughNewForward(
         description: translate(
           'auto.lib.workspace.ports.serverPortForward.opened',
           'Opened {{address}} in your default browser.',
-          { address: new URL(target).host }
+          { address: new URL(opened).host }
+        )
+      }
+    )
+  }
+}
+
+/** Tells the person once that a forward restored after a restart listens on another port here. */
+export async function announceRestoredPortForwardMoves(
+  moves: readonly RestoredPortForwardMove[]
+): Promise<void> {
+  if (moves.length === 0) {
+    return
+  }
+  // A restore can land before this window has loaded its server list; main's list has the names.
+  const known = new Set(useAppStore.getState().runtimeEnvironments?.map((env) => env.id))
+  const savedNames = moves.every((move) => known.has(move.environmentId))
+    ? new Map<string, string>()
+    : new Map(
+        (await window.api.runtimeEnvironments.list().catch(() => [])).map(
+          (env): [string, string] => [env.id, env.name]
+        )
+      )
+  for (const move of moves) {
+    const host =
+      savedNames.get(move.environmentId) ??
+      selectExecutionHostDisplayLabel(
+        useAppStore.getState(),
+        toRuntimeExecutionHostId(move.environmentId)
+      )
+    toast.info(
+      translate(
+        'auto.lib.workspace.ports.serverPortForward.restoredMoved',
+        'Forwarded port {{port}} from {{host}} to localhost:{{localPort}}',
+        { port: move.remotePort, host, localPort: move.localPort }
+      ),
+      {
+        description: translate(
+          'auto.lib.workspace.ports.serverPortForward.restoredMovedReason',
+          'localhost:{{previousPort}} is in use on this computer.',
+          { previousPort: move.previousLocalPort }
         )
       }
     )

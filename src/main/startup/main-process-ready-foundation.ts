@@ -41,7 +41,7 @@ import {
 } from './profile-startup/dev-education-suppression'
 import { setBrowserNetworkProxySettingsResolver } from '../browser/sessions/proxy/browser-session-proxy'
 import { installPreviewProtocolHandlers } from './preview-protocol-handlers'
-import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
+import { registerLazyDocPreviewGrantHandlers } from '../ipc/register-lazy-doc-preview-grant-handlers'
 import {
   initializeBrowserSessionsForApp,
   whenBrowserSessionsReadyForRestoredTabs
@@ -292,14 +292,14 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => nativeSettings.getSettings())
   installPreviewProtocolHandlers()
-  registerDocPreviewGrantHandlers()
+  registerLazyDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
     enabled: nativeSettings.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.
-  initializeBrowserSessionsForApp({
+  await initializeBrowserSessionsForApp({
     orcaProfileId: profile.profile.id,
     profileDirectory: profile.profileDirectory,
     // Sweep against current SSH targets or live target cookie jars look orphaned.

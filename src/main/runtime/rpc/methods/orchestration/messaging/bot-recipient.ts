@@ -2,20 +2,20 @@
  * chat coordinates. Orca resolves the receiving bot first, then reads who the sending turn is for from
  * its own record, never the model's. */
 
+import type { AutomationRunMessage } from '../../../../../../shared/automations/automation-run-message'
 import type { Bot } from '../../../../../../shared/bot-types'
+import { automationPlace } from './bot-automation-place'
 import { botOfAddress, parseBotAddress } from '../../../../../../shared/bot-roster'
-import { isFinalAutomationRunStatus } from '../../../../../../shared/automations/history/automation-run'
-import { isConnectorSource } from '../../../../../../shared/automation-event-triggers'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
 import { readBotConversationActsFor } from '../../../../../bots/bot-conversation-acts-for'
 import {
   readBotActingTurn,
   type BotActingTurn,
-  type BotRequestConversation,
-  type BotWakingPlace
+  type BotRequestConversation
 } from '../../../../../bots/bot-request-asker'
 import { readNewestBotActingTurn } from '../../../../../bots/bot-acting-turn-read'
+import { withCarriedAskers } from '../../../../../bots/bot-request-askers-of'
 import type {
   AutomationTriggeredBy,
   BotRequestAsker
@@ -181,27 +181,15 @@ export function creatorSession(
   }
 }
 
-/** The one automation run in progress in this chat, if exactly one is: where its event happened, never
- *  whom the chat acts for, which the conversation's own record says. */
-function runningAutomationRun(runtime: OrcaRuntimeService, sessionId: string) {
-  const running = runtime
-    .listAutomationRuns()
-    .filter((run) => run.chatSessionId === sessionId && !isFinalAutomationRunStatus(run.status))
-  return running.length === 1 ? running[0] : undefined
-}
-
-/** The thread, issue or pull request a running automation run's event happened on. */
-function automationPlace(runtime: OrcaRuntimeService, sessionId: string): BotWakingPlace | null {
-  const run = runningAutomationRun(runtime, sessionId)
-  const event = run?.trigger === 'event' ? run.event : undefined
-  return event?.subject && isConnectorSource(event.source)
-    ? { source: event.source, placeId: event.subject, ...(event.url ? { url: event.url } : {}) }
-    : null
-}
-
 // Every source's conversation id starts with its workspace (the cloud's botConversationId).
-function workspaceOf(externalId: string): string | null {
+export function workspaceOf(externalId: string): string | null {
   return externalId.split(':')[0] || null
+}
+
+export type ActingMail = {
+  sender: OrchestrationCallerIdentity
+  /** Whom a paired computer's sending turn acts for, beside this sender's own. */
+  carriedAskers?: readonly BotRequestAsker[]
 }
 
 /** Who the sender acts for; null for a bot's own worker mailing its own chat, which is ordinary mail. */
@@ -209,14 +197,27 @@ export async function readActingSender(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   callerSessionId: string | undefined,
+  { sender, carriedAskers }: ActingMail,
+  /** Null for a bot on another computer: its mail is never a bot's own chat here. */
+  receiving: ReceivingBot | null
+): Promise<ActingSender | null> {
+  const read = await readOwnActingSender(runtime, db, callerSessionId, sender, receiving)
+  return read && { ...read, turn: withCarriedAskers(read.turn, carriedAskers) }
+}
+
+async function readOwnActingSender(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  callerSessionId: string | undefined,
   sender: OrchestrationCallerIdentity,
-  receiving: ReceivingBot
+  receiving: ReceivingBot | null
 ): Promise<ActingSender | null> {
   const creator = creatorSession(db, sender)
   if (creator.dispatchId) {
     const creatorBot = creator.sessionId ? botOfSession(runtime.bots, creator.sessionId) : null
     // Its own chat (or the Run it coordinates) is ordinary mail; the bot's other chats are other agents.
     if (
+      receiving &&
       creatorBot?.id === receiving.bot.id &&
       receiving.via === 'address' &&
       receiving.chat &&
@@ -225,7 +226,7 @@ export async function readActingSender(
       return null
     }
     if (creatorBot && creator.sessionId) {
-      if (isBotGroupMemberSession(creator.sessionId)) {
+      if (receiving && isBotGroupMemberSession(creator.sessionId)) {
         return refuse(BOT_REQUEST_GROUP_WORKER_REFUSAL)
       }
       const read = await readBotTurn(runtime, db, creator.sessionId)
@@ -305,7 +306,8 @@ export async function readBotTurn(
     isBotRequest: (messageId: string) => db.getBotRequest(messageId) !== undefined,
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
-    automationPlace: () => automationPlace(runtime, sessionId),
+    automationPlace: (run?: AutomationRunMessage) =>
+      automationPlace(runtime, sessionId, run, conversation),
     conversationWorkspaceId: workspaceId
   }
   const turn = opening

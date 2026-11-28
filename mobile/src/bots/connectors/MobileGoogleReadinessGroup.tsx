@@ -1,5 +1,12 @@
 // Google's "What it can use" for one account: a row per thing the person picked, with its fix.
-import { CalendarDays, Folder, Mail, Users, type LucideIcon } from 'lucide-react-native'
+import {
+  ArrowUpRight,
+  CalendarDays,
+  Folder,
+  Mail,
+  Users,
+  type LucideIcon
+} from 'lucide-react-native'
 import {
   GOOGLE_CHOICE_SERVICES,
   GOOGLE_SERVICES,
@@ -13,9 +20,9 @@ import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { googleChoiceLabel } from '../../session/native-chat/transcript/bot-cards/mobile-google-setup-copy'
 import { MobileNativeChatNoticePill } from '../../session/native-chat/transcript/notices/MobileNativeChatNoticePill'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import { openGoogleConsoleLink } from './connector-link'
 import type { PhoneGoogle, PhoneGoogleStatus } from './phone-google-accounts'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export type GoogleAccount = NonNullable<PhoneGoogleStatus['accounts']>[number]
 type Readiness = GoogleAccount['services'][number]
@@ -73,14 +80,17 @@ export function GoogleReadinessGroup(props: {
   google: PhoneGoogle
   /** Says who can use it under the group; null on an account's own page. */
   botName: string | null
-  hostName: string
   online: boolean
   first: boolean
   showToast: (message: string) => void
+  hostName: string
+  /** Google's sign-in again, for what the person didn't allow; null where the host takes it only itself. */
+  onAllowAgain: (() => void) | null
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
-  const { account, google, hostName } = props
+  const { account, google } = props
   const clientId = google.status?.client?.clientId ?? null
   const fix = (email: string, readiness: Readiness) => {
     const service = knownService(readiness.service)
@@ -129,7 +139,9 @@ export function GoogleReadinessGroup(props: {
       case 'api-disabled':
         return t('bots.google.state.apiOff', 'Turned off in Google Cloud')
       case 'needs-permission':
-        return t('bots.google.state.allowOnHost', 'Allow again on {{host}}', { host: hostName })
+        return props.onAllowAgain
+          ? t('bots.google.state.notAllowed', 'You didn’t allow it')
+          : t('bots.google.state.allowOnHost', 'Allow again on {{host}}', { host: props.hostName })
       case 'blocked-by-admin':
         return t('bots.google.state.adminBlocked', 'Your company’s Google admin blocked it')
       default:
@@ -140,6 +152,9 @@ export function GoogleReadinessGroup(props: {
   if (rows.length === 0) {
     return null
   }
+  // One sign-in allows every service it lists, so one row asks for it.
+  const { onAllowAgain } = props
+  const allowAgain = onAllowAgain && rows.some((row) => row.readiness.state === 'needs-permission')
   return (
     <SettingsSection
       title={t('bots.google.bot.uses', 'What it can use')}
@@ -177,6 +192,16 @@ export function GoogleReadinessGroup(props: {
           />
         )
       })}
+      {allowAgain ? (
+        <ListRow
+          leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+          accent
+          title={t('bots.google.fix.allowAgain', 'Allow again')}
+          accessibilityRole="link"
+          disabled={!props.online}
+          onPress={onAllowAgain}
+        />
+      ) : null}
     </SettingsSection>
   )
 }

@@ -1,10 +1,10 @@
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { useHostDisplay, type HostDisplaySource } from '../../host-descriptors/use-host-display'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import { DownloadProgressBar, downloadedMegabytesCaption } from './DownloadProgressBar'
 import type { MobileWebShellSessionState } from '../session/mobile-web-shell-session-contract'
 import { ShellWaitingFrame } from './ShellWaitingFrame'
-
-const DOWNLOADING_LABEL = 'Downloading the latest app'
 
 export function ShellDownloadProgress({
   state,
@@ -15,21 +15,31 @@ export function ShellDownloadProgress({
   feed: DownloadProgressFeed
   host: HostDisplaySource | null
 }) {
+  const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const hostTitle = useHostDisplay(host).title
-  const source = host === null ? '' : `from ${hostTitle} · `
+  const label = t('webShell.shellStateScreen.downloadingLatestApp', 'Downloading the latest app')
+  const progress = downloadedMegabytesCaption(state.receivedBytes, state.totalBytes, t, intlLocale)
+  const caption =
+    host === null
+      ? progress
+      : t('webShell.shellStateScreen.downloadProgressFromHost', 'from {{host}} · {{progress}}', {
+          host: hostTitle,
+          progress
+        })
   return (
     <ShellWaitingFrame
-      label={DOWNLOADING_LABEL}
+      label={label}
       indicator={
         <DownloadProgressBar
           feed={feed}
           receivedBytes={state.receivedBytes}
           totalBytes={state.totalBytes}
-          accessibilityLabel={DOWNLOADING_LABEL}
+          accessibilityLabel={label}
           testID="mobile-web-shell-progress-bar"
         />
       }
-      caption={`${source}${downloadedMegabytesCaption(state.receivedBytes, state.totalBytes)}`}
+      caption={caption}
     />
   )
 }

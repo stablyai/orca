@@ -3,6 +3,7 @@ import { ChevronRight, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
+import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
 import {
   NativeChatMessageTimestamp,
   useNativeChatMessageTimeLabel
@@ -18,27 +19,40 @@ const REVEAL_POINTER =
   'can-hover:pointer-events-none group-hover/event-row:pointer-events-auto group-has-[:focus-visible]/event-row:pointer-events-auto'
 export const NATIVE_CHAT_EVENT_ROW_REVEAL = `${REVEAL_OPACITY} ${REVEAL_POINTER}`
 
-export type NativeChatEventBadge = 'running' | 'failed'
+export type NativeChatEventBadge = 'running' | 'failed' | 'needs-input' | 'queued' | 'done'
 
 /** The row's 14px mark with its state in a badge at the bottom right: a spinner while it runs, a red ✕ when it failed. */
 export function NativeChatEventIcon({
   children,
-  badge
+  badge,
+  badgeClassName
 }: {
   children: React.ReactNode
   badge?: NativeChatEventBadge | null
+  badgeClassName?: string
 }): React.JSX.Element {
   return (
     <span className="relative flex size-3.5 items-center justify-center">
       {children}
       {badge ? (
-        <span className="absolute -right-1 -bottom-1 flex size-2.5 items-center justify-center rounded-full bg-chat-pane">
+        <span
+          className={cn(
+            'absolute -right-1 -bottom-1 flex size-2.5 items-center justify-center rounded-full bg-chat-pane',
+            badgeClassName
+          )}
+        >
           {badge === 'running' ? (
             <AgentWorkingSpinner className="size-[7px] border-[1.5px]" />
-          ) : (
+          ) : badge === 'failed' ? (
             <span className="flex size-2 items-center justify-center rounded-full bg-destructive text-chat-pane">
               <X className="size-1.5" strokeWidth={4} aria-hidden />
             </span>
+          ) : badge === 'needs-input' ? (
+            <AgentQuestionIcon className="size-2" />
+          ) : badge === 'queued' ? (
+            <span className="size-2 rounded-full border-[1.5px] border-muted-foreground" />
+          ) : (
+            <span className="size-2 rounded-full bg-status-success" />
           )}
         </span>
       ) : null}

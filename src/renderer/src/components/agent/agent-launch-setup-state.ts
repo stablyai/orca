@@ -53,7 +53,7 @@ export function agentLaunchSetupState(
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const catalog = agentLaunchSetupCatalogState(entry, models, currentModel)
+  const catalog = agentLaunchSetupCatalogState(entry, models, currentModel, draft.surface)
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   return {
     argumentsView,

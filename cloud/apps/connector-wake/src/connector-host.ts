@@ -3,10 +3,11 @@
 import { DurableObject } from 'cloudflare:workers'
 import {
   CONNECTOR_WAKE_CLOSE_CODE,
-  CONNECTOR_WAKE_FRAME,
   CONNECTOR_WAKE_KEEPALIVE_ACK_FRAME,
   CONNECTOR_WAKE_KEEPALIVE_FRAME,
-  CONNECTOR_WAKE_MAX_INBOUND_FRAME_BYTES
+  CONNECTOR_WAKE_MAX_INBOUND_FRAME_BYTES,
+  connectorWakeFrame,
+  type ConnectorWakeKind
 } from '../../../packages/connector-contract/src/wake-messages'
 import type { Env } from './env'
 import { metric } from './metrics'
@@ -60,8 +61,9 @@ export class ConnectorHost extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client })
   }
 
-  // RPC from the Worker's admin wake. Content-free: the frame never varies.
-  async wake(): Promise<WakeResult> {
+  // RPC from the Worker's admin wake. Content-free: the frame depends only on the kind.
+  async wake(kind?: ConnectorWakeKind): Promise<WakeResult> {
+    const frame = connectorWakeFrame(kind)
     const sockets = this.live()
     if (sockets.length === 0) {
       this.wokenWithoutSocket = true
@@ -70,7 +72,7 @@ export class ConnectorHost extends DurableObject<Env> {
     let sent = false
     for (const ws of sockets) {
       try {
-        ws.send(CONNECTOR_WAKE_FRAME)
+        ws.send(frame)
         sent = true
       } catch {
         this.drop(ws, 1011, 'send failed')

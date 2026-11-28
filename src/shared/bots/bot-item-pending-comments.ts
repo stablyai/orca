@@ -24,6 +24,8 @@ export type BotItemPendingComment = {
   requestId: string | null
   /** The question a quick reply answers: the host refuses it once the agent has asked another. */
   questionId: string | null
+  /** The question it was sent for, kept on this device even where the host takes no question id. */
+  origin?: string
   /** Answers no question the agent waits on: the comment box named none. */
   plain: boolean
   /** Skills picked in it, each by its file on the bot's host; empty where the host takes none. */
@@ -119,8 +121,12 @@ export type BotItemPendingCommentDelivery = {
   /** Says why a comment wasn't sent; it stays with Retry, unless it answered a question the agent
    *  has since replaced (`replaced`): that one goes, as a Retry would fail the same way. */
   failed: (error: unknown, replaced: boolean) => void
-  /** A replaced question's reply, dropped: its words go back to the comment box if it is empty. */
+  /** A replaced question's reply, dropped: what `botItemRefusedReplyText` gives back of it goes to
+   *  the comment box. */
   returnText: (text: string, entry: BotItemPendingComment) => void
+  /** Re-reads the item after a replaced question's refusal, so the box names the ask the host waits
+   *  on (its read's `waitingAsk`) even when the loaded events missed the change. */
+  refresh: () => void
   /** The host dedupes comments by request id, so a Retry never posts twice. */
   requestIds: boolean
   /** The host binds a quick reply to its question. */
@@ -221,6 +227,7 @@ function deliver(
         if (replaced) {
           update(key, id, null)
           delivery.returnText(botItemPendingCommentText(entry), entry)
+          delivery.refresh()
           return
         }
         update(key, id, {
@@ -305,6 +312,7 @@ export function createBotItemPendingCommentsHook({
           eventId: null,
           requestId: delivery.requestIds ? createNonSecureContextUuid() : null,
           questionId: questionId && delivery.questionIds ? questionId : null,
+          ...(questionId ? { origin: questionId } : {}),
           plain: plain && delivery.plain,
           ...(delivery.skills && skills.length > 0 ? { skills } : {}),
           // Only with the ask it answers named: skipped lines are that ask's.

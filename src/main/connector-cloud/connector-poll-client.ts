@@ -5,17 +5,11 @@ import {
   CONNECTOR_PATHS,
   ConnectorPollResponse,
   type ConnectorCloudFeature,
-  type ConnectorReplyResponse,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
-import {
-  UNREADABLE_ANSWER,
-  connectorStop,
-  type ConnectorFailure,
-  type ConnectorResult
-} from './connector-cloud-request'
+import { UNREADABLE_ANSWER, connectorStop, type ConnectorFailure } from './connector-cloud-request'
 import { ConnectorActiveConversations } from './connector-active-conversations'
 import { ConnectorDeliveryAcks } from './connector-delivery-acks'
 import { connectorHelloSaid, sayConnectorHello } from './connector-hello'
@@ -36,6 +30,7 @@ import { ConnectorWakePolls } from './connector-wake-channel'
 // The cloud forgets a machine's running workers once it has been silent 15 minutes (its last-seen is
 // a minute coarse); back from a silence near that, a fresh hello's snapshot restates them.
 const HELLO_AFTER_SILENCE_MS = 10 * 60_000
+const REVIEW_FEATURE: ConnectorCloudFeature = 'review'
 
 export type { ConnectorPollClientOptions } from './connector-machine'
 
@@ -144,10 +139,10 @@ export class ConnectorPollClient {
   }
 
   /** Posts an agent's reply to its conversation's thread while this client runs. */
-  reply(body: ConnectorReplyBody): Promise<ConnectorResult<ConnectorReplyResponse>> {
-    const review = this.features?.has('review' satisfies ConnectorCloudFeature)
-    const sent = review ? body : foldConnectorReview(body)
-    return this.posted(postConnectorReply(this.transport, sent, this.stopped.signal, this.random))
+  reply(body: ConnectorReplyBody, proceed?: () => boolean) {
+    const sent = this.features?.has(REVIEW_FEATURE) ? body : foldConnectorReview(body)
+    const { transport, stopped, random } = this
+    return this.posted(postConnectorReply(transport, sent, stopped.signal, random, proceed))
   }
 
   /** Posts as a bot in one of its app's channels while this client runs. */

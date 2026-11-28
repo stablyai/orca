@@ -42,8 +42,7 @@ function mappedPushBranch(spec: string, branch: string): string | null {
     if (!fullBranch.startsWith(prefix) || !fullBranch.endsWith(suffix)) {
       return null
     }
-    target = destination.replace(
-      '*',
+    target = destination.replace('*', () =>
       fullBranch.slice(prefix.length, fullBranch.length - suffix.length)
     )
   } else if (normalized !== fullBranch) {
@@ -59,11 +58,12 @@ function mappedPushBranch(spec: string, branch: string): string | null {
   return target.replace(/^refs\/heads\//, '')
 }
 
-/** One repository snapshot supplies all branches, rather than probing configuration per lookup. */
-export async function readGitReviewBranchSources(
-  runGit: GitExec,
-  branchNames: Iterable<string>
-): Promise<Map<string, GitReviewBranchSource | Error>> {
+export type GitReviewBranchSourceResolver = (branch: string) => GitReviewBranchSource | Error
+
+/** One repository snapshot resolves any queried branch lazily, avoiding per-branch allocation for the whole repo. */
+export async function createGitReviewBranchSourceResolver(
+  runGit: GitExec
+): Promise<GitReviewBranchSourceResolver> {
   const config = await readGitConfigSnapshot(runGit)
   const { stdout } = await runGit(['remote', '-v'])
   const remotes = new Map<string, { fetch: string[]; push: string[] }>()
@@ -106,8 +106,13 @@ export async function readGitReviewBranchSources(
     expandedUrls.set(remote, result)
     return result
   }
-  const sources = new Map<string, GitReviewBranchSource | Error>()
-  for (const branch of branchNames) {
+  const resolved = new Map<string, GitReviewBranchSource | Error>()
+  return (branch: string): GitReviewBranchSource | Error => {
+    const cached = resolved.get(branch)
+    if (cached) {
+      return cached
+    }
+    let result: GitReviewBranchSource | Error
     try {
       const trackedRemoteValue = get(`branch.${branch}.remote`)
       const trackedRemote = trackedRemoteValue ? normalizeRemote(trackedRemoteValue) : undefined
@@ -181,7 +186,7 @@ export async function readGitReviewBranchSources(
           throw new Error('Review upstream belongs to another remote')
         }
       }
-      sources.set(branch, {
+      result = {
         remoteName: remote,
         urls: urlsFor(remote),
         branchName,
@@ -189,10 +194,24 @@ export async function readGitReviewBranchSources(
         ...(trackedBranchName
           ? { trackedBranchName, trackedUrls: remotes.get(remote)?.fetch ?? [remote] }
           : {})
-      })
+      }
     } catch {
-      sources.set(branch, new Error('Cannot establish a unique hosted review source'))
+      result = new Error('Cannot establish a unique hosted review source')
     }
+    resolved.set(branch, result)
+    return result
+  }
+}
+
+/** One repository snapshot supplies all branches, rather than probing configuration per lookup. */
+export async function readGitReviewBranchSources(
+  runGit: GitExec,
+  branchNames: Iterable<string>
+): Promise<Map<string, GitReviewBranchSource | Error>> {
+  const resolve = await createGitReviewBranchSourceResolver(runGit)
+  const sources = new Map<string, GitReviewBranchSource | Error>()
+  for (const branch of branchNames) {
+    sources.set(branch, resolve(branch))
   }
   return sources
 }

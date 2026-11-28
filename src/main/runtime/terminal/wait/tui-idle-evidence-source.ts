@@ -48,6 +48,8 @@ export type TuiIdleEvidenceSource = {
   getOutputClockAt?(ptyId: string | null | undefined): number | null
   /** Whether mail delivery would type into this pane now (drafts, prompts and overlays hold it). */
   isSettledForDelivery?(ptyId: string): boolean
+  /** Whether the caught-up screen's cursor rests in a composer with no typed text and no prompt is up. */
+  hasEmptyInputComposer?(ptyId: string): boolean
   /** The foreground process a poll read during the pane's current quiet stretch; absent before any
    *  such read, and once output has moved on. Only the idle polls supply it. */
   getQuietForegroundProcess?(ptyId: string | null | undefined): string | null
@@ -168,7 +170,8 @@ function paintAgent(
 export function ptyTuiIdleEvidence(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
-  readWaitText: () => string
+  readWaitText: () => string,
+  acceptsMidTurnInput = false
 ): TuiIdleEvaluationInput {
   const tailText = lazyWaitText(readWaitText)
   // Why only after a tail block: the screen may clear one (#24187), and a clear tail never pays the read.
@@ -224,6 +227,10 @@ export function ptyTuiIdleEvidence(
       isQuietReadyScreenBody(waitText(), agent, readScreen) && readScreenPainted(),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, record, readScreen, waitText),
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
+    readReusableComposer:
+      acceptsMidTurnInput && agent === 'claude'
+        ? () => readScreenPainted() && source.hasEmptyInputComposer?.(pty.ptyId) === true
+        : undefined,
     readProgramSignInWaitScreen: () => isProgramSignInWaitScreen(waitText()),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,

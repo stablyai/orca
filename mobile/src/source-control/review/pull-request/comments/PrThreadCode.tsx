@@ -1,12 +1,10 @@
 import { Text, View } from 'react-native'
 import type { DiffHunkLine } from '../../../../../../src/shared/github/comments/pr-comment-diff-hunk'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 // The lines a thread is about, as GitHub anchored them, tinted like the diff they came from.
 export function PrThreadCode({ lines }: { lines: DiffHunkLine[] }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   if (lines.length === 0) {
     return null
   }
@@ -30,7 +28,7 @@ export function PrThreadCode({ lines }: { lines: DiffHunkLine[] }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   code: { borderRadius: radii.mark, overflow: 'hidden' },
   line: {
     color: colors.textPrimary,

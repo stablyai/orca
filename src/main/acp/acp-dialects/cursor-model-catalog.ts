@@ -1,19 +1,22 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { SessionConfigOptionSchema } from '../generated/acp-protocol.generated'
 import { acpEffortOption, acpSelectChoices } from '../options/acp-select-choices'
 
-const listReplySchema = z.object({
-  models: z
-    .array(
-      z.object({
-        value: z.string(),
-        name: z.string(),
-        configOptions: z.array(z.unknown()).nullish()
-      })
-    )
-    .min(1)
-})
+const listReplySchema = lazyZodSchema(() =>
+  z.object({
+    models: z
+      .array(
+        z.object({
+          value: z.string(),
+          name: z.string(),
+          configOptions: z.array(z.unknown()).nullish()
+        })
+      )
+      .min(1)
+  })
+)
 
 /** Lists every model with its own effort levels and Fast support, before any session exists. */
 export async function readCursorModelCatalog(connection: {

@@ -1,6 +1,6 @@
 // Checks for rows whose details load late, monitoring with no listed rows, dialogs a row opens,
 // and Jump to latest over the open card. Imported by run.mjs.
-import { card, events, expanded, focusedRow, toggle } from './fixture-session.mjs'
+import { card, chip, events, expanded, focusedRow, rows, toggle } from './fixture-session.mjs'
 
 const rowOf = (id) => `[data-worker-dock-row="${id}"]`
 const focusedIs = (page, id) =>
@@ -18,16 +18,108 @@ const loaded = (page, id) =>
   }, rowOf(id))
 
 export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
+  await check('the folded chip hugs its label', () =>
+    scene('threeFolded720', {}, async (page) => {
+      const width = await toggle(page).evaluate((chip) => {
+        const label = chip.querySelector('[data-worker-dock-pill-title]')
+        return chip.getBoundingClientRect().width - label.getBoundingClientRect().width
+      })
+      // Glyph, gap, padding and border only.
+      assert(width <= 44, `the chip is ${width}px wider than its label`)
+    })
+  )
+
+  await check(
+    'a pane so short the dock takes the transcript floor: the chip clears the dock, the open card stays in the pane',
+    () =>
+      scene('both320', { width: 360, height: 260 }, async (page) => {
+        const fit = await page
+          .locator('[data-native-chat-root]')
+          .evaluate((root) => root.getAttribute('data-native-chat-dock-fit') ?? '')
+        assert(
+          fit.split(' ').includes('transcript'),
+          `dock fit "${fit}" never gave up the transcript`
+        )
+        const clear = async (when) => {
+          const [chipBox, dock] = await Promise.all([
+            card(page)
+              .count()
+              .then((open) => (open ? card(page) : chip(page)).boundingBox()),
+            page.locator('[data-native-chat-dock]').boundingBox()
+          ])
+          assert(chipBox.y + chipBox.height <= dock.y + 1, `${when}: the chip runs over the dock`)
+          // A press on the question card reaches the card, not the chip's frame.
+          const hit = await page.evaluate(() => {
+            const question = document.querySelector('[data-native-chat-question-card]')
+            const box = question.getBoundingClientRect()
+            const target = document.elementFromPoint(box.left + box.width / 2, box.top + 8)
+            return Boolean(target?.closest('[data-native-chat-question-card]'))
+          })
+          assert(hit, `${when}: a press on the question card lands on the chip`)
+        }
+        await clear('folded')
+        await toggle(page).click()
+        await page.waitForTimeout(400)
+        // No room above for a header and a row: it drops over the dock, whole, like a popover.
+        const [open, pane] = await Promise.all([
+          card(page).boundingBox(),
+          page.locator('[data-native-chat-root]').boundingBox()
+        ])
+        assert(open.y >= pane.y, `the open card starts ${pane.y - open.y}px above the pane`)
+        assert(open.y + open.height <= pane.y + pane.height, 'the open card runs off the pane')
+        // Folding, it slides back with the shape: no frame starts above the pane.
+        const highest = await page.evaluate(
+          () =>
+            new Promise((resolve) => {
+              const pane = document.querySelector('[data-native-chat-root]').getBoundingClientRect()
+              const shape = document.querySelector('[data-worker-dock-morph]')
+              let worst = Infinity
+              document.querySelector('[data-worker-dock-pill]').click()
+              const start = performance.now()
+              const step = () => {
+                worst = Math.min(worst, shape.getBoundingClientRect().top - pane.top)
+                if (performance.now() - start < 400) {
+                  requestAnimationFrame(step)
+                } else {
+                  resolve(worst)
+                }
+              }
+              step()
+            })
+        )
+        assert(highest >= -1, `a folding frame starts ${-highest}px above the pane`)
+      })
+  )
+
+  await check('a panel opened under a resting pointer keeps its row order as states change', () =>
+    scene('twentyFolded720', {}, async (page) => {
+      const box = await toggle(page).boundingBox()
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+      await card(page).waitFor()
+      await page.waitForTimeout(150)
+      const before = (await rows(page)).map((row) => row.id)
+      await page.evaluate(() => window.__workerDockHarness.fail('Late failure'))
+      await page.waitForTimeout(200)
+      const after = (await rows(page)).map((row) => row.id)
+      // A failure sorts before running rows; held, it joins the end instead.
+      assert(
+        before.every((id, index) => after[index] === id),
+        `rows re-sorted under the pointer: ${before.slice(0, 5)} -> ${after.slice(0, 5)}`
+      )
+    })
+  )
+
   await check('incomplete monitoring with no listed rows keeps the pill and Stop all', () =>
     scene('unlistedOpen720', {}, async (page) => {
-      const title = await page.locator('[data-worker-dock-pill-title]').textContent()
-      assert(title === 'Background work running', `pill shows "${title}"`)
       assert(!(await card(page).textContent()).includes('unavailable'), 'card says unavailable')
       await page.getByRole('button', { name: 'Stop all' }).click()
       assert(
         (await events(page)).some((event) => event.action === 'stop-all'),
         'no Stop all'
       )
+      await toggle(page).click()
+      const title = await toggle(page).textContent()
+      assert(title === 'Background work running', `pill says "${title}"`)
     })
   )
 
@@ -116,20 +208,25 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
       scene('jumpFolded720', {}, async (page) => {
         await toggle(page).click()
         await card(page).waitFor()
-        await page.waitForTimeout(200)
+        // Jump goes straight to its place above the open card; the card reaches it after 280ms.
+        await page.waitForTimeout(400)
         const jump = page.getByRole('button', { name: 'Jump to latest' })
         const [a, c] = await Promise.all([jump.boundingBox(), card(page).boundingBox()])
         const gap = c.y - (a.y + a.height)
         assert(Math.abs(gap - 8) <= 1, `Jump to latest sits ${gap}px above the open card`)
         const hit = await page.evaluate(
-          ([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.textContent ?? '',
+          ([x, y]) =>
+            document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? '',
           [a.x + a.width / 2, a.y + a.height / 2]
         )
         assert(hit.includes('Jump to latest'), `the point over Jump hits "${hit}"`)
         await toggle(page).click()
         await page.waitForTimeout(200)
-        const [b, p] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
-        assert(Math.abs(p.y - (b.y + b.height) - 8) <= 1, 'Jump did not settle back over the pill')
+        // The fold takes 280ms; Jump returns to its rest once the chip has shrunk back.
+        await page.waitForTimeout(200)
+        const [b, p] = await Promise.all([jump.boundingBox(), chip(page).boundingBox()])
+        const rest = p.y - (b.y + b.height)
+        assert(Math.abs(rest - 12) <= 1, `Jump settled ${rest}px above the chip, not 12px`)
         await jump.click()
         await page.waitForTimeout(200)
         const atEnd = await page.evaluate(() => {
@@ -168,46 +265,9 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
     })
   )
 
-  for (const [how, removed] of [
-    ['Close', false],
-    ['Escape', false],
-    ['Close', true],
-    ['Escape', true]
-  ]) {
-    await check(
-      `a settled result closed by ${how}${removed ? ' after its row left' : ''} returns focus in its own pane`,
-      () =>
-        scene('twoPanesCommand720', { width: 760 }, async (page) => {
-          const pane = page.locator('[data-fixture-pane="1"]')
-          await pane.locator(`${rowOf('dock:0')} [data-worker-dock-open]`).click()
-          const dialog = page.getByRole('dialog')
-          await dialog.waitFor()
-          if (removed) {
-            await page.evaluate(() => window.__workerDockHarnesses[1].finish('dock:0'))
-            await pane.locator(rowOf('dock:0')).waitFor({ state: 'detached' })
-          }
-          await (how === 'Close'
-            ? dialog.getByRole('button', { name: 'Close' }).click()
-            : page.keyboard.press('Escape'))
-          await dialog.waitFor({ state: 'detached' })
-          await page.waitForTimeout(100)
-          const where = await page.evaluate(() => {
-            const active = document.activeElement
-            return {
-              pane: active?.closest('[data-fixture-pane]')?.getAttribute('data-fixture-pane'),
-              row: active?.closest('[data-worker-dock-row]')?.getAttribute('data-worker-dock-row'),
-              pill: active?.hasAttribute('data-worker-dock-pill') ?? false
-            }
-          })
-          const expected = removed ? where.pill : where.row === 'dock:0'
-          assert(where.pane === '1' && expected, `focus went to ${JSON.stringify(where)}`)
-        })
-    )
-  }
-
   for (const [label, options] of [
     ['normal height', {}],
-    ['a 300 x 250 pane', { width: 340, height: 250 }]
+    ['a 340 x 250 pane', { width: 340, height: 250 }]
   ]) {
     await check(`a full click on Jump to latest over the open card jumps (${String(label)})`, () =>
       scene(options.height ? 'jumpFolded300' : 'jumpFolded720', options, async (page) => {
@@ -244,7 +304,8 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
     if (!(await jump.isVisible())) {
       await toggle(page).click()
       await card(page).waitFor({ state: 'detached' })
-      await page.waitForTimeout(200)
+      // Jump returns once the 280ms fold has finished.
+      await page.waitForTimeout(400)
     }
     const box = await jump.boundingBox()
     assert(box.y >= 0, `Jump to latest is off the pane at y=${box.y}`)
@@ -254,13 +315,13 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
   }
 
   await check(
-    'Jump to latest stays wholly reachable as the footer appears and the message box grows',
+    'Jump to latest stays wholly reachable as Clear failed appears and the message box grows',
     () =>
       scene('jumpFolded300', { width: 340, height: 250 }, async (page) => {
         await toggle(page).click()
         await card(page).waitFor()
         await page.evaluate(() => window.__workerDockHarness.fail('Another failure'))
-        await page.locator('[data-worker-dock-footer]').waitFor()
+        await page.getByRole('button', { name: /Clear all/ }).waitFor()
         await page.waitForTimeout(200)
         await shot?.(page, 'jump-short-pane-open')
         await jumpWorks(page)
@@ -313,35 +374,6 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         )
       })
   )
-
-  for (const [when, early] of [
-    ['while its result is loading', true],
-    ['while its result is open', false]
-  ]) {
-    await check(
-      `when the last worker leaves ${when}, closing its result focuses the message box`,
-      () =>
-        scene('lastFailedDetails720', {}, async (page) => {
-          await page.locator(`${rowOf('dock:0')} [data-worker-dock-open]`).click()
-          if (early) {
-            await page.evaluate(() => window.__workerDockHarness.finish('dock:0'))
-          }
-          const dialog = page.getByRole('dialog')
-          await dialog.waitFor()
-          if (!early) {
-            await page.evaluate(() => window.__workerDockHarness.finish('dock:0'))
-          }
-          await page.locator('[data-worker-dock-pill]').waitFor({ state: 'detached' })
-          await page.keyboard.press('Escape')
-          await dialog.waitFor({ state: 'detached' })
-          await page.waitForTimeout(100)
-          const onComposer = await page.evaluate(() =>
-            document.activeElement?.hasAttribute('data-fixture-composer')
-          )
-          assert(onComposer, 'focus did not land on the pane’s message box')
-        })
-    )
-  }
 
   await check('another pane’s Jump to latest folds this pane’s card; its own does not', () =>
     scene('twoPanesCommand720', { width: 760 }, async (page) => {

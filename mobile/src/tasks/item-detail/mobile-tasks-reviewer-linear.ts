@@ -1,11 +1,11 @@
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
-import { colors } from '../../theme/mobile-theme'
 import {
   getLinearPriorityLabel,
   getLinearPriorityRank
 } from '../hosted-review/mobile-tasks-hosted-review'
 import { formatUpdatedAt, taskTime } from './mobile-tasks-item-mapping'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
+import type { MobilePalette } from '../../theme/mobile-theme'
 import type { LinearIssueSection } from '../task-list/mobile-tasks-options'
 import type {
   LinearDisplayProperty,
@@ -84,8 +84,8 @@ export function hasGitHubIssueSourceChoice(sources: GitHubRepoSources | undefine
   )
 }
 
-export function issueSourceSlug(source: GitHubOwnerRepo | null | undefined): string {
-  return source ? `${source.owner}/${source.repo}` : translate('common.unknown', 'Unknown')
+export function issueSourceSlug(t: Translate, source: GitHubOwnerRepo | null | undefined): string {
+  return source ? `${source.owner}/${source.repo}` : t('common.unknown', 'Unknown')
 }
 
 export function sortLinearIssues(
@@ -110,7 +110,9 @@ export function sortLinearIssues(
 
 export function getLinearIssueGroup(
   issue: LinearIssue,
-  groupBy: LinearGroupBy
+  groupBy: LinearGroupBy,
+  t: Translate,
+  colors: MobilePalette
 ): {
   key: string
   label: string
@@ -122,20 +124,14 @@ export function getLinearIssueGroup(
   if (groupBy === 'assignee') {
     return {
       key: `assignee:${issue.assignee?.id ?? issue.assignee?.displayName ?? 'unassigned'}`,
-      get label() {
-        return (
-          issue.assignee?.displayName ?? translate('tasks.reviewerLinear.unassigned', 'Unassigned')
-        )
-      },
+      label: issue.assignee?.displayName ?? t('tasks.reviewerLinear.unassigned', 'Unassigned'),
       color: colors.accentBlue
     }
   }
   if (groupBy === 'priority') {
     return {
       key: `priority:${issue.priority}`,
-      get label() {
-        return getLinearPriorityLabel(issue.priority)
-      },
+      label: getLinearPriorityLabel(issue.priority),
       color: issue.priority === 1 ? colors.statusRed : colors.accentBlue
     }
   }
@@ -144,9 +140,7 @@ export function getLinearIssueGroup(
   }
   return {
     key: 'all',
-    get label() {
-      return translate('tasks.reviewerLinear.issues', 'Issues')
-    },
+    label: t('tasks.reviewerLinear.issues', 'Issues'),
     color: colors.accentBlue
   }
 }
@@ -154,29 +148,33 @@ export function getLinearIssueGroup(
 export function groupLinearIssues(
   issues: LinearIssue[],
   groupBy: LinearGroupBy,
-  orderBy: LinearOrderBy
+  orderBy: LinearOrderBy,
+  t: Translate,
+  colors: MobilePalette
 ): LinearIssueSection[] {
-  return groupOrderedLinearIssues(sortLinearIssues(issues, orderBy), groupBy)
+  return groupOrderedLinearIssues(sortLinearIssues(issues, orderBy), groupBy, t, colors)
 }
 
 export function groupSortedLinearIssues(
   issues: readonly LinearIssue[],
-  groupBy: LinearGroupBy
+  groupBy: LinearGroupBy,
+  t: Translate,
+  colors: MobilePalette
 ): LinearIssueSection[] {
-  return groupOrderedLinearIssues([...issues], groupBy)
+  return groupOrderedLinearIssues([...issues], groupBy, t, colors)
 }
 
 function groupOrderedLinearIssues(
   sorted: LinearIssue[],
-  groupBy: LinearGroupBy
+  groupBy: LinearGroupBy,
+  t: Translate,
+  colors: MobilePalette
 ): LinearIssueSection[] {
   if (groupBy === 'none') {
     return [
       {
         key: 'all',
-        get label() {
-          return translate('tasks.reviewerLinear.issues', 'Issues')
-        },
+        label: t('tasks.reviewerLinear.issues', 'Issues'),
         color: colors.accentBlue,
         issues: sorted
       }
@@ -187,16 +185,13 @@ function groupOrderedLinearIssues(
     { key: string; label: string; color: string; issues: LinearIssue[] }
   >()
   for (const issue of sorted) {
-    const group = getLinearIssueGroup(issue, groupBy)
+    const group = getLinearIssueGroup(issue, groupBy, t, colors)
     const section = sections.get(group.key)
     if (section) {
       section.issues.push(issue)
     } else {
       sections.set(group.key, {
         ...group,
-        get label() {
-          return group.label
-        },
         issues: [issue]
       })
     }

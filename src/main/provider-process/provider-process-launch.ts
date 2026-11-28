@@ -1,3 +1,5 @@
+import { removeAppImageRuntimeEnv } from '../pty/shell-startup/appimage-terminal-env'
+
 export type ProviderProcessLaunch = {
   command: string
   args: string[]
@@ -14,6 +16,7 @@ export function resolveProviderChildEnv(
   baseEnv: NodeJS.ProcessEnv
 ): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...baseEnv, ...launch.env }
+  removeAppImageRuntimeEnv(childEnv)
   for (const key of launch.envToDelete ?? []) {
     delete childEnv[key]
   }
