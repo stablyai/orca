@@ -9,13 +9,12 @@ import type { BotGroupPostReadInput, BotGroupPostReadResult } from './orchestrat
 
 const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
 
-/** The reader's page cache is bounded to its connection and is invalidated by each worker restart. */
-const roomPosts = new WeakMap<
-  Database,
-  BoundedMap<string, { post: BotGroupMessage; bytes: number }>
->()
+/** The reader's page cache is bounded to its connection and validates each persisted row on reuse. */
+type CachedPost = { record: string; sequence: number; post: BotGroupMessage; bytes: number }
 
-function cacheFor(db: Database): BoundedMap<string, { post: BotGroupMessage; bytes: number }> {
+const roomPosts = new WeakMap<Database, BoundedMap<string, CachedPost>>()
+
+function cacheFor(db: Database): BoundedMap<string, CachedPost> {
   let cache = roomPosts.get(db)
   if (!cache) {
     cache = new BoundedMap({
@@ -48,12 +47,14 @@ function messageRow(db: Database, row: Record<string, unknown>): BotGroupMessage
 
 function projectPost(db: Database, id: string, row: Record<string, unknown>): BotGroupMessage {
   const cache = cacheFor(db)
+  const record = String(row.record)
+  const sequence = Number(row.sequence)
   const cached = cache.get(id)
-  if (cached) {
+  if (cached?.record === record && cached.sequence === sequence) {
     return cached.post
   }
   const post = projectBotGroupRoomPost(messageRow(db, row))
-  cache.set(id, { post, bytes: JSON.stringify(post).length * 2 })
+  cache.set(id, { record, sequence, post, bytes: JSON.stringify(post).length * 2 })
   return post
 }
 
