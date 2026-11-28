@@ -23239,7 +23239,8 @@
           "unmuteTab": "Unmute Tab"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Close Others"
+          "closeOthers": "Close Others",
+          "revealInOrcaExplorer": "Reveal in Orca Explorer"
         },
         "CopyTabIdMenuItem": {
           "copied": "Tab ID copied",

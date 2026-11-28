@@ -1,4 +1,15 @@
-import { Copy, CopyX, ExternalLink, Eye, ListX, Pencil, Pin, PinOff, X } from 'lucide-react'
+import {
+  Copy,
+  CopyX,
+  ExternalLink,
+  Eye,
+  FolderOpen,
+  ListX,
+  Pencil,
+  Pin,
+  PinOff,
+  X
+} from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -6,7 +17,10 @@ import {
   ContextMenuContent
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { getRelativePathInsideRoot } from '@/lib/path'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { useTranslate } from '@/i18n/use-translate'
 import { LocalOnlyMenuHint } from '@/components/ui/local-only-menu-hint'
@@ -89,6 +103,14 @@ export function EditorFileTabContextMenu({
     })
   )
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
+  const worktreePath =
+    useWorktreeById(file.worktreeId, getOpenFileExecutionHostId(file))?.path ?? null
+  const canRevealInOrcaExplorer =
+    Boolean(getRelativePathInsideRoot(file.filePath, worktreePath)) &&
+    (file.mode === 'edit' || file.mode === 'markdown-preview') &&
+    !file.isUntitled &&
+    file.externalMutation !== 'deleted' &&
+    file.externalMutation !== 'renamed'
 
   return (
     <ContextMenuContent
@@ -193,6 +215,19 @@ export function EditorFileTabContextMenu({
             {t('auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605', 'Copy Relative Path')}
           </ContextMenuItem>
           <ContextMenuSeparator />
+          {canRevealInOrcaExplorer && (
+            <ContextMenuItem
+              onSelect={() =>
+                useAppStore.getState().revealInExplorer(file.worktreeId, file.filePath)
+              }
+            >
+              <FolderOpen className="size-3.5" />
+              {t(
+                'components.tab.bar.EditorFileTabContextMenu.revealInOrcaExplorer',
+                'Reveal in Orca Explorer'
+              )}
+            </ContextMenuItem>
+          )}
           <ContextMenuItem
             disabled={revealBlocked}
             onSelect={() => void revealInFileManager(file.filePath, revealOwner)}
