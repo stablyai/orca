@@ -16,6 +16,7 @@ import {
 import { PluginCliError } from '../../../shared/plugins/approval/plugin-cli-approval'
 import {
   capturePluginPanelPng,
+  pluginPanelContentHeight,
   type BitmapImageFactory,
   settlePluginFrameGuest,
   withPaintingWhileHidden
@@ -52,6 +53,10 @@ export type PluginShotResult = {
   png: string
   width: number
   height: number
+  /** Components panels: the height the content needs, in the same points as `height`; absent when unmeasured. */
+  contentHeight?: number
+  /** The content is taller than this capture, so the image drops its lower part. */
+  clipped?: boolean
   colorScheme: PluginViewColorScheme
   themeApplied: boolean
   /** Why `--theme` was not applied, when it was asked for and not applied. */
@@ -260,6 +265,10 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
               .logsSince(pluginKey, cursor)
               .lines.filter((line) => line.level === 'error')
               .map((line) => line.line)
+            const contentHeight =
+              drawn.contentHeight === undefined
+                ? undefined
+                : pluginPanelContentHeight(drawn.contentHeight, image.zoom)
             return {
               pluginKey,
               panelId: panel.panelId,
@@ -268,6 +277,9 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
               png: image.png.toString('base64'),
               width: image.width,
               height: image.height,
+              ...(contentHeight === undefined
+                ? {}
+                : { contentHeight, clipped: contentHeight > image.height + 1 }),
               colorScheme: drawn.colorScheme,
               themeApplied: drawn.themeApplied,
               ...(themeReason ? { themeReason } : {}),

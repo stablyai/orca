@@ -18,6 +18,7 @@ import { defaultPluginShotsDir } from './plugin-shot-default-dir'
 import { takePluginScenarioShot } from './plugin-shot-scenario'
 import { runPluginEditorShot } from './plugin-shot-editor'
 import { chromeShotRegion, runPluginChromeShot } from './plugin-shot-chrome'
+import { pluginShotClippedNote } from './plugin-shot-clipped'
 
 /** What `plugins.shot` answers; `png` is base64. */
 export type PluginShotReply = {
@@ -28,6 +29,10 @@ export type PluginShotReply = {
   png: string
   width: number
   height: number
+  /** The height the panel's content needs, in the same pixels as `height`; absent when unmeasured or on older hosts. */
+  contentHeight?: number
+  /** The content is taller than the capture; absent when unknown. */
+  clipped?: boolean
   colorScheme: 'light' | 'dark'
   themeApplied: boolean
   /** Absent on hosts that predate it. */
@@ -51,6 +56,8 @@ export type PluginShotSaved = {
   panelId: string
   width: number
   height: number
+  contentHeight?: number
+  clipped?: boolean
   theme: 'light' | 'dark'
   themeApplied: boolean
   themeReason?: string
@@ -147,6 +154,8 @@ async function shoot(
     panelId: reply.panelId,
     width: reply.width,
     height: reply.height,
+    ...(reply.contentHeight === undefined ? {} : { contentHeight: reply.contentHeight }),
+    ...(reply.clipped === undefined ? {} : { clipped: reply.clipped }),
     theme: reply.colorScheme,
     themeApplied: reply.themeApplied,
     ...(reply.themeReason ? { themeReason: reply.themeReason } : {}),
@@ -179,6 +188,7 @@ export function takePluginShotIfShown(
 }
 
 export function formatPluginShot(shot: PluginShotSaved, requestedTheme?: string): string {
+  const clippedNote = pluginShotClippedNote(shot)
   return [
     `Saved ${shot.path} (${shot.width}x${shot.height}, ${shot.theme} theme${shot.scenario === undefined ? '' : `, scenario "${shot.scenario}"`})`,
     ...(shot.notes ?? []).map((note) => `  note: ${note}.`),
@@ -187,6 +197,7 @@ export function formatPluginShot(shot: PluginShotSaved, requestedTheme?: string)
           `  note: ${requestedTheme} was not applied (${shot.themeReason ?? 'Orca could not paint it'}); it shows ${shot.theme}.`
         ]
       : []),
+    ...(clippedNote ? [`  note: ${clippedNote}.`] : []),
     ...(shot.settled
       ? []
       : ['  note: the panel had not finished drawing; this is what it showed.']),

@@ -100,12 +100,23 @@ function bindShotHost(
       if ('notShown' in shot) {
         return { notShown: shot.notShown }
       }
-      const { path: file, width, height, settled, errors, pendingRequests } = shot
+      const {
+        path: file,
+        width,
+        height,
+        settled,
+        errors,
+        pendingRequests,
+        contentHeight,
+        clipped
+      } = shot
       return {
         panelId,
         path: file,
         width,
         height,
+        ...(contentHeight === undefined ? {} : { contentHeight }),
+        ...(clipped === undefined ? {} : { clipped }),
         settled,
         errors,
         ...(pendingRequests === undefined ? {} : { pendingRequests })

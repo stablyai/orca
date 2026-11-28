@@ -64,6 +64,32 @@ export function measurePluginPanelSurface(
   return width > 0 && height > 0 ? { x, y, width, height } : null
 }
 
+/** The height the panel's content needs, from the surface's top, past what its outer scroller shows. */
+export function measurePluginPanelContentHeight(tabKey: string): number | undefined {
+  const surface = document.querySelector(`[data-plugin-panel-surface="${CSS.escape(tabKey)}"]`)
+  if (!surface) {
+    return undefined
+  }
+  const scrollers = [...surface.querySelectorAll('*')].filter((element) => {
+    const { overflowY } = getComputedStyle(element)
+    return overflowY === 'auto' || overflowY === 'scroll'
+  })
+  // Why outermost only: a nested scroller (a capped table) scrolls inside the layout, not past it.
+  const outer = scrollers.filter(
+    (element) => !scrollers.some((other) => other !== element && other.contains(element))
+  )
+  if (outer.length === 0) {
+    return undefined
+  }
+  const top = surface.getBoundingClientRect().top
+  return Math.round(
+    Math.max(
+      0,
+      ...outer.map((element) => element.getBoundingClientRect().top - top + element.scrollHeight)
+    )
+  )
+}
+
 /** An html panel's guest `<webview>` rect in CSS pixels, so main can capture the guest itself. */
 export function measurePluginPanelGuest(
   tabKey: string

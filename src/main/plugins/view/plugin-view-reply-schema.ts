@@ -26,6 +26,7 @@ const drawnPanelSchema = lazyZodSchema(() =>
     themeApplied: z.boolean(),
     settled: z.boolean(),
     pendingRequests: z.number().int().nonnegative().optional(),
+    contentHeight: z.number().finite().nonnegative().optional(),
     actions: z.array(pluginShotActResultSchema).max(PLUGIN_SHOT_MAX_ACTS).optional(),
     subscribed: z.boolean().optional(),
     guestContentsId: z.number().int().positive().optional()
