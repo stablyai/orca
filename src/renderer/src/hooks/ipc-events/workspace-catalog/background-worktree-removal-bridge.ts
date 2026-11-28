@@ -50,9 +50,33 @@ function showHostFailure(store: AppStoreApi, row: Worktree & { removalError: str
 /** Mirror host removal markers into Deleting/error cards: disappearing rows finished, while unmarked returns did not; retain reported errors until retry. */
 export function reconcileHostWorktreeRemovals(store: AppStoreApi = useAppStore): void {
   settleHostWorktreeRemovals()
+  const worktreesByRepo = selectWorktreesByRepo(store.getState())
+  if (hostFailedDeleteStates.size === 0 && hostMarkedDeleteStates.size === 0) {
+    let hasRemovalSignal = false
+    for (const repoId in worktreesByRepo) {
+      if (!Object.hasOwn(worktreesByRepo, repoId)) {
+        continue
+      }
+      for (const row of worktreesByRepo[repoId]) {
+        if (row.removalError || row.removing) {
+          hasRemovalSignal = true
+          break
+        }
+      }
+      if (hasRemovalSignal) {
+        break
+      }
+    }
+    if (!hasRemovalSignal) {
+      return
+    }
+  }
   const listed = new Map<string, Worktree>()
-  for (const rows of Object.values(selectWorktreesByRepo(store.getState()))) {
-    for (const row of rows) {
+  for (const repoId in worktreesByRepo) {
+    if (!Object.hasOwn(worktreesByRepo, repoId)) {
+      continue
+    }
+    for (const row of worktreesByRepo[repoId]) {
       listed.set(deleteStateKey(row), row)
     }
   }
@@ -70,6 +94,9 @@ export function reconcileHostWorktreeRemovals(store: AppStoreApi = useAppStore):
   const state = store.getState()
   const marked: HostMarkedRow[] = []
   for (const [key, row] of listed) {
+    if (!row.removalError && !row.removing) {
+      continue
+    }
     const current = getDeleteStateForWorktreeHost(row, state.deleteStateByWorktreeId)
     if (row.removalError && !row.removing) {
       if (!current && !hostMarkedDeleteStates.has(key)) {
