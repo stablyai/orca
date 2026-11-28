@@ -8,7 +8,11 @@ import type { JsonlRpcTimelineLane } from '../../jsonl-rpc/timeline-lane'
 import type { JsonlRpcRecord } from '../../jsonl-rpc/peer'
 import { piRpcDialogPresentation, type PiRpcDialogPresentation } from './rpc-extension-dialogs'
 import { PiRpcBackgroundWork } from './background-work/rpc-background-work'
-import { PiRpcSubagents } from './rpc-subagents'
+import {
+  PI_RPC_BACKGROUND_COMMANDS_CHANNEL,
+  PI_RPC_SUBAGENTS_CHANNEL,
+  PiRpcChildWorkRoster
+} from './rpc-child-work-roster'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 
 type Callback = { presentation: PiRpcDialogPresentation; claimed: boolean; bytes: number }
@@ -19,7 +23,7 @@ export class PiRpcDialogCallbacks {
   private pendingBytes = 0
   /** Its frames never reach presentation, the pending cap, or cancelAll at turn end. */
   readonly backgroundWork: PiRpcBackgroundWork
-  private readonly subagents: PiRpcSubagents
+  private readonly childWork: PiRpcChildWorkRoster[]
   constructor(
     private readonly lane: JsonlRpcTimelineLane,
     private readonly send: (frame: JsonlRpcRecord) => Promise<void>,
@@ -28,18 +32,25 @@ export class PiRpcDialogCallbacks {
     onChildWork: (evidence: AgentChildWorkEvidence[]) => void
   ) {
     this.backgroundWork = new PiRpcBackgroundWork(backgroundWorkDirectory)
-    this.subagents = new PiRpcSubagents(onChildWork)
+    this.childWork = [PI_RPC_SUBAGENTS_CHANNEL, PI_RPC_BACKGROUND_COMMANDS_CHANNEL].map(
+      (channel) => new PiRpcChildWorkRoster(onChildWork, channel)
+    )
   }
 
   /** The child exited: its dialogs and any probe awaiting an answer can never be answered. */
   close(): void {
     this.cancelAll()
     this.backgroundWork.end()
-    this.subagents.end()
+    for (const roster of this.childWork) {
+      roster.end()
+    }
   }
 
   receive(frame: JsonlRpcRecord): void {
-    if (this.backgroundWork.receive(frame) || this.subagents.receive(frame)) {
+    if (
+      this.backgroundWork.receive(frame) ||
+      this.childWork.some((roster) => roster.receive(frame))
+    ) {
       return
     }
     if (typeof frame.method === 'string' && DECORATION.has(frame.method)) {
