@@ -25,7 +25,7 @@ export type AutomationLaunch = {
   setupSkippedContent?: AutomationDispatchResult['setupSkippedContent']
   completion?: Promise<
     {
-      status: 'completed' | 'dispatch_failed'
+      status: 'completed' | 'dispatch_failed' | 'skipped_needs_interactive_auth'
       outputSnapshot?: AutomationRunOutputSnapshot | null
       error?: string | null
     } & AutomationRunFailureCodeFields
