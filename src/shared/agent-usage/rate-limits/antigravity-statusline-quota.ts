@@ -32,6 +32,22 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+const ISO_INSTANT =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
+
+/** Epoch ms for an RFC 3339 instant naming a real calendar day; NaN for anything else. */
+function parseIsoInstant(value: unknown): number {
+  const match = typeof value === 'string' ? ISO_INSTANT.exec(value) : null
+  if (!match) {
+    return Number.NaN
+  }
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  const realDay =
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  return realDay && hour < 24 && minute < 60 && second < 60 ? Date.parse(match[0]) : Number.NaN
+}
+
 function parseWindow(value: unknown, receivedAt: number): ParsedWindow | null {
   if (typeof value !== 'object' || value === null || !('remaining_fraction' in value)) {
     return null
@@ -44,10 +60,7 @@ function parseWindow(value: unknown, receivedAt: number): ParsedWindow | null {
     return null
   }
   const used = (1 - Math.min(1, Math.max(0, remaining))) * 100
-  const resetTime =
-    'reset_time' in value && typeof value.reset_time === 'string'
-      ? Date.parse(value.reset_time)
-      : Number.NaN
+  const resetTime = 'reset_time' in value ? parseIsoInstant(value.reset_time) : Number.NaN
   // Only a valid epoch or past reset means the window refilled; a bad value keeps its fraction.
   if (Number.isFinite(resetTime) && resetTime <= receivedAt) {
     return { usedPercent: 0, resetsAt: null }
@@ -71,7 +84,7 @@ function toBucket(
 /** The reading holds only quota windows; the payload's email never leaves this function. */
 export type AntigravityStatusLineReading = ProviderRateLimits
 
-/** Null means the payload carries no usable quota window. `payload` is already-parsed JSON. */
+/** Null means the payload has no quota object; one with no usable pool reads as empty buckets. */
 export function readAntigravityStatusLineQuota(
   payload: unknown,
   receivedAt: number
@@ -92,9 +105,7 @@ export function readAntigravityStatusLineQuota(
     ...toBucket(thirdParty5h, ANTIGRAVITY_POOL_LABELS.thirdParty5h, FIVE_HOUR_MINUTES),
     ...toBucket(thirdPartyWeekly, ANTIGRAVITY_POOL_LABELS.thirdPartyWeekly, WEEKLY_MINUTES)
   ]
-  if (buckets.length === 0) {
-    return null
-  }
+  // A quota object with no usable pool is an explicit "nothing to show", not a missing report.
   return {
     provider: 'antigravity',
     session: toWindow(gemini5h, FIVE_HOUR_MINUTES),
@@ -116,16 +127,21 @@ export function readAntigravityStatusLinePost(
   return form ? readAntigravityStatusLineQuota(form.payload, receivedAt) : null
 }
 
-/** The pool the status bar leads with: Gemini's windows, else the third-party 5h one. */
+/** The pool the status bar leads with: Gemini's windows, else the first pool that is present. */
 export function antigravityBarBuckets(
   buckets: readonly RateLimitBucket[] | undefined
 ): RateLimitBucket[] {
-  const gemini = (buckets ?? []).filter(
+  const all = buckets ?? []
+  const gemini = all.filter(
     (bucket) =>
       bucket.name === ANTIGRAVITY_POOL_LABELS.gemini5h ||
       bucket.name === ANTIGRAVITY_POOL_LABELS.geminiWeekly
   )
-  return gemini.length > 0
-    ? gemini
-    : (buckets ?? []).filter((bucket) => bucket.name === ANTIGRAVITY_POOL_LABELS.thirdParty5h)
+  if (gemini.length > 0) {
+    return gemini
+  }
+  const first = [ANTIGRAVITY_POOL_LABELS.thirdParty5h, ANTIGRAVITY_POOL_LABELS.thirdPartyWeekly]
+    .map((name) => all.find((bucket) => bucket.name === name))
+    .find((bucket) => bucket !== undefined)
+  return first ? [first] : []
 }

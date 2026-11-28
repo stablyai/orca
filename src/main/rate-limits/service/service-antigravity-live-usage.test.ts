@@ -7,6 +7,15 @@ function reading(updatedAt: number, usedPercent: number): ProviderRateLimits {
     provider: 'antigravity',
     session: { usedPercent, windowMinutes: 300, resetsAt: 5_000_000, resetDescription: null },
     weekly: null,
+    buckets: [
+      {
+        name: 'Gemini 5h',
+        usedPercent,
+        windowMinutes: 300,
+        resetsAt: 5_000_000,
+        resetDescription: null
+      }
+    ],
     updatedAt,
     error: null,
     status: 'ok'
@@ -48,6 +57,13 @@ describe('AntigravityLiveUsage', () => {
     // The clock moved back: the newer post still replaces the held reading.
     live.ingest(reading(1000, 70))
     expect(get()).toMatchObject({ updatedAt: 1000, session: { usedPercent: 70 } })
+  })
+
+  it('clears the held reading when a report arrives with no usable pool', () => {
+    const { live, get } = setup()
+    live.ingest(reading(2000, 40))
+    live.ingest({ ...reading(3000, 0), session: null, buckets: [] })
+    expect(get()).toBeNull()
   })
 
   it('ignores readings while the setting is off and clears what it held', () => {

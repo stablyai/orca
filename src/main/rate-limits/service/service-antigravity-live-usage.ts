@@ -25,6 +25,10 @@ export class AntigravityLiveUsage {
     if (!this.isEnabled?.()) {
       return
     }
+    if (!reading.buckets?.length) {
+      this.clear()
+      return
+    }
     const previous = this.host.current()
     // Unchanged windows keep the time Orca first received them.
     if (previous && windowsKey(previous) === windowsKey(reading)) {

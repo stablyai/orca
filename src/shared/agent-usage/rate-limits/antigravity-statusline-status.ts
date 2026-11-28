@@ -1,5 +1,5 @@
 export type AntigravityStatusLineStatus = {
-  state: 'installed' | 'not_installed' | 'error'
+  state: 'installed' | 'not_installed' | 'error' | 'unsupported'
   configPath: string
   detail: string | null
 }

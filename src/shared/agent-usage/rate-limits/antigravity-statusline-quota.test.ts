@@ -55,6 +55,16 @@ describe('readAntigravityStatusLineQuota', () => {
       }),
       NOW
     )
+    // Numbers and impossible dates are not instants, whatever Date.parse makes of them.
+    const odd = readAntigravityStatusLineQuota(
+      payload({
+        'gemini-5h': { remaining_fraction: 0.1, reset_time: '0' },
+        'gemini-weekly': { remaining_fraction: 0.1, reset_time: '2026-02-30T10:00:00Z' }
+      }),
+      NOW
+    )
+    expect(odd?.session).toMatchObject({ usedPercent: 90, resetsAt: null })
+    expect(odd?.weekly).toMatchObject({ usedPercent: 90, resetsAt: null })
     expect(reading?.session).toMatchObject({ usedPercent: 0, resetsAt: null })
     expect(reading?.weekly).toMatchObject({ usedPercent: 0, resetsAt: null })
     expect(reading?.buckets?.[2]).toMatchObject({ usedPercent: 90, resetsAt: null })
@@ -73,19 +83,19 @@ describe('readAntigravityStatusLineQuota', () => {
     expect(reading?.buckets?.map((bucket) => bucket.name)).toEqual(['Gemini 5h'])
   })
 
-  it('returns null without a usable quota window', () => {
+  it('returns null without a quota object', () => {
     expect(readAntigravityStatusLineQuota(payload(undefined), NOW)).toBeNull()
-    expect(readAntigravityStatusLineQuota(payload({}), NOW)).toBeNull()
     expect(readAntigravityStatusLineQuota(payload('nope'), NOW)).toBeNull()
-    expect(
-      readAntigravityStatusLineQuota(payload({ 'gemini-5h': { reset_time: 'x' } }), NOW)
-    ).toBeNull()
-    expect(
-      readAntigravityStatusLineQuota(
-        payload({ 'gemini-5h': { remaining_fraction: 1, disabled: true } }),
-        NOW
-      )
-    ).toBeNull()
+  })
+
+  it('reads a quota object with no usable pool as an empty reading, so held values can be cleared', () => {
+    for (const quota of [
+      {},
+      { 'gemini-5h': { reset_time: 'x' } },
+      { 'gemini-5h': { remaining_fraction: 1, disabled: true } }
+    ]) {
+      expect(readAntigravityStatusLineQuota(payload(quota), NOW)?.buckets).toEqual([])
+    }
   })
 })
 
@@ -110,10 +120,19 @@ describe('antigravityBarBuckets', () => {
     }
     const both = readAntigravityStatusLineQuota(payload(quota), NOW)
     expect(antigravityBarBuckets(both?.buckets).map((bucket) => bucket.name)).toEqual(['Gemini 5h'])
-    const { 'gemini-5h': _gemini, ...thirdPartyOnly } = quota
-    const only = readAntigravityStatusLineQuota(payload(thirdPartyOnly), NOW)
+    const only = readAntigravityStatusLineQuota(
+      payload({ '3p-5h': quota['3p-5h'], '3p-weekly': quota['3p-weekly'] }),
+      NOW
+    )
     expect(antigravityBarBuckets(only?.buckets).map((bucket) => bucket.name)).toEqual([
       'Claude · GPT 5h'
+    ])
+    const weeklyOnly = readAntigravityStatusLineQuota(
+      payload({ '3p-weekly': quota['3p-weekly'] }),
+      NOW
+    )
+    expect(antigravityBarBuckets(weeklyOnly?.buckets).map((bucket) => bucket.name)).toEqual([
+      'Claude · GPT weekly'
     ])
   })
 })
