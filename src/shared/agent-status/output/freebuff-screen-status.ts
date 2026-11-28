@@ -89,8 +89,13 @@ export function readFreebuffScreenStatus(
     return { state: 'done', sessionBoundary: true }
   }
   // The bar ends with "✕ End session" only while idle; its label varies by plan
-  // (untimed sessions show just the context readout).
-  if (status.endsWith('\u2715 End session')) {
+  // (untimed sessions show just the context readout). A narrow terminal wraps
+  // that control onto its own row, above a blank separator, so a blank row above
+  // the composer looks one row further. Only that single row is tested, never a
+  // joined pair: the line above a transient mid-turn notice is assistant output,
+  // and a readout on its own is not a done signal.
+  const bar = status === '' ? (lines[composerTop - 2]?.trim() ?? '') : status
+  if (/End session/.test(bar) && !/(?:■|▌)\s*Esc\b/.test(bar)) {
     return { state: 'done' }
   }
   return null
