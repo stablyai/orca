@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import { listWorktreeGraph } from '../git/worktrees/catalog/worktree-scan-cache'
@@ -7,19 +8,19 @@ export type NestedRepoImportTargetResolver = {
 }
 
 function findImportTarget(
-  selectedPath: string,
+  selectedPathKeys: ReadonlySet<string>,
   worktrees: readonly GitWorktreeInfo[]
 ): { targetPath: string; graphPaths: string[] } | null {
-  const selectedPathKey = normalizeRuntimePathForComparison(selectedPath)
-  const graphContainsSelectedPath = worktrees.some(
-    (worktree) => normalizeRuntimePathForComparison(worktree.path) === selectedPathKey
+  const graphContainsSelectedPath = worktrees.some((worktree) =>
+    selectedPathKeys.has(normalizeRuntimePathForComparison(worktree.path))
   )
   if (!graphContainsSelectedPath) {
     return null
   }
 
-  // Collapse a linked worktree only with Git proof it shares this non-bare owner graph.
-  const mainWorktree = worktrees.find((worktree) => worktree.isMainWorktree && !worktree.isBare)
+  const mainWorktree =
+    worktrees.find((worktree) => worktree.isMainWorktree && !worktree.isBare) ??
+    worktrees.find((worktree) => worktree.isMainWorktree && worktree.isBare)
   return mainWorktree
     ? { targetPath: mainWorktree.path, graphPaths: worktrees.map((worktree) => worktree.path) }
     : null
@@ -36,12 +37,30 @@ async function resolveWithCache(
     return cachedPath
   }
 
+  const resolvedRealPath = await realpath(repoPath).catch(() => null)
+  const resolvedRealPathKey = resolvedRealPath
+    ? normalizeRuntimePathForComparison(resolvedRealPath)
+    : null
+  if (resolvedRealPathKey) {
+    const cachedRealPath = cache.get(resolvedRealPathKey)
+    if (cachedRealPath) {
+      cache.set(repoPathKey, cachedRealPath)
+      return cachedRealPath
+    }
+  }
+
+  const selectedPathKeys = new Set([repoPathKey])
+  if (resolvedRealPathKey) {
+    selectedPathKeys.add(resolvedRealPathKey)
+  }
+
   try {
-    const target = findImportTarget(repoPath, await readWorktreeGraph(repoPath))
+    const target = findImportTarget(selectedPathKeys, await readWorktreeGraph(repoPath))
     if (target) {
       for (const graphPath of target.graphPaths) {
         cache.set(normalizeRuntimePathForComparison(graphPath), target.targetPath)
       }
+      cache.set(repoPathKey, target.targetPath)
       return target.targetPath
     }
   } catch {

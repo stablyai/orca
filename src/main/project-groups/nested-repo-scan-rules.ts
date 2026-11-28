@@ -6,6 +6,11 @@ export type NestedRepoDirectoryEntry = {
   isSymlink?: boolean
 }
 
+export type NestedRepoGitIdentity = {
+  commonDir: string
+  kind: 'main' | 'bare' | 'linked'
+}
+
 export type NestedRepoScanFilesystem = {
   readDirectory: (dirPath: string) => Promise<NestedRepoDirectoryEntry[]>
   readTextFile?: (filePath: string) => Promise<string>
@@ -13,6 +18,9 @@ export type NestedRepoScanFilesystem = {
   basename: (path: string) => string
   hasGitMarker: (path: string) => Promise<boolean> | boolean
   isSelectedPathGitRepo: (path: string) => Promise<boolean> | boolean
+  resolveGitCommonDir?: (
+    path: string
+  ) => Promise<NestedRepoGitIdentity | null> | NestedRepoGitIdentity | null
 }
 
 type IgnoreRule = {
