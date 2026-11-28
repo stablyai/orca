@@ -35,7 +35,8 @@ export class DaemonRouterPreRpcRetirement {
   private readonly recheckDelays = new WeakMap<DaemonPtyAdapter, number>()
   private readonly rechecks = new WeakMap<DaemonPtyAdapter, number>()
   private readonly decisions = new Map<DaemonPtyAdapter, Promise<unknown>>()
-  private readonly awaitingExits = new WeakSet<DaemonPtyAdapter>()
+  /** Retired with a watched terminal: only this timer, or that terminal's last exit, forgets it. */
+  private readonly exitDeliveryTimers = new Map<DaemonPtyAdapter, Timer>()
   private reattachesInFlight = 0
   private reattachEpoch = 0
   private disposed = false
@@ -80,6 +81,48 @@ export class DaemonRouterPreRpcRetirement {
     this.schedule(adapter)
   }
 
+  /** A spawn this generation's own fence refused: ask it again now, since only an answer reopens it. */
+  async askAgain(adapter: DaemonPtyAdapter): Promise<void> {
+    if (!this.decisions.has(adapter) && adapter.isIdleRetirementAdmissionClosed()) {
+      const pending = this.timers.get(adapter)
+      if (pending !== undefined) {
+        clearTimeout(pending)
+        this.timers.delete(adapter)
+      }
+      this.rechecks.delete(adapter)
+      await this.check(adapter)
+    }
+    await this.decisions.get(adapter)
+  }
+
+  /** Retired with a watched terminal: its exit forgets the generation, or this does once that exit is overdue. */
+  forgetOnceExited(adapter: DaemonPtyAdapter): void {
+    if (!adapter.hasWatchedSessions()) {
+      this.forget(adapter)
+      return
+    }
+    if (this.disposed || this.exitDeliveryTimers.has(adapter)) {
+      return
+    }
+    const timer = setTimeout(() => {
+      this.exitDeliveryTimers.delete(adapter)
+      if (!this.disposed) {
+        this.forget(adapter)
+      }
+    }, this.options.timing?.exitDeliveryMaxMs ?? EXIT_DELIVERY_MAX_MS)
+    timer.unref?.()
+    this.exitDeliveryTimers.set(adapter, timer)
+  }
+
+  /** The generation was forgotten by another path. */
+  release(adapter: DaemonPtyAdapter): void {
+    const timer = this.exitDeliveryTimers.get(adapter)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      this.exitDeliveryTimers.delete(adapter)
+    }
+  }
+
   /** The decision being asked of this generation, if any. */
   pendingDecision(adapter: DaemonPtyAdapter): Promise<unknown> | undefined {
     return this.decisions.get(adapter)
@@ -91,6 +134,10 @@ export class DaemonRouterPreRpcRetirement {
       clearTimeout(timer)
     }
     this.timers.clear()
+    for (const timer of this.exitDeliveryTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.exitDeliveryTimers.clear()
     this.waitingForQuiet.clear()
     this.checkAgain.clear()
   }
@@ -160,8 +207,8 @@ export class DaemonRouterPreRpcRetirement {
 
   private checkAgainLater(adapter: DaemonPtyAdapter): void {
     const rechecks = this.rechecks.get(adapter) ?? 0
-    // A generation fenced by an unanswered decision is asked until it answers: only that reopens it.
-    if (rechecks >= RECHECK_LIMIT && !adapter.isIdleRetirementAdmissionClosed()) {
+    // A fenced generation past the limit is asked again by the next spawn it refuses (`askAgain`).
+    if (rechecks >= RECHECK_LIMIT) {
       return
     }
     this.rechecks.set(adapter, rechecks + 1)
@@ -176,16 +223,6 @@ export class DaemonRouterPreRpcRetirement {
   private forget(adapter: DaemonPtyAdapter): void {
     this.recheckDelays.delete(adapter)
     this.options.forget(adapter)
-  }
-
-  /** Retired with a watched terminal: its exit forgets the generation, or this does once that exit is overdue. */
-  private forgetOnceExited(adapter: DaemonPtyAdapter): void {
-    if (adapter.hasWatchedSessions() && !this.awaitingExits.has(adapter)) {
-      this.awaitingExits.add(adapter)
-      this.schedule(adapter, this.options.timing?.exitDeliveryMaxMs ?? EXIT_DELIVERY_MAX_MS)
-      return
-    }
-    this.forget(adapter)
   }
 
   private async retireIfEmpty(adapter: DaemonPtyAdapter): Promise<void> {

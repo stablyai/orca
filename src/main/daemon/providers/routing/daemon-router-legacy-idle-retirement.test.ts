@@ -471,21 +471,54 @@ describe('the transitional recheck timer', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps asking a generation fenced by an unanswered decision past the recheck cap', async () => {
+  it('waits out a slow decision without forgetting a generation whose watched exit is still owed', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, inventory, state } = stubs()
+    Object.assign(state, { watched: true, admissionClosed: true })
+    inventory.liveRelays = 0
+    let answer!: () => void
+    vi.mocked(preRpc.requestIdleRetirement).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = () => {
+            state.retired = true
+            resolve({ state: 'retiring' })
+          }
+        })
+    )
+    const { legacy, retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(1_000)
+    // Another exit while the decision is pending asks for a second check after it.
+    retirement.noteActivity(preRpc)
+    await vi.advanceTimersByTimeAsync(1_000)
+    answer()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(legacy).toEqual([preRpc])
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(legacy).toEqual([])
+  })
+
+  it('stops rechecking a fenced generation after the cap, and asks it again when it refuses a spawn', async () => {
     vi.useFakeTimers()
     const { current, preRpc, state } = stubs()
     state.admissionClosed = true
-    vi.mocked(preRpc.requestIdleRetirement).mockImplementation(async () => ({
-      state: 'unverifiable'
-    }))
-    const { retirement } = track(preRpc, current)
+    const decide = vi.mocked(preRpc.requestIdleRetirement)
+    decide.mockImplementation(async () => ({ state: 'unverifiable' }))
+    const { legacy, retirement } = track(preRpc, current)
     retirement.noteAll()
     await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
-    const asked = vi.mocked(preRpc.requestIdleRetirement).mock.calls.length
-    expect(asked).toBeGreaterThan(7)
-    // Once it answers, admission reopens and the ordinary cap applies again.
-    state.admissionClosed = false
-    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
+    // The first decision, its follow-up and six rechecks; then no timer until something asks.
+    expect(decide).toHaveBeenCalledTimes(8)
     expect(vi.getTimerCount()).toBe(0)
+
+    decide.mockImplementation(async () => {
+      state.admissionClosed = false
+      return { state: 'busy' }
+    })
+    const refused = new Error('Terminal daemon is decommissioning')
+    await expect(retirement.settleHeldRetirements(refused, 1, preRpc)).resolves.toBe(true)
+    expect(decide).toHaveBeenCalledTimes(9)
+    expect(legacy).toEqual([preRpc])
   })
 })

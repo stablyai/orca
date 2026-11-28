@@ -57,9 +57,7 @@ export class DaemonRouterLegacyIdleRetirement {
     // Accepted under another router (a restart carries adapters over): it is already leaving.
     if (adapter.hasRetiredForIdle()) {
       // Each exit still owed to a watched terminal (a WSL pane's comes late) must reach the app first.
-      if (!adapter.hasWatchedSessions()) {
-        this.forget(adapter)
-      }
+      this.preRpc.forgetOnceExited(adapter)
       return
     }
     const mode = this.modes.get(adapter)
@@ -85,12 +83,22 @@ export class DaemonRouterLegacyIdleRetirement {
       return false
     }
     const reached = target && target !== 'any' ? target : undefined
+    // Retired, it owns nothing; a spawn it refused while its last exits arrive is routed without it.
+    if (reached?.hasRetiredForIdle() && this.options.legacy().includes(reached)) {
+      this.forget(reached)
+      return true
+    }
     // Refused while an older generation decided past the fence: route again once it has answered.
     const decision = reached ? this.preRpc.pendingDecision(reached) : undefined
     if (reached && decision) {
       await decision
       // Its own admission refused the spawn before sending it, or it retired: either way nothing ran there.
       return !this.options.legacy().includes(reached) || isAdmissionRefusal(error)
+    }
+    // Fenced by an unanswered decision: ask again now; a busy answer reopens it, retiring drops it.
+    if (reached && isAdmissionRefusal(error) && this.modes.get(reached) === 'pre-rpc') {
+      await this.preRpc.askAgain(reached)
+      return !this.options.legacy().includes(reached) || !reached.isIdleRetirementAdmissionClosed()
     }
     const held = this.options.legacy().filter((adapter) => this.modes.get(adapter) === 'held')
     // Only the generation the spawn reached can have refused it before its close arrives.
@@ -214,6 +222,7 @@ export class DaemonRouterLegacyIdleRetirement {
   }
 
   private forget(adapter: DaemonPtyAdapter): void {
+    this.preRpc.release(adapter)
     this.lostListeners.get(adapter)?.()
     this.lostListeners.delete(adapter)
     this.options.drop(adapter)
