@@ -9,6 +9,8 @@ export type RuntimeCallOptions = {
   timeoutMs?: number
   legacyTerminalPrompt?: true
   terminalPromptPreflight?: { runtimeId: string | null }
+  /** The local runtime whose capabilities shaped this request; a restart must not redirect it to another. */
+  preflightRuntimeId?: string | null | undefined
   requestSelection?: RuntimeRequestSelection
   /** Send under the replay-only contract: the runtime may replay or join this request id, never run it anew. */
   orchestrationReplayOnly?: true

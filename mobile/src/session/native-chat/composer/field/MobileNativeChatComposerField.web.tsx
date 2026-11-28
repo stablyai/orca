@@ -11,20 +11,21 @@ import { useKeyboardOcclusion } from '../../../../platform/keyboard/keyboard-occ
 import { primaryModifierKey } from '../../../../platform/keyboard/primary-modifier-key'
 import { useTextInputContentHeight } from '../../../../platform/text-input/text-input-content-height'
 import { useTextInputSelectionReveal } from '../../../../platform/text-input/text-input-selection-reveal.web'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import {
-  composerInputStyles,
+  composerInputStylesSheet,
   MESSAGE_MIN_HEIGHT
 } from '../../../../components/composer-input/composer-input-styles'
 import type { MobileNativeChatComposerFieldProps } from './mobile-native-chat-composer-field-skill'
 import { MobileNativeChatComposerFieldCopy } from './MobileNativeChatComposerFieldCopy'
+import { useThemedStyles } from '../../../../theme/themed-styles'
+import type { MobilePalette } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 // Share of the space above the keyboard the field may grow into before it scrolls.
 const MAX_HEIGHT_SHARE = 0.35
 
 // Textareas cannot style tokens: hide their text under a styled copy while preserving the caret. RN types omit caretColor.
-function clearText() {
+function clearText(colors: MobilePalette) {
   return { field: { color: 'transparent', caretColor: colors.textPrimary } }
 }
 
@@ -52,7 +53,8 @@ export function MobileNativeChatComposerField({
   onWebPaste,
   ...props
 }: MobileNativeChatComposerFieldProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const allocation = useMobileNativeChatComposerAllocation()
   const [scrollTop, setScrollTop] = useState(0)
   const [fieldHeight, setFieldHeight] = useState(0)
@@ -104,7 +106,7 @@ export function MobileNativeChatComposerField({
       <TextInput
         ref={input}
         value={value}
-        style={[composerInputStyles.messageText, sizing, copied ? clearText().field : null]}
+        style={[composerInputStyles.messageText, sizing, copied ? clearText(colors).field : null]}
         onScroll={skillToken ? (event) => setScrollTop(scrollTopOf(event)) : undefined}
         placeholder={dictationPreview ? undefined : placeholder}
         {...props}

@@ -1,12 +1,12 @@
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, GitBranch, GitCommitHorizontal } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { GitConflictOperation } from '../../../../src/shared/git/status/git-status-types'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
-import { styles } from '../mobile-source-control-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type HeaderState = Pick<
   MobileSourceControlState,
@@ -72,7 +72,8 @@ export function MobileSourceControlChangesHeader({
   state: HeaderState
   onOpenCommits: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { status, busyAction } = state
   const rawOperation = status?.conflictOperation ?? null

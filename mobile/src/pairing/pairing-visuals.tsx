@@ -11,10 +11,10 @@ import { Check } from 'lucide-react-native'
 import { SHEET_CURVE } from '../components/motion/sheet-motion-values'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
-import { pairScanStyles as scanStyles } from '../pair-scan-styles'
-import { colors, radii } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pairScanStylesSheet } from '../pair-scan-styles'
+import { radii } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 /** The reticle's squeeze on a decoded QR, before the screen turns to Connecting. */
 export const SCAN_DECODE_BEAT_MS = 160
@@ -29,7 +29,7 @@ export function waitForBeat(ms: number): Promise<void> {
 
 /** The QR guide's four corners; they squeeze in once a code decodes, or dim under Reduce Motion. */
 export function ScanReticle({ size, decoded }: { size: number; decoded: boolean }) {
-  useMobileColorScheme()
+  const scanStyles = useThemedStyles(pairScanStylesSheet)
   const reducedMotion = useReducedMotionEnabled() === true
   const progress = useSharedValue(0)
   useEffect(() => {
@@ -67,7 +67,8 @@ export function PairingProgress({
   connectingLabel: string
   labelStyle: StyleProp<TextStyle>
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const reducedMotion = useReducedMotionEnabled() === true
   const shown = useSharedValue(0)
@@ -102,7 +103,7 @@ export function PairingProgress({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   check: {
     width: 36,
     height: 36,

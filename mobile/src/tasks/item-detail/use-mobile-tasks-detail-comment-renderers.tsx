@@ -15,12 +15,14 @@ import {
   isResolvedDetailCommentGroup,
   renderCommentReactions
 } from './mobile-tasks-item-comments'
-import { styles } from '../mobile-tasks-legacy-styles'
+import { stylesSheet } from '../mobile-tasks-legacy-styles'
 import { formatUpdatedAt } from './mobile-tasks-item-mapping'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { pressedStyle } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsModel) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const {
     actionItem,
@@ -76,7 +78,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
           : ''}
       </Text>
       <MobileMarkdown content={comment.body} />
-      {renderCommentReactions(comment)}
+      {renderCommentReactions(styles, comment)}
       {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
       actionItem?.provider === 'github' &&
       detailPayload?.provider === 'github' ? (
@@ -177,11 +179,12 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
       </View>
     )
   }
-  return Object.assign(model, {
+  return {
+    ...model,
     renderCommentComposer,
     renderDetailComment,
     renderDetailCommentGroup
-  })
+  }
 }
 
 export type DetailCommentRenderersModel = ReturnType<typeof useMobileTasksDetailCommentRenderers>

@@ -17,10 +17,7 @@ import type { StructuredChatNamingDeps } from '../../../native-chat/conversation
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/source-control/ai/generation/commit-message-host-key'
-import {
-  generateConversationNameFromContext,
-  resolveCommitMessageSettings as resolveTextGenerationParams
-} from '../../../text-generation/commit-message-text-generation'
+import type { resolveCommitMessageSettings as resolveTextGenerationParams } from '../../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from '../../../agent-hooks/first-work/first-work-generation-target'
 
 type StructuredChatNamingRuntime = {
@@ -135,6 +132,10 @@ export function structuredChatNamingDeps(
           )
         }
       }
+      const {
+        generateConversationNameFromContext,
+        resolveCommitMessageSettings: resolveTextGenerationParams
+      } = await import('../../../text-generation/commit-message-text-generation')
       const settings = resolveTextGenerationParams(
         useChatAgent
           ? {

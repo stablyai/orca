@@ -11,9 +11,9 @@ import {
 } from 'react-native'
 import { ChevronLeft, Ellipsis, Keyboard, Lock, RotateCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { TextField } from '../../components/composer-input/TextField'
 import { COMPOSER_TEXT_SIZE } from '../../components/composer-input/composer-input-styles'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
@@ -54,8 +54,8 @@ type Props = {
 
 /** Safari's bottom bar in the app's controls: back, the site with the keyboard and reload inside it, and ⋯. */
 export function MobileBrowserBottomBar(props: Props) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const menuAnchor = useRef<HostInstance>(null)
   const addressInputRef = useRef<TextInputInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -151,6 +151,8 @@ function AddressPill({
   focusWhenReady,
   inputRef
 }: Props & { inputRef: RefObject<TextInputInstance | null> }) {
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const focusedOnceRef = useRef(false)
   useEffect(() => {
@@ -241,6 +243,8 @@ type BarButtonSpec = {
 }
 
 function BarButton({ button, ref }: { button: BarButtonSpec; ref?: Ref<HostInstance> }) {
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const { icon: Icon } = button
   return (
     <Pressable
@@ -262,7 +266,7 @@ function BarButton({ button, ref }: { button: BarButtonSpec; ref?: Ref<HostInsta
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   bar: {
     zIndex: 20,
     paddingTop: spacing.sm,

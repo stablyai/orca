@@ -282,13 +282,14 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     },
     [appliedQuery, githubKind]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     refreshJiraConnection,
     loadLinearContext,
     persistLinearTeamSelection,
     fetchGitHubItemsPage,
     countGitHubItemPages
-  })
+  }
 }
 
 export type ProviderLoadActionsModel = ReturnType<

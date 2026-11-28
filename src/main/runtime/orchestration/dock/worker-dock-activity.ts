@@ -10,10 +10,7 @@ import {
   structuredWorkerSessionIdOf
 } from '../workers/lifecycle/session-worker-liveness'
 import { chatAssigneeSessionId } from '../workers/lifecycle/chat-assignee'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { mintFleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { WorkerDockEntry } from '../../../../shared/orchestration/dock/worker-dock'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -189,7 +186,7 @@ export function refreshWorkerDockActivity(
       chatAssigneeSessionId(subject.agentTerminalHandle) ??
       structuredWorkerSessionIdOf(subject, null)
     if (known) {
-      panes?.add(structuredAgentSessionPaneKey(structuredAgentSessionTabId(known), known))
+      panes?.add(chatPaneKey(known))
     }
     const pane =
       session?.status === 'live' && session.activity

@@ -5,7 +5,6 @@ import { Plus, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { startBotSession } from '@/lib/bot-catalog'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { callBotRpc } from '@/lib/bot-hosts'
@@ -29,6 +28,7 @@ import {
   useBotUsageLimitStops
 } from './use-bot-usage-limit-stops'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { startAndOpenBotChat } from './bot-session-open'
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 import { BotChatPaging } from './BotChatRowControls'
 import { botErrorMessage } from './bot-presentation'
@@ -139,13 +139,11 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
       : []
   )
   const newChat = (): void => {
-    void startBotSession(bot, { agent: bot.agent })
-      .then((sessionId) =>
-        activateAiVaultStructuredSession({
-          structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
-        })
-      )
-      .catch((error: unknown) => toast.error(botErrorMessage(error)))
+    startAndOpenBotChat(
+      bot,
+      () => startBotSession(bot, { agent: bot.agent }),
+      (error) => toast.error(botErrorMessage(error))
+    )
   }
   const newChatLabel = t('bots.chats.new', 'New chat')
   return (

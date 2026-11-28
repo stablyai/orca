@@ -8,16 +8,16 @@ import {
   type ViewStyle
 } from 'react-native'
 import { ChevronDown, Keyboard as KeyboardIcon, Plus } from 'lucide-react-native'
-import { colors } from '../../../theme/mobile-theme'
 import { ActionSheetModal } from '../../../components/sheets/ActionSheetModal'
 import { mobileNativeChatAttachActions } from '../../../session/native-chat/composer/attachments/mobile-native-chat-attach-actions'
-import { styles as sessionStyles } from '../../../session/mobile-session-styles'
+import { stylesSheet as sessionStylesSheet } from '../../../session/mobile-session-styles'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles
+  composerInputStylesSheet
 } from '../../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 import { keepHeldPressThroughLongPress } from '../../../platform/held-press-long-press'
 import { dictationControlsCopy } from '../../../dictation/mobile-dictation-controls-copy'
 import { useMobileDictationCancelDrop } from '../../../dictation/use-mobile-dictation-cancel-drop'
@@ -86,7 +86,9 @@ export function MobileTerminalLeadingButton({
   onAttachFile,
   onDismissKeyboard
 }: MobileTerminalLeadingButtonProps) {
-  useMobileColorScheme()
+  const sessionStyles = useThemedStyles(sessionStylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [attachOpen, setAttachOpen] = useState(false)
   if (keyboardUp) {
@@ -138,7 +140,11 @@ export function MobileTerminalLeadingButton({
       <ActionSheetModal
         visible={attachOpen}
         onClose={() => setAttachOpen(false)}
-        actions={mobileNativeChatAttachActions({ onPhotos: onAttachImage, onFiles: onAttachFile })}
+        actions={mobileNativeChatAttachActions({
+          onPhotos: onAttachImage,
+          onFiles: onAttachFile,
+          t
+        })}
       />
     </>
   )
@@ -157,8 +163,8 @@ function MobileTerminalDictationButton({
   onDictationPressOut,
   onDictationCancel
 }: MobileTerminalDictationButtonProps) {
-  useMobileColorScheme()
-  useMobileTranslation()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const t = useMobileTranslation()
   const release = useMobileDictationCancelDrop(
     dictationCancelRef,
     onDictationCancel,
@@ -193,11 +199,14 @@ function MobileTerminalDictationButton({
       }
       accessibilityRole="button"
       aria-busy={dictation.isStarting || dictation.isProcessing}
-      accessibilityLabel={dictationControlsCopy.mic({
-        starting: dictation.isStarting,
-        active: dictationActive,
-        processing: dictation.isProcessing
-      })}
+      accessibilityLabel={dictationControlsCopy.mic(
+        {
+          starting: dictation.isStarting,
+          active: dictationActive,
+          processing: dictation.isProcessing
+        },
+        t
+      )}
     >
       <MobileDictationMicIcon
         active={dictationActive}

@@ -1,5 +1,4 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
 import { RefreshCw, X, GitBranch } from 'lucide-react-native'
 import { taskStatusActionLabel, isGitHubPrMergeBlocked } from './mobile-tasks-item-comments'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
@@ -13,7 +12,8 @@ export function mobileTasksItemMenuActions(
     mutatingStatus,
     setLinearStatusPickerItem,
     setMergeMethodTaskItem,
-    setPendingHostedStateChange
+    setPendingHostedStateChange,
+    t
   } = model
   if (!actionItem) {
     return []
@@ -40,11 +40,11 @@ export function mobileTasksItemMenuActions(
   ) {
     const blocked = isGitHubPrMergeBlocked(actionItem)
     actions.push({
-      label: translate('tasks.itemActions.mergePullRequest', 'Merge pull request'),
+      label: t('tasks.itemActions.mergePullRequest', 'Merge pull request'),
       icon: GitBranch,
       disabled: mutatingStatus || blocked,
       hint: blocked
-        ? translate('tasks.itemActions.mergeConflicts', 'GitHub reports merge conflicts.')
+        ? t('tasks.itemActions.mergeConflicts', 'GitHub reports merge conflicts.')
         : undefined,
       onPress: () => setMergeMethodTaskItem(actionItem)
     })
@@ -73,7 +73,7 @@ export function mobileTasksItemMenuActions(
     actionItem.source.state === 'opened'
   ) {
     actions.push({
-      label: translate('tasks.itemActions.mergeMergeRequest', 'Merge merge request'),
+      label: t('tasks.itemActions.mergeMergeRequest', 'Merge merge request'),
       icon: GitBranch,
       disabled: mutatingStatus,
       onPress: () => setMergeMethodTaskItem(actionItem)
@@ -81,7 +81,7 @@ export function mobileTasksItemMenuActions(
   }
   if (actionItem.provider === 'linear') {
     actions.push({
-      label: translate('tasks.itemActions.changeStatus', 'Change status'),
+      label: t('tasks.itemActions.changeStatus', 'Change status'),
       icon: GitBranch,
       disabled: mutatingStatus,
       onPress: () => setLinearStatusPickerItem(actionItem)

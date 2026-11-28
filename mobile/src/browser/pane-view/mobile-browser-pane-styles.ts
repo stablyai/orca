@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { COMPOSER_TEXT_SIZE } from '../../components/composer-input/composer-input-styles'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
+export const mobileBrowserPaneStylesSheet = themedStyleSheet((colors) => ({
   root: {
     flex: 1,
     minHeight: 0,

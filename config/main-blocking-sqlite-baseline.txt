@@ -1,8 +1,9 @@
 # Legacy synchronous sqlite uses per file; counts may only go DOWN.
 # Worker/utility entries and modules only they import are exempt; anything event-loop code imports stays guarded.
-10 src/main/ai-vault-search/storage/session-search-message-rows.ts
+5 src/main/ai-vault-search/storage/session-search-message-rows.ts
 13 src/main/ai-vault-search/storage/session-search-schema.ts
 20 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
+2 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: probe and prune the few other-version cache files; not Electron main
 13 src/main/ai-vault/parse-cache/session-scope-cwds-table.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
 13 src/main/bots/bot-group-store-tables.ts # store-open table setup moved out of the store, keep-field triggers and the incremental remote-ask index pass (one-shot startup)
@@ -64,6 +65,7 @@
 6 src/main/runtime/orchestration/db/dispatch-row-writer.ts
 1 src/main/runtime/orchestration/db/federation/federated-stub-home-run-backfill.ts
 9 src/main/runtime/orchestration/db/lifecycle-transition.ts
+8 src/main/runtime/orchestration/db/maintenance/orchestration-db-compaction.ts # once a minute: the cached page-1 statement on the runtime's connection and a read-only observer's data_version (both per-connection, so they can't move to a worker; ~0.05 ms) while a legacy file is copied or waits for quit; the observer's open/close around a copy; at the end of a clean quit, after every window closed: one connection's open, exclusive lock, WAL checkpoint and data_version reads
 7 src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts
 11 src/main/runtime/orchestration/db/orchestration-db.ts
 4 src/main/runtime/orchestration/db/peer-runs/peer-run-queue-sql.ts

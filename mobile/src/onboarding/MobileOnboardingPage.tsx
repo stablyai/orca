@@ -2,13 +2,13 @@ import { ScrollView, Text, View } from 'react-native'
 import { MessageSquare } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
-import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
+import { mobileOnboardingStylesSheet } from './mobile-onboarding-styles'
 import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { SheetSecondaryButton } from '../components/sheets/SheetSecondaryButton'
 import type { MobileSessionView } from '../storage/session-view-preferences'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -32,8 +32,9 @@ export function MobileOnboardingPage({
   onSessionChoice,
   onNotificationChoice
 }: Props) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(mobileOnboardingStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const busy = busyChoice !== null
   const isSessionView = step === 'session-view'
 

@@ -100,6 +100,18 @@ const DETAIL_COPY: Record<WslHostStatusDetailCode, (values: Values) => string | 
           detail
         })
   },
+  runsAsOtherUser: ({ text }) => {
+    const user = text('user')
+    const defaultUser = text('defaultUser')
+    return user === null || defaultUser === null
+      ? null
+      : translate('sidebar.wslHosts.statusDetails.runsAsOtherUser', DETAIL.runsAsOtherUser, {
+          user,
+          defaultUser
+        })
+  },
+  serverIdentityReset: () =>
+    translate('sidebar.wslHosts.statusDetails.serverIdentityReset', DETAIL.serverIdentityReset),
   removalUnrecorded: ({ text }) => {
     const detail = text('detail')
     return detail === null

@@ -25,8 +25,6 @@ import type * as CompatibilityAuthority from '../orchestration/terminal-authorit
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
-import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
-import { sweepStoppedWorkerTerminals } from '../orchestration/terminal-authority/release/stopped-worker-terminal-release'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
 import { createLazyMobileSpeechOwners } from '../speech/lazy-mobile-speech-owners'
@@ -230,10 +228,15 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
     hasRequestedReleases: () =>
       (this.getExistingOrchestrationDb()?.listWorkerTerminalReleaseBacklog(1).length ?? 0) > 0,
-    reconcileRequestedReleases: () =>
-      reconcileRequestedWorkerTerminalReleases(this).then(() =>
-        sweepStoppedWorkerTerminals(this, () => this.legacyWorkerRecovery.isStopped())
-      ),
+    reconcileRequestedReleases: async () => {
+      const [{ reconcileRequestedWorkerTerminalReleases }, { sweepStoppedWorkerTerminals }] =
+        await Promise.all([
+          import('../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'),
+          import('../orchestration/terminal-authority/release/stopped-worker-terminal-release')
+        ])
+      await reconcileRequestedWorkerTerminalReleases(this)
+      await sweepStoppedWorkerTerminals(this, () => this.legacyWorkerRecovery.isStopped())
+    },
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
     updateRetry: (plan, deferredDispatchIds, options) =>
       this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)
@@ -283,8 +286,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     resolveRepo: (...args) => this.managedWorktreeQueries.resolveRepoForConnection(...args),
     notifyReposChanged: () => this.notifyReposChanged(),
     resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
-    acquireFileWatcherRemoval: (path, connectionId) =>
-      this.acquireFileWatcherRemoval(path, connectionId),
+    acquireFileWatcherRemoval: (...args) => this.acquireFileWatcherRemoval(...args),
     teardownFolderWorkspacePtys: (...target) =>
       teardownFolderWorkspacePtys(
         {
@@ -294,15 +296,13 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
         },
         ...target
       ),
-    cleanupRemovedFolderWorkspaceState: (worktreeId): void | Promise<void> => {
-      // Retire runs after the awaited store cleanup, so the delete cannot
-      // report before the Codex pretrust purge lands; failures degrade here.
-      const cleanup = this.store && this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
-      return Promise.resolve(cleanup).then(() => {
-        this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
-      })
+    cleanupRemovedFolderWorkspaceState: async (worktreeId) => {
+      await (this.store && this.removeWorktreeMetadataAndHistory(this.store, worktreeId))
+      this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
     },
-    emitWorktreeLifecycle: (event) => this.worktreeLifecycleEvents.emit(event)
+    emitWorktreeLifecycle: (event) => this.worktreeLifecycleEvents.emit(event),
+    isBotGroupHome: async (id) =>
+      (await import('../../bots/bot-group-runtime')).isBotGroupHomeFolderWorkspace(this, id)
   })
 
   private readonly repositoryCatalogDeps = {

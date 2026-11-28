@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { COMPOSER_TEXT_SIZE } from '../../../components/composer-input/composer-input-styles'
 
-export const prTabStyles = themedStyleSheet(() => ({
+export const prTabStylesSheet = themedStyleSheet((colors) => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
   dockBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacing.sm },
   scroll: { flex: 1 },
@@ -136,7 +136,7 @@ export const prTabStyles = themedStyleSheet(() => ({
   }
 }))
 
-export const prSheetStyles = themedStyleSheet(() => ({
+export const prSheetStylesSheet = themedStyleSheet((colors) => ({
   // Groups span the sheet like every other sheet's; text lines up with the rows' 16 pt inset.
   body: { paddingBottom: spacing.lg, gap: spacing.md },
   note: { color: colors.textSecondary, fontSize: 13, paddingHorizontal: spacing.lg },

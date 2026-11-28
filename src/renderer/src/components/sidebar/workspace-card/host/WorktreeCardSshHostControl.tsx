@@ -69,6 +69,8 @@ function PassiveGlyph({
   )
 }
 
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+
 export function WorktreeCardSshHostControl({
   targetId,
   targetLabel,
@@ -79,7 +81,6 @@ export function WorktreeCardSshHostControl({
   onPointerDown
 }: WorktreeCardSshHostControlProps): React.JSX.Element | null {
   const t = useTranslate()
-  const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
   // Share in-flight state across all host surfaces; store IPC lags the initial click.
   const inFlight = useSshConnectInFlight(targetId)
 
@@ -101,7 +102,7 @@ export function WorktreeCardSshHostControl({
         )
         if (connectState) {
           // Publish early connection results because deferred PTY reattach may precede state-change IPC.
-          setSshConnectionState(targetId, connectState)
+          getAppStoreState().setSshConnectionState(targetId, connectState)
         }
       }
     } catch (err) {
@@ -126,7 +127,7 @@ export function WorktreeCardSshHostControl({
         })().catch(() => {})
       }
     }
-  }, [setSshConnectionState, sshOwnerEnvironmentId, status, targetId])
+  }, [sshOwnerEnvironmentId, status, targetId])
 
   // Live connection outranks stale removal; runtime-owned null status stays passive without claiming disconnection.
   if (status === null || status === 'connected') {

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-details'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getReadonlyWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from '../../workspace-actions/deletion/workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
@@ -76,7 +76,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     hoverDetailsOpen
   )
   const reviewChecks = summarizeWorkspaceReviewChecks(
-    getWorkspaceAttachments(worktree),
+    getReadonlyWorkspaceAttachments(worktree),
     referenceDetails
   )
 

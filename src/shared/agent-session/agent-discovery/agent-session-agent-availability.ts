@@ -17,7 +17,8 @@ export const AGENT_SESSION_AVAILABILITY_METHOD = 'agentSession.subscribeAvailabi
 export type AgentSessionChatProgram = 'available' | 'installable' | 'missing' | 'unknown'
 
 /** `refused` carries the reason (`agent`: this host cannot run its chat; `windows`: the agent has
- *  no chat on a Windows host); `unknown` is a check that could not answer, never a refusal. */
+ *  no chat on a Windows host; `too-old`: the installed CLI is older than chats need); `unknown` is
+ *  a check that could not answer, never a refusal. */
 export type AgentSessionAgentAvailability = (
   | { agent: string; state: 'available' }
   | { agent: string; state: 'refused'; reason?: string }

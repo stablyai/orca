@@ -24,7 +24,7 @@ import {
   type SkippedTranscriptRecord
 } from '../transcripts/session-transcript-record-budget'
 
-// Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
+// Bump for row-layout or cached-semantic changes; each version keeps its own database file.
 export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 10
 
 const SCHEMA_SQL = `
@@ -77,7 +77,12 @@ const ROWS_REPAIR_SQL =
     `instr(rows.session, '"agent":"claude"') > 0 AND instr(rows.session, '"title":"<') > 0`
   ) +
   // Copilot rows whose totals added currentTokens and cache/reasoning subsets to model usage.
-  rowsRepairSql('copilot_usage_rows_version', `instr(rows.session, '"agent":"copilot"') > 0`)
+  rowsRepairSql('copilot_usage_rows_version', `instr(rows.session, '"agent":"copilot"') > 0`) +
+  // Legacy OpenCode JSON metadata omits bodies, which live in separate part files.
+  rowsRepairSql(
+    'opencode_json_parts_rows_version',
+    `instr(rows.session, '"agent":"opencode"') > 0 AND rows.path GLOB '*.json'`
+  )
 // Rows hold transcript-derived preview text; keep the directory user-only.
 const PRIVATE_DIRECTORY_MODE = 0o700
 // A ~2.3 KB row fills most of a 4 KB page; 8 KB pages fit three.

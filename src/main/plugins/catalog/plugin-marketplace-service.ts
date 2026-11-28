@@ -138,6 +138,7 @@ export class PluginMarketplaceService {
     const removed = await this.store.removeSource(sourceId)
     if (removed) {
       this.sourceErrors.delete(sourceId)
+      this.refreshSourceShared.evict(sourceId)
       if (this.officialSeedRequested) {
         // Recover the managed source when a full profile frees a slot, without restart.
         await this.seedOfficialSource().catch(() => undefined)

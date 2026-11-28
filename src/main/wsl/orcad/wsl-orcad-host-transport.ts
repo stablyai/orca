@@ -27,6 +27,7 @@ import {
   WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS
 } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
+import { pinnedWslHostLinuxUser } from './wsl-orcad-host-user'
 
 export type WslOrcadHostTransport = OrcadHostTransport & {
   getTarget(): WslOrcadHostTarget
@@ -44,6 +45,8 @@ type WslOrcadHostTransportOptions = {
   commandLoops?: boolean
   /** Test seam; production shares the deploy's own registry read (no extra reg.exe). */
   readDistroRegistryId?: (distro: string) => Promise<string | null>
+  /** Overrides the host's pinned account; null runs as the distro's default user. */
+  user?: string | null
   /** Once aborted, no wsl.exe starts and running ones end, so a late step can't boot a stopped distro. */
   signal?: AbortSignal
 }
@@ -56,7 +59,10 @@ export function createWslOrcadHostTransport(
   const { target } = options
   const spawnWsl = (shellArgs: string[]) => {
     const program = resolveWslExecutablePath()
-    const args = buildWslExecArgs(target.distro, shellArgs)
+    const args = buildWslExecArgs(target.distro, shellArgs, {
+      user:
+        options.user === null ? undefined : (options.user ?? pinnedWslHostLinuxUser(target.distro))
+    })
     if (commandLineLength([program, ...args]) > MAX_COMMAND_LINE_CHARS) {
       throw new Error('WSL command exceeds the Windows command-line limit')
     }

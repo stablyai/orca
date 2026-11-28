@@ -6,7 +6,10 @@ export function reconcileCatalogRows<T>(
   next: readonly T[],
   getIdentity: (row: T) => string
 ): readonly T[] {
-  const previousByIdentity = new Map(previous.map((row) => [getIdentity(row), row]))
+  const previousByIdentity = new Map<string, T>()
+  for (const row of previous) {
+    previousByIdentity.set(getIdentity(row), row)
+  }
   let identical = next.length === previous.length
   const reconciled = next.map((row, index) => {
     const existing = previousByIdentity.get(getIdentity(row))

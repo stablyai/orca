@@ -17,6 +17,8 @@ import { validateComputerSidecarPasteText } from '../action-contracts/computer-s
 import { RuntimeClientError } from '../runtime-client-error'
 import { assertTeamAllowsComputerUse } from '../computer-team-policy'
 import { getForkedChildEntryPath } from '../../worker-threads/forked-child-entry-path'
+import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { COMPUTER_SIDECAR_DEV_BUILD_ENV } from './computer-sidecar-dev-build-env'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
 export const COMPUTER_SIDECAR_ENTRY_FILENAME = 'computer-sidecar.js'
@@ -220,7 +222,9 @@ class ComputerSidecarProcess {
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
-        ORCA_COMPUTER_SIDECAR: '1'
+        ORCA_COMPUTER_SIDECAR: '1',
+        [COMPUTER_SIDECAR_DEV_BUILD_ENV]:
+          hasAppEnvironment() && !getAppEnvironment().isPackaged() ? '1' : '0'
       },
       ...(process.platform === 'win32' ? { windowsHide: true } : {})
     })

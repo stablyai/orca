@@ -19,8 +19,7 @@ import {
 } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { PhoneAsk } from './phone-needs-you-asks'
 import { chatSessionId } from './use-phone-chat-prompts'
 import type { PhoneConnectorNeed } from '../connectors/phone-connector-needs'
@@ -87,6 +86,7 @@ function AskRow({
   onOpen: () => void
   onSkipFailed: (message: string) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const capabilities = useOptionalHostProtocolGates()?.hostCapabilities
   const hostSupport = useMemo(
@@ -159,6 +159,7 @@ function AccessAskRow({
   disabled: boolean
   onOpen: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const title = t('bots.needs.access', '{{person}} asked for access', {
     person: accessRequestPerson(request)
@@ -200,6 +201,7 @@ function PairedAskRow({
   disabled: boolean
   onOpen: (() => void) | null
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const name = card.botName ?? botName
   const title = t('bots.needs.pairedAsk', '{{from}} wants to message {{name}}', {
@@ -235,6 +237,7 @@ function ConnectorsAskRow({
   disabled: boolean
   onOpen: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [only] = needs
   const several = needs.length > 1
@@ -288,7 +291,6 @@ export function MobileBotNeedsYouGroup({
   client: RpcClient | null
   onSkipFailed: (message: string) => void
 }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const [folded, setFolded] = useState(false)
   const [expanded, setExpanded] = useState(false)

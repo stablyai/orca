@@ -19,6 +19,7 @@ import {
   parseCursorSessionToken,
   type CursorSessionToken
 } from './cursor-session-token'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 // cursor-agent 2026.06+ stores tokens in Keychain instead of auth.json.
 const KEYCHAIN_SERVICE = 'cursor-access-token'
@@ -49,18 +50,24 @@ function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
-const cliConfigSchema = z.object({
-  authInfo: z.object({ email: z.unknown(), displayName: z.unknown() }).partial().optional()
-})
+const cliConfigSchema = lazyZodSchema(() =>
+  z.object({
+    authInfo: z.object({ email: z.unknown(), displayName: z.unknown() }).partial().optional()
+  })
+)
 
 // Linux/Windows cursor-agent keep this shape in the OS secret store; auth.json keeps only `storedIn`.
-const cliAuthFileSchema = z.object({ accessToken: z.unknown(), storedIn: z.unknown() }).partial()
+const cliAuthFileSchema = lazyZodSchema(() =>
+  z.object({ accessToken: z.unknown(), storedIn: z.unknown() }).partial()
+)
 
 // Windows cursor-agent's secret store: `auth.dpapi` next to auth.json, holding a current-user DPAPI blob.
-const dpapiFileSchema = z.object({
-  version: z.literal(1),
-  dpapi: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/)
-})
+const dpapiFileSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    dpapi: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/)
+  })
+)
 const DPAPI_ERROR = 'Unable to decrypt the Cursor CLI login'
 
 /** `cli-config.json` carries the signed-in identity for keychain-backed CLI sessions. */
@@ -103,10 +110,12 @@ function parseCliCredentials(text: string): CliFileReadResult {
 
 // Providers may prompt on each search (KeePassXC unlock-before-search), so every outcome, failures included,
 // is reused until cursor-agent rewrites auth.json; concurrent reads for the same mtime share one secret-tool run.
+// Explicit user refreshes may retry a settled non-ok outcome so unlocking the keyring recovers without rewriting auth.json.
 let linuxKeyringRead: {
   authPath: string
   authMtimeMs: number
   result: Promise<TokenReadResult>
+  settledStatus?: TokenReadResult['status']
 } | null = null
 
 function tokenFromSecret(secret: string): TokenReadResult {
@@ -124,7 +133,8 @@ function tokenFromKeyringRead(read: CursorLinuxKeyringRead): TokenReadResult {
 
 async function readLinuxKeyringToken(
   authPath: string,
-  cliFile: CliFileReadResult
+  cliFile: CliFileReadResult,
+  retryFailure: boolean
 ): Promise<TokenReadResult> {
   // Only cursor-agent's auth.json marker justifies reading the keyring.
   if (cliFile.status !== 'in-keyring') {
@@ -137,12 +147,26 @@ async function readLinuxKeyringToken(
   } catch {
     return { status: 'missing' }
   }
-  if (linuxKeyringRead?.authPath !== authPath || linuxKeyringRead.authMtimeMs !== authMtimeMs) {
-    linuxKeyringRead = {
+  const shouldRetrySettledFailure =
+    retryFailure &&
+    linuxKeyringRead?.settledStatus !== undefined &&
+    linuxKeyringRead.settledStatus !== 'ok'
+  if (
+    linuxKeyringRead?.authPath !== authPath ||
+    linuxKeyringRead.authMtimeMs !== authMtimeMs ||
+    shouldRetrySettledFailure
+  ) {
+    const entry: NonNullable<typeof linuxKeyringRead> = {
       authPath,
       authMtimeMs,
-      result: readCursorLinuxKeyringSecret().then(tokenFromKeyringRead)
+      result: readCursorLinuxKeyringSecret()
+        .then(tokenFromKeyringRead)
+        .then((outcome) => {
+          entry.settledStatus = outcome.status
+          return outcome
+        })
     }
+    linuxKeyringRead = entry
   }
   return linuxKeyringRead.result
 }
@@ -233,6 +257,8 @@ export type CursorAuthReadOptions = {
   cliAuthPath?: string
   cliConfigPath?: string
   desktopStateDbPath?: string
+  /** Bypass a settled non-ok Linux keyring cache entry (e.g. on an explicit user refresh after unlocking). */
+  retryLinuxKeyringError?: boolean
 }
 
 /** Prefer live CLI sessions (OS secret store, then legacy auth.json), then IDE sessions; never refresh or write credentials. */
@@ -260,7 +286,11 @@ export async function readCursorAuthSession(
   const readCliFile = (): CliFileReadResult => (cliFile ??= readCliFileToken(cliAuthPath))
   const keychainRead =
     process.platform === 'linux'
-      ? await readLinuxKeyringToken(cliAuthPath, readCliFile())
+      ? await readLinuxKeyringToken(
+          cliAuthPath,
+          readCliFile(),
+          options.retryLinuxKeyringError === true
+        )
       : await readKeychainToken()
   if (keychainRead.status === 'error') {
     errors.push(keychainRead.error)

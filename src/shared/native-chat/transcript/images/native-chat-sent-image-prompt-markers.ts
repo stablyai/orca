@@ -33,23 +33,55 @@ export function imageReferencesToPromptMarkers(
   })
 }
 
-function findClosingBackticks(text: string, from: number, length: number): number {
-  BACKTICKS.lastIndex = from
+function indexBacktickRuns(text: string): {
+  findClosing: (openStart: number, length: number) => number
+} {
+  const byLength = new Map<number, { starts: number[]; paragraphs: number[]; cursor: number }>()
+  const runParagraphByStart = new Map<number, number>()
+  let paragraph = 0
+  let prevEnd = 0
+  BACKTICKS.lastIndex = 0
   for (let match = BACKTICKS.exec(text); match !== null; match = BACKTICKS.exec(text)) {
-    if (BLANK_LINE_BREAK.test(text.slice(from, match.index))) {
-      return -1
+    const start = match.index
+    const length = match[0].length
+    if (prevEnd > 0 && BLANK_LINE_BREAK.test(text.slice(prevEnd, start))) {
+      paragraph += 1
     }
-    if (match[0].length === length) {
-      return match.index + length
+    prevEnd = start + length
+    runParagraphByStart.set(start, paragraph)
+    let bucket = byLength.get(length)
+    if (!bucket) {
+      bucket = { starts: [], paragraphs: [], cursor: 0 }
+      byLength.set(length, bucket)
+    }
+    bucket.starts.push(start)
+    bucket.paragraphs.push(paragraph)
+  }
+
+  return {
+    findClosing(openStart: number, length: number): number {
+      const openParagraph = runParagraphByStart.get(openStart)
+      const bucket = byLength.get(length)
+      if (openParagraph === undefined || !bucket) {
+        return -1
+      }
+      const { starts, paragraphs } = bucket
+      while (bucket.cursor < starts.length && starts[bucket.cursor] <= openStart) {
+        bucket.cursor += 1
+      }
+      if (bucket.cursor >= starts.length || paragraphs[bucket.cursor] !== openParagraph) {
+        return -1
+      }
+      return starts[bucket.cursor] + length
     }
   }
-  return -1
 }
 
 function replaceMarkersOutsideInlineCode(
   text: string,
   replace: (number: number, marker: string) => string
 ): string {
+  const backtickRuns = text.includes('`') ? indexBacktickRuns(text) : null
   let out = ''
   let last = 0
   SENT_MARKER_OR_PROTECTED_TOKEN.lastIndex = 0
@@ -60,7 +92,7 @@ function replaceMarkersOutsideInlineCode(
   ) {
     const [token, ticks, fileReference, number] = match
     if (ticks !== undefined) {
-      const closeEnd = findClosingBackticks(text, match.index + ticks.length, ticks.length)
+      const closeEnd = backtickRuns?.findClosing(match.index, ticks.length) ?? -1
       if (closeEnd !== -1) {
         SENT_MARKER_OR_PROTECTED_TOKEN.lastIndex = closeEnd
       }

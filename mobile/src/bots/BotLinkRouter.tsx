@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { PickerModal } from '../components/sheets/PickerModal'
 import { hostPickerOptions } from '../host-catalog/selection/use-connected-host-picker'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { NewWorkspaceLoadingDrawer } from '../new-workspace/NewWorkspaceLoadingDrawer'
 import type { HostProfile } from '../host-catalog/host-profile'
 import { redeemBotAccessRequest } from './bot-access-request-redeem'
@@ -59,7 +60,10 @@ export function BotLinkRouter() {
         })
         return
       }
-      Alert.alert(t('bots.link.updateOrca', 'Update Orca'), botLinkUpdateNeededLine(t, names))
+      Alert.alert(
+        t('bots.link.updateOrca', 'Update Orca'),
+        botLinkUpdateNeededLine(t, names, getUiIntlLocale())
+      )
     },
     [router, t]
   )
@@ -245,7 +249,7 @@ function BotLinkResolver({
       case 'unreachable':
         Alert.alert(
           t('bots.link.botNotFound', 'Bot not found'),
-          botLinkUnreachableLine(t, hostNames(resolution.hostIds))
+          botLinkUnreachableLine(t, hostNames(resolution.hostIds), getUiIntlLocale())
         )
         break
       case 'missing':

@@ -9,7 +9,6 @@ import {
   saveLinkOpenMode,
   type MobileLinkOpenMode
 } from '../storage/preferences'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 
 function linkModeOptions(
@@ -40,7 +39,6 @@ export default function BrowserSettingsScreen({
   onBack?: () => void
 }): React.JSX.Element {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const router = useRouter()
   const [linkMode, setLinkMode] = useState<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
   const [error, setError] = useState<'load' | 'save' | null>(null)

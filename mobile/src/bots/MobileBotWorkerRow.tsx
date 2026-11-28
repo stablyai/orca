@@ -6,7 +6,7 @@ import { ListRow } from '../components/list/ListGroup'
 import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import { formatNativeChatDuration } from '../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 
@@ -45,6 +45,7 @@ export function MobileBotWorkerRow({
   /** In place of its note and branch, as a chat's worker strip says what it is doing. */
   subtitle?: string
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const counting = worker.state === 'running'
   const now = useNow(1_000, counting)
@@ -84,7 +85,7 @@ export function MobileBotWorkerRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   // Indent only, no guide line: a worker sits one step under its chat.
   nested: { paddingLeft: spacing.xl }
 }))

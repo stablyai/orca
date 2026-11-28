@@ -35,7 +35,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { openConnectorLink, GITHUB_LINK_HOSTS } from './connector-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
@@ -49,6 +48,7 @@ import {
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
 import type { PhoneGitHubView } from './use-phone-connector-account'
 import { MobileGhSignedOutLine } from './MobileGhSignedOutLine'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileBotGitHubPage(props: {
   client: RpcClient | null
@@ -69,6 +69,7 @@ export function MobileBotGitHubPage(props: {
   /** `signIn`: the setup opens on GitHub's sign-in with the account picker. */
   onSetUp: (signIn?: boolean) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, installation, github, hostName } = props
   const [menuOpen, setMenuOpen] = useState(false)

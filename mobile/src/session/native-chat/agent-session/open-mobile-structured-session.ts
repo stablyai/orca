@@ -7,7 +7,6 @@ import {
   type StructuredSessionOpenTarget
 } from '../../../../../src/shared/agent-session/view/open-structured-agent-session'
 import { isStructuredAgentId } from '../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { structuredAgentSessionPaneKey } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   structuredOpenLocation,
@@ -18,6 +17,7 @@ import {
 import { sessionTabActivate } from '../../tabs/mobile-session-tab-write-operations'
 import { readWhileBotLinkConnected } from '../../../bots/bot-link-connection-read'
 import type { SendRequestOptions } from '../../../transport/rpc/unvalidated-rpc-request-port'
+import { chatPaneKey } from '../../../../../src/shared/agent-session/view/chat-pane-address'
 
 /** The workspace client already carries executionHost; a single budget includes connect waits. */
 export async function openMobileStructuredSession(args: {
@@ -193,9 +193,8 @@ function isRelayResetReply(reply: unknown): boolean {
 
 export function mobileStructuredSessionHref(
   hostId: string,
-  target: StructuredSessionOpenTarget,
-  tab: StructuredSessionOpenTab
+  target: StructuredSessionOpenTarget
 ): string {
-  const paneKey = structuredAgentSessionPaneKey(tab.id, target.sessionId)
+  const paneKey = chatPaneKey(target.sessionId)
   return `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}?paneKey=${encodeURIComponent(paneKey)}`
 }

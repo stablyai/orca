@@ -28,9 +28,10 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     let result: RuntimeRpcSuccess<{ browserPageId: string }>
     try {
       const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
+      const fromTabId = process.env.ORCA_TAB_ID
       result = await client.call<{ browserPageId: string }>(
         'browser.openUrl',
-        { url, worktree },
+        { url, worktree, ...(fromTabId ? { fromTabId } : {}) },
         { timeoutMs: 60_000 }
       )
     } catch (error) {

@@ -43,13 +43,10 @@ import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/catalog/hom
 import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { useHomeBots } from './bots/use-home-bots'
-import { useHomeServerAgents } from './use-home-server-agents'
-import {
-  homeUnreachableHostIds,
-  projectHomeHostConnections
-} from './home-host-connection-projection'
+import { projectHomeHostConnections } from './home-host-connection-projection'
 import { restoreHomeQueries } from './home-query-restore'
 import { homeWorktreeRead } from './home-worktree-read'
+import { useHomeUnreachableHosts } from './use-home-unreachable-hosts'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
 export type MobileHomeData = ReturnType<typeof useMobileHomeData>
@@ -217,13 +214,6 @@ export function useMobileHomeData() {
   )
 
   const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])
-  const agentWorktreeInfo = useHomeServerAgents(
-    homeHosts,
-    isLive,
-    homeFocused,
-    sortedHosts,
-    worktreeInfo
-  )
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   // One clock for every agent count, so Feed, the Agents badge and each desktop agree.
   const now = useNow(30_000, homeFocused)
@@ -256,11 +246,11 @@ export function useMobileHomeData() {
     () => ({
       hosts: sortedHosts,
       hostStates,
-      worktreeInfo: agentWorktreeInfo,
+      worktreeInfo,
       now,
       pendingActivity
     }),
-    [sortedHosts, hostStates, agentWorktreeInfo, now, pendingActivity]
+    [sortedHosts, hostStates, worktreeInfo, now, pendingActivity]
   )
   const agentsNeedingYou = useMemo(() => selectAgentsNeedingYou(agentList), [agentList])
   const activeAgents = useMemo(() => selectActiveAgents(agentList), [agentList])
@@ -276,19 +266,10 @@ export function useMobileHomeData() {
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const hostConnections = useMemo(() => projectHomeHostConnections(allClients), [allClients])
   const { autoConnectHostIds, hostAttempts } = connections
-  // Keyed by its members, so a retry that moves no desktop in or out keeps Home's rows as they are.
-  const unreachableKey = useMemo(
-    () =>
-      homeUnreachableHostIds(
-        hosts,
-        { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
-        now
-      ).join('\n'),
-    [hosts, autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates, now]
-  )
-  const unreachableHosts = useMemo(
-    () => new Set(unreachableKey ? unreachableKey.split('\n') : []),
-    [unreachableKey]
+  const unreachableHosts = useHomeUnreachableHosts(
+    hosts,
+    { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
+    now
   )
   // A desktop still dialing may yet connect; one Home never dials or gave up on won't.
   const hostsConnecting = hosts.some(

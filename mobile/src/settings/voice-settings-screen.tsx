@@ -5,8 +5,7 @@ import { MobileStateView } from '../components/feedback/MobileStateView'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { PickerModal } from '../components/sheets/PickerModal'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
@@ -74,7 +73,7 @@ export default function VoiceSettingsScreen({
   focused: boolean
   onBack: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(true)
@@ -394,6 +393,6 @@ export default function VoiceSettingsScreen({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   models: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }
 }))

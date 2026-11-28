@@ -40,29 +40,58 @@ export type SshWorktreeMetaCandidate = {
 
 export type SshWorktreeMetaIndex = Map<string, SshWorktreeMetaCandidate[]>
 
+function addSshWorktreeMetaEntry(
+  index: SshWorktreeMetaIndex,
+  worktreeId: string,
+  meta: WorktreeMeta
+): void {
+  let parsed: { repoId: string; worktreePath: string }
+  try {
+    parsed = parseWorktreeId(worktreeId)
+  } catch (err) {
+    warnOnce(
+      loggedMalformedWorktreeMetaKeys,
+      worktreeId,
+      `[worktrees] ignoring malformed persisted worktree metadata key "${worktreeId}"`,
+      err
+    )
+    return
+  }
+  let candidates = index.get(parsed.repoId)
+  if (!candidates) {
+    candidates = []
+    index.set(parsed.repoId, candidates)
+  }
+  candidates.push({ id: worktreeId, path: parsed.worktreePath, meta })
+}
+
 export function createSshWorktreeMetaIndex(
   entries: [string, WorktreeMeta][]
 ): SshWorktreeMetaIndex {
   const index: SshWorktreeMetaIndex = new Map()
-  for (const [worktreeId, meta] of entries) {
-    let parsed: { repoId: string; worktreePath: string }
-    try {
-      parsed = parseWorktreeId(worktreeId)
-    } catch (err) {
-      warnOnce(
-        loggedMalformedWorktreeMetaKeys,
-        worktreeId,
-        `[worktrees] ignoring malformed persisted worktree metadata key "${worktreeId}"`,
-        err
-      )
-      continue
-    }
-
-    const candidates = index.get(parsed.repoId) ?? []
-    candidates.push({ id: worktreeId, path: parsed.worktreePath, meta })
-    index.set(parsed.repoId, candidates)
+  for (let i = 0; i < entries.length; i += 1) {
+    addSshWorktreeMetaEntry(index, entries[i][0], entries[i][1])
   }
   return index
+}
+
+function hasOwnKeys(record: Readonly<Record<string, unknown>>): boolean {
+  for (const key in record) {
+    if (Object.hasOwn(record, key)) {
+      return true
+    }
+  }
+  return false
+}
+
+function countRepoOwners(repos: readonly Repo[], repoId: string): number {
+  let count = 0
+  for (const candidate of repos) {
+    if (candidate.id === repoId) {
+      count += 1
+    }
+  }
+  return count
 }
 
 // Scope ID parsing to one repo; enumerating the store snapshot still costs a full pass.
@@ -70,9 +99,13 @@ export function createSshWorktreeMetaIndexForRepo(
   allMeta: Record<string, WorktreeMeta>,
   repoId: string
 ): SshWorktreeMetaIndex {
-  return createSshWorktreeMetaIndex(
-    Object.entries(allMeta).filter(([worktreeId]) => getRepoIdFromWorktreeId(worktreeId) === repoId)
-  )
+  const index: SshWorktreeMetaIndex = new Map()
+  for (const worktreeId in allMeta) {
+    if (Object.hasOwn(allMeta, worktreeId) && getRepoIdFromWorktreeId(worktreeId) === repoId) {
+      addSshWorktreeMetaEntry(index, worktreeId, allMeta[worktreeId])
+    }
+  }
+  return index
 }
 
 export function synthesizeSshGitWorktree(
@@ -101,22 +134,20 @@ export function listDisconnectedSshWorktrees(
 ): Worktree[] {
   const byWorktreeId = new Map<string, Worktree>()
   const expectedHostId = getRepoExecutionHostId(repo)
-  const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
+  const repoOwnerCount = countRepoOwners(store.getRepos(), repo.id)
   for (const candidate of metaIndex.get(repo.id) ?? []) {
     // An archived row has no checkout to show while its host is unreachable.
     if (
       (candidate.meta.hostId && candidate.meta.hostId !== expectedHostId) ||
-      (!candidate.meta.hostId && repoOwners.length > 1) ||
+      (!candidate.meta.hostId && repoOwnerCount > 1) ||
       candidate.meta.archivedCheckout
     ) {
       continue
     }
     const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, candidate.meta)
-    const meta =
-      Object.keys(ownershipUpdates).length > 0
-        ? { ...candidate.meta, ...ownershipUpdates }
-        : candidate.meta
-    if (Object.keys(ownershipUpdates).length > 0) {
+    const hasUpdates = hasOwnKeys(ownershipUpdates)
+    const meta = hasUpdates ? { ...candidate.meta, ...ownershipUpdates } : candidate.meta
+    if (hasUpdates) {
       store.setWorktreeMeta(
         hostWorktreeTarget({ id: candidate.id, hostId: expectedHostId }),
         ownershipUpdates
@@ -145,15 +176,16 @@ export function buildDetectedGitWorktrees(
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
   const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
-  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+  const repoOwnerCount = countRepoOwners(store.getRepos(), repo.id)
   const readOwnedMeta = (worktreeId: string): WorktreeMeta | undefined => {
+    const direct = readWorktreeMetaForRepo(store, worktreeId, repo)
+    if (direct !== undefined) {
+      return direct
+    }
     // Locator-keyed metadata is only a compatibility fallback when no host snapshot exists.
     const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
     const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
-    return (
-      readWorktreeMetaForRepo(store, worktreeId, repo) ??
-      getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
-    )
+    return getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
   }
   // Keep failed removals retryable; other prunable registrations stay hidden (#8389).
   const liveWorktrees = collapsePathEqualWorktreeRows(
@@ -163,8 +195,12 @@ export function buildDetectedGitWorktrees(
     ),
     (worktreeId) => readOwnedMeta(worktreeId) !== undefined
   )
+  const visibilityPaths: string[] = [repo.path]
+  for (let i = 0; i < liveWorktrees.length; i += 1) {
+    visibilityPaths.push(liveWorktrees[i].path)
+  }
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
-    [repo.path, ...liveWorktrees.map((worktree) => worktree.path)],
+    visibilityPaths,
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(repo)
   )

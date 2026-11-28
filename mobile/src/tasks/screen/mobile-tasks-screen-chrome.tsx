@@ -7,14 +7,13 @@ import { View } from 'react-native'
 import { ChevronLeft, Ellipsis, RefreshCw } from 'lucide-react-native'
 import { StatusDot } from '../../components/feedback/StatusDot'
 import { MobileTasksHostSubtitle } from './mobile-tasks-host-subtitle'
-import { styles } from '../mobile-tasks-legacy-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useRefreshHint } from '../../query/refresh-hint'
 
 // Back, Tasks and ⋯ only: filters live in the bar's filter sheet, search at the bottom.
 export function renderMobileTasksChrome(model: ConnectionPresentationModel) {
   return (
-    <View ref={model.setTaskCopyFeedbackRootRef} style={styles.topChrome}>
+    <View ref={model.setTaskCopyFeedbackRootRef} style={model.styles.topChrome}>
       <MobileTasksNavBar model={model} />
     </View>
   )

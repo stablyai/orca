@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
 import { ChevronsUpDown } from 'lucide-react-native'
-import { colors, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { triggerError, triggerSuccess } from '../../../../platform/haptics/haptics'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
@@ -33,10 +33,10 @@ import {
 import { useMobileCommitFailureRecovery } from '../../../commits/use-mobile-commit-failure-recovery'
 import { MobileCommitFailurePanel } from '../../../commits/MobileCommitFailurePanel'
 import type { MobilePrTab } from '../use-mobile-pr-tab'
-import { prSheetStyles as sheetStyles } from '../pr-tab-styles'
+import { prSheetStylesSheet as sheetStylesSheet } from '../pr-tab-styles'
 import { PrBasePicker } from './PrBasePicker'
 import { MessageBox } from '../../../../components/composer-input/MessageBox'
-import { groupFieldStyles } from '../../../../components/composer-input/composer-input-styles'
+import { groupFieldStylesSheet } from '../../../../components/composer-input/composer-input-styles'
 import { workspaceDraftRowKey } from '../../../../drafts/durable-draft-rows'
 import {
   updateDurableDraftField,
@@ -72,7 +72,10 @@ function useKeptCreateFields(key: string | null): Fields | null {
 
 // One Create flow for every entry point and all five providers: seed from commits, push if needed, land on the PR tab.
 export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const sheetStyles = useThemedStyles(sheetStylesSheet)
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client, hostId, worktreeId, gitBranch } = tab
   const executionHost = useWorkspaceExecutionHost()
@@ -140,7 +143,7 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
     }
   }, [client, gitBranch, worktreeId])
 
-  const copy = hostedReviewCopy(fields?.provider)
+  const copy = hostedReviewCopy(fields?.provider, t)
   const title = t('pullRequest.createSheet.title', 'Create {{reviewLabel}}', {
     reviewLabel: copy.reviewLabel
   })
@@ -398,6 +401,6 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
 
 const TITLE_LINES = { min: 1, max: 3 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   loading: { padding: spacing.xl, alignItems: 'center' }
 }))

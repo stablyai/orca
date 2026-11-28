@@ -216,12 +216,11 @@ export function glabHostnameArgs(
   return connectionId && projectRef?.host ? ['--hostname', projectRef.host] : []
 }
 
-/** mr/issue commands reject --hostname; use GITLAB_HOST instead. */
-export function glabHostEnvOptions(
-  projectRef: Pick<ProjectRef, 'host'> | null | undefined,
-  connectionId?: string | null
-): { env?: NodeJS.ProcessEnv } {
-  if (!connectionId || !projectRef?.host) {
+/** mr/issue reject --hostname, and older glab resolves a bare -R against its default host, not the cwd remote; use GITLAB_HOST. */
+export function glabHostEnvOptions(projectRef: Pick<ProjectRef, 'host'> | null | undefined): {
+  env?: NodeJS.ProcessEnv
+} {
+  if (!projectRef?.host) {
     return {}
   }
   const env: NodeJS.ProcessEnv = { ...process.env, GITLAB_HOST: projectRef.host }

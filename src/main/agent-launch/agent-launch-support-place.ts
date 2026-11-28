@@ -1,7 +1,12 @@
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import type { AgentCliInstallationProblem } from '../../shared/agent-launch/catalog/agent-cli-installation-problem'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentCreateSupportReply } from '../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+
+export type StructuredCreateSupportWithInstallation = StructuredAgentCreateSupportReply & {
+  installation?: AgentCliInstallationProblem
+}
 
 export const REGISTERED_STRUCTURED_AGENTS: readonly string[] =
   STRUCTURED_AGENT_RUNTIME_METADATA.map(({ definition }) => definition.agent)
@@ -20,7 +25,7 @@ export async function readStructuredCreateSupport(
   runtime: CreateSupportRuntime,
   place: AgentLaunchSupportPlace,
   agent: TuiAgent | undefined
-): Promise<StructuredAgentCreateSupportReply | null> {
+): Promise<StructuredCreateSupportWithInstallation | null> {
   if (!agent || !REGISTERED_STRUCTURED_AGENTS.includes(agent)) {
     return { supported: false, reason: 'agent' }
   }

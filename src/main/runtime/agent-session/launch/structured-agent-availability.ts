@@ -80,7 +80,7 @@ async function observeHostAgent(
     return { agent, state: 'available' }
   }
   return seen.status === 'tooOld'
-    ? { agent, state: 'refused', reason: 'agent' }
+    ? { agent, state: 'refused', reason: 'too-old' }
     : { agent, state: 'unknown' }
 }
 

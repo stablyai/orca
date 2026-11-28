@@ -8,6 +8,7 @@ import {
   resumeInvocationFromOptions,
   type StructuredAgentSessionHistory
 } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import { DROID_TRANSCRIPT_IMPORT } from './droid-transcript-import'
 
 // Chats and terminals share Droid's session store; `droid resume <id>` is `--resume <id>`.
 const DROID_SESSION_HISTORY: StructuredAgentSessionHistory = {
@@ -45,7 +46,7 @@ export const DROID_LAUNCH_SPEC: AcpLaunchSpec = {
     reason: 'Droid lists its models only inside a session it cannot delete'
   },
   instructions: deliverDroidInstructions,
-  transcriptImport: null,
+  transcriptImport: DROID_TRANSCRIPT_IMPORT,
   sessionHistory: DROID_SESSION_HISTORY,
   // No session/delete: a naming task's session would land in the user's Droid history.
   keepsEverySession: true

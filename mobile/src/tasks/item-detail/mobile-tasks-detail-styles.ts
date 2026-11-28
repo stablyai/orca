@@ -1,12 +1,12 @@
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { radii, spacing } from '../../theme/mobile-theme'
 import {
-  composerInputStyles,
+  composerInputStylesSheet,
   COMPOSER_TEXT_SIZE
 } from '../../components/composer-input/composer-input-styles'
 import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 
-export const mobileTasksDetailStyles = themedStyleSheet(() => ({
+export const mobileTasksDetailStylesSheet = themedStyleSheet((colors, scheme) => ({
   sheetHeader: {
     paddingHorizontal: spacing.xs,
     marginBottom: spacing.md
@@ -127,7 +127,7 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   },
   // Pickers sit beside text fields in these forms, so they wear the same field shell.
   fieldButton: {
-    ...composerInputStyles.field,
+    ...composerInputStylesSheet.resolve(scheme).field,
     paddingVertical: spacing.sm
   },
   fieldButtonDisabled: {

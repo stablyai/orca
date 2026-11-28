@@ -49,7 +49,7 @@ export function useHostScreenController({
   hostId: hostIdProp,
   onHideSidebar
 }: HostScreenProps = {}) {
-  useMobileTranslation()
+  const t = useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
@@ -70,13 +70,16 @@ export function useHostScreenController({
     useHostProtocolGates()
   const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
-  const connectionVerdict = classifyConnection({
-    state: connState,
-    reconnectAttempts,
-    lastConnectedAt,
-    hostName: state.hostName,
-    ...relayRecovery
-  })
+  const connectionVerdict = classifyConnection(
+    {
+      state: connState,
+      reconnectAttempts,
+      lastConnectedAt,
+      hostName: state.hostName,
+      ...relayRecovery
+    },
+    t
+  )
   const hostDisplay = useHostDisplay(
     hostId && state.hostName
       ? { id: hostId, name: state.hostName, ...state.hostStoredDescriptor }

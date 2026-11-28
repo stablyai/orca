@@ -26,6 +26,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'mobileRelayHosts'
   | 'peerDesktops'
   | 'delegatedMobileDevices'
+  | 'delegatedPhoneServerOffers'
   | 'sendBinary'
   | 'registerBinaryStreamHandler'
   | 'registerBinaryMessageHandler'
@@ -84,6 +85,7 @@ export function rpcContextFromTransport(
     mobileRelayHosts: options?.mobileRelayHosts,
     peerDesktops: options?.peerDesktops,
     delegatedMobileDevices: options?.delegatedMobileDevices,
+    delegatedPhoneServerOffers: options?.delegatedPhoneServerOffers,
     sendBinary: options?.sendBinary,
     registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
     registerBinaryMessageHandler: options?.registerBinaryMessageHandler,

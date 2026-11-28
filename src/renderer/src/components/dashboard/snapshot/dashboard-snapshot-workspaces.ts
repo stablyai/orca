@@ -15,10 +15,14 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type ActiveDashboardWorkspace = {
   projectId: string
@@ -64,6 +68,30 @@ function remoteHostKind(
     return 'ssh'
   }
   return executionHostId && executionHostId !== 'local' ? 'remote' : null
+}
+
+export function collectActiveDashboardOwnerIds(state: DashboardWorkspaceState): Set<string> {
+  const ownerIds = new Set<string>()
+  const worktreesByRepo = selectWorktreesByRepo(state)
+  if (worktreesByRepo) {
+    for (const repo of state.repos ?? []) {
+      const worktrees = worktreesByRepo[repo.id]
+      if (!worktrees) {
+        continue
+      }
+      for (const worktree of worktrees) {
+        if (!worktree.isArchived) {
+          ownerIds.add(worktree.id)
+        }
+      }
+    }
+  }
+  for (const folderWorkspace of selectFolderWorkspaces(state) ?? []) {
+    if (!folderWorkspace.isArchived) {
+      ownerIds.add(folderWorkspaceKey(folderWorkspace.id))
+    }
+  }
+  return ownerIds
 }
 
 export function collectActiveDashboardWorkspaces(

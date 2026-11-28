@@ -195,9 +195,6 @@ export function paletteForScheme(scheme: MobileColorScheme): MobilePalette {
   return palettes[scheme]
 }
 
-// Live object rewritten in place on a scheme change; read it at render time, never copy at module scope.
-export const colors: MobilePalette = { ...darkColors }
-
 let currentScheme: MobileColorScheme = 'dark'
 const schemeListeners = new Set<() => void>()
 
@@ -205,12 +202,16 @@ export function getMobileColorScheme(): MobileColorScheme {
   return currentScheme
 }
 
+// For event handlers and effects; render code reads useMobileColors() so React Compiler sees the dependency.
+export function getMobilePalette(): MobilePalette {
+  return palettes[currentScheme]
+}
+
 export function applyMobileColorScheme(scheme: MobileColorScheme): void {
   if (scheme === currentScheme) {
     return
   }
   currentScheme = scheme
-  Object.assign(colors, palettes[scheme])
   for (const listener of schemeListeners) {
     listener()
   }

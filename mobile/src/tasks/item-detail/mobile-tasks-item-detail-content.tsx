@@ -6,12 +6,12 @@ import {
 } from '../../../../src/shared/source-control/checks/provider-check-summary'
 import { Text, View } from 'react-native'
 import { CircleCheck, FolderKanban, Gauge, ListChecks, Tag, Users } from 'lucide-react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { styles as legacyStyles } from '../mobile-tasks-legacy-styles'
+import { stylesSheet as legacyStylesSheet } from '../mobile-tasks-legacy-styles'
 import { discussionSummary } from './mobile-tasks-item-comments'
 import {
   renderMobileTasksItemBodyEditor,
@@ -33,7 +33,8 @@ export type MobileTasksDetailSubpage = 'checks' | 'subIssues'
 /** What a PR's checks say in one word, from the shared summary the list row's tone also reads. */
 function checksValue(
   checks: readonly GitHubDetailCheck[],
-  t: Translate
+  t: Translate,
+  colors: MobilePalette
 ): { text: string; color?: string } {
   const summary = summarizeProviderChecks(checks)
   switch (getProviderChecksOutcome(summary)) {
@@ -76,7 +77,8 @@ function factRows(
   payload: DetailPayload,
   isPullRequest: boolean,
   openSubpage: (page: MobileTasksDetailSubpage) => void,
-  t: Translate
+  t: Translate,
+  colors: MobilePalette
 ): FactRow[] {
   const icon = (Icon: typeof Users) => (
     <Icon size={18} color={colors.textSecondary} strokeWidth={2} />
@@ -127,7 +129,7 @@ function factRows(
     })
   }
   if (payload.provider === 'github' && isPullRequest && payload.checks.length > 0) {
-    const checks = checksValue(payload.checks, t)
+    const checks = checksValue(payload.checks, t, colors)
     rows.push({
       key: 'checks',
       icon: icon(CircleCheck),
@@ -157,7 +159,9 @@ export function MobileTasksItemDetailContent({
   model: ConnectionPresentationModel
   openSubpage: (page: MobileTasksDetailSubpage) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const legacyStyles = useThemedStyles(legacyStylesSheet)
   const t = useMobileTranslation()
   const {
     actionItem,
@@ -199,7 +203,7 @@ export function MobileTasksItemDetailContent({
   const isPullRequest =
     (actionItem.provider === 'github' && actionItem.source.type === 'pr') ||
     (actionItem.provider === 'gitlab' && actionItem.source.type === 'mr')
-  const facts = factRows(detailPayload, isPullRequest, openSubpage, t)
+  const facts = factRows(detailPayload, isPullRequest, openSubpage, t, colors)
   return (
     <>
       {facts.length > 0 ? (
@@ -234,7 +238,7 @@ export function MobileTasksItemDetailContent({
       <View style={styles.body}>
         {detailPayload.comments.length === 0 ? (
           <Text style={legacyStyles.detailMuted}>
-            {discussionSummary(detailPayload.comments.length)}
+            {discussionSummary(t, detailPayload.comments.length)}
           </Text>
         ) : (
           detailCommentGroups.map(renderDetailCommentGroup)
@@ -264,7 +268,7 @@ export function MobileTasksItemDetailContent({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   group: { backgroundColor: colors.bgPanel, marginTop: spacing.lg },
   body: { paddingHorizontal: spacing.lg, gap: spacing.sm }
 }))

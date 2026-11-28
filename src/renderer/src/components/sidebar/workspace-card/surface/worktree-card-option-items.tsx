@@ -29,17 +29,18 @@ function boardAttr(preserveWorkspaceBoardOpen: boolean): '' | undefined {
   return preserveWorkspaceBoardOpen ? '' : undefined
 }
 
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+
 function useToggleCardProperty(): (property: WorktreeCardProperty, checked: boolean) => void {
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
-  const setWorktreeCardProperties = useAppStore((s) => s.setWorktreeCardProperties)
   return useCallback(
     (property, checked) => {
       const next = checked
         ? [...worktreeCardProperties, property]
         : worktreeCardProperties.filter((candidate) => candidate !== property)
-      setWorktreeCardProperties(next)
+      getAppStoreState().setWorktreeCardProperties(next)
     },
-    [setWorktreeCardProperties, worktreeCardProperties]
+    [worktreeCardProperties]
   )
 }
 
@@ -47,12 +48,11 @@ function AgentModelProperty(): React.JSX.Element {
   const t = useTranslate()
   const showAgentModels = useAppStore((s) => s.showAgentModels !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  const setShowAgentModels = useAppStore((s) => s.setShowAgentModels)
   return (
     <DropdownMenuCheckboxItem
       checked={showAgentModels}
       disabled={!persistedUIReady}
-      onCheckedChange={(checked) => setShowAgentModels(checked === true)}
+      onCheckedChange={(checked) => getAppStoreState().setShowAgentModels(checked === true)}
       onSelect={(e) => e.preventDefault()}
     >
       {t('sidebar.cardProperties.agentModel', 'Agent model')}
@@ -71,7 +71,6 @@ export function WorktreeCardDisplayMenuItem({
   const options = useMemo(() => getWorktreeCardDisplayOptions(hasProjectGroups), [hasProjectGroups])
   const experimentalCard = useAppStore(selectDrawsNewWorktreeCards)
   const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow !== false)
-  const updateSettings = useAppStore((s) => s.updateSettings)
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -91,7 +90,9 @@ export function WorktreeCardDisplayMenuItem({
             <DropdownMenuCheckboxItem
               checked={detailsRow}
               onCheckedChange={(checked) =>
-                void updateSettings({ worktreeCardDetailsRow: checked === true })
+                void getAppStoreState().updateSettings({
+                  worktreeCardDetailsRow: checked === true
+                })
               }
               onSelect={(e) => e.preventDefault()}
             >
@@ -121,7 +122,6 @@ export function WorktreeCardLayoutMenuItem({
 }: CardMenuItemProps): React.JSX.Element {
   const t = useTranslate()
   const compact = useAppStore((s) => s.settings?.compactWorktreeCards === true)
-  const setWorktreeCardMode = useAppStore((s) => s.setWorktreeCardMode)
   const cardLayout = compact ? 'compact' : 'detailed'
   const cardLayoutLabel =
     CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
@@ -143,7 +143,7 @@ export function WorktreeCardLayoutMenuItem({
           value={cardLayout}
           onValueChange={(value) => {
             // Apply layout presets so menu selection stays aligned with card-property defaults.
-            setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
+            getAppStoreState().setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
           }}
         >
           {CARD_LAYOUT_OPTIONS.map((opt) => (
@@ -165,7 +165,7 @@ export function WorktreeCardPropertiesMenuItem({
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const compact = useAppStore((s) => s.settings?.compactWorktreeCards === true)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
-  const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
+  const setAgentActivityDisplayMode = getAppStoreState().setAgentActivityDisplayMode
   const toggleProperty = useToggleCardProperty()
   const value = getWorkspaceCardPropertiesValue(worktreeCardProperties, compact)
   return (

@@ -35,6 +35,7 @@ export function worker(index: number, state: WorkerDockRowView['state'], remote:
     source: SOURCE,
     name: `ORCA-${30 + index}`,
     title: TITLES[index % TITLES.length],
+    agent: index % 2 === 0 ? 'codex' : 'claude',
     model: 'gpt-6.1-sol',
     state,
     changedAt: at,

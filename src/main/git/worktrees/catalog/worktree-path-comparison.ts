@@ -18,9 +18,26 @@ export function canonicalWorktreePath(pathValue: string, platform = process.plat
     : canonicalPosixPath(pathValue, platform)
 }
 
+function isAlreadyNormalizedPosixAbsolutePath(pathValue: string): boolean {
+  if (pathValue.charCodeAt(0) !== 47) {
+    return false
+  }
+  if (pathValue.length === 1) {
+    return true
+  }
+  return (
+    pathValue.charCodeAt(pathValue.length - 1) !== 47 &&
+    !pathValue.includes('//') &&
+    !pathValue.includes('/.')
+  )
+}
+
 // macOS Git reports /tmp checkouts as /private/tmp.
 function canonicalPosixPath(pathValue: string, platform: NodeJS.Platform): string {
-  const normalized = posix.normalize(posix.resolve(pathValue))
+  // posix.resolve already normalizes; skip it completely for already-canonical absolute POSIX paths.
+  const normalized = isAlreadyNormalizedPosixAbsolutePath(pathValue)
+    ? pathValue
+    : posix.resolve(pathValue)
   if (platform !== 'darwin') {
     return normalized
   }
@@ -47,6 +64,9 @@ export function areWorktreePathsEqual(
   rightPath: string,
   platform = process.platform
 ): boolean {
+  if (leftPath === rightPath) {
+    return true
+  }
   const leftIsPosix = looksLikePosixAbsolutePath(leftPath)
   if (leftIsPosix || looksLikePosixAbsolutePath(rightPath)) {
     // win32.resolve would attach a drive to POSIX paths and manufacture cross-filesystem equality.

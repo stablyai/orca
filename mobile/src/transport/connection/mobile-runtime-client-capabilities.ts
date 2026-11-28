@@ -14,7 +14,6 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../src/shared/agent-session/requests/agent-session-current-requests-capability'
-import '../../../../src/shared/remote-runtime/protocol/protocol-version'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
@@ -60,7 +59,8 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
   // The session view follows a tab's terminal handle, so a pane the host restarts shows its new terminal.
   TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY,
-  // Home reads relayed servers' agents on relayHostRowsChanged, so a desktop may watch those servers for it.
+  // Makes this connection eligible for the desktop's relay host list and row watches, so Home Bots'
+  // relay list stays live on relayHostsChanged.
   MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   // Every socket this list is sent on reads frames through MobileE2EEV2PhysicalChannel, which inflates them.
   COMPRESSED_FRAMES_CLIENT_CAPABILITY,

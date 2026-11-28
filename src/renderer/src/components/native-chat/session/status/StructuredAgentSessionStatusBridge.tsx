@@ -14,6 +14,7 @@ import {
 } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
   getStructuredAgentSessionTabsInWorkspace,
+  structuredTabsShowingConversation,
   type StructuredTab
 } from './structured-agent-session-tabs'
 import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
@@ -311,7 +312,11 @@ function installStatusProjection(): () => void {
         const listed = [...changes.workspaceIds].flatMap((workspaceId) => [
           ...getStructuredAgentSessionTabsInWorkspace(source, workspaceId)
         ])
-        retiring.push(...membership.reconcileTabs(listed, changes.tabIds, placeTab))
+        retiring.push(
+          ...membership.reconcileTabs(listed, changes.tabIds, placeTab, (paneKey) =>
+            structuredTabsShowingConversation(source, paneKey)
+          )
+        )
         tabs = null
       } else {
         retiring.push(...reconcileFromSnapshot(source, placeTab))

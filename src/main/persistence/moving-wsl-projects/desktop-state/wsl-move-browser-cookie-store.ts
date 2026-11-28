@@ -2,10 +2,6 @@
 import { BrowserWindow } from 'electron'
 import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { WSL_MOVE_BROWSER_COOKIES_STORE_ID } from '../../../../shared/wsl-move/wsl-move-browser-cookie-copy'
-import {
-  copyBrowserPartitionCookies,
-  flushBrowserPartitionCookies
-} from '../../../browser/cookies/browser-partition-cookie-copy'
 import { activeBrowserRoutePartitionOrcaProfileId } from '../../../browser/routing/partitions/browser-route-partition-binding-runtime'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserSessionsInitialized } from '../../../browser/sessions/browser-session-startup'
@@ -33,8 +29,14 @@ export function productionWslMoveBrowserCookieCopyDependencies(
     listBrowserProfiles: () => browserSessionRegistry.listProfiles(),
     resolveHostStorage: wslHostBrowserRouteStorage,
     bindHostPartition: bindWslHostBrowserRoutePartition,
-    copyCookies: copyBrowserPartitionCookies,
-    flushCookies: flushBrowserPartitionCookies
+    copyCookies: async (...args) =>
+      (
+        await import('../../../browser/cookies/browser-partition-cookie-copy')
+      ).copyBrowserPartitionCookies(...args),
+    flushCookies: async (...args) =>
+      (
+        await import('../../../browser/cookies/browser-partition-cookie-copy')
+      ).flushBrowserPartitionCookies(...args)
   }
 }
 

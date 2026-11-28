@@ -11,7 +11,6 @@ import {
   type MobileUiLanguagePreference
 } from '../i18n/ui-language-preference'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsSection } from './settings-screen-frame'
 
 const LANGUAGE_CHOICES: readonly MobileUiLanguagePreference[] = [
@@ -23,7 +22,6 @@ const PSEUDO = 'pseudo'
 
 /** One Language row; the eleven choices open in a picker instead of filling the page. */
 export function UiLanguageSettingsSection() {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const preference = useMobileUiLanguagePreference()
   const pseudo = isMobilePseudoLocalizationEnabled()

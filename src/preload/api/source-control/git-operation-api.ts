@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/git/remotes/git-fork-sync'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
+  GitAbortOperationRequest,
   ContinueRebaseAction,
   ContinueRebaseRequest,
   ContinueRebaseResult,
@@ -23,8 +24,12 @@ import type { TextGenerationFailureFields } from '../../../shared/text-generatio
 
 export type GitOperationApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
-  abortMerge: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
-  abortRebase: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+  abortMerge: (
+    args: { worktreePath: string; connectionId?: string } & GitAbortOperationRequest
+  ) => Promise<void>
+  abortRebase: (
+    args: { worktreePath: string; connectionId?: string } & GitAbortOperationRequest
+  ) => Promise<void>
   continueRebase: (
     args: {
       worktreePath: string
@@ -86,11 +91,13 @@ export type GitOperationApi = {
     commitId: string
     connectionId?: string
   }) => Promise<GitCommitActionResult>
-  sequencerAbort: (args: {
-    worktreePath: string
-    operation: GitCommitAction
-    connectionId?: string
-  }) => Promise<void>
+  sequencerAbort: (
+    args: {
+      worktreePath: string
+      operation: GitCommitAction
+      connectionId?: string
+    } & GitAbortOperationRequest
+  ) => Promise<void>
   sequencerContinue: (args: {
     worktreePath: string
     operation: GitCommitAction
