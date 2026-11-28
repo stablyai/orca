@@ -11,8 +11,8 @@ export type OrchestrationMailboxDeliveryFlight = {
 /** A mailbox waiting behind a terminal's in-flight pointer, with the types its waiters reserve. */
 type ParkedOrchestrationMailboxDeliveries = Map<string, ReadonlySet<string> | undefined>
 
-/** Two deferred deliveries of one mailbox exclude a type only when both reserve it as owned
- *  elsewhere; an unreserved delivery may type everything. */
+/** Deferred deliveries of one mailbox keep the union of their reserved types when every one
+ *  reserves some; an unreserved delivery lifts the reservation, as it may type everything. */
 export function mergeDeferredReservedTypes(
   hasPrior: boolean,
   prior: ReadonlySet<string> | undefined,
