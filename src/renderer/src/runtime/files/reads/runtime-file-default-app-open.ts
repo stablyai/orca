@@ -63,7 +63,16 @@ async function downloadPairedHostFile(
   const { target } = remote
   if (remote.grantId === undefined) {
     const { worktree: worktreeSelector, relativePath } = remote
-    return downloadRemoteRuntimeFile({ target, worktreeId, worktreeSelector, relativePath }, name)
+    return downloadRemoteRuntimeFile(
+      {
+        target,
+        worktreeId,
+        worktreeSelector,
+        relativePath,
+        expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision
+      },
+      name
+    )
   }
   if (!(await hostStreamsGrantedFiles(target.environmentId))) {
     throw new Error(

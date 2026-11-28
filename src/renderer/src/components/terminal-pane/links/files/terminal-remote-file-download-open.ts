@@ -89,10 +89,27 @@ export async function downloadAndOpenRemoteTerminalFile(
       return true
     }
   }
+  // Why: a newer click owns the outcome; a stale one must not save a file or launch an OS app.
+  if (!isCurrent()) {
+    return true
+  }
   try {
-    await openRuntimeFileWithDefaultApp(linkFileReadSource(fileContext, filePath, grant))
+    const opened = await openRuntimeFileWithDefaultApp(
+      linkFileReadSource(fileContext, filePath, grant)
+    )
+    // Why: the download and OS open are awaited, so a newer click may own the outcome by now.
+    if (!opened && isCurrent()) {
+      toast.error(
+        translate(
+          'auto.components.editor.BinaryFileDefaultAppButton.openFailed',
+          'No app on this computer opened this file.'
+        )
+      )
+    }
   } catch (error) {
-    showDownloadFailedToast(error, linkName(filePath))
+    if (isCurrent()) {
+      showDownloadFailedToast(error, linkName(filePath))
+    }
   }
   return true
 }

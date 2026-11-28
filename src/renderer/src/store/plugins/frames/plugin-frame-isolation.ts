@@ -30,11 +30,21 @@ export function notePluginFrameIsolation(isolated: boolean): void {
   }
 }
 
+function framesIsolated(known: boolean | null): boolean {
+  return !isWebClientLocation() && known !== false
+}
+
+export function pluginFramesIsolatedNow(): boolean {
+  const setting = isolatedFramesSetting(useAppStore.getState().settings)
+  const { isolated, learnedUnder } = usePluginFrameIsolationStore.getState()
+  return framesIsolated(learnedUnder === setting ? isolated : null)
+}
+
 export function usePluginFramesIsolated(): boolean {
   const setting = useAppStore((state) => isolatedFramesSetting(state.settings))
   // Why: main's env override can still force a value, so a changed setting re-asks, not decides.
   const known = usePluginFrameIsolationStore((state) =>
     state.learnedUnder === setting ? state.isolated : null
   )
-  return !isWebClientLocation() && known !== false
+  return framesIsolated(known)
 }

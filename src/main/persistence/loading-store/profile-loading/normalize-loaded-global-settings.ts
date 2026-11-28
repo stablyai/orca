@@ -11,6 +11,7 @@ import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/
 import { normalizeAppIconId } from '../../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../../shared/plugins/capabilities/plugin-owned-settings'
+import { normalizeExternalAppFileSettings } from '../../../../shared/file-access/external-app-file-preference'
 import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
@@ -162,6 +163,7 @@ export function normalizeLoadedGlobalSettings(
     ),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
     ...pluginOwnedSettings,
+    ...normalizeExternalAppFileSettings(parsed.settings ?? {}),
     ...syncLegacyMatchTerminalSidebar(
       matchTerminalSidebarInputs,
       hasLegacyMatchTerminalSidebar(matchTerminalSidebarInputs)

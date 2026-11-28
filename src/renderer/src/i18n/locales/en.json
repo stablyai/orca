@@ -18811,7 +18811,8 @@
           "downloadFailed": "Failed to download '{{value0}}'.",
           "open": "Open with default app",
           "downloadOpen": "Download & open",
-          "openFailed": "No app on this computer opened this file."
+          "openFailed": "No app on this computer opened this file.",
+          "alwaysExternal": "Always open .{{value0}} links with the default app"
         }
       },
       "diff": {

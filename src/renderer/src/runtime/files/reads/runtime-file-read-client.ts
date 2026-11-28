@@ -172,5 +172,11 @@ export async function downloadRuntimeFile(
     })
   }
 
-  return downloadRemoteRuntimeFile(remoteArgs, suggestedName)
+  return downloadRemoteRuntimeFile(
+    {
+      ...remoteArgs,
+      expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
+    },
+    suggestedName
+  )
 }

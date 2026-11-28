@@ -14,7 +14,10 @@ const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
 const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
   'Remote file download requires a newer Orca server. Update the headless server and try again.'
 
-export type RemoteFileDownloadArgs = NonNullable<ReturnType<typeof getRemoteFileArgs>>
+export type RemoteFileDownloadArgs = NonNullable<ReturnType<typeof getRemoteFileArgs>> & {
+  /** Pins probe, pages and preview to one pairing, so a re-pair cannot switch hosts mid-download. */
+  expectedEnvironmentPairingRevision?: number
+}
 
 export async function remoteChunkedDownloadAvailable(
   remoteArgs: RemoteFileDownloadArgs
@@ -29,7 +32,10 @@ export async function remoteChunkedDownloadAvailable(
         offset: 0,
         length: 1
       },
-      { timeoutMs: 60_000 }
+      {
+        timeoutMs: 60_000,
+        expectedEnvironmentPairingRevision: remoteArgs.expectedEnvironmentPairingRevision
+      }
     )
     return true
   } catch (error) {
@@ -54,7 +60,10 @@ export async function readRemoteDownloadChunk(
       offset,
       length: REMOTE_DOWNLOAD_CHUNK_BYTES
     },
-    { timeoutMs: 60_000 }
+    {
+      timeoutMs: 60_000,
+      expectedEnvironmentPairingRevision: remoteArgs.expectedEnvironmentPairingRevision
+    }
   )
 }
 
@@ -63,12 +72,18 @@ export async function downloadRemoteRuntimeFile(
   remoteArgs: RemoteFileDownloadArgs,
   suggestedName: string
 ): Promise<RuntimeFileDownloadResult> {
-  if (!(await remoteChunkedDownloadAvailable(remoteArgs))) {
-    return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
+  // Why captured before the first await: every page of one download must come from one host.
+  const pinned = {
+    ...remoteArgs,
+    expectedEnvironmentPairingRevision: captureRuntimeEnvironmentRequestRevision(
+      remoteArgs.target.environmentId,
+      remoteArgs.expectedEnvironmentPairingRevision
+    )
   }
-  return streamDownloadedFile(suggestedName, (offset) =>
-    readRemoteDownloadChunk(remoteArgs, offset)
-  )
+  if (!(await remoteChunkedDownloadAvailable(pinned))) {
+    return downloadRemoteFileViaPreview(pinned, suggestedName)
+  }
+  return streamDownloadedFile(suggestedName, (offset) => readRemoteDownloadChunk(pinned, offset))
 }
 
 /** A host file outside every workspace, paged through the grant the host issued for it. */
@@ -149,7 +164,10 @@ export async function downloadRemoteFileViaPreview(
       remoteArgs.target,
       'files.readPreview',
       { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: remoteArgs.expectedEnvironmentPairingRevision
+      }
     )
     // Legacy empty metadata-free binary means unsupported; recognized zero-byte previews remain valid.
     if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
