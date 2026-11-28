@@ -4,11 +4,11 @@
  * tab and pane ids and order, its terminal panes bind the session.tabs handle, and both hold
  * through a serve restart and a layout change made on the server's side.
  *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
+ * Run (switch-on: ORCA_LAYOUT_OWNER=main ORCA_SERVER_LAYOUT_OWNER=main in the env):
  *   pnpm exec playwright test tests/e2e/paired-desktop-server-layout-frames.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=2
  */
-import { existsSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import {
@@ -34,10 +34,7 @@ import {
   waitForWorktree
 } from './helpers/paired-desktop-server-terminal-tab'
 import { expectFrameDrawnTreeMatchesServer } from './helpers/paired-desktop-server-layout'
-
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 const scratch = createRetentionFixtureDirectory()
 const fixturePath = writeRetentionFixture(scratch)
@@ -85,7 +82,7 @@ async function readPaneText(page: Page, webTabId: string, leafId: string): Promi
 }
 
 test.describe('paired desktop draws a switch-on server from its layout frames', () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'Needs a layout-owner build (ORCA_LAYOUT_OWNER=main)')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'Needs the layout-owner path (ORCA_LAYOUT_OWNER=main)')
 
   test('frames draw the server workspace; handles attach; restart and server changes keep it', async ({
     testRepoPath

@@ -1,8 +1,10 @@
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { basename, extname, isAbsolute, posix, relative, resolve } from 'node:path'
 import { readBundledWebClientFiles } from '../../../../../shared/web-client/bundled-web-client-manifest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
+import { LAYOUT_OWNER_META_NAME } from '../../../../../shared/workspace-layout/layout-owner-startup'
 
 const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
 const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']
@@ -88,6 +90,12 @@ async function handleStaticRequest(
     return
   }
 
+  // The browser client draws with its serving host's layout path; it has no other way to learn it before its modules run.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && pathname === '/web-index.html') {
+    await sendWebIndexForLayoutOwner(absolutePath, request, response)
+    return
+  }
+
   response.statusCode = 200
   response.setHeader(
     'Content-Type',
@@ -126,6 +134,32 @@ async function handleStaticRequest(
     response.destroy()
   })
   stream.pipe(response)
+}
+
+async function sendWebIndexForLayoutOwner(
+  absolutePath: string,
+  request: IncomingMessage,
+  response: ServerResponse
+): Promise<void> {
+  let html: string
+  try {
+    html = await readFile(absolutePath, 'utf8')
+  } catch {
+    writeHttpStatus(response, 500)
+    return
+  }
+  const meta = `<meta name="${LAYOUT_OWNER_META_NAME}" content="main" />`
+  const body = Buffer.from(
+    html.includes('<head>') ? html.replace('<head>', `<head>${meta}`) : meta + html
+  )
+  if (response.destroyed) {
+    return
+  }
+  response.statusCode = 200
+  response.setHeader('Content-Type', 'text/html; charset=utf-8')
+  response.setHeader('Content-Length', body.byteLength)
+  response.setHeader('Cache-Control', 'no-cache')
+  response.end(request.method === 'HEAD' ? undefined : body)
 }
 
 function parseStaticPathname(rawUrl: string | undefined): string | null {

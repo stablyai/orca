@@ -1,7 +1,5 @@
 // Layout-owner stream loss/reopen must retain every tab/pane exactly once, catch up main/window changes and persist them across relaunch.
 
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
@@ -9,10 +7,7 @@ import { ensureTerminalVisible, switchToWorktree, waitForSessionReady } from './
 import { splitActiveTerminalPane, waitForActiveTerminalManager } from './helpers/terminal'
 import { leafIdsInOrder } from './helpers/workspace-layout-oracle-model'
 import { readMainLayout, type TerminalLayout } from './helpers/main-terminal-layout'
-
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 type Launched = Awaited<ReturnType<ReturnType<typeof createRestartSession>['launch']>>
 
@@ -181,7 +176,10 @@ async function loseStreamAndChange(
 }
 
 test.describe('the window layout stream ends mid-session', () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'layout-owner build only: other builds open no layout stream')
+  test.skip(
+    !LAYOUT_OWNER_SWITCH_ON,
+    'layout-owner path only: the window path opens no layout stream'
+  )
 
   test('reopens with no tab or pane lost or doubled, and later changes apply', async ({
     testRepoPath

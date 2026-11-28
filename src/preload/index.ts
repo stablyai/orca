@@ -3,6 +3,7 @@ import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/app-lifecycle/w
 import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
 import { installBrowserFindListener } from './renderer/renderer-runtime'
+import { exposeLayoutOwner } from './renderer/layout-owner-bridge'
 import { appApi } from './api/app-bridge'
 import { orcaProfilesApi } from './api/profiles/orca-profiles-bridge'
 import { platformApi } from './api/platform-bridge'
@@ -214,6 +215,8 @@ const api = {
   agentStatus: agentStatusApi,
   speech: speechApi
 } satisfies PreloadApi
+
+exposeLayoutOwner(process.argv)
 
 if (process.contextIsolated) {
   try {

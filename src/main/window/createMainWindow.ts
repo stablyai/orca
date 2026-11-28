@@ -31,7 +31,7 @@ import { installMainWindowShortcutRouting } from './main-window/main-window-shor
 import { installMainWindowStateLifecycle } from './main-window/main-window-state-lifecycle'
 import { installMainWindowActivityRelay } from './main-window/main-window-activity'
 import { stopHiddenWindowFramePumpOnShow } from './visibility/hidden-window-frame-pump'
-import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
+import { sharedPreloadWindowArguments } from './shared-preload-window-arguments'
 import {
   formatHiddenWindowFramePumpArgument,
   shouldPumpHiddenWindowFrames
@@ -168,7 +168,7 @@ export function createMainWindow(
         formatBrowserClientHostIdArgument(getBrowserClientHostId()),
         ...(windowMaterial === 'off' ? [] : [formatWindowMaterialArgument(windowMaterial)]),
         ...(pumpHiddenFrames ? [formatHiddenWindowFramePumpArgument()] : []),
-        ...wslHostsWindowArguments()
+        ...sharedPreloadWindowArguments()
       ]
     }
   })

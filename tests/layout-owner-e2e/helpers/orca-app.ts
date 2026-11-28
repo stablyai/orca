@@ -14,6 +14,7 @@ import path from 'node:path'
 import { closeElectronAppForE2E } from './electron-process-shutdown'
 import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { expectAppTookLayoutOwner } from './layout-owner-build'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import {
@@ -192,6 +193,9 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         app.evaluate(({ app }) => app.getPath('home'))
       )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+      const page = await app.firstWindow({ timeout: 120_000 })
+      await page.waitForLoadState('domcontentloaded')
+      await expectAppTookLayoutOwner(app, homeIsolation.env, page)
     } catch (error) {
       await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
       await removeUserDataDirAfterShutdown(userDataDir)

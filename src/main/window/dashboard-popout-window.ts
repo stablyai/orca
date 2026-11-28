@@ -20,7 +20,7 @@ import type {
   KeybindingInput,
   KeybindingOverrides
 } from '../../shared/keybindings/types'
-import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
+import { sharedPreloadWindowArguments } from './shared-preload-window-arguments'
 import { isMacAppPasteInput } from './editing/mac-app-paste-input'
 
 const MIN_WIDTH = 480
@@ -149,7 +149,6 @@ export function createOrFocusDashboardPopout(
   const savedBounds = resolveRestoredBounds(nativeSettings)
 
   // Serve-only: this window lists saved WSL hosts and their Connect, as the main window does.
-  const wslArguments = wslHostsWindowArguments()
   const window = new BrowserWindow({
     width: savedBounds?.width ?? DEFAULT_WIDTH,
     height: savedBounds?.height ?? DEFAULT_HEIGHT,
@@ -168,7 +167,7 @@ export function createOrFocusDashboardPopout(
       partition: DASHBOARD_POPOUT_PARTITION,
       // No webviews run here; disable embedding and omit host identity so client-placed pages stay mirrors.
       webviewTag: false,
-      ...(wslArguments.length > 0 ? { additionalArguments: wslArguments } : {})
+      additionalArguments: sharedPreloadWindowArguments()
     }
   })
   installPrivilegedWindowNavigationPolicy(window.webContents)
