@@ -93,9 +93,11 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    // Only a known session can belong to an older generation; fresh ones always start on current.
-    const releaseReattach =
-      opts.sessionId && !opts.isNewSession ? await this.legacyIdleRetirement.admitReattach() : null
+    // Only a known or routed session can reach an older generation; other fresh ones start on current.
+    const mayReachLegacy =
+      opts.sessionId !== undefined &&
+      (!opts.isNewSession || this.sessionAdapters.has(opts.sessionId))
+    const releaseReattach = mayReachLegacy ? await this.legacyIdleRetirement.admitReattach() : null
     if (this.retirement.admissionClosed) {
       releaseReattach?.()
       throw new Error('Terminal daemon is decommissioning')

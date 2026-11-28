@@ -144,7 +144,7 @@ describe.skipIf(process.platform === 'win32')('retiring an empty older daemon ge
 
     legacy.endSession('old-1')
     await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
-    expect(app.router.getLegacyAdapters()).toEqual([])
+    await vi.waitFor(() => expect(app.router.getLegacyAdapters()).toEqual([]))
 
     // The current generation keeps serving, empty or not.
     current.endSession(kept.id)
@@ -229,6 +229,6 @@ describe.skipIf(process.platform === 'win32')('retiring an empty older daemon ge
 
     legacy.endSession(result.id)
     await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
-    expect(app.router.getLegacyAdapters()).toEqual([])
+    await vi.waitFor(() => expect(app.router.getLegacyAdapters()).toEqual([]))
   })
 })

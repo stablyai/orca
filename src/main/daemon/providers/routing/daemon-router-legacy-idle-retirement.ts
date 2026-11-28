@@ -13,7 +13,7 @@ type Timer = ReturnType<typeof setTimeout>
 export type LegacyIdleRetirementOptions = {
   current: () => DaemonPtyAdapter
   legacy: () => readonly DaemonPtyAdapter[]
-  /** Forgets a generation that retired, or that owned nothing when contact was lost mid-decision. */
+  /** Forgets a generation that accepted retirement. */
   drop: (adapter: DaemonPtyAdapter) => void
   timing?: { exitSettleMs?: number; recheckMs?: number; fenceMaxMs?: number }
 }
@@ -168,12 +168,12 @@ export class DaemonRouterLegacyIdleRetirement {
       if (this.disposed && result.state !== 'retiring') {
         return
       }
-      // Unverifiable: it owned nothing and refuses new work, so leaving lets it retire on disconnect.
-      if (result.state === 'retiring' || result.state === 'unverifiable') {
+      if (result.state === 'retiring') {
         this.options.drop(adapter)
         return
       }
-      if (result.state === 'busy') {
+      // An unanswered request proves nothing: another client may have given it work, so it stays known.
+      if (result.state === 'busy' || result.state === 'unverifiable') {
         this.checkAgainLater(adapter)
       }
     } finally {
