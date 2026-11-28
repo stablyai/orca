@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View } from 'react-native'
 import Svg, { Line, Path } from 'react-native-svg'
 
-import { useMobileColorScheme, useMobileColors } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { UsageChartModel } from './usage-window-stats'
 
 const HEIGHT = 88
@@ -20,8 +20,6 @@ export function UsageHistoryChart({
   accessibilityLabel: string
 }): React.JSX.Element {
   const colors = useMobileColors()
-
-  useMobileColorScheme()
   const [width, setWidth] = useState(0)
   const span = model.endsAt - model.startsAt
   const x = (at: number): number =>

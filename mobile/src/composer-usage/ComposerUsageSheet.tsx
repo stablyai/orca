@@ -9,7 +9,6 @@ import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   listProviderUsages,
   pickComposerUsageWindow,
@@ -36,8 +35,6 @@ type Props = {
 
 export function ComposerUsageSheet({ visible, onClose, usage, snapshot, spanSideStrip }: Props) {
   const styles = useThemedStyles(stylesSheet)
-
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const now = useNow(30_000, visible)
   const display = useComposerUsageDisplay()

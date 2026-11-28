@@ -36,7 +36,9 @@ async function readSavedHistory(filePath: string): Promise<PersistedUsageHistory
     }
     return parseUsageHistoryFile(JSON.parse(text))
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+    if (code !== 'ENOENT') {
       console.warn('[rate-limits] Unreadable usage history; starting fresh', error)
     }
     return { activeAccounts: {}, series: [] }

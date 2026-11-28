@@ -22,19 +22,19 @@ describe('composerUsageWideMeterLayout', () => {
     // 60 + 40 + 2*8 + 60 = 176 of 200.
     expect(
       composerUsageWideMeterLayout({ room: 200, fullLabelWidth: 60, percentWidth: 40, gap: 8 })
-    ).toEqual({ width: 176, label: 'full' })
+    ).toEqual({ width: 176, resetText: 'full' })
   })
 
   it('falls back to the largest unit alone when the full label does not fit', () => {
     expect(
       composerUsageWideMeterLayout({ room: 170, fullLabelWidth: 120, percentWidth: 40, gap: 8 })
-    ).toEqual({ width: 140, label: 'compact' })
+    ).toEqual({ width: 140, resetText: 'compact' })
   })
 
   it('shows the wide meter with the full label until the labels are measured', () => {
     expect(
       composerUsageWideMeterLayout({ room: 200, fullLabelWidth: null, percentWidth: null, gap: 8 })
-    ).toEqual({ width: 150, label: 'full' })
+    ).toEqual({ width: 150, resetText: 'full' })
     expect(
       composerUsageWideMeterLayout({ room: null, fullLabelWidth: null, percentWidth: null, gap: 8 })
     ).toBeNull()

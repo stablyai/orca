@@ -4,7 +4,6 @@ import { MobileSegmentedControl } from '../components/controls/MobileSegmentedCo
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   setComposerUsageDisplay,
   useComposerUsageDisplay
@@ -13,8 +12,6 @@ import {
 /** Picks whether the composer meter shows used or remaining. One choice for every composer. */
 export function ComposerUsageDisplayPicker({ inSettings = false }: { inSettings?: boolean }) {
   const styles = useThemedStyles(stylesSheet)
-
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const display = useComposerUsageDisplay()
   return (

@@ -20,7 +20,7 @@ export function ComposerUsageWideMeter({
   color,
   onPress
 }: {
-  layout: { width: number; label: 'full' | 'compact' }
+  layout: { width: number; resetText: 'full' | 'compact' }
   accessibilityLabel: string
   resetsIn: string
   resetsInCompact: string
@@ -49,7 +49,7 @@ export function ComposerUsageWideMeter({
       testID="composer-usage-meter"
     >
       <Text style={[styles.text, styles.label]} numberOfLines={1}>
-        {layout.label === 'full' ? resetsIn : resetsInCompact}
+        {layout.resetText === 'full' ? resetsIn : resetsInCompact}
       </Text>
       <ComposerUsageTrack readout={readout} color={color} wide />
       <Text style={[styles.text, styles.percent]} numberOfLines={1}>

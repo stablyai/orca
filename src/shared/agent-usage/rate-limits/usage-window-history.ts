@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** One reading of a window's used percent, stamped with the provider's own reading time. */
 export type UsageHistorySample = { at: number; usedPercent: number }
@@ -13,11 +14,13 @@ export type UsageWindowHistory = {
 /** Keyed by `${providerKey}:${windowId}`, e.g. `claude:weekly` or `codex:session`. */
 export type UsageHistoryByWindow = Record<string, UsageWindowHistory>
 
-const UsageWindowHistorySchema = z.object({
-  resetsAt: z.number().finite().nullable(),
-  windowMinutes: z.number().finite().positive(),
-  samples: z.array(z.object({ at: z.number().finite(), usedPercent: z.number().finite() }))
-})
+const UsageWindowHistorySchema = lazyZodSchema(() =>
+  z.object({
+    resetsAt: z.number().finite().nullable(),
+    windowMinutes: z.number().finite().positive(),
+    samples: z.array(z.object({ at: z.number().finite(), usedPercent: z.number().finite() }))
+  })
+)
 
 /** Persisted or streamed history; a malformed series is dropped rather than failing the rest. */
 export function parseUsageHistory(raw: unknown): UsageHistoryByWindow {
