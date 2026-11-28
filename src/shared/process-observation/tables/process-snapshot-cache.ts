@@ -48,8 +48,9 @@ export function createProcessTableSnapshotReader<T = string>(
         return
       }
       const remainingMs = ttlMs - (deps.now() - lastUsedMs)
-      // A clock that moved backward reads as more than the TTL left; release rather than wait on it.
-      if (remainingMs > 0 && remainingMs <= ttlMs) {
+      // Only a cleanup read since completion extends it, so an early fire never re-arms an unused capture;
+      // a clock that moved backward reads as more than the TTL left and releases too.
+      if (lastUsedMs > next.completedAtMs && remainingMs > 0 && remainingMs <= ttlMs) {
         armExpiry(next, remainingMs)
       } else {
         cached = null
