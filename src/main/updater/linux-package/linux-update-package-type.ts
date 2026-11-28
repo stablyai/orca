@@ -114,12 +114,13 @@ const DPKG_FILE_LIST = '/var/lib/dpkg/info/orca-ide.list'
  * checks resolve with no result and no events, which settled as "not available". Repackagers that
  * ship the extracted tree (e.g. an AUR package) keep the AppImage marker but never set it.
  * Mirrors AppImageUpdater.isUpdaterActive exactly, so local update flows cannot change.
+ * Pure: callers pass the cached package type, so this adds no file reads.
  */
-function isAppImageWithoutUpdateTarget(): boolean {
+export function isAppImageWithoutUpdateTarget(packageType: LinuxPackageType): boolean {
   return (
+    packageType === 'non-root' &&
     process.platform === 'linux' &&
     app.isPackaged &&
-    getLinuxPackageType() === 'non-root' &&
     process.env.APPIMAGE == null
   )
 }
@@ -127,14 +128,14 @@ function isAppImageWithoutUpdateTarget(): boolean {
 /** Repackagers can inherit deb/rpm markers; require the same manager discovery used for installation. */
 export function isExternallyManagedLinuxInstall(): boolean {
   if (cachedExternallyManaged === undefined) {
-    const packageType = getLinuxRootPackageType()
+    const packageType = getLinuxPackageType()
     cachedExternallyManaged =
-      packageType === null
-        ? isAppImageWithoutUpdateTarget()
-        : !hasTrustedPackageManagerFor(packageType) ||
+      packageType === 'deb' || packageType === 'rpm'
+        ? !hasTrustedPackageManagerFor(packageType) ||
           // Why: Arch ships dpkg, and a pacman package built from our .deb keeps the deb marker.
           // `dpkg -i` there unpacks over pacman's files before its dependency check fails.
           (packageType === 'deb' && !existsSync(DPKG_FILE_LIST))
+        : isAppImageWithoutUpdateTarget(packageType)
   }
   return cachedExternallyManaged
 }

@@ -9,7 +9,7 @@ import type {
 import { hasServeUpdateSupervisor } from '../serve-update-handoff'
 import {
   getLinuxPackageType,
-  isExternallyManagedLinuxInstall
+  isAppImageWithoutUpdateTarget
 } from '../linux-package/linux-update-package-type'
 import { UpdaterNudge } from '../nudges/updater-nudge'
 import type { UpdateInstallMode } from './updater-state'
@@ -40,8 +40,8 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
       linuxPackageType === 'deb' ||
       linuxPackageType === 'rpm' ||
       linuxPackageType === 'unusable' ||
-      // Same classification the local updater uses: it cannot install over this copy either.
-      isExternallyManagedLinuxInstall()
+      // Same predicate isExternallyManagedLinuxInstall uses: the native updater cannot replace this copy.
+      isAppImageWithoutUpdateTarget(linuxPackageType)
     ) {
       return {
         installMode: this.updateInstallMode,

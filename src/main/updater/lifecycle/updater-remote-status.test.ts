@@ -32,6 +32,7 @@ const originalPlatform = process.platform
 const originalResourcesPath = process.resourcesPath
 const originalAppImage = process.env.APPIMAGE
 let root: string
+const NOW = Date.UTC(2026, 10, 27, 12)
 
 async function createLinuxAppImageUpdater(appImagePath: string | undefined) {
   if (appImagePath === undefined) {
@@ -43,7 +44,8 @@ async function createLinuxAppImageUpdater(appImagePath: string | undefined) {
   vi.resetModules()
   const { UpdaterSetup } = await import('./updater-setup')
   const updater = new UpdaterSetup()
-  updater.setupAutoUpdater(null, { getLastUpdateCheckAt: () => Date.now() })
+  // A check recorded at the frozen clock keeps the startup background check from running.
+  updater.setupAutoUpdater(null, { getLastUpdateCheckAt: () => NOW })
   return updater
 }
 
@@ -51,6 +53,7 @@ async function createLinuxAppImageUpdater(appImagePath: string | undefined) {
 await import('./updater-setup')
 
 beforeEach(() => {
+  vi.useFakeTimers({ now: NOW })
   root = mkdtempSync(join(tmpdir(), 'orca-remote-update-support-'))
   const resourcesPath = join(root, 'resources')
   // An extracted AppImage tree still carries the AppImage package-type marker.
@@ -62,6 +65,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   Object.defineProperty(process, 'resourcesPath', {
     value: originalResourcesPath,
