@@ -197,10 +197,10 @@ function ReferencePeekRow({
       <span className="shrink-0 font-medium tabular-nums">
         {workspaceAttachmentReferenceLabel(item, PEEK_LABELS)}
       </span>
-      <span className="min-w-0 flex-1 truncate text-muted-foreground">{detail?.title}</span>
+      <span className="min-w-[25%] flex-1 truncate text-muted-foreground">{detail?.title}</span>
       {status ? (
-        // Why: long custom issue states must not squeeze the title away in a narrow peek.
-        <span className="max-w-[40%] shrink-0 truncate text-muted-foreground">{status}</span>
+        // Why: long keys or custom issue states must not squeeze the title away in a narrow peek.
+        <span className="max-w-[40%] min-w-0 truncate text-muted-foreground">{status}</span>
       ) : null}
     </li>
   )
