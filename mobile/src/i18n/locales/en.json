@@ -3909,7 +3909,6 @@
         "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
         "finishOnPage": "Finish on the page that opened",
         "waitingForSignIn": "Waiting for sign-in…",
-        "openInBrowser": "Open in browser",
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
         "disabled": "Disabled",

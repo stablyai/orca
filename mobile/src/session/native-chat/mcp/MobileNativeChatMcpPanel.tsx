@@ -242,9 +242,7 @@ function McpServerRow({
           numberOfLines={1}
         >
           {copying
-            ? signingIn.finish === 'external'
-              ? '' // Three buttons leave no room; the line under the row says what to do.
-              : t('chat.mcp.status.openInBrowser', 'Open in browser')
+            ? '' // The phone can't open this link, so nothing here offers to; Copy link does.
             : signingIn
               ? signingIn.finish === 'external'
                 ? t('chat.mcp.status.finishOnPage', 'Finish on the page that opened')
