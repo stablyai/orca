@@ -1,0 +1,18 @@
+{
+  "cli": "/Applications/Orca.app/Contents/Resources/bin/orca",
+  "relativePath": "spec/does-not-exist-repro-8844-1784182271.md",
+  "exitCode": 0,
+  "response": {
+    "id": "334a60ae-3053-4530-a320-3757ae9618bf",
+    "ok": true,
+    "result": {
+      "worktree": "8cf8301a-6725-4f9f-a5f4-93ba5c7c1e99::/Users/nwparker/orca/workspaces/orca/cooked-PRs",
+      "relativePath": "spec/does-not-exist-repro-8844-1784182271.md",
+      "kind": "markdown",
+      "opened": true
+    },
+    "_meta": {
+      "runtimeId": "feee85bb-b526-4f92-8c2b-959c1b3a2c03"
+    }
+  }
+}
