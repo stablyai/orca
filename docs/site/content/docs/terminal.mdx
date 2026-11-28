@@ -98,7 +98,11 @@ To open a different shell, choose **Custom shell** under [Settings → Terminal 
 
 ## Windows shell
 
-The default shell on Windows is configurable between PowerShell, Command Prompt, and WSL under [Settings → Terminal](/docs/settings). WSL is offered automatically when `wsl.exe --status` succeeds. The **+** dropdown on the tab bar also shows a submenu so you can open a one-off tab in any shell without changing your default.
+Under [Settings → Terminal](/docs/settings), choose PowerShell, Command Prompt, Git Bash when installed, or **Custom shell**. For a custom shell, enter the full executable path, such as `C:\msys64\usr\bin\zsh.exe`. Enter optional arguments one per line, for example `-l`. The custom shell applies to new local interactive panes.
+
+Custom shells run with the arguments you enter. The built-in PowerShell option reports command status and directory changes and restores the starting directory after loading the profile. For a custom PowerShell executable, the profile controls these behaviors.
+
+Choose a WSL distribution in the project's runtime settings. The tab bar's **+** menu lets you open a terminal with a built-in shell for that tab.
 
 For repos on a WSL filesystem (`\\wsl.localhost\...`), Orca launches through `wsl.exe -d <distro>`. For Windows-path repos opened in WSL, Orca translates the cwd to `/mnt/<drive>/...` and drops you into a login bash.
 

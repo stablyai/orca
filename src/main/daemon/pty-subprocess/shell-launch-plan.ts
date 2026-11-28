@@ -28,6 +28,7 @@ import {
 } from '../../providers/shell-launch/windows/shell-fallback-chain'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
+  resolveWindowsCustomShellLaunch,
   resolveWindowsShellLaunchArgs
 } from '../../providers/shell-launch/windows/shell-args'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
@@ -77,22 +78,27 @@ export function createPtyShellLaunchPlan(
   let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
+    const customShell = !resolvedWslContext && resolveWindowsCustomShellLaunch(opts, spawnCwd)
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
-    const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
+    const resolvedGitBashPath = customShell ? null : resolveWindowsGitBashShellPath(shellPath)
     const resolvedShellFamily: WindowsPowerShellShellFamily =
       normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
         ? normalizedShellFamily
         : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
           ? normalizedShellFamily
           : undefined
-    const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
-      shellFamily: resolvedShellFamily,
-      implementation: opts.terminalWindowsPowerShellImplementation
-    })
+    const shouldProbePwsh =
+      !customShell &&
+      shouldProbeWindowsPowerShellAvailability({
+        shellFamily: resolvedShellFamily,
+        implementation: opts.terminalWindowsPowerShellImplementation
+      })
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
       pathWin32.basename(shellPath) === shellPath
-    if (resolvedGitBashPath) {
+    if (customShell) {
+      shellPath = customShell.shellPath
+    } else if (resolvedGitBashPath) {
       shellPath = resolvedGitBashPath
     } else if (shellPath === WINDOWS_GIT_BASH_SHELL) {
       shellPath = 'powershell.exe'
@@ -111,13 +117,15 @@ export function createPtyShellLaunchPlan(
     ) {
       env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
     }
-    windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
-      shellPath,
-      cwd: spawnCwd,
-      defaultCwd: resolveSafePtyDefaultCwd(),
-      wslContext: resolvedWslContext,
-      startupCommand: opts.command
-    })
+    if (!customShell) {
+      windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
+        shellPath,
+        cwd: spawnCwd,
+        defaultCwd: resolveSafePtyDefaultCwd(),
+        wslContext: resolvedWslContext,
+        startupCommand: opts.command
+      })
+    }
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
       shellPath = primaryAttempt.shellPath
@@ -126,14 +134,16 @@ export function createPtyShellLaunchPlan(
       validationCwd = primaryAttempt.validationCwd
       startupCommandDeliveredInShellArgs = primaryAttempt.startupCommandDeliveredInShellArgs
     } else {
-      const resolved = resolveWindowsShellLaunchArgs(
-        shellPath,
-        spawnCwd,
-        resolveSafePtyDefaultCwd(),
-        resolvedWslContext,
-        opts.command,
-        env.ORCA_CODEX_LAUNCH_PREFLIGHT
-      )
+      const resolved =
+        customShell ||
+        resolveWindowsShellLaunchArgs(
+          shellPath,
+          spawnCwd,
+          resolveSafePtyDefaultCwd(),
+          resolvedWslContext,
+          opts.command,
+          env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
       validationCwd = resolved.validationCwd

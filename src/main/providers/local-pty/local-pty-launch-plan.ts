@@ -19,7 +19,10 @@ import {
   type WindowsPowerShellShellFamily
 } from '../shell-launch/windows/powershell'
 import { buildWindowsPowerShellSpawnAttempts } from '../shell-launch/windows/shell-fallback-chain'
-import { resolveWindowsShellLaunchArgs } from '../shell-launch/windows/shell-args'
+import {
+  resolveWindowsCustomShellLaunch,
+  resolveWindowsShellLaunchArgs
+} from '../shell-launch/windows/shell-args'
 import { assertSafeAgentStartupCwd } from '../working-directory/default-cwd'
 import type { PtySpawnOptions } from '../pty/provider-contract'
 
@@ -222,9 +225,13 @@ export function createLocalPtyLaunchPlan(
         ? getWslContextFromPreferredDistro(wslInfo.distro)
         : (worktreeWslContext ?? preferredWslContext)
   }
-  if (wslInfo) {
-    const shellPath = 'wsl.exe'
-    const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+  const customWindowsShell =
+    process.platform === 'win32' && !wslInfo && !worktreeWslContext
+      ? resolveWindowsCustomShellLaunch(args, cwd)
+      : undefined
+  if (wslInfo || customWindowsShell) {
+    const shellPath = customWindowsShell?.shellPath ?? 'wsl.exe'
+    const resolved = customWindowsShell ?? resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,
       shellArgs: resolved.shellArgs,

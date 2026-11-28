@@ -3,8 +3,10 @@ import { getProjectRuntimeFolder } from '@/runtime/hosts/wsl/local-project-runti
 import { findLocalFolderWorkspaceRuntimeRepo } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
+import { resolveConfiguredWindowsShell } from '../../../../../../shared/shell/launch/local-windows-terminal-runtime'
 import {
   getRemoteConnectionIdForWorktree,
+  isWindowsRendererRuntime,
   resolveCreatedTabShellOverride,
   worktreeUsesWslPath
 } from './terminal-workspace-routing'
@@ -42,9 +44,43 @@ export function resolveTerminalCreatedShell(
   const isWslWorktree =
     facts?.isWsl ??
     (folder ? isWslUncPath(folder.workspace.folderPath) : worktreeUsesWslPath(s, worktreeId))
+  const projectRuntime = facts
+    ? facts.projectRuntime
+    : isRemoteWorktree || options?.forceHostRuntime
+      ? undefined
+      : getLocalProjectExecutionRuntimeContext(
+          s,
+          worktreeId,
+          undefined,
+          {},
+          runtimeWorktree && runtimeRepo
+            ? { worktree: runtimeWorktree, repo: runtimeRepo }
+            : undefined
+        )
+  const startup = options?.pendingStartup
+  const useHostDefault =
+    s.settings?.terminalWindowsUseCustomShell &&
+    isWindowsRendererRuntime() &&
+    !isRemoteWorktree &&
+    !isWslWorktree &&
+    !shellOverride &&
+    !options?.initialPtyId &&
+    !options?.launchAgent &&
+    !options?.agentLaunchPane &&
+    !startup?.command &&
+    !startup?.launchAgent &&
+    !startup?.agentLaunch &&
+    !startup?.freshAgentLaunch &&
+    !startup?.resumeProviderSession &&
+    projectRuntime?.status !== 'repair-required' &&
+    projectRuntime?.runtime.kind !== 'wsl'
+  if (useHostDefault) {
+    return { folder, createdShellOverride: undefined }
+  }
+
   const createdShellOverride = resolveCreatedTabShellOverride(
     shellOverride,
-    s.settings?.terminalWindowsShell,
+    resolveConfiguredWindowsShell(s.settings ?? undefined),
     // Why: SSH PTYs ignore local Windows shell selection; a local shell icon would mislabel a remote terminal.
     isRemoteWorktree,
     facts
@@ -55,19 +91,7 @@ export function resolveTerminalCreatedShell(
         : null,
     // Why: new terminals enter the worktree's repo-scoped WSL distro even when the global Windows shell is PowerShell/cmd.exe.
     isWslWorktree,
-    facts
-      ? facts.projectRuntime
-      : isRemoteWorktree || options?.forceHostRuntime
-        ? undefined
-        : getLocalProjectExecutionRuntimeContext(
-            s,
-            worktreeId,
-            undefined,
-            {},
-            runtimeWorktree && runtimeRepo
-              ? { worktree: runtimeWorktree, repo: runtimeRepo }
-              : undefined
-          )
+    projectRuntime
   )
   return { folder, createdShellOverride }
 }

@@ -90,7 +90,7 @@ export type PtySpawnOptions = {
   expectedIncarnationIsAuthoritative?: boolean
   /** Windows-only per-tab shell selection without changing the persistent default. */
   shellOverride?: string
-  /** Optional Unix interactive profile args; ignored for command and agent launches. */
+  /** Optional interactive profile args; on Windows they mark an exact executable and argv. */
   terminalShellArgs?: string[]
   /** Default WSL distro for generic wsl.exe; workspace/session cwd identity takes precedence. */
   terminalWindowsWslDistro?: string | null

@@ -18,6 +18,7 @@ import type { PluginFileTypeSuggestionSettings } from '../plugins/contributions/
 import type { PluginUpdatePolicySettings } from '../plugins/catalog/plugin-update-policy'
 import type { PluginSystemSettings } from '../plugins/plugin-system-settings'
 import type { TerminalScrollSettings } from '../terminal/appearance/terminal-scroll-settings'
+import type { TerminalCustomShellSettings } from '../shell/launch/terminal-default-shell'
 import type { WorktreeDeletionPreferences } from '../worktree/removal/worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from '../agent-launch/permissions/tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from '../terminal-themes/terminal-color-overrides'
@@ -66,6 +67,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
   TerminalScrollSettings &
+  TerminalCustomShellSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
   DesktopWindowSettings &

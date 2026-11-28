@@ -17,6 +17,7 @@ import {
 } from '../../../pty/shell-startup/powershell-osc133-bootstrap'
 import { quoteStartupArg } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { WSL_GUEST_ROOT_MARKER_COMMAND } from '../../../../shared/shell/wsl/wsl-guest-root-marker'
+import { isWindowsCustomShellPath } from '../../../../shared/shell/launch/terminal-default-shell'
 
 /** cmd.exe's own documented ceiling; callers that go through sshd budget below it. */
 export const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
@@ -56,6 +57,34 @@ export type WindowsShellLaunchArgs = {
 export type WindowsShellWslContext = {
   distro: string
   treatPosixCwdAsWsl?: boolean
+}
+
+export function resolveWindowsCustomShellLaunch(
+  options: {
+    shellOverride?: string
+    terminalShellArgs?: string[]
+    command?: string
+    launchAgent?: string
+  },
+  cwd: string
+): (WindowsShellLaunchArgs & { shellPath: string }) | undefined {
+  const { shellOverride, terminalShellArgs, command, launchAgent } = options
+  if (
+    !shellOverride ||
+    !isWindowsCustomShellPath(shellOverride) ||
+    terminalShellArgs === undefined ||
+    command ||
+    launchAgent
+  ) {
+    return undefined
+  }
+  const nativeCwd = msysDrivePathToWindows(cwd)
+  return {
+    shellPath: shellOverride,
+    shellArgs: terminalShellArgs,
+    effectiveCwd: nativeCwd,
+    validationCwd: nativeCwd
+  }
 }
 
 function getCmdShellArgStartupCommand(command?: string): string | null {

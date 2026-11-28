@@ -1,6 +1,8 @@
 import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
+import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { isWindowsCustomShellPath } from '../../../../shared/shell/launch/terminal-default-shell'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
@@ -210,13 +212,32 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     if (input.shellOverride !== undefined) {
       spawnOptions.shellOverride = input.shellOverride
     }
-    spawnOptions.terminalShellArgs = resolveConfiguredTerminalShellArgs({
-      connectionId,
-      requestedShellOverride: args.shellOverride,
-      launchCommand,
-      settings: input.getSettings?.()
-    })
+    if (process.platform !== 'win32') {
+      spawnOptions.terminalShellArgs = resolveConfiguredTerminalShellArgs({
+        connectionId,
+        requestedShellOverride: args.shellOverride,
+        launchCommand,
+        settings
+      })
+    }
     if (process.platform === 'win32') {
+      const customShell = settings?.terminalDefaultShell?.trim()
+      if (
+        settings?.terminalWindowsUseCustomShell === true &&
+        customShell &&
+        isWindowsCustomShellPath(customShell) &&
+        !input.preAdoptedStablePane &&
+        !args.shellOverride &&
+        !args.command &&
+        !launchAgent &&
+        !launchCommand &&
+        !input.expectedWslDistro &&
+        input.codexRuntime !== 'wsl' &&
+        !isWslShellName(input.shellOverride)
+      ) {
+        spawnOptions.shellOverride = customShell
+        spawnOptions.terminalShellArgs = [...(settings.terminalDefaultShellArgs ?? [])]
+      }
       // Preserve the PowerShell implementation choice across both provider paths.
       spawnOptions.terminalWindowsWslDistro = input.expectedWslDistro
       spawnOptions.terminalWindowsPowerShellImplementation = input.getSettings
