@@ -123,9 +123,11 @@ it.each([750, 7_500])('reuses an unchanged %i-step /clear lineage on later turns
   expect(store.count() - beforeClear).toBe(4)
 
   // A broken suffix cannot redirect to Home or reuse an old endpoint.
+  records.set(BOT.chatSessionId, record(BOT.chatSessionId))
   records.set(successor, record(successor, chatId(0)))
   store.lineageChanged(successor)
   expect(route(BOT, store.records, successor, idle)(chatId(0))).toBeNull()
+  expect(route(BOT, store.records, BOT.chatSessionId, idle)(chatId(0))).toBeNull()
   records.set(successor, record(successor))
   store.lineageChanged(successor)
   expect(route(BOT, store.records, successor, idle)(chatId(0))).toBe(successor)
