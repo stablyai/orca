@@ -969,6 +969,7 @@
       "thinking": "생각 중",
       "toggleDetails": "턴 세부정보 전환",
       "workedFor": "{{value0}} 작업 완료",
+      "continuedFor": "{{value0}} 동안 이어서 작업",
       "working": "작업 중…",
       "workingFor": "{{value0}} 작업 중"
     },

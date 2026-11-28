@@ -747,6 +747,7 @@
       "thinking": "Düşünüyor",
       "toggleDetails": "Tur ayrıntılarını aç/kapat",
       "workedFor": "{{value0}} boyunca çalıştı",
+      "continuedFor": "{{value0}} boyunca devam etti",
       "working": "Çalışıyor…",
       "workingFor": "{{value0}} süredir çalışıyor"
     },

@@ -16,7 +16,7 @@ import { MobileNativeChatReasoningRow } from '../message-content/MobileNativeCha
 import { useMobileNativeChatRunAsides } from '../use-mobile-native-chat-run-asides'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
 import { nativeChatWorkRunEntries } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-work-run'
-import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import { mobileNativeChatTurnStatusRows } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from '../notices/MobileNativeChatNoticeRow'
 import { mobileNativeChatBotCardRow } from '../bot-cards/mobile-native-chat-bot-card-row'
 import { useMobileFoldedIntoBotRequest } from '../bot-cards/mobile-bot-request-folded-mail'
@@ -40,6 +40,7 @@ import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundT
 import { withoutBackgroundTaskRows } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { ToolRun } from '../tool-results/MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import type { NativeChatBarStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-segments'
 import { stylesSheet } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from '../agent-messages/MobileNativeChatAgentMessageCard'
 import { mobileAutomationRow } from '../MobileAutomationSavedRow'
@@ -61,6 +62,8 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   turnStatus,
   turnStatusAbove = false,
+  turnLeadStatus,
+  turnStatusLive = false,
   turnExpanded,
   turnKey,
   rewindable,
@@ -92,8 +95,10 @@ function MobileNativeChatMessageImpl({
   previousTodoWrite?: Chat.NativeChatToolCallBlock
   previousUpdatePlan?: Chat.NativeChatToolCallBlock
   fontScale?: number
-  turnStatus?: NativeChatTurnStatus | null
+  turnStatus?: NativeChatBarStatus | null
   turnStatusAbove?: boolean
+  turnLeadStatus?: NativeChatTurnStatus
+  turnStatusLive?: boolean
   turnExpanded?: boolean
   turnKey?: string
   /** The chat may rewind to this row, by desktop's `nativeChatRowOffersRewind`. */
@@ -184,19 +189,18 @@ function MobileNativeChatMessageImpl({
       ? message.blocks.at(-1)
       : undefined
 
-  const statusRow = turnStatus ? (
-    <MobileNativeChatTurnStatus
-      startedAt={turnStatus.startedAt}
-      workedSeconds={turnStatus.workedSeconds}
-      verdict={turnStatus.verdict}
-      expanded={turnExpanded ?? false}
-      onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
-    />
-  ) : null
+  const { statusRow, leadRow } = mobileNativeChatTurnStatusRows({
+    status: turnStatus,
+    lead: turnLeadStatus,
+    live: turnStatusLive,
+    expanded: turnExpanded ?? false,
+    onToggle: turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined,
+    style: styles.turnStatus
+  })
   const rowId = rowKey ?? message.id
   const withStatus = (row: React.ReactNode) => (
     <>
-      {turnStatusAbove ? statusRow : null}
+      {turnStatusAbove ? statusRow : leadRow}
       {row}
       {turnStatusAbove ? null : statusRow}
     </>
@@ -300,7 +304,7 @@ function MobileNativeChatMessageImpl({
   return (
     <>
       {tookOver ? <MobileNativeChatTookOverRow workspace={tookOver.workspace} /> : null}
-      {turnStatusAbove ? statusRow : null}
+      {turnStatusAbove ? statusRow : leadRow}
       <View style={[styles.row, isUser && styles.rowUser]} testID={mobileNativeChatRowId(rowId)}>
         <Marks.MobileNativeChatConnectorMarks message={message} tagged={!agentFrom} end={isUser} />
         <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>

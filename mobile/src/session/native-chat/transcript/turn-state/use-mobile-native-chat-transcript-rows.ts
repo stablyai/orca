@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   nativeChatActivityRowJoins,
   type NativeChatActivityJoin
@@ -9,8 +9,16 @@ import {
   NATIVE_CHAT_EMPTY_TURN_FOLD,
   nativeChatTurnFold,
   nativeChatTurnFoldRow,
-  type NativeChatTurnFold
+  type NativeChatTurnFold,
+  type NativeChatTurnFoldRow
 } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-turn-fold'
+import {
+  NO_NATIVE_CHAT_TURN_SEGMENTS,
+  nativeChatRowBars,
+  nativeChatTurnSegments,
+  type NativeChatTurnBarsInput,
+  type NativeChatTurnSegments
+} from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-segments'
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
@@ -31,25 +39,6 @@ type TranscriptRows = {
 export type MobileNativeChatWorkRuns = {
   heads: ReadonlyMap<number, readonly NativeChatMessage[]>
   joined: ReadonlySet<number>
-}
-
-function mobileNativeChatTurnFold({
-  rows,
-  turnKeys,
-  receipts,
-  settledTurnKeys,
-  expandedTurnKeys
-}: TranscriptRows & {
-  settledTurnKeys: ReadonlySet<string>
-  expandedTurnKeys: ReadonlySet<string>
-}): NativeChatTurnFold {
-  return nativeChatTurnFold({
-    rows: rows.map((message, index) =>
-      nativeChatTurnFoldRow(message, turnKeys[index], receipts?.get(message.id))
-    ),
-    settledTurnKeys,
-    expandedTurnKeys
-  })
 }
 
 // Invisible thoughts neither join nor split work runs; visible thoughts stay inside the run.
@@ -92,11 +81,15 @@ export type MobileNativeChatTurnBars = {
   quiet: { ids: ReadonlySet<string>; turns: ReadonlySet<string> } | null
   active: NativeChatTurnStatus | null
   activeTurnKey: string | null | undefined
+  /** Rows the list leaves out (quiet, merged or waiting), which never cut a turn. */
+  hiddenRows: ReadonlySet<number>
 }
+
+export type MobileNativeChatRowBars = ReturnType<typeof nativeChatRowBars>
 
 /** The rows that draw their turn's bar, and on which side: a turn with a status that isn't quiet. */
 function mobileNativeChatBarSides(
-  turnBars: MobileNativeChatTurnBars,
+  turnBars: Omit<MobileNativeChatTurnBars, 'hiddenRows'>,
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
 ): Map<number, 'above' | 'below'> {
   const sides = new Map<number, 'above' | 'below'>()
@@ -109,11 +102,20 @@ function mobileNativeChatBarSides(
   return sides
 }
 
+const NO_KEYS: ReadonlySet<never> = new Set()
 const NO_TURN_BARS: MobileNativeChatTurnBars = {
   bars: new Map(),
   quiet: null,
   active: null,
-  activeTurnKey: undefined
+  activeTurnKey: undefined,
+  hiddenRows: NO_KEYS
+}
+const NO_FOLD_ROWS: readonly NativeChatTurnFoldRow[] = []
+const NO_ROW_BARS: MobileNativeChatRowBars = {
+  status: undefined,
+  statusAbove: false,
+  leadStatus: undefined,
+  foldKey: undefined
 }
 const NO_RECEIPTS: ReadonlyMap<string, NativeChatResolvedPrompt> = new Map()
 const NO_WORK_RUNS: MobileNativeChatWorkRuns = { heads: new Map(), joined: new Set() }
@@ -128,7 +130,7 @@ export function useMobileNativeChatTranscriptRows({
   expandedTurnKeys,
   liveReasoningId,
   turnDiffs,
-  turnBars: { bars, quiet, active, activeTurnKey } = NO_TURN_BARS
+  turnBars: { bars, quiet, active, activeTurnKey, hiddenRows } = NO_TURN_BARS
 }: TranscriptRows & {
   enabled: boolean
   /** Turn diffs by the row they draw under (undefined: its turn changed nothing); one ends an
@@ -145,23 +147,64 @@ export function useMobileNativeChatTranscriptRows({
   workRuns: MobileNativeChatWorkRuns
   /** Activity rows that touch another, past rows this projection hides. */
   activityJoins: ReadonlyMap<number, NativeChatActivityJoin>
+  /** Where the person's messages mid-turn cut each turn into stretches, as on desktop. */
+  segments: NativeChatTurnSegments
+  /** The bars a row draws: its turn's, or its stretch's, and the fold that bar opens. */
+  rowBars: (index: number) => MobileNativeChatRowBars
+  /** The row the live turn's ticking bar draws under, if one does. */
+  liveBarIndex: number | undefined
 } {
+  const foldRows = useMemo(
+    () =>
+      enabled
+        ? rows.map((message, index) =>
+            nativeChatTurnFoldRow(message, turnKeys[index], receipts?.get(message.id))
+          )
+        : NO_FOLD_ROWS,
+    [enabled, receipts, rows, turnKeys]
+  )
+  const barsInput = useMemo<NativeChatTurnBarsInput>(
+    () => ({
+      messages: rows,
+      turnKeys,
+      foldRows,
+      liveTurnKey: activeTurnKey ?? undefined,
+      turnStatuses: { active, completedByTurn },
+      bars,
+      quiet: { rows: hiddenRows, turns: quiet?.turns ?? NO_KEYS },
+      introTurn: undefined
+    }),
+    [active, activeTurnKey, bars, completedByTurn, foldRows, hiddenRows, quiet, rows, turnKeys]
+  )
+  const segments = useMemo(
+    () => (enabled ? nativeChatTurnSegments(barsInput) : NO_NATIVE_CHAT_TURN_SEGMENTS),
+    [barsInput, enabled]
+  )
+  const rowBars = useCallback(
+    (index: number) => (enabled ? nativeChatRowBars(index, barsInput, segments) : NO_ROW_BARS),
+    [barsInput, enabled, segments]
+  )
+  // A turn the person wrote into mid-turn draws its live bar under their newest message.
+  const ownBar = activeTurnKey == null ? undefined : bars.get(activeTurnKey)
+  const liveBarIndex =
+    (activeTurnKey == null ? undefined : segments.foldsBefore.get(activeTurnKey)) ??
+    (ownBar && !ownBar.above ? ownBar.index : undefined)
   const fold = useMemo(
     () =>
       enabled
-        ? mobileNativeChatTurnFold({
-            rows,
-            turnKeys,
-            receipts,
+        ? nativeChatTurnFold({
+            rows: foldRows,
             settledTurnKeys: new Set(
               Object.entries(completedByTurn).flatMap(([turnKey, status]) =>
                 status.workedSeconds != null ? [turnKey] : []
               )
             ),
-            expandedTurnKeys
+            expandedTurnKeys,
+            foldsBefore: segments.foldsBefore,
+            foldKeys: segments.foldKeys
           })
         : NATIVE_CHAT_EMPTY_TURN_FOLD,
-    [completedByTurn, enabled, expandedTurnKeys, receipts, rows, turnKeys]
+    [completedByTurn, enabled, expandedTurnKeys, foldRows, segments]
   )
   // The turn owns liveness: its frontier stays live between calls, while earlier runs are settled.
   const trailingRunIndex = useMemo(
@@ -207,5 +250,5 @@ export function useMobileNativeChatTranscriptRows({
     turnDiffs,
     workRuns
   ])
-  return { fold, trailingRunIndex, workRuns, activityJoins }
+  return { fold, trailingRunIndex, workRuns, activityJoins, segments, rowBars, liveBarIndex }
 }

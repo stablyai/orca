@@ -27,12 +27,16 @@ export function formatMobileNativeChatDuration(seconds: number, t: Translate): s
 }
 
 export function formatMobileNativeChatTurnStatusLabel(
-  input: Parameters<typeof describeNativeChatTurnStatus>[0],
+  input: Parameters<typeof describeNativeChatTurnStatus>[0] & {
+    /** A finished stretch after the person's message mid-turn. */
+    continued?: boolean
+  },
   t: Translate
 ): string {
   const { key } = describeNativeChatTurnStatus(input)
   const duration = formatMobileNativeChatDuration(input.workedSeconds ?? input.elapsedSeconds, t)
-  return nativeChatTurnStatusCopy(t, duration)[key]
+  const copy = nativeChatTurnStatusCopy(t, duration)
+  return input.continued && input.workedSeconds != null ? copy.continuedFor : copy[key]
 }
 
 export function formatMobileNativeChatActiveTurnLabel(
@@ -52,6 +56,7 @@ export function nativeChatTurnStatusCopy(t: Translate, value0?: string) {
     sendAfterStop: t('chat.turnStatus.sendAfterStop', 'Send a message to run after the stop'),
     workingFor: t('chat.turnStatus.workingFor', 'Working for {{value0}}', { value0 }),
     workedFor: t('chat.turnStatus.workedFor', 'Worked for {{value0}}', { value0 }),
+    continuedFor: t('chat.turnStatus.continuedFor', 'Continued for {{value0}}', { value0 }),
     interruptedAfter: t('chat.turnStatus.interruptedAfter', 'Interrupted after {{value0}}', {
       value0
     }),

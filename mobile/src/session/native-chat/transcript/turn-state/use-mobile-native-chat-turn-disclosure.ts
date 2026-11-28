@@ -8,10 +8,7 @@ import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scop
 import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
-import {
-  nativeChatLiveLine,
-  type NativeChatLiveLine
-} from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-live-line'
+import { nativeChatLiveLine } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-live-line'
 import type {
   NativeChatSettledTurns,
   NativeChatTurnStatus
@@ -32,11 +29,16 @@ import {
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-grouping'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { mobileNativeChatQuietTurns } from './mobile-native-chat-quiet-turns'
+import {
+  useMobileNativeChatLiveLine,
+  type MobileNativeChatLiveLine
+} from './mobile-native-chat-live-line-placement'
 import { structuredAgentTurnOpeningSendPending } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 
 const NO_TURN_KEYS: readonly undefined[] = []
+const NO_HIDDEN_ROWS: ReadonlySet<number> = new Set()
 
-export type MobileNativeChatLiveLine = NativeChatLiveLine & { reasoningExpanded: boolean }
+export type { MobileNativeChatLiveLine }
 
 export function useMobileNativeChatTurnDisclosure({
   messages,
@@ -145,9 +147,12 @@ export function useMobileNativeChatTurnDisclosure({
         )
       : null
     if (!ids?.size && !quiet?.ids.size) {
-      return { listMessages: rows, waitingRows: [], indexById: null }
+      return { listMessages: rows, waitingRows: [], indexById: null, hiddenRows: NO_HIDDEN_ROWS }
     }
     return {
+      hiddenRows: new Set(
+        rows.flatMap((m, index) => (ids?.has(m.id) || quiet?.ids.has(m.id) ? [index] : []))
+      ),
       // Rows merged into a later one are among the quiet ids, and draw inside it.
       listMessages: (quiet?.shown ?? rows).filter((m) => !ids?.has(m.id) && !quiet?.ids.has(m.id)),
       waitingRows: rows.flatMap((item, index) => (ids?.has(item.id) ? [{ item, index }] : [])),
@@ -188,27 +193,23 @@ export function useMobileNativeChatTurnDisclosure({
     [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows, stopping]
   )
   const liveReasoningId = line?.reasoning?.message.id
-  const liveLine = useMemo<MobileNativeChatLiveLine | null>(
-    () =>
-      line && {
-        ...line,
-        reasoningExpanded:
-          line.reasoning !== null &&
-          expandedReasoning.has(nativeChatReasoningDisclosureKey(line.reasoning.message.id))
-      },
-    [expandedReasoning, line]
+  const { fold, trailingRunIndex, workRuns, activityJoins, rowBars, liveBarIndex } =
+    useMobileNativeChatTranscriptRows({
+      enabled,
+      rows,
+      turnKeys,
+      receipts,
+      completedByTurn,
+      expandedTurnKeys: expandedTurnIds,
+      liveReasoningId,
+      turnDiffs: summaries,
+      turnBars: { bars, quiet, active, activeTurnKey, hiddenRows: waiting.hiddenRows }
+    })
+  const { liveLine, placement: linePlacement } = useMobileNativeChatLiveLine(
+    line,
+    expandedReasoning,
+    { active, activeTurnKey, liveBarIndex, quiet, rows, listMessages: waiting.listMessages }
   )
-  const { fold, trailingRunIndex, workRuns, activityJoins } = useMobileNativeChatTranscriptRows({
-    enabled,
-    rows,
-    turnKeys,
-    receipts,
-    completedByTurn,
-    expandedTurnKeys: expandedTurnIds,
-    liveReasoningId,
-    turnDiffs: summaries,
-    turnBars: { bars, quiet, active, activeTurnKey }
-  })
   const presentation = useMemo(
     () => ({ rows, workRuns, turnKeys, receipts }),
     [rows, workRuns, turnKeys, receipts]
@@ -221,20 +222,20 @@ export function useMobileNativeChatTurnDisclosure({
     (listIndex: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
       const index = waiting.indexById?.get(message.id) ?? listIndex
       const turnKey = turnKeys[index]
-      const bar = turnKey === undefined ? undefined : bars.get(turnKey)
-      const turnStatus =
-        enabled && turnKey !== undefined && bar?.index === index && !quiet?.turns.has(turnKey)
-          ? turnKey === activeTurnKey
-            ? active
-            : (completedByTurn[turnKey] ?? null)
-          : null
+      const { status, statusAbove, leadStatus, foldKey } = rowBars(index)
+      // A stretch after the person's message mid-turn opens on its own; any other bar opens its turn.
+      const opens = foldKey ?? turnKey
       return {
         turnDiff: summaries.get(message.id),
-        turnStatus,
-        ...(bar?.above === true && turnStatus !== null ? { turnStatusAbove: true } : {}),
-        turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
+        turnStatus: status ?? null,
+        ...(statusAbove ? { turnStatusAbove: true } : {}),
+        ...(leadStatus ? { turnLeadStatus: leadStatus } : {}),
+        ...(linePlacement === 'merged' && status !== undefined && index === liveBarIndex
+          ? { turnStatusLive: true as const }
+          : {}),
+        turnExpanded: opens ? expandedTurnIds.has(opens) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
-        turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
+        turnKey: opens && fold.foldableTurnKeys.has(opens) ? opens : undefined,
         ...(turnKey === message.id ? { opensTurn: true as const } : {}),
         ...(turnKey !== undefined && automationTurns.has(turnKey)
           ? { inAutomationTurn: true as const }
@@ -271,12 +272,10 @@ export function useMobileNativeChatTurnDisclosure({
       actingTurns,
       summaries,
       waiting,
-      quiet,
-      bars,
+      rowBars,
       enabled,
-      activeTurnKey,
-      active,
-      completedByTurn,
+      liveBarIndex,
+      linePlacement,
       expandedTurnIds,
       inLiveWorkingTurn,
       trailingRunIndex,

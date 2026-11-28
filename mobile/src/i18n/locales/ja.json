@@ -701,6 +701,7 @@
       "thinking": "思考中",
       "toggleDetails": "ターンの詳細を切り替えます",
       "workedFor": "{{value0}} で完了",
+      "continuedFor": "さらに {{value0}} 作業",
       "working": "処理中…",
       "workingFor": "{{value0}} 処理中"
     },

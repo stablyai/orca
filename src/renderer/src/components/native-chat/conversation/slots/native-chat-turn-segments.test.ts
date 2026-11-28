@@ -3,7 +3,7 @@ import type { NativeChatMessage } from '../../../../../../shared/native-chat/nat
 import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
-import { nativeChatTurnSegmentKey } from './native-chat-turn-segments'
+import { nativeChatTurnSegmentKey } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-segments'
 
 const start = Date.parse('2026-11-27T12:00:00Z')
 const at = (seconds: number): number => start + seconds * 1000

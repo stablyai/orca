@@ -771,6 +771,7 @@
       "thinking": "Думает",
       "toggleDetails": "Показать или скрыть подробности ответа",
       "workedFor": "Работал {{value0}}",
+      "continuedFor": "Продолжал {{value0}}",
       "working": "Работает…",
       "workingFor": "Работает {{value0}}"
     },

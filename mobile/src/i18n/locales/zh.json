@@ -718,6 +718,7 @@
       "thinking": "思考中",
       "toggleDetails": "切换回合详情",
       "workedFor": "工作了 {{value0}}",
+      "continuedFor": "继续工作 {{value0}}",
       "working": "处理中…",
       "workingFor": "已工作 {{value0}}"
     },

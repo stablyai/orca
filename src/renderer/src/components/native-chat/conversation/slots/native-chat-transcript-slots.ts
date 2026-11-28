@@ -43,7 +43,10 @@ import {
 } from '../../messages/actions/native-chat-side-chat-fork-point'
 import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
 import { nativeChatBotIntroTurn, nativeChatShownRows } from './native-chat-quiet-turn-rows'
-import { nativeChatTranscriptTurnBars, type NativeChatBarStatus } from './native-chat-turn-segments'
+import {
+  nativeChatTranscriptTurnBars,
+  type NativeChatBarStatus
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-segments'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot = NativeChatMessageSlot | NativeChatSubagentHeadSlot

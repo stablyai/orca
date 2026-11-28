@@ -701,6 +701,7 @@
       "thinking": "思考",
       "toggleDetails": "切換回合詳細資訊",
       "workedFor": "工作時間 {{value0}}",
+      "continuedFor": "繼續工作 {{value0}}",
       "working": "處理中…",
       "workingFor": "已執行 {{value0}}"
     },
