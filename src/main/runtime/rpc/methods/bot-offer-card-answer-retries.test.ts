@@ -371,6 +371,71 @@ describe('host-confirmed offer answers', () => {
     expect(persistedCard('google')).toMatchObject({ googleActionIds: ids })
   })
 
+  it.each([false, true])(
+    'preserves the admitted receipt boundary across a backward clock step (retry save: %s)',
+    async (retrySave) => {
+      const now = Date.now()
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+      const expired = actionId('expires-first')
+      clock.mockReturnValue(now + 1)
+      const retained = Array.from({ length: MAX_GOOGLE_OFFER_ACTIONS - 1 }, (_, index) =>
+        actionId(`retained-${index}`)
+      )
+      await bots.update('b1', {
+        offerAnswerConfirmation: {
+          cardId: 'google',
+          answers: [
+            {
+              cardId: 'google',
+              sent: { chosen: ['a@example.com'] },
+              googleActionIds: [expired, ...retained]
+            }
+          ]
+        }
+      })
+      if (retrySave) {
+        vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(
+          new Error('Profile unavailable')
+        )
+      }
+
+      const admitted = Promise.withResolvers<void>()
+      const completeSend = Promise.withResolvers<boolean>()
+      chat.beforeNext = () => {
+        admitted.resolve()
+        return completeSend.promise
+      }
+      const boundary = now + GOOGLE_OFFER_REPLAY_WINDOW_MS
+      clock.mockReturnValue(boundary + 1)
+      const accepted = googleAccount('b', 'new-action')
+      await admitted.promise
+      clock.mockReturnValue(boundary)
+      completeSend.resolve(true)
+      if (retrySave) {
+        await expect(accepted).rejects.toThrow('Profile unavailable')
+        await googleAccount('b', 'new-action')
+      } else {
+        await expect(accepted).resolves.toMatchObject({ sent: true })
+      }
+
+      expect
+        .soft(persistedCard('google'))
+        .toHaveProperty('googleActionIds.length', MAX_GOOGLE_OFFER_ACTIONS)
+      await restartHost()
+      const reopened = bots.list()[0]?.offerAnswers?.find((answer) => answer.cardId === 'google')
+      const replayed = await googleAccount('a', 'retained-0')
+      expect.soft(heardAccounts()).toEqual(['b@example.com'])
+      expect.soft(reopened?.googleActionIds).toEqual([...retained, actionId('new-action')])
+      expect(reopened).toMatchObject({
+        sent: { chosen: ['b@example.com'] },
+        googleReplayCutoff: now + 1
+      })
+      expect(replayed).toMatchObject({
+        answer: { sent: { chosen: ['b@example.com'] } }
+      })
+    }
+  )
+
   it('retains an older stored choice without replay receipts through a reopen', async () => {
     await bots.update('b1', {
       offerAnswerConfirmation: {

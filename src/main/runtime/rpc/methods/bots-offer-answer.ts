@@ -44,10 +44,10 @@ function googleReplayCutoff(answer: BotOfferAnswer | undefined, now: number): nu
 function googleActionReplay(
   actionId: string,
   answer: BotOfferAnswer | undefined,
-  now: number
+  now: number,
+  cutoff: number
 ): boolean {
   const issuedAt = googleOfferActionTime(actionId)
-  const cutoff = googleReplayCutoff(answer, now)
   if (issuedAt < cutoff) {
     throw new InvalidArgumentError('This Google card answer expired. Sign in again to continue.')
   }
@@ -67,17 +67,18 @@ function googleActionReplay(
 
 async function saveCardAnswer(
   runtime: OrcaRuntimeService,
-  { botId, selection, googleActionId }: PendingBotOfferAnswer
+  { botId, selection, googleAction }: PendingBotOfferAnswer
 ): Promise<BotOfferTold> {
   const { cardId } = selection
   const bot = await runtime.bots.update(botId, (current) => {
     const offerAnswers = withBotOfferAnswer(current.offerAnswers, selection)
     const answer = offerAnswers.at(-1)
-    if (answer && googleActionId) {
-      const cutoff = googleReplayCutoff(answer, Date.now())
+    if (answer && googleAction) {
+      // A clock rollback after chat admission must not revive receipts excluded by the capacity check.
+      const cutoff = Math.max(googleAction.admissionCutoff, googleReplayCutoff(answer, Date.now()))
       const retained = recentGoogleActions(answer, cutoff)
-      if (googleOfferActionTime(googleActionId) >= cutoff && !retained.includes(googleActionId)) {
-        retained.push(googleActionId)
+      if (googleOfferActionTime(googleAction.id) >= cutoff && !retained.includes(googleAction.id)) {
+        retained.push(googleAction.id)
       }
       answer.googleActionIds = retained
       answer.googleReplayCutoff = cutoff
@@ -106,10 +107,14 @@ function confirmCardAnswer(
 
     const bot = runtime.bots.list().find((entry) => entry.id === botId)
     const current = bot?.offerAnswers?.find((entry) => entry.cardId === selection.cardId)
+    let googleAction: PendingBotOfferAnswer['googleAction']
     if (googleActionId) {
-      if (googleActionReplay(googleActionId, current, Date.now())) {
+      const now = Date.now()
+      const admissionCutoff = googleReplayCutoff(current, now)
+      if (googleActionReplay(googleActionId, current, now, admissionCutoff)) {
         return { sent: true, answer: current }
       }
+      googleAction = { id: googleActionId, admissionCutoff }
     } else if (current?.sent || ('dismissed' in selection && current?.dismissed)) {
       return { sent: true, answer: current }
     }
@@ -125,7 +130,7 @@ function confirmCardAnswer(
     }
     const write = {
       botId,
-      googleActionId,
+      googleAction,
       selection: told ? selection : { cardId: selection.cardId }
     }
     pending.set(key, write)

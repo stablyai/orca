@@ -5,7 +5,7 @@ import { persistBotStore, type BotStore } from './bot-controller-store'
 export type PendingBotOfferAnswer = {
   botId: string
   selection: BotOfferAnswer
-  googleActionId?: string
+  googleAction?: { id: string; admissionCutoff: number }
 }
 
 export class BotOfferAnswerWrites {
