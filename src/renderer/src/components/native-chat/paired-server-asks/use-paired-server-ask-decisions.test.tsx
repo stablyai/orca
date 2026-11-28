@@ -3,8 +3,8 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
-import type { PairedServerAskCard } from '../../../../../../shared/rpc-contract/paired-server-asks-params'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { PairedServerAskCard } from '../../../../../shared/rpc-contract/paired-server-asks-params'
 import {
   NativeChatViewTabContext,
   releaseNativeChatViewTabs

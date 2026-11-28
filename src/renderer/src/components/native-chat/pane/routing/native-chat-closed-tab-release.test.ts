@@ -15,9 +15,13 @@ afterEach(() => releaseNativeChatViewTabs([TAB.tabId]))
 it("a layer's tab change releases only its own closed tabs; an unmount sweeps the rest", () => {
   const two = { tabId: 'tab-2', worktreeId: TAB.worktreeId }
   const elsewhere = { tabId: 'tab-3', worktreeId: 'wt-2' }
-  const tab = (id: string): Tab => ({ id }) as Tab // oxlint-disable-line typescript/consistent-type-assertions -- SAFETY: only ids are read.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
+  const tab = (id: string): Tab => ({ id }) as Tab
   useAppStore.setState({
-    unifiedTabsByWorktree: { [TAB.worktreeId]: [tab(TAB.tabId), tab(two.tabId)], 'wt-2': [tab('tab-3')] }
+    unifiedTabsByWorktree: {
+      [TAB.worktreeId]: [tab(TAB.tabId), tab(two.tabId)],
+      'wt-2': [tab('tab-3')]
+    }
   })
   reportChatLayerTabs('layer-a', TAB.worktreeId, new Set([TAB.tabId, two.tabId]))
   reportChatLayerTabs('layer-b', 'wt-2', new Set(['tab-3']))
@@ -25,7 +29,9 @@ it("a layer's tab change releases only its own closed tabs; an unmount sweeps th
     writeNativeChatViewMemory(each, 'kept', 1)
   }
   // tab-3 closes while its workspace's layer is gone; tab-2 closes in a shown workspace.
-  useAppStore.setState({ unifiedTabsByWorktree: { [TAB.worktreeId]: [tab(TAB.tabId)], 'wt-2': [] } })
+  useAppStore.setState({
+    unifiedTabsByWorktree: { [TAB.worktreeId]: [tab(TAB.tabId)], 'wt-2': [] }
+  })
   reportChatLayerTabs('layer-a', TAB.worktreeId, new Set([TAB.tabId]))
   expect(readNativeChatViewMemory(two, 'kept')).toBeUndefined()
   expect(readNativeChatViewMemory(elsewhere, 'kept')).toBe(1)
