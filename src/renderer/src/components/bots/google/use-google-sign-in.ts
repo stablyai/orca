@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import {
-  useNativeChatViewRef,
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewGuard,
   useNativeChatViewState
 } from '../../native-chat/pane/ownership/native-chat-view-memory'
 import type {
@@ -16,7 +17,13 @@ import { cancelGoogleSignIn, connectGoogle, type GoogleSignInWay } from './googl
 export type GoogleSignInState =
   | { kind: 'idle' }
   /** `prompt` arrives once the host has the Google link, with where it opened; Open again reopens it. */
-  | { kind: 'waiting'; prompt: GoogleSignInPrompt | null; way?: GoogleSignInWay }
+  | {
+      kind: 'waiting'
+      prompt: GoogleSignInPrompt | null
+      way?: GoogleSignInWay
+      /** Kept-state marker: a waiting sign-in is never dropped to make room. */
+      inFlight?: true
+    }
   | { kind: 'failed'; error: string }
 
 const IDLE: GoogleSignInState = { kind: 'idle' }
@@ -38,22 +45,18 @@ export function useGoogleSignIn(
   ) => Promise<GoogleAccountView | null>
   cancel: () => void
 } {
+  // Kept with the chat tab, newest few runs: a sign-in still waiting stays shown through the chat's release and is
+  // never the one dropped; a finished one returns to idle, which keeps nothing.
   const [state, setState] = useNativeChatViewState<GoogleSignInState>(
     memoryKey === undefined ? undefined : `google-sign-in:${memoryKey}`,
-    IDLE
+    IDLE,
+    KEPT_PROMPT_VIEWS
   )
-  // Whether the module's running sign-in is this hook's, so cancel never stops another surface's; and the run
-  // count, so a cancelled run's rejection isn't shown. Kept with the chat tab like the state.
-  const own = useNativeChatViewRef(
+  // The run this hook started, so cancel never stops another surface's, and a cancelled run's rejection isn't
+  // shown. Cleared when the run ends, so a settled card keeps nothing.
+  const [, setRun, readRun] = useNativeChatViewGuard<symbol | null>(
     memoryKey === undefined ? undefined : `google-sign-in-run:${memoryKey}`,
-    { waiting: false, runs: 0 }
-  )
-  const show = useCallback(
-    (next: GoogleSignInState): void => {
-      own.current.waiting = next.kind === 'waiting'
-      setState(next)
-    },
-    [own, setState]
+    null
   )
   const connect = useCallback(
     async (
@@ -61,8 +64,9 @@ export function useGoogleSignIn(
       account?: string,
       options?: Pick<GoogleSignInAsk, 'currentApp'>
     ) => {
-      const run = ++own.current.runs
-      show({ kind: 'waiting', prompt: null })
+      const run = Symbol('google-sign-in')
+      setRun(run)
+      setState({ kind: 'waiting', prompt: null, inFlight: true })
       try {
         const connected = await connectGoogle(
           target,
@@ -72,25 +76,36 @@ export function useGoogleSignIn(
             ...(options?.currentApp ? { currentApp: true } : {}),
             ...(bot ? { bot } : {})
           },
-          (prompt, way) => show({ kind: 'waiting', prompt, way })
+          (prompt, way) => {
+            if (readRun() === run) {
+              setState({ kind: 'waiting', prompt, way, inFlight: true })
+            }
+          }
         )
-        show(IDLE)
+        if (readRun() === run) {
+          setRun(null)
+          setState(IDLE)
+        }
         return connected
       } catch (error) {
-        if (own.current.runs === run) {
-          show({ kind: 'failed', error: error instanceof Error ? error.message : String(error) })
+        if (readRun() === run) {
+          setRun(null)
+          setState({
+            kind: 'failed',
+            error: error instanceof Error ? error.message : String(error)
+          })
         }
         return null
       }
     },
-    [target, bot, own, show]
+    [target, bot, readRun, setRun, setState]
   )
   const cancel = useCallback(() => {
-    own.current.runs += 1
-    if (own.current.waiting) {
+    if (readRun() !== null) {
+      setRun(null)
       void cancelGoogleSignIn()
     }
-    show(IDLE)
-  }, [own, show])
+    setState(IDLE)
+  }, [readRun, setRun, setState])
   return { state, connect, cancel }
 }

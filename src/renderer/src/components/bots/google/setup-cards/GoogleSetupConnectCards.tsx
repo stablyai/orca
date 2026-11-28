@@ -1,7 +1,10 @@
 // The setup's last two cards: the owner's own sign-in with the new app (a bot can't sign in for
 // them), which ends on the accounts the bot may use, then what the bot can use.
 import React, { useState } from 'react'
-import { useNativeChatViewState } from '../../../native-chat/pane/ownership/native-chat-view-memory'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewState
+} from '../../../native-chat/pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { botErrorMessage } from '../../bot-presentation'
 import { Button } from '@/components/ui/button'
@@ -49,7 +52,8 @@ export function GoogleSetupConnectCard({
   // chat tab, so a sign-in that finishes while the chat is released still leads to the account step.
   const [signedIn, setSignedIn] = useNativeChatViewState<string | null>(
     `google-setup-signed-in:${run.id}`,
-    null
+    null,
+    KEPT_PROMPT_VIEWS
   )
   const done = run.steps.connect?.status === 'done'
   const open = googleSetupConnectOpen(run)

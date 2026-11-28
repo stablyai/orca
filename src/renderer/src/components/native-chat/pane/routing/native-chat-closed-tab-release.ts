@@ -114,7 +114,12 @@ export function releaseRemovedChatTabs(
       const pass: ReleasePass = { byWorktree: useAppStore.getState().unifiedTabsByWorktree }
       const byWorktree = new Map<string, string[]>()
       for (const [tabId, worktreeId] of removedPending) {
-        byWorktree.set(worktreeId, [...(byWorktree.get(worktreeId) ?? []), tabId])
+        const gone = byWorktree.get(worktreeId)
+        if (gone) {
+          gone.push(tabId)
+        } else {
+          byWorktree.set(worktreeId, [tabId])
+        }
       }
       removedPending.clear()
       for (const [worktreeId, gone] of byWorktree) {

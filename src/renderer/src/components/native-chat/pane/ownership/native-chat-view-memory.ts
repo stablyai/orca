@@ -249,17 +249,23 @@ export function useNativeChatViewStateRef<T>(
  * Back at `initial`, the entry is deleted; per-item keys whose settled value stays pass `keepNewest`.
  */
 export function useNativeChatViewGuard<T>(
-  key: string,
+  /** Without a key the guard stays local to the view. */
+  key: string | undefined,
   initial: T,
   keepNewest?: number
 ): [T, (action: SetStateAction<T>) => void, () => T] {
-  const tab = useContext(NativeChatViewTabContext)
+  const viewTab = useContext(NativeChatViewTabContext)
+  const tab = key === undefined ? null : viewTab
   // Suffixed, so `keepNewest` still groups by the key's own prefix.
-  const keptKey = tab?.conversation === undefined ? key : `${key}@${tab.conversation}`
+  const keptKey =
+    key === undefined || tab?.conversation === undefined ? key : `${key}@${tab.conversation}`
   const [value, setValue] = useNativeChatViewState(keptKey, initial, keepNewest)
   const local = useRef(initial)
   const read = useCallback(
-    (): T => (tab ? (readNativeChatViewMemory<T>(tab, keptKey) ?? initial) : local.current),
+    (): T =>
+      tab && keptKey !== undefined
+        ? (readNativeChatViewMemory<T>(tab, keptKey) ?? initial)
+        : local.current,
     [tab, keptKey, initial]
   )
   const set = useCallback(
