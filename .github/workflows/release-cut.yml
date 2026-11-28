@@ -105,14 +105,6 @@ jobs:
           node-version-file: package.json
           check-latest: true
 
-      - name: Publish complete release-cut RC drafts from prior runs
-        id: publish_drafts
-        # Recover complete RC drafts before deciding whether manual dispatch needs another tag.
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
-
       - name: Compute RC slot
         id: slot
         run: |
@@ -187,6 +179,14 @@ jobs:
           echo "Window reason: ${{ steps.window.outputs.reason }}"
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
+
+      - name: Publish complete release-cut RC drafts from prior runs
+        id: publish_drafts
+        # Recover complete RC drafts before deciding whether manual dispatch needs another tag.
+        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
 
       - name: Compute next version
         id: version
