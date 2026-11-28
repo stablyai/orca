@@ -1,7 +1,6 @@
 import { useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { BitbucketAuthMode } from '../../../../../shared/bitbucket/bitbucket-credentials'
-import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,7 +15,8 @@ import { DialogCancel, DialogDisclosure, DialogError } from '@/components/ui/dia
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { hasRemoteProviderRuntime } from '@/runtime/hosts/observations/provider-runtime-context'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { bitbucketConnect } from '@/runtime/source-control/bitbucket/runtime-bitbucket-credentials-client'
 import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 import { bitbucketConnectErrorText } from '@/lib/source-control/remote/bitbucket-connect-error-copy'
 import { useTranslate } from '@/i18n/use-translate'
@@ -35,6 +35,8 @@ type BitbucketCredentialsDialogProps = {
   initialBaseUrl?: string | null
   /** Env vars win over stored credentials, so saving here would have no effect. */
   environmentManaged?: boolean
+  /** The host the card shows; secrets go only there, never to another host. */
+  target: RuntimeClientTarget
   onConnected?: () => void
   overlayClassName?: string
 }
@@ -46,11 +48,11 @@ export function BitbucketCredentialsDialog({
   initialEmail,
   initialBaseUrl,
   environmentManaged = false,
+  target,
   onConnected,
   overlayClassName
 }: BitbucketCredentialsDialogProps): React.JSX.Element {
   const t = useTranslate()
-  const settings = useAppStore((s) => s.settings)
   const mountedRef = useMountedRef()
   const emailId = useId()
   const apiTokenId = useId()
@@ -88,7 +90,7 @@ export function BitbucketCredentialsDialog({
     }
   }, [open])
 
-  const remoteRuntime = hasRemoteProviderRuntime(settings)
+  const remoteRuntime = target.kind === 'environment'
   // Only environment-managed auth makes saving ineffective; remote runtimes change storage guidance, not form usability.
   const locked = environmentManaged
   const connecting = connectState === 'connecting'
@@ -124,7 +126,7 @@ export function BitbucketCredentialsDialog({
     setConnectState('connecting')
     setConnectError(null)
     try {
-      const result = await window.api.bitbucket.connect({
+      const result = await bitbucketConnect(target, {
         authMode,
         accessToken: isTokenMode ? accessToken.trim() : null,
         email: isTokenMode ? null : email.trim(),
@@ -204,8 +206,8 @@ export function BitbucketCredentialsDialog({
           ) : remoteRuntime ? (
             <DialogDescription>
               {t(
-                'components.settings.bitbucket.credentials.dialog.savedLocallyOnly',
-                'Saved on this computer only.'
+                'components.settings.bitbucket.credentials.dialog.savedOnSelectedServer',
+                'Sent to the selected server and stored there, encrypted when it supports it.'
               )}
             </DialogDescription>
           ) : null}

@@ -15,6 +15,8 @@
     "terminalPromptFailed": "O Orca abriu um terminal para {{value0}}, mas não conseguiu passar seu prompt. Envie o prompt nesse terminal."
   },
   "common": {
+    "new": "Criar",
+    "search": "Buscar",
     "retry": "Tentar novamente",
     "cancel": "Cancelar",
     "unassigned": "Não atribuído",
@@ -427,6 +429,26 @@
       "title": "Arquivo muito grande para comparação",
       "detail": "Uma versão deste arquivo tem mais de 10 MB, então o Orca não o carrega para uma comparação de texto.",
       "connectionDetail": "Este diff é grande demais para abrir por uma conexão remota."
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Recarregar do disco · recarregamento automático pausado",
+      "ariaLabelPaused": "Recarregar do disco, recarregamento automático pausado",
+      "noChanges": "Nenhuma alteração no disco",
+      "readFailed": "Não foi possível ler {{value0}}",
+      "retry": "Tentar novamente",
+      "fileDeleted": "Arquivo excluído do disco",
+      "cannotCheckDirty": "Não é possível comparar com o disco enquanto houver edições não salvas",
+      "changedOnDisk": "Alterado no disco",
+      "editsKept": "As edições não salvas em {{value0}} são mantidas",
+      "openTab": "Abrir aba",
+      "paletteTitle": "Recarregar arquivo do disco",
+      "paletteDescription": "Lê o arquivo ativo do disco e o recarrega se ele mudou.",
+      "verbs": {
+        "reloadFile": "recarregar arquivo",
+        "reloadFromDisk": "recarregar do disco",
+        "refreshFile": "atualizar arquivo",
+        "revertFile": "reverter arquivo"
+      }
     }
   },
   "notifications": {
@@ -1509,7 +1531,11 @@
         "pageChanged": "Esta página foi fechada ou mudou de perfil durante a importação. Tente novamente."
       },
       "notice": {
-        "failed": "Não foi possível importar cookies: {{reason}}"
+        "failed": "Não foi possível importar cookies: {{reason}}",
+        "importedCount_one": "Cookies importados: {{countLabel}}",
+        "importedCount_other": "Cookies importados: {{countLabel}}",
+        "reload": "Recarregar",
+        "importedCount_many": "Cookies importados: {{countLabel}}"
       },
       "routedPage": {
         "label": "Navegadores neste dispositivo",
@@ -1572,10 +1598,53 @@
       "resetZoom": "Redefinir zoom",
       "resetViewport": "Redefinir tamanho da viewport",
       "findOnPage": "Localizar na página",
-      "profile": "Perfil"
+      "profile": "Perfil",
+      "annotateModeWithShortcut": "Anotar, capturar ou desenhar ({{value0}})",
+      "annotateMode": "Anotar, capturar ou desenhar"
     },
     "loadStall": {
       "waitingForHost": "Aguardando {{host}}…"
+    },
+    "annotatePalette": {
+      "annotateTooltip": "Anotar: comentar um elemento (A)",
+      "grabTooltip": "Capturar: copiar o contexto de um elemento (G)",
+      "drawTooltip": "Desenhar: marcar uma captura de tela (D)",
+      "positionLeft": "Esquerda",
+      "positionRight": "Direita",
+      "positionTop": "Topo",
+      "positionMiddle": "Meio",
+      "positionBottom": "Base",
+      "label": "Ferramentas de anotação",
+      "tools": "Ferramenta",
+      "copy": "Copiar",
+      "copyTitle": "Copiar o elemento selecionado",
+      "copied": "Copiado",
+      "screenshot": "Captura de tela",
+      "screenshotTitle": "Copiar uma captura de tela do elemento selecionado",
+      "done": "Concluir",
+      "doneTitle": "Concluir (Esc)",
+      "move": "Mover barra de ferramentas",
+      "positionValueBothAxes": "{{side}} {{percent}}%, {{vertical}} {{verticalPercent}}%",
+      "annotateTooltipNoKey": "Anotar: comentar um elemento",
+      "grabTooltipNoKey": "Capturar: copiar o contexto de um elemento",
+      "drawTooltipNoKey": "Desenhar: marcar uma captura de tela",
+      "moveAnywhereTooltip": "Arraste ou use as setas para mover · clique duas vezes para redefinir · segure {{key}} para ver o que está embaixo",
+      "copyMarkup": "Copiar marcação",
+      "pickFirst": "Selecione um elemento primeiro",
+      "moreDrawTools": "Mais ferramentas de desenho",
+      "showNotes": "Mostrar notas",
+      "noteCountOne": "1 nota",
+      "noteCount": "{{count}} notas",
+      "drawingDiscarded": "Desenho descartado",
+      "undo": "Desfazer",
+      "collapseNotes": "Recolher notas",
+      "expandNotes": "Expandir notas",
+      "clearNotes": "Limpar notas",
+      "waitingForPage": "Aguardando a página…",
+      "pageDidNotLoad": "A página não carregou",
+      "discardDrawing": "Descartar desenho",
+      "discardDrawingTitle": "Descartar desenho (Esc)",
+      "positionCenter": "Centro"
     },
     "profileCookieClear": {
       "label": "Cookies",
@@ -1595,6 +1664,12 @@
       "failed": "Não foi possível limpar os cookies em {{profile}} em {{host}}. Tente novamente.",
       "failedLocal": "Não foi possível limpar os cookies em {{profile}} neste computador. Tente novamente.",
       "sshHostOption": "{{host}} (SSH)"
+    },
+    "grabToast": {
+      "noScreenshot": "Nenhuma captura de tela disponível",
+      "hoverReadFailed": "Não foi possível ler o elemento sob o cursor",
+      "noHover": "Nenhum elemento sob o cursor",
+      "copyFailed": "Não foi possível copiar"
     }
   },
   "settings": {
@@ -1831,6 +1906,12 @@
           "added": "{{name}} adicionada",
           "browse": "Chrome Web Store",
           "openFailed": "Abra um espaço de trabalho para explorar a Chrome Web Store."
+        },
+        "failure": {
+          "supportDisabled": "Ative as extensões do navegador em Configurações › Navegador › Extensões",
+          "invalidWebStoreInput": "Cole um link da Chrome Web Store ou um ID de extensão de 32 letras",
+          "profileUnavailable": "O perfil do navegador não está disponível para extensões",
+          "alreadyAdded": "{{name}} já foi adicionada"
         },
         "enabledToggleLabel": "Ativar ou desativar extensões do navegador"
       },
@@ -2938,6 +3019,9 @@
     "computerUse": {
       "teamDisabled": "O Uso do Computador foi desativado pela sua equipe."
     },
+    "browserUse": {
+      "teamDisabled": "O Uso do Navegador por Agente foi desativado pela sua equipe."
+    },
     "artifacts": {
       "teamDisabled": "O compartilhamento de Artefatos foi desativado pela sua equipe."
     },
@@ -3099,7 +3183,8 @@
         "add": "Adicionar um servidor para este repositório",
         "files": "Dos arquivos deste repositório",
         "open": "Abrir {{file}}"
-      }
+      },
+      "unreadable": "O login ou a chave salvos não podem ser abertos neste computador"
     }
   },
   "auto": {
@@ -3396,8 +3481,6 @@
           "localBaseRefNotUpdatedDirty": "Alterações não confirmadas em {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits apenas locais em {{value0}}.",
           "localBaseRefNotUpdatedError": "Erro do Git.",
-          "localBaseRefHideDetails": "Ocultar detalhes",
-          "localBaseRefShowDetails": "Detalhes",
           "0216895fb5": "Falha ao excluir a branch",
           "c6cf133786": "Este espaço de trabalho não está mais disponível.",
           "5366d13eec": "Espaço de trabalho excluído, branch mantida",
@@ -3433,6 +3516,9 @@
           "localBaseRefShallowHistory": "Seu espaço de trabalho foi criado a partir de {{value0}} e não foi afetado. O Orca não conseguiu também atualizar sua branch local {{value1}} porque este clone só tem o histórico recente, então o Git não consegue confirmar que a {{value1}} local está apenas atrasada. Para corrigir isso em todos os novos espaços de trabalho, execute uma vez:",
           "localBaseRefRefreshTurnOff": "Desativar verificação",
           "localBaseRefRefreshTurnOffHelp": "O que Desativar verificação faz",
+          "localBaseRefRefreshDisable": "Desativar",
+          "localBaseRefRefreshDisableTooltip": "Parar de verificar {{value0}}",
+          "localBaseRefClose": "Fechar",
           "localBaseRefRefreshTurnOffTooltip": "Desativa a configuração do Orca {{value0}}. O Orca deixará de atualizar a {{value1}} local ao criar um espaço de trabalho, e este aviso deixará de aparecer. Novos espaços de trabalho não são afetados. Reative quando quiser em Configurações › Git.",
           "localBaseRefUnshallow": "Buscar histórico completo",
           "localBaseRefUnshallowFailed": "Não foi possível abrir um terminal para este espaço de trabalho",
@@ -4410,12 +4496,26 @@
         "linkedIssue": "Issue vinculada",
         "listeningPort": "Porta em escuta"
       },
+      "simulator": {
+        "runtime": {
+          "emulatorRuntimeAttach": {
+            "serverAndroid": "Emuladores Android em {{host}} ainda não são compatíveis. Selecione um simulador iOS.",
+            "updateServer": "Não foi possível mostrar aqui o simulador de {{host}}. Atualize o Orca em {{host}} e tente novamente."
+          },
+          "emulatorRuntimeTarget": {
+            "ambiguousOwner": "Não foi possível identificar qual computador executa este espaço de trabalho. Reabra-o e tente novamente."
+          }
+        }
+      },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+clique verifica a versão candidata (RC) mais recente. {{perfKey}}+clique verifica a build de teste de desempenho mais recente.",
         "localMacBuildHint": "⌥+clique permite escolher uma build local do macOS."
       }
     },
     "components": {
+      "railPage": {
+        "closeSearch": "Fechar busca"
+      },
       "onboarding": {
         "AgentStep": {
           "e6a369bd04": "Agentes populares",
@@ -7346,6 +7446,7 @@
           "localLink": "Link somente local",
           "localLinkHelp": "Este link só funciona em um navegador ou cliente Orca em execução neste computador.",
           "noExternalAddress": "Nenhum endereço para outro dispositivo foi encontrado. Conecte este computador a uma LAN ou Tailscale, atualize, ou escolha Endereço personalizado.",
+          "interfaceDisconnected": "A interface de rede do endereço {{address}} está desconectada. Reconecte a interface e atualize a lista ou escolha outro endereço para criar um link.",
           "customInvalid": "Digite um host, host:porta, endereço IPv6 ou URL ws(s):// válido.",
           "thisComputer": "Este computador",
           "whoOpens": "Quem abrirá o link",
@@ -8130,7 +8231,12 @@
             "agentsRead": "Receber notificações quando o status do agente mudar",
             "terminalRead": "Leia a saída dos seus terminais, incluindo SSH",
             "workspaceWrite": "Abra seus espaços de trabalho e arquivos e execute comandos integrados",
-            "agentLaunch": "Inicie agentes em seus espaços de trabalho, incluindo SSH"
+            "agentLaunch": "Inicie agentes em seus espaços de trabalho, incluindo SSH",
+            "appearanceWrite": "Publicar e selecionar as cores do aplicativo desktop, do editor e do terminal",
+            "workspaceCreate": "Criar espaços de trabalho (novas branches e worktrees do Git) nos seus projetos locais e nos acessados via SSH. O Orca só executa o script de configuração se as configurações do projeto permitirem",
+            "automationRead": "Ler suas automações, incluindo nomes, prompts, agentes, projetos, espaços de trabalho e agendamentos",
+            "automationWrite": "Criar automações que iniciam agentes nos seus projetos conforme o agendamento, mesmo quando o plugin não está em execução, e alterá-las ou excluí-las (o Orca pede sua confirmação antes para as que o plugin não criou e antes de mudar o que é executado por uma automação com configurações extras de agente)",
+            "historyRead": "Ler a lista das suas sessões anteriores de agentes neste computador, inclusive as de distribuições WSL em execução no Windows, a partir dos arquivos de histórico dos agentes de código compatíveis com o Orca. A lista inclui título (geralmente o início da primeira mensagem), agente, espaço de trabalho, branch, datas e horários de criação e da última atividade e totais de mensagens e tokens. Ficam de fora as sessões via SSH ou em outros computadores, as conversas do Antigravity IDE, as transcrições de subagentes e o conteúdo das conversas"
           },
           "decisionFailed": "Não foi possível salvar a decisão de permissão. Tente novamente.",
           "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar seus logins salvos e chaves SSH, usar a rede, executar outros programas e controlar o Orca, incluindo seus terminais e agentes.",
@@ -9410,8 +9516,11 @@
           "restarting": "Reiniciando…",
           "updated": "Atualizado",
           "failed": "Falha na atualização",
-          "serviceManagerHelp": "Atualize o Orca no host do servidor — através do gerenciador de pacotes do sistema se foi instalado de um .deb ou .rpm, ou através do gerenciador de serviços que o inicia.",
-          "unpackedHelp": "Builds de desenvolvimento precisam ser atualizadas a partir do seu checkout de origem.",
+          "nodeServerHelp": "As atualizações remotas estão desativadas: este servidor executa o Orca sem o atualizador integrado, como faz o servidor Node do Orca (orcad). Instale a versão mais nova do Orca no servidor e reinicie o orca serve.",
+          "updaterNotStartedHelp": "As atualizações remotas estão desativadas: o Orca neste servidor não iniciou o atualizador. Reinicie o Orca no servidor e verifique novamente, ou atualize-o lá.",
+          "headlessServeHelp": "As atualizações remotas estão desativadas: este servidor executa orca serve sem um supervisor de atualização, então não consegue reiniciar em uma nova versão. Atualize o Orca no servidor e reinicie o serviço.",
+          "systemPackageHelp": "As atualizações remotas estão desativadas: o Orca neste servidor foi instalado por um pacote do sistema ou outro instalador que precisa atualizá-lo. Atualize-o da mesma forma que foi instalado, por exemplo com apt ou dnf para um .deb ou .rpm.",
+          "devBuildHelp": "As atualizações remotas estão desativadas: este servidor executa uma versão de desenvolvimento. Atualize-a a partir do checkout do código-fonte.",
           "legacyHelp": "Atualize este servidor manualmente uma vez para habilitar atualizações remotas.",
           "managedOverSshHelp": "Este desktop atualiza este servidor por SSH. Use Atualizar na linha dele em Servidores remotos do Orca."
         },
@@ -11472,7 +11581,8 @@
             "windows": "porcentagem usada ou restante no período",
             "reset": "tempo até a redefinição, por exemplo, 3h 15m",
             "resetAt": "horário da redefinição, por exemplo, 20:50",
-            "optional": "omitido quando um marcador dentro do grupo está vazio"
+            "optional": "omitido quando um marcador dentro do grupo está vazio",
+            "namedUsagePools": "cotas de uso nomeadas, como as do plano do Cursor"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -16751,6 +16861,8 @@
         }
       },
       "TaskPage": {
+        "issueFilterState": "Estado",
+        "issueFilterPreset": "Predefinição",
         "ff69a30681": "Cancelar",
         "8ff6fdc368": "Criando…",
         "919a20dd5b": "Digite {{value0}}",
@@ -18074,6 +18186,7 @@
           "9d0f2eda6d": "Rótulo",
           "01f3f3d161": "Autor",
           "13b3ac0a84": "Status",
+          "show": "Mostrar",
           "79c54552f7": "Filtros",
           "8a2ffbf9b3": "Remover filtro de {{value0}}",
           "anyState": "Qualquer",
@@ -19362,6 +19475,9 @@
             "devToolsDockBottom": "Acoplar na parte inferior",
             "devToolsUndock": "Abrir em uma janela separada",
             "devToolsClose": "Fechar DevTools",
+            "e852e20cea": "Copiado — pressione S para fazer uma captura de tela ou selecione outro elemento",
+            "074f0ed10b": "{{value0}} anotação pronta. Selecione outro elemento ou copie todo o feedback.",
+            "a2164a6e5a": "{{value0}} anotações prontas. Selecione outro elemento ou copie todo o feedback.",
             "copyImageAddress": "Copiar endereço da imagem",
             "pasteAndMatchStyle": "Colar e adaptar estilo",
             "addToDictionary": "Adicionar ao dicionário",
@@ -19625,7 +19741,14 @@
           "reconnectCopy": "Entre novamente para ver e gerenciar os artefatos compartilhados através da sua conta.",
           "signInAgainAction": "Entrar novamente",
           "unconfiguredCopy": "O login da conta do Orca ainda não está configurado nesta máquina.",
-          "openAccountSettings": "Abrir configurações da conta"
+          "openAccountSettings": "Abrir configurações da conta",
+          "deleteManyDescription_one": "{{count}} artefato não estará mais disponível em seu link público.",
+          "deleteManyDescription_other": "{{count}} artefatos não estarão mais disponíveis em seus links públicos.",
+          "deleteNamedFailed": "Não foi possível excluir \"{{name}}\".",
+          "deleteManyDescription_many": "{{count}} artefatos não estarão mais disponíveis em seus links públicos.",
+          "deleteBatchStopped_one": "Não foi possível excluir \"{{name}}\". {{count}} outro não foi excluído.",
+          "deleteBatchStopped_other": "Não foi possível excluir \"{{name}}\". {{count}} outros não foram excluídos.",
+          "deleteBatchStopped_many": "Não foi possível excluir \"{{name}}\". {{count}} outros não foram excluídos."
         },
         "copySuccess": "Link do artefato copiado",
         "copyFailed": "Não foi possível copiar o link do artefato",
@@ -19640,7 +19763,7 @@
         },
         "ArtifactCollection": {
           "loadMore": "Carregar mais",
-          "noMatches": "Nenhuma correspondência"
+          "noMatchingArtifacts": "Nenhum artefato correspondente"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Qualquer pessoa com este link pode visualizá-lo",
@@ -19702,14 +19825,35 @@
           "size": "Tamanho",
           "updated": "Atualizado",
           "expires": "Expira",
-          "actions": "Ações"
+          "actions": "Ações",
+          "selectAll": "Selecionar todos"
         },
         "ArtifactsPageSkeleton": {
           "loading": "Carregando artefatos"
         },
         "expiredCompact": "Expirado",
         "typeMarkdown": "Markdown",
-        "typeHtml": "HTML"
+        "typeHtml": "HTML",
+        "ArtifactListFilterMenu": {
+          "clearFilters": "Limpar filtros",
+          "any": "Qualquer período",
+          "today": "Hoje",
+          "pastWeek": "Últimos 7 dias",
+          "pastMonth": "Últimos 30 dias",
+          "anyExpiry": "Qualquer",
+          "withinWeek": "Em até 7 dias",
+          "expired": "Expirado"
+        },
+        "ArtifactListRow": {
+          "select": "Selecionar {{name}}"
+        },
+        "ArtifactListSelectionBar": {
+          "delete": "Excluir",
+          "clear": "Limpar",
+          "selected_one": "{{count}} selecionado",
+          "selected_other": "{{count}} selecionados",
+          "selected_many": "{{count}} selecionados"
+        }
       },
       "NewWorkspaceComposerCard": {
         "openExistingWorkspace": "Abrir espaço de trabalho existente",
@@ -21961,6 +22105,9 @@
           "newlyAdded": "Adicionados recentemente",
           "newlyAddedDetail": "em todos os seus catálogos"
         },
+        "PluginsPage": {
+          "close": "Fechar plugins"
+        },
         "declarative": {
           "PluginDeclarativeView": {
             "unsupported": "{{value0}} não está disponível nesta versão do Orca"
@@ -23128,6 +23275,7 @@
       "htmlView": "Visualização de HTML",
       "htmlViewCode": "Código",
       "htmlViewPreview": "Prévia",
+      "htmlViewPreviewWaiting": "A prévia fica disponível quando este bloco de código terminar de ser recebido.",
       "context": {
         "unavailable": "O uso de contexto ainda não é conhecido. Ele fica disponível após a próxima resposta do agente.",
         "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}}%), estimado a partir da última resposta.",
@@ -23161,6 +23309,7 @@
         },
         "goToAgent": "Vá para o agente",
         "unnamedRecipient": "um agente",
+        "recipientName": "{{name}}",
         "event": {
           "followedUp": "Acompanhamento enviado",
           "update": "Atualização",
@@ -24103,7 +24252,9 @@
           "pending": "Conectando…",
           "tools_many": "{{count}} ferramentas",
           "tools_one": "{{count}} ferramenta",
-          "tools_other": "{{count}} ferramentas"
+          "tools_other": "{{count}} ferramentas",
+          "orcaRemoved": "Removido: reinicia na próxima mensagem",
+          "orcaChanged": "Alterado: reinicia na próxima mensagem"
         },
         "signIn": {
           "external": "Conclua na página que foi aberta",
@@ -24127,6 +24278,7 @@
         "readFailed": "Erro ao carregar",
         "retry": "Recarregar",
         "empty": "Nenhum configurado para este chat",
+        "unreported": "{{agent}} não informa o status da conexão",
         "cancel": "Cancelar",
         "reconnect": "Reconectar",
         "toggle": "Usar {{name}}",
@@ -24145,7 +24297,8 @@
           "user": "Usuário",
           "plugin": "Plugin",
           "session": "Sessão"
-        }
+        },
+        "stillFailing": "Continua falhando após reconectar."
       },
       "botContext": {
         "soul": "Alma atualizada aplicada",
@@ -25077,6 +25230,7 @@
           "deleted": "Excluído",
           "kept": "Mantidos · {{count}}",
           "showMore": "Mostrar mais {{count}}",
+          "showFewer": "Mostrar menos",
           "waiting": "Inativo há {{elapsed}} de {{after}} dias",
           "title": "Atividade",
           "notListed_one": "Mais {{count}} espaço de trabalho mantido não está listado.",
@@ -25252,7 +25406,6 @@
           "dialog": {
             "createToken": "Criar um",
             "environmentManagedLine": "Definido pelas variáveis de ambiente ORCA_BITBUCKET_*. Remova-as para salvar um aqui.",
-            "savedLocallyOnly": "Salvo apenas neste computador.",
             "accessTokenNeeds": "Precisa de acesso de leitura a pull requests.",
             "atlassianEmail": "E-mail da Atlassian",
             "requiredScopes": "Escopos necessários",
@@ -26051,7 +26204,10 @@
       "chatPasteCode": "Cole o código",
       "chatPasteCodeLabel": "O código que o Google mostra depois que você entra, ou o endereço dessa página",
       "launchesUse": "Novas execuções do agy usam esta conta",
-      "loginNow": "Login atual do agy"
+      "loginNow": "Login atual do agy",
+      "signedInUnread": "O agy está conectado",
+      "unreadDetail": "Mostre a conta para ver qual é. O macOS pode pedir que você permita o acesso às Chaves.",
+      "showAccount": "Mostrar conta"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
@@ -26168,6 +26324,7 @@
       "errors": {
         "ownerSilent": "O dispositivo que iniciou este login parou de responder.",
         "superseded": "Uma alteração de conta neste host interrompeu o login. Inicie novamente.",
+        "noPrompt": "O comando de login do servidor não mostrou um link de login em um minuto. Atualize o Orca no servidor e tente novamente.",
         "failed": "Falha no login. Tente novamente."
       }
     },
@@ -26459,8 +26616,7 @@
         "failing": "falhando",
         "running": "pendente",
         "cancelled": "cancelado",
-        "passing": "com sucesso",
-        "more": "+{{count}} mais"
+        "passing": "com sucesso"
       },
       "addEmoji": "Adicionar emoji",
       "addEmojiTooltip": "Adicione emoji (ou digite :)",
@@ -26681,7 +26837,9 @@
     "statusFilters": {
       "loadFailed": "Não foi possível carregar os filtros de status do Jira.",
       "saveFailed": "Não foi possível salvar os filtros de status do Jira.",
+      "unavailable": "Ainda não há status disponíveis para esta visualização.",
       "manualQuery": "Os filtros de status se aplicam às visualizações predefinidas. Limpe a busca para usá-los.",
+      "favouriteActive": "Limpe o favorito do Jira ou escolha uma visualização predefinida para usar os filtros de status.",
       "label": "Filtrar issues do Jira por status",
       "clear": "Limpar status",
       "jql": "JQL do filtro de status",
@@ -26929,6 +27087,7 @@
       "fileExplorerCopyPath": "Copiar caminho do arquivo",
       "fileExplorerCopyRelativePath": "Copiar caminho relativo do arquivo",
       "fileExplorerDelete": "Excluir arquivo",
+      "fileExplorerToggleDotfiles": "Mostrar ou ocultar dotfiles",
       "terminalCopySelection": "Copiar seleção do terminal",
       "terminalSelectAll": "Selecionar todo o texto do terminal",
       "terminalPaste": "Colar no terminal",
@@ -26996,6 +27155,7 @@
       "d286d1ab85": "Limpar Título do Painel",
       "botItemPrevious": "Item anterior",
       "botItemNext": "Próximo item",
+      "pageSearch": "Buscar nesta página",
       "botItemBack": "Voltar aos itens"
     },
     "group": {
@@ -28016,7 +28176,9 @@
       "missing": "O dispositivo salvo não está mais neste computador. Escolha outro dispositivo.",
       "unavailable": "O runtime do dispositivo salvo está indisponível. Escolha outro dispositivo ou instale seu runtime.",
       "askPrompt": "Escolha um dispositivo para abrir.",
-      "firstUse": "Escolha seu primeiro dispositivo. O Orca lembrará as seleções bem-sucedidas neste computador."
+      "firstUse": "Escolha seu primeiro dispositivo. O Orca lembrará as seleções bem-sucedidas neste computador.",
+      "missingOnServer": "O dispositivo salvo não está mais em {{host}}. Escolha outro dispositivo.",
+      "firstUseOnServer": "Escolha seu primeiro dispositivo. O Orca lembrará as seleções bem-sucedidas em {{host}}."
     },
     "picker": {
       "starting": "Iniciando",
@@ -28028,7 +28190,8 @@
       "unavailable": "Runtimes indisponíveis",
       "runtimeUnavailable": "Runtime indisponível",
       "running": "Em execução",
-      "stopped": "Parado"
+      "stopped": "Parado",
+      "otherOnServer": "Outros dispositivos em {{host}}"
     }
   },
   "ephemeralVm": {
@@ -28216,6 +28379,9 @@
       "pick": "Mais de um computador tem um bot para este link: {{hosts}}. Abra-o pela barra lateral.",
       "updateNeeded": "Atualize o Orca em {{hosts}} para abrir este bot aqui."
     },
+    "chatOpen": {
+      "homeDidNotLoad": "O Início do bot não carregou."
+    },
     "activity": {
       "title": "Atividade",
       "waitsOnBackground": "Aguardando a tarefa em segundo plano",
@@ -28227,6 +28393,7 @@
       "stop": "Parar",
       "stopWorker": "Parar {{value0}}",
       "agent": "Agente",
+      "progress": "Progresso",
       "result": "Resultado",
       "workspace": "Espaço de trabalho",
       "branch": "Branch",
@@ -28417,6 +28584,12 @@
       },
       "repositoryCount_one": "{{count}} repositório em {{accounts}}",
       "repositoryCount_other": "{{count}} repositórios em {{accounts}}",
+      "ghSignedOut": {
+        "thisComputer": "este computador",
+        "status": "gh desconectado · {{host}}",
+        "line": "O gh está desconectado ({{host}}). Execute <code>gh auth login</code> nesse computador.",
+        "copy": "Copiar {{text}}"
+      },
       "repositoryCount_many": "{{count}} repositórios em {{accounts}}"
     },
     "upcoming": {
@@ -29455,14 +29628,13 @@
         "serverPr": "PR ainda não exibido para trabalho em servidor"
       },
       "menu": {
-        "waiting": "Aguardando…",
-        "cancel": "Cancelar",
-        "done": "Concluído"
+        "waiting": "Aguardando…"
       },
       "loading": "Carregando itens…",
       "row": {
-        "more": "Mais",
+        "cancel": "Cancelar",
         "done": "Concluído",
+        "more": "Mais",
         "select": "Selecionar {{title}}"
       },
       "snooze": {
@@ -30046,6 +30218,7 @@
       "deliveryUnconfirmed": "Entrega não confirmada",
       "starting": "Iniciando…",
       "notStarted": "Não iniciado",
+      "renameThreadNeedsHostUpdate": "Para renomear threads, atualize o Orca no computador indicado ({{host}}).",
       "needsYou": "· Precisa de você",
       "stopCouldNotBeConfirmed": "Não foi possível confirmar a parada.",
       "useEachBotSNativeSessionForCommands": "Usar a sessão nativa de cada bot para comandos.",
@@ -30191,7 +30364,11 @@
       "seeMessage": "Ver a mensagem",
       "addStep": "Adicionar a pasta que ele criou",
       "replyLabel": "Resposta dele",
-      "rowDetail": "{{app}} {{kind}}"
+      "rowDetail": "{{app}} {{kind}}",
+      "titleFrom": "Importar de {{source}}",
+      "import": "Importar",
+      "importing": "Importando…",
+      "fromExport": "Usar uma exportação"
     },
     "composio": {
       "key": {

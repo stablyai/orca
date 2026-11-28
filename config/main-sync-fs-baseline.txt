@@ -266,7 +266,6 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
 1 src/main/ipc/worktrees/floating-workspace-directory.ts
@@ -358,7 +357,7 @@
 7 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer.ts
 1 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store.ts
 1 src/main/persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite.ts
-1 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts
+2 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts # one read per load (retried on a wake only while unreadable) and one rename setting an unparseable file aside (#49980)
 6 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-scrollback.ts
 2 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-spool-sweep.ts
 5 src/main/persistence/preferences/active-view-preference.ts

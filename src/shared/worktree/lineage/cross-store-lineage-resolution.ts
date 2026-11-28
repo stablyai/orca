@@ -102,27 +102,20 @@ export function resolveCrossStoreLineageParents<Row extends LineageResolutionRow
   rowsByIdentity: ReadonlyMap<string, Row>,
   view: CrossStoreLineageView
 ): Map<string, Row> {
-  const childRowsByStoreAndKey = new Map<string, Map<WorkspaceKey, [string, Row][]>>()
-  const rowsByStoreAndInstance = new Map<string, Map<string, Row[]>>()
-  for (const [identity, row] of rowsByIdentity) {
-    const instanceId = lineageInstanceIdOfRow(row)
-    if (!instanceId) {
-      continue
+  const parents = new Map<string, Row>()
+  let hasCrossStoreRecords = false
+  for (const store of view.values()) {
+    if (
+      store.installationId &&
+      store.crossStoreLineageByChildKey &&
+      Object.keys(store.crossStoreLineageByChildKey).length > 0
+    ) {
+      hasCrossStoreRecords = true
+      break
     }
-    const storeKey = lineageStoreKeyOfRow(row)
-    if (storeKey === undefined) {
-      continue
-    }
-    let byKey = childRowsByStoreAndKey.get(storeKey)
-    let byInstance = rowsByStoreAndInstance.get(storeKey)
-    if (!byKey || !byInstance) {
-      byKey = new Map()
-      byInstance = new Map()
-      childRowsByStoreAndKey.set(storeKey, byKey)
-      rowsByStoreAndInstance.set(storeKey, byInstance)
-    }
-    pushTo(byKey, workspaceKeyOfRow(row), [identity, row])
-    pushTo(byInstance, instanceId, row)
+  }
+  if (!hasCrossStoreRecords) {
+    return parents
   }
   const storeKeysByInstallationId = new Map<string, string[]>()
   for (const [storeKey, store] of view) {
@@ -130,33 +123,91 @@ export function resolveCrossStoreLineageParents<Row extends LineageResolutionRow
       pushTo(storeKeysByInstallationId, store.installationId, storeKey)
     }
   }
-
-  const parents = new Map<string, Row>()
+  const candidates: {
+    childStoreKey: string
+    childWorkspaceKey: WorkspaceKey
+    childInstanceId: string
+    parentStoreKey: string
+    parentInstanceId: string
+  }[] = []
+  const wantedChildInstanceIds = new Set<string>()
+  const wantedParentInstanceIds = new Set<string>()
   for (const [childStoreKey, store] of view) {
     // A store without a known identity cannot tell its own copies from a parent store.
-    if (!store.installationId) {
+    if (!store.installationId || !store.crossStoreLineageByChildKey) {
       continue
     }
     for (const lineage of Object.values(
       validCrossStoreLineage(store.crossStoreLineageByChildKey)
     )) {
-      const child = soleRow(
-        childRowsByStoreAndKey
-          .get(childStoreKey)
-          ?.get(lineage.childWorkspaceKey)
-          ?.filter(([, row]) => lineageInstanceIdOfRow(row) === lineage.childInstanceId)
-      )
       // Two stores reporting one installationId are a copied profile; neither is the parent's.
       const parentStoreKey = soleRow(storeKeysByInstallationId.get(lineage.parent.installationId))
-      if (!child || parentStoreKey === undefined) {
+      if (parentStoreKey === undefined) {
         continue
       }
-      const parent = soleRow(
-        rowsByStoreAndInstance.get(parentStoreKey)?.get(lineage.parent.instanceId)
-      )
-      if (parent && parent !== child[1]) {
-        parents.set(child[0], parent)
+      candidates.push({
+        childStoreKey,
+        childWorkspaceKey: lineage.childWorkspaceKey,
+        childInstanceId: lineage.childInstanceId,
+        parentStoreKey,
+        parentInstanceId: lineage.parent.instanceId
+      })
+      wantedChildInstanceIds.add(lineage.childInstanceId)
+      wantedParentInstanceIds.add(lineage.parent.instanceId)
+    }
+  }
+  if (candidates.length === 0) {
+    return parents
+  }
+  const childRowsByStoreAndKey = new Map<string, Map<WorkspaceKey, [string, Row][]>>()
+  const rowsByStoreAndInstance = new Map<string, Map<string, Row[]>>()
+  for (const [identity, row] of rowsByIdentity) {
+    const instanceId = lineageInstanceIdOfRow(row)
+    if (!instanceId) {
+      continue
+    }
+    const wantChild = wantedChildInstanceIds.has(instanceId)
+    const wantParent = wantedParentInstanceIds.has(instanceId)
+    if (!wantChild && !wantParent) {
+      continue
+    }
+    const storeKey = lineageStoreKeyOfRow(row)
+    if (storeKey === undefined) {
+      continue
+    }
+    if (wantChild) {
+      let byKey = childRowsByStoreAndKey.get(storeKey)
+      if (!byKey) {
+        byKey = new Map()
+        childRowsByStoreAndKey.set(storeKey, byKey)
       }
+      pushTo(byKey, workspaceKeyOfRow(row), [identity, row])
+    }
+    if (wantParent) {
+      let byInstance = rowsByStoreAndInstance.get(storeKey)
+      if (!byInstance) {
+        byInstance = new Map()
+        rowsByStoreAndInstance.set(storeKey, byInstance)
+      }
+      pushTo(byInstance, instanceId, row)
+    }
+  }
+
+  for (const candidate of candidates) {
+    const child = soleRow(
+      childRowsByStoreAndKey
+        .get(candidate.childStoreKey)
+        ?.get(candidate.childWorkspaceKey)
+        ?.filter(([, row]) => lineageInstanceIdOfRow(row) === candidate.childInstanceId)
+    )
+    if (!child) {
+      continue
+    }
+    const parent = soleRow(
+      rowsByStoreAndInstance.get(candidate.parentStoreKey)?.get(candidate.parentInstanceId)
+    )
+    if (parent && parent !== child[1]) {
+      parents.set(child[0], parent)
     }
   }
   return parents

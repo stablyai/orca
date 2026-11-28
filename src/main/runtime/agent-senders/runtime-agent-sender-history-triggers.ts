@@ -4,6 +4,10 @@ import { projectionMutationTriggers } from '../orchestration/db/projection-mutat
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { tolerant } from './agent-sender-row-decoding'
 
+const generationRow = lazyZodSchema(() =>
+  z.object({ history: z.number(), principals: z.number(), external: z.number() })
+)
+
 const dirtyRow = lazyZodSchema(() =>
   z.object({ kind: z.enum(['pane', 'dispatch']), key: z.string() })
 )
@@ -92,11 +96,18 @@ export function readAgentSenderGeneration(
   if (install) {
     db.db.exec(GENERATION_SQL)
   }
-  const row = z
-    .object({ history: z.number(), principals: z.number() })
-    .parse(db.db.prepare('SELECT history, principals FROM temp.agent_sender_generation').get())
-  const external = String(db.db.pragma('data_version', { simple: true }))
-  return { history: `${row.history}:${external}`, principals: `${row.principals}:${external}` }
+  // One cached statement: PRAGMA statements are never cached, and every publication reads this.
+  const row = generationRow.parse(
+    db.db
+      .prepare(
+        'SELECT history, principals, (SELECT data_version FROM pragma_data_version) AS external FROM temp.agent_sender_generation'
+      )
+      .get()
+  )
+  return {
+    history: `${row.history}:${row.external}`,
+    principals: `${row.principals}:${row.external}`
+  }
 }
 
 /** The panes (`p:`) and Dispatch ids (`d:`) writes on this connection marked since the last clear. */

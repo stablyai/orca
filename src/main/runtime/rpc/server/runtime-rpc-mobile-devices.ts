@@ -16,14 +16,28 @@ import { settleRemovedPairedClient } from '../../orchestration/federation/client
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
 export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
   private onPushUnregisterQueued?: () => void
+  private relayPhonesChangeQueued = false
 
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    const revoked = device?.scope === 'mobile' && this.revokeDevicesNow([device])
-    if (revoked) {
-      this.mobileDesktopRelay?.phonesChanged()
+    return device?.scope === 'mobile' && this.revokeDevicesNow([device])
+  }
+
+  /** Every removal counts, a cascade or a disk edit too, so relayed servers drop that phone. */
+  protected announcePairedDevicesChanged(): void {
+    this.queueRelayPhonesChanged()
+    this.onPairedDevicesChanged?.()
+  }
+
+  // Deferred, so a save has taken the saved list, and once per cascade of saves.
+  protected queueRelayPhonesChanged(): void {
+    if (!this.relayPhonesChangeQueued) {
+      this.relayPhonesChangeQueued = true
+      queueMicrotask(() => {
+        this.relayPhonesChangeQueued = false
+        this.mobileDesktopRelay?.phonesChanged()
+      })
     }
-    return revoked
   }
 
   revokeRuntimeAccess(deviceId: string): boolean {

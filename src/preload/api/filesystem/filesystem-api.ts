@@ -4,7 +4,10 @@ import type { RuntimeFileReadChunkResult } from '../../../shared/file-content/ru
 import type { SearchOptions, SearchResult } from '../../../shared/file-search/code-search-types'
 import type { PdfExportResult } from '../../../shared/document-preview/pdf-export-failure-copy'
 import type { DirEntry } from '../../../shared/file-listing/directory-entry'
-import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
+import type {
+  FsChangedPayload,
+  FsWatchPausedPayload
+} from '../../../shared/file-watch/filesystem-change-event'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
 import type {
   ImportItemResult,
@@ -263,6 +266,8 @@ export type FilesystemApi = {
       handOver?: boolean
     }) => Promise<FsChangedPayload | undefined>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
+    /** Local watch roots whose auto-reload paused or resumed; main pushes only on change. */
+    onWatchPaused: (callback: (payload: FsWatchPausedPayload) => void) => () => void
   }
   notebook: {
     listPythonEnvironments: (args: {

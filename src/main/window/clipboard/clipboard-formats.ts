@@ -30,11 +30,6 @@ async function readItemsBuffer(
   return Buffer.alloc(0)
 }
 
-export async function readClipboardHtml(): Promise<string> {
-  const item = (await clipboard.read()).find((entry) => entry.types.includes('text/html'))
-  return item ? (await item.getType('text/html')).text() : ''
-}
-
 export async function writeClipboardBuffer(format: string, buffer: Buffer): Promise<void> {
   await clipboard.write([
     new ClipboardItem({ [nativeClipboardFormat(format)]: new Blob([new Uint8Array(buffer)]) })
@@ -53,18 +48,34 @@ export type ClipboardFormatReader = {
   availableFormats: () => Promise<string[]>
   readBuffer: (format: string, assertByteLength?: (length: number) => void) => Promise<Buffer>
   has: (format: string) => Promise<boolean>
+  readHtml: () => Promise<string>
 }
 
 /** Reads the clipboard at most once per request: each read() re-enumerates every native format. */
 export function clipboardFormatSnapshot(): ClipboardFormatReader {
   let items: Promise<ClipboardItems> | null = null
   const read = (): Promise<ClipboardItems> => (items ??= clipboard.read())
+  // getType() fetches from the pasteboard each call; a paste probes the same file-list formats twice.
+  const unboundedReads = new Map<string, Promise<Buffer>>()
   return {
     availableFormats: async () => (await read()).flatMap((item) => item.types),
-    readBuffer: async (format, assertByteLength) =>
-      readItemsBuffer(await read(), format, assertByteLength),
+    readBuffer: async (format, assertByteLength) => {
+      if (assertByteLength) {
+        return readItemsBuffer(await read(), format, assertByteLength)
+      }
+      let buffer = unboundedReads.get(format)
+      if (!buffer) {
+        buffer = read().then((entries) => readItemsBuffer(entries, format))
+        unboundedReads.set(format, buffer)
+      }
+      return buffer
+    },
     // Electron's has() is membership in this same type list, enumerated again.
     has: async (format) =>
-      (await read()).some((item) => item.types.includes(nativeClipboardFormat(format)))
+      (await read()).some((item) => item.types.includes(nativeClipboardFormat(format))),
+    readHtml: async () => {
+      const item = (await read()).find((entry) => entry.types.includes('text/html'))
+      return item ? (await item.getType('text/html')).text() : ''
+    }
   }
 }

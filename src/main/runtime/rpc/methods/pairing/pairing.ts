@@ -12,6 +12,10 @@ import {
   DelegatedMobileDeviceSyncParamsSchema
 } from '../../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import {
+  DELEGATED_PHONE_SERVER_OFFER_METHOD,
+  DelegatedPhoneServerOfferParamsSchema
+} from '../../../../../shared/remote-runtime/pairing/delegated-phone-server-offer-contract'
+import {
   ORCAD_DECLARE_CLIENT_METHOD,
   ORCAD_PEER_DESKTOPS_METHOD,
   OrcadDeclareClientParamsSchema,
@@ -150,6 +154,18 @@ export const PAIRING_METHODS = [
         throw new Error('runtime_device_required')
       }
       return ctx.delegatedMobileDevices.sync(params.phones, params.clientInstanceId)
+    }
+  }),
+  defineMethod({
+    name: DELEGATED_PHONE_SERVER_OFFER_METHOD,
+    // A relayed phone can already run terminals here; this grants nothing new, and never pairing-admin.
+    permission: 'workspace',
+    params: DelegatedPhoneServerOfferParamsSchema,
+    handler: async (params, ctx) => {
+      if (!ctx.delegatedPhoneServerOffers) {
+        throw new Error('delegated_phone_required')
+      }
+      return await ctx.delegatedPhoneServerOffers.create(params)
     }
   })
 ]

@@ -8,7 +8,7 @@ import { Button } from '../../../ui/button'
 import { AntigravityChatSignInFlowPanel } from '../../../provider-accounts/AntigravityChatSignInFlowPanel'
 import type { AntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 
-export type AntigravityAccountAction = 'List' | 'AddCurrent' | 'Select' | 'Remove'
+export type AntigravityAccountAction = 'List' | 'ReadCurrent' | 'AddCurrent' | 'Select' | 'Remove'
 
 /** agy's Google logins, which agy in the terminal and Google-account chats share: the current
  *  login, then saved accounts. With `signIn`, signing in and adding an account run in Orca. */
@@ -31,8 +31,10 @@ export function AntigravityAgyAccountRows({
   const t = useTranslate()
   const signingIn = signIn?.ownFlow === true
   const signInAlert = signIn?.alert ? <ActionError message={signIn.alert} /> : null
+  // Until Orca reads agy's login it can't tell which account holds it, so nothing changed yet.
+  const unread = state?.currentAccount?.unread === true
   const changed = Boolean(
-    state?.selectedAccountId && state.activeAccountId !== state.selectedAccountId
+    !unread && state?.selectedAccountId && state.activeAccountId !== state.selectedAccountId
   )
   const changedText = windowsHost
     ? t(
@@ -122,6 +124,22 @@ export function AntigravityAgyAccountRows({
               {t('accounts.antigravity.signInGoogle', 'Sign in with Google')}
             </Button>
           ) : undefined
+        }
+      />
+    )
+  } else if (unread) {
+    terminalRows.push(
+      <AntigravityAccountRow
+        key="current"
+        title={t('accounts.antigravity.signedInUnread', 'agy is signed in')}
+        detail={t(
+          'accounts.antigravity.unreadDetail',
+          'Show the account to see which one. macOS may ask you to allow keychain access.'
+        )}
+        actions={
+          <Button size="xs" variant="outline" disabled={busy} onClick={() => run('ReadCurrent')}>
+            {t('accounts.antigravity.showAccount', 'Show account')}
+          </Button>
         }
       />
     )
