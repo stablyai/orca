@@ -1,3 +1,5 @@
+import { terminalPaneKeyboardLayout } from '../session/pane-layout/mobile-terminal-pane-layout'
+import type { TerminalFrame } from '../webview/terminal-webview-messages'
 import type { TerminalKeyboardAvoidanceMetrics } from '../webview/terminal-webview-contract'
 
 type ActiveTerminalKeyboardLiftParams = {
@@ -32,6 +34,37 @@ export function computeActiveTerminalKeyboardLift(
   }
   const rowHeight = terminalFrameHeight / metrics.rows
   return Math.min(keyboardLift, anchorOverflow(metrics, rowHeight, dockTop))
+}
+
+export function terminalPaneViewKeyboardLift(input: {
+  activeHandle: string | null
+  activeTerminalKeyboardLift: number
+  handle: string
+  keyboardLift: number
+  metrics: TerminalKeyboardAvoidanceMetrics | undefined
+  paneDirection: 'row' | 'column'
+  paneFrame: TerminalFrame
+  splitActive: boolean
+  terminalFrameHeight: number
+  visibleHandles: readonly string[]
+}): number {
+  const visible = input.splitActive && input.visibleHandles.includes(input.handle)
+  if (input.handle !== input.activeHandle && !visible) {
+    return 0
+  }
+  if (!input.splitActive) {
+    return input.activeTerminalKeyboardLift
+  }
+  return computeActiveTerminalKeyboardLift({
+    keyboardLift: terminalPaneKeyboardLayout(
+      input.paneFrame,
+      input.paneDirection,
+      input.visibleHandles.indexOf(input.handle),
+      input.keyboardLift
+    ).occlusion,
+    metrics: input.metrics,
+    terminalFrameHeight: input.terminalFrameHeight
+  })
 }
 
 function anchorOverflow(

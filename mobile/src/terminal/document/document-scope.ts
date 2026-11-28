@@ -289,7 +289,9 @@ function createTerminalDocumentState(): TerminalDocumentState {
       startY: 0,
       startAt: 0,
       swipe: 'terminal',
-      keepTouchId: null
+      keepTouchId: null,
+      swipeStartX: null,
+      swipeStartY: null
     }
   }
 }

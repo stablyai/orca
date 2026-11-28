@@ -6,7 +6,7 @@ import {
 import type { PendingSessionSelection } from '../../session/tabs/pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../webview/terminal-webview-messages'
-import type { Keyboard } from 'react-native'
+import { Keyboard } from 'react-native'
 import type { MobileTextInputHandle } from '../../platform/text-input/text-input-handle'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -145,15 +145,17 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   })
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
-  const { handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
-    activeHandleRef,
-    canSend,
-    inputRef: liveInputRef,
-    lifecycleIdentity: client,
-    lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
-    reopenFocusedInputWhenKeyboardHidden: reopensFocusedInputWhenKeyboardHidden(),
-    timerRef: liveInputFocusTimerRef
-  })
+  const { handleTerminalSwipeDown, handleTerminalTap, resetLiveInputFocus } =
+    useTerminalLiveInputFocus({
+      activeHandleRef,
+      canSend,
+      dismissKeyboard: () => Keyboard.dismiss(),
+      inputRef: liveInputRef,
+      lifecycleIdentity: client,
+      lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
+      reopenFocusedInputWhenKeyboardHidden: reopensFocusedInputWhenKeyboardHidden(),
+      timerRef: liveInputFocusTimerRef
+    })
   useFocusEffect(
     useCallback(() => {
       // Expo retains this route while pushed screens are visible.
@@ -223,6 +225,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     canCompose,
     canSend,
     handleTerminalTap,
+    handleTerminalSwipeDown,
     resetLiveInputFocus,
     terminalInventoryRecoveryScope,
     registerTerminalInventoryRecoveryAction,

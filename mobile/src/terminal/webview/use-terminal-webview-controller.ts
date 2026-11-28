@@ -11,7 +11,10 @@ import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-er
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
 import type { TerminalFrame, TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
-import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
+import {
+  dispatchTerminalWebViewNotification,
+  terminalWebViewNotificationHandlers
+} from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
 import { createTerminalDocumentWrites } from '../output-flow/terminal-output-ack'
@@ -46,10 +49,6 @@ export function useTerminalWebViewController(
     onEngineError,
     onTerminalInput,
     onTerminalQueryReply,
-    onTerminalInteraction,
-    onTerminalTap,
-    onFileTap,
-    onOpenUrl,
     onCellBoxChange
   } = props
   const { coalesce, pingsOnForegroundRecovery, post } = transport
@@ -161,16 +160,10 @@ export function useTerminalWebViewController(
           onCellBoxChange?.()
         }
       } else {
-        // The pane passes fresh callbacks each render, so `props` costs no extra identity churn.
-        dispatchTerminalWebViewNotification(msg, {
-          ...props,
-          reportEngineError,
-          onTerminalInput: interactionActive ? onTerminalInput : undefined,
-          onTerminalInteraction: interactionActive ? onTerminalInteraction : undefined,
-          onTerminalTap: interactionActive ? onTerminalTap : undefined,
-          onFileTap: interactionActive ? onFileTap : undefined,
-          onOpenUrl: interactionActive ? onOpenUrl : undefined
-        })
+        dispatchTerminalWebViewNotification(
+          msg,
+          terminalWebViewNotificationHandlers(props, interactionActive, reportEngineError)
+        )
       }
     },
     [
@@ -178,13 +171,21 @@ export function useTerminalWebViewController(
       interactionActive,
       promises,
       reportEngineError,
-      props,
       onTerminalInput,
       onTerminalQueryReply,
-      onTerminalInteraction,
-      onTerminalTap,
-      onFileTap,
-      onOpenUrl,
+      props.onSelectionMode,
+      props.onSelectionCopy,
+      props.onSelectionEvicted,
+      props.onClipboardWrite,
+      props.onModesChanged,
+      props.onKeyboardAvoidanceMetrics,
+      props.onHaptic,
+      props.onTerminalInteraction,
+      props.onTerminalTap,
+      props.onTerminalSwipeDown,
+      props.onFileTap,
+      props.onOpenUrl,
+      props.onTextScaleChange,
       onCellBoxChange,
       writeCoalescer
     ]

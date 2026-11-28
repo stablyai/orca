@@ -3,7 +3,8 @@ import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/f
 import { translate } from '../../i18n/mobile-i18n'
 import {
   parseTerminalKeyboardAvoidanceMetrics,
-  type TerminalSelectionEvents
+  type TerminalSelectionEvents,
+  type TerminalWebViewProps
 } from './terminal-webview-contract'
 
 export type TerminalWebViewNotificationHandlers = Omit<
@@ -11,6 +12,30 @@ export type TerminalWebViewNotificationHandlers = Omit<
   'onTerminalQueryReply'
 > & {
   reportEngineError: (message: string, fatal: boolean) => void
+}
+
+export function terminalWebViewNotificationHandlers(
+  props: TerminalWebViewProps,
+  interactionActive: boolean,
+  reportEngineError: (message: string, fatal: boolean) => void
+): TerminalWebViewNotificationHandlers {
+  return {
+    reportEngineError,
+    onSelectionMode: props.onSelectionMode,
+    onSelectionCopy: props.onSelectionCopy,
+    onSelectionEvicted: props.onSelectionEvicted,
+    onClipboardWrite: props.onClipboardWrite,
+    onModesChanged: props.onModesChanged,
+    onKeyboardAvoidanceMetrics: props.onKeyboardAvoidanceMetrics,
+    onHaptic: props.onHaptic,
+    onTerminalInput: interactionActive ? props.onTerminalInput : undefined,
+    onTerminalInteraction: interactionActive ? props.onTerminalInteraction : undefined,
+    onTerminalTap: interactionActive ? props.onTerminalTap : undefined,
+    onTerminalSwipeDown: interactionActive ? props.onTerminalSwipeDown : undefined,
+    onFileTap: interactionActive ? props.onFileTap : undefined,
+    onOpenUrl: interactionActive ? props.onOpenUrl : undefined,
+    onTextScaleChange: props.onTextScaleChange
+  }
 }
 
 export function dispatchTerminalWebViewNotification(
@@ -68,6 +93,8 @@ export function dispatchTerminalWebViewNotification(
     handlers.onTerminalInteraction?.()
   } else if (msg.type === 'terminal-tap') {
     handlers.onTerminalTap?.()
+  } else if (msg.type === 'terminal-swipe-down') {
+    handlers.onTerminalSwipeDown?.()
   } else if (msg.type === 'terminal-file-tap') {
     const candidates = parseFileTapCandidates(msg.candidates)
     if (candidates.length > 0) {
