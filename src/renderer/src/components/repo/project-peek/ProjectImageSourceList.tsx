@@ -284,11 +284,8 @@ export function ProjectImageSourceList({
             <PlaceholderThumb icon={ImageUp} />
           )
         }
-        label={
-          source === 'upload'
-            ? t('auto.components.repo.ProjectPeek.uploadedImage', 'Image')
-            : t('auto.components.settings.RepositoryIconPicker.381b4844fd', 'Upload PNG')
-        }
+        // Stays an action even while an upload is in use, so replacing it is obvious.
+        label={t('auto.components.settings.RepositoryIconPicker.381b4844fd', 'Upload PNG')}
         detail={
           sizeError
             ? t('auto.components.repo.ProjectPeek.uploadTooLarge', 'Over 256 KB')

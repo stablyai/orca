@@ -17440,7 +17440,6 @@
           "websiteIcon": "Значок сайта",
           "fetchIcon": "Загрузить",
           "uploadTooLarge": "Больше 256 КБ",
-          "uploadedImage": "Изображение",
           "options": "Параметры"
         }
       },

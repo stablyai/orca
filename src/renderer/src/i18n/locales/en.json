@@ -16958,7 +16958,6 @@
           "websiteIcon": "Website icon",
           "fetchIcon": "Fetch",
           "uploadTooLarge": "Over 256 KB",
-          "uploadedImage": "Image",
           "options": "Options"
         }
       },
