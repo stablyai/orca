@@ -11,6 +11,11 @@ const DESCRIPTION_LINE_HEIGHT = 20
 const DESCRIPTION_TEXT_SCALE = 15 / 13
 const DESCRIPTION_LINE_SPACING = DESCRIPTION_LINE_HEIGHT / (21 * DESCRIPTION_TEXT_SCALE)
 const DESCRIPTION_LINES_HEIGHT = 3 * DESCRIPTION_LINE_HEIGHT
+// Show more is one 16pt line; padding takes its tap box to 44pt and an equal negative margin keeps it
+// where it sits. hitSlop would do this on native only, and this page also renders on the web.
+// 14 below is exactly the head's bottom pad plus the page's gap, so the box ends at the card's top.
+const SHOW_MORE_LINE_HEIGHT = 16
+const SHOW_MORE_TAP_PAD = (44 - SHOW_MORE_LINE_HEIGHT) / 2
 
 /** The description's first three lines, then Show more; Markdown, as the desktop draws it, in the
  *  secondary text color so the title leads. */
@@ -34,7 +39,11 @@ export function MobileBotItemDescription({ text }: { text: string }) {
         </View>
       </View>
       {clamps ? (
-        <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" hitSlop={6}>
+        <Pressable
+          onPress={() => setOpen(!open)}
+          accessibilityRole="button"
+          style={styles.showMoreTap}
+        >
           <Text style={styles.showMore}>
             {open
               ? t('bots.items.view.showLess', 'Show less')
@@ -49,5 +58,11 @@ export function MobileBotItemDescription({ text }: { text: string }) {
 const stylesSheet = themedStyleSheet((colors) => ({
   description: { marginTop: 6, gap: spacing.xs },
   clamped: { maxHeight: DESCRIPTION_LINES_HEIGHT, overflow: 'hidden' },
-  showMore: { fontSize: 13, fontWeight: '600', color: colors.textSecondary }
+  showMoreTap: { paddingVertical: SHOW_MORE_TAP_PAD, marginVertical: -SHOW_MORE_TAP_PAD },
+  showMore: {
+    fontSize: 13,
+    lineHeight: SHOW_MORE_LINE_HEIGHT,
+    fontWeight: '600',
+    color: colors.textSecondary
+  }
 }))
