@@ -201,15 +201,17 @@ export async function claudeSignInFolder(
   return folder
 }
 
+type ProblemsScope = { remote?: boolean; only?: ReadonlySet<string>; signal?: AbortSignal }
+
 /**
  * Only the bot's own tools that need something; a working one isn't listed. `remote` checks only
- * the URL servers, so no command is started; `signal` stops the check and closes its session.
+ * the URL servers (no command starts), `only` just those it names; `signal` stops the check.
  */
 export async function botToolProblems(
   cli: BotToolsHome,
-  { remote = false, signal }: { remote?: boolean; signal?: AbortSignal } = {}
+  { remote = false, only, signal }: ProblemsScope = {}
 ): Promise<Record<string, BotToolProblem>> {
-  const own = await readBotToolServers(cli.folder)
+  const own = (await readBotToolServers(cli.folder)).filter((tool) => only?.has(tool.name) ?? true)
   // Its chats start without them, so each row says why instead of looking ready.
   const off = acpLaunchSpecFor(cli.agent)?.botToolsOff
   if (off) {

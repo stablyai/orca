@@ -122,6 +122,14 @@ export function claudeInPlan(session: ClaudeModeFacts): boolean {
   return session.appliedInputOptions.get('interactionMode') === 'plan' || running === 'plan'
 }
 
+/** Claude hasn't said which mode it runs yet (no init or mode report read). */
+export function claudeModeUnreported(session: ClaudeModeFacts): boolean {
+  const running = session.orderedPermissionMode
+    ? session.orderedPermissionMode()
+    : session.reportedOptions.reportedPermissionMode
+  return running == null
+}
+
 function claudeRunsAsk(session: ClaudeModeFacts): boolean {
   const running = session.orderedPermissionMode
     ? session.orderedPermissionMode()

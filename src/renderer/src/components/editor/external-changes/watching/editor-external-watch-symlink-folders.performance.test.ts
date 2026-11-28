@@ -178,7 +178,7 @@ it('keeps the outer watch, and its route, when a narrower watch fails to install
     // The outer watch stays for the folder whose own watch failed, and the others share it rather than doubling up.
     expect(heldPaths(held)).toEqual([OUTER])
     // An external edit the outer watch reports still reaches that folder's workspace.
-    expect(folders.targetsFor(OUTER, undefined)).toEqual([target])
+    expect(folders.targetsFor(OUTER, undefined, held)).toEqual([target])
     folders.sync(tabsIn(healthy), TARGETS, held)
     await settle()
     expect(heldPaths(held)).toEqual([...healthy].sort())
@@ -220,7 +220,7 @@ it('retries a failed watch when a second workspace opens the same folder', async
   folders.sync(selectLocalTabFoldersKey(fromBoth, both), both, held)
   await settle()
   expect([watched, heldPaths(held)]).toEqual([[folder], [folder]])
-  expect(folders.targetsFor(folder, undefined)).toEqual(both)
+  expect(folders.targetsFor(folder, undefined, held)).toEqual(both)
 })
 
 it('keeps narrower watches until a deferred outer watch is installed', async () => {

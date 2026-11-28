@@ -32,3 +32,5 @@ export const FileSaveCommit = lazyZodSchema(() =>
 )
 
 export const FileSaveAbort = lazyZodSchema(() => z.object({ saveId: SaveId }))
+
+export const FileUploadCommit = lazyZodSchema(() => z.object({ saveId: SaveId }))

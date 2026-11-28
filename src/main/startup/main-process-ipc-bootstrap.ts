@@ -1,4 +1,3 @@
-import { readSessionWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import { ipcMain } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
@@ -110,11 +109,14 @@ export function registerMainProcessIpcHandlers(): void {
       return null
     }
     return state.store
-      ? openBotDeepLink(state.store, link, async (sessionId) =>
-          state.core.runtime
-            ? readSessionWorkers(state.core.runtime, sessionId, { connectorOnly: true })
-            : []
-        )
+      ? openBotDeepLink(state.store, link, async (sessionId) => {
+          if (!state.core.runtime) {
+            return []
+          }
+          const { readSessionWorkers } =
+            await import('../runtime/rpc/methods/orchestration/worker/session-workers-method')
+          return readSessionWorkers(state.core.runtime, sessionId, { connectorOnly: true })
+        })
       : { kind: 'missing' }
   })
   ipcMain.handle('ui:consumePendingQuitAndStopAllSessions', (event) =>

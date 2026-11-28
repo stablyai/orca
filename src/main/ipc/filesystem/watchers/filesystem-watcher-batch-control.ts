@@ -1,5 +1,6 @@
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
+import type { WatcherEventBatchState } from './filesystem-watcher-event-batch'
 
 export type DebouncedBatch = {
   events: WatcherEvent[]
@@ -8,6 +9,8 @@ export type DebouncedBatch = {
   lastFlushAt: number
   flushInFlight: boolean
   flushQueued: boolean
+  /** Events taken by the flush still statting; it sends only to the listeners left when it finishes. */
+  flushing: WatcherEventBatchState | null
   cancelled: boolean
   statAbortController: AbortController
 }
@@ -20,6 +23,7 @@ export function createDebouncedBatch(): DebouncedBatch {
     lastFlushAt: 0,
     flushInFlight: false,
     flushQueued: false,
+    flushing: null,
     cancelled: false,
     statAbortController: new AbortController()
   }

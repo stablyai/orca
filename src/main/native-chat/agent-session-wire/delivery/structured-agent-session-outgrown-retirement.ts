@@ -6,7 +6,10 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from '../host/structured-agent-session-host-types'
-import { retireOutgrownStructuredAgentSessionChild } from '../recovery/structured-agent-session-outgrown-child'
+import {
+  retireOutgrownStructuredAgentSessionChild,
+  structuredAgentSessionChildOwesWork
+} from '../recovery/structured-agent-session-outgrown-child'
 import { readJournalSqlWorkAnswerOnce } from '../../agent-session-journal/journal-sql-work-answer'
 import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import {
@@ -67,11 +70,17 @@ export function createStructuredAgentSessionOutgrownRetirement(input: {
         const record = deps.store.getRecord(sessionId)
         return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
       },
-      launchToolsChanged: async () =>
-        (await deps.adapter.keptLaunchOutgrown?.(
+      launchToolsChanged: async () => {
+        const kept = await deps.adapter.keptLaunchOutgrown?.(
           sessionId,
-          launchTools?.outdated(sessionId) === true
-        )) ?? (await launchTools?.changed(sessionId)) === true,
+          launchTools?.outdated(sessionId) === true,
+          () => structuredAgentSessionChildOwesWork(input.retainedWork(sessionId, continuingId))
+        )
+        // Pending: not durable yet, so not retired here; the send's handover holds it.
+        return kept === 'pending'
+          ? false
+          : (kept ?? (await launchTools?.changed(sessionId)) === true)
+      },
       logger: deps.logger,
       ...(committed && session
         ? {

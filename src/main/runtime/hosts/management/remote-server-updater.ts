@@ -4,11 +4,16 @@ import type {
 } from '../../../../shared/remote-runtime/host-catalog/remote-server-update'
 import type { UpdateCheckOptions } from '../../../../shared/updater/update-status-types'
 
+type MaybePromise<T> = T | Promise<T>
+
 type RemoteServerUpdaterAdapter = {
-  getSnapshot: (runtimeId: string) => RemoteServerUpdaterSnapshot
-  check: (runtimeId: string, options?: UpdateCheckOptions) => RemoteServerUpdaterSnapshot
-  download: (runtimeId: string) => RemoteServerUpdaterSnapshot
-  install: (runtimeId: string) => RemoteServerUpdateInstallResult
+  getSnapshot: (runtimeId: string) => MaybePromise<RemoteServerUpdaterSnapshot>
+  check: (
+    runtimeId: string,
+    options?: UpdateCheckOptions
+  ) => MaybePromise<RemoteServerUpdaterSnapshot>
+  download: (runtimeId: string) => MaybePromise<RemoteServerUpdaterSnapshot>
+  install: (runtimeId: string) => MaybePromise<RemoteServerUpdateInstallResult>
 }
 
 const unavailableSnapshot = (runtimeId: string): RemoteServerUpdaterSnapshot => ({
@@ -46,21 +51,27 @@ export function isRemoteServerUpdaterConfigured(): boolean {
   return configured
 }
 
-export function getRemoteServerUpdaterSnapshot(runtimeId: string): RemoteServerUpdaterSnapshot {
-  return adapter.getSnapshot(runtimeId)
+export async function getRemoteServerUpdaterSnapshot(
+  runtimeId: string
+): Promise<RemoteServerUpdaterSnapshot> {
+  return await adapter.getSnapshot(runtimeId)
 }
 
-export function checkRemoteServerUpdater(
+export async function checkRemoteServerUpdater(
   runtimeId: string,
   options?: UpdateCheckOptions
-): RemoteServerUpdaterSnapshot {
-  return options ? adapter.check(runtimeId, options) : adapter.check(runtimeId)
+): Promise<RemoteServerUpdaterSnapshot> {
+  return options ? await adapter.check(runtimeId, options) : await adapter.check(runtimeId)
 }
 
-export function downloadRemoteServerUpdater(runtimeId: string): RemoteServerUpdaterSnapshot {
-  return adapter.download(runtimeId)
+export async function downloadRemoteServerUpdater(
+  runtimeId: string
+): Promise<RemoteServerUpdaterSnapshot> {
+  return await adapter.download(runtimeId)
 }
 
-export function installRemoteServerUpdater(runtimeId: string): RemoteServerUpdateInstallResult {
-  return adapter.install(runtimeId)
+export async function installRemoteServerUpdater(
+  runtimeId: string
+): Promise<RemoteServerUpdateInstallResult> {
+  return await adapter.install(runtimeId)
 }

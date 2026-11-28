@@ -143,17 +143,16 @@ export class RuntimeTerminalIdlePolls {
   }
 
   private sample(entry: IdlePollEntry): IdlePollSample {
-    const { handle } = entry.waiter
+    const { handle, acceptsMidTurnInput, launchReadiness } = entry.waiter
     // PTY records mutate in place, so this captured reference remains live.
     const { pty } = entry
     const readWaitText = () =>
       buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    const evidence = ptyTuiIdleEvidence(this.evidenceSource, pty, readWaitText)
-    const verdict = evaluateTuiIdle({ ...evidence, launchReadiness: entry.waiter.launchReadiness })
+    const evidence = ptyTuiIdleEvidence(this.evidenceSource, pty, readWaitText, acceptsMidTurnInput)
+    const verdict = evaluateTuiIdle({ ...evidence, launchReadiness })
     return {
       verdict,
-      takesInputNow:
-        !!entry.waiter.acceptsMidTurnInput && settlesForMidTurnInput(verdict, pty.ptyId, this.deps),
+      takesInputNow: !!acceptsMidTurnInput && settlesForMidTurnInput(verdict, pty.ptyId, this.deps),
       ptyId: pty.ptyId,
       ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
       blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),

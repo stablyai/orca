@@ -886,7 +886,7 @@
         "finishOnPage": "Завершите на открывшейся странице",
         "needsAuth": "Требуется вход",
         "needsAuthAfterSend": "Требуется вход. Отправьте сообщение, чтобы войти здесь.",
-        "off": "Выключен",
+        "disabled": "Выключен",
         "pending": "Подключение…",
         "tools_few": "{{count}} инструмента",
         "tools_many": "{{count}} инструментов",
@@ -1848,7 +1848,9 @@
         "backToBots": "Назад к ботам",
         "loadingBotChats": "Загрузка чатов {{name}}…",
         "noOtherChats": "Других чатов нет",
-        "noMatchingChats": "Подходящих чатов нет"
+        "noMatchingChats": "Подходящих чатов нет",
+        "permissionAgentSettings": "Настройки {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"
@@ -3422,7 +3424,7 @@
       "collapse": "Свернуть"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Продолжить в новом CLI"
+      "continueInTerminal": "Продолжить в терминале"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "Прокрутить к последним сообщениям"
@@ -3980,6 +3982,18 @@
     },
     "tabMenu": {
       "closeTab": "Закрыть вкладку"
+    },
+    "terminalChatContinuation": {
+      "busy": "Открывается другой чат или терминал. Подождите и повторите попытку.",
+      "continueInChat": "Продолжить в чате",
+      "failed": "Не удалось продолжить в чате. {{detail}}",
+      "failedAfterClose": "Не удалось продолжить в чате. {{detail}} Разговор находится в истории агентов.",
+      "otherJob": "В этом терминале работает {{process}}. Завершите его, затем продолжите в чате.",
+      "terminalChanged": "Терминал изменился, пока Orca его проверяла. Повторите попытку.",
+      "tryAgain": "Повторите попытку.",
+      "unavailable": "Чаты {{agent}} недоступны на этом компьютере.",
+      "uncheckable": "Orca не удалось проверить, что запущено в этом терминале. Повторите попытку.",
+      "unconfirmed": "Orca не удалось подтвердить, что чат открылся. Проверьте вкладки, прежде чем пробовать снова."
     }
   },
   "settings": {
@@ -4123,9 +4137,6 @@
       "toggleMode": "Переключение",
       "updateFailed": "Не удалось обновить",
       "loading": "Загрузка настроек голоса…"
-    },
-    "agents": {
-      "permissionOwnAll": "Собственные настройки агентов"
     },
     "voiceTranscribeOn": {
       "heading": "Где распознавать",
@@ -4591,6 +4602,9 @@
       "agentCouldNotStart": "Не удалось запустить {{label}}. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentFailedToStart": "Запуск {{label}} завершился ошибкой. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentReportedError": "{{label}} сообщил об ошибке.",
+      "antigravityInvalidEvents": "Antigravity вернул некорректные события JSON.",
+      "antigravityInvalidResult": "Antigravity вернул некорректный результат.",
+      "antigravityNoFinalResult": "Antigravity не вернул итоговый результат.",
       "chatNameAgentUnsupported": "Выберите поддерживаемого агента для названий чатов в разделе «Настройки -> Чат -> Названия чатов». Поддерживаемые агенты: {{agents}} или «Своя команда».",
       "chatNameCustomCommandEmpty": "Своя команда не задана. Добавьте её в разделе «Настройки -> Чат -> Названия чатов».",
       "cliFailed": "Команда CLI {{label}} завершилась с ошибкой и кодом {{exitCode}}.",
