@@ -17,11 +17,23 @@ const CURSOR_CLI_EFFORTS = [
   { value: 'extra-high', label: 'Extra high' },
   { value: 'max', label: 'Max' }
 ]
-// What `cursor-agent models` ids add after the chat server's id: Claude's `-thinking` (its ids
-// without it are non-thinking), effort and Fast.
+// What `cursor-agent models` ids add after the chat server's id: Claude's `-thinking` (where the
+// model has it, its ids without it are non-thinking), effort and Fast.
 export const CURSOR_CLI_MODEL_SUFFIX = new RegExp(
   `^(-thinking)?(?:-(${CURSOR_CLI_EFFORTS.map(({ value }) => value).join('|')}))?(-fast)?$`
 )
+
+// Chat models with `-thinking` CLI ids; others (claude-opus-5-5, claude-sonnet-5-5, claude-fable-5-2)
+// think without one.
+const CURSOR_THINKING_ID_MODELS = new Set([
+  'claude-opus-5',
+  'claude-opus-4-8',
+  'claude-opus-4-7',
+  'claude-sonnet-5',
+  'claude-haiku-5-5',
+  'claude-fable-5-1',
+  'claude-fable-5'
+])
 
 /** Whether an id already names a `cursor-agent models` variant rather than a chat server model. */
 function isCursorCliVariant(modelId: string): boolean {
@@ -120,9 +132,8 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
         ? `-${values.effort === 'extra-high' ? 'xhigh' : values.effort}`
         : ''
     const fast = values.fastMode === true ? '-fast' : ''
-    // A Claude id without `-thinking` is the non-thinking model; Cursor's Claude models think by default.
     const thinking =
-      modelId.startsWith('claude-') &&
+      CURSOR_THINKING_ID_MODELS.has(modelId) &&
       (values.thinking === true || (values.thinking === undefined && (effort || fast)))
         ? '-thinking'
         : ''
