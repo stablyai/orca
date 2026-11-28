@@ -260,8 +260,15 @@ export function getLaneHostWorktreeCounts(
   repoOf: RepoOfWorktree,
   defaultHostId: ExecutionHostId
 ): Map<ExecutionHostId, number> | undefined {
-  return getLaneHostWorktreeScope(worktrees, folderWorkspaces, repoOf, defaultHostId)
-    .hostWorktreeCounts
+  if (worktrees.length === 0 && folderWorkspaces.length === 0) {
+    return undefined
+  }
+  const counts = getHostWorktreeCounts(worktrees, repoOf, defaultHostId) ?? new Map()
+  for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
+    const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
+    counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
+  }
+  return counts
 }
 
 /** Folder hosts need explicit empty worktree-ID arrays; missing keys trigger global-ID fallbacks into that host section. */
