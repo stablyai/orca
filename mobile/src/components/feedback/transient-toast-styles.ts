@@ -9,6 +9,8 @@ export const transientToastStylesSheet = themedStyleSheet((colors) => ({
     alignSelf: 'center',
     left: 0,
     right: 0,
+    // A message longer than one line keeps clear of the screen edges.
+    paddingHorizontal: spacing.lg,
     alignItems: 'center'
   },
   toastText: {
