@@ -6133,9 +6133,8 @@
             "84c3b15dca": "Ajan kullanım sınırları",
             "d663430cf9": "Kullanım izlemeyi yapılandır",
             "remoteLabel": "{{host}} üzerinde kullanım yok",
-            "remoteTitle": "{{host}} üzerindeki kullanım",
-            "remoteBody": "Bu çalışma alanı {{host}} üzerinde çalıştığından çubuk o ana makinenin kullanımını gösterir. Oradaki bir ajanda oturum açın veya bu bilgisayarın kullanımını görmek için yerel bir çalışma alanına odaklanın.",
-            "remoteOpenAccounts": "{{host}} hesaplarını aç"
+            "remoteNoUsageYet": "Henüz kullanım yok. Orada oturum açın.",
+            "remoteAccounts": "Hesaplar"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Beceriler güncelleniyor",

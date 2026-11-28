@@ -5366,9 +5366,8 @@
             "84c3b15dca": "에이전트 사용량 한도",
             "d663430cf9": "사용량 추적 설정",
             "remoteLabel": "{{host}}에 사용량 없음",
-            "remoteTitle": "{{host}}의 사용량",
-            "remoteBody": "이 워크스페이스는 {{host}}에서 실행되므로 상태 표시줄에는 해당 호스트의 사용량이 표시됩니다. 그 호스트에서 에이전트에 로그인하거나, 로컬 워크스페이스로 전환하면 이 컴퓨터의 사용량을 볼 수 있습니다.",
-            "remoteOpenAccounts": "{{host}} 계정 열기"
+            "remoteNoUsageYet": "아직 사용량이 없습니다. 해당 호스트에서 로그인하세요.",
+            "remoteAccounts": "계정"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "업데이트에 실패했습니다. 확장하려면 클릭하세요.",

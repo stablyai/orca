@@ -5340,9 +5340,8 @@
             "84c3b15dca": "代理用量限制",
             "d663430cf9": "设置用量跟踪",
             "remoteLabel": "{{host}} 上没有用量",
-            "remoteTitle": "{{host}} 上的用量",
-            "remoteBody": "此工作区运行在 {{host}} 上，因此状态栏显示的是该主机的用量，请在该主机上登录代理，或切换到本地工作区以查看这台电脑的用量",
-            "remoteOpenAccounts": "打开 {{host}} 的账户"
+            "remoteNoUsageYet": "暂无用量。请在该主机上登录。",
+            "remoteAccounts": "账户"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "更新失败，单击以展开",

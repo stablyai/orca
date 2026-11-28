@@ -5788,9 +5788,8 @@
             "84c3b15dca": "Nutzungslimits der Agenten",
             "d663430cf9": "Nutzungserfassung konfigurieren",
             "remoteLabel": "Keine Nutzung auf {{host}}",
-            "remoteTitle": "Nutzung auf {{host}}",
-            "remoteBody": "Dieser Arbeitsbereich läuft auf {{host}}, daher zeigt die Leiste die Nutzung dieses Hosts an. Dort bei einem Agenten anmelden oder einen lokalen Arbeitsbereich fokussieren, um die Nutzung dieses Computers anzuzeigen.",
-            "remoteOpenAccounts": "Konten auf {{host}} öffnen"
+            "remoteNoUsageYet": "Noch keine Nutzung. Dort anmelden.",
+            "remoteAccounts": "Konten"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Skills werden aktualisiert",

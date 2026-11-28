@@ -6061,9 +6061,8 @@
             "84c3b15dca": "代理程式用量限制",
             "d663430cf9": "設定用量追蹤",
             "remoteLabel": "{{host}} 上沒有用量資料",
-            "remoteTitle": "{{host}} 上的用量",
-            "remoteBody": "此工作區在 {{host}} 上執行，因此狀態列會顯示該主機的用量。請在該主機上登入代理程式，或切換至本機工作區以查看這台電腦的用量。",
-            "remoteOpenAccounts": "開啟 {{host}} 的帳戶"
+            "remoteNoUsageYet": "尚無用量。請在該主機上登入。",
+            "remoteAccounts": "帳戶"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "正在更新技能",

@@ -5820,9 +5820,8 @@
             "84c3b15dca": "Limites d'utilisation des agents",
             "d663430cf9": "Configurer le suivi d'utilisation",
             "remoteLabel": "Aucune utilisation sur {{host}}",
-            "remoteTitle": "Utilisation sur {{host}}",
-            "remoteBody": "Cet espace de travail s’exécute sur {{host}}, la barre affiche donc l’utilisation de cet hôte. Connectez-vous à un agent sur cet hôte, ou sélectionnez un espace de travail local pour voir l’utilisation de cet ordinateur.",
-            "remoteOpenAccounts": "Ouvrir les comptes de {{host}}"
+            "remoteNoUsageYet": "Aucune utilisation pour l’instant. Connectez-vous là-bas.",
+            "remoteAccounts": "Comptes"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Mise à jour des skills",
