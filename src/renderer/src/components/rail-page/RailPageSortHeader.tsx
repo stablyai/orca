@@ -46,7 +46,7 @@ export function RailPageSortHeader<F extends string>({
       onClick={() => onSort(field)}
       aria-label={sortedLabel ?? label}
       className={cn(
-        'flex min-w-0 items-center gap-1 rounded-sm text-left text-[11px] font-medium tracking-[0.08em] uppercase select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+        'flex max-w-full min-w-0 items-center gap-1 rounded-sm text-left text-[11px] font-medium tracking-[0.08em] uppercase select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
         active && 'text-foreground'
       )}
     >
