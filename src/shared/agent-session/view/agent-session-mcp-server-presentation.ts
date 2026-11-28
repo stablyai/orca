@@ -72,7 +72,7 @@ export function agentSessionMcpRowFailure(
   }
   if (failure.stillFailing) {
     // A server that recovered since says nothing; one failing for a new reason shows it.
-    if (server.status !== 'failed') {
+    if (agentSessionMcpShownStatus(server) !== 'failed') {
       return null
     }
     if (failure.message === null || failure.message === server.error) {

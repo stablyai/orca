@@ -145,7 +145,7 @@ export function NativeChatMcpServerRow({
     <li>
       <div className="flex h-8 min-w-0 items-center gap-2 pr-2 pl-3">
         <span aria-hidden="true" className="flex size-3 shrink-0 items-center justify-center">
-          {signIn || server.status === 'pending' ? (
+          {signIn || agentSessionMcpShownStatus(server) === 'pending' ? (
             <LoadingSpinner className="size-3 text-muted-foreground" />
           ) : (
             <span
