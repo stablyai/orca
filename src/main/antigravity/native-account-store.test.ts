@@ -351,14 +351,27 @@ describe('protected Antigravity account snapshots', () => {
     // agy rewrote its login: which account it holds is unknown until Orca reads it again.
     h.setNative(refreshedWithoutIdToken(2))
     expect(await restarted.listAccounts()).toMatchObject({ ...unread, selectedAccountId: id })
-    await expect(restarted.prepareForLaunch({ mayPrompt: false })).rejects.toThrow(
-      'keychain access'
-    )
     expect(h.backend.read).not.toHaveBeenCalled()
+    // A launch reads it once, and the next listing names it from that read.
     await restarted.prepareForLaunch()
     expect(h.backend.read).toHaveBeenCalledTimes(1)
     expect(await restarted.listAccounts()).toMatchObject({ activeAccountId: id })
     expect(h.backend.read).toHaveBeenCalledTimes(1)
+
+    // A chat's brief read that fails stops chats asking; a launch's refused read isn't asked again
+    // under the same revision.
+    h.setNative(refreshedWithoutIdToken(3))
+    vi.mocked(h.backend.read).mockRejectedValueOnce(new Error('no answer'))
+    await expect(restarted.prepareForLaunch({ mayPrompt: false })).rejects.toThrow('no answer')
+    expect(h.backend.read).toHaveBeenLastCalledWith({ quick: true })
+    vi.mocked(h.backend.read).mockRejectedValueOnce(new Error('denied'))
+    await expect(restarted.prepareForLaunch()).rejects.toThrow('denied')
+    await expect(restarted.prepareForLaunch()).rejects.toThrow('denied')
+    h.setNative(refreshedWithoutIdToken(4))
+    await expect(restarted.prepareForLaunch({ mayPrompt: false })).rejects.toThrow(
+      'keychain access'
+    )
+    expect(h.backend.read).toHaveBeenCalledTimes(3)
   })
 
   it('removes the selected account after agy signs in to another one, unblocking launches', async () => {

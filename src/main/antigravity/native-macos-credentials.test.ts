@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { fingerprintAntigravityMacOSCredential } from './native-macos-credentials'
+import { readAntigravityMacOSCredentialRevision } from './native-macos-credentials'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 
@@ -31,10 +31,12 @@ it('fingerprints agy’s keychain item from its attributes alone, changing when 
   answer({ code: 0, stdout: attributes('20261127235448') })
   answer({ code: 0, stdout: attributes('20261127235449') })
   answer({ code: 44 })
-  const first = await fingerprintAntigravityMacOSCredential()
-  expect(await fingerprintAntigravityMacOSCredential()).toBe(first)
-  expect(await fingerprintAntigravityMacOSCredential()).not.toBe(first)
-  expect(await fingerprintAntigravityMacOSCredential()).toBeNull()
+  const first = await readAntigravityMacOSCredentialRevision()
+  // mdat counts whole seconds: a write later in 23:54:48 would keep this fingerprint.
+  expect(first).toMatchObject({ stableFrom: Date.UTC(2026, 10, 27, 23, 54, 49), settled: true })
+  expect((await readAntigravityMacOSCredentialRevision())?.fingerprint).toBe(first?.fingerprint)
+  expect((await readAntigravityMacOSCredentialRevision())?.fingerprint).not.toBe(first?.fingerprint)
+  expect(await readAntigravityMacOSCredentialRevision()).toBeNull()
   // -w (or -g) would read the secret, which can raise the keychain's access dialog.
   for (const [spec] of vi.mocked(runProcess).mock.calls) {
     expect(spec.args).not.toContain('-w')

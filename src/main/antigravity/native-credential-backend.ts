@@ -1,9 +1,10 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
-  fingerprintAntigravityMacOSCredential,
   readAntigravityMacOSCredential,
-  writeAntigravityMacOSCredential
+  readAntigravityMacOSCredentialRevision,
+  writeAntigravityMacOSCredential,
+  type AntigravityKeychainRevision
 } from './native-macos-credentials'
 import {
   readAntigravityLinuxCredential,
@@ -35,16 +36,16 @@ const CONFLICT =
   'The native Antigravity credential changed during selection; refresh before retrying.'
 
 function hostKeyring(): {
-  read: () => Promise<AntigravityNativeCredential | null>
+  read: (options?: { quick?: boolean }) => Promise<AntigravityNativeCredential | null>
   write: (contents: string) => Promise<void>
   /** Only where reading the secret can raise a dialog: the Linux keyring refuses when locked. */
-  fingerprint?: () => Promise<string | null>
+  revision?: () => Promise<AntigravityKeychainRevision | null>
 } {
   if (process.platform === 'darwin') {
     return {
-      read: readAntigravityMacOSCredential,
+      read: (options) => readAntigravityMacOSCredential(undefined, options),
       write: writeAntigravityMacOSCredential,
-      fingerprint: fingerprintAntigravityMacOSCredential
+      revision: readAntigravityMacOSCredentialRevision
     }
   }
   if (process.platform === 'linux') {
@@ -79,20 +80,20 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
       )
     }
   }
-  async function read() {
+  async function read(options?: { quick?: boolean }) {
     await refuseMarker()
-    return (await keyring.read()) ?? (await file.read())
+    return (await keyring.read(options)) ?? (await file.read())
   }
-  const { fingerprint } = keyring
+  const { revision } = keyring
   return {
-    read,
-    ...(fingerprint
+    read: (options) => read(options),
+    ...(revision
       ? {
           async readWithoutPrompt() {
             await refuseMarker()
-            const item = await fingerprint()
+            const item = await revision()
             // With no keychain item agy uses its token file, which reads without a prompt.
-            return item === null ? { credential: await file.read() } : { fingerprint: item }
+            return item ?? { credential: await file.read() }
           }
         }
       : {}),

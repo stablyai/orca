@@ -67,7 +67,9 @@ export function harness(initial: string | null = credential('a'), { keychain = f
     ...(keychain
       ? {
           readWithoutPrompt: vi.fn(async () =>
-            native ? { fingerprint: `revision-${revision}` } : { credential: null }
+            native
+              ? { fingerprint: `revision-${revision}`, stableFrom: 0, settled: true }
+              : { credential: null }
           )
         }
       : {})

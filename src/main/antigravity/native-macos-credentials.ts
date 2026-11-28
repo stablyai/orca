@@ -56,12 +56,33 @@ function readFailure(result: Awaited<ReturnType<typeof runProcess>>): Error {
   return new Error('The Antigravity macOS credential store could not be read.')
 }
 
-/** A hash of agy's keychain item's attributes, which change (`mdat`) whenever agy rewrites its
- *  login; null when there is no item. Read without the secret, so macOS asks for no access. */
-export async function fingerprintAntigravityMacOSCredential(
+/** agy's keychain item as its attributes describe it, read without the secret so macOS asks for no
+ *  access. `fingerprint` hashes them; they change (`mdat`) whenever agy rewrites its login. */
+export type AntigravityKeychainRevision = {
+  fingerprint: string
+  /** `mdat` counts whole seconds, so another write before this time keeps the fingerprint. */
+  stableFrom: number
+  /** Read at or after `stableFrom`: no later write can share the fingerprint. */
+  settled: boolean
+}
+
+const MDAT = /"mdat"<timedate>=0x[0-9A-Fa-f]+\s+"(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z/
+
+function stableFrom(attributes: string): number {
+  const match = MDAT.exec(attributes)
+  if (!match) {
+    return Number.POSITIVE_INFINITY
+  }
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number)
+  return Date.UTC(year, month - 1, day, hour, minute, second) + 1000
+}
+
+/** Null when there is no item. */
+export async function readAntigravityMacOSCredentialRevision(
   target = nativeTarget
-): Promise<string | null> {
+): Promise<AntigravityKeychainRevision | null> {
   requireMacOS()
+  const startedAt = Date.now()
   const result = await runSecurity(
     [
       'find-generic-password',
@@ -78,7 +99,12 @@ export async function fingerprintAntigravityMacOSCredential(
       return null
     }
     if (result.code === 0 && result.stdout) {
-      return createHash('sha256').update(result.stdout).digest('hex')
+      const stable = stableFrom(result.stdout)
+      return {
+        fingerprint: createHash('sha256').update(result.stdout).digest('hex'),
+        stableFrom: stable,
+        settled: startedAt >= stable
+      }
     }
   }
   throw readFailure(result)
@@ -86,11 +112,13 @@ export async function fingerprintAntigravityMacOSCredential(
 
 /** Whether agy's keychain item exists, read from its attributes so macOS asks for no access. */
 export async function hasAntigravityMacOSCredential(target = nativeTarget): Promise<boolean> {
-  return (await fingerprintAntigravityMacOSCredential(target)) !== null
+  return (await readAntigravityMacOSCredentialRevision(target)) !== null
 }
 
+/** `quick`: give up after a few seconds rather than wait for an answer to the keychain's dialog. */
 export async function readAntigravityMacOSCredential(
-  target = nativeTarget
+  target = nativeTarget,
+  { quick = false }: { quick?: boolean } = {}
 ): Promise<AntigravityNativeCredential | null> {
   requireMacOS()
   const result = await runSecurity(
@@ -103,7 +131,7 @@ export async function readAntigravityMacOSCredential(
       '-w',
       ...(target.keychainPath ? [target.keychainPath] : [])
     ],
-    ANTIGRAVITY_KEYCHAIN_PROMPT_WAIT_MS
+    quick ? ATTRIBUTE_READ_WAIT_MS : ANTIGRAVITY_KEYCHAIN_PROMPT_WAIT_MS
   )
   if (!result.timedOut && !result.signal && !result.outputTruncated) {
     if (result.code === ITEM_NOT_FOUND) {
