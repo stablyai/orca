@@ -103,7 +103,13 @@ function rehypeChatMath(
                   )
                 }
               : {
-                  className: ['inline-block', 'max-w-full', 'overflow-x-auto', 'overflow-y-hidden']
+                  className: [
+                    'inline-flex',
+                    'min-w-0',
+                    'max-w-full',
+                    'overflow-x-auto',
+                    'overflow-y-hidden'
+                  ]
                 })
         },
         children:
