@@ -1,8 +1,9 @@
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
-import type {
-  AntigravityAccountState,
-  AntigravityChatSignInIntent,
-  AntigravityAccountTarget
+import {
+  ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS,
+  type AntigravityAccountState,
+  type AntigravityChatSignInIntent,
+  type AntigravityAccountTarget
 } from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
@@ -31,7 +32,8 @@ import {
 export async function callAntigravityAccounts(
   owner: RuntimeClientTarget,
   target: AntigravityAccountTarget,
-  action: 'List' | 'AddCurrent' | 'Select' | 'Remove',
+  /** `ReadCurrent` only where a List answered `currentAccount.unread`, so the host has it. */
+  action: 'List' | 'ReadCurrent' | 'AddCurrent' | 'Select' | 'Remove',
   accountId?: string
 ): Promise<AntigravityAccountState> {
   if (owner.kind === 'environment') {
@@ -44,8 +46,9 @@ export async function callAntigravityAccounts(
   return callRuntimeRpc(
     owner,
     `accounts.antigravity${action}`,
-    action === 'List' || action === 'AddCurrent' ? target : { target, accountId },
-    { timeoutMs: 20_000 }
+    action === 'Select' || action === 'Remove' ? { target, accountId } : target,
+    // Every action but List may wait on the keychain dialog that reading agy's login can raise.
+    { timeoutMs: action === 'List' ? 20_000 : ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS }
   )
 }
 
@@ -66,7 +69,8 @@ export async function callAntigravityChatSignIn<TResult>(
 ): Promise<RuntimeRpcSuccess<TResult>> {
   await assertChatSignInHost(owner)
   return callRuntimeRpcResponse(owner, `accounts.antigravityChatSignIn${action}`, params, {
-    timeoutMs: 20_000,
+    // Adding an account first saves agy's current login, which may wait on a keychain dialog.
+    timeoutMs: action === 'Start' ? ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS : 20_000,
     ...(action === 'Start'
       ? {
           paramsForStatus: (status) =>

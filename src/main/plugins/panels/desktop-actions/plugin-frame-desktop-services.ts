@@ -1,23 +1,15 @@
 import { app, BrowserWindow, dialog, shell, webContents } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
-import { normalizeBrowserDownloadFilename } from '../../../../shared/browser/downloads/browser-download-filename'
-import { isPluginExternalUrl } from '../../../../shared/plugins/workers/plugin-host-api'
-import { createPanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 import type { PanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 import type { PluginDesktopFrameServices } from '../../workers/host-api/plugin-host-method-bindings'
 import {
   PluginHostCallError,
   type PluginHostCallScope
 } from '../../workers/host-api/plugin-host-call-scope'
-import { markPluginSavedFileAsDownloaded } from './plugin-save-as-download-mark'
-import { confirmPluginExternalOpen } from './plugin-external-open-consent'
-import { canConfirmInWindow, confirmPluginAction } from '../../consent/plugin-action-confirmation'
-import { createPluginConfirmationGate } from '../../consent/plugin-confirmation-gate'
-import { pluginConfirmationCopy } from '../../consent/plugin-confirmation-copy'
 import type { Store } from '../../../persistence/loading-store/store'
+import type { createPluginConfirmationGate } from '../../consent/plugin-confirmation-gate'
 import { translateMain } from '../../../i18n/main-i18n'
-import { blockedPluginSaveAsExtension } from '../../../../shared/plugins/frames/plugin-save-as-extensions'
 
 /** Backstop behind the frame host's one-call-per-gesture check: a few dialogs or tabs at most. */
 const DESKTOP_FRAME_RATE_LIMIT = {
@@ -30,7 +22,14 @@ const DESKTOP_FRAME_RATE_LIMIT = {
 const hostWindows = new Set<BrowserWindow>()
 const budgets = new Map<string, PanelMessageBudget>()
 let services: PluginDesktopFrameServices | null = null
-const askOnce = createPluginConfirmationGate()
+let askOncePromise: Promise<ReturnType<typeof createPluginConfirmationGate>> | null = null
+
+function getAskOnce(): Promise<ReturnType<typeof createPluginConfirmationGate>> {
+  askOncePromise ??= import('../../consent/plugin-confirmation-gate').then(
+    ({ createPluginConfirmationGate: createGate }) => createGate()
+  )
+  return askOncePromise
+}
 
 /** Null in headless serve and before a main window exists: the methods then fail. */
 export function getPluginDesktopFrameServices(): PluginDesktopFrameServices | null {
@@ -52,7 +51,10 @@ function callingWindow(scope: PluginHostCallScope): BrowserWindow {
 
 /** Where a host confirmation shows: the calling frame's window; for workers, Orca's focused
  *  main window, else the first one the person can see. */
-function confirmationWindow(scope: PluginHostCallScope): BrowserWindow | null {
+function confirmationWindow(
+  scope: PluginHostCallScope,
+  canConfirmInWindow: (window: BrowserWindow | null) => window is BrowserWindow
+): BrowserWindow | null {
   if (scope.callerWebContentsId !== undefined) {
     return callingWindow(scope)
   }
@@ -60,10 +62,12 @@ function confirmationWindow(scope: PluginHostCallScope): BrowserWindow | null {
   return windows.find((window) => window.isFocused()) ?? windows.find(canConfirmInWindow) ?? null
 }
 
-function admit(window: BrowserWindow, pluginId: string): void {
+async function admit(window: BrowserWindow, pluginId: string): Promise<void> {
   const key = `${window.id}\0${pluginId}`
   let budget = budgets.get(key)
   if (!budget) {
+    const { createPanelMessageBudget } =
+      await import('../../../../shared/plugins/frames/plugin-panel-message-budget')
     budget = createPanelMessageBudget(DESKTOP_FRAME_RATE_LIMIT)
     budgets.set(key, budget)
   }
@@ -95,12 +99,18 @@ export function installPluginDesktopFrameServices(
   }
   services = {
     async confirm(pluginId, subject, scope) {
-      const window = confirmationWindow(scope)
+      const [{ canConfirmInWindow, confirmPluginAction }, { pluginConfirmationCopy }, askOnce] =
+        await Promise.all([
+          import('../../consent/plugin-action-confirmation'),
+          import('../../consent/plugin-confirmation-copy'),
+          getAskOnce()
+        ])
+      const window = confirmationWindow(scope, canConfirmInWindow)
       if (!canConfirmInWindow(window)) {
         return 'unavailable'
       }
       return askOnce(pluginId, async () => {
-        admit(window, pluginId)
+        await admit(window, pluginId)
         // A worker that exits or cancels the call closes its question, freeing the plugin's turn.
         const { answer } = await confirmPluginAction(
           window,
@@ -113,6 +123,12 @@ export function installPluginDesktopFrameServices(
       })
     },
     async openExternal(pluginId, url, scope) {
+      const [{ isPluginExternalUrl }, { confirmPluginExternalOpen }, { createPanelMessageBudget }] =
+        await Promise.all([
+          import('../../../../shared/plugins/workers/plugin-host-api'),
+          import('./plugin-external-open-consent'),
+          import('../../../../shared/plugins/frames/plugin-panel-message-budget')
+        ])
       // Re-checked here: the shared schema already refused other schemes, but this is the sink.
       if (!isPluginExternalUrl(url)) {
         throw new Error('url must be an http:, https: or mailto: URL')
@@ -126,7 +142,22 @@ export function installPluginDesktopFrameServices(
         pluginName,
         url,
         log: scope.log,
-        admit: () => admit(window, pluginId)
+        admit: () => {
+          const key = `${window.id}\0${pluginId}`
+          let budget = budgets.get(key)
+          if (!budget) {
+            budget = createPanelMessageBudget(DESKTOP_FRAME_RATE_LIMIT)
+            budgets.set(key, budget)
+          }
+          const now = Date.now()
+          if (budget.admit(now, 0)) {
+            throw new PluginHostCallError(
+              'rate_limited',
+              'too many requests; try again shortly',
+              budget.retryAfterMs?.(now)
+            )
+          }
+        }
       })
       if (consent !== 'allowed') {
         return {
@@ -140,9 +171,24 @@ export function installPluginDesktopFrameServices(
       return { opened: true }
     },
     async saveFile(pluginId, input, scope) {
+      const [
+        { normalizeBrowserDownloadFilename },
+        { blockedPluginSaveAsExtension },
+        { markPluginSavedFileAsDownloaded }
+      ] = await Promise.all([
+        import('../../../../shared/browser/downloads/browser-download-filename'),
+        import('../../../../shared/plugins/frames/plugin-save-as-extensions'),
+        import('./plugin-save-as-download-mark')
+      ])
+      const refuseBlocked = (name: string): void => {
+        const blocked = blockedPluginSaveAsExtension(name)
+        if (blocked) {
+          throw new Error(`plugins cannot save .${blocked} files: they would run when opened`)
+        }
+      }
       const parent = callingWindow(scope)
-      admit(parent, pluginId)
-      refuseBlockedExtension(input.suggestedName ?? '')
+      await admit(parent, pluginId)
+      refuseBlocked(input.suggestedName ?? '')
       const name = normalizeBrowserDownloadFilename(
         input.suggestedName ?? 'download',
         process.platform
@@ -157,7 +203,7 @@ export function installPluginDesktopFrameServices(
         return false
       }
       // Re-checked: the person may type a name, but plugin data still never becomes a program.
-      refuseBlockedExtension(result.filePath)
+      refuseBlocked(result.filePath)
       // The dialog may have stayed open while the plugin was disabled or removed.
       scope.assertActive()
       const { data } = input
@@ -165,13 +211,6 @@ export function installPluginDesktopFrameServices(
       await markPluginSavedFileAsDownloaded(result.filePath)
       return true
     }
-  }
-}
-
-function refuseBlockedExtension(name: string): void {
-  const blocked = blockedPluginSaveAsExtension(name)
-  if (blocked) {
-    throw new Error(`plugins cannot save .${blocked} files: they would run when opened`)
   }
 }
 

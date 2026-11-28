@@ -9,6 +9,7 @@ import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotLookAroundStore } from './bot-look-around-store'
 import type { BotTurnNoteRead } from './bot-active-work'
 import {
+  sessionHostMcpChanges,
   sessionLaunchToolsChanged,
   sessionLaunchToolsOutdated,
   sessionMcpLaunchTools,
@@ -214,6 +215,12 @@ export function botStructuredSessionWiring(deps: {
       outdated: (sessionId) => {
         const launched = launchedTools.get(sessionId)
         return launched !== undefined && sessionLaunchToolsOutdated(launched)
+      },
+      hostChanges: async (sessionId) => {
+        const launched = launchedTools.get(sessionId)
+        return launched
+          ? sessionHostMcpChanges(launched, sessionHostMcpDelivered(sessionId))
+          : new Map()
       }
     },
     prepareSessionLinkedSkills: async (record) => {

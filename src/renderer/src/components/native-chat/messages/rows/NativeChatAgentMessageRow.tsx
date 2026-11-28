@@ -16,10 +16,13 @@ import {
 
 /** Takes no width until the row is hovered or holds keyboard focus, so it never cuts the first line
  *  short; kept on touch, where nothing hovers. It stays laid out at zero width, its gap pulled back,
- *  so a row can measure the room it will need. A narrow chat shows a row button's time in its open message instead. */
+ *  so a row can measure the room it will need. */
 const REVEAL =
   'shrink-0 overflow-hidden can-hover:-ml-1.5 can-hover:w-0 can-hover:group-hover/agent-row:ml-0 can-hover:group-hover/agent-row:w-auto can-hover:group-has-[:focus-visible]/agent-row:ml-0 can-hover:group-has-[:focus-visible]/agent-row:w-auto'
-const TIME = `${REVEAL} @max-[360px]/agent-row:hidden!`
+/** The time keeps its slot and only shows on hover or focus, so the chevron after it never moves.
+ *  A narrow chat shows a row button's time in its open message instead. */
+const TIME =
+  'min-w-16 shrink-0 text-right can-hover:invisible can-hover:group-hover/agent-row:visible can-hover:group-has-[:focus-visible]/agent-row:visible @max-[400px]/agent-row:hidden!'
 
 /** How much wider an element's text is than its box, to the fraction of a pixel: the text is laid out
  *  whole even where it is drawn cut or the box has no width. Whole-pixel scroll widths miss a line a
@@ -42,23 +45,27 @@ function hiddenWidth(part: HTMLElement | null): number {
   return part && cut > 0.01 ? cut - (Number.parseFloat(getComputedStyle(part).marginLeft) || 0) : 0
 }
 
-/** Whether the first line is cut now, or would be once the time and actions show on hover or focus:
- *  the line fits only if the row has room left for their hidden width. */
+/** Whether the first line is cut now, or would be once the actions show on hover or focus: the line
+ *  fits only if the room between it and the row's end holds their hidden width. */
 function previewCutShort(
   preview: HTMLElement,
-  row: HTMLElement,
-  revealed: readonly (HTMLElement | null)[]
+  end: HTMLElement,
+  action: HTMLElement | null
 ): boolean {
-  if (textOverflow(preview) > 0.01) {
+  const overflow = textOverflow(preview)
+  if (overflow > 0.01) {
     return true
   }
-  const hidden = revealed.reduce((sum, part) => sum + hiddenWidth(part), 0)
-  const container = row.parentElement
-  // The row may reach past its container by its own 0.25rem bleed on each side.
-  const free = container
-    ? container.getBoundingClientRect().width + 8 - row.getBoundingClientRect().width
-    : 0
-  return hidden > free + 0.01
+  const hidden = hiddenWidth(action)
+  const line = preview.getBoundingClientRect()
+  const endBox = end.getBoundingClientRect()
+  // A narrow chat wraps the line under the actions, which then never cut it.
+  if (hidden <= 0.01 || line.top >= endBox.bottom - 0.5) {
+    return false
+  }
+  const gap = Number.parseFloat(getComputedStyle(end.parentElement ?? end).columnGap) || 0
+  // The line's box fills the free room, so its own room past the words counts too.
+  return hidden > -overflow + endBox.left - line.right - gap + 0.01
 }
 
 /**
@@ -100,7 +107,7 @@ export function NativeChatAgentMessageRow({
   timestamp: number | null
   /** Said after the sender's state, never drawn: e.g. "not sent yet". */
   spokenState?: string
-  /** Controls shown on hover or keyboard focus, after the chevron. */
+  /** Controls shown on hover or keyboard focus, before the time and chevron. */
   action?: React.ReactNode
   /** Null when there is nothing to open. */
   details: React.ReactNode | null
@@ -115,7 +122,7 @@ export function NativeChatAgentMessageRow({
   const detailsId = useId()
   const rowRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLSpanElement | null>(null)
-  const timeRef = useRef<HTMLSpanElement | null>(null)
+  const endRef = useRef<HTMLSpanElement | null>(null)
   const actionRef = useRef<HTMLSpanElement | null>(null)
   const [previewCut, setPreviewCut] = useState(false)
   const expandable = details !== null
@@ -127,15 +134,16 @@ export function NativeChatAgentMessageRow({
   useLayoutEffect(() => {
     const node = previewRef.current
     const row = rowRef.current
-    if (!measures || !node || !row) {
+    const end = endRef.current
+    if (!measures || !node || !row || !end) {
       return
     }
-    const measure = () =>
-      setPreviewCut(previewCutShort(node, row, [timeRef.current, actionRef.current]))
+    const measure = () => setPreviewCut(previewCutShort(node, end, actionRef.current))
     measure()
     // A narrower chat cuts the line; a wider one can show it whole again.
     const observer = new ResizeObserver(measure)
     observer.observe(node)
+    observer.observe(end)
     if (row.parentElement) {
       observer.observe(row.parentElement)
     }
@@ -168,10 +176,10 @@ export function NativeChatAgentMessageRow({
       <div
         ref={rowRef}
         className={cn(
-          'group/agent-row relative -mx-1 flex w-fit max-w-[calc(100%+0.5rem)] min-h-6 items-center gap-1.5 rounded-md px-1 font-sans text-sm leading-relaxed text-chat-foreground-faint',
+          'group/agent-row relative -mx-1 flex w-[calc(100%+0.5rem)] min-h-6 items-center gap-1.5 rounded-md px-1 font-sans text-sm leading-relaxed text-chat-foreground-faint',
           toggles && 'hover:bg-foreground/[0.04]',
           previewShown &&
-            '@max-[360px]/agent-row:w-[calc(100%+0.5rem)] @max-[360px]/agent-row:flex-wrap @max-[360px]/agent-row:gap-y-0 @max-[360px]/agent-row:pb-1'
+            '@max-[400px]/agent-row:flex-wrap @max-[400px]/agent-row:gap-y-0 @max-[400px]/agent-row:pb-1'
         )}
       >
         {toggles ? (
@@ -202,12 +210,12 @@ export function NativeChatAgentMessageRow({
         <span
           className={cn(
             content,
-            // The first line gives way first, down to a few words or to the room a name and an item
-            // need to keep a few letters each. It never shrinks, since any shrink at all cuts its last
-            // letters for an ellipsis; past its cap the name, then its items, cut short. Several items
-            // can need more than the cap, so it clips sideways only, keeping focus rings whole.
-            'flex min-w-0 max-w-[max(100cqw-13rem,14rem)] shrink-0 items-center overflow-x-clip gap-1 font-medium whitespace-nowrap text-chat-foreground',
-            '@max-[360px]/agent-row:max-w-fit @max-[360px]/agent-row:shrink @max-[360px]/agent-row:grow @max-[360px]/agent-row:basis-0'
+            // The first line takes only the room left, so it gives way first, down to a few words or to
+            // the room a name and an item need to keep a few letters each. Past its cap, or once the
+            // row's end leaves too little, the name, then its items, cut short. Several items can need
+            // more than the cap, so it clips sideways only, keeping focus rings whole.
+            'flex min-w-0 max-w-[max(100cqw-13rem,14rem)] shrink items-center overflow-x-clip gap-1 font-medium whitespace-nowrap text-chat-foreground',
+            '@max-[400px]/agent-row:max-w-fit @max-[400px]/agent-row:shrink @max-[400px]/agent-row:grow @max-[400px]/agent-row:basis-0'
           )}
         >
           {names(!toggles)}
@@ -221,42 +229,45 @@ export function NativeChatAgentMessageRow({
             aria-hidden={toggles || undefined}
             className={cn(
               content,
-              'min-w-0 max-w-[48ch] truncate',
-              '@max-[360px]/agent-row:order-last @max-[360px]/agent-row:max-w-none @max-[360px]/agent-row:basis-full @max-[360px]/agent-row:pl-5'
+              'min-w-0 max-w-[48ch] grow basis-0 truncate',
+              '@max-[400px]/agent-row:order-last @max-[400px]/agent-row:max-w-none @max-[400px]/agent-row:basis-full @max-[400px]/agent-row:pl-5'
             )}
           >
             {preview}
           </span>
         ) : null}
         {!toggles && time ? <span className="sr-only">{`, ${time}`}</span> : null}
-        {expandable ? (
-          // Kept in place, unseen, on a line that shows whole, so whether the line fits never
-          // depends on whether the chevron was drawn when it was measured.
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              'relative pointer-events-none size-3.5 shrink-0 transition-transform dark:opacity-70',
-              !toggles && 'invisible',
-              shown && 'rotate-90'
-            )}
-          />
-        ) : null}
-        {action ? (
-          // Width-revealed rather than faded, so the hidden buttons never cover the row's own button.
-          <span ref={actionRef} className={cn(content, REVEAL, 'flex items-center')}>
-            {action}
-          </span>
-        ) : null}
-        {timestamp !== null ? (
-          <span ref={timeRef} aria-hidden className={cn(content, TIME)}>
-            <NativeChatMessageTimestamp timestamp={timestamp} />
-          </span>
-        ) : null}
+        {/* Pinned to the row's end: actions, then the time's slot, then the chevron, always last. */}
+        <span ref={endRef} className="ml-auto flex shrink-0 items-center gap-1.5">
+          {action ? (
+            // Width-revealed rather than faded, so the hidden buttons never cover the row's own button.
+            <span ref={actionRef} className={cn(content, REVEAL, 'flex items-center')}>
+              {action}
+            </span>
+          ) : null}
+          {timestamp !== null ? (
+            <span aria-hidden className={cn(content, TIME)}>
+              <NativeChatMessageTimestamp timestamp={timestamp} />
+            </span>
+          ) : null}
+          {expandable ? (
+            // Kept in place, unseen, on a line that shows whole, so whether the line fits never
+            // depends on whether the chevron was drawn when it was measured.
+            <ChevronRight
+              aria-hidden
+              className={cn(
+                'relative pointer-events-none size-3.5 shrink-0 transition-transform dark:opacity-70',
+                !toggles && 'invisible',
+                shown && 'rotate-90'
+              )}
+            />
+          ) : null}
+        </span>
       </div>
       {shown ? (
         <NativeChatEventDetails id={detailsId} clamp findActive={findActive} rows={false}>
           {timestamp !== null ? (
-            <span className="hidden @max-[360px]/agent-row:block">
+            <span className="hidden @max-[400px]/agent-row:block">
               <NativeChatMessageTimestamp timestamp={timestamp} />
             </span>
           ) : null}

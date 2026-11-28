@@ -1,7 +1,6 @@
 // A tool's sign-in as every surface shows it (the Connectors row, Settings › Tools, the chat's
 // tool-added card): one status, one line and one action, whether Orca signs in or the agent's CLI.
 import type { BotRef } from '@/lib/bot-hosts'
-import { useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { BotOwnTool, BotToolProblem } from '../../../../shared/bot-tools'
@@ -16,6 +15,7 @@ import {
   openBotToolSignInPage,
   useBotToolSignIn
 } from './bot-tools-client'
+import { useNativeChatViewGuard } from '../native-chat/pane/ownership/native-chat-view-memory'
 
 /**
  * A sign-in face in words, one mapping for every surface: `line` for a row (Connectors, Settings ›
@@ -78,7 +78,8 @@ export function useBotToolSignInAction(
 ): BotToolSignInAction {
   const t = useTranslate()
   const { active: started, failure, hostName } = useBotToolSignIn(bot, tool.name)
-  const [busy, setBusy] = useState(false)
+  // Kept with the chat tab when shown in a chat: a card released mid-connect returns still connecting.
+  const [busy, setBusy] = useNativeChatViewGuard(`bot-tool-sign-in:${bot.id}:${tool.name}`, false)
   const host = useBotToolHostSignIn(bot, tool.name)
   const hosted = started ? host : null
   const face = botToolSignInFace(tool, problem, started, failure, hosted?.state === 'finishing')

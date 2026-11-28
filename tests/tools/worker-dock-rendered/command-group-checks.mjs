@@ -1,5 +1,5 @@
-// Workers and background commands in one card: groups, keyboard across them, and the footer's
-// Stop/Clear row at narrow widths. Scenes come from the WorkerDockCommandGroup fixture.
+// Workers and background commands in one card: groups, keyboard across them, and the header's
+// Stop/Clear actions at narrow widths. Scenes come from the WorkerDockCommandGroup fixture.
 import { events, focusedRow, region, rows, toggle } from './fixture-session.mjs'
 
 const fixture = 'native-chat/tools/tasks/dock/WorkerDockCommandGroup'
@@ -21,10 +21,9 @@ export async function runCommandGroupChecks({ check, scene, assert, open, shot }
         (await page.locator('[data-worker-dock-group-label]').count()) === 1,
         'one group label'
       )
-      assert(
-        ((await toggle(page).textContent()) ?? '').startsWith('3 workers · 2 commands'),
-        'header'
-      )
+      // The header reads like the chip: what needs you or runs, or the two counts.
+      const header = ((await toggle(page).textContent()) ?? '').replace(/\s+/g, ' ')
+      assert(/(^\d+ running$)|3 workers · 2 commands$/.test(header), `header "${header}"`)
     })
   )
 
@@ -56,14 +55,16 @@ export async function runCommandGroupChecks({ check, scene, assert, open, shot }
   )
 
   for (const [name, width, clear] of [
-    ['footerStopClear320', 320, false],
-    ['footerStopClear420', 420, false],
-    ['footerStopClearShort320', 320, false],
-    ['footerStopClearShort420', 420, true]
+    ['actionsStopClear320', 320, false],
+    ['actionsStopClear420', 420, false],
+    ['actionsStopClear560', 560, true],
+    ['actionsStopClearShort320', 320, false],
+    ['actionsStopClearShort420', 420, false],
+    ['actionsStopClearShort560', 560, true]
   ]) {
-    await check(`the footer keeps one row and a whole Stop label (${name})`, () =>
-      scene(name, { fixture, width }, async (page) => {
-        const footer = page.locator('[data-worker-dock-footer]')
+    await check(`the header keeps its actions on one row and a whole Stop label (${name})`, () =>
+      scene(name, { fixture, width: width + 40 }, async (page) => {
+        const footer = page.locator('[data-worker-dock-actions]')
         const stop = footer.getByRole('button', { name: 'Stop subagents and commands' })
         const fits = await stop.evaluate((element) => element.scrollWidth <= element.clientWidth)
         assert(fits, 'Stop label is cut')
@@ -79,38 +80,61 @@ export async function runCommandGroupChecks({ check, scene, assert, open, shot }
     )
   }
 
-  await check(
-    'Stop all shows in the panel footer only when it applies, names its scope, and stops',
-    () =>
-      scene('stopAllOpen720', {}, async (page) => {
-        // Orchestration workers only, with the chat's own stop offered: it names what it may end
-        // (work the roster does not list), never "Stop all", which would include the workers.
-        const footer = page.locator('[data-worker-dock-footer]')
-        const stop = footer.getByRole('button', { name: 'Stop subagents and commands' })
-        assert((await stop.count()) === 1, 'no scoped Stop in the footer')
-        assert(
-          (await stop.getAttribute('aria-describedby')) !== null,
-          'Stop does not say the workers keep running'
-        )
-        const [box, header] = await Promise.all([stop.boundingBox(), toggle(page).boundingBox()])
-        assert(box.y > header.y + header.height, 'Stop is not below the header')
-        await stop.click()
-        assert(
-          (await events(page)).some((event) => event.action === 'stop-all'),
-          'no Stop all'
-        )
-        await shot(page, 'footer-stop-all')
-        await open('fourOpen720', {})
-        assert(
-          (await page.getByRole('button', { name: /^Stop (all|subagents|commands)/ }).count()) ===
-            0,
-          'Stop all drawn'
-        )
-        assert(
-          (await page.locator('[data-worker-dock-footer]').count()) === 0,
-          'empty footer drawn'
-        )
+  await check('a focused Clear that a narrower pane sets aside hands focus to the chip', () =>
+    scene('actionsStopClear560', { fixture, width: 600 }, async (page) => {
+      const clearButton = page.locator('[data-worker-dock-actions]').getByRole('button', {
+        name: /^Clear all/
       })
+      await clearButton.focus()
+      await page
+        .locator('[data-native-chat-root]')
+        .evaluate((pane) => pane.style.setProperty('width', '320px'))
+      await page.waitForTimeout(200)
+      assert(!(await clearButton.isVisible()), 'Clear did not step aside')
+      const onChip = await page.evaluate(() =>
+        document.activeElement?.hasAttribute('data-worker-dock-pill')
+      )
+      assert(onChip, 'focus fell to the page')
+    })
+  )
+
+  await check('Stop all shows in the header only when it applies, names its scope, and stops', () =>
+    scene('stopAllOpen720', {}, async (page) => {
+      // Orchestration workers only, with the chat's own stop offered: it names what it may end
+      // (work the roster does not list), never "Stop all", which would include the workers.
+      const footer = page.locator('[data-worker-dock-actions]')
+      const stop = footer.getByRole('button', { name: 'Stop subagents and commands' })
+      assert((await stop.count()) === 1, 'no scoped Stop in the header')
+      assert(
+        (await stop.getAttribute('aria-describedby')) !== null,
+        'Stop does not say the workers keep running'
+      )
+      const [box, header, list] = await Promise.all([
+        stop.boundingBox(),
+        toggle(page).boundingBox(),
+        region(page).boundingBox()
+      ])
+      assert(
+        Math.abs(box.y + box.height / 2 - (header.y + header.height / 2)) <= 1,
+        'Stop is not in the header'
+      )
+      assert(box.y + box.height <= list.y + 1, 'Stop is not above the rows')
+      await stop.click()
+      assert(
+        (await events(page)).some((event) => event.action === 'stop-all'),
+        'no Stop all'
+      )
+      await shot(page, 'header-stop-all')
+      await open('fourOpen720', {})
+      assert(
+        (await page.getByRole('button', { name: /^Stop (all|subagents|commands)/ }).count()) === 0,
+        'Stop all drawn'
+      )
+      assert(
+        (await page.locator('[data-worker-dock-actions]').count()) === 0,
+        'empty actions drawn'
+      )
+    })
   )
 
   await check(

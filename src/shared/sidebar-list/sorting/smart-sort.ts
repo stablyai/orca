@@ -72,8 +72,19 @@ function worktreeSortReads(
   repoMap: Map<string, Pick<Repo, 'displayName'>>,
   labels: WorktreeSortLabels | undefined
 ) {
+  let lazyLabels: Map<WorktreeSortLabelInput, string> | undefined
+  const label = labels
+    ? (worktree: Worktree): string => labels.get(worktree) ?? getWorktreeSortLabel(worktree)
+    : (worktree: Worktree): string => {
+        let cached = lazyLabels?.get(worktree)
+        if (cached === undefined) {
+          cached = getWorktreeSortLabel(worktree)
+          ;(lazyLabels ??= new Map()).set(worktree, cached)
+        }
+        return cached
+      }
   return {
-    label: (worktree: Worktree): string => labels?.get(worktree) ?? getWorktreeSortLabel(worktree),
+    label,
     identity: getWorktreeHostIdentity,
     repoLabel: (worktree: Worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
     // Legacy users have sortOrder but no manualOrder; seed Manual from saved order instead of alphabetizing.
@@ -99,7 +110,7 @@ export function sortWorktreesByStamps<W extends Worktree>(
   sortBy: SortBy,
   repoMap: Map<string, Pick<Repo, 'displayName'>>
 ): W[] {
-  return worktrees.sort(buildStampComparator(sortBy, repoMap, buildWorktreeSortLabels(worktrees)))
+  return worktrees.sort(buildStampComparator(sortBy, repoMap, undefined))
 }
 
 /** Require the precomputed attention map: omission would silently reduce Smart to idle/recent ordering. */
@@ -201,11 +212,9 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
   sources: SmartSortSources
 }): WorktreeSortRanking<W> {
   const { worktrees, sortBy, now, sources } = args
-  // Why precompute: the label tiebreaker runs on every comparison in every mode.
-  const labels = buildWorktreeSortLabels(worktrees)
   // Switch point: stamps need no cold phase, latch or attention map.
   if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-    worktrees.sort(buildStampComparator(sortBy, args.repoMap, labels))
+    worktrees.sort(buildStampComparator(sortBy, args.repoMap, undefined))
     return { sorted: worktrees, detectedLiveSmartSignal: false }
   }
   let detectedLiveSmartSignal = false
@@ -223,7 +232,21 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
     ) {
       detectedLiveSmartSignal = true
     } else {
-      worktrees.sort((a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b, labels))
+      let lazyLabels: Map<WorktreeSortLabelInput, string> | undefined
+      const labelOf = (w: Worktree): string => {
+        let cached = lazyLabels?.get(w)
+        if (cached === undefined) {
+          cached = getWorktreeSortLabel(w)
+          ;(lazyLabels ??= new Map()).set(w, cached)
+        }
+        return cached
+      }
+      worktrees.sort(
+        (a, b) =>
+          b.sortOrder - a.sortOrder ||
+          compareSidebarText(labelOf(a), labelOf(b)) ||
+          compareCodePoints(getWorktreeHostIdentity(a), getWorktreeHostIdentity(b))
+      )
       return { sorted: worktrees, detectedLiveSmartSignal: false }
     }
   }
@@ -246,6 +269,6 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
             sources.terminalLayoutsByTabId
           )
       : new Map<string, WorktreeAttention>()
-  worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, attentionByWorktree, labels))
+  worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, attentionByWorktree, undefined))
   return { sorted: worktrees, detectedLiveSmartSignal }
 }

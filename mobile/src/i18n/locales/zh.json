@@ -866,7 +866,9 @@
         "tools_one": "{{count}} 个工具",
         "tools_other": "{{count}} 个工具",
         "disabled": "已禁用",
-        "notStarted": "尚未启动"
+        "notStarted": "尚未启动",
+        "orcaRemoved": "已移除：下一条消息时重新启动",
+        "orcaChanged": "已更改：下一条消息时重新启动"
       },
       "title": "MCP 服务器",
       "notRunning": "MCP 服务器会在你发送下一条消息时连接",
@@ -891,7 +893,8 @@
         "failed": "{{count}} 个失败"
       },
       "pasteHint": "当浏览器跳转到一个无法加载的页面时，复制它的地址并粘贴到这里",
-      "manage": "管理 MCP 服务器"
+      "manage": "管理 MCP 服务器",
+      "stillFailing": "重新连接后仍然失败。"
     },
     "fork": {
       "busy": "另一个聊天或终端正在打开。请稍候，再次为 {{agent}} 聊天创建分支",
@@ -5999,7 +6002,6 @@
       "suggestThree": "{{a}}、{{b}} 和 {{c}}",
       "suggestMore": "{{a}}、{{b}} 及另外 {{count}} 个",
       "pickOne": "请选择一个 bot",
-      "needsTwoBots": "需要 {{host}} 上有 2 个 bot",
       "stopCouldNotBeConfirmed": "无法确认是否已停止",
       "notStarted": "尚未启动",
       "workingCount_one": "{{count}} 个工作中",
@@ -8385,7 +8387,8 @@
     "workspacesCount": "{{count}} 个工作区",
     "workspacesAllButCount": "除 {{count}} 个外的全部",
     "headerMissing": "填写 {{header}} 后才能添加此服务器",
-    "servers": "服务器"
+    "servers": "服务器",
+    "unreadable": "无法打开已保存的登录或密钥。请重新登录。"
   },
   "chats": {
     "delete": {

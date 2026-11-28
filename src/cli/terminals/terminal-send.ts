@@ -1,4 +1,5 @@
 import type { RuntimeTerminalSend } from '../../shared/terminal/runtime/runtime-terminal-send-contract'
+import { readReachableCliStatus } from '../runtime/status/reachable-cli-status'
 import '../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { CommandHandler } from '../dispatch/dispatch'
@@ -32,7 +33,7 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
   let promptDeliverySupported = false
   let promptDeliveryRuntimeId: string | null = null
   if (promptCandidate) {
-    const status = await client.getCliStatus()
+    const status = await readReachableCliStatus(client)
     if (!status.result.runtime.reachable) {
       throw new RuntimeClientError(
         'runtime_unavailable',

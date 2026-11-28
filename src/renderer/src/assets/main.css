@@ -779,6 +779,33 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   gap: 6px;
 }
 
+/* Why: sonner fades a folded toast's content only for styled toasts; a custom card is its own surface, so fade its rows. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-sonner-toaster] [data-toast-card] > * {
+    transition:
+      opacity 400ms,
+      visibility 0s;
+  }
+
+  [data-sonner-toaster]
+    [data-sonner-toast][data-expanded='false'][data-front='false']
+    [data-toast-card]
+    > * {
+    transition:
+      opacity 400ms,
+      visibility 0s 400ms;
+  }
+}
+
+/* Why visibility: hidden rows also leave the tab order, so focus can't land on an invisible control. */
+[data-sonner-toaster]
+  [data-sonner-toast][data-expanded='false'][data-front='false']
+  [data-toast-card]
+  > * {
+  opacity: 0;
+  visibility: hidden;
+}
+
 /* Clip folded toast overflow to prevent hover/re-expansion loops; hidden would create a focus-scrollable container. */
 [data-sonner-toaster] [data-sonner-toast][data-expanded='false'][data-front='false'] {
   overflow: clip;
@@ -1618,6 +1645,17 @@ html.native-shell .app-layout {
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   user-select: none;
+}
+
+/* Rail pages: titlebar and rail form one tray, so the page card's own border is the only seam and its rounded
+   corner meets plain tray. */
+[data-rail-page-active] .titlebar {
+  background: var(--worktree-sidebar);
+  border-bottom-color: transparent;
+}
+
+[data-rail-page-active] [data-app-rail-nav] {
+  border-right-color: transparent;
 }
 
 /* Reserve the same 36px baseline (4px drag strip + 32px tabs) for macOS traffic lights and sidebar chrome. */

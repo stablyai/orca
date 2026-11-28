@@ -1,7 +1,5 @@
 import { installElectronNativeServices } from '../host/electron-native-services'
 import { captureBackendBootstrap } from '../backend-desktop/backend-supervisor'
-import { antigravityHookService } from '../antigravity/hook-service'
-import { getRelocatedDaemonHost } from '../daemon/executable-host/windows/daemon-host-relocation'
 import { app } from 'electron'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -25,15 +23,8 @@ import {
   installUncaughtExceptionQuitGuard,
   installUnhandledRejectionLogging
 } from './process-failure/main-process-error-guards'
-import { hydrateShellPath, mergePathSegments } from './shell-environment/hydrate-shell-path'
 import { configureRemoteServerUpdater } from '../runtime/hosts/management/remote-server-updater'
-import {
-  getRemoteServerUpdaterSnapshot,
-  checkForRemoteServerUpdate,
-  downloadRemoteServerUpdate,
-  installRemoteServerUpdate,
-  isQuittingForUpdate
-} from '../updater/updater-service'
+import { isQuittingForUpdate, loadUpdaterService } from '../updater/updater-service-slot'
 import {
   getDevInstanceIdentity,
   shouldApplyPreReadyAppName
@@ -44,7 +35,6 @@ import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic
 } from './diagnostics/startup-diagnostics'
-import { startEventLoopStallProbe } from './diagnostics/event-loop-stall-probe'
 import { startEventLoopDelayProbe } from '../diagnostics/event-loop-delay-probe'
 import {
   isMainThreadDiagnosticsEnabled,
@@ -172,24 +162,30 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.
   process.env.ORCA_APP_VERSION = app.getVersion()
   configureRemoteServerUpdater({
-    getSnapshot: getRemoteServerUpdaterSnapshot,
-    check: checkForRemoteServerUpdate,
-    download: downloadRemoteServerUpdate,
-    install: installRemoteServerUpdate
+    getSnapshot: async (runtimeId) =>
+      (await loadUpdaterService()).getRemoteServerUpdaterSnapshot(runtimeId),
+    check: async (runtimeId, options) =>
+      (await loadUpdaterService()).checkForRemoteServerUpdate(runtimeId, options),
+    download: async (runtimeId) =>
+      (await loadUpdaterService()).downloadRemoteServerUpdate(runtimeId),
+    install: async (runtimeId) => (await loadUpdaterService()).installRemoteServerUpdate(runtimeId)
   })
   patchPackagedProcessPath()
   // The synchronous seed covers early IPC; packaged login-shell hydration adds rc PATH later.
   if (app.isPackaged && process.platform !== 'win32') {
-    void hydrateShellPath().then((result) => {
-      if (result.ok) {
-        mergePathSegments(result.segments)
-      } else {
-        // Failed hydration keeps seeded fallbacks, which may differ from shell choice; log the reason for missing-CLI diagnosis.
-        console.warn(
-          `[shell-path] login-shell probe failed (${result.failureReason}); using seeded PATH`
-        )
+    void import('./shell-environment/hydrate-shell-path').then(
+      async ({ hydrateShellPath, mergePathSegments }) => {
+        const result = await hydrateShellPath()
+        if (result.ok) {
+          mergePathSegments(result.segments)
+        } else {
+          // Failed hydration keeps seeded fallbacks, which may differ from shell choice; log the reason for missing-CLI diagnosis.
+          console.warn(
+            `[shell-path] login-shell probe failed (${result.failureReason}); using seeded PATH`
+          )
+        }
       }
-    })
+    )
   }
   // Register before spawning so CLI/relay-shared tree killing can reach main's gate and breadcrumbs.
   installMainProcessTreeKillGate()
@@ -200,9 +196,16 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Capture after overrides, before ready-time app naming can change userData on case-sensitive filesystems.
   initDataPath()
   startEventLoopDelayProbe('main', getCanonicalUserDataPath())
-  antigravityHookService.setWindowsRuntimePathProvider(
-    () => getRelocatedDaemonHost()?.execPath ?? process.execPath
-  )
+  if (process.platform === 'win32') {
+    void Promise.all([
+      import('../antigravity/hook-service'),
+      import('../daemon/executable-host/windows/daemon-host-relocation')
+    ]).then(([{ antigravityHookService }, { getRelocatedDaemonHost }]) => {
+      antigravityHookService.setWindowsRuntimePathProvider(
+        () => getRelocatedDaemonHost()?.execPath ?? process.execPath
+      )
+    })
+  }
 
   // Electron fixes the Keychain service name before ready; dev userData is already pinned so renaming cannot shift it.
   if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
@@ -218,7 +221,9 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
       userData: app.getPath('userData'),
       e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
     })
-    startEventLoopStallProbe()
+    void import('./diagnostics/event-loop-stall-probe').then(({ startEventLoopStallProbe }) =>
+      startEventLoopStallProbe()
+    )
   }
   // Session-long main-thread diagnostics (#7576) distinguish cold cache from unstable filesystem stamps via hit/miss/unprovable counts.
   if (isMainThreadDiagnosticsEnabled()) {
