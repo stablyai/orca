@@ -1121,7 +1121,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost se refiere al equipo de este bot.",
           "headers": "Encabezados",
-          "authHint": "Si el servidor requiere iniciar sesión en el navegador, aparecerá Conectar después de su comprobación nativa.",
+          "authHint": "Si el servidor requiere iniciar sesión en el navegador, aparecerá «Iniciar sesión» después de su comprobación nativa.",
           "executable": "Ejecutable",
           "commandPlaceholder": "npx",
           "args": "Argumentos",

@@ -1225,7 +1225,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost 指此 bot 所在的电脑",
           "headers": "请求头",
-          "authHint": "如果服务器需要在浏览器中登录，原生检查完成后会出现“连接”",
+          "authHint": "如果服务器需要在浏览器中登录，原生检查完成后会出现“登录”。",
           "executable": "可执行文件",
           "commandPlaceholder": "npx",
           "args": "参数",

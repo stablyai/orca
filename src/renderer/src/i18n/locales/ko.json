@@ -1085,7 +1085,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost는 이 봇의 컴퓨터를 뜻합니다.",
           "headers": "헤더",
-          "authHint": "서버에 브라우저 로그인이 필요하면 도구 확인이 끝난 뒤 “연결” 버튼이 표시됩니다.",
+          "authHint": "서버에 브라우저 로그인이 필요하면 도구 확인이 끝난 뒤 “로그인” 버튼이 표시됩니다.",
           "executable": "실행 파일",
           "commandPlaceholder": "npx",
           "args": "인수",
