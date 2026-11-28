@@ -9,11 +9,11 @@ import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import type { AgentJournalBotBackupModelSwitchItem } from '../../shared/agent-journal-orca-card-items'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
-import type { ExternalConversationLinkStore } from '../external-conversations/external-conversation-links'
 import {
   findLink,
   findLinksForSession,
   writeLink,
+  type ExternalConversationLinkStore,
   type LinkedConversation
 } from '../external-conversations/external-conversation-links'
 import type { AgentSessionContinuationContext } from '../../shared/agent-session/agent-session-wire'

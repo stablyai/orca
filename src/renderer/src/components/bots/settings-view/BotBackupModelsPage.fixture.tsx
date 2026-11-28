@@ -73,7 +73,7 @@ const ACTIVE_STATUS: BotBackupStatusResult = {
       defaultEffort: 'medium',
       state: 'ready'
     },
-    { agent: 'gemini', model: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', state: 'ready' }
+    { agent: 'antigravity', model: 'gemini-3-flash', label: 'Gemini 3 Flash', state: 'ready' }
   ]
 }
 
