@@ -27,6 +27,13 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.worktreeNavigateUp', 'Previous worktree'),
   'worktree.navigateDown': () =>
     translate('keybindings.title.worktreeNavigateDown', 'Next worktree'),
+  'worktree.navigateUpAll': () =>
+    translate(
+      'keybindings.title.worktreeNavigateUpAll',
+      'Previous sidebar workspace (all sections)'
+    ),
+  'worktree.navigateDownAll': () =>
+    translate('keybindings.title.worktreeNavigateDownAll', 'Next sidebar workspace (all sections)'),
   'workspace.create': () => translate('keybindings.title.workspaceCreate', 'Create worktree'),
   'workspace.rename': () => translate('keybindings.title.workspaceRename', 'Rename worktree'),
   'workspace.delete': () => translate('keybindings.title.1d2c86248c', 'Delete workspace'),
@@ -52,6 +59,8 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.437260810f', 'Toggle sleeping workspaces'),
   'sidebar.focusWorktreeList': () =>
     translate('keybindings.title.sidebarFocusWorktreeList', 'Focus worktree list'),
+  'sidebar.switchSection': () =>
+    translate('keybindings.title.sidebarSwitchSection', 'Switch between Bots and Projects'),
   'floatingTerminal.toggle': () =>
     translate('keybindings.title.e67a41569d', 'Toggle floating terminal'),
   'floatingWorkspace.maximize': () =>

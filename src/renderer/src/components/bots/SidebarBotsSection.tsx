@@ -46,6 +46,7 @@ import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
+import { setBotSidebarCycleEntries } from './bot-sidebar-cycle-entries'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
 
 /** Lists bots from this computer and paired servers in the sidebar. */
@@ -156,6 +157,10 @@ export function SidebarBotsSection({
     getScrollContainer: () => listRef.current
   })
   const listShown = !collapsed && entries.length > 0
+  useLayoutEffect(() => {
+    setBotSidebarCycleEntries(listShown ? entries : [], { paused: searchOpen })
+  }, [entries, listShown, searchOpen])
+  useLayoutEffect(() => () => setBotSidebarCycleEntries([]), [])
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
   const handleRenameFromPreview = useCallback(
     (entryKey: string) => {

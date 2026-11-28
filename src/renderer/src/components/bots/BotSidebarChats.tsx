@@ -30,6 +30,10 @@ import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChat
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
+import {
+  collectVisibleBotWorkerWorktrees,
+  setBotSidebarCycleWorkers
+} from './bot-sidebar-cycle-entries'
 import { BotSidebarOlderToggle } from './BotSidebarOlderChats'
 import {
   useBotHomeFrontTab,
@@ -90,8 +94,10 @@ export function BotSidebarChats({
       activeLineId: activeLine?.id ?? null
     })
   }, [chats, listed, workspaceChats, workspaces, folds, steps, activeLine])
+  const collapsedGroups = useAppStore((s) => s.collapsedGroups)
+  const entryKey = botSidebarEntryKey(bot)
   // A reveal of a worker line under a folded chat opens that chat, once per request.
-  const reveal = useBotsRevealRequest(botSidebarEntryKey(bot))
+  const reveal = useBotsRevealRequest(entryKey)
   const revealWorker = reveal?.target.hostDown ? undefined : reveal?.target.worker
   const revealLineId = revealWorker ? (revealWorker.ancestors[0]?.id ?? revealWorker.id) : null
   const revealNonce = reveal?.nonce ?? null
@@ -146,6 +152,20 @@ export function BotSidebarChats({
     fresh: tree.state === 'ready' && tree.landed && !tree.refreshFailed && !tree.changeUnread,
     held
   })
+  useLayoutEffect(() => {
+    const visibleRoots = [
+      ...recent.flatMap((chatView) => (chatView.open ? chatView.lines : [])),
+      ...view.stray
+    ]
+    setBotSidebarCycleWorkers(
+      entryKey,
+      collectVisibleBotWorkerWorktrees(
+        visibleRoots,
+        lineageChildrenByParentIdentity,
+        collapsedGroups
+      )
+    )
+  }, [entryKey, recent, view.stray, lineageChildrenByParentIdentity, collapsedGroups])
   useLayoutEffect(() => {
     const ids = new Set(older.map((chatView) => chatView.chat.chatId))
     // A chat that leaves the older list no longer counts as a focused older row, even if it folds again.

@@ -1,9 +1,17 @@
+import type { BotGroup } from '../../../../../../shared/bots/bot-group'
 import {
   getFolderWorkspaceHostIdentity,
   getFolderWorkspaceWorktree
 } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import {
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import type {
@@ -49,7 +57,82 @@ export function getPreferredWorktreeRows(
   return preferredRows
 }
 
-export type RenderedWorkspaceRow = Pick<WorktreeRow, 'worktree' | 'repo' | 'rowKey'>
+export type RenderedWorkspaceRow = Pick<WorktreeRow, 'worktree' | 'repo' | 'rowKey'> & {
+  section?: 'bots' | 'projects'
+  botGroup?: BotGroup
+}
+
+/** Resolve host ownership like activation does; raw local rows omit hostId and would fail identity matching. */
+export function getCyclableRowIdentity(row: RenderedWorkspaceRow): string {
+  return composeWorktreeHostIdentity(
+    getWorktreeExecutionHostId(row.worktree, row.repo),
+    row.worktree.id
+  )
+}
+
+export type SidebarCycleScope = 'section' | 'all'
+export type SidebarCycleSection = 'bots' | 'projects'
+export type LastActiveCycleWorkspace = {
+  worktreeId: string
+  executionHostId: ExecutionHostId | null
+}
+export type LastActiveSectionWorkspaces = Partial<
+  Record<SidebarCycleSection, LastActiveCycleWorkspace>
+>
+
+export function dedupeCycleRows(rows: readonly RenderedWorkspaceRow[]): RenderedWorkspaceRow[] {
+  const seen = new Set<string>()
+  const deduped: RenderedWorkspaceRow[] = []
+  for (const row of rows) {
+    const identity = getCyclableRowIdentity(row)
+    if (seen.has(identity)) {
+      continue
+    }
+    seen.add(identity)
+    deduped.push(row)
+  }
+  return deduped
+}
+
+export function resolveActiveSidebarSection(args: {
+  botsRows: readonly RenderedWorkspaceRow[]
+  projectsRows: readonly RenderedWorkspaceRow[]
+  activeIdentity: string | null
+  preferredSection?: SidebarCycleSection | null
+  projectsFirst: boolean
+}): SidebarCycleSection | null {
+  const { botsRows, projectsRows, activeIdentity, preferredSection, projectsFirst } = args
+  const inBots =
+    activeIdentity !== null &&
+    botsRows.some((row) => getCyclableRowIdentity(row) === activeIdentity)
+  const inProjects =
+    activeIdentity !== null &&
+    projectsRows.some((row) => getCyclableRowIdentity(row) === activeIdentity)
+  if (inBots && inProjects) {
+    return preferredSection ?? 'projects'
+  }
+  if (inBots) {
+    return 'bots'
+  }
+  if (inProjects) {
+    return 'projects'
+  }
+  if (preferredSection === 'bots') {
+    return botsRows.length > 0 ? 'bots' : null
+  }
+  if (preferredSection === 'projects') {
+    return projectsRows.length > 0 ? 'projects' : null
+  }
+  const order: readonly SidebarCycleSection[] = projectsFirst
+    ? ['projects', 'bots']
+    : ['bots', 'projects']
+  for (const section of order) {
+    if ((section === 'bots' ? botsRows : projectsRows).length > 0) {
+      return section
+    }
+  }
+  return null
+}
 
 function forEachRenderedWorkspaceRow(
   rows: readonly HostSectionRow[],
