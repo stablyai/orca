@@ -27,6 +27,7 @@ import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orche
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
+import { supersededReplyWarning } from './superseded-reply-warning'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
@@ -174,6 +175,8 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       replyFrom,
       runtime.getTerminalPaneKey(replyFrom) ?? undefined
     )?.id
+    // Read before the reply is stored, so a reply to one's own mail never counts as newer mail.
+    const supersededWarning = supersededReplyWarning(db, original)
     // The answer's record and its mail commit together, so a crash between them can't keep one alone.
     const reply = runLifecycleWriteTransaction(db.db, 'reply_with_answer', () => {
       const stored = db.insertMessage({
@@ -196,9 +199,12 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       runtimeBotGroups(runtime).saveAnswer(answerTurn, params.body)
     }
 
+    const warnings = [recipient.warning, supersededWarning].filter(
+      (warning) => warning !== undefined
+    )
     const receipt = {
       message: exposeMessage(reply),
-      ...(recipient.warning ? { warnings: [recipient.warning] } : {})
+      ...(warnings.length > 0 ? { warnings } : {})
     }
     return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
       runtime.notifyMessageArrived(reply.to_handle, reply.type)

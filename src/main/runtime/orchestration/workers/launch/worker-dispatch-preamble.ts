@@ -1,4 +1,5 @@
 import type { OrchestrationCliCommand } from './orchestration-cli-command'
+import { AGENT_MAIL_ANSWER_RULE } from '../../../../../shared/orchestration/mailbox/agent-status-rule'
 import type { RuntimeAgentPromptWriteOptions } from '../../../terminal/input/agent-prompt-write-options'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../../../shared/orchestration/workers/orca-dispatch-status-prompt'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
@@ -109,8 +110,9 @@ export function buildDispatchPreamble(params: PreambleParams): string {
 ${dispatchIdentityLines(params)}
 
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
-below, and message it only to ask, report a blocker, or finish; it needs no progress updates
-unless the task asks (any send between you and it wakes it, status included; task-update --note is passive and never wakes).
+below: ask, report a blocker, and finish with one worker_done; it needs no progress mail unless
+the task asks. Any send between you and it wakes it, status included; your progress goes in
+task-update --note, which never wakes. ${AGENT_MAIL_ANSWER_RULE}
 ${windowsSandboxLine(cli, params.runsOnNativeWindows)}Do only this task, yourself: no subagents or helper workers unless the task asks.
 Terminals you open with \`${cli} terminal create\` or \`split\` close with this worker; add --keep-open to one the user keeps.
 

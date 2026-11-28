@@ -1,4 +1,6 @@
 import type { ChatMailPlace } from '../../../../../shared/connectors/external-conversation-link'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-mail-sender'
+import { AGENT_STATUS_RULE } from '../../../../../shared/orchestration/mailbox/agent-status-rule'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
@@ -179,15 +181,15 @@ export function structuredMailMessage(input: {
           reportItem: input.reportItem
         }).text
       : formatted.text
-    const noted = withConversationNote(guided, from, input)
+    // The reply rule is dropped first, so a long mail keeps the line saying where its answer goes.
+    const noted = withConversationNotes(guided, from, input, input.message.from_handle).find(
+      (blocks) => !structuredAgentSessionBlocksTooLarge(blocks)
+    )
     return {
       body: {
         kind: 'message',
         role: 'user',
-        blocks: [
-          ...(structuredAgentSessionBlocksTooLarge(noted) ? whole : noted),
-          ...botItemMailImageBlocks(input.message)
-        ],
+        blocks: [...(noted ?? whole), ...botItemMailImageBlocks(input.message)],
         from: {
           ...from,
           orchestration: {
@@ -217,8 +219,11 @@ export function structuredMailMessage(input: {
 }
 
 /** In a chat bound to a conversation, mail says where the bot's answer lands: there for its own
- *  workers' reports and other bots' answers to its asks, else Orca. */
-function withConversationNote(
+ *  workers' reports and other bots' answers to its asks, else Orca. Peer agent mail whose answer
+ *  stays in Orca also carries the agent status and mail rule; owner item mail and mail answered in a
+ *  thread never do, so a person's instruction never reads as "answer only if asked".
+ *  Returns the fullest note first, then one without the rule. */
+function withConversationNotes(
   text: string,
   from: ReturnType<typeof structuredMailSource>,
   {
@@ -227,15 +232,21 @@ function withConversationNote(
   }: {
     cliCommand: OrchestrationCliCommand
     conversationPlace?: (from: AgentMessageSource) => ChatMailPlace | null
-  }
-): { type: 'text'; text: string }[] {
+  },
+  sender: string
+): { type: 'text'; text: string }[][] {
   const bound = conversationPlace?.(from)
-  const note = !bound
+  const place = !bound
     ? null
     : bound.answersThere
       ? `[Orca: your final message and \`${cliCommand} bot reply\` (with any files) go to ${bound.place}.]`
       : `[Orca: this mail did not come from ${bound.place}, so your final message stays in Orca.]`
-  return [{ type: 'text', text: note ? `${text}\n\n${note}` : text }]
+  const placed = [{ type: 'text' as const, text: place ? `${text}\n\n${place}` : text }]
+  if (sender === BOT_ITEM_MAIL_SENDER || bound?.answersThere) {
+    return [placed]
+  }
+  const rule = `[Agent mail. ${AGENT_STATUS_RULE}]`
+  return [[{ type: 'text', text: `${text}\n\n${place ? `${rule}\n${place}` : rule}` }], placed]
 }
 
 /** The worker this mail was recorded from when it was written. */
