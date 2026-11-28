@@ -1,7 +1,7 @@
 // An ask of several questions, all on one card: a quick reply, or the box's Enter on the line its
-// "Replying to" names, picks the line's answer and sends nothing (a picked line reopened is open to
-// it too, its Enter replacing the pick); Send posts the picks as one
-// comment, so the agent wakes once. Picks are held on this device
+// "Replying to" names, picks the line's answer (a picked line reopened is open to it too, its Enter
+// replacing the pick); the pick that fills the last open line posts them all as one comment, as
+// chat's question card submits on its last answer, and Send posts a partial set, so the agent wakes once. Picks are held on this device
 // (the comment box's draft store, so a reload keeps them) until the host has the comment: one the host
 // refused for a newer question stays to recover. A held answer keeps the files and skills it was
 // sent with (src/shared/bots/bot-item-held-answers). Box words with no line named post at once and
@@ -202,13 +202,21 @@ export function useBotItemQuestionSteps(
     skipped?: readonly number[]
   ): void =>
     send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
+  // Held until the last open line has an answer: then every answer goes, the held copy kept to recover.
+  const holdOrSend = (index: number, answer: BotItemHeldAnswer): void => {
+    hold(stored(index, answer))
+    const next = picks.map((pick, at) => (at === index ? answer : pick))
+    if (lines.every((at) => next[at])) {
+      post(botItemHeldAnswersComment(shape, next))
+    }
+  }
   const pick = useLatestHandler((index: number, words: string) => {
     if (lines.includes(index)) {
       if (index === reopened) {
         setReopenedAt(null)
       }
       if (!botItemHeldAnswerIsReply(held[index], words)) {
-        hold(stored(index, botItemHeldAnswer(words)))
+        holdOrSend(index, botItemHeldAnswer(words))
       }
     }
   })
@@ -279,9 +287,9 @@ export function useBotItemQuestionSteps(
       }
       target.release()
       if (answering) {
-        // Words, files and skills alike wait like a pick: the line folds to them, the box names the
-        // next open line, and Send posts them with the rest.
-        hold(stored(line, answer))
+        // Words, files and skills alike count as a pick: the line folds to them and the box names the
+        // next open line, or, on the last open line, they all go.
+        holdOrSend(line, answer)
         setReopenedAt(null)
       } else if (picks.some(Boolean)) {
         // The picks name their lines; the words ride along answering none.
