@@ -26,7 +26,7 @@ export function TaskPageListBands({
   const { closeTaskPage, taskSourceAvailabilityNotice, taskSourceContextSummary } = model
   const { taskSource, taskSourceRepoContexts, accountBackedTaskSourceHostId } = model
   const showContext =
-    taskSource === 'github' || taskSource === 'gitlab'
+    taskSource === 'github' || taskSource === 'gitlab' || taskSource === 'gitea'
       ? taskSourceRepoContexts.some(({ hostId }) => hostId !== 'local')
       : accountBackedTaskSourceHostId !== 'local'
   return (

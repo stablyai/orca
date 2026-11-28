@@ -1,3 +1,4 @@
+import { RailPageScroll } from '@/components/rail-page/RailPage'
 import { ArrowRight, ExternalLink } from 'lucide-react'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -22,9 +23,9 @@ export function TaskPageGiteaItemList({
   const intlLocale = useIntlLocale()
   const { giteaItems, giteaLoading, giteaError, displayedGiteaItems, selectedRepos } = model
   return (
-    <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
+    <div className="flex min-h-0 max-h-full flex-col overflow-hidden bg-background">
       <div
-        className={`flex-none grid ${COLUMNS} gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground`}
+        className={`flex-none grid ${COLUMNS} gap-3 border-b border-border/50 rail-page-row-gutter py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground`}
       >
         <span>{t('auto.components.TaskPage.eb10c32872', 'ID')}</span>
         <span>{t('auto.components.TaskPage.16cba35bee', 'Title')}</span>
@@ -32,10 +33,7 @@ export function TaskPageGiteaItemList({
         <span>{t('auto.components.TaskPage.f362667d55', 'Updated')}</span>
         <span />
       </div>
-      <div
-        className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
-        style={{ scrollbarGutter: 'stable' }}
-      >
+      <RailPageScroll className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek">
         {giteaError ? (
           <div className="border-b border-border px-4 py-4 text-sm text-destructive">
             {giteaError}
@@ -45,7 +43,7 @@ export function TaskPageGiteaItemList({
           // Fill the viewport with shimmer rows to prevent a loading height jump.
           <div className="divide-y divide-border/50">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className={`grid w-full gap-3 px-3 py-2 ${COLUMNS}`}>
+              <div key={i} className={`grid w-full gap-3 rail-page-row-gutter py-2 ${COLUMNS}`}>
                 <div className="h-4 w-16 animate-pulse rounded bg-muted/70" />
                 <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
                 <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
@@ -89,7 +87,7 @@ export function TaskPageGiteaItemList({
                   onOpen(item)
                 }
               }}
-              className={`grid w-full cursor-pointer gap-3 px-3 py-2 text-left ${COLUMNS} hover:bg-muted/50`}
+              className={`grid w-full cursor-pointer gap-3 rail-page-row-gutter py-2 text-left ${COLUMNS} hover:bg-muted/50`}
             >
               <span className="font-mono text-xs text-muted-foreground">#{item.number}</span>
               <span className="flex min-w-0 items-center gap-2">
@@ -159,7 +157,7 @@ export function TaskPageGiteaItemList({
             </div>
           ))}
         </div>
-      </div>
+      </RailPageScroll>
     </div>
   )
 }
