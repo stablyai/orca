@@ -1,5 +1,8 @@
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
-import { restateKeptCodexBackgroundWork } from '../threads/codex-kept-turn-ordinals'
+import {
+  restateKeptCodexBackgroundWork,
+  settleKeptCodexHelperTurns
+} from '../threads/codex-kept-turn-ordinals'
 import { openKeptCodexState, type KeptCodexSnapshot } from '../threads/codex-kept-snapshot'
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
@@ -257,6 +260,10 @@ export async function openCodexStructuredSession(
   }
   current()
   sessions.set(sessionId, session)
+  // Before the frames buffered since the open: those helper ends came first.
+  if (rebuilt && translator) {
+    settleKeptCodexHelperTurns(translator, sessionId, opened.threadId, keptTurns)
+  }
   for (const event of attempt.window.drain()) {
     event()
   }

@@ -97,8 +97,8 @@ export class CodexKeptServers {
         { chatKey: relay.info.chatKey, attach: relay }
       )
     )
-    // Started under an older launch (an updated Codex): it serves the chats it kept, no new ones.
-    server.draining = key !== spec.key
+    // Filed under its own launch's key: a fresh run of another launch (an updated Codex) never
+    // finds it, while one of the same launch does, whatever this opener's key came out as.
     this.placements.set(server, { relayId: run.relayId, daemon: run.daemon })
     return server
   }

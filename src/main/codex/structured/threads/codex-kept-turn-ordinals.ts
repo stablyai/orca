@@ -186,3 +186,30 @@ function endedLately(
 ): boolean {
   return typeof completedAt !== 'number' || typeof since !== 'number' || completedAt >= since
 }
+
+/**
+ * A shared server's chat rebuilds its own thread from Codex, not its helpers': a helper turn that
+ * ended while no app was attached gets its end here, as a kept agent's replay would give it, so its
+ * rows and card don't stay running.
+ */
+export function settleKeptCodexHelperTurns(
+  translator: Pick<CodexJournalTranslator, 'handle' | 'flush'>,
+  sessionId: string,
+  primaryThreadId: string,
+  turns: readonly KeptCodexTurn[]
+): void {
+  for (const { threadId, turnId, status, items, completedAt } of turns) {
+    if (threadId === primaryThreadId || status === null || status === 'inProgress') {
+      continue
+    }
+    const notify = (method: string, params: Record<string, unknown>) =>
+      translator.handle({ type: 'notification', sessionId, threadId, method, params })
+    notify('turn/started', { threadId, turn: { id: turnId, status: 'inProgress' } })
+    for (const item of items) {
+      notify('item/completed', { threadId, turnId, item })
+    }
+    const ended = typeof completedAt === 'number' ? { completedAt } : {}
+    notify('turn/completed', { threadId, turn: { id: turnId, status, items: [], ...ended } })
+  }
+  translator.flush()
+}
