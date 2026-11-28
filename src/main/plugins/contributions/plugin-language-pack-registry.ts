@@ -24,8 +24,10 @@ type EnglishSource = { translatablePaths: ReadonlySet<string>; lookup: EnglishSo
 let englishSource: Promise<EnglishSource> | null = null
 
 // Why lazy: the English catalog is ~1 MB and only matters once a language pack loads.
+// Why ?full: this bundle subsets locales/*.json to keys main names. Coverage must
+// count the whole catalog, or a pack that translates the UI is scored on the menu subset.
 function loadEnglishSource(): Promise<EnglishSource> {
-  englishSource ??= import('../../../renderer/src/i18n/locales/en.json').then((module) => ({
+  englishSource ??= import('../../../renderer/src/i18n/locales/en.json?full').then((module) => ({
     translatablePaths: translatableCatalogPaths(module.default),
     lookup: englishSourceLookup(module.default)
   }))
