@@ -1,4 +1,6 @@
+import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
+  AgentJournalItemBody,
   AgentJournalRowAttribution,
   AgentJournalStatusItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -9,12 +11,13 @@ import {
   type CodexJournalTranslationAdmission
 } from './codex-structured-journal-contracts'
 
-/** A frame row to write; a terminal error row also says when its frame was received and hears
- *  whether a person's Stop dropped it. */
+/** A frame row to write. A terminal error row also says when its frame was received; `ifAbsent`:
+ *  it repeats an error an earlier row of its turn reported, so it is written only where that row
+ *  is missing (a person's Stop dropped it). */
 export type CodexFrameRow = {
   body: AgentJournalStatusItem
   observedAt?: number
-  onDecided?: (stopped: boolean) => void
+  ifAbsent?: true
 }
 
 export type CodexFrameRowPlace = {
@@ -26,6 +29,9 @@ export type CodexFrameRowPlace = {
   stopTurnId?: (providerTurnId: string) => string
   receivedAt: number
 }
+
+/** The person's Stop a failure row is checked against: its journal turn, and when it failed. */
+export type CodexFailureStop = { turnId: string; endedAt: number }
 
 export function defaultCodexFrameSchedule(run: () => void, ms: number): () => void {
   const timer = setTimeout(run, ms)
@@ -47,12 +53,48 @@ export function codexTerminalTurnId(
   return body.failure && body.failure.kind !== 'providerRetrying' ? frameTurnId : null
 }
 
-/** Writes a Codex frame's row. A terminal error row is the Stop's to drop when a person's Stop of
- *  its journal turn caused it, judged at the frame's receipt time, the time its turn's end uses. */
+function appendRow(
+  sink: StructuredAgentSessionEventSink,
+  identity: AgentJournalItemIdentity,
+  body: AgentJournalItemBody,
+  options: AgentJournalRowAttribution
+): CodexJournalTranslationAdmission {
+  return sink.tryAppendItem
+    ? sink.tryAppendItem(identity, body, options)
+    : (sink.appendItem(identity, body, options), CODEX_JOURNAL_ADMITTED)
+}
+
+/** A row reporting a turn's failure, decided once, by the writer at its position: dropped when a
+ *  person's Stop of that turn caused the failure (personStopDecidesFailure), and with `ifAbsent`
+ *  also where a row with its identity already shows. Everything it needs is fixed now. */
+export function writeCodexFailureRow(
+  sink: StructuredAgentSessionEventSink,
+  identity: AgentJournalItemIdentity,
+  body: AgentJournalItemBody,
+  options: AgentJournalRowAttribution,
+  stop: CodexFailureStop,
+  ifAbsent?: true
+): CodexJournalTranslationAdmission {
+  if (!sink.tryReviseResolvedItem) {
+    // A sink that can't decide at its writer keeps the earlier row, as before.
+    return ifAbsent ? CODEX_JOURNAL_ADMITTED : appendRow(sink, identity, body, options)
+  }
+  const ran = ifAbsent
+    ? { kind: 'literal-if-absent' as const, identity, body }
+    : { kind: 'literal' as const, identity, body }
+  return sink.tryReviseResolvedItem(
+    estimateStructuredAgentSessionItemBytes(identity, body),
+    { kind: 'stop-decided', failure: true, ...stop, ran, stopped: null },
+    options
+  )
+}
+
+/** Writes a Codex frame's row; a terminal error row is a failure row of its journal turn, judged at
+ *  the frame's receipt time, the time its turn's end uses. */
 export function writeCodexFrameRow(
   sink: StructuredAgentSessionEventSink,
   attribution: AgentJournalRowAttribution,
-  { body, observedAt, onDecided }: CodexFrameRow,
+  { body, observedAt, ifAbsent }: CodexFrameRow,
   place: CodexFrameRowPlace
 ): CodexJournalTranslationAdmission {
   const terminalTurnId = codexTerminalTurnId(body, place.frameTurnId)
@@ -62,26 +104,12 @@ export function writeCodexFrameRow(
       ? `terminal-failure:codex:${JSON.stringify([place.threadId, terminalTurnId])}`
       : `provider-frame:codex:${place.fallbackKey}`
   }
-  if (terminalTurnId && sink.tryReviseResolvedItem) {
-    return sink.tryReviseResolvedItem(
-      estimateStructuredAgentSessionItemBytes(identity, body),
-      {
-        kind: 'stop-decided',
-        failure: true,
-        turnId: place.stopTurnId?.(terminalTurnId) ?? terminalTurnId,
-        endedAt: observedAt ?? place.receivedAt,
-        ran: { kind: 'literal', identity, body },
-        stopped: null
-      },
-      attribution,
-      (outcome) => onDecided?.(outcome.stopped === true)
-    )
+  if (!terminalTurnId) {
+    return appendRow(sink, identity, body, attribution)
   }
-  const admission = sink.tryAppendItem
-    ? sink.tryAppendItem(identity, body, attribution)
-    : (sink.appendItem(identity, body, attribution), CODEX_JOURNAL_ADMITTED)
-  if (admission.accepted) {
-    onDecided?.(false)
+  const stop = {
+    turnId: place.stopTurnId?.(terminalTurnId) ?? terminalTurnId,
+    endedAt: observedAt ?? place.receivedAt
   }
-  return admission
+  return writeCodexFailureRow(sink, identity, body, attribution, stop, ifAbsent)
 }

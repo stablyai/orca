@@ -12,6 +12,49 @@ import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agen
 import { structuredCompactionOutcome } from '../../../native-chat/agent-session-wire/operations/structured-conversation-command-outcome'
 import { readCodexJournalRecord } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { writeCodexFailureRow, type CodexFailureStop } from './codex-frame-row-write'
+import {
+  CODEX_JOURNAL_ADMITTED,
+  type CodexJournalTranslationAdmission
+} from './codex-structured-journal-contracts'
+
+/** A carried command's end: its own failure row, if any, apart from the rows that settle it. */
+export type CodexCommandEnd = {
+  failure: {
+    row: JournalLifecycleIdentityMutationInput & { kind: 'item' }
+    stop: CodexFailureStop
+  } | null
+  mutations: JournalLifecycleIdentityMutationInput[]
+}
+
+/** A command's failure row, decided by the writer like Codex's own error rows, ahead of the batch
+ *  that settles the command; a sink that can't decide at its writer gets it in that batch. */
+export function writeCodexCommandFailure(
+  sink: StructuredAgentSessionEventSink,
+  end: CodexCommandEnd
+): {
+  admission: CodexJournalTranslationAdmission
+  mutations: JournalLifecycleIdentityMutationInput[]
+} {
+  if (!end.failure) {
+    return { admission: CODEX_JOURNAL_ADMITTED, mutations: end.mutations }
+  }
+  const { row, stop } = end.failure
+  if (!sink.tryReviseResolvedItem) {
+    return { admission: CODEX_JOURNAL_ADMITTED, mutations: [row, ...end.mutations] }
+  }
+  return {
+    admission: writeCodexFailureRow(
+      sink,
+      row.identity,
+      row.body,
+      { turnScope: row.turnScope },
+      stop
+    ),
+    mutations: end.mutations
+  }
+}
 
 type CarriedCommand = {
   command: StructuredAgentSessionCommandRun
@@ -89,10 +132,10 @@ export class CodexJournalCommandTurn {
       error: string | null
       completedAt: number
     }
-  ): JournalLifecycleIdentityMutationInput[] {
+  ): CodexCommandEnd {
     const carried = this.carried.get(providerTurnId)
     if (!carried) {
-      return []
+      return { failure: null, mutations: [] }
     }
     const { command } = carried
     const detail = ended.error === null ? undefined : providerDiagnostic(ended.error, 'person')
@@ -102,11 +145,11 @@ export class CodexJournalCommandTurn {
       failed: ended.status !== 'completed' || detail ? (detail ? { detail } : {}) : null
     })
     const turnScope = { kind: 'turn' as const, turnItemId: agentJournalItemKey(command.identity) }
-    return [
-      // Successful compaction already has Codex's marker; do not add a second status row.
-      ...(verdict.failure && !carried.failureShown
-        ? [
-            {
+    // Successful compaction already has Codex's marker; do not add a second status row.
+    const failure =
+      verdict.failure && !carried.failureShown
+        ? {
+            row: {
               kind: 'item' as const,
               identity: command.resultIdentity,
               body: {
@@ -118,9 +161,11 @@ export class CodexJournalCommandTurn {
                 tone: 'error' as const
               },
               turnScope
-            }
-          ]
-        : []),
+            },
+            stop: { turnId: command.turnId, endedAt: ended.completedAt }
+          }
+        : null
+    const mutations: JournalLifecycleIdentityMutationInput[] = [
       {
         kind: 'item',
         identity: command.identity,
@@ -134,6 +179,7 @@ export class CodexJournalCommandTurn {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }
     ]
+    return { failure, mutations }
   }
 
   // Suppress duplicate failure rows after Codex's own terminal error frame.

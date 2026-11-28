@@ -1,19 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalStopEvent } from '../../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
-import { STOP_DECIDES_FAILURE_MS } from '../../../native-chat/agent-session-journal/context-epochs/journal-stop-turn-end'
 import {
   errorRows,
   openStopJournal
 } from '../../../native-chat/agent-session-journal/journal-stop-writer.test-fixture'
+import { codexAcquisitionNotificationHandler } from '../acquisition/codex-structured-acquisition-notification'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
-// Codex's error rows for a failed turn, through the real translator into the real journal writer,
-// against the Stop that writer saved: as the chat shows them.
+// Codex's error rows for a failed turn, as the chat shows them: each frame enters through the real
+// notification handler, which stamps its receipt, then the real translator and the real journal
+// writer, against the Stop that writer saved.
 const NOW = 1_800_000_000_000
+// The Stop's window, written out: the production constant doesn't exist before the fix.
+const WINDOW_MS = 30_000
 const TURN = 'provider-turn'
 const THREAD = 'thread-1'
 const ERROR = { message: 'stream disconnected before completion' }
+const TERMINAL_ROW = agentJournalItemKey({
+  provider: 'orca',
+  clientMessageId: `terminal-failure:codex:${JSON.stringify([THREAD, TURN])}`
+})
 let journal: ReturnType<typeof openStopJournal> | null = null
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
@@ -24,6 +32,7 @@ afterEach(() => {
 
 /** A running Codex turn. `deferred`: the writer resolves writes only when drained. */
 function codexTurn(options: { deferred?: boolean; command?: true } = {}) {
+  journal?.close()
   journal = openStopJournal({ deferred: options.deferred })
   const chat = journal
   const translator = createCodexJournalTranslator({
@@ -41,34 +50,58 @@ function codexTurn(options: { deferred?: boolean; command?: true } = {}) {
       running: { kind: 'turn', turnId: 'command-turn', state: 'running', startedAt: NOW - 60_000 }
     })
   }
-  // `processedAt`: when the translator handles the frame, which a busy host makes later than its receipt.
-  const send = (method: string, params: object, observedAt: number, processedAt = observedAt) => {
+  let receivedAt = NOW
+  const delivered: (() => unknown)[] = []
+  const receive = codexAcquisitionNotificationHandler({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these frames read no acquisition settings.
+    acquisition: {} as never,
+    sessionId: 'chat-1',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these two members.
+    dispatchEchoes: { latestSequence: () => 0, observeStatus: () => {} } as never,
+    primaryThreadId: () => THREAD,
+    notificationRetries: {
+      handle: (sessionId: string, method: string, params: unknown, observedAt?: number) =>
+        translator.handle({
+          type: 'notification',
+          sessionId,
+          threadId: THREAD,
+          method,
+          params,
+          ...(observedAt === undefined ? {} : { observedAt })
+        })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler calls only handle.
+    } as never,
+    deliver: (_acquisition, _sessionId, event) => {
+      delivered.push(event)
+    },
+    now: () => receivedAt
+  })
+  // Received at `at`; the translator gets to it at `processedAt`, which a busy host makes later.
+  const send = (method: string, params: object, at: number, processedAt = at) => {
+    receivedAt = at
+    receive(method, { threadId: THREAD, ...params })
     vi.setSystemTime(processedAt)
-    translator.handle({
-      type: 'notification',
-      sessionId: 'chat-1',
-      threadId: THREAD,
-      method,
-      params: { threadId: THREAD, ...params },
-      observedAt
-    })
+    return delivered.splice(0).map((event) => event())
   }
   send('turn/started', { turn: { id: TURN } }, NOW - 60_000)
   chat.drain()
+  const stopTurn = options.command ? 'command-turn' : TURN
   return {
-    stop: (reason: JournalStopEvent['reason'], turnId = options.command ? 'command-turn' : TURN) =>
-      chat.stop(reason, NOW, turnId),
+    stop: (reason: JournalStopEvent['reason'], turnId = stopTurn) => chat.stop(reason, NOW, turnId),
     notice: (at: number, processedAt?: number) =>
       send('error', { turnId: TURN, willRetry: false, error: ERROR }, at, processedAt),
-    failed: (at: number) =>
-      send('turn/completed', { turn: { id: TURN, status: 'failed', error: ERROR } }, at),
+    failed: (at: number, turn: object = { id: TURN }) =>
+      send('turn/completed', { turn: { ...turn, status: 'failed', error: ERROR } }, at),
+    completed: (at: number) =>
+      send('turn/completed', { turn: { id: TURN, status: 'completed' } }, at),
+    reject: chat.reject,
     drain: () => chat.drain(),
     errors: () => errorRows(chat.items()),
-    outcome: () =>
+    outcome: (turnId = stopTurn) =>
       chat
         .items()
         .map((item) => readAgentJournalTurn(item.body))
-        .find((turn) => turn?.turnId === TURN)?.outcome
+        .find((turn) => turn?.turnId === turnId)?.outcome
   }
 }
 
@@ -81,12 +114,15 @@ describe('a person stops a Codex turn that Codex then reports as failed', () => 
     expect(turn.outcome()).toBe('cancellation')
   })
 
-  it('shows none for its error notice and completion', () => {
-    const turn = codexTurn()
-    turn.stop('user-stop')
-    turn.notice(NOW + 1_000)
-    turn.failed(NOW + 1_500)
-    expect(turn.errors()).toEqual([])
+  it('shows none for its error notice and completion, on either writer', () => {
+    for (const deferred of [false, true]) {
+      const turn = codexTurn({ deferred })
+      turn.stop('user-stop')
+      turn.notice(NOW + 29_000)
+      turn.failed(NOW + 29_500)
+      turn.drain()
+      expect(turn.errors()).toEqual([])
+    }
   })
 
   it('shows none when the person closed the chat on it', () => {
@@ -96,43 +132,44 @@ describe('a person stops a Codex turn that Codex then reports as failed', () => 
     expect(turn.errors()).toEqual([])
   })
 
-  it('judges the row by when Codex sent it, not when Orca got to it', () => {
+  it('judges the error notice by when the handler received it, not when Orca got to it', () => {
     const turn = codexTurn()
     turn.stop('user-stop')
-    turn.notice(NOW + STOP_DECIDES_FAILURE_MS - 1_000, NOW + STOP_DECIDES_FAILURE_MS + 10_000)
+    turn.notice(NOW + WINDOW_MS - 1_000, NOW + WINDOW_MS + 10_000)
     expect(turn.errors()).toEqual([])
   })
 
   it('drops it at the Stop itself and at the window’s far edge', () => {
-    for (const at of [NOW, NOW + STOP_DECIDES_FAILURE_MS]) {
+    for (const at of [NOW, NOW + WINDOW_MS]) {
       const turn = codexTurn()
       turn.stop('user-stop')
       turn.notice(at)
       expect(turn.errors()).toEqual([])
-      journal?.close()
-      journal = null
     }
   })
 
-  it('shows none for a stopped command turn', () => {
-    const turn = codexTurn({ command: true })
-    turn.stop('user-stop')
-    turn.notice(NOW + 2_000)
-    expect(turn.errors()).toEqual([])
+  it('shows none for a stopped command turn, on either writer', () => {
+    for (const deferred of [false, true]) {
+      const turn = codexTurn({ deferred, command: true })
+      turn.stop('user-stop')
+      turn.notice(NOW + 2_000)
+      turn.failed(NOW + 2_500)
+      turn.drain()
+      expect(turn.errors()).toEqual([])
+    }
   })
 
-  it('waits on the writer, then shows none when the completion is in the window too', () => {
-    const turn = codexTurn({ deferred: true })
+  it('shows no failure row for a stopped compaction Codex ended without a marker', () => {
+    const turn = codexTurn({ command: true })
     turn.stop('user-stop')
-    turn.notice(NOW + 29_000)
-    turn.failed(NOW + 29_500)
-    turn.drain()
+    turn.completed(NOW + 2_000)
     expect(turn.errors()).toEqual([])
+    expect(turn.outcome()).toBe('cancellation')
   })
 })
 
 describe('a real Codex failure keeps exactly one error row', () => {
-  it('with no Stop, notice and completion alike', () => {
+  it('with no Stop, notice and completion alike, on either writer', () => {
     for (const deferred of [false, true]) {
       const turn = codexTurn({ deferred })
       turn.notice(NOW)
@@ -140,15 +177,13 @@ describe('a real Codex failure keeps exactly one error row', () => {
       turn.drain()
       expect(turn.errors()).toHaveLength(1)
       expect(turn.outcome()).toBe('failure')
-      journal?.close()
-      journal = null
     }
   })
 
   it('one millisecond past the window', () => {
     const turn = codexTurn()
     turn.stop('user-stop')
-    turn.notice(NOW + STOP_DECIDES_FAILURE_MS + 1)
+    turn.notice(NOW + WINDOW_MS + 1)
     expect(turn.errors()).toHaveLength(1)
   })
 
@@ -161,13 +196,23 @@ describe('a real Codex failure keeps exactly one error row', () => {
       turn.drain()
       expect(turn.errors()).toHaveLength(1)
       expect(turn.outcome()).toBe('failure')
-      journal?.close()
-      journal = null
     }
   })
 
+  it('when that completion names no turn and the writer resolves it after the turn ended', () => {
+    const turn = codexTurn({ deferred: true })
+    turn.stop('user-stop')
+    turn.notice(NOW + 29_000)
+    turn.failed(NOW + 31_000, {})
+    turn.drain()
+    // The turn's own terminal row, in the turn: what the frame named when it arrived.
+    expect(turn.errors().map((row) => [row.itemId, row.turnScope?.kind])).toEqual([
+      [TERMINAL_ROW, 'turn']
+    ])
+  })
+
   it('when it failed before the Stop, even though the turn then reads stopped', () => {
-    // The notice is a real error from before the Stop, so its row stays.
+    // The error notice came before the Stop, so it is a real error and its row stays.
     const turn = codexTurn()
     turn.notice(NOW - 1_000)
     turn.stop('user-stop')
@@ -189,8 +234,27 @@ describe('a real Codex failure keeps exactly one error row', () => {
       turn.stop(reason)
       turn.failed(NOW + 1_000)
       expect(turn.errors()).toHaveLength(1)
-      journal?.close()
-      journal = null
     }
+  })
+
+  it('for a compaction Codex ended without a marker and no Stop', () => {
+    const turn = codexTurn({ command: true })
+    turn.completed(NOW + 2_000)
+    expect(turn.errors()).toHaveLength(1)
+    expect(turn.outcome()).toBe('failure')
+  })
+})
+
+describe('a failed completion the writer refuses', () => {
+  it('returns the refusal, so the frame is retried rather than its row lost', () => {
+    const turn = codexTurn()
+    turn.stop('user-stop')
+    turn.notice(NOW + 29_000)
+    turn.reject(true)
+    const [admission] = turn.failed(NOW + 31_000)
+    expect(admission).toMatchObject({ accepted: false })
+    turn.reject(false)
+    turn.failed(NOW + 31_000)
+    expect(turn.errors()).toHaveLength(1)
   })
 })

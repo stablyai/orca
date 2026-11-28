@@ -35,7 +35,10 @@ import {
   readCodexTurnStatus
 } from '../../app-server/codex-structured-thread-facts'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
-import type { CodexJournalCommandTurn } from './codex-journal-command-turn'
+import {
+  writeCodexCommandFailure,
+  type CodexJournalCommandTurn
+} from './codex-journal-command-turn'
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import { recordCodexCommandTurnClaim } from '../turns/codex-command-turn-claim'
 
@@ -196,11 +199,17 @@ export class CodexJournalTurnBoundaries {
     }
     const status = readCodexTurnStatus(event.params)
     const completedAt = this.receiptTime(event)
-    const commandEnd = this.deps.commands.end(turnId, {
-      status,
-      error: readString(readRecord(readRecord(readRecord(event.params).turn).error), 'message'),
-      completedAt
-    })
+    const commandEnd = writeCodexCommandFailure(
+      this.deps.sink,
+      this.deps.commands.end(turnId, {
+        status,
+        error: readString(readRecord(readRecord(readRecord(event.params).turn).error), 'message'),
+        completedAt
+      })
+    )
+    if (!commandEnd.admission.accepted) {
+      return commandEnd.admission
+    }
     // Stop settles an unstarted send; do not invent a turn record without observed work.
     const ranNothing =
       status === 'interrupted' &&
@@ -236,7 +245,7 @@ export class CodexJournalTurnBoundaries {
       pendingPrompts: this.deps.pendingPrompts,
       ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {}),
       attributionFor: this.deps.attributionFor,
-      commandEnd
+      commandEnd: commandEnd.mutations
     })
     if (admission.accepted) {
       if (turnLifecycle) {

@@ -23,21 +23,9 @@ import type { CodexFrameRow } from './codex-frame-row-write'
 
 type ErrorInfo = { error: string; status?: number }
 type TerminalSignature = { code?: string; message?: string; status?: number }
-/** Whether a terminal frame's row was shown: the writer decides, and may drop it for a person's
- *  Stop. `whenStopped`: a repeat of it that waits on that decision. */
-type TerminalDecision = { state: 'pending' | 'shown' | 'stopped'; whenStopped?: () => void }
 type FailureEvidence =
   | { phase: 'retry'; info: ErrorInfo; text: string }
-  | { phase: 'terminal'; signature: TerminalSignature; decision: TerminalDecision }
-
-function settleDecision(decision: TerminalDecision, stopped: boolean): void {
-  decision.state = stopped ? 'stopped' : 'shown'
-  const repeat = decision.whenStopped
-  decision.whenStopped = undefined
-  if (stopped) {
-    repeat?.()
-  }
-}
+  | { phase: 'terminal'; signature: TerminalSignature }
 
 function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex')
@@ -98,7 +86,7 @@ export class CodexTurnFailures {
     payload: unknown,
     errorPayload: unknown,
     threadId: string,
-    observedAt = this.deps.receivedAt?.()
+    ifAbsent?: true
   ): CodexJournalTranslationAdmission {
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload, undefined, {
       reportsFailure: true
@@ -107,7 +95,6 @@ export class CodexTurnFailures {
       return CODEX_JOURNAL_ADMITTED
     }
     const failure = this.failure(errorPayload, threadId, this.deps.account?.())
-    const decision: TerminalDecision = { state: 'pending' }
     const admission = this.deps.append(threadId, payload, {
       ...translated,
       body: {
@@ -119,15 +106,14 @@ export class CodexTurnFailures {
           surface: 'row'
         })
       },
-      ...(observedAt === undefined ? {} : { observedAt }),
-      onDecided: (stopped) => settleDecision(decision, stopped)
+      ...this.receipt(),
+      ...(ifAbsent ? { ifAbsent } : {})
     })
     if (admission.accepted) {
       this.admittedTerminal(
         errorPayload,
         threadId,
-        readCodexTurnId(payload) ?? this.deps.activeTurn(threadId),
-        decision
+        readCodexTurnId(payload) ?? this.deps.activeTurn(threadId)
       )
     }
     return admission
@@ -145,24 +131,15 @@ export class CodexTurnFailures {
       return CODEX_JOURNAL_ADMITTED
     }
     const errorPayload = { turnId, error: turn.error, willRetry: false }
-    const observedAt = this.deps.receivedAt?.()
-    const write = () =>
-      this.appendTerminal(
-        'notification:turn/completed',
-        payload,
-        errorPayload,
-        threadId,
-        observedAt
-      )
-    // The same error's earlier row stands for this one only once shown; one a person's Stop dropped
-    // leaves this end to be decided at its own receipt time.
-    const repeated = this.repeatedTerminal(errorPayload, threadId, turnId)
-    let admission: CodexJournalTranslationAdmission = CODEX_JOURNAL_ADMITTED
-    if (!repeated || repeated.state === 'stopped') {
-      admission = write()
-    } else if (repeated.state === 'pending') {
-      repeated.whenStopped = () => void write()
-    }
+    // A repeat of the error an earlier row of this turn reported adds no row, except where a
+    // person's Stop dropped that row: the writer decides, at this end's own receipt time.
+    const admission = this.appendTerminal(
+      'notification:turn/completed',
+      payload,
+      errorPayload,
+      threadId,
+      this.repeatsTerminal(errorPayload, threadId, turnId) ? true : undefined
+    )
     if (admission.accepted) {
       onShown(turnId)
     }
@@ -237,34 +214,29 @@ export class CodexTurnFailures {
     }
   }
 
-  /** The decision on the same error's earlier row in this turn, if one was written. */
-  private repeatedTerminal(
-    payload: unknown,
-    threadId: string,
-    turnId: string
-  ): TerminalDecision | null {
+  private receipt(): { observedAt?: number } {
+    const observedAt = this.deps.receivedAt?.()
+    return observedAt === undefined ? {} : { observedAt }
+  }
+
+  private repeatsTerminal(payload: unknown, threadId: string, turnId: string): boolean {
     const key = scopeKey(threadId, turnId)
     const previous = key ? this.evidence.get(key) : undefined
     if (previous?.phase !== 'terminal') {
-      return null
+      return false
     }
     const next = terminalSignature(payload)
-    return (next.code === undefined || next.code === previous.signature.code) &&
+    return (
+      (next.code === undefined || next.code === previous.signature.code) &&
       (next.message === undefined || next.message === previous.signature.message) &&
       (next.status === undefined || next.status === previous.signature.status)
-      ? previous.decision
-      : null
+    )
   }
 
-  private admittedTerminal(
-    payload: unknown,
-    threadId: string,
-    turnId: string | null,
-    decision: TerminalDecision
-  ): void {
+  private admittedTerminal(payload: unknown, threadId: string, turnId: string | null): void {
     const key = scopeKey(threadId, turnId)
     if (key) {
-      this.remember(key, { phase: 'terminal', signature: terminalSignature(payload), decision })
+      this.remember(key, { phase: 'terminal', signature: terminalSignature(payload) })
     }
   }
 
