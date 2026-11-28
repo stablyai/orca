@@ -1,4 +1,5 @@
 const LOG_INTERVAL_MS = 30_000
+const MAX_TRACKED_PARTITIONS = 256
 const lastLogByPartition = new Map<string, { at: number; suppressed: number }>()
 
 /** Traces a host frame that drops any of a worktree's terminal tabs, at most once per partition per interval. */
@@ -19,6 +20,17 @@ export function logHostTerminalTabsShrunk(
   if (last && now - last.at < LOG_INTERVAL_MS) {
     last.suppressed += 1
     return
+  }
+  for (const [entryKey, entry] of lastLogByPartition) {
+    if (now - entry.at >= LOG_INTERVAL_MS) {
+      lastLogByPartition.delete(entryKey)
+    }
+  }
+  if (lastLogByPartition.size >= MAX_TRACKED_PARTITIONS) {
+    const oldestKey = lastLogByPartition.keys().next().value
+    if (oldestKey !== undefined) {
+      lastLogByPartition.delete(oldestKey)
+    }
   }
   lastLogByPartition.set(key, { at: now, suppressed: 0 })
   console.info(
