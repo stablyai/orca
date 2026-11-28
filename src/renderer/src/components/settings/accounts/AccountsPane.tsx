@@ -355,13 +355,13 @@ export function AccountsPane({
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
     ) : null,
-    !searchQuery || /opencode|account/i.test(searchQuery) ? (
+    !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <ManagedDataAccountsSection key={accountOwnerKey} provider="opencode" target={accountOwner} />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model, t)
       : null,
-    !searchQuery || /devin|account/i.test(searchQuery) ? (
+    !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <ManagedDataAccountsSection
         key={`devin:${accountOwnerKey}`}
         provider="devin"
