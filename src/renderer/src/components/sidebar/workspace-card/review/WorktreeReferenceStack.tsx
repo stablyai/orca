@@ -17,6 +17,7 @@ import { workspaceAttachmentReferenceLabel } from '../../../../../../shared/work
 import { cn } from '@/lib/class-names'
 import { WorktreeCardReferencePeekContext } from '../details/worktree-card-reference-peek-context'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { peekScrollTarget } from './reference-peek-scroll-keys'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import '../activity/worktree-card-empty-inputs'
@@ -114,7 +115,6 @@ const PEEK_CARD_INSET = 8
 const PEEK_MAX_WIDTH = 300
 // Deeply nested cards get too narrow to read; the peek then extends left past the card.
 const PEEK_MIN_WIDTH = 176
-const PEEK_SCROLL_STEP = 28
 
 type PeekGeometry = { width: number; alignOffset: number }
 
@@ -363,12 +363,12 @@ function ReferencePeek({
           ref={triggerRef}
           onKeyDown={(event) => {
             const list = listRef.current
-            const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
-            if (list && step && list.scrollHeight > list.clientHeight) {
-              // Why: arrows scroll the open peek instead of moving sidebar focus.
+            const top = list ? peekScrollTarget(list, event) : undefined
+            if (list && top !== undefined && list.scrollHeight > list.clientHeight) {
+              // Why: scroll keys move the open peek instead of sidebar focus.
               event.preventDefault()
               event.stopPropagation()
-              list.scrollBy({ top: step * PEEK_SCROLL_STEP })
+              list.scrollTo({ top })
             }
           }}
           role="img"

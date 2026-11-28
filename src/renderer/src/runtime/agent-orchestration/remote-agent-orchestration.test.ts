@@ -8,7 +8,7 @@ import {
   publicRuntimeEnvironment
 } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import {
-  structuredAgentSessionPaneKey,
+  chatPaneKey,
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -29,8 +29,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc }))
 
 const ENVIRONMENT = 'wsl-ubuntu'
 const HOST = toRuntimeExecutionHostId(ENVIRONMENT)
-const paneKeyOf = (sessionId: string) =>
-  structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
+const paneKeyOf = chatPaneKey
 const ASSISTANT = paneKeyOf('assistant')
 const ORCHESTRATOR = paneKeyOf('orchestrator')
 const WORKER = paneKeyOf('worker')

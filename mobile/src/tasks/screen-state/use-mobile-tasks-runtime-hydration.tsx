@@ -325,9 +325,10 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     setProvider(resolveVisibleTaskProvider(provider, visibleProviders))
   }, [provider, visibleProviders])
 
-  return Object.assign(model, {
+  return {
+    ...model,
     retryTasksHydration: () => setHydrationAttempt((attempt) => attempt + 1)
-  })
+  }
 }
 
 export type RuntimeHydrationModel = ReturnType<typeof useMobileTasksRuntimeHydration>

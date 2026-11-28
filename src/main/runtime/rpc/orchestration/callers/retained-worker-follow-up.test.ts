@@ -283,6 +283,8 @@ describe('follow-up custody for retained worker chats', () => {
   })
 
   it('moves the only owned row before publishing or delivering the same saved conversation', async () => {
+    h.records.get(SESSION_X)!.permissionMode = 'ask'
+    h.records.get(SESSION_Y)!.permissionMode = 'full-access'
     const resource = h.db.getWorkerTerminalResourceByOwner(owner.id)
     const receipt = resultOf(await send())
     expect(receipt).toMatchObject({ runId, delivery: 'reopened', followUpOf: owner.id })
@@ -301,6 +303,7 @@ describe('follow-up custody for retained worker chats', () => {
     expect(observedStages).toEqual(['retained_chat_before_brief', 'dispatch_input'])
     expect(h.db.getWorkerTerminalResourceFormerlyOwnedBy(owner.id)?.id).toBe(resource?.id)
     expect(deliveredTo).toEqual([{ sessionId: SESSION_Y, expectedRuntimeFence: 7 }])
+    expect(h.records.get(SESSION_Y)?.permissionMode).toBe('full-access')
     expect(h.db.getDispatchContextById(newOwner)).toMatchObject({
       assignee_handle: handle,
       assignee_orca_session_id: SESSION_Y,

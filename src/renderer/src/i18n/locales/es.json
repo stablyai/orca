@@ -1121,7 +1121,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost se refiere al equipo de este bot.",
           "headers": "Encabezados",
-          "authHint": "Si el servidor requiere iniciar sesión en el navegador, aparecerá Conectar después de su comprobación nativa.",
+          "authHint": "Si el servidor requiere iniciar sesión en el navegador, aparecerá «Iniciar sesión» después de su comprobación nativa.",
           "executable": "Ejecutable",
           "commandPlaceholder": "npx",
           "args": "Argumentos",
@@ -5448,9 +5448,8 @@
             "84c3b15dca": "Límites de uso de agentes",
             "d663430cf9": "Configurar seguimiento de uso",
             "remoteLabel": "Sin uso en {{host}}",
-            "remoteTitle": "Uso en {{host}}",
-            "remoteBody": "Este espacio de trabajo se ejecuta en {{host}}, por lo que la barra muestra el uso de ese host. Inicia sesión en un agente allí o enfoca un espacio de trabajo local para ver el uso de este equipo.",
-            "remoteOpenAccounts": "Abrir cuentas de {{host}}"
+            "remoteNoUsageYet": "Aún no hay uso. Inicia sesión allí.",
+            "remoteAccounts": "Cuentas"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "La actualización falló. Haz clic para expandir.",
@@ -15250,7 +15249,10 @@
             "operationResolve": "Resolver",
             "operationResolveLabel": "Resolver conflictos con IA",
             "operationMoreActions": "Más acciones",
-            "operationAbortConfirm": "Vuelve a seleccionar para abortar"
+            "operationAbortConfirm": "Vuelve a seleccionar para abortar",
+            "operationRunChangedTitle": "No se abortó nada",
+            "operationRunChangedDescription": "La operación cambió después de elegir Abortar. Revisa su estado actual e inténtalo de nuevo.",
+            "operationRunUnknown": "No se puede saber qué ejecución está en pausa, así que Abortar no está disponible aquí. Actualiza el control de código fuente o abórtala en una terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -23420,6 +23422,9 @@
           "always": "Siempre",
           "never": "Nunca"
         }
+      },
+      "advanced": {
+        "localOnlyNotice": "Ajustes de compatibilidad de bajo nivel para solucionar problemas. Estos ajustes se guardan en este equipo, no en {{host}}."
       },
       "repositoryHooks": {
         "availableEnvVars": "Variables de entorno disponibles"

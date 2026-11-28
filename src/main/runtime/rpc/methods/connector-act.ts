@@ -91,6 +91,12 @@ export function actFailure(
         `Orca Cloud didn't answer, so the ${verb === 'post' ? 'post' : 'file'} may have gone. Read ${ref ?? (verb === 'reply' ? 'the thread that woke you' : 'the place')} before trying again.`
       )
     }
+    if (verb === 'canvas' || verb === 'list') {
+      return new ConnectorActError(
+        'connector_post_unknown',
+        `Orca Cloud didn't answer, so the ${verb} may have been created. Check ${ref ?? 'the channel'} before trying again.`
+      )
+    }
     return new ConnectorActError(
       'connector_unavailable',
       verb === 'edit' || verb === 'delete'
@@ -241,7 +247,8 @@ export async function actAsBot(
   }
   const toSlack = actionGoesToSlack({ verb, ref, title: args.title, conversation })
   // Only a post into the thread the chat answers is its own answer; one elsewhere is other work,
-  // and a file staged for a later post isn't a post yet.
+  // and a staged file or scheduled post hasn't posted yet.
+  const scheduled = verb === 'post' && args.postAt !== undefined
   const intoThread = connectorActionIntoThread({ verb, args, ref, conversation })
   const refused = intoThread
     ? connectorPostAttempts.attempted(chatPaneKey(sessionId), args.postId, target?.key.externalId)
@@ -273,7 +280,7 @@ export async function actAsBot(
       botName: bot.name
     })
   }
-  if (verb === 'post' && answer.value.ok) {
+  if (verb === 'post' && !scheduled && answer.value.ok) {
     // Before the bot's next command, so a reply right after it knows the answer is already posted.
     await noteBotRequestPost(runtime, sessionId, ref).catch((error: unknown) =>
       console.warn('[bots] could not note a post for a bot request', error)

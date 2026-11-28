@@ -1688,7 +1688,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "可串流 HTTP · localhost 指的是這個機器人所在的電腦。",
           "headers": "標頭",
-          "authHint": "如果伺服器需要透過瀏覽器登入，原生檢查完成後會顯示「連線」。",
+          "authHint": "如果伺服器需要透過瀏覽器登入，原生檢查完成後會顯示「登入」。",
           "executable": "執行檔",
           "commandPlaceholder": "npx",
           "args": "引數",
@@ -6061,9 +6061,8 @@
             "84c3b15dca": "代理程式用量限制",
             "d663430cf9": "設定用量追蹤",
             "remoteLabel": "{{host}} 上沒有用量資料",
-            "remoteTitle": "{{host}} 上的用量",
-            "remoteBody": "此工作區在 {{host}} 上執行，因此狀態列會顯示該主機的用量。請在該主機上登入代理程式，或切換至本機工作區以查看這台電腦的用量。",
-            "remoteOpenAccounts": "開啟 {{host}} 的帳戶"
+            "remoteNoUsageYet": "尚無用量。請在該主機上登入。",
+            "remoteAccounts": "帳戶"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "正在更新技能",
@@ -15625,7 +15624,10 @@
             "operationResolve": "解決",
             "operationResolveLabel": "用 AI 解決衝突",
             "operationMoreActions": "更多操作",
-            "operationAbortConfirm": "再次選取以中止"
+            "operationAbortConfirm": "再次選取以中止",
+            "operationRunChangedTitle": "沒有中止任何操作",
+            "operationRunChangedDescription": "選擇中止後，操作已變更。請檢查目前狀態後再試一次。",
+            "operationRunUnknown": "無法判斷哪一次執行已暫停，因此這裡無法中止。請重新整理原始碼控制，或在終端機中中止。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",
@@ -23614,6 +23616,9 @@
           "always": "一律",
           "never": "永不"
         }
+      },
+      "advanced": {
+        "localOnlyNotice": "用於故障排除的低階相容性設定。這些設定儲存在這台電腦上，而非 {{host}}。"
       },
       "repositoryHooks": {
         "availableEnvVars": "可用的環境變數"

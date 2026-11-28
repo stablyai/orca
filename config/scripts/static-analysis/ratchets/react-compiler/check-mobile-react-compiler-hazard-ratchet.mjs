@@ -353,6 +353,112 @@ function discardedMobileHooks(sf) {
   return count
 }
 
+function pascalFunctionNames(sf) {
+  const names = new Set()
+  const visit = (node) => {
+    if (ts.isFunctionDeclaration(node) && node.name && /^[A-Z]/.test(node.name.text)) {
+      names.add(node.name.text)
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      /^[A-Z]/.test(node.name.text) &&
+      node.initializer &&
+      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+    ) {
+      names.add(node.name.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return names
+}
+
+// A component whose only output is another component's call has no JSX of its own.
+function pascalOwner(node) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (ts.isFunctionDeclaration(current)) {
+      return current.name && /^[A-Z]/.test(current.name.text) ? current : null
+    }
+    if (ts.isFunctionExpression(current) || ts.isArrowFunction(current)) {
+      return null
+    }
+  }
+  return null
+}
+
+// A component called as a plain function during render runs its hooks in the caller, and the
+// compiler memoizes the call like any value: a cache hit skips those hooks (React error #300).
+function componentCallsDuringRender(sf, components) {
+  let count = 0
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      components.has(node.expression.text) &&
+      !isShadowed(node.expression, node.expression.text)
+    ) {
+      const owner = owningReactFunction(node) ?? pascalOwner(node)
+      if (owner !== null && evaluatesDuringRender(node, owner)) {
+        count += 1
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return count
+}
+
+function parameterNames(name) {
+  if (ts.isIdentifier(name)) {
+    return [name.text]
+  }
+  // A rest element (...props) is a fresh object, so writing to it mutates nothing passed in.
+  return name.elements.flatMap((element) =>
+    ts.isOmittedExpression(element) || element.dotDotDotToken ? [] : parameterNames(element.name)
+  )
+}
+
+// The nearest function whose own parameter binds `name`, so an inner helper's parameter of the same name is not the hook's.
+function parameterBinder(node, name) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (
+      (ts.isFunctionDeclaration(current) ||
+        ts.isFunctionExpression(current) ||
+        ts.isArrowFunction(current)) &&
+      current.parameters.some((param) => parameterNames(param.name).includes(name))
+    ) {
+      return current
+    }
+  }
+  return null
+}
+
+// The compiler treats props and hook arguments as immutable: writing into one keeps its identity
+// while its contents change, so memos keyed on it serve stale values. Return a new object instead.
+function mutatedReactParams(sf) {
+  let count = 0
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'Object' &&
+      node.expression.name.text === 'assign' &&
+      node.arguments.length > 1 &&
+      ts.isIdentifier(node.arguments[0])
+    ) {
+      const owner = owningReactFunction(node)
+      if (owner !== null && parameterBinder(node, node.arguments[0].text) === owner) {
+        count += 1
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return count
+}
+
 export function collectMobileReactCompilerHazards(root = process.cwd()) {
   const parsed = [...readTrackedSources(root, SCAN_ROOTS, isScannedMobilePath)].map(
     ([rel, text]) => ({ rel, sf: parseSource(rel, text) })
@@ -374,6 +480,7 @@ export function collectMobileReactCompilerHazards(root = process.cwd()) {
       }
     }
   }
+  const components = new Set(parsed.flatMap(({ sf }) => [...pascalFunctionNames(sf)]))
   const counts = new Map()
   for (const { rel, sf } of parsed) {
     const calls = liveCalls(sf, liveNames.get(rel))
@@ -385,6 +492,9 @@ export function collectMobileReactCompilerHazards(root = process.cwd()) {
       liveGetters(calls).size +
       unreadMemoDeps(sf) +
       discardedMobileHooks(sf) +
+      componentCallsDuringRender(sf, components) +
+      // Test harnesses assemble their own fixture models; the app never runs them.
+      (rel.includes('/test-support/') ? 0 : mutatedReactParams(sf)) +
       findSourceHazards(rel, sf.text).length
     if (count > 0) {
       counts.set(rel, count)
@@ -400,12 +510,14 @@ export function main(root = process.cwd(), arg = undefined) {
       baselinePath: BASELINE_PATH,
       header: HEADER,
       collect: collectMobileReactCompilerHazards,
-      unit: 'React Compiler hazard(s): render-path theme/language reads or unread memo deps',
+      unit: 'React Compiler hazard(s): render-path theme/language reads, unread memo deps, components called as functions in render, or Object.assign onto a prop or hook argument',
       fix: [
         'Read the hook in the component and pass it down: useMobileColors() for colors,',
         'useThemedStyles(sheet) for styles, useMobileTranslation() for t, useMobileUiLocale()',
         'for the locale, useMobileColorScheme() for the scheme. A memo dep the callback never',
-        'reads: recomputeOn([dep], () => ...) from mobile/src/hooks/recompute-on.'
+        'reads: recomputeOn([dep], () => ...) from mobile/src/hooks/recompute-on.',
+        'A component called as a function: render it as JSX (<Component {...props} />).',
+        'A mutated prop or hook argument (Object.assign(model, ...)): return { ...model, ... }.'
       ]
     },
     root,

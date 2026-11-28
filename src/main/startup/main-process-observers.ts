@@ -18,13 +18,11 @@ import {
   startDesktopPresenceReporter
 } from '../notifications/desktop-presence-reporter'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
-import { startWslHostAgentAwake } from '../ipc/wsl/wsl-host-agent-awake-wiring'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
 import { initObservability } from '../observability/index'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
-import { trackUnrecoveredStallImport } from '../hang-watchdog/previous-unrecovered-stall-import'
 import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { mainProcessState as state } from './main-process-state'
@@ -80,11 +78,27 @@ export function initializeMainProcessObservers(store: Store): void {
   // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
   const unsubscribeHookStatus = bindAgentAwakeToHookStatus(agentHookServer, state.agentAwakeService)
-  // WSL-host agents never reach the hook server; their host's own stream reports them.
-  const stopWslHostAgentAwake = startWslHostAgentAwake(state.agentAwakeService)
+  // WSL-host agents never reach the hook server; their host's own stream reports them on Windows.
+  let stopWslHostAgentAwake: (() => void) | null = null
+  let wslAwakeDisposed = false
+  if (process.platform === 'win32') {
+    const awakeService = state.agentAwakeService
+    void import('../ipc/wsl/wsl-host-agent-awake-wiring')
+      .then(({ startWslHostAgentAwake }) => {
+        if (wslAwakeDisposed) {
+          return
+        }
+        stopWslHostAgentAwake = startWslHostAgentAwake(awakeService)
+      })
+      .catch((error: unknown) =>
+        console.warn('[power] Could not load WSL host agent-awake wiring:', error)
+      )
+  }
   state.unsubscribeAgentAwakeStatusChanges = () => {
+    wslAwakeDisposed = true
     unsubscribeHookStatus()
-    stopWslHostAgentAwake()
+    stopWslHostAgentAwake?.()
+    stopWslHostAgentAwake = null
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
   // Load the SDK after first paint (#35752); headless serve and GPU failures never show a window.
@@ -123,18 +137,24 @@ export function initializeMainProcessObservers(store: Store): void {
   const { unrecoveredStall } = previousHang
   if (unrecoveredStall && state.crashReports) {
     const store = state.crashReports
-    trackUnrecoveredStallImport(
-      import('../hang-watchdog/unrecovered-stall-report')
-        .then(async ({ importUnrecoveredStallReport }) =>
-          (await importUnrecoveredStallReport(store, unrecoveredStall))
-            ? unrecoveredStall.detectedAt
-            : null
+    void import('../hang-watchdog/previous-unrecovered-stall-import')
+      .then(({ trackUnrecoveredStallImport }) => {
+        trackUnrecoveredStallImport(
+          import('../hang-watchdog/unrecovered-stall-report')
+            .then(async ({ importUnrecoveredStallReport }) =>
+              (await importUnrecoveredStallReport(store, unrecoveredStall))
+                ? unrecoveredStall.detectedAt
+                : null
+            )
+            .catch((error) => {
+              console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
+              return null
+            })
         )
-        .catch((error) => {
-          console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
-          return null
-        })
-    )
+      })
+      .catch((error) => {
+        console.warn('[hang-watchdog] Failed to load unrecovered stall tracker:', error)
+      })
   }
   if (state.hangDetection) {
     const marker = state.hangDetection

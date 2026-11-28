@@ -95,7 +95,7 @@ export function pruneStaleVirtualRowElementCache<TElement extends Element>({
   activeRowKeys,
   virtualizer
 }: {
-  activeRowKeys: ReadonlySet<string>
+  activeRowKeys: Pick<ReadonlySet<string>, 'has'>
   virtualizer: VirtualRowElementCache<TElement>
 }): void {
   virtualizer.measureElement(null)

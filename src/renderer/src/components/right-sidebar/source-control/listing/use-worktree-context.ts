@@ -97,6 +97,10 @@ export function useSourceControlWorktreeContext() {
   const rebaseIndexObservation = useSourceControlState((s) =>
     activeWorktreeId ? (s.gitRebaseIndexObservationByWorktree?.[activeWorktreeId] ?? null) : null
   )
+  // Null (a current host couldn't read it) and undefined (an older host) mean different things.
+  const operationRunIdentity = useSourceControlState((s) =>
+    activeWorktreeId ? s.gitOperationRunIdentityByWorktree?.[activeWorktreeId] : undefined
+  )
   // Distinguishes an unborn HEAD (status read, no head) from status not read yet.
   const gitStatusLoaded = useSourceControlState((s) =>
     activeWorktreeId ? s.gitStatusByWorktree[activeWorktreeId] !== undefined : false
@@ -236,6 +240,7 @@ export function useSourceControlWorktreeContext() {
     activeConnectionId,
     activeGitStatusHead,
     rebaseIndexObservation,
+    operationRunIdentity,
     gitStatusLoaded,
     activeGroupId,
     activePrCacheKey,
