@@ -16,9 +16,17 @@ import { useMobileSessionSidebar } from './tabs/use-mobile-session-sidebar'
 import { SidebarPageDragContext } from './tabs/sidebar-page-drag'
 import { useMobileSessionTabSummaryChannel } from './tabs/use-mobile-session-tab-summaries'
 import { useSessionRouteRequest } from './use-session-route-request'
+import { useReleasedSideInset } from '../layout/released-side-inset'
+import { sideStripPadding } from './session-side-strip-inset'
+import { DuoRailBackButton } from './DuoRailBackButton'
+import { useSessionRailBack } from './use-duo-rail-back'
+import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
+import { DuoRailJumpHost, DuoRailJumpOverlay } from './duo-rail-jump-controls'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   const styles = useThemedStyles(stylesSheet)
+  const releasedStrip = useReleasedSideInset()
+  const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const { setMobileSessionRootRef } = controller
   const layout = useResponsiveLayout()
   const { itemsOnPhone, openBotPanel, openNativeSession, worktreeId, sessionTabs } = controller
@@ -74,43 +82,56 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       ),
     [homeChatId, sessionTabs, activeSessionTabId, switchSessionTab, openNativeSession, worktreeId]
   )
+  const onRailBack = useSessionRailBack(() => {
+    controller.requestLeaveSession()
+  })
   return (
-    <View ref={setMobileSessionRootRef} style={styles.container}>
-      <MobileSessionSidebarStage
-        sidebar={sidebar}
-        cardLabel={controller.activeSessionTab?.title || controller.worktreeName}
-        panel={
-          <MobileSessionSidebar
-            controller={controller}
-            sidebar={sidebar}
-            summaries={summaries}
-            place={controller.terminalSummary}
-            connectionIssue={connectionIssue}
-          />
-        }
-      >
-        <View style={styles.kavInner}>
-          <MobileSessionHeader
-            controller={controller}
-            homeChatId={homeChatId ?? null}
-            summaries={summaries}
-            sidebar={sidebar}
-            connectionIssue={connectionIssue}
-          />
-          <MobileWorkerAutoCloseStrip controller={controller} />
-          {/* A chat's item chips open the item's page in the bot panel. */}
-          <BotItemOpenContext.Provider value={openItem}>
-            <BotChatOpenContext.Provider value={openChat}>
-              <BotPanelOpenContext.Provider value={panelOpener}>
-                <SidebarPageDragContext.Provider value={sidebar.pageDrag}>
-                  <MobileSessionContentRow controller={controller} />
-                </SidebarPageDragContext.Provider>
-              </BotPanelOpenContext.Provider>
-            </BotChatOpenContext.Provider>
-          </BotItemOpenContext.Provider>
-        </View>
-      </MobileSessionSidebarStage>
-      <MobileSessionSheets controller={controller} />
-    </View>
+    <DuoRailJumpHost chatVisible={controller.showNativeChat} keyboardInset={keyboardInset}>
+      <View ref={setMobileSessionRootRef} style={styles.container}>
+        <MobileSessionSidebarStage
+          sidebar={sidebar}
+          cardLabel={controller.activeSessionTab?.title || controller.worktreeName}
+          panel={
+            <MobileSessionSidebar
+              controller={controller}
+              sidebar={sidebar}
+              summaries={summaries}
+              place={controller.terminalSummary}
+              connectionIssue={connectionIssue}
+            />
+          }
+        >
+          <View style={styles.kavInner}>
+            <MobileSessionHeader
+              controller={controller}
+              homeChatId={homeChatId ?? null}
+              summaries={summaries}
+              sidebar={sidebar}
+              connectionIssue={connectionIssue}
+            />
+            <View style={sideStripPadding(releasedStrip)}>
+              <MobileWorkerAutoCloseStrip controller={controller} />
+            </View>
+            {/* A chat's item chips open the item's page in the bot panel. */}
+            <BotItemOpenContext.Provider value={openItem}>
+              <BotChatOpenContext.Provider value={openChat}>
+                <BotPanelOpenContext.Provider value={panelOpener}>
+                  <SidebarPageDragContext.Provider value={sidebar.pageDrag}>
+                    <MobileSessionContentRow controller={controller} />
+                  </SidebarPageDragContext.Provider>
+                </BotPanelOpenContext.Provider>
+              </BotChatOpenContext.Provider>
+            </BotItemOpenContext.Provider>
+          </View>
+        </MobileSessionSidebarStage>
+        <DuoRailBackButton
+          chatVisible={controller.showNativeChat}
+          keyboardInset={keyboardInset}
+          onBack={onRailBack}
+        />
+        <DuoRailJumpOverlay />
+        <MobileSessionSheets controller={controller} />
+      </View>
+    </DuoRailJumpHost>
   )
 }

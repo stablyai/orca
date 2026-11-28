@@ -29,6 +29,7 @@ import {
   createPageDeviceStore,
   publishPageDeviceStore
 } from '../src/mobile-web-shell/bridge/page-storage/page-device-store'
+import { applyStoredDuoChatExpanded, DUO_CHAT_EXPANDED_KEY } from '../src/session/duo-chat-width'
 import {
   RouteScreenPaintProvider,
   createRouteScreenPaintReporter
@@ -227,6 +228,7 @@ bootstrapShellPage({
       const current = client.getShellSession()
       if (current !== null) {
         refreshPageTerminalSettings(current.storage, current.storageOversize)
+        applyStoredDuoChatExpanded(current.storage[DUO_CHAT_EXPANDED_KEY] ?? null)
       }
     })
     const bootRoutes = preloadBootRoutes(route.pathname)

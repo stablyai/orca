@@ -26,6 +26,8 @@ type NavBarButtonProps = {
   /** The screen or panel this button opens is showing. */
   active?: boolean
   disabled?: boolean
+  /** Drawn size. The header stays at 36; a Duo rail control passes the 44pt target. */
+  size?: number
   /** The icon's colour while not active, e.g. a PR state's. */
   iconColor?: string
   /** A count on the button's corner, e.g. items that need you; nothing at 0. */
@@ -40,6 +42,7 @@ export function NavBarButton({
   onPress,
   active = false,
   disabled = false,
+  size = NAV_BAR_BUTTON_SIZE,
   iconColor,
   badge
 }: NavBarButtonProps) {
@@ -51,6 +54,7 @@ export function NavBarButton({
       ref={ref}
       style={({ pressed }) => [
         styles.button,
+        { width: size, height: size },
         onSheet && styles.onSheet,
         active && styles.active,
         pressed && styles.pressed,
@@ -58,13 +62,13 @@ export function NavBarButton({
       ]}
       onPress={onPress}
       disabled={disabled}
-      hitSlop={4}
+      hitSlop={size >= 44 ? 0 : 4}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled, selected: active }}
     >
       <Icon
-        size={18}
+        size={size / 2}
         color={active ? colors.bgBase : (iconColor ?? colors.textPrimary)}
         strokeWidth={2.1}
       />

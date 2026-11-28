@@ -27,7 +27,7 @@ import { useNativeImageActions } from '../platform/image-actions/native-image-ac
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
-import { useShellPageBack } from './routing/use-shell-page-back'
+import { useShellPageBack, useShellSideRelease } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
 import { usePageOpenTarget } from './routing/page-open-target'
@@ -320,6 +320,7 @@ export function MobileWebShellScreen({
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)
+  useShellSideRelease(overlay, routeGrants, bridge.publishStorage)
   useEffect(() => bridge.publishRoute(pageRoute), [bridge.publishRoute, pageRoute])
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
