@@ -2,11 +2,13 @@ import React from 'react'
 import { useAppStore } from '../../../store'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { getTightestUsageSection, usedSections } from '../usage/usage-headline-sections'
 import { getUsageRosterRowState } from '../usage/usage-roster-row-state'
 import { isClaudeUsageWaitingForClaude } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { formatUsagePercentageLabel } from '../usage/usage-percentage-label'
+import { formatLocalizedResetDuration, formatResetsInCaption } from '../usage/usage-reset-caption'
+import { useResetCountdownClock } from '../usage/useResetCountdownClock'
 import { UsageBar, UsageValue } from '../usage/usage-meter'
 
 export function useNotCheckedDescription(): string {
@@ -85,6 +87,76 @@ export function AccountUsageGauge({
         display={display}
         className="w-9 text-right text-xs font-medium"
       />
+    </div>
+  )
+}
+
+/**
+ * Every primary window with its own bar, percentage and reset countdown — the account list's
+ * multi-window view, restoring what the tightest-gauge collapsed to one line (#43594).
+ * Falls back to the tightest gauge for states with no readable windows (not-checked, sign-in).
+ */
+export function AccountUsageWindowsGauge({
+  limits,
+  isFetching
+}: {
+  limits: ProviderRateLimits
+  isFetching: boolean
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const display = normalizeUsagePercentageDisplay(
+    useAppStore((state) => state.usagePercentageDisplay)
+  )
+  const sections = usedSections(limits, t)
+  // Why: one boundary-scheduled clock re-renders this gauge the moment a reset label goes stale,
+  // instead of leaving an expired countdown on screen until an unrelated update (#43673 review).
+  // Called before the early return so hook order stays stable.
+  const now = useResetCountdownClock(sections.map((section) => section.window.resetsAt))
+  if (sections.length === 0) {
+    return <AccountUsageGauge limits={limits} isFetching={isFetching} />
+  }
+  return (
+    <div
+      className={`flex flex-col items-end gap-0.5 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
+    >
+      {sections.map((section) => {
+        const resetLabel = formatLocalizedResetDuration(section.window.resetsAt, now, intlLocale)
+        // Why: role="img" makes descendants presentational, so the countdown must live in the
+        // label itself or screen readers never announce it (#43673 review).
+        // Mirror only the visible countdown: past the reset the slot is empty, and a caption on
+        // its own would keep announcing "resets now" with the clock no longer scheduling.
+        const resetCaption = resetLabel
+          ? formatResetsInCaption(section.window.resetsAt, now, intlLocale, t)
+          : null
+        const usageLabel = `${section.label} ${formatUsagePercentageLabel(section.window.usedPercent, display, t)}`
+        return (
+          <div
+            key={section.label}
+            role="img"
+            aria-label={resetCaption ? `${usageLabel}, ${resetCaption}` : usageLabel}
+            className="flex items-center justify-end gap-1.5"
+          >
+            <span className="text-3xs text-muted-foreground">{section.label}</span>
+            <UsageBar
+              usedPercent={section.window.usedPercent}
+              display={display}
+              tone="health"
+              className="h-[5px] w-[24px] shrink-0"
+            />
+            <UsageValue
+              usedPercent={section.window.usedPercent}
+              display={display}
+              className="w-9 text-right text-xs font-medium"
+            />
+            {/* Why: the fixed-width slot always renders, so a window without a reset time
+                keeps its bar and percentage aligned with windows that have countdowns. */}
+            <span className="w-[46px] text-right text-3xs text-muted-foreground">
+              {resetLabel ?? ''}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
