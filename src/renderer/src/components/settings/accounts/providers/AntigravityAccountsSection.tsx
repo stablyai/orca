@@ -3,7 +3,7 @@ import { Loader2, RefreshCw } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
-import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
+import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityAccountState,
@@ -11,10 +11,7 @@ import type {
 } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
-import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { AntigravityChatAuthRows } from '../../../provider-accounts/AntigravityChatAuthRows'
-import { antigravityChatSignInBlocked } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useAntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
@@ -26,6 +23,7 @@ import {
   AntigravityAgyAccountRows,
   type AntigravityAccountAction
 } from './AntigravityAgyAccountRows'
+import { AntigravityAgyCliRow } from './AntigravityAgyCliRow'
 
 export function AntigravityAccountsSection({
   owner,
@@ -50,16 +48,29 @@ export function AntigravityAccountsSection({
   const wslDistro = target.wslDistro ?? null
   // Chats run on the host itself, never in a WSL distro.
   const chats = runtime !== 'wsl'
-  const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
-  // Install and Remove wait for a sign-in, which runs agy.
-  const chatSignIn = chats && chatRuntime.kind === 'active'
-  // Signing agy in runs on this host, never in a WSL distro, and needs agy installed.
+  const chatsHere = chats && !structuredChatUnavailableOnPlatform('antigravity', ownerPlatform)
+  // The host finds agy as its chats do; an older host doesn't say, so its agent list answers.
+  const hostSays = state === null || state.agyInstalled !== undefined
+  const agents = useDetectedAgents(
+    !chats || hostSays
+      ? undefined
+      : environmentId
+        ? { kind: 'runtime', environmentId }
+        : { kind: 'local' },
+    'all'
+  )
+  // The user installs agy; signing it in runs it, so that waits until the host finds it.
+  const agyInstalled = !chats
+    ? null
+    : hostSays
+      ? (state?.agyInstalled ?? null)
+      : (agents.detectedIds?.includes('antigravity') ?? null)
   const signIn = useAntigravityChatSignInControls({
     owner,
     label,
-    disabled: chatRuntime.kind !== 'active' || !chats || antigravityChatSignInBlocked(chatRuntime)
+    disabled: !chatsHere || agyInstalled !== true
   })
-  const signInControls = chatSignIn ? signIn : undefined
+  const signInControls = chatsHere && agyInstalled === true ? signIn : undefined
 
   useEffect(() => {
     mounted.current = true
@@ -128,33 +139,8 @@ export function AntigravityAccountsSection({
       {title}
     </span>
   )
-  const runtimeRow =
-    chats && chatRuntime.kind === 'active' ? (
-      <ManagedRuntimeInstallRow
-        observation={chatRuntime}
-        agentLabel={t('accounts.antigravity.title', 'Antigravity')}
-        signInRunning={antigravityChatSignInRunning(signIn.flow)}
-      >
-        {(line, actions) => (
-          <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{t('accounts.antigravity.runtime', 'Runtime')}</p>
-              <div className="mt-0.5">{line}</div>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">{actions}</div>
-          </div>
-        )}
-      </ManagedRuntimeInstallRow>
-    ) : null
-
   // A pick moves new chats between agy's own home and Orca's, which the description follows.
   const reread = () => void run('List', undefined, true)
-  // Installing or removing agy changes what its account rows can read.
-  const installKey =
-    chatRuntime.kind === 'active' && chatRuntime.snapshot.kind === 'known'
-      ? `${chatRuntime.snapshot.state.program}:${chatRuntime.snapshot.state.source}`
-      : null
-  useOnLaterChange(installKey, reread)
   // Signing in or adding an account changes agy's login, which the account rows read again.
   // 'idle' once the status is read is a first value, so the first sign-in after mount re-reads too.
   const signedInFlow = !signIn.known
@@ -206,9 +192,7 @@ export function AntigravityAccountsSection({
           </Tooltip>
         }
       >
-        {chats && chatRuntime.kind === 'active' ? (
-          <AntigravityChatAuthRows owner={owner} onSaved={reread} />
-        ) : null}
+        {chatsHere ? <AntigravityChatAuthRows owner={owner} onSaved={reread} /> : null}
         <AntigravityAgyAccountRows
           state={state}
           error={error}
@@ -217,11 +201,22 @@ export function AntigravityAccountsSection({
           run={(action, accountId) => void run(action, accountId)}
           {...(signInControls ? { signIn: signInControls } : {})}
         />
-        {runtimeRow}
+        {chats ? (
+          <AntigravityAgyCliRow
+            owner={owner}
+            installed={agyInstalled}
+            checking={busy || agents.isRefreshing}
+            onCheckAgain={() => {
+              // An older host answers from its agent list, which a re-list alone doesn't refresh.
+              if (!hostSays) {
+                void agents.refresh()
+              }
+              void run('List')
+            }}
+          />
+        ) : null}
       </SettingsGroup>
-      {chats &&
-      chatRuntime.kind !== 'active' &&
-      structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
+      {chats && !chatsHere ? (
         <ChatUnavailableOnWindowsNote label={t('accounts.antigravity.title', 'Antigravity')} />
       ) : null}
     </div>

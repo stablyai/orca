@@ -36,9 +36,13 @@ export type WorkspaceRowSortReader<Row> = {
   compareSmart: (a: Row, b: Row) => number
 }
 
+function compareDesc(a: number, b: number): number {
+  return a > b ? -1 : a < b ? 1 : 0
+}
+
 function compareManualRank(a: number | null, b: number | null): number {
   if (a !== null && b !== null) {
-    return b - a
+    return compareDesc(a, b)
   }
   if (a !== null) {
     return -1
@@ -54,18 +58,16 @@ export function buildWorkspaceRowComparator<Row>(
   const byLabel = (a: Row, b: Row): number =>
     compareText(read.label(a), read.label(b)) ||
     compareCodePoints(read.identity(a), read.identity(b))
-  return (a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return byLabel(a, b)
-      case 'smart':
-        return read.compareSmart(a, b) || byLabel(a, b)
-      case 'recent':
-        return read.recentActivity(b) - read.recentActivity(a) || byLabel(a, b)
-      case 'repo':
-        return compareText(read.repoLabel(a), read.repoLabel(b)) || byLabel(a, b)
-      case 'manual':
-        return compareManualRank(read.manualRank(a), read.manualRank(b)) || byLabel(a, b)
-    }
+  switch (sortBy) {
+    case 'name':
+      return byLabel
+    case 'smart':
+      return (a, b) => read.compareSmart(a, b) || byLabel(a, b)
+    case 'recent':
+      return (a, b) => compareDesc(read.recentActivity(a), read.recentActivity(b)) || byLabel(a, b)
+    case 'repo':
+      return (a, b) => compareText(read.repoLabel(a), read.repoLabel(b)) || byLabel(a, b)
+    case 'manual':
+      return (a, b) => compareManualRank(read.manualRank(a), read.manualRank(b)) || byLabel(a, b)
   }
 }

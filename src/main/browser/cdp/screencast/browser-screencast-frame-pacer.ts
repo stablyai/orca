@@ -64,7 +64,7 @@ export function createBrowserScreencastFramePacer(
         opcode: BrowserScreencastOpcode.Frame,
         seq: seq++,
         format: options.format,
-        metadata: { ...frame.metadata, zoomFactor: readZoomFactor() },
+        metadata: frame.metadata,
         image: frame.image
       })
     )
@@ -91,10 +91,15 @@ export function createBrowserScreencastFramePacer(
     }, BACKPRESSURE_RETRY_MS)
   }
 
-  const queueFrame = (frame: PendingScreencastFrame): void => {
+  const queueFrame = (rawFrame: PendingScreencastFrame): void => {
     if (isClosed() || isStopping()) {
       return
     }
+    // Stamp zoomFactor at capture/arrival time so throttled or retried frames never carry a later zoom.
+    const frame: PendingScreencastFrame =
+      rawFrame.metadata.zoomFactor !== undefined
+        ? rawFrame
+        : { ...rawFrame, metadata: { ...rawFrame.metadata, zoomFactor: readZoomFactor() } }
     const now = Date.now()
     const elapsed = now - lastFrameSentAt
     if (

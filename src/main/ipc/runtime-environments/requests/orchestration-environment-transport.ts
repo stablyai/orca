@@ -34,8 +34,24 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         (environment) => environment.id === environmentId
       ),
     // Loaded on first dial: the routing graph is large and most hosts never place remote workers.
-    call: async (selector, method, params, timeoutMs, envelope, expectedPairingRevision, send) =>
-      (await import('./runtime-environment-transport-routing')).callRuntimeEnvironment(
+    call: async (selector, method, params, timeoutMs, envelope, expectedPairingRevision, send) => {
+      if (send?.readyOnly) {
+        const environment = await resolveEnvironment(registryRoot(), selector)
+        const connection = getPreferredPairedRuntimeConnection(environment)
+        const { isRemoteRuntimeConnectionReady } =
+          await import('../connections/runtime-environment-request-connections')
+        if (!isRemoteRuntimeConnectionReady(environment.id, connection)) {
+          return {
+            id: '',
+            ok: false,
+            error: {
+              code: 'runtime_unavailable',
+              message: 'Paired server is not currently connected.'
+            }
+          }
+        }
+      }
+      return (await import('./runtime-environment-transport-routing')).callRuntimeEnvironment(
         registryRoot(),
         selector,
         method,
@@ -48,8 +64,12 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
           ...(send.prepareGuard ? { prepareGuard: send.prepareGuard } : {}),
           ...(send.expectedRuntimeId === undefined
             ? {}
-            : { expectedEnvironmentRuntimeId: send.expectedRuntimeId })
+            : { expectedEnvironmentRuntimeId: send.expectedRuntimeId }),
+          ...(send.readyOnly
+            ? { background: true, preparation: { wslStart: 'never' as const, background: true } }
+            : {})
         }
       )
+    }
   }
 }

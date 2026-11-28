@@ -11,7 +11,7 @@ import {
 import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import type { StructuredAgentSessionTurnCompletionListener } from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
 import {
-  structuredAgentSessionPaneKey,
+  chatPaneKey,
   structuredAgentSessionTabId
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
@@ -65,7 +65,7 @@ function mountWorker(executionHostId: ExecutionHostId): () => number | undefined
     executionHostId
   })
   const contexts = {
-    [structuredAgentSessionPaneKey(worker.id, worker.entityId)]: {
+    [chatPaneKey(worker.entityId)]: {
       taskId: 'task',
       dispatchId: 'dispatch',
       parentPaneKey: 'coordinator-pane'

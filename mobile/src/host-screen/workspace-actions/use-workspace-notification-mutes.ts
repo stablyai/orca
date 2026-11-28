@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
+  workspaceNotificationMuteSet,
   workspaceNotificationMutesRead,
   workspaceNotificationMutesWrite
 } from './workspace-row-menu-operations'
@@ -52,10 +53,25 @@ export function useWorkspaceNotificationMutes(args: {
       if (!client) {
         return
       }
-      // The write replaces the desktop's whole map, so it starts from a fresh read, not the menu's copy.
+      // Prefer the host's atomic per-worktree mute RPC so concurrent toggles on desktop are never overwritten.
       queueRef.current = queueRef.current
-        .then(() => readMutes(client))
-        .then(async (fresh) => {
+        .then(async () => {
+          const atomicReply = await workspaceNotificationMuteSet.request(client, {
+            worktreeId,
+            muted
+          })
+          const atomic = workspaceNotificationMuteSet.interpret(atomicReply)
+          if (atomic.accepted) {
+            if (atomic.value) {
+              setRead({ client, mutes: atomic.value })
+            }
+            return
+          }
+          // Fall back to read-modify-write only on older hosts without ui.setWorkspaceNotificationMuted.
+          if (atomicReply.ok || atomicReply.error.code !== 'method_not_found') {
+            return
+          }
+          const fresh = await readMutes(client)
           if (!fresh) {
             return
           }

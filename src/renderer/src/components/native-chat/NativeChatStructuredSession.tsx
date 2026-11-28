@@ -7,7 +7,6 @@ import { NativeChatUsageLimitActionsProvider } from './usage/NativeChatUsageLimi
 import { useNativeChatHandOff } from './pane/actions/use-native-chat-hand-off'
 import { useNativeChatStructuredPaneNotices } from '@/components/native-chat/messages/notices/use-native-chat-structured-pane-notices'
 import { useRef, useState } from 'react'
-import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './session/structured/use-structured-chat-live-session'
 import { NativeChatStructuredPromptCard } from './prompts/NativeChatStructuredPromptCard'
 import { NativeChatComposer } from './composer/NativeChatComposer'
@@ -74,6 +73,7 @@ import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   NativeChatWorkerChipHost,
   NativeChatWorkerChipSlot
@@ -90,7 +90,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
   // The host's own word on whether the provider child has answered startup yet.
   const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
-  const paneKey = structuredAgentSessionPaneKey(props.tabId, props.sessionId)
+  const paneKey = chatPaneKey(props.sessionId)
   // Chat-wide preference; an alternate send flips it for one message.
   const queueFollowUps = useAppStore((store) => nativeChatQueueFollowUps(store.settings))
   const composerRef = useRef<NativeChatComposerHandle>(null)
@@ -140,7 +140,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     )
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
-    needsFailureFacts || props.agent === 'claude'
+    needsFailureFacts || props.agent === 'claude',
+    controller.submissions
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
     pending: controller.pending,

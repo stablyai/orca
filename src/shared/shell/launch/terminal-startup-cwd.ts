@@ -1,9 +1,9 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating-workspace-id'
 import {
-  isWslUncPathForCallerLinuxPath,
   normalizeRuntimePathForComparison,
   resolveRuntimePath
 } from '../../file-access/cross-platform-path'
+import { isWslUncPathForCallerLinuxPath } from '../../file-access/wsl-path-aliases'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../worktree/id'

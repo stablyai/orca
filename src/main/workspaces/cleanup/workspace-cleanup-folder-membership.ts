@@ -28,20 +28,30 @@ export function summaryIdentity(summary: RuntimeWorktreePsSummary): string {
   return composeWorktreeHostIdentity(summaryHostId(summary) ?? undefined, summary.worktreeId)
 }
 
+const EMPTY_SIBLINGS: readonly string[] = []
+const EMPTY_HELD_FOLDERS: ReadonlySet<string> = new Set()
+
+export type FolderMembershipIndex = {
+  siblingsOf: (summary: RuntimeWorktreePsSummary) => readonly string[]
+  localFolderKeyOf: (summary: RuntimeWorktreePsSummary) => string | null
+  findPairedHeldFolders: (
+    candidateFolderKeys: ReadonlySet<string>,
+    readPairedFolderChildren: () => Promise<PairedFolderChildren>
+  ) => Promise<ReadonlySet<string>>
+}
+
 /** Each listed worktree's folder siblings by host identity: the others its folder workspace's Source
  * Control lists, attached worktrees and their lineage children alike, on any host. A bot's home is
  * not one piece of work, so its workspaces stay independent.
  *
  * A parent in another Orca store keeps that link only in the child's store, so each side sees half:
  * a child here whose parent is elsewhere may be in a folder there, so it is held (workers and bot
- * hand-overs aside), and this host's folders learn of children in paired servers' stores from
- * `readPairedFolderChildren`. A headless server can't reach the other servers its clients pair, so
- * children elsewhere of its own folders stay unseen. */
-export async function folderSiblingsByWorktree(
+ * hand-overs aside), and this host's folders learn of children in paired servers' stores lazily via
+ * `findPairedHeldFolders` only when a local folder actually has a removable member. */
+export function buildFolderMembership(
   store: RuntimeStore,
-  summaries: readonly RuntimeWorktreePsSummary[],
-  readPairedFolderChildren?: () => Promise<PairedFolderChildren>
-): Promise<(summary: RuntimeWorktreePsSummary) => string[]> {
+  summaries: readonly RuntimeWorktreePsSummary[]
+): FolderMembershipIndex {
   const botHomes = new Set(
     (store.getBots?.() ?? []).map((bot) => folderWorkspaceKey(bot.folderWorkspaceId))
   )
@@ -123,41 +133,54 @@ export async function folderSiblingsByWorktree(
       join(folderKey, composeWorktreeHostIdentity(undefined, worktreeId))
     }
   }
-  const localFolders = [...membersByFolder.keys()].filter((key) => key.startsWith('folder:'))
   for (const key of membersByFolder.keys()) {
     if (!key.startsWith('folder:')) {
       // The folder's other members are in its own store, which this host can't read.
       join(key, `?|${key}`)
     }
   }
-  if (localFolders.length > 0 && readPairedFolderChildren) {
-    const paired = await readPairedFolderChildren()
-    // A renamed or moved parent keeps its instance, while the child's ref keeps its old key.
-    const byInstance = new Map(rows.map((row) => [row.worktreeInstanceId, row]))
-    for (const { identity, parentWorkspaceKey, parentInstanceId } of paired.children) {
-      const parent = parseWorkspaceKey(parentWorkspaceKey)
-      const parentRow = byInstance.get(parentInstanceId)
-      const folderKey =
-        parent?.type !== 'worktree'
-          ? parentWorkspaceKey
-          : parentRow
-            ? folderOf(summaryHostId(parentRow) ?? undefined, parentRow.worktreeId)
-            : folderOf(undefined, parent.worktreeId)
-      if (folderKey && membersByFolder.has(folderKey)) {
-        join(folderKey, identity)
+  let byInstance: Map<string | undefined, RuntimeWorktreePsSummary> | null = null
+  return {
+    // Share the folder's member list directly so K members don't allocate K copies of size K-1.
+    siblingsOf: (summary) => {
+      const folderKey = folderByMember.get(summary)
+      const members = folderKey ? membersByFolder.get(folderKey) : undefined
+      return members && members.length > 1 ? members : EMPTY_SIBLINGS
+    },
+    localFolderKeyOf: (summary) => {
+      const folderKey = folderByMember.get(summary)
+      return folderKey && folderKey.startsWith('folder:') ? folderKey : null
+    },
+    findPairedHeldFolders: async (candidateFolderKeys, readPairedFolderChildren) => {
+      if (candidateFolderKeys.size === 0) {
+        return EMPTY_HELD_FOLDERS
       }
-    }
-    if (!paired.complete) {
-      // A server that didn't answer may hold a member of any of them.
-      for (const key of localFolders) {
-        join(key, '?|unanswered')
+      const paired = await readPairedFolderChildren()
+      if (!paired.complete) {
+        // A server that didn't answer (or wasn't connected) may hold a member of any candidate folder.
+        return candidateFolderKeys
       }
+      if (paired.children.length === 0) {
+        return EMPTY_HELD_FOLDERS
+      }
+      // A renamed or moved parent keeps its instance, while the child's ref keeps its old key.
+      byInstance ??= new Map(rows.map((row) => [row.worktreeInstanceId, row]))
+      const held = new Set<string>()
+      for (const { parentWorkspaceKey, parentInstanceId } of paired.children) {
+        const parent = parseWorkspaceKey(parentWorkspaceKey)
+        const parentRow = byInstance.get(parentInstanceId)
+        const folderKey =
+          parent?.type !== 'worktree'
+            ? parentWorkspaceKey
+            : parentRow
+              ? folderOf(summaryHostId(parentRow) ?? undefined, parentRow.worktreeId)
+              : folderOf(undefined, parent.worktreeId)
+        if (folderKey && candidateFolderKeys.has(folderKey)) {
+          held.add(folderKey)
+        }
+      }
+      return held
     }
-  }
-  return (summary) => {
-    const folderKey = folderByMember.get(summary)
-    const self = summaryIdentity(summary)
-    return folderKey ? membersByFolder.get(folderKey)!.filter((id) => id !== self) : []
   }
 }
 
@@ -165,12 +188,28 @@ export async function folderSiblingsByWorktree(
 export function folderGroupOf(
   owned: readonly RuntimeWorktreePsSummary[],
   worktreeId: string,
-  folderSiblingsOf: (summary: RuntimeWorktreePsSummary) => string[]
+  folderSiblingsOf: (summary: RuntimeWorktreePsSummary) => readonly string[]
 ): RuntimeWorktreePsSummary[] {
   const target = owned.find((summary) => summary.worktreeId === worktreeId)
   if (!target) {
     return []
   }
+  const targetId = summaryIdentity(target)
   const siblings = new Set(folderSiblingsOf(target))
-  return [target, ...owned.filter((summary) => siblings.has(summaryIdentity(summary)))]
+  return [
+    target,
+    ...owned.filter((summary) => {
+      const id = summaryIdentity(summary)
+      return id !== targetId && siblings.has(id)
+    })
+  ]
+}
+
+/** Every owned workspace currently in the given local folder. */
+export function folderGroupByKey(
+  owned: readonly RuntimeWorktreePsSummary[],
+  localFolderKey: string,
+  localFolderKeyOf: (summary: RuntimeWorktreePsSummary) => string | null
+): RuntimeWorktreePsSummary[] {
+  return owned.filter((summary) => localFolderKeyOf(summary) === localFolderKey)
 }

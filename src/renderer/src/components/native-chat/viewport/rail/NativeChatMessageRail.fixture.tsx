@@ -112,6 +112,14 @@ export const longChatNoMatch = defineFixture({
   interact: (frame) => filterFor(frame, 'kubernetes')
 })
 
+export const shortChatRest = defineFixture({
+  width: 760,
+  render: () => <Chat count={12} />,
+  interact: async () => {
+    await pause(300)
+  }
+})
+
 export const shortChatPreview = defineFixture({
   width: 760,
   render: () => <Chat count={12} />,

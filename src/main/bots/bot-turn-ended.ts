@@ -14,6 +14,7 @@ import { isRegisteredLookOpening } from './bot-look-around-runtime'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { Bot } from '../../shared/bot-types'
+import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import type { BotItemMail } from './bot-items-schema'
 import {
@@ -23,6 +24,8 @@ import {
 } from './bot-unanswered-question-note'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import { readAgentSessionRecordStore } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
+import { createBotIdleItemChatRouter } from './bot-idle-item-chat'
 
 /** A bot session's turn ended: settle the request it answered, and raise its group room. */
 export function botTurnEnded(
@@ -99,6 +102,8 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
   const sections: TurnSectionsMemo = new Map()
   const idleSaid = new Map<string, Map<number, string>>()
   const needsYouSaid = new Map<string, string>()
+  const bots = createBotLookupIndex(() => runtime.bots.list())
+  const routeIdleItem = createBotIdleItemChatRouter()
   return {
     turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),
     requestFailed: (failure) =>
@@ -137,25 +142,43 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
         ),
         activeWorkSlot(runtime, botId)
       ])
-      const idle = work?.idle ? botIdleItemsNote(idleSaid, sessionId, work.idle) : null
       const needsYou =
         work?.needsYou && ownerChat(sessionId)
           ? botNeedsYouInChatNote(needsYouSaid, sessionId, work.needsYou)
           : null
-      const text = [unanswered, needsYou?.text, idle?.text].filter(Boolean).join('\n\n')
+      const items = work?.idle
       const lookItems = clientMessageId && work?.idleLookItems?.length ? work.idleLookItems : null
-      return text || lookItems
+      let idle: ReturnType<typeof botIdleItemsNote> = null
+      return unanswered || needsYou || work
         ? {
             get text() {
-              // Check at assembly, after the other turn context reads finish.
-              if (
+              // Other turn reads may have waited. Use the current chat placement when assembling it.
+              try {
+                const bot = work ? bots.byId(botId) : undefined
+                const records = bot ? readAgentSessionRecordStore() : null
+                if (bot && records) {
+                  const candidates = items ?? []
+                  const route = routeIdleItem(
+                    bot,
+                    records,
+                    sessionId,
+                    candidates,
+                    runtime.bots.list()
+                  )
+                  idle = botIdleItemsNote(idleSaid, sessionId, candidates, route)
+                }
+              } catch {
+                idle = null
+              }
+              const lookFacts =
                 lookItems &&
                 clientMessageId &&
                 isRegisteredLookOpening(runtime, botId, sessionId, clientMessageId)
-              ) {
-                return [text, lookAroundIdleItemFacts(lookItems)].filter(Boolean).join('\n\n')
-              }
-              return text
+                  ? lookAroundIdleItemFacts(lookItems)
+                  : null
+              return [unanswered, needsYou?.text, idle?.text, lookFacts]
+                .filter(Boolean)
+                .join('\n\n')
             },
             given: () => {
               needsYou?.given()

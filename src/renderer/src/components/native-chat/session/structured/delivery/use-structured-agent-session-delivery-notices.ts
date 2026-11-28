@@ -27,7 +27,8 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   )
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
     args.journalItems,
-    hasRejected && args.startFailures === undefined
+    hasRejected && args.startFailures === undefined,
+    submissions
   )
   const startFailures = args.startFailures ?? loadedFailures
   const commandItemIds = useCommandItemIds(args.journalItems, hasRejected)

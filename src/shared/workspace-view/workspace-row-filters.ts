@@ -1,7 +1,8 @@
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types'
 import {
-  isHiddenByKindSwitch,
+  WORKSPACE_KINDS,
+  WORKSPACE_KIND_SWITCH,
   type WorkspaceKind,
   type WorkspaceKindSwitches
 } from '../worktree/visibility/workspace-kinds'
@@ -92,9 +93,19 @@ function buildWorkspaceRowPredicate<Row>(
   filters: WorkspaceRowFilters,
   read: WorkspaceRowFactReader<Row>
 ): (row: Row) => boolean {
-  const listedFilterIds = filters.filterRepoIds.filter((id) => !read.isProjectHidden(id))
+  const listedFilterIds =
+    filters.filterRepoIds.length > 0
+      ? filters.filterRepoIds.filter((id) => !read.isProjectHidden(id))
+      : filters.filterRepoIds
   const repoIds = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
   const hostIds = filters.visibleHostIds ? new Set(filters.visibleHostIds) : null
+  let activeKindReaders: (<R>(reader: WorkspaceRowFactReader<R>, item: R) => boolean)[] | undefined
+  for (let i = 0; i < WORKSPACE_KINDS.length; i += 1) {
+    const kind = WORKSPACE_KINDS[i]
+    if (filters[WORKSPACE_KIND_SWITCH[kind]]) {
+      ;(activeKindReaders ??= []).push(KIND_READERS[kind])
+    }
+  }
   return (row) => {
     if (read.isArchived(row) || read.isInHiddenProject(row)) {
       return false
@@ -111,8 +122,12 @@ function buildWorkspaceRowPredicate<Row>(
     if (read.isFolderWorkspace(row)) {
       return true
     }
-    if (isHiddenByKindSwitch(filters, (kind) => KIND_READERS[kind](read, row))) {
-      return false
+    if (activeKindReaders) {
+      for (let i = 0; i < activeKindReaders.length; i += 1) {
+        if (activeKindReaders[i](read, row)) {
+          return false
+        }
+      }
     }
     if (repoIds && !repoIds.has(read.repoId(row))) {
       return false
@@ -168,9 +183,8 @@ function comparableFilterValue(
 export function activeWorkspaceRowFilterKeys(
   filters: WorkspaceRowFilters
 ): (keyof WorkspaceRowFilters)[] {
-  return WORKSPACE_ROW_FILTER_KEYS.filter(
-    (key) => key in changedWorkspaceRowFilters(filters, NO_WORKSPACE_ROW_FILTERS)
-  )
+  const changed = changedWorkspaceRowFilters(filters, NO_WORKSPACE_ROW_FILTERS)
+  return WORKSPACE_ROW_FILTER_KEYS.filter((key) => key in changed)
 }
 
 /** Pluralized "N filter(s)" for an options trigger's tooltip and accessibility label. */

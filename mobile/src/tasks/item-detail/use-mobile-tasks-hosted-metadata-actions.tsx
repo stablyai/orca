@@ -260,7 +260,7 @@ export function useMobileTasksHostedMetadataActions<
     },
     [client, detailPayload, captureTaskListRefresh, tryBeginMutation]
   )
-  return Object.assign(model, { updateGitHubPullRequestMetadata, updateGitLabIssueMetadata })
+  return { ...model, updateGitHubPullRequestMetadata, updateGitLabIssueMetadata }
 }
 
 export type HostedMetadataActionsModel = GitlabGithubStatusActionsModel &

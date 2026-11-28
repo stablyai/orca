@@ -33,11 +33,13 @@ import { fileDirectoryQuery, type DirectoryRead } from './mobile-file-explorer-o
 import { fileExplorerStylesSheet } from './mobile-file-explorer-styles'
 import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
-import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
+import { useMobileFileExplorerActions } from './use-mobile-file-explorer-actions'
 import { useMobileFileExplorerPaging } from './use-mobile-file-explorer-paging'
 import { useMobileFileExplorerDecorations } from './use-mobile-file-explorer-decorations'
 import { useMobileNativeChatFileSearch } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-search'
 import { useRefreshHint } from '../../query/refresh-hint'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
+import { MOBILE_FILE_CONTENT_SEARCH_RUNTIME_CAPABILITY } from '../../../../src/shared/file-search/mobile-file-content-search'
 import { navigateToMobileFilePreview } from '../preview/mobile-file-preview-navigation'
 import {
   MobileLoadErrorState,
@@ -174,7 +176,6 @@ export function MobileFileExplorerPanel(props: {
   )
   const [panelWidth, setPanelWidth] = useState(0)
   const [filterBarHeight, setFilterBarHeight] = useState(0)
-  const { openRowActions, rowActionsSheet } = useMobileFileExplorerRowActions()
   const insets = useSafeAreaInsets()
   const worktreeLabel = getWorktreeLabel(name, worktreeId, t)
 
@@ -242,7 +243,8 @@ export function MobileFileExplorerPanel(props: {
     limit: SEARCH_RESULT_LIMIT,
     maxAgeMs: SEARCH_MAX_AGE_MS
   })
-  const { filter, setFilter, filtering, rows, searchPending, onToggleDirectory } =
+  const searchesContents = useRouteCapability(MOBILE_FILE_CONTENT_SEARCH_RUNTIME_CAPABILITY)
+  const { filter, setFilter, filtering, rows, searchPending, contentPending, onToggleDirectory } =
     useMobileFileExplorerRows({
       scope,
       directoryCache,
@@ -250,9 +252,10 @@ export function MobileFileExplorerPanel(props: {
       setExpanded,
       loadDirectory: refreshDirectory,
       search,
+      contentSearch: searchesContents ? { client, worktreeId } : null,
       connected: connState === 'connected'
     })
-  const refreshing = useRefreshHint(searchPending)
+  const refreshing = useRefreshHint(searchPending || contentPending)
   const decorate = useMobileFileExplorerDecorations({
     host,
     target,
@@ -274,7 +277,7 @@ export function MobileFileExplorerPanel(props: {
   )
 
   const previewFile = useCallback(
-    (relativePath: string, displayName: string) => {
+    (relativePath: string, displayName: string, at?: { line: number; column: number }) => {
       navigateToMobileFilePreview(
         router,
         {
@@ -282,13 +285,23 @@ export function MobileFileExplorerPanel(props: {
           worktreeId,
           relativePath,
           name: displayName,
-          worktreeName: name
+          worktreeName: name,
+          ...(at ? { line: String(at.line), column: String(at.column) } : {})
         },
         { embedded, onRequestClose }
       )
     },
     [embedded, hostId, name, onRequestClose, router, worktreeId]
   )
+  const { openRowActions, rootMenuButton, newEntry, overlays } = useMobileFileExplorerActions({
+    hostId,
+    client,
+    target,
+    pagedListing: rootRead?.kind === 'directory',
+    headerless: headerless === true,
+    setExpanded,
+    previewFile
+  })
 
   const renderItem: ListRenderItem<FileExplorerRow> = ({ item }) => {
     return (
@@ -325,6 +338,7 @@ export function MobileFileExplorerPanel(props: {
         )
       }
       title={t('files.fileExplorerPanel.title', 'Files')}
+      trailing={rootMenuButton}
       refreshing={refreshing}
       subtitle={
         rootRead?.kind === 'legacy' && rootRead.truncated
@@ -365,7 +379,7 @@ export function MobileFileExplorerPanel(props: {
       />
     ) : rootScreen !== 'data' ? (
       <MobileStateView loading title={t('files.fileExplorerPanel.loading', 'Loading files…')} />
-    ) : rows.length === 0 && filtering && searchPending ? (
+    ) : rows.length === 0 && filtering && (searchPending || contentPending) ? (
       <MobileStateView loading title={t('files.fileExplorerPanel.searching', 'Searching…')} />
     ) : rows.length === 0 && filtering ? (
       <MobileNoMatchState onClear={() => setFilter('')} bottomInset={filterBarHeight} />
@@ -373,6 +387,7 @@ export function MobileFileExplorerPanel(props: {
       <MobileStateView
         icon={FolderOpen}
         title={t('files.fileExplorerPanel.emptyState', 'No files found')}
+        action={newEntry.stateAction}
       />
     ) : (
       <FlatList
@@ -411,9 +426,10 @@ export function MobileFileExplorerPanel(props: {
           placeholder={t('files.fileExplorerPanel.searchPlaceholder', 'Search files')}
           bottomInset={insets.bottom}
           onCoveredHeightChange={setFilterBarHeight}
+          primary={newEntry.searchBarButton}
         />
       ) : null}
-      {rowActionsSheet}
+      {overlays(treeReady ? filterBarHeight : insets.bottom)}
     </View>
   )
 }

@@ -21,7 +21,7 @@ import {
   isUsageUrgent
 } from './usage/StatusBarProviderSegment'
 import { UsageOverflowChip } from './usage/usage-overflow-chip'
-import { getUsageErrorAlertLabel } from './usage/UsageErrorAlert'
+import { getUsageChipDescription } from './usage/UsageErrorAlert'
 import {
   USAGE_ROW_LEVELS,
   chooseUsageRowLayout,
@@ -87,7 +87,7 @@ export function StatusBarUsageArea({
   // Why: chips show errors as bare alerts, so the menu button carries their messages for keyboard users.
   const alertDescriptionId = useId()
   const alertDescription = rosterProviders
-    .map((p) => getUsageErrorAlertLabel(p, t))
+    .map((p) => getUsageChipDescription(p, t))
     .filter(Boolean)
     .join('. ')
   // Why the setting, not usageMode: the measured gap and label must not depend on the layout choice.

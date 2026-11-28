@@ -1,7 +1,14 @@
+import { useTranslate } from '@/i18n/use-translate'
 import React from 'react'
 import { useSequencerRecovery } from '../listing/use-sequencer-recovery'
 import { OperationRow, type OperationRowOperation, type OperationRowPrimary } from './operation-row'
-import { RebaseOperationRow, useConflictPrimary, type OperationRowAi } from './rebase-operation-row'
+import {
+  RebaseOperationRow,
+  useConflictPrimary,
+  type AbortChoice,
+  type AbortOptions,
+  type OperationRowAi
+} from './rebase-operation-row'
 import type { SourceControlPanelModel } from './use-panel-model'
 
 /** The panel's paused rebase, merge, cherry-pick or revert, drawn in place of the HEAD row. */
@@ -12,6 +19,7 @@ export function SourceControlOperationRow({
   model: SourceControlPanelModel
   worktreeId: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const operation = model.conflictOperation
   const unresolvedCount = model.unresolvedConflictReviewEntries.length
   const recoveryBusy = model.isCheckingRecoveryAdmission || model.isResolvingConflictsWithAI
@@ -25,8 +33,30 @@ export function SourceControlOperationRow({
   // A rebase always detaches HEAD, so its sha moves into the tooltip instead of a pill.
   const detachedNote = identity?.kind === 'detached' ? identity.sourceControlLabel : null
   const headBranch = identity?.kind === 'branch' ? identity.branchName : null
-  // Everything Abort would act on: workspace instance, Git owner, connection, operation and step.
-  // Merge and sequencer stops carry no incarnation token; their end unmounts the row, clearing any arm.
+  // The paused run: a string binds the in-place confirm to it (main re-checks before aborting);
+  // null means this host couldn't read it, so Abort is off (below); undefined is an older host,
+  // which keeps the in-place confirm bound to HEAD and step only.
+  const runIdentity = model.operationRunIdentity
+  const abortOptions: AbortOptions = {
+    confirmed: true,
+    expectedRunIdentity: runIdentity ?? undefined
+  }
+  // Fails closed: without an owner, or on a current host that can't tell which run is paused, the
+  // row can't bind a confirmation to a run, so Abort is off and says why.
+  const blockedReason = !model.activeRepoTarget
+    ? t(
+        'auto.store.slices.editor.gitOperationTarget.unresolvedHost',
+        'The workspace host is unresolved. Refresh the workspace and retry.'
+      )
+    : runIdentity === null
+      ? t(
+          'auto.components.right.sidebar.SourceControl.operationRunUnknown',
+          "Can't tell which run is paused, so Abort is off here. Refresh Source Control, or abort it in a terminal."
+        )
+      : null
+  const abortChoice: AbortChoice = { blockedReason }
+  // Everything Abort would act on: workspace instance, Git owner, connection, operation, step and
+  // the paused run itself.
   const abortTargetKey = JSON.stringify([
     worktreeId,
     model.activeWorktreeInstanceId ?? null,
@@ -34,7 +64,8 @@ export function SourceControlOperationRow({
     model.activeConnectionId ?? null,
     operation,
     model.activeGitStatusHead ?? null,
-    operation === 'rebase' ? (model.rebaseStop?.token ?? null) : null
+    operation === 'rebase' ? (model.rebaseStop?.token ?? null) : null,
+    runIdentity ?? null
   ])
   if (operation === 'rebase') {
     return model.baseRebaseState.kind === 'rebase_paused' ? (
@@ -44,13 +75,14 @@ export function SourceControlOperationRow({
         notes={[detachedNote]}
         ai={ai}
         abortTargetKey={abortTargetKey}
+        abortChoice={abortChoice}
         actions={{
           state: model.baseRebaseState,
           isAbortingRebase: model.isAbortingOperation,
           isContinuingRebase: model.isContinuingRebase,
           isRetryingRebaseInspect: model.isRetryingRebaseInspect,
           hasGitOwner: !!model.activeRepoTarget,
-          onAbortRebase: () => void model.handleAbortRebase({ confirmed: true }),
+          onAbortRebase: () => void model.handleAbortRebase(abortOptions),
           onContinueRebase: () => void model.handleContinueRebase(),
           onRetryRebaseInspect: model.handleRetryRebaseInspect
         }}
@@ -66,6 +98,8 @@ export function SourceControlOperationRow({
         unresolvedCount={unresolvedCount}
         ai={ai}
         abortTargetKey={abortTargetKey}
+        abortChoice={abortChoice}
+        onAbort={() => void model.handleAbortMerge(abortOptions)}
       />
     )
   }
@@ -78,8 +112,10 @@ export function SourceControlOperationRow({
       unresolvedCount={unresolvedCount}
       disabled={recoveryBusy || model.isAbortingOperation || model.isCommitting}
       hasGitOwner={!!model.activeRepoTarget}
+      abortOptions={abortOptions}
       ai={ai}
       abortTargetKey={abortTargetKey}
+      abortChoice={abortChoice}
     />
   )
 }
@@ -90,7 +126,9 @@ function MergeOperationRow({
   notes,
   unresolvedCount,
   ai,
-  abortTargetKey
+  abortTargetKey,
+  abortChoice,
+  onAbort
 }: {
   model: SourceControlPanelModel
   branch: string | null
@@ -98,6 +136,8 @@ function MergeOperationRow({
   unresolvedCount: number
   ai: OperationRowAi
   abortTargetKey: string
+  abortChoice: AbortChoice
+  onAbort: () => void
 }): React.JSX.Element {
   const conflict = useConflictPrimary(unresolvedCount, ai)
   // Eligibility first: nothing to press while an abort runs or with no Git owner to run it.
@@ -118,9 +158,11 @@ function MergeOperationRow({
       notes={[...notes, conflict?.note ?? null]}
       primary={primary}
       abort={{
-        unavailable: model.isAbortingOperation || model.isCommitting,
+        unavailable:
+          model.isAbortingOperation || model.isCommitting || abortChoice.blockedReason !== null,
         busy: model.isAbortingOperation,
-        onAbort: () => void model.handleAbortMerge({ confirmed: true })
+        reason: abortChoice.blockedReason,
+        onAbort
       }}
       abortTargetKey={abortTargetKey}
     />
@@ -135,8 +177,10 @@ function SequencerOperationRow({
   unresolvedCount,
   disabled,
   hasGitOwner,
+  abortOptions,
   ai,
-  abortTargetKey
+  abortTargetKey,
+  abortChoice
 }: {
   worktreeId: string
   operation: Exclude<OperationRowOperation, 'rebase' | 'merge'>
@@ -145,8 +189,10 @@ function SequencerOperationRow({
   unresolvedCount: number
   disabled: boolean
   hasGitOwner: boolean
+  abortOptions: AbortOptions
   ai: OperationRowAi
   abortTargetKey: string
+  abortChoice: AbortChoice
 }): React.JSX.Element {
   const recovery = useSequencerRecovery({
     worktreeId,
@@ -176,10 +222,15 @@ function SequencerOperationRow({
       notes={[...notes, conflict?.note ?? null, hostReason]}
       primary={primary}
       abort={{
-        unavailable: !recovery.supported || disabled || recovery.busyAction !== null,
+        unavailable:
+          !recovery.supported ||
+          !hasGitOwner ||
+          disabled ||
+          recovery.busyAction !== null ||
+          abortChoice.blockedReason !== null,
         busy: recovery.busyAction === 'abort',
-        reason: hostReason,
-        onAbort: () => void recovery.run('abort', { confirmed: true })
+        reason: hostReason ?? abortChoice.blockedReason,
+        onAbort: () => void recovery.run('abort', abortOptions)
       }}
       abortTargetKey={abortTargetKey}
     />

@@ -294,7 +294,8 @@
       "connecting": "Connecting…",
       "backToHome": "Back to home",
       "pairThisComputer": "Pair with this computer?",
-      "onlyYourOwn": "Only pair with a computer you trust."
+      "onlyYourOwn": "Only pair with a computer you trust.",
+      "pairNamedServer": "Pair with {{server}}?"
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
@@ -405,6 +406,10 @@
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
       "useReset": "Use reset",
+      "antigravitySaved": "Saved Google account",
+      "antigravityLaunchesUse": "New agy launches use this account",
+      "antigravityLoginNow": "agy's login right now",
+      "antigravityChanged": "The native account changed. Select a saved account again before launching agy.",
       "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts.",
       "otherAgents": "Other agents",
       "fableWindow": "Fable",
@@ -990,6 +995,13 @@
     },
     "identity": {
       "hostNotFound": "Host not found"
+    },
+    "serverOwnPairing": {
+      "updateDesktop": "Update Orca on {{desktop}} to keep {{server}} reachable.",
+      "failed": "Could not reach {{server}}. Try again while {{desktop}} is awake.",
+      "thisServer": "this server",
+      "keepReachable": "Keep {{server}} reachable",
+      "evenWhenAsleep": "Even when {{desktop}} sleeps"
     }
   },
   "webShell": {
@@ -2211,7 +2223,10 @@
       "emptyState": "No files found",
       "loading": "Loading files…",
       "searching": "Searching…",
-      "searchPlaceholder": "Search files"
+      "searchPlaceholder": "Search files",
+      "inFiles": "In files",
+      "more": "More",
+      "newEntry": "New"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2247,7 +2262,19 @@
       "discardMessage": "Unsaved edits will be lost.",
       "discardMessageSaving": "The save in progress may not finish. Unsaved edits will be lost.",
       "discard": "Discard",
-      "stay": "Stay"
+      "stay": "Stay",
+      "saveFile": "Save file",
+      "editFile": "Edit file",
+      "changedOnComputer": "Changed on {{computer}}",
+      "changedSinceOpened": "Changed since you opened it",
+      "deletedOnComputer": "Deleted on {{computer}}",
+      "deletedSinceOpened": "Deleted since you opened it",
+      "reloadConfirmTitle": "Discard your changes and load the latest?",
+      "reload": "Reload",
+      "overwrite": "Overwrite",
+      "notUtf8": "This file isn't UTF-8 text, so it can't be saved here",
+      "cannotOverwrite": "The file on disk can't be edited here anymore",
+      "tooLargeToSave": "Too large to save from your phone"
     },
     "filePreviewSourceText": {
       "previewLabel": "File preview",
@@ -2272,13 +2299,35 @@
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
+      "openAtLine": "Open {{name}} at line {{line}}",
       "showMore": "Show {{rows}} more",
       "loadedOfTotal": "{{loaded}} of {{total}}",
       "ignored": "Ignored by .gitignore"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
-      "copyRelativePath": "Copy Relative Path"
+      "copyRelativePath": "Copy Relative Path",
+      "newFile": "New File",
+      "newFolder": "New Folder",
+      "rename": "Rename",
+      "duplicate": "Duplicate",
+      "create": "Create",
+      "fileName": "File name",
+      "folderName": "Folder name",
+      "deleteTitle": "Delete {{name}}?",
+      "deleteFileDetail": "This permanently deletes the file. This cannot be undone.",
+      "deleteFolderDetail": "This permanently deletes the folder and its contents. This cannot be undone.",
+      "duplicateFailed": "Couldn't duplicate {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "The copy may not be complete. Check it and try again.",
+      "deleteFailed": "Couldn't delete {{name}}. {{reason}}",
+      "deleteUnconfirmed": "It's still there. Check the folder and try again.",
+      "renameFailed": "Couldn't rename {{name}}. {{reason}}",
+      "newFileFailed": "Couldn't create the file. {{reason}}",
+      "newFolderFailed": "Couldn't create the folder. {{reason}}",
+      "share": "Share",
+      "shareFailed": "Couldn't share {{name}}",
+      "shareTooLarge": "Files larger than 256 MB can’t be shared from the phone",
+      "shareHostOutdated": "Update Orca where this workspace runs to share files"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."
@@ -3881,6 +3930,10 @@
       "toggleLabel": "Use {{name}}",
       "actionFailed": "Couldn't do that. Try again.",
       "openAgain": "Open again",
+      "copyLink": "Copy link",
+      "copyFailed": "Couldn’t copy the link.",
+      "finishInBrowser": "Open the copied link in your browser, finish there, then tap Done.",
+      "signInUnfinishedInBrowser": "Sign-in isn't finished yet. Finish it in your browser, then tap Done.",
       "pastePlaceholder": "Paste address",
       "pasteLabel": "Sign-in page address",
       "finish": "Finish",
@@ -5697,7 +5750,6 @@
       "suggestThree": "{{a}}, {{b}} & {{c}}",
       "suggestMore": "{{a}}, {{b}} & {{count}} more",
       "pickOne": "Pick a bot",
-      "needsTwoBots": "Needs 2 bots on {{host}}",
       "items": {
         "emptyTitle": "No items from this group yet",
         "needsYouCount_one": "{{count}} needs you",
@@ -6951,6 +7003,7 @@
       "signIn": {
         "action": "Sign in",
         "step1Detail": "Sign in to {{app}} and allow access.",
+        "step1Copy": "Copy the link below and open it in your browser.",
         "step2": "Copy the address",
         "step2Detail": "The last page won’t load. That’s expected. Copy its address.",
         "step3": "Paste it here",
@@ -6961,7 +7014,11 @@
         "finish": "Finish",
         "open": "Open sign-in page",
         "notThisSignIn": "That address isn’t from this sign-in. Paste the address you landed on.",
-        "pasteLanded": "After you sign in, paste the address you landed on."
+        "pasteLanded": "After you sign in, paste the address you landed on.",
+        "copyLink": "Copy link",
+        "copyFailed": "Couldn’t copy the link.",
+        "pasteInBrowser": "Paste it into your browser to sign in.",
+        "copyThenPaste": "Copy the link, sign in from your browser, then paste the address you landed on."
       },
       "updateHost": "Update Orca on {{host}} to sign in to apps",
       "none": "None",

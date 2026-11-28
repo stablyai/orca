@@ -3,7 +3,6 @@ import { useQueryClient, type Query, type QueryClient, type QueryKey } from '@ta
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
-import '../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { CUTOVER_RETRY_DELAY_MS, isHostNotConnectedError } from './host-query-errors'

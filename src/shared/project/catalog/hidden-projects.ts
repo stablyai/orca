@@ -51,6 +51,17 @@ export function indexHiddenProjects(
   if (cached?.defaultHostId === defaultHostId) {
     return cached.hidden
   }
+  let anyHidden = false
+  for (let i = 0; i < repos.length; i += 1) {
+    if (isRepoHidden(repos[i])) {
+      anyHidden = true
+      break
+    }
+  }
+  if (!anyHidden) {
+    cache.set(repos, { defaultHostId, hidden: NO_HIDDEN_PROJECTS })
+    return NO_HIDDEN_PROJECTS
+  }
   const hiddenKeys = new Set<string>()
   const hostsByRepoId = new Map<string, ExecutionHostId[]>()
   const listedRepoIds = new Set<string>()
@@ -91,16 +102,35 @@ export function isListedByFolderWorkspace(
   identity: string,
   parentIdentityOf: (identity: string) => string | undefined
 ): boolean {
-  const seen = new Set<string>()
-  for (
-    let parent = parentIdentityOf(identity);
-    parent !== undefined && !seen.has(parent);
-    parent = parentIdentityOf(parent)
-  ) {
+  let parent = parentIdentityOf(identity)
+  if (parent === undefined) {
+    return false
+  }
+  let seen: Set<string> | undefined
+  let firstParent: string | undefined
+  while (parent !== undefined) {
     if (parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder') {
       return true
     }
-    seen.add(parent)
+    const nextParent = parentIdentityOf(parent)
+    if (nextParent === undefined) {
+      return false
+    }
+    if (firstParent === undefined) {
+      firstParent = parent
+      if (nextParent === firstParent) {
+        return false
+      }
+    } else {
+      if (!seen) {
+        seen = new Set<string>([firstParent])
+      }
+      seen.add(parent)
+      if (seen.has(nextParent)) {
+        return false
+      }
+    }
+    parent = nextParent
   }
   return false
 }

@@ -8,6 +8,7 @@ import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource
 export const memoryApi = {
   getSnapshot: (admission?: ResourceViewAdmission): Promise<MemorySnapshot> =>
     ipcRenderer.invoke('memory:getSnapshot', admission),
+  getAppMemoryTotal: (): Promise<number> => ipcRenderer.invoke('memory:getAppMemoryTotal'),
   readPerfNoticeSignals: (): Promise<PerfNoticeSignals> =>
     ipcRenderer.invoke('memory:readPerfNoticeSignals'),
   countHiddenBrowserPages: (hiddenForMs: number): Promise<number> =>

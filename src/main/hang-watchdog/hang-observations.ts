@@ -1,7 +1,7 @@
 import {
   isHangTierObservation,
   mergeHangTierFields,
-  parseHangTierFields,
+  parseHangStallTrailFields,
   MACHINE_FIELDS,
   SNAPSHOT_FIELDS,
   type HangPowerReceipt,
@@ -153,10 +153,7 @@ function parseObservation(value: unknown): HangObservation | null {
         }
       : {}),
     ...(workerSends ? { workerSends } : {}),
-    ...(typeof data.appVersion === 'string' && data.appVersion.length <= 64
-      ? { appVersion: data.appVersion }
-      : {}),
-    ...parseHangTierFields(data)
+    ...parseHangStallTrailFields(data)
   }
 }
 

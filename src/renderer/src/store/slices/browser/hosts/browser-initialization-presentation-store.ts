@@ -19,6 +19,17 @@ export function withBrowserInitializationPresentations<T extends BrowserHandleSt
         partial: T | Partial<T> | ((state: T) => T | Partial<T>),
         replace?: boolean
       ): void => {
+        if (typeof partial !== 'function' && active === undefined) {
+          const current = get()
+          const handles = Object.hasOwn(partial, 'remoteBrowserPageHandlesByPageId')
+            ? partial.remoteBrowserPageHandlesByPageId!
+            : current.remoteBrowserPageHandlesByPageId
+          if (handles === current.remoteBrowserPageHandlesByPageId) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preserves both Zustand overloads and the caller's replacement semantics.
+            ;(write as (next: T | Partial<T>, replace?: boolean) => void)(partial, replace)
+            return
+          }
+        }
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preserves both Zustand overloads and the caller's replacement semantics.
         ;(write as (next: (state: T) => T | Partial<T>, replace?: boolean) => void)((state) => {
           const context: WriteContext = { parent: active }

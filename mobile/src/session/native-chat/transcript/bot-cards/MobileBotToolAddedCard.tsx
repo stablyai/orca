@@ -2,7 +2,7 @@
 // Signing in opens the app's page in the phone's browser and finishes from the address it lands on, pasted here.
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ExternalLink, Wrench } from 'lucide-react-native'
+import { Copy, ExternalLink, Wrench } from 'lucide-react-native'
 import type { NativeChatBotCardValues } from '../../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import { botToolAddedCardView } from '../../../../../../src/shared/bots/bot-tool-added-card-view'
 import { botToolSubtitle, botToolTitle } from '../../../../../../src/shared/bots/bot-tool-labels'
@@ -145,10 +145,15 @@ export function MobileBotToolAddedCard({
       {view.present && attempt ? (
         <View style={styles.paste}>
           <Text style={[styles.hint, meta]}>
-            {t(
-              'bots.tools.signIn.pasteLanded',
-              'After you sign in, paste the address you landed on.'
-            )}
+            {signIn.opensHere
+              ? t(
+                  'bots.tools.signIn.pasteLanded',
+                  'After you sign in, paste the address you landed on.'
+                )
+              : t(
+                  'bots.tools.signIn.copyThenPaste',
+                  'Copy the link, sign in from your browser, then paste the address you landed on.'
+                )}
           </Text>
           <TextField
             value={address}
@@ -171,7 +176,18 @@ export function MobileBotToolAddedCard({
               disabled={!pasted || attempt.finishing}
               onPress={finish}
             />
-            {attempt.url ? (
+            {attempt.url && !signIn.opensHere ? (
+              // This phone's shell can't open a link this long; the browser finishes the same attempt.
+              <MobileNativeChatNoticePill
+                label={
+                  signIn.copied
+                    ? t('common.copied', 'Copied')
+                    : t('bots.tools.signIn.copyLink', 'Copy link')
+                }
+                Icon={Copy}
+                onPress={signIn.copyLink}
+              />
+            ) : attempt.url ? (
               <MobileNativeChatNoticePill
                 label={t('bots.tools.signIn.openAgain', 'Open page again')}
                 Icon={ExternalLink}

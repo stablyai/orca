@@ -14,19 +14,29 @@ export type ActivityItem = { lastActivityAt?: number }
 export function withRepoSectionDisplayLabels<
   E extends ProjectSectionEntry<ActivityItem, ProjectSectionRepo>
 >(entries: readonly [string, E][]): [string, E][] {
-  const labelItems = entries.flatMap(([, group]) =>
-    group.repo ? [{ ...group.repo, displayName: group.label }] : []
-  )
+  const labelItems: (ProjectSectionRepo & { displayName: string })[] = []
+  for (let i = 0; i < entries.length; i += 1) {
+    const group = entries[i][1]
+    if (group.repo) {
+      labelItems.push({ ...group.repo, displayName: group.label })
+    }
+  }
   if (labelItems.length === 0) {
     return [...entries]
   }
   const labelsByPath = getRepoDisplayLabelsByPath(labelItems)
-  return entries.map(([key, group]) => [
-    key,
-    group.repo
-      ? { ...group, label: labelsByPath.get(getRepoDisplayLabelKey(group.repo)) ?? group.label }
-      : group
-  ])
+  const result: [string, E][] = []
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i]
+    const group = entry[1]
+    if (!group.repo) {
+      result.push([entry[0], group])
+      continue
+    }
+    const nextLabel = labelsByPath.get(getRepoDisplayLabelKey(group.repo)) ?? group.label
+    result.push([entry[0], nextLabel === group.label ? group : { ...group, label: nextLabel }])
+  }
+  return result
 }
 
 /** Visible activity always beats placeholder addedAt; within each tier, newest timestamps rank first. */
@@ -79,14 +89,18 @@ function manualRankForEntry(
   entry: readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>],
   repoOrder: ReadonlyMap<string, number> | undefined
 ): number {
-  const key = entry[0]
-  const repoIds =
-    entry[1].repoIds.size > 0
-      ? [...entry[1].repoIds]
-      : [key.startsWith('repo:') ? key.slice('repo:'.length) : key]
+  if (!repoOrder) {
+    return Number.POSITIVE_INFINITY
+  }
+  const repoIds = entry[1].repoIds
+  if (repoIds.size === 0) {
+    const key = entry[0]
+    const repoId = key.startsWith('repo:') ? key.slice('repo:'.length) : key
+    return repoOrder.get(repoId) ?? Number.POSITIVE_INFINITY
+  }
   let rank = Number.POSITIVE_INFINITY
   for (const repoId of repoIds) {
-    const repoRank = repoOrder?.get(repoId)
+    const repoRank = repoOrder.get(repoId)
     if (repoRank !== undefined && repoRank < rank) {
       rank = repoRank
     }
@@ -176,11 +190,12 @@ export function getLogicalRepoOrderRankById(
   orderedRepoIds: readonly string[]
 ): Map<string, number> {
   const rankById = new Map<string, number>()
-  orderedRepoIds.forEach((repoId, index) => {
+  for (let index = 0; index < orderedRepoIds.length; index += 1) {
+    const repoId = orderedRepoIds[index]
     // Shared logical project IDs anchor to first occurrence, independent of host load order.
     if (!rankById.has(repoId)) {
       rankById.set(repoId, index)
     }
-  })
+  }
   return rankById
 }

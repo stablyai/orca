@@ -66,23 +66,26 @@ export function useWorktreeCardWorkspaceActions({
     [folderWorkspaceId, worktree.hostId, showDeleteQuickAction, worktree.id]
   )
   const unreadTooltip = getUnreadToggleTooltip(worktree.isUnread)
-  const lineageChildAriaLabel = lineageCollapsed
-    ? t(
-        'auto.components.sidebar.WorktreeList.showChildWorkspaces',
-        'Show {{count}} child workspaces',
-        { count: lineageChildCount, defaultValue_one: 'Show {{count}} child workspace' }
-      )
-    : t(
-        'auto.components.sidebar.WorktreeList.hideChildWorkspaces',
-        'Hide {{count}} child workspaces',
-        { count: lineageChildCount, defaultValue_one: 'Hide {{count}} child workspace' }
-      )
-  const childWorkspaceShortLabel = t(
-    'auto.components.sidebar.WorktreeList.childCount',
-    '{{count}} children',
-    { count: lineageChildCount, defaultValue_one: '{{count}} child' }
-  )
   const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
+  const lineageChildAriaLabel = showLineageChildChip
+    ? lineageCollapsed
+      ? t(
+          'auto.components.sidebar.WorktreeList.showChildWorkspaces',
+          'Show {{count}} child workspaces',
+          { count: lineageChildCount, defaultValue_one: 'Show {{count}} child workspace' }
+        )
+      : t(
+          'auto.components.sidebar.WorktreeList.hideChildWorkspaces',
+          'Hide {{count}} child workspaces',
+          { count: lineageChildCount, defaultValue_one: 'Hide {{count}} child workspace' }
+        )
+    : ''
+  const childWorkspaceShortLabel = showLineageChildChip
+    ? t('auto.components.sidebar.WorktreeList.childCount', '{{count}} children', {
+        count: lineageChildCount,
+        defaultValue_one: '{{count}} child'
+      })
+    : ''
 
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {

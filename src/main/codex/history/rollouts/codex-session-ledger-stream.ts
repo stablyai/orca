@@ -8,11 +8,28 @@ export function bufferSliceContains(
   end: number,
   needle: Buffer
 ): boolean {
-  if (end - start < needle.length) {
+  const needleLen = needle.length
+  if (needleLen === 0) {
+    return true
+  }
+  const limit = end - needleLen
+  if (limit < start) {
     return false
   }
-  const index = buf.indexOf(needle, start)
-  return index !== -1 && index + needle.length <= end
+  const firstByte = needle[0]
+  for (let i = start; i <= limit; i += 1) {
+    if (buf[i] !== firstByte) {
+      continue
+    }
+    let j = 1
+    while (j < needleLen && buf[i + j] === needle[j]) {
+      j += 1
+    }
+    if (j === needleLen) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Stream growing ledgers in 64 KiB chunks to avoid whole-file reads and per-line promise churn. */
@@ -23,9 +40,11 @@ export async function forEachCodexSessionLedgerRecord(
     throwOnReadFailure?: boolean
     shouldParseLine?: (raw: string) => boolean
     shouldParseBuffer?: (buf: Buffer, start: number, end: number) => boolean
+    /** Optional zero-alloc buffer consumer; return true when handled to skip toString + JSON.parse. */
+    onLineBuffer?: (buf: Buffer, start: number, end: number) => boolean
   } = {}
 ): Promise<void> {
-  const { shouldParseLine, shouldParseBuffer } = options
+  const { shouldParseLine, shouldParseBuffer, onLineBuffer } = options
   const stream = createReadStream(filePath, {
     highWaterMark: LEDGER_READ_CHUNK_BYTES
   })
@@ -53,7 +72,8 @@ export async function forEachCodexSessionLedgerRecord(
             lineBuf.length,
             onRecord,
             shouldParseBuffer,
-            shouldParseLine
+            shouldParseLine,
+            onLineBuffer
           )
         } else if (newlineIndex > start) {
           emitLedgerLineBuffer(
@@ -62,7 +82,8 @@ export async function forEachCodexSessionLedgerRecord(
             newlineIndex,
             onRecord,
             shouldParseBuffer,
-            shouldParseLine
+            shouldParseLine,
+            onLineBuffer
           )
         }
         start = newlineIndex + 1
@@ -71,7 +92,15 @@ export async function forEachCodexSessionLedgerRecord(
     if (remainderChunks.length > 0) {
       const lineBuf =
         remainderChunks.length === 1 ? remainderChunks[0] : Buffer.concat(remainderChunks)
-      emitLedgerLineBuffer(lineBuf, 0, lineBuf.length, onRecord, shouldParseBuffer, shouldParseLine)
+      emitLedgerLineBuffer(
+        lineBuf,
+        0,
+        lineBuf.length,
+        onRecord,
+        shouldParseBuffer,
+        shouldParseLine,
+        onLineBuffer
+      )
     }
   } catch (error) {
     if (options.throwOnReadFailure && !isNotFoundError(error)) {
@@ -89,12 +118,16 @@ function emitLedgerLineBuffer(
   end: number,
   onRecord: (record: Record<string, unknown>) => void,
   shouldParseBuffer?: (buf: Buffer, start: number, end: number) => boolean,
-  shouldParseLine?: (raw: string) => boolean
+  shouldParseLine?: (raw: string) => boolean,
+  onLineBuffer?: (buf: Buffer, start: number, end: number) => boolean
 ): void {
   if (end <= start || (end - start === 1 && buf[start] === 0x0d)) {
     return
   }
   if (shouldParseBuffer && !shouldParseBuffer(buf, start, end)) {
+    return
+  }
+  if (onLineBuffer && onLineBuffer(buf, start, end)) {
     return
   }
   const raw = buf.toString('utf-8', start, end)

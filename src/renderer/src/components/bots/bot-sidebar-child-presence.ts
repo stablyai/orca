@@ -23,9 +23,10 @@ function publish(): void {
 
 /** Keep the last known chat presence when folding unmounts its reader; never start another read. */
 export function setBotSidebarChildren(key: string, update: Partial<Children>): void {
+  const hadRow = rows.has(key)
   const before = botSidebarHasChildren(key)
   rows.set(key, { workspaces: false, chats: false, available: true, ...rows.get(key), ...update })
-  if (before !== botSidebarHasChildren(key)) {
+  if (!hadRow || before !== botSidebarHasChildren(key)) {
     publish()
   }
 }
@@ -34,7 +35,7 @@ export function pruneBotSidebarChildren(liveKeys: ReadonlySet<string>): void {
   let changed = false
   for (const key of rows.keys()) {
     if (!liveKeys.has(key)) {
-      changed = botSidebarHasChildren(key) || changed
+      changed = true
       rows.delete(key)
     }
   }

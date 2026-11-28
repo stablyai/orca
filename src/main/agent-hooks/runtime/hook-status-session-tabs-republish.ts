@@ -3,8 +3,14 @@ import type { AgentHookServer } from '../server/agent-hook-server'
 type SessionTabsRepublisher = {
   getTerminalWorktreeIdForHandle(handle: string): string | null
   getTerminalWorktreeIdForPaneKey(paneKey: string): string | null
-  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId: string): void
-  touchMobileSessionTabsForWorktree(worktreeId: string): void
+  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(
+    worktreeId: string,
+    paneKey: string
+  ): void
+  touchMobileSessionTabsForWorktree(
+    worktreeId: string,
+    options: { statusPaneKeys: readonly string[] }
+  ): void
 }
 
 type StatusStore = Pick<AgentHookServer, 'subscribeStatusFreshness' | 'subscribeStatusRowMutations'>
@@ -29,18 +35,21 @@ export function installHookStatusSessionTabsRepublish(
     if (!runtime) {
       return
     }
-    const worktreeIds = new Set<string>()
+    const paneKeysByWorktree = new Map<string, string[]>()
     for (const identity of [mutation.before, mutation.after]) {
       if (!identity) {
         continue
       }
       const worktreeId = resolveWorktreeId(identity, runtime)
       if (worktreeId) {
-        worktreeIds.add(worktreeId)
+        paneKeysByWorktree.set(worktreeId, [
+          ...(paneKeysByWorktree.get(worktreeId) ?? []),
+          identity.paneKey
+        ])
       }
     }
-    for (const worktreeId of worktreeIds) {
-      runtime.touchMobileSessionTabsForWorktree(worktreeId)
+    for (const [worktreeId, statusPaneKeys] of paneKeysByWorktree) {
+      runtime.touchMobileSessionTabsForWorktree(worktreeId, { statusPaneKeys })
     }
   })
   const unsubscribeFreshness = statusStore.subscribeStatusFreshness((status) => {
@@ -50,7 +59,7 @@ export function installHookStatusSessionTabsRepublish(
     }
     const worktreeId = resolveWorktreeId(status, runtime)
     if (worktreeId) {
-      runtime.scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId)
+      runtime.scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId, status.paneKey)
     }
   })
   return () => {

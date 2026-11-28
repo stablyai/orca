@@ -148,8 +148,6 @@ function removeOrphanOverlayIfUnpaired(hostId: string): Promise<void> {
   })
 }
 
-import '../host-descriptors/host-descriptor-persistence'
-
 export class RelayRoutingHostRemovedError extends Error {}
 
 // Persist learned relay routing only; pairing/Edit Host retain authority over host rows and tokens.

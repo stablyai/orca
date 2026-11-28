@@ -90,7 +90,8 @@ export async function resolveStructuredSessionOpenSource(
       failure: {
         reason: found.lost ? 'gone' : 'unknown',
         beforeEffects: true,
-        ...(found.lost === 'terminal' ? { surface: 'terminal' as const } : {})
+        ...(found.lost === 'terminal' ? { surface: 'terminal' as const } : {}),
+        ...(!found.lost && found.pairedServer ? { pairedServer: found.pairedServer } : {})
       }
     }
   }

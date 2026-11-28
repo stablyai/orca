@@ -156,7 +156,11 @@
             "buildReactNativeFromSource": true
           },
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enablePngCrunchInReleaseBuilds": true,
+            "extraProguardRules": "-keep class expo.modules.orcamobilewebshell.** { *; }\n-keep class expo.modules.orcagziputf8codec.** { *; }\n-keep class expo.modules.orcaplaystorepresence.** { *; }\n-keep class expo.modules.twowayaudio.** { *; }"
           }
         }
       ]

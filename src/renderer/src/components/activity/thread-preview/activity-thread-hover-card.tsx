@@ -112,7 +112,7 @@ function ActivityThreadHoverCardContent({
     worktree,
     repo: repo ?? undefined,
     settings: foundation.settings,
-    projectGroups: foundation.projectGroups,
+    hasProjectGroups: foundation.hasProjectGroups,
     cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle
   })

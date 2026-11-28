@@ -143,6 +143,7 @@ export class LazyRuntimeGitHubRepositoryQueryCommands implements RuntimeGitHubRe
 
 type LazyRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {
   resolveRepo: (selector: string) => Promise<TRepo>
+  resolveProjectGroupOwner?: (groupId: string) => WorkspaceHookOwner | null
   readCreateSourceHooks: (
     repo: TRepo,
     source: SetupHooksCreateSource

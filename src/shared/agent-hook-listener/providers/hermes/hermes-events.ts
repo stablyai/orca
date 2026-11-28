@@ -101,7 +101,8 @@ export function normalizeHermesEvent(
 ): ParsedAgentStatusPayload | null {
   const stateName = typeof eventName === 'string' ? HERMES_EVENT_STATES[eventName] : undefined
 
-  if (!stateName) {
+  // Why: smart approvals are decided by Hermes' guardian LLM; an escalation fires its own human-surface request.
+  if (!stateName || hookPayload.surface === 'smart') {
     return null
   }
 

@@ -69,8 +69,12 @@ export class ConversationTurnActivity {
   observe(paneKey: string): void {
     const turnId = this.deps.toldTurn(paneKey)
     const linked = turnId === null ? null : this.deps.linkedFor(paneKey)
-    const row = linked ? this.deps.readHookRow(paneKey) : null
-    if (turnId === null || !linked || !row || (row.mainAgent ?? row).state !== 'working') {
+    if (turnId === null || !linked) {
+      this.forget(paneKey)
+      return
+    }
+    const row = this.deps.readHookRow(paneKey)
+    if (!row || (row.mainAgent ?? row).state !== 'working') {
       return
     }
     this.readPlan(paneKey, turnId, linked.link.sessionId, row)
@@ -141,6 +145,17 @@ export class ConversationTurnActivity {
         this.observe(paneKey)
       })
       .catch(() => {})
+  }
+
+  forget(paneKey: string): void {
+    const timer = this.timers.get(paneKey)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      this.timers.delete(paneKey)
+    }
+    this.told.delete(paneKey)
+    this.planRead.delete(paneKey)
+    this.planReads.delete(paneKey)
   }
 
   clear(): void {

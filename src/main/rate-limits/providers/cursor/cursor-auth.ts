@@ -110,10 +110,12 @@ function parseCliCredentials(text: string): CliFileReadResult {
 
 // Providers may prompt on each search (KeePassXC unlock-before-search), so every outcome, failures included,
 // is reused until cursor-agent rewrites auth.json; concurrent reads for the same mtime share one secret-tool run.
+// Explicit user refreshes may retry a settled non-ok outcome so unlocking the keyring recovers without rewriting auth.json.
 let linuxKeyringRead: {
   authPath: string
   authMtimeMs: number
   result: Promise<TokenReadResult>
+  settledStatus?: TokenReadResult['status']
 } | null = null
 
 function tokenFromSecret(secret: string): TokenReadResult {
@@ -131,7 +133,8 @@ function tokenFromKeyringRead(read: CursorLinuxKeyringRead): TokenReadResult {
 
 async function readLinuxKeyringToken(
   authPath: string,
-  cliFile: CliFileReadResult
+  cliFile: CliFileReadResult,
+  retryFailure: boolean
 ): Promise<TokenReadResult> {
   // Only cursor-agent's auth.json marker justifies reading the keyring.
   if (cliFile.status !== 'in-keyring') {
@@ -144,12 +147,26 @@ async function readLinuxKeyringToken(
   } catch {
     return { status: 'missing' }
   }
-  if (linuxKeyringRead?.authPath !== authPath || linuxKeyringRead.authMtimeMs !== authMtimeMs) {
-    linuxKeyringRead = {
+  const shouldRetrySettledFailure =
+    retryFailure &&
+    linuxKeyringRead?.settledStatus !== undefined &&
+    linuxKeyringRead.settledStatus !== 'ok'
+  if (
+    linuxKeyringRead?.authPath !== authPath ||
+    linuxKeyringRead.authMtimeMs !== authMtimeMs ||
+    shouldRetrySettledFailure
+  ) {
+    const entry: NonNullable<typeof linuxKeyringRead> = {
       authPath,
       authMtimeMs,
-      result: readCursorLinuxKeyringSecret().then(tokenFromKeyringRead)
+      result: readCursorLinuxKeyringSecret()
+        .then(tokenFromKeyringRead)
+        .then((outcome) => {
+          entry.settledStatus = outcome.status
+          return outcome
+        })
     }
+    linuxKeyringRead = entry
   }
   return linuxKeyringRead.result
 }
@@ -240,6 +257,8 @@ export type CursorAuthReadOptions = {
   cliAuthPath?: string
   cliConfigPath?: string
   desktopStateDbPath?: string
+  /** Bypass a settled non-ok Linux keyring cache entry (e.g. on an explicit user refresh after unlocking). */
+  retryLinuxKeyringError?: boolean
 }
 
 /** Prefer live CLI sessions (OS secret store, then legacy auth.json), then IDE sessions; never refresh or write credentials. */
@@ -267,7 +286,11 @@ export async function readCursorAuthSession(
   const readCliFile = (): CliFileReadResult => (cliFile ??= readCliFileToken(cliAuthPath))
   const keychainRead =
     process.platform === 'linux'
-      ? await readLinuxKeyringToken(cliAuthPath, readCliFile())
+      ? await readLinuxKeyringToken(
+          cliAuthPath,
+          readCliFile(),
+          options.retryLinuxKeyringError === true
+        )
       : await readKeychainToken()
   if (keychainRead.status === 'error') {
     errors.push(keychainRead.error)
