@@ -46,6 +46,8 @@ it('keeps the owner’s tab when a teammate’s first call after a start opens t
   const fresh = await rig({ opened: await physicalReload(r, { restore: false }) })
   // Before the host's tabs are restored: the owner's list must not lose O to the teammate's open.
   await fresh.reveal('mate-desk', O)
+  // The teammate's call started the host's restore; the owner's list is read once it is done.
+  await fresh.runtime.restoreStructuredAgentSessionTabs()
   await chatTabCommandsSettled()
 
   expect(await fresh.hostChats()).toEqual([O])

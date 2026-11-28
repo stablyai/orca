@@ -36,11 +36,7 @@ import { joinWorktreeRelativePath } from '../../files/paths/runtime-relative-pat
 import { OrcaRuntimeWithPersonSessionTabs, type OwnList } from './person-session-tab-publication'
 
 /** A chat tab write: the publication, and the person it is for. */
-export type PersonChatTabPublication = StructuredSessionTabPublicationInput & {
-  person: TabPerson
-  /** A create's publish: the chat was just founded with a host tab row. */
-  founded?: true
-}
+export type PersonChatTabPublication = StructuredSessionTabPublicationInput & { person: TabPerson }
 
 export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeWithPersonSessionTabs {
   abstract listAutomationRuns(): AutomationRun[]
@@ -69,7 +65,10 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     saveChanges: (list, changes) => this.changeWindowlessChatTabs(list, changes),
     project: (input) => this.projectStructuredAgentSessionTab(input),
     forgetTabs: (list, tabIds) => this.clientSessionTabSelections.forgetTabs(list, tabIds),
-    restored: () => this.restoreStructuredAgentSessionTabs(),
+    restoring: () =>
+      void this.restoreStructuredAgentSessionTabs().catch((error: unknown) =>
+        console.warn('[session-tabs] restoring chat tabs failed:', error)
+      ),
     agents: () => this.store?.getBots?.() ?? [],
     closeListTab: (person, home, tabId) => this.closePersonSessionTab(person, home, tabId)
   })
@@ -225,20 +224,20 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
 
   /** The chat tab write (reveal, create, Fork, publish) for the person it names: true when that is a
    *  teammate's own workspace, which then holds the tab; false leaves it to the host's list. */
-  protected async publishPersonChatTab(input: PersonChatTabPublication): Promise<boolean> {
+  protected publishPersonChatTab(input: PersonChatTabPublication): boolean {
     const list = this.personChatTabs.listOf(input.person, input.workspaceId)
     if (!list) {
       return false
     }
-    await this.personChatTabs.open(list, {
+    input.workspaceAuthority?.check()
+    const saving = this.personChatTabs.open(list, {
       sessionId: input.sessionId,
       agent: input.agent,
       activate: input.activate,
       ...(input.notify === false ? { notify: false } : {}),
-      ...(input.founded ? { founded: true } : {}),
       ...(input.placement ? { placement: input.placement } : {})
     })
-    input.workspaceAuthority?.check()
+    input.workspaceAuthority?.saving(saving)
     input.workspaceAuthority?.committed()
     input.capture?.({
       tableId: null,
@@ -249,6 +248,11 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
       }
     })
     return true
+  }
+
+  /** The teammate's own workspace a person's chat tab in `worktreeId` lands in; null for the host's. */
+  teammateChatList(person: TabPerson, worktreeId: string): string | null {
+    return this.personChatTabs.listOf(person, worktreeId)
   }
 
   /** Activates a tab of a teammate's own list on the caller's device alone: it never reaches the

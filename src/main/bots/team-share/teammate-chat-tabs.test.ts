@@ -5,7 +5,10 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
-import { physicalReload } from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import {
+  physicalReload,
+  savedIds
+} from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { showBotSessionTab } from '../bot-session-tab-show'
 import { activeProviderContext } from '../../../shared/agent-session/conversation-context/agent-session-provider-context'
@@ -377,4 +380,33 @@ it('titles a teammate’s fork by its source and retitles it when the source is 
     { title: 'Sprint Plan', forked: undefined },
     { title: 'Release fork', forked: true }
   ])
+})
+
+it('keeps a teammate’s create out of the owner’s tabs when it is the first call after a start', async () => {
+  const r = await rig()
+  await r.reveal('owner-desk', O)
+  const fresh = await rig({ opened: await physicalReload(r, { restore: false }) })
+
+  const created = await fresh.create('mate-desk')
+  await fresh.runtime.restoreStructuredAgentSessionTabs()
+  await chatTabCommandsSettled()
+
+  expect(fresh.mine().chats).toEqual([created])
+  expect(await fresh.hostChats()).toEqual([O])
+  expect(savedIds(fresh)).toEqual([O])
+  expect(fresh.host.isSessionTabVisible(created)).toBe(false)
+})
+
+it('keeps a teammate’s chat closed after a start when the close comes before the restore', async () => {
+  const r = await rig()
+  await r.reveal('mate-desk', C)
+  await r.reveal('mate-desk', B)
+  const fresh = await rig({ opened: await physicalReload(r, { restore: false }) })
+
+  await fresh.closeMine(C)
+  await fresh.runtime.restoreStructuredAgentSessionTabs()
+  await chatTabCommandsSettled()
+
+  expect(fresh.mine().chats).toEqual([B])
+  expect(fresh.mineSaved()).toEqual([B])
 })

@@ -116,7 +116,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
    *  in their own Home goes to their own list, any other to the host's (teammate-rules.ts, rule 4). */
   async publishStructuredAgentSessionTab(input: PersonChatTabPublication): Promise<void> {
     input.workspaceAuthority?.check()
-    if (await this.publishPersonChatTab(input)) {
+    if (this.publishPersonChatTab(input)) {
       return
     }
     const { tabId, current, eligible } = await admitStructuredSessionTabPublication(input, () =>

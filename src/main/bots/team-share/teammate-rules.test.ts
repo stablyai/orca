@@ -164,9 +164,9 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
       /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closeChatTabs|commitStructuredAgentSessionCreate|createMobileSessionTerminal|createSessionBrowserTab|openPersonFile)\(/g
     // Sources: the caller's scope at a handler, a chat's stamp, the host's own state, the list a close
     // names (`sessionTabCloseTarget`, which reads one of those); or the field of a function that took
-    // one of those (its own callers are in this census too).
+    // one of those (its own callers are in this census too; a create reads its `personOf` once).
     const source =
-      /^(callerTabPerson\(\w+\.callerScope\)|closeTarget\.person|callerTabPerson\(callerScope\)|\(?\w*\)? => callerTabPerson\(ctx\.callerScope\)|(\w+\.)?runtime\.chatTab(Person|People)\(|(\(\w+\) => )?args\.runtime\.chatTabPerson\(|HOST_STATE_PERSON|args\.personOf\(|input\.person|options\.person|opts\.person|caller\.person)/
+      /^(callerTabPerson\(\w+\.callerScope\)|closeTarget\.person|callerTabPerson\(callerScope\)|\(?\w*\)? => callerTabPerson\(ctx\.callerScope\)|(\w+\.)?runtime\.chatTab(Person|People)\(|(\(\w+\) => )?args\.runtime\.chatTabPerson\(|HOST_STATE_PERSON|args\.personOf\(|createPerson$|input\.person|options\.person|opts\.person|caller\.person)/
     const calls = files.flatMap(({ file, text }) =>
       [...text.matchAll(writes)].flatMap((match) => {
         const at = match.index + match[0].length

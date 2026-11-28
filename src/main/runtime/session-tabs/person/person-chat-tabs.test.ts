@@ -1,11 +1,11 @@
-// A teammate's chat opens and closes in their own list run one at a time, in call order, each whole
-// (its saved row and its live row): under a main-owned layout a save lands later, so a close must
-// neither jump ahead of an open still landing nor leave a live row that open projects after it.
+// A teammate's chat opens and closes in their own list take effect in call order, live at once and
+// saved in the order issued: under a main-owned layout a save lands later, and nothing waits on it.
 import { expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { personWorkspaceKey } from '../../../../shared/workspace/identity/person-workspace-key'
 import type { ChatTabChange } from '../chat/agent-session-tab-layout'
 import { PersonChatTabs } from './person-chat-tabs'
+import { teammateTabListKey } from '../../../bots/team-share/teammate-rules'
 
 const LIST = personWorkspaceKey({
   folderWorkspaceId: 'home',
@@ -41,7 +41,10 @@ function harness() {
         })
       )
     },
-    project: (input) =>
+    project: (input) => {
+      const rows = (snapshots.get(input.workspaceId)?.tabs ?? []).filter(
+        (tab) => tab.type !== 'agent-session' || tab.sessionId !== input.sessionId
+      )
       snapshots.set(input.workspaceId, {
         worktree: input.workspaceId,
         publicationEpoch: 'e',
@@ -50,6 +53,7 @@ function harness() {
         activeTabId: null,
         activeTabType: null,
         tabs: [
+          ...rows,
           {
             type: 'agent-session',
             id: input.rowId ?? input.sessionId,
@@ -59,10 +63,11 @@ function harness() {
             isActive: false
           }
         ]
-      }),
+      })
+    },
     forgetTabs: () => {},
-    restored: async () => {},
-    agents: () => [],
+    restoring: () => {},
+    agents: () => [{ id: 'bot-1', folderWorkspaceId: 'home' }],
     closeListTab: () => {}
   })
   const live = () =>
@@ -77,37 +82,55 @@ function harness() {
   return { tabs, saved, queued, live, landNext }
 }
 
-it('runs a close called during an open after it, leaving the chat closed live and saved', async () => {
+it('closes a chat opened just before, live at once and saved in call order', async () => {
   const h = harness()
   const opening = h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
-  let closed = false
-  const closing = h.tabs.close(LIST, 's1').then(() => (closed = true))
-  await tick()
+  expect(h.live()).toEqual(['s1'])
+  const closing = h.tabs.close(LIST, 's1')
 
-  // The close waits for the open whole: nothing of it is queued yet.
-  expect(h.queued).toMatchObject([{ open: { sessionId: 's1' } }])
-  await h.landNext()
+  expect(h.live()).toEqual([])
   expect(h.queued).toMatchObject([{ open: { sessionId: 's1' } }, { close: 's1' }])
-  expect(closed).toBe(false)
+  await h.landNext()
   await h.landNext()
   await Promise.all([opening, closing])
-
-  expect(closed).toBe(true)
-  expect(h.live()).toEqual([])
   expect([...h.saved]).toEqual([])
 })
 
-it('runs an open called during a close after it, leaving the chat open live and saved', async () => {
+it('opens a chat closed just before, live at once and saved in call order', async () => {
   const h = harness()
-  const first = h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
-  await h.landNext()
-  await first
-  const closing = h.tabs.close(LIST, 's1')
-  const opening = h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
-  await h.landNext()
-  await h.landNext()
-  await Promise.all([closing, opening])
+  void h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
+  void h.tabs.close(LIST, 's1')
+  void h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
 
   expect(h.live()).toEqual(['s1'])
+  await h.landNext()
+  await h.landNext()
+  await h.landNext()
   expect([...h.saved]).toEqual(['s1'])
+})
+
+it('closes a teammate’s tab for a chat whose open is still saving', async () => {
+  const h = harness()
+  void h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
+  const person = teammateTabListKey({ botId: 'bot-1', accountId: 'usr_mate' })
+
+  const closing = h.tabs.closeTeammateTab(person, 'folder:home', 'agent-session:s1', {})
+
+  expect(h.live()).toEqual([])
+  await h.landNext()
+  await h.landNext()
+  expect(await closing).toMatchObject({ closed: true, retirementConfirmed: true })
+  expect(h.live()).toEqual([])
+  expect(h.queued).toMatchObject([{ open: { sessionId: 's1' } }, { close: 's1' }])
+})
+
+it('never holds one write behind a save that does not land', () => {
+  const h = harness()
+  void h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
+  void h.tabs.open(LIST, { sessionId: 's2', agent: 'codex', activate: true })
+  void h.tabs.close(LIST, 's2')
+
+  // No save has landed; every write is live and issued.
+  expect(h.live()).toEqual(['s1'])
+  expect(h.queued).toHaveLength(3)
 })

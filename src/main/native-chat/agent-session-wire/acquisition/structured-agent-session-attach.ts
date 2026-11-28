@@ -62,6 +62,8 @@ export type AgentSessionAttachParams = {
   options?: Readonly<Record<string, string>>
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
+  /** False: the new chat's tab is a teammate's own, so it founds no host tab row. */
+  hostTab?: false
   launchArgs?: string[]
   /** Omit only for create intent; fingerprint the client wire form before adapter proof. */
   providerHandle?: AgentSessionWireProviderHandle
@@ -217,6 +219,7 @@ export function reserveRequestFor(input: {
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }
       : {}),
+    ...(params.hostTab === false ? { hostTab: false as const } : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),

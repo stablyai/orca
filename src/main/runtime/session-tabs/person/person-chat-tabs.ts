@@ -1,6 +1,8 @@
 // The one owner of a chat tab in a teammate's own workspace (`person:`) in a shared agent's Home:
 // open, close, rename and restore. A row there lives in that workspace's snapshot and saved session
-// only; it never reads or writes the owner's chat tabs or the chat's host tab row.
+// only; it never reads or writes the owner's chat tabs or the chat's host tab row. Ordered as the
+// owner's are: each write changes the live row synchronously and issues its save through the one
+// ordered layout save, so call order is the order everywhere.
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
@@ -42,9 +44,8 @@ export type PersonChatTabsHost = {
   saveChanges(list: string, changes: readonly ChatTabChange[]): Promise<void>
   project(input: StructuredSessionRawPublicationInput): void
   forgetTabs(list: string, tabIds: readonly string[]): void
-  /** The host's chat tabs restored, as every chat tab write waits for: a teammate's call can be
-   *  the first after a start. */
-  restored(): Promise<void>
+  /** Starts the host's chat tab restore, as any chat tab write does; nothing here waits for it. */
+  restoring(): void
   agents(): readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[]
   /** A teammate's non-chat tab close, in their person list. */
   closeListTab(person: TeammateTabListKey, home: string, tabId: string): void
@@ -55,52 +56,45 @@ export type PersonChatOpen = {
   agent: StructuredAgentId
   activate: boolean
   notify?: boolean
-  /** A create founded the chat with a host tab row; it has none, so that row goes. */
-  founded?: boolean
   placement?: { groupId?: string; afterTabId?: string }
 }
 
 export class PersonChatTabs {
   constructor(private readonly host: PersonChatTabsHost) {}
 
-  /** Each list's opens and closes, in call order: one runs whole (save and live row) before the next. */
-  private readonly writes = new Map<string, Promise<void>>()
+  /** The lists whose saved chat rows are live this run. */
+  private readonly hydrated = new Set<string>()
 
-  private inOrder(list: string, write: () => Promise<void>): Promise<void> {
-    const run = (this.writes.get(list) ?? Promise.resolve()).then(write)
-    const settled = run.catch(() => {})
-    this.writes.set(list, settled)
-    void settled.then(() => {
-      if (this.writes.get(list) === settled) {
-        this.writes.delete(list)
-      }
-    })
-    return run
-  }
-
-  open(list: PersonWorkspaceKey, chat: PersonChatOpen): Promise<void> {
-    return this.inOrder(list, () => this.openNow(list, chat))
-  }
-
-  private async openNow(list: PersonWorkspaceKey, chat: PersonChatOpen): Promise<void> {
-    await this.host.restored()
-    const home = homeOfPersonWorkspace(list)
-    const ownerListed = home
-      ? this.host
-          .snapshots()
-          .get(home)
-          ?.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === chat.sessionId)
-      : true
-    if (chat.founded && !ownerListed) {
-      // As a background create does: the founding row named a host tab nobody opened.
-      await getStructuredAgentSessionHost()?.setSessionTabVisibility(
-        chat.sessionId,
-        false,
-        undefined,
-        { background: true }
-      )
+  /** Before a list's first write this run: its saved chat rows, as they were placed, go live. */
+  private hydrate(list: string): void {
+    if (this.hydrated.has(list)) {
+      return
     }
-    await this.host.saveChanges(list, [
+    this.hydrated.add(list)
+    const sessions = getStructuredAgentSessionHost()?.deps.store
+    for (const tab of this.host.savedLists()?.unifiedTabs?.[list] ?? []) {
+      const agent =
+        tab.contentType === 'agent-session'
+          ? sessions?.getConversation(tab.entityId)?.provider
+          : undefined
+      if (agent) {
+        this.host.project({
+          workspaceId: list,
+          sessionId: tab.entityId,
+          agent,
+          activate: false,
+          notify: false,
+          rowId: personChatTabId(tab.entityId)
+        })
+      }
+    }
+  }
+
+  /** Opens the chat's row: live now, its save issued now. Resolves once the save lands. */
+  open(list: PersonWorkspaceKey, chat: PersonChatOpen): Promise<void> {
+    this.host.restoring()
+    this.hydrate(list)
+    const saved = this.host.saveChanges(list, [
       {
         open: {
           sessionId: chat.sessionId,
@@ -119,14 +113,13 @@ export class PersonChatTabs {
       ...(chat.notify === false ? { notify: false } : {}),
       ...(chat.placement ? { placement: chat.placement } : {})
     })
+    return saved
   }
 
-  /** Drops the chat's row from the list; the chat runs on, as a closed tab's does. */
+  /** Drops the chat's row, live now and its save issued now; the chat runs on, as a closed tab's
+   *  does. Resolves once the save lands. */
   close(list: string, sessionId: string): Promise<void> {
-    return this.inOrder(list, () => this.closeNow(list, sessionId))
-  }
-
-  private async closeNow(list: string, sessionId: string): Promise<void> {
+    this.hydrate(list)
     const snapshot = this.host.snapshots().get(list)
     const next = snapshot ? retireStructuredAgentSessionTabFrom(snapshot, sessionId) : null
     if (next) {
@@ -134,7 +127,7 @@ export class PersonChatTabs {
       this.host.forgetTabs(list, [personChatTabId(sessionId)])
     }
     const tabId = this.savedChatTabId(list, sessionId) ?? structuredAgentSessionTabId(sessionId)
-    await this.host.saveChanges(list, [{ close: sessionId, tabId }])
+    return this.host.saveChanges(list, [{ close: sessionId, tabId }])
   }
 
   /** A person's own workspace in their agent's Home; null for the owner and everywhere else. */
@@ -180,6 +173,9 @@ export class PersonChatTabs {
     close: { expectedTerminalHandle?: string }
   ): Promise<MobileSessionTabCloseOutcome> {
     const list = this.listOf(person, home)
+    if (list) {
+      this.hydrate(list)
+    }
     const chat = list ? findAddressedSessionTab(this.host.snapshots().get(list)?.tabs, tabId) : null
     if (!list || chat?.type !== 'agent-session') {
       this.host.closeListTab(person, home, tabId)
@@ -221,28 +217,11 @@ export class PersonChatTabs {
     )
   }
 
-  /** After a host start: each saved chat row of each teammate's list, as it was placed. */
+  /** After a host start: every saved teammate list goes live, as its first write would make it. */
   restore(): void {
-    const sessions = getStructuredAgentSessionHost()?.deps.store
-    for (const [list, tabs] of Object.entries(this.host.savedLists()?.unifiedTabs ?? {})) {
-      if (!isPersonWorkspaceKey(list)) {
-        continue
-      }
-      for (const tab of tabs) {
-        const agent =
-          tab.contentType === 'agent-session'
-            ? sessions?.getConversation(tab.entityId)?.provider
-            : undefined
-        if (agent) {
-          this.host.project({
-            workspaceId: list,
-            sessionId: tab.entityId,
-            agent,
-            activate: false,
-            notify: false,
-            rowId: personChatTabId(tab.entityId)
-          })
-        }
+    for (const list of Object.keys(this.host.savedLists()?.unifiedTabs ?? {})) {
+      if (isPersonWorkspaceKey(list)) {
+        this.hydrate(list)
       }
     }
   }
