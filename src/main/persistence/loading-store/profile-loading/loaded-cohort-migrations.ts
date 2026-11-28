@@ -151,6 +151,24 @@ export class LoadedCohortMigrationOperations {
     return { ...state, settings: { ...state.settings, experimentalAppRail: false } }
   }
 
+  /** Orca chats follow a deleted workspace on new profiles; saved ones keep the older combined switch's choice. */
+  seedDeleteOrcaChatsWithWorkspace(state: PersistedState, savedProfile: unknown): PersistedState {
+    const saved =
+      isRecord(savedProfile) && isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.deleteOrcaChatsWithWorkspace === 'boolean') {
+      return state
+    }
+    const fresh = !isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        deleteOrcaChatsWithWorkspace: fresh || saved?.deleteChatHistoryWithWorkspace === true
+      }
+    }
+  }
+
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     return this.seedMilestoneInstallCohort(
       this.migrateTelemetryIdentity(state, fileExistedOnLoad),

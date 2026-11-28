@@ -47,7 +47,9 @@ export function initializeNewOrcaProfileState(
         : cohorts.migrateTelemetry(defaults, false),
       false
     )
-    const initialState = createInitialHomeWorkspaceState(initial)
+    const initialState = createInitialHomeWorkspaceState(
+      cohorts.seedDeleteOrcaChatsWithWorkspace(initial, undefined)
+    )
     const migrated = migrateProfileStateToSqlite({
       dataFile,
       databaseFile,

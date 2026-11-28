@@ -32,6 +32,8 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'codex_history_move_status',
   'codex_legacy_history_import',
   'legacy_journal_retirement',
+  'deleted_chats_sweep',
+  'deleted_chats_discard',
   'daemon_adopted',
   'daemon_async_io_health',
   'daemon_audit_eligibility',

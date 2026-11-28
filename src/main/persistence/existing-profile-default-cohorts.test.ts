@@ -86,6 +86,30 @@ describe('existing-profile default cohorts', () => {
     expect(createStore().getSettings().experimentalAppRail).toBe(true)
   })
 
+  it('deletes Orca chats with their workspace only for new profiles or an earlier opt-in', async () => {
+    expect(createStore().getSettings().deleteOrcaChatsWithWorkspace).toBe(true)
+    await closeTestStores()
+
+    initializeNewOrcaProfileState('created', undefined, testState.dir)
+    expect(
+      readPersistedState(getOrcaProfileDataFile('created', testState.dir), 'created').settings
+        .deleteOrcaChatsWithWorkspace
+    ).toBe(true)
+
+    writeDataFile(legacyProfile({ theme: 'dark' }))
+    const existing = createStore()
+    expect(existing.getSettings().deleteOrcaChatsWithWorkspace).toBe(false)
+    await existing.flushAsync()
+    await closeTestStores()
+    expect(createStore().getSettings().deleteOrcaChatsWithWorkspace).toBe(false)
+    await closeTestStores()
+
+    writeDataFile(legacyProfile({ deleteChatHistoryWithWorkspace: true }))
+    const optedIn = createStore().getSettings()
+    expect(optedIn.deleteOrcaChatsWithWorkspace).toBe(true)
+    expect(optedIn.deleteChatHistoryWithWorkspace).toBe(true)
+  })
+
   it('marks new chat messages only for existing profiles without a choice', async () => {
     const fresh = createStore()
     expect(nativeChatMarksNewMessages(fresh.getSettings())).toBe(false)

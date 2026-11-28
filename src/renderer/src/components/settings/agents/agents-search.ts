@@ -36,7 +36,10 @@ import {
   getCodexHistorySharingSearchKeywords,
   getCodexHistorySharingTitle
 } from './behavior/codex-history-sharing-copy'
-import { getDeleteAgentHistorySearchEntry } from './behavior/delete-agent-history-search'
+import {
+  getDeleteAgentHistorySearchEntry,
+  getDeleteOrcaChatsSearchEntry
+} from './behavior/delete-agent-history-search'
 import { translate } from '@/i18n/i18n'
 import {
   searchKeywords,
@@ -100,6 +103,7 @@ type AgentsPaneSearchOptions = {
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
 const DELETE_AGENT_HISTORY_SEARCH_ENTRY_ID = 'delete-agent-history'
+const DELETE_ORCA_CHATS_SEARCH_ENTRY_ID = 'delete-orca-chats'
 const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
 /** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
 export const AGENTS_INSTALLED_SECTION_ID = 'agents-installed'
@@ -206,6 +210,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     description: getCodexHistorySharingDescription(),
     keywords: getCodexHistorySharingSearchKeywords()
   },
+  { ...getDeleteOrcaChatsSearchEntry(), id: DELETE_ORCA_CHATS_SEARCH_ENTRY_ID },
   { ...getDeleteAgentHistorySearchEntry(), id: DELETE_AGENT_HISTORY_SEARCH_ENTRY_ID },
   {
     title: getCodexTerminalServerIsolationTitle(),
@@ -266,6 +271,7 @@ export function getAgentsPaneSearchEntries({
   }
   if (!includeDeleteAgentHistory) {
     hiddenIds.add(DELETE_AGENT_HISTORY_SEARCH_ENTRY_ID)
+    hiddenIds.add(DELETE_ORCA_CHATS_SEARCH_ENTRY_ID)
   }
   if (!includeAgentChatChoice) {
     hiddenIds.add(AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID)

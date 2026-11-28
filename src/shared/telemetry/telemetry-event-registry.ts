@@ -8,6 +8,10 @@ import { agentTokenUsageDailySchema } from './schemas/telemetry-agent-token-usag
 import { codexLegacyHistoryImportSchema } from './schemas/telemetry-codex-legacy-history-event-schemas'
 import { legacyJournalRetirementSchema } from './schemas/telemetry-legacy-journal-retirement-schema'
 import {
+  deletedChatsDiscardSchema,
+  deletedChatsSweepSchema
+} from './schemas/telemetry-deleted-chats-event-schemas'
+import {
   agentDashboardActiveSchema,
   agentDashboardEnabledSchema,
   agentDashboardOpenedSchema
@@ -267,6 +271,8 @@ export const eventSchemas = {
 
   codex_legacy_history_import: codexLegacyHistoryImportSchema,
   legacy_journal_retirement: legacyJournalRetirementSchema,
+  deleted_chats_sweep: deletedChatsSweepSchema,
+  deleted_chats_discard: deletedChatsDiscardSchema,
 
   plugin_installed: pluginInstalledSchema,
 

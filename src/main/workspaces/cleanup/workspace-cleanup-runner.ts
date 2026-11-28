@@ -92,7 +92,8 @@ export class WorkspaceCleanupRunner {
           event.type === 'reposChanged' ||
           (event.type === 'settingsChanged' &&
             (event.keys.includes('workspaceCleanupPolicy') ||
-              event.keys.includes('deleteChatHistoryWithWorkspace')))
+              event.keys.includes('deleteChatHistoryWithWorkspace') ||
+              event.keys.includes('deleteOrcaChatsWithWorkspace')))
         ) {
           this.noteRulesChanged()
         }
