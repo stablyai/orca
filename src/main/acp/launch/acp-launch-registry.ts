@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from '../acp-dialects/omp-dialect'
-import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
+import { OPENCODE_ACP_DIALECT_WITH_PICKED_SKILLS } from '../acp-dialects/opencode-dialect'
 import { directoryAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../../opencode/acp/opencode-acp-environment'
@@ -92,7 +92,7 @@ function openCodeLaunchSpec(
     // 1.x cannot answer ACP questions; 2.x ignores this guard and negotiates form support.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
     scrubEnvironment: (env, inherited) => scrubOpenCodeAcpEnvironment(env, inherited),
-    dialect: OPENCODE_ACP_DIALECT,
+    dialect: OPENCODE_ACP_DIALECT_WITH_PICKED_SKILLS,
     historyCatchUp: 'user-message-id',
     loginCommand: agentSessionSetupFor(row.agent)?.loginCommand ?? [],
     account: openCodeAcpAccountBinding(),

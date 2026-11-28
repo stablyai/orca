@@ -234,7 +234,9 @@ function pickerSkill(
     sources: sorted.map((skill) => ({
       sourceKind: skill.sourceKind,
       skillFilePath: skill.skillFilePath
-    }))
+    })),
+    // Picking a scanned skill sends its file so a host that cannot expand the token can attach it.
+    ...(sorted[0] ? { path: sorted[0].skillFilePath } : {})
   }
 }
 

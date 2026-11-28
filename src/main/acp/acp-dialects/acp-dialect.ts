@@ -270,6 +270,8 @@ export type AcpDialect = {
   }
   /** The agent reads a mentioned file only from a resource link, not from `@path` text. */
   linksFileMentions?: true
+  /** ACP leaves picked skill tokens as plain text; from this release, attach each skill's SKILL.md as assistant context. */
+  pickedSkillContentSince?: string
   /** The agent advertises image prompts but drops image blocks, so images go as file references. */
   dropsPromptImages?: true
   /** Hide these commands and reject command-only prompts before dispatch. */

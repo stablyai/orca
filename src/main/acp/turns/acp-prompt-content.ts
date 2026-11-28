@@ -26,7 +26,12 @@ import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { acpSessionAcceptsImages } from '../protocol/acp-image-capability'
 import type { ContentBlock } from '../generated/acp-protocol.generated'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import { acpFileMentionLinks } from './acp-file-mention-links'
+import { acpPickedSkillBlocks } from './acp-picked-skill-content'
 
 // Reserve space for the JSON-RPC envelope around the prompt blocks.
 const ACP_PROMPT_LINE_BUDGET = ACP_MAX_LINE_BYTES - 64 * 1024
@@ -198,6 +203,23 @@ function isWithheldCommand(body: AgentJournalMessageItem, withheld: readonly str
   return text.startsWith('/') && withheld.includes(text.slice(1).split(/\s/, 1)[0].toLowerCase())
 }
 
+async function pickedSkillBlocks(
+  body: AgentJournalMessageItem,
+  session: {
+    spec: Pick<AcpLaunchSpec, 'agent' | 'dialect'>
+    connection: Pick<AcpStructuredConnection, 'initialize'>
+  }
+): Promise<ContentBlock[]> {
+  const since = session.spec.dialect.pickedSkillContentSince
+  if (!since || !body.skills?.length) {
+    return []
+  }
+  const version = (await session.connection.initialize()).agentInfo?.version
+  return version && isValidAppVersion(version) && compareAppVersions(version, since) >= 0
+    ? acpPickedSkillBlocks(body.skills)
+    : []
+}
+
 export async function acpDispatchPrompt(
   body: AgentJournalMessageItem,
   session: {
@@ -213,11 +235,13 @@ export async function acpDispatchPrompt(
     })
   }
   try {
-    return await acpPromptBlocks(
+    const blocks = await acpPromptBlocks(
       body,
       await acpSessionAcceptsImages(session),
       session.spec.dialect.linksFileMentions ? session.cwd : undefined
     )
+    blocks.push(...(await pickedSkillBlocks(body, session)))
+    return blocks
   } catch (error) {
     if (error instanceof AcpPromptContentError) {
       return agentSessionFailureWords(error.failure, {

@@ -219,3 +219,9 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
   providerRetry,
   sessionInOtherFolder
 }
+
+/** 1.x expands `/skill` itself; 2.x leaves it as text and reads assistant-audience blocks as synthetic context. */
+export const OPENCODE_ACP_DIALECT_WITH_PICKED_SKILLS: AcpDialect = {
+  ...OPENCODE_ACP_DIALECT,
+  pickedSkillContentSince: '2.0.14'
+}
