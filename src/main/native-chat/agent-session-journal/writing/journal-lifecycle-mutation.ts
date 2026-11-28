@@ -1,4 +1,3 @@
-import './journal-row-builders'
 import { journalItemEchoFields, type JournalItemEcho } from '../projection/journal-item-echo'
 import type {
   AgentJournalItemBody,

@@ -1109,7 +1109,9 @@
         "tools_many": "{{count}} herramientas",
         "tools_one": "{{count}} herramienta",
         "tools_other": "{{count}} herramientas",
-        "waitingForSignIn": "Esperando el inicio de sesión…"
+        "waitingForSignIn": "Esperando el inicio de sesión…",
+        "orcaRemoved": "Eliminado: se reinicia con el próximo mensaje",
+        "orcaChanged": "Cambiado: se reinicia con el próximo mensaje"
       },
       "source": {
         "project": "Proyecto",
@@ -1142,7 +1144,8 @@
         "needsAuth_many": "{{count}} requieren iniciar sesión"
       },
       "pasteHint": "Cuando el navegador llegue a una página que no se carga, copia su dirección y pégala aquí.",
-      "manage": "Gestionar servidores MCP"
+      "manage": "Gestionar servidores MCP",
+      "stillFailing": "Sigue fallando tras reconectar."
     },
     "agentMessage": {
       "unnamedRecipient": "un agente",
@@ -7429,6 +7432,7 @@
     "workspacesCount": "{{count}} espacios de trabajo",
     "workspacesAllButCount": "Todos menos {{count}}",
     "headerMissing": "Rellena {{header}} para añadir este servidor.",
-    "servers": "Servidores"
+    "servers": "Servidores",
+    "unreadable": "El inicio de sesión o la clave guardados no se pueden abrir. Vuelve a iniciar sesión."
   }
 }

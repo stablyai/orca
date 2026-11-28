@@ -4,7 +4,11 @@ import {
 } from '../../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import { agentSessionAccountHomePath } from '../../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { defineMethod } from '../../../core'
-import { withOrcaMcpSource } from '../../../../../mcp-servers/session-host-mcp-delivery'
+import {
+  refuseRemovedOrcaReconnect,
+  withOrcaMcpChanges,
+  withOrcaMcpSource
+} from '../../../../../mcp-servers/session-host-mcp-delivery'
 import { withKnownSessionMcpServers } from '../../../../../mcp-servers/session-mcp-at-rest'
 import { isMcpServersFeatureEnabled } from '../../../../../mcp-servers/mcp-servers-feature'
 import { agentSessionPinnedLaunchDirectory } from '../../../../agent-session/records/agent-session-record-launch-directory'
@@ -35,19 +39,31 @@ export const STRUCTURED_AGENT_SESSION_MCP_METHODS = [
       // An agent at rest is managed on the account its next turn launches on, as /usage reads it.
       const accountHome = await host.deps.launchAccountHome?.(saved).catch(() => null)
       const record = accountHome ? { ...saved, accountHome } : saved
-      const answer: AgentSessionMcpResult = manage
-        ? await manage(record, operation).then(
-            (result) => withOrcaMcpSource(sessionId, result),
-            (error: unknown) => ({
-              status: 'failed',
-              message: agentSessionMcpFailureMessage(error)
-            })
-          )
-        : { status: 'unsupported' }
+      // Only a running chat keeps servers Orca changed since its launch (a bot's too, when it takes
+      // the host's list); one at rest reads the list.
+      const changes =
+        running && isMcpServersFeatureEnabled()
+          ? ((await host.deps.launchTools?.hostChanges?.(sessionId).catch(() => null)) ?? undefined)
+          : undefined
+      const refused =
+        operation.action === 'reconnect' && changes
+          ? refuseRemovedOrcaReconnect(sessionId, operation.server, changes)
+          : null
+      const answer: AgentSessionMcpResult = refused
+        ? refused
+        : manage
+          ? await manage(record, operation).then(
+              (result) => withOrcaMcpSource(sessionId, result),
+              (error: unknown) => ({
+                status: 'failed',
+                message: agentSessionMcpFailureMessage(error)
+              })
+            )
+          : { status: 'unsupported' }
       if (!knows) {
-        return answer
+        return withOrcaMcpChanges(answer, changes)
       }
-      return withKnownSessionMcpServers(answer, {
+      const known = await withKnownSessionMcpServers(answer, {
         sessionId,
         agent: saved.provider,
         workspaceId: saved.location.workspaceId,
@@ -59,6 +75,7 @@ export const STRUCTURED_AGENT_SESSION_MCP_METHODS = [
         running,
         manages: manage !== undefined
       })
+      return withOrcaMcpChanges(known, changes)
     }
   })
 ]
