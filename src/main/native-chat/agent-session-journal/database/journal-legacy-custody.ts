@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import Database from '../../../sqlite/sync-database'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { agentSessionAttachmentStoreRoot } from '../../agent-session-attachments/agent-session-attachment-references'
-import { journalForkAttachmentHeld } from '../journal-fork-stage-state'
 import { journalPragmaNumber } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
 import {
@@ -129,9 +128,9 @@ function legacyClaimsPage(
   const resolved = new Map<string, boolean>()
   const chatResolved = (sessionId: string): boolean => {
     // A chat that failed to join keeps its original's revision too, so a failure never resolves.
+    // Fork holds keep claims here, so an upload they hold never reaches this check.
     if (
       recordedHere.get(sessionId) !== undefined ||
-      journalForkAttachmentHeld(db, sessionId) ||
       readMeta(db, journalLegacyFailureKey(sessionId)) !== undefined
     ) {
       return false

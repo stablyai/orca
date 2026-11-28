@@ -38,7 +38,7 @@ export async function applyJournalSqlWriteRequest(
 ): Promise<JournalSqlCommitResponse> {
   const { database, executor, forks, stateDirectory } = context
   const { command, id } = request
-  const checkpoint = forks.checkpoint()
+  const checkpoint = journalSqlLeavesForksAlone(request) ? undefined : forks.checkpoint()
   try {
     if (command.type === 'maintenance') {
       if (
@@ -72,9 +72,23 @@ export async function applyJournalSqlWriteRequest(
           )
         }
   } catch (error) {
-    forks.rollback(checkpoint)
+    if (checkpoint) {
+      forks.rollback(checkpoint)
+    }
     throw error
   }
+}
+
+/** A custody page neither reads nor changes fork stages, so it takes no fork snapshot. */
+export function journalSqlLeavesForksAlone(request: JournalSqlWriteRequest): boolean {
+  const { command } = request
+  return (
+    command.type === 'effects' &&
+    command.effects.length > 0 &&
+    command.effects.every(
+      (effect) => effect.kind === 'sweep' && effect.operation.kind === 'legacy-custody'
+    )
+  )
 }
 
 /** A durable retirement save or a fork install raises the whole transaction's sync level. */

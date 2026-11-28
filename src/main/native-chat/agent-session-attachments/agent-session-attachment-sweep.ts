@@ -39,7 +39,9 @@ export async function sweepAgentSessionAttachments(
   const removed: string[] = []
   // Before any mark, folder or claim prune: a pruned claim of an unadopted chat loses its upload.
   if (!(await facts.legacyCustodyKnown(stopped))) {
-    facts.onLegacyCustodyUnknown?.()
+    if (!stopped()) {
+      facts.onLegacyCustodyUnknown?.()
+    }
     return { removed }
   }
   // Undefined until read; null keeps every stored upload this pass.

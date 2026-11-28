@@ -22,6 +22,7 @@ import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
 import {
   applyJournalSqlWriteRequest,
+  journalSqlLeavesForksAlone,
   journalSqlWriteDurability,
   type JournalSqlCommitResponse,
   type JournalSqlWriteContext,
@@ -259,7 +260,9 @@ async function runWrites(
       journalSqlWriteDurability(list),
       urgent
     )
-    forks!.acknowledge()
+    if (!list.every(journalSqlLeavesForksAlone)) {
+      forks!.acknowledge()
+    }
     // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.
     return {
       rolledBack: false,

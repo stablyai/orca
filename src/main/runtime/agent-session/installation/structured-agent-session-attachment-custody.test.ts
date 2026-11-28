@@ -266,6 +266,31 @@ it('holds an upload the older Orca claimed after this open reconciled', async ()
   expect(stored(root, OWNED)).toBe(true)
 })
 
+it('checks every page of a large original before removing anything', async () => {
+  const root = profile()
+  const late = 'f0e1d2c3-b4a5-4968-8776-655443322110'
+  original(root, (db) => {
+    chat(db, 'kept')
+    // More claims than one page holds, so the one this file later loses is on the second page.
+    for (let index = 0; index < 200; index++) {
+      claim(db, `gone-${index}`, 'kept')
+    }
+    claim(db, late, 'kept')
+  })
+  upload(root, late)
+  upload(root, ORPHAN)
+  await launch(root)
+  expect([late, ORPHAN].map((id) => stored(root, id))).toEqual([true, false])
+
+  // Released here while the older Orca still shows it attached.
+  destination(root, (db) =>
+    db.prepare('DELETE FROM agent_session_attachment_claims WHERE upload_id=?').run(late)
+  )
+  upload(root, ORPHAN)
+  await launch(root)
+  expect([late, ORPHAN].map((id) => stored(root, id))).toEqual([true, true])
+})
+
 it('takes neither a missing original with a companion nor a lost initializer race as absent', async () => {
   const companion = profile()
   writeFileSync(`${journalDatabasePath(companion)}-wal`, 'frames')
