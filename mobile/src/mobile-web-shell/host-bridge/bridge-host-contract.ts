@@ -27,6 +27,7 @@ import type { BridgeErrorCapture } from '../bridge/protocol/bridge-error-capture
 import type { BridgeNativeVerb } from '../bridge/native-capabilities/bridge-native-verbs'
 import type { BridgeNotifyRefusal } from '../bridge/protocol/bridge-notify-grants'
 import type { PageStorageForInit } from '../page-storage/page-storage-keys'
+import type { BridgeSideStripFree } from '../bridge/page-geometry/bridge-side-strip-cover'
 
 // Only popped moves the stack; nothing-to-pop means root entry, while pop-pending means a duplicate frame before the queued pop commits.
 export type BridgeNavigateBackOutcome = 'popped' | 'nothing-to-pop' | 'pop-pending'
@@ -126,6 +127,8 @@ export type BridgeHostOptions = {
   onPageLocation: (href: string) => void
   // The page's answer to sendAppResumed: whether reloading it onto a newer build now loses nothing.
   onPageSwapSafe?: (safe: boolean, round: number) => void
+  // Whether the page lays itself across the side strip; only pages granted `sideStripCover` report it.
+  onSideStripCover?: (covered: boolean, free: BridgeSideStripFree | null) => void
   /** The page shows a terminal with its key row, or stopped; false also arrives each time a
    *  document starts or ends, and the page claims again on the `init` that follows. */
   onTerminalKeyRailClaim?: (

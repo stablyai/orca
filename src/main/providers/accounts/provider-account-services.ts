@@ -1,4 +1,8 @@
 // Keep Electron imports out: both desktop and orcad bundle these account services.
+import { join } from 'node:path'
+import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { UsageHistoryRecorder } from '../../rate-limits/usage-history/usage-history-recorder'
+import { UsageLastGoodStore } from '../../rate-limits/usage-last-good/usage-last-good-store'
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { Store } from '../../persistence/loading-store/store'
 import { RateLimitService } from '../../rate-limits/service/rate-limit-service'
@@ -46,6 +50,13 @@ export function createProviderAccountServices(
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())
   const rateLimits = new RateLimitService()
+  rateLimits.setUsageHistoryRecorder(
+    new UsageHistoryRecorder(
+      hasAppEnvironment()
+        ? join(getAppEnvironment().getPath('userData'), 'orca-usage-window-history.json')
+        : null
+    )
+  )
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(
     store,
@@ -86,6 +97,13 @@ export function createProviderAccountServices(
     resolveKimiHome(resolveLocalAccountUsageTarget(store.getSettings()))
   )
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
+  void rateLimits.setUsageLastGoodStore(
+    new UsageLastGoodStore(
+      hasAppEnvironment()
+        ? join(getAppEnvironment().getPath('userData'), 'orca-usage-last-good.json')
+        : null
+    )
+  )
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
     store.getSettings()

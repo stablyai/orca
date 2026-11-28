@@ -99,7 +99,11 @@ export function MobileSessionSidebarStage({
   ) : null
   return (
     <View
-      style={[styles.stage, docked && styles.stageDocked]}
+      style={[
+        styles.stage,
+        docked && styles.stageDocked,
+        shown && !docked && styles.stageAboveRail
+      ]}
       onLayout={(event) => sidebar.onStageLayout(event.nativeEvent.layout.width)}
     >
       {/* Docked, the panel comes first so row-reverse puts it on the right. */}
@@ -153,6 +157,8 @@ const stylesSheet = themedStyleSheet((colors, scheme) => {
   return {
     stage: { flex: 1, backgroundColor: ground, overflow: 'hidden' },
     stageDocked: { flexDirection: 'row-reverse' },
+    // Above Duo rail-back and rail-jump overlays, under Modal drawers (zIndex 1000).
+    stageAboveRail: { zIndex: 1 },
     card: { flex: 1, backgroundColor: colors.bgBase },
     cardContent: { flex: 1 },
     cover: { position: 'absolute', top: 0, bottom: 0, left: 0, width: SIDEBAR_PEEK },
