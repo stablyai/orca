@@ -2,9 +2,10 @@ import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
+import { useHostProjectAddedHandoff, usePlusActionSheet } from './host-project-admission-actions'
+import { REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/mobile-runtime-capabilities'
 import { floatingWorkspaceSessionPath } from '../../session/floating-workspace'
 import { holdSessionLeave } from '../../session/session-leave-guard'
-import { savePinnedIds } from '../../storage/preferences'
 import type { useForgetHostClient } from '../../transport/connection/host-client-hooks'
 import { removeHostAndCloseClient } from '../../host-catalog/host-removal-lifecycle'
 import { isPageHostRemovalUnavailable } from '../../host-catalog/page-host-removal-refusal'
@@ -16,14 +17,11 @@ import {
 import { serverUpdateNeededNotice } from '../../host-route-notice'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { leaveHostRoute } from '../../host-route-exit'
-import {
-  getWorktreeRowIdentity,
-  isSameWorktreeRow
-} from '../../worktree/row-presentation/worktree-host-row-identity'
+import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
+import { useHostWorktreePins } from './use-host-worktree-pins'
 import { noteLastVisitedWorktree } from '../../worktree/navigation/last-visited-worktree-by-host'
-import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
-import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
+import { worktreeActivate, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
 import { useHostWorktreeRowWrites } from './use-host-worktree-row-writes'
@@ -34,7 +32,7 @@ export function useHostWorktreeActions(args: {
   client: RpcClient | null
   connState: ConnectionState
   embedded: boolean
-  fetchWorktrees: (options?: { allowDuringModal?: boolean }) => Promise<void>
+  fetchWorktrees: (options?: { allowDuringModal?: boolean }) => Promise<Worktree[] | undefined>
   forgetHostClient: ReturnType<typeof useForgetHostClient>
   hostCapabilities: readonly string[]
   hostId: string | undefined
@@ -56,18 +54,15 @@ export function useHostWorktreeActions(args: {
   } = args
   const queryClient = useQueryClient()
   const {
-    pinnedIds,
     setActionError,
     setConfirmRemoveHost,
-    setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,
-    setPinnedIds,
     serverWorkspaces,
     setNewWorktreeVisible,
     setServerNotice,
-    setServerWorkspaces,
+    setShowAddProject,
+    setShowPlusActionSheet,
     setSleptIds,
-    setWorktrees,
     worktrees
   } = state
 
@@ -94,75 +89,23 @@ export function useHostWorktreeActions(args: {
     [setNewWorktreeVisible]
   )
 
-  const updateLocalPins = useCallback(
-    (worktreeId: string, pinned: boolean) => {
-      // Switch point: a feed-built list keeps no pin cache of its own.
-      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-        return
-      }
-      setPinnedIds((prev) => {
-        const next = new Set(prev)
-        if (pinned) {
-          next.add(worktreeId)
-        } else {
-          next.delete(worktreeId)
-        }
-        if (hostId) {
-          void savePinnedIds(hostId, next)
-        }
-        return next
-      })
-    },
-    [hostId]
-  )
+  // Why: hosts without the add-project capability never list it, so the + goes straight
+  // to the create form there — a one-row sheet would be an extra tap for nothing.
+  const addProjectSupported = hostCapabilities.includes(REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY)
+  const { openAddProject, openPlusActionSheet } = usePlusActionSheet({
+    addProjectSupported,
+    openNewWorktreeModal,
+    setShowAddProject,
+    setShowPlusActionSheet
+  })
 
-  const togglePin = useCallback(
-    (item: Worktree) => {
-      // Why: the desktop pins a server's workspace on that server (worktree.set at its owner).
-      if (item.hostId?.startsWith('runtime:')) {
-        const rowClient = clientForRow(item)
-        if (!rowClient) {
-          return
-        }
-        const isPinned = !item.isPinned
-        setServerWorkspaces((prev) => ({
-          ...prev,
-          worktrees: prev.worktrees.map((w) =>
-            isSameWorktreeRow(w, item) ? { ...w, isPinned } : w
-          )
-        }))
-        void worktreePinWrite
-          .request(rowClient, { worktree: `id:${item.worktreeId}`, isPinned })
-          .catch(() => {})
-        return
-      }
-      const { worktreeId } = item
-      const worktree = worktrees.find((w) => w.worktreeId === worktreeId)
-      const currentlyPinned = worktree
-        ? isWorktreePinned(worktree, pinnedIds)
-        : pinnedIds.has(worktreeId)
-      const newPinned = !currentlyPinned
-
-      setWorktrees((prev) =>
-        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, isPinned: newPinned } : w))
-      )
-      setLastKnownWorktrees((prev) =>
-        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, isPinned: newPinned } : w))
-      )
-
-      updateLocalPins(worktreeId, newPinned)
-
-      if (client) {
-        worktreePinWrite
-          .request(client, {
-            worktree: `id:${worktreeId}`,
-            isPinned: newPinned
-          })
-          .catch(() => {})
-      }
-    },
-    [client, clientForRow, worktrees, pinnedIds, updateLocalPins]
-  )
+  const { togglePin } = useHostWorktreePins({
+    client,
+    clientForRow,
+    hostId,
+    state,
+    worktrees
+  })
 
   const putWorktreeToSleep = useCallback(
     (item: Worktree) => {
@@ -305,6 +248,8 @@ export function useHostWorktreeActions(args: {
     ]
   )
 
+  const handleProjectAdded = useHostProjectAddedHandoff({ fetchWorktrees, openWorktreeSession })
+
   const openFloatingWorkspace = useCallback(() => {
     // The floating sentinel has no worktree record to activate; tabs.list hydrates its host-owned tabs.
     navigateFromHostList(floatingWorkspaceSessionPath(hostId))
@@ -313,12 +258,15 @@ export function useHostWorktreeActions(args: {
   return {
     ...worktreeDelete,
     ...rowWrites,
+    handleProjectAdded,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,
+    openAddProject,
     openFloatingWorkspace,
     openNewWorktreeModal,
     closeNewWorktreeModal,
+    openPlusActionSheet,
     openWorktreeSession,
     putWorktreeToSleep,
     renameWorktree,

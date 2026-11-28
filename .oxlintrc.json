@@ -1,6 +1,12 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "react", "react-hooks", "react-perf", "unicorn"],
+  "plugins": [
+    "typescript",
+    "react",
+    "react-hooks",
+    "react-perf",
+    "unicorn"
+  ],
   "categories": {
     "correctness": "error"
   },
@@ -33,17 +39,39 @@
     "react/no-deriving-state-in-effects": "error",
     "react/jsx-curly-brace-presence": [
       "error",
-      { "props": "never", "children": "never", "propElementValues": "always" }
+      {
+        "props": "never",
+        "children": "never",
+        "propElementValues": "always"
+      }
     ],
-    "react/jsx-filename-extension": ["error", { "extensions": [".tsx", ".jsx"] }],
+    "react/jsx-filename-extension": [
+      "error",
+      {
+        "extensions": [
+          ".tsx",
+          ".jsx"
+        ]
+      }
+    ],
     "react/jsx-fragments": "error",
     "react/jsx-key": "error",
     "react/jsx-no-constructed-context-values": "error",
     "react/jsx-no-target-blank": "error",
-    "react/jsx-no-useless-fragment": ["error", { "allowExpressions": true }],
+    "react/jsx-no-useless-fragment": [
+      "error",
+      {
+        "allowExpressions": true
+      }
+    ],
     "react/jsx-pascal-case": "error",
     "react/no-object-type-as-default-prop": "error",
-    "react/no-unstable-nested-components": ["warn", { "allowAsProps": true }],
+    "react/no-unstable-nested-components": [
+      "warn",
+      {
+        "allowAsProps": true
+      }
+    ],
     "react/self-closing-comp": "error",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",
@@ -51,9 +79,17 @@
     "typescript/consistent-generic-constructors": "error",
     "typescript/consistent-indexed-object-style": "error",
     "typescript/consistent-type-assertions": "error",
-    "typescript/consistent-type-definitions": ["error", "type"],
+    "typescript/consistent-type-definitions": [
+      "error",
+      "type"
+    ],
     "typescript/consistent-type-imports": "error",
-    "typescript/no-explicit-any": ["error", { "ignoreRestArgs": true }],
+    "typescript/no-explicit-any": [
+      "error",
+      {
+        "ignoreRestArgs": true
+      }
+    ],
     "typescript/no-confusing-non-null-assertion": "error",
     "typescript/no-import-type-side-effects": "error",
     "typescript/no-unnecessary-boolean-literal-compare": "error",
@@ -65,7 +101,9 @@
     "typescript/prefer-ts-expect-error": "error",
     "typescript/switch-exhaustiveness-check": [
       "error",
-      { "allowDefaultCaseForExhaustiveSwitch": false }
+      {
+        "allowDefaultCaseForExhaustiveSwitch": false
+      }
     ],
     "curly": "error",
     "no-unneeded-ternary": "error",
@@ -115,14 +153,19 @@
   },
   "overrides": [
     {
-      "files": ["src/main/backend/**/*.ts"],
+      "files": [
+        "src/main/backend/**/*.ts"
+      ],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
               {
-                "group": ["electron", "electron/*"],
+                "group": [
+                  "electron",
+                  "electron/*"
+                ],
                 "message": "Backend services use the typed desktop capability bridge; only the shell imports Electron."
               }
             ]
@@ -131,7 +174,9 @@
       }
     },
     {
-      "files": ["**/*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}"],
+      "files": [
+        "**/*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}"
+      ],
       "excludeFiles": [
         "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
         "**/__tests__/**",
@@ -168,7 +213,9 @@
       }
     },
     {
-      "files": ["src/main/backend/**/*.ts"],
+      "files": [
+        "src/main/backend/**/*.ts"
+      ],
       "excludeFiles": [
         "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
         "**/__tests__/**",
@@ -200,7 +247,10 @@
                 "message": "Component fixtures are dev-only and load through the fixture explorer's import.meta.glob; importing one would ship it in a production bundle."
               },
               {
-                "group": ["electron", "electron/*"],
+                "group": [
+                  "electron",
+                  "electron/*"
+                ],
                 "message": "Backend services use the typed desktop capability bridge; only the shell imports Electron."
               }
             ]
@@ -209,7 +259,9 @@
       }
     },
     {
-      "files": ["src/main/{window,browser,updater,menu,tray,hang-watchdog}/**/*.ts"],
+      "files": [
+        "src/main/{window,browser,updater,menu,tray,hang-watchdog}/**/*.ts"
+      ],
       "excludeFiles": [
         "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
         "**/__tests__/**",
@@ -250,7 +302,9 @@
       }
     },
     {
-      "files": ["src/main/runtime/**/*.ts"],
+      "files": [
+        "src/main/runtime/**/*.ts"
+      ],
       "excludeFiles": [
         "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
         "**/__tests__/**",
@@ -282,7 +336,10 @@
                 "message": "Component fixtures are dev-only and load through the fixture explorer's import.meta.glob; importing one would ship it in a production bundle."
               },
               {
-                "group": ["electron", "electron/*"],
+                "group": [
+                  "electron",
+                  "electron/*"
+                ],
                 "message": "The runtime reaches windows, renderers and dialogs through RuntimeDesktopSurface; only the desktop shell imports Electron."
               }
             ]
@@ -291,7 +348,9 @@
       }
     },
     {
-      "files": ["src/renderer/src/**/*.{ts,tsx}"],
+      "files": [
+        "src/renderer/src/**/*.{ts,tsx}"
+      ],
       "rules": {
         "no-restricted-properties": [
           "error",
@@ -303,7 +362,9 @@
       }
     },
     {
-      "files": ["src/shared/**/*.ts"],
+      "files": [
+        "src/shared/**/*.ts"
+      ],
       "rules": {
         "no-restricted-properties": [
           "error",
@@ -315,27 +376,60 @@
       }
     },
     {
-      "files": ["**/*.test.*", "**/*.spec.*", "**/*-benchmark.*"],
+      "files": [
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/*-benchmark.*"
+      ],
       "rules": {
         "react/globals": "off"
       }
     },
     {
-      "files": ["**/*.ts", "**/*.mts", "**/*.cts"],
+      "files": [
+        "**/*.ts",
+        "**/*.mts",
+        "**/*.cts"
+      ],
       "rules": {
-        "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": [
+          "error",
+          {
+            "max": 300,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
       }
     },
     {
-      "files": ["**/*.tsx"],
+      "files": [
+        "**/*.tsx"
+      ],
       "rules": {
-        "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": [
+          "error",
+          {
+            "max": 400,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
       }
     },
     {
-      "files": ["**/*.mjs"],
+      "files": [
+        "**/*.mjs"
+      ],
       "rules": {
-        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": [
+          "error",
+          {
+            "max": 600,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
       }
     },
     {
@@ -350,7 +444,14 @@
         "**/*.spec.cts"
       ],
       "rules": {
-        "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": [
+          "error",
+          {
+            "max": 800,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
       }
     },
     {
@@ -377,7 +478,9 @@
             ],
             "patterns": [
               {
-                "group": ["**/rpc-method-registry"],
+                "group": [
+                  "**/rpc-method-registry"
+                ],
                 "allowTypeImports": true,
                 "message": "The registry imports every RPC method (~3.4k modules); take the method list as a parameter so importers stay light."
               }

@@ -45,13 +45,14 @@ export function HostBottomBar({
         onPress: () => state.setShowWorkspaceOptions(true),
         badge: activeFilterCount
       }}
-      // Hidden until it can work, rather than shown greyed.
+      // Hidden until it can work, rather than shown greyed; opens the two-choice sheet
+      // (New workspace / Add project) when the host can add projects.
       primary={
         connState === 'connected'
           ? {
               icon: Plus,
               accessibilityLabel: t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
-              onPress: actions.openNewWorktreeModal
+              onPress: actions.openPlusActionSheet
             }
           : undefined
       }

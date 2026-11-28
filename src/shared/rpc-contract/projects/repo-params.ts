@@ -27,7 +27,7 @@ export const RepoPath = lazyZodSchema(() =>
 
 export const RepoCreate = lazyZodSchema(() =>
   z.object({
-    parentPath: requiredString('Missing parent path'),
+    parentPath: OptionalString,
     name: requiredString('Missing repo name'),
     kind: z.enum(['git', 'folder']).optional()
   })
@@ -36,7 +36,7 @@ export const RepoCreate = lazyZodSchema(() =>
 export const RepoClone = lazyZodSchema(() =>
   z.object({
     url: requiredString('Missing clone URL'),
-    destination: requiredString('Missing clone destination'),
+    destination: OptionalString,
     folderName: z.string().optional()
   })
 )

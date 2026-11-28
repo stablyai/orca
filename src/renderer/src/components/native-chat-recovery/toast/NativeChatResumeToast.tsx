@@ -186,7 +186,7 @@ export function NativeChatResumeToast({
   const showDismissAll = onDismissAll !== undefined && offering
   const detailsButton = showDetails && (
     <Button
-      variant={offering ? 'ghost' : 'ghost-muted-disclosure'}
+      variant={offering ? 'ghost' : 'ghost-muted'}
       size={offering ? 'xs' : 'xs-compact'}
       className={offering && !showResume ? '-ml-2' : undefined}
       aria-expanded={expanded}
