@@ -42,7 +42,8 @@ export function useChatMathRendering(enabled: boolean): () => ReturnType<typeof 
 // KaTeX breaks inline lines only between top-level `.base` parts; a single part needs its own scroller.
 function isUnbreakableInlineMath(content: RootContent[]): boolean {
   let parts = -1
-  visit({ type: 'root', children: content } as Root, 'element', (node) => {
+  const root: Root = { type: 'root', children: content }
+  visit(root, 'element', (node) => {
     const names = node.properties.className
     if (Array.isArray(names) && names.includes('katex-html')) {
       parts = node.children.filter(
