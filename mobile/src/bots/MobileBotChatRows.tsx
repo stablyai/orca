@@ -33,7 +33,7 @@ import type {
 } from './host-bot-row-facts'
 import { ChatBadgedIcon, useMobileBotChatLabel } from './MobileBotChatLeading'
 import { MobileBotTextButton } from './MobileBotTextButton'
-import { chatPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/chat-pane-address'
 
 // The chat's icon sits centred under the bot's 32 pt avatar and its title starts where the bot's
 // does; a worker's status under the chat's title, each child one step further in.

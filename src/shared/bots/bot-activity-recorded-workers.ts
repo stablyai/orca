@@ -6,7 +6,7 @@ import {
 } from '../orchestration-session-workers'
 import type { AgentDotState } from '../agent-dot-state'
 import { agentRowDotState } from '../agent-row-dot-state'
-import { chatPaneKey } from '../agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../agent-session/view/chat-pane-address'
 import type {
   BotActivityInput,
   BotActivityOrigin,
