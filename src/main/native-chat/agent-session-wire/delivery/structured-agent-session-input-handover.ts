@@ -80,6 +80,7 @@ export async function beginStructuredAgentSessionInputHandover(
       journal: session.journal,
       fence: awaitedChild.fence,
       adapter: deps.adapter,
+      providerReceipts: deps.providerReceipts,
       agents: deps.agents,
       failureTextContext: failureTextContext,
       record: () => deps.record(sessionId),

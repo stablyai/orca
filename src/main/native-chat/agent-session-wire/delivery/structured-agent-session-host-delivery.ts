@@ -88,6 +88,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>
   clientDelivery: Pick<
     StructuredAgentSessionClientDelivery,
+    | 'subscribers'
     | 'publishRestored'
     | 'readChildWork'
     | 'childWorkOpen'
@@ -147,6 +148,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     readiness: input.readiness,
     startFlights: input.startFlights,
     deliveryOrder: input.deliveryOrder,
+    providerReceipts: input.clientDelivery.subscribers.providerReceipts,
     conversationFence: (id) => structuredAgentSessionConversationFence(deps.store, id),
     closeWhatTheUserClosed: (sessionId) => closeWhatTheUserClosed(deps, sessions, sessionId),
     turnContext: deps.turnContext,

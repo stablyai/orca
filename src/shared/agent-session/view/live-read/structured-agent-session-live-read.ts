@@ -56,6 +56,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     | AgentSessionTextAppendCapabilities
   /** Whether this reader shows prompt suggestions and the host takes the param; a rejection means no. */
   promptSuggestions?: Promise<boolean> | boolean
+  providerReceived?: boolean
   liveTextViewer?: Parameters<typeof createStructuredAgentSessionSubscribeAsks>[0]['liveTextViewer']
   readCurrentRequests: (
     request: AgentSessionCurrentRequestsRead
@@ -87,6 +88,12 @@ export function startStructuredAgentSessionLiveRead(args: {
       args.applyEvent(event)
     }
   }, args.coalesce)
+  const clearProviderReceived = (): void => {
+    if (args.providerReceived) {
+      coalescer.clearProviderReceived()
+      args.applyRequests?.({ type: 'clear-provider-received' })
+    }
+  }
   const reconnectScheduler = createReconnectScheduler({
     shouldStop: () => stopped || connected || failedFinally,
     reconnect: () => void open()
@@ -95,6 +102,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   const stopHostContactWatch = args.subscribeRetryNow(() => reconnectScheduler.retryNow())
   const loseContact = (): void => {
     connected = false
+    clearProviderReceived()
     // Flush before marking contact lost or buffered frames would appear to restore contact.
     coalescer.flush()
     requestReader.invalidate()
@@ -141,6 +149,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   const replaceStream = (eventOpenGeneration: number): void => {
     replacedOpenGeneration = eventOpenGeneration
     asks.refuseAppends()
+    clearProviderReceived()
     if (!connected) {
       // Still opening: retry later; the open drops its handle when it lands.
       loseContact()
@@ -315,6 +324,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       stopHostContactWatch()
       reconnectScheduler.dispose()
       coalescer.dispose()
+      clearProviderReceived()
       asks.dispose()
       unsubscribe()
     }

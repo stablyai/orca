@@ -1,5 +1,7 @@
 // Commit pending/settlement around an external provider call so concurrent sends remain acceptable.
 
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { BeginProviderReceipt } from '../journal-ingress/provider-receipt-publication'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -22,6 +24,7 @@ import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   handOverStructuredAgentSessionCommand,
+  localProviderReceipt,
   structuredAgentSessionHandoverOrigin
 } from '../operations/structured-agent-session-command-turn'
 import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
@@ -61,7 +64,7 @@ export async function beginSubmissionHandover(
     await whileStructuredAgentSessionHandingOver(
       ctx.journal,
       clientMessageId,
-      async () => handOverStructuredAgentSessionCommand(ctx, submission, body),
+      async () => handOverStructuredAgentSessionCommand(ctx, submission, body, stillCurrent),
       ctx.workChanged
     )
     return null
@@ -89,13 +92,26 @@ export async function beginSubmissionHandover(
   )
   const attempt = ctx.acquireAborts?.begin(ctx.sessionId, true, false, isBound)
   const queued = submission.queuedMessageId !== undefined
+  let dispatchCursor: AgentJournalCursor | undefined
+  let claudeUuidUnused: boolean
+  const providerReceipt = localProviderReceipt(ctx, clientMessageId, () => ownsChild(), attempt?.signal)
+  const beginProviderReceipt: BeginProviderReceipt | undefined = providerReceipt
+    ? () => {
+        const unused = claudeUuidUnused
+        claudeUuidUnused = false
+        return dispatchCursor ? providerReceipt(dispatchCursor, unused) : undefined
+      }
+    : undefined
   try {
-    carried = await ctx.journal.prepareHandover({
+    const prepared = await ctx.journal.prepareHandover({
       clientMessageId,
       fence: ctx.fence,
       turnScope,
       body
     })
+    carried = prepared.carried
+    dispatchCursor = prepared.dispatchCursor
+    claudeUuidUnused = prepared.firstHandover
     await rideAlong.claim(ctx.fence, turnScope)
   } catch (error) {
     attempt?.end()
@@ -105,12 +121,14 @@ export async function beginSubmissionHandover(
   }
   const prepareFresh = async (fence: number): Promise<AgentJournalMessageItem> => {
     ctx.fence = fence
-    carried = await ctx.journal.prepareHandover({
+    const prepared = await ctx.journal.prepareHandover({
       clientMessageId,
       fence,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE,
       body
     })
+    carried = prepared.carried
+    dispatchCursor = prepared.dispatchCursor
     await rideAlong.claim(fence, AGENT_JOURNAL_THREAD_SCOPE)
     return outgoing()
   }
@@ -150,7 +168,8 @@ export async function beginSubmissionHandover(
                       queued,
                       ownsChild,
                       prepareFresh,
-                      attempt?.signal
+                      attempt?.signal,
+                      beginProviderReceipt
                     )
                   : null
               break
@@ -245,7 +264,8 @@ async function dispatchSafely(
   queued: boolean,
   isCurrent: () => boolean,
   prepare: (fence: number) => Promise<AgentJournalMessageItem>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  beginProviderReceipt?: BeginProviderReceipt
 ): Promise<AgentSessionDispatchOutcome> {
   const { admitFreshInput } = ctx
   try {
@@ -265,7 +285,8 @@ async function dispatchSafely(
       fence: ctx.fence,
       requestedAt,
       onInputPreparation: ctx.recordRanOptions?.prepareInput,
-      onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
+      onExecutionSnapshot: ctx.recordRanOptions?.checkpoint,
+      ...(beginProviderReceipt ? { beginProviderReceipt } : {})
     })
     return outcome
   } catch (error) {

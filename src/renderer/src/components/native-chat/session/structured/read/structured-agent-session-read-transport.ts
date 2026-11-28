@@ -67,6 +67,7 @@ export function startStructuredAgentSessionReadTransport(
     // A streaming reply goes out as its new text every window. The local host ships with this
     // renderer, so it is asked without a check and the read still opens in the same turn.
     textAppend: asks ? asks.textAppend : LOCAL_TEXT_APPEND,
+    providerReceived: target.kind === 'local',
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
     coalesce: { visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail) },
     // Only a shown window takes live text; a hidden one gets saves, and the newest text on show.

@@ -6,6 +6,7 @@ import { JournalCursor, SessionId } from './structured-agent-session-identifiers
 const SubscribeCapabilities = lazyZodSchema(() =>
   z.object({
     textAppend: z.literal(1).optional(),
+    providerReceived: z.literal(1).optional(),
     toolOutputAppend: z.literal(1).optional(),
     // This reader shows suggestions on screen; the host pauses generating them while none does.
     promptSuggestions: z.literal(1).optional(),

@@ -61,6 +61,7 @@ export type SubscriberDeliveryRetention = {
 export class SubscriberDeliveryLane {
   private readonly pending: LaneEntry[] = []
   private active: LaneEntry | undefined
+  private receiptJob: { since: number; run: () => void } | undefined
   private scheduled = false
   /** Live text the running delivery holds, whether a live-text entry or sent by ordered work. */
   private delivering: readonly AgentJournalRenderItem[] | undefined
@@ -70,12 +71,17 @@ export class SubscriberDeliveryLane {
   constructor(private readonly runners: SubscriberDeliveryLaneRunners) {}
 
   get idle(): boolean {
-    return !this.active && !this.scheduled && this.pending.length === 0
+    return !this.active && !this.scheduled && !this.receiptJob && this.pending.length === 0
   }
 
   /** Catch-ups and refreshes never merge across ordered work: it may reset what they read from. */
   ordered(run: () => Promise<unknown>): void {
     this.add({ kind: 'ordered', since: this.runners.now(), run })
+  }
+
+  providerReceived(run: () => void): void {
+    this.receiptJob = { since: this.receiptJob?.since ?? this.runners.now(), run }
+    this.schedule()
   }
 
   catchUp(next: SubscriberCatchUp): void {
@@ -157,6 +163,7 @@ export class SubscriberDeliveryLane {
   /** Releases waiting work and withdraws queued reads; the active delivery gets no more frames. */
   clear(): void {
     this.pending.length = 0
+    this.receiptJob = undefined
     this.stop.abort()
   }
 
@@ -178,7 +185,11 @@ export class SubscriberDeliveryLane {
       }
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)
-    return { pending: entries.length, oldestMs: now - oldest, liveTextBytes }
+    return {
+      pending: entries.length + Number(this.receiptJob !== undefined),
+      oldestMs: now - Math.min(oldest, this.receiptJob?.since ?? now),
+      liveTextBytes
+    }
   }
 
   private openIndex(kind: LaneEntry['kind']): number | undefined {
@@ -196,6 +207,10 @@ export class SubscriberDeliveryLane {
 
   private add(entry: LaneEntry): void {
     this.pending.push(entry)
+    this.schedule()
+  }
+
+  private schedule(): void {
     if (!this.active && !this.scheduled) {
       this.scheduled = true
       queueMicrotask(() => void this.drain())
@@ -207,6 +222,11 @@ export class SubscriberDeliveryLane {
     while (!this.active) {
       const entry = this.pending.shift()
       if (!entry) {
+        const receipt = this.receiptJob
+        this.receiptJob = undefined
+        if (receipt && this.runners.runnable()) {
+          receipt.run()
+        }
         return
       }
       this.active = entry

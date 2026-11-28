@@ -64,6 +64,7 @@ export function applyJournalDomainCommandTurn(
     operation.kind === 'command-open'
       ? { ...operation.input, state: 'pending' as const }
       : operation.input.dispatch
+  let dispatchSequence: number | undefined
   const restoreDispatchEvents = checkpointJournalRequestEvents(db)
   db.exec('SAVEPOINT journal_command_dispatch')
   try {
@@ -75,6 +76,7 @@ export function applyJournalDomainCommandTurn(
     )
     db.exec('RELEASE journal_command_dispatch')
     appendJournalDomainInputCommit(result, commit)
+    dispatchSequence = commit.items.find((item) => item.sequence === commit.cursor.sequence)?.sequence
   } catch (error) {
     db.exec('ROLLBACK TO journal_command_dispatch; RELEASE journal_command_dispatch')
     restoreDispatchEvents()
@@ -132,7 +134,7 @@ export function applyJournalDomainCommandTurn(
       }
       db.exec('RELEASE journal_command_turn')
       appendJournalDomainInputCommit(result, step)
-      result.value = { value: { turn, running } }
+      result.value = { value: { turn, running, dispatchSequence } }
     } else {
       const previous = readJournalDomainDispatchItem(db, target, turn.itemId)
       const running = readAgentJournalTurn(previous?.item.body)

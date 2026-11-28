@@ -29,7 +29,8 @@ export async function dispatchClaudeCommand(
       ...(command.running.requestedAt === undefined
         ? {}
         : { requestedAt: command.running.requestedAt }),
-      sentUuid
+      sentUuid,
+      ...(command.beginProviderReceipt ? { beginProviderReceipt: command.beginProviderReceipt } : {})
     })
     if (admission.state === 'rejected') {
       session.translator?.forgetCommand(command.turnId)

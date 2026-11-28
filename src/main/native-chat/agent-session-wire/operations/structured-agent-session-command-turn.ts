@@ -1,3 +1,7 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { BeginProviderReceipt } from '../journal-ingress/provider-receipt-publication'
+import { withProviderReceipt } from '../journal-ingress/provider-receipt-publication'
+import type { AgentSessionProviderReceipts } from '../publication/subscribers/agent-session-provider-receipts'
 import { isStructuredAgentSessionStopNote } from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
 export {
   isStructuredAgentSessionStopNote,
@@ -129,6 +133,7 @@ export type StructuredAgentSessionCommandHandoverContext = {
   journal: AgentSessionJournal
   fence: number
   adapter: StructuredAgentSessionAdapter
+  providerReceipts?: AgentSessionProviderReceipts
   agents: StructuredAgentRegistry
   readWork?: JournalWorkReader
   failureTextContext?: AgentSessionFailureWordsContext
@@ -143,7 +148,8 @@ export type StructuredAgentSessionCommandHandoverContext = {
 export async function handOverStructuredAgentSessionCommand(
   ctx: StructuredAgentSessionCommandHandoverContext,
   submission: AgentJournalSubmission,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  isCurrent?: () => boolean
 ): Promise<void> {
   const { clientMessageId } = submission
   const blocked = await commandBlocked(ctx, body)
@@ -171,14 +177,23 @@ export async function handOverStructuredAgentSessionCommand(
     )
     return
   }
-  const { turn, running } = await openCommandTurn(ctx, submission)
+  const { turn, running, dispatchCursor } = await openCommandTurn(ctx, submission)
+  const providerReceipt = localProviderReceipt(ctx, clientMessageId, isCurrent)
+  const beginProviderReceipt =
+    dispatchCursor && providerReceipt ? () => providerReceipt(dispatchCursor) : undefined
   const instructions = body.command?.instructions
   let admission: AgentSessionCommandAdmission
   try {
     admission = await ctx.adapter.compact!({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
-      command: { clientMessageId, ...turn, running, ...(instructions ? { instructions } : {}) }
+      command: {
+        clientMessageId,
+        ...turn,
+        running,
+        ...(instructions ? { instructions } : {}),
+        ...(beginProviderReceipt ? { beginProviderReceipt } : {})
+      }
     })
   } catch (error) {
     // Ready-child writes can lose replies after running; never infer non-delivery from throws.
@@ -199,6 +214,42 @@ export async function handOverStructuredAgentSessionCommand(
     // Unknown writes leave lifecycle settlement to provider frames or child exit.
     await ctx.journal.resolveDispatch({ clientMessageId, ...admission, fence: ctx.fence })
   }
+}
+
+
+export function localProviderReceipt(
+  ctx: Pick<StructuredAgentSessionCommandHandoverContext, 'providerReceipts' | 'journal' | 'record' | 'fence'>,
+  clientMessageId: string,
+  isCurrent?: () => boolean,
+  signal?: AbortSignal
+): ((cursor: AgentJournalCursor, claudeUuidUnused?: boolean) => ReturnType<BeginProviderReceipt>) | undefined {
+  const { providerReceipts, journal } = ctx
+  const record = ctx.record()
+  const provider = record?.provider
+  if (
+    !providerReceipts ||
+    !isCurrent ||
+    !record ||
+    record.location.executionHostId !== 'local' ||
+    record.location.wslDistro !== null ||
+    (provider !== 'claude' && provider !== 'codex')
+  ) {
+    return undefined
+  }
+  return (cursor, claudeUuidUnused = true) => withProviderReceipt(() => {
+    const fence = ctx.fence
+    if (provider === 'claude' && !claudeUuidUnused) {
+      return undefined
+    }
+    return providerReceipts.bind({
+      journal,
+      clientMessageId,
+      cursor,
+      fence,
+      provider,
+      owns: () => !signal?.aborted && isCurrent() && ctx.record()?.lease.runtimeFence === fence
+    })
+  })
 }
 
 async function openCommandTurn(

@@ -20,6 +20,7 @@ import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-
 import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import { codexRunningOrOpeningTurn, codexStopTarget } from './codex-structured-turn-open-wait'
+import { withProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 
 /** false means correlation capacity refused the send before writing; null turnId means an unnamed answer. */
@@ -142,6 +143,8 @@ export async function startCodexTurn(
     if (host.permissions && mode) {
       host.permissions.appliedMode = mode
     }
+    const received = input.beginProviderReceipt?.()
+    const origin = received && host.dispatchEchoes.requestOrigin(input.clientMessageId)
     return {
       kind: 'sent' as const,
       response: host.connection
@@ -164,6 +167,14 @@ export async function startCodexTurn(
                 host.dispatchEchoes.repliedTurn(input.clientMessageId, host.threadId, turnId)
               }
               input.onReply?.()
+              if (received && origin && readCodexTurnId(reply, true)) {
+                withProviderReceipt(() =>
+                  received(() =>
+                    host.dispatchEchoes.requestOrigin(input.clientMessageId)?.sequence ===
+                    origin.sequence
+                  )
+                )
+              }
             }
           }
         )

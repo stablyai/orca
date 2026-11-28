@@ -28,6 +28,7 @@ import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capt
 import type { SubscriberDeliveryRetention } from './agent-session-subscriber-delivery-lane'
 import { SubscriberLanes } from './agent-session-subscriber-lane-runners'
 import { trackSubscriberRetention } from './agent-session-subscriber-retention'
+import { AgentSessionProviderReceipts } from './agent-session-provider-receipts'
 import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-suggestion-delivery'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
@@ -38,6 +39,7 @@ export class AgentSessionSubscribers {
   private readonly lanes = new SubscriberLanes({
     deliveryPort: () => this.deliveryPort(),
     now: () => this.now(),
+    caughtUp: (subscriber, journal) => this.providerReceipts.caughtUp(subscriber, journal),
     isActive: (subscriber) => this.isActive(subscriber),
     fail: (subscriber, error) => this.fail(subscriber, error)
   })
@@ -49,6 +51,9 @@ export class AgentSessionSubscribers {
     (id) => this.hooks.readForkJournal?.(id),
     (subscriber, journal) =>
       this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
+  )
+  readonly providerReceipts = new AgentSessionProviderReceipts((sub, send) =>
+    this.lanes.of(sub).providerReceived(send)
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
   private readonly viewerShows = new liveText.LiveTextViewerShows({
@@ -95,6 +100,9 @@ export class AgentSessionSubscribers {
     subscriber.stopped = this.lanes.of(subscriber).stopped
     const replaced = session.get(input.id)
     if (replaced) {
+      if (replaced.readsProviderReceived) {
+        this.providerReceipts.drop(replaced)
+      }
       this.lanes.clear(replaced)
     }
     session.set(input.id, subscriber)
@@ -115,10 +123,17 @@ export class AgentSessionSubscribers {
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       }
       await this.sendLiveTail(subscriber, journal, input.fence)
+      if (subscriber.readsProviderReceived) {
+        this.providerReceipts.caughtUp(subscriber, journal)
+      }
     })
     this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
-    return () => this.close(sessionId, id)
+    return () => {
+      if (this.isActive(subscriber)) {
+        this.close(sessionId, id)
+      }
+    }
   }
 
   close(sessionId: string, id: string): void {
@@ -204,6 +219,9 @@ export class AgentSessionSubscribers {
       this.enqueue(subscriber, async () => {
         await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
         await this.sendLiveTail(subscriber, journal, fence)
+        if (subscriber.readsProviderReceived) {
+          this.providerReceipts.caughtUp(subscriber, journal)
+        }
       })
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
@@ -298,6 +316,9 @@ export class AgentSessionSubscribers {
       }
       await emitSubscriberFrame(hooks, subscriber, event, {
         ...options,
+        ...(subscriber.readsProviderReceived
+          ? { post: (frame) => this.providerReceipts.emit(subscriber, frame) }
+          : {}),
         isActive: () => this.isActive(subscriber)
       })
       liveText.forgetEndedTurnRows(subscriber, event)
@@ -330,6 +351,9 @@ export class AgentSessionSubscribers {
   }
 
   private drop(subscriber: Subscriber): void {
+    if (subscriber.readsProviderReceived) {
+      this.providerReceipts.drop(subscriber)
+    }
     this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)

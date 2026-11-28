@@ -18,6 +18,8 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   submissions: readonly AgentJournalSubmission[]
   journalItems: readonly AgentJournalRenderItem[]
   agentName: string
+  provider?: string
+  providerReceived?: ReadonlyMap<string, number>
   startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, pending, submissions } = args
@@ -31,6 +33,7 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   )
   const startFailures = args.startFailures ?? loadedFailures
   const commandItemIds = useCommandItemIds(args.journalItems, hasRejected)
+  const { provider, providerReceived } = args
   const notices = useMemo(
     () =>
       structuredAgentSessionDeliveryNotices({
@@ -38,9 +41,11 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
         submissions,
         agentName,
         startFailures,
-        commandItemIds
+        commandItemIds,
+        provider,
+        providerReceived
       }),
-    [pending, submissions, agentName, startFailures, commandItemIds]
+    [pending, submissions, agentName, startFailures, commandItemIds, provider, providerReceived]
   )
   // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)
@@ -94,6 +99,7 @@ function sameNoticesKept(
     const same =
       before !== undefined &&
       before.text === notice.text &&
+      before.receivedBy === notice.receivedBy &&
       before.failureKind === notice.failureKind &&
       before.signIn?.agentName === notice.signIn?.agentName &&
       before.signIn?.account === notice.signIn?.account &&

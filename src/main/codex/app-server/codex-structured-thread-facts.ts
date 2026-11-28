@@ -18,12 +18,12 @@ export function readCodexThreadId(payload: unknown): string | null {
   return nonEmptyString(record(root.thread)?.id) ?? nonEmptyString(root.threadId)
 }
 
-export function readCodexTurnId(payload: unknown): string | null {
+export function readCodexTurnId(payload: unknown, nestedOnly = false): string | null {
   const root = record(payload)
   if (!root) {
     return null
   }
-  return nonEmptyString(record(root.turn)?.id) ?? nonEmptyString(root.turnId)
+  return nonEmptyString(record(root.turn)?.id) ?? (nestedOnly ? null : nonEmptyString(root.turnId))
 }
 
 export function readCodexTurnStatus(payload: unknown): string | null {

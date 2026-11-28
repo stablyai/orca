@@ -12,6 +12,7 @@ import {
   rejectClaudeDispatchWaiters,
   releaseClaudeDispatchWaitersInDoubt
 } from '../dispatch/claude-structured-dispatch'
+import { withProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeText } from '../journal/claude-structured-item-translation'
 import { isRootClaudeFrame } from './claude-turn-opening'
@@ -43,6 +44,16 @@ export function observeClaudeCommandLifecycle(
   }
   const state = message.state
   if (state === 'started' || (state === 'queued' && waiter.commandLifecycle !== 'started')) {
+    if (
+      waiter.providerReceived &&
+      waiter.commandLifecycle === undefined &&
+      !waiter.retired &&
+      readClaudeFrameString(message, 'session_id') === session.providerSessionId
+    ) {
+      withProviderReceipt(() =>
+        waiter.providerReceived?.(() => session.dispatchWaiters.includes(waiter))
+      )
+    }
     // Redelivery can emit queued again after started.
     waiter.commandLifecycle = state
   } else if (isTerminalState(state) && waiter.commandLifecycle === 'started') {

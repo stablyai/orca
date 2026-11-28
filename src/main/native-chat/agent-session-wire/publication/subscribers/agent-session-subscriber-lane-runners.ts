@@ -16,6 +16,7 @@ import type { Subscriber } from './agent-session-subscribe-input'
 type LaneOwner = {
   deliveryPort: () => SubscriberDeliveryPort
   now: () => number
+  caughtUp: (subscriber: Subscriber, journal: SubscriberCatchUp['journal']) => void
   isActive: (subscriber: Subscriber) => boolean
   fail: (subscriber: Subscriber, error: unknown) => void
 }
@@ -27,8 +28,12 @@ export function subscriberLaneRunners(
 ): SubscriberDeliveryLaneRunners {
   const { sessionId } = subscriber
   return {
-    catchUp: ({ journal, port, hostNow, activity }) =>
-      deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity }),
+    catchUp: async ({ journal, port, hostNow, activity }) => {
+      await deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity })
+      if (subscriber.readsProviderReceived) {
+        owner.caughtUp(subscriber, journal)
+      }
+    },
     backgroundTasks: (fence) =>
       republishSubscriberBackgroundTasks(
         owner.deliveryPort(),

@@ -1,3 +1,4 @@
+import type { BeginProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
@@ -31,6 +32,7 @@ export type CodexTurnInput = {
   clientMessageId: string
   body: AgentJournalMessageItem
   requestedAt?: number
+  beginProviderReceipt?: BeginProviderReceipt
   turnOptions?: Readonly<Record<string, string>>
   executionOptions?: AgentSessionExecutionOptions
   signal?: AbortSignal

@@ -177,6 +177,8 @@ export type AgentSessionSubscribeEvent =
       latestTurn?: AgentSessionLatestTurn | null
       /** On a catch-up page with more behind it; absent on the last, live, and from older hosts. */
       hasNewer?: true
+      /** Live provider receipts, keyed by the committed handover sequence. */
+      providerReceived?: number[]
     } & AgentSessionCurrentWorkFields &
       AgentSessionFrameFields)
   | ({

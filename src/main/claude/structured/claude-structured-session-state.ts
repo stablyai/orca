@@ -115,6 +115,7 @@ export type ClaudeDispatchWaiter = {
   /** Settled with no echo (failed write, child exit, doubt after start); a replay may name it. */
   retired?: boolean
   /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
+  providerReceived?: (isPending: () => boolean) => void
   commandLifecycle?: 'queued' | 'started'
   /** Sent as Claude's rename command; only its started window carries the user's new title. */
   renamesSession?: true

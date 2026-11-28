@@ -1,3 +1,4 @@
+import { providerReceivedAfterBatch } from './agent-session-provider-received'
 import { trimStructuredAgentSessionHistory } from './structured-agent-session-history-retention'
 import type { AgentSessionCurrentRequestsMarker } from '../../requests/agent-session-current-requests-wire'
 import {
@@ -104,11 +105,13 @@ export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   working?: boolean
   /** Bump when a live turn revision falls outside the window so whole-journal turn readers refresh. */
   unloadedTurnRevisions?: number
+  providerReceived?: ReadonlyMap<string, number>
 }
 
 export type StructuredAgentSessionAction =
   | { type: 'loading' }
   | { type: 'trim-history' }
+  | { type: 'clear-provider-received' }
   | { type: 'requests-marker'; marker: AgentSessionCurrentRequestsMarker }
   | {
       type: 'requests-complete'
@@ -147,6 +150,9 @@ export function reduceStructuredAgentSession(
   action: StructuredAgentSessionAction,
   receivedAt: number = Date.now()
 ): StructuredAgentSessionState {
+  if (action.type === 'clear-provider-received') {
+    return state.providerReceived ? { ...state, providerReceived: undefined } : state
+  }
   if (action.type === 'trim-history') {
     return trimStructuredAgentSessionHistory(state)
   }
@@ -247,7 +253,13 @@ export function reduceStructuredAgentSession(
     liveItems.length === 0 &&
     event.batch.removedItemIds.length === 0 &&
     event.batch.submissions.length === 0
+  const previousReceived =
+    action.opensSubscription || (event.fence !== undefined && event.fence !== state.fence)
+      ? undefined
+      : state.providerReceived
   if (
+    previousReceived === state.providerReceived &&
+    !event.providerReceived?.length &&
     event.batch.cursor.sequence === state.cursor?.sequence &&
     journalUnchanged &&
     subagentRoster === (state.subagentRoster ?? NO_STRUCTURED_AGENT_SUBAGENT_ROSTER) &&
@@ -288,18 +300,22 @@ export function reduceStructuredAgentSession(
     ...merged.slice(0, merged.length - items.length)
   ]
   const lostTurnRow = outsideWindow.some((item) => readAgentJournalTurn(item.body) !== null)
+  const submissions =
+    event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
+      ? state.submissions
+      : mergeSubmissions(state.submissions, event.batch.submissions, items)
   return {
     ...state,
     ...requests,
+    ...(previousReceived || state.providerReceived || event.providerReceived
+      ? { providerReceived: providerReceivedAfterBatch(previousReceived, event, items, submissions) }
+      : {}),
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
     items,
     subagentRoster,
     hasOlder: hasOlderAfterMerge(state.items, items, items.length < merged.length, state.hasOlder),
-    submissions:
-      event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
-        ? state.submissions
-        : mergeSubmissions(state.submissions, event.batch.submissions, items),
+    submissions,
     status: 'ready',
     error: undefined,
     readRefusal: undefined,

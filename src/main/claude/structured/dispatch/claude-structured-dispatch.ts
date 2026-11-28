@@ -1,3 +1,4 @@
+import type { BeginProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../lifecycle/claude-structured-session-id'
@@ -133,6 +134,7 @@ export async function dispatchClaudeTurn(
     body: AgentJournalMessageItem
     requestedAt?: number
     sentUuid?: string
+    beginProviderReceipt?: BeginProviderReceipt
     signal?: AbortSignal
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
   },
@@ -169,6 +171,9 @@ export async function dispatchClaudeTurn(
       input.clientMessageId ?? null,
       input.requestedAt ?? null
     )
+    if (input.beginProviderReceipt) {
+      replay.waiter.providerReceived = input.beginProviderReceipt()
+    }
     if (renamesSession) {
       replay.waiter.renamesSession = true
     }

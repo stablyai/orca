@@ -144,6 +144,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     pending: controller.pending,
     submissions: controller.submissions,
     journalItems: controller.journalItems,
+    providerReceived: controller.providerReceived,
+    provider: props.agent,
     startFailures,
     agentName: agentLabel
   })

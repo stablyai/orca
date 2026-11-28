@@ -262,6 +262,7 @@ export type JournalStopAcceptance = {
 export type JournalCommandOpenResult = {
   turn: ReturnType<typeof structuredAgentSessionCommandTurn>
   running: AgentJournalTurnItem
+  dispatchSequence?: number
 }
 
 export type JournalAttachmentClaim = (

@@ -280,6 +280,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     sendOut: sending || sends.held,
     /** The journal's rows for sent messages, which carry a rejected message's whole fact. */
     submissions: transportState.submissions,
+    providerReceived: transportEnabled ? state.providerReceived : undefined,
     send,
     isWorking,
     queueSendsNext: transportState.queueSendsNext,

@@ -1,3 +1,4 @@
+import { MAX_AGENT_SESSION_PROVIDER_RECEIPTS } from './agent-session-provider-received'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
@@ -35,16 +36,32 @@ type HeldBatches = {
   merged: Batch | null
   items: Map<string, BatchRow>
   submissions: Map<string, BatchSubmission>
+  providerReceived?: Set<number>
 }
 
 function holdBatch(event: Batch): HeldBatches {
-  return {
+  const held: HeldBatches = {
     first: event,
     merged: null,
     items: new Map(event.batch.items.map((item) => [item.itemId, item])),
     submissions: new Map(
       event.batch.submissions.map((submission) => [submission.clientMessageId, submission])
     )
+  }
+  holdProviderReceived(held, event)
+  return held
+}
+
+function holdProviderReceived(held: HeldBatches, event: Batch): void {
+  if (!event.providerReceived?.length) {
+    return
+  }
+  const received = (held.providerReceived ??= new Set())
+  for (const sequence of event.providerReceived) {
+    if (received.size >= MAX_AGENT_SESSION_PROVIDER_RECEIPTS) {
+      break
+    }
+    received.add(sequence)
   }
 }
 
@@ -58,21 +75,36 @@ function addToHeld(held: HeldBatches, right: Batch): void {
   for (const submission of right.batch.submissions) {
     held.submissions.set(submission.clientMessageId, submission)
   }
-  held.merged = mergeBatchHeader(held.merged ?? held.first, right)
+  const left = held.merged ?? held.first
+  if (
+    left.batch.cursor.epoch !== right.batch.cursor.epoch ||
+    (right.fence !== undefined && right.fence !== left.fence)
+  ) {
+    held.providerReceived = undefined
+  }
+  holdProviderReceived(held, right)
+  held.merged = mergeBatchHeader(left, right)
 }
 
 function heldEvent(held: HeldBatches): Batch {
-  if (!held.merged) {
-    return held.first
+  const event = held.merged
+    ? {
+        ...held.merged,
+        batch: {
+          ...held.merged.batch,
+          items: [...held.items.values()],
+          submissions: [...held.submissions.values()]
+        }
+      }
+    : held.first
+  if (held.providerReceived?.size) {
+    return { ...event, providerReceived: [...held.providerReceived] }
   }
-  return {
-    ...held.merged,
-    batch: {
-      ...held.merged.batch,
-      items: [...held.items.values()],
-      submissions: [...held.submissions.values()]
-    }
+  if (event.providerReceived) {
+    const { providerReceived: _cleared, ...batch } = event
+    return batch
   }
+  return event
 }
 
 function mergeBatchHeader(left: Batch, right: Batch): Batch {
@@ -152,6 +184,7 @@ export function createStructuredAgentSessionEventCoalescer(
   push: (event: AgentSessionSubscribeEvent) => void
   flush: () => void
   dispose: () => void
+  clearProviderReceived: () => void
 } {
   let pending: HeldBatches | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -211,6 +244,11 @@ export function createStructuredAgentSessionEventCoalescer(
       timer ??= setTimeout(() => (visibility?.hidden() ? (timer = null) : flush()), delayMs)
     },
     flush,
+    clearProviderReceived() {
+      if (pending) {
+        pending.providerReceived = undefined
+      }
+    },
     dispose() {
       stopShownWatch?.()
       if (timer) {

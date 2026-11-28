@@ -22199,6 +22199,8 @@
       "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
       "messageNotSent": "Message not sent",
+      "messageReceivedByClaude": "Received by Claude",
+      "messageReceivedByCodex": "Received by Codex",
       "messageSending": "Sending…",
       "userMessage": {
         "showFull": "Show full message",

@@ -39,11 +39,13 @@ function UserMessageMeta({
   markdown,
   timestamp,
   sending,
+  receivedBy,
   rewind
 }: {
   markdown: string
   timestamp: number | null
   sending: boolean
+  receivedBy?: NativeChatDeliveryNotice['receivedBy']
   rewind?: { itemId: string; surface: NativeChatRewindSurface }
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -61,7 +63,11 @@ function UserMessageMeta({
       ) : null}
       {sending ? (
         <span className="text-xs whitespace-nowrap text-chat-foreground-faint">
-          {t('components.native-chat.messageSending', 'Sending…')}
+          {receivedBy === 'claude'
+            ? t('components.native-chat.messageReceivedByClaude', 'Received by Claude')
+            : receivedBy === 'codex'
+              ? t('components.native-chat.messageReceivedByCodex', 'Received by Codex')
+              : t('components.native-chat.messageSending', 'Sending…')}
         </span>
       ) : (
         <NativeChatMessageTimestamp timestamp={timestamp} focusable />
@@ -202,6 +208,7 @@ export function NativeChatUserMessageRow({
           markdown={markdown}
           timestamp={message.timestamp}
           sending={sending}
+          receivedBy={deliveryNotice?.receivedBy}
           {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}
         />
       ) : null}

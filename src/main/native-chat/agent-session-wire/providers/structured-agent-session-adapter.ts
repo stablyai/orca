@@ -1,3 +1,4 @@
+import type { BeginProviderReceipt } from '../journal-ingress/provider-receipt-publication'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -82,6 +83,7 @@ export type StructuredAgentSessionCommandRun = {
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
   running: AgentJournalTurnItem
+  beginProviderReceipt?: BeginProviderReceipt
   /** Only agents declaring `compactInstructions` receive this. */
   instructions?: string
 }
@@ -229,6 +231,7 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     onInputPreparation?: () => void
     /** Checkpoint between choice application and execution-evidence capture. */
     onExecutionSnapshot?: () => void
+    beginProviderReceipt?: BeginProviderReceipt
   }): Promise<AgentSessionDispatchOutcome>
   /** Narrow declared rewind per session; agent supplies the resting-session answer. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport

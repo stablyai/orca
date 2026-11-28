@@ -60,5 +60,13 @@ export function applyJournalDomainDispatchCommand(
     },
     savedAt
   )
-  return { ...result, value: carried }
+  return {
+    ...result,
+    value: {
+      carried,
+      firstHandover: submission?.handedOverAt === undefined,
+      dispatchSequence: result.items.find((item) => item.sequence === result.cursor.sequence)
+        ?.sequence
+    }
+  }
 }

@@ -46,6 +46,9 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     dispose = await host.subscribe({
       commandsOnRequest: clientRequestsCommands(ctx),
       readsCurrentRequests: clientReadsCurrentRequests(ctx),
+      ...(ctx.caller?.kind === 'desktop' && capabilities?.providerReceived === 1
+        ? { readsProviderReceived: true }
+        : {}),
       id: subscriptionId,
       sessionId: params.sessionId,
       ...queuedImages.queuedImageSubscriber(ctx),
