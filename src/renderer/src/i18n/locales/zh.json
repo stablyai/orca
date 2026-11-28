@@ -25165,6 +25165,7 @@
       "googleLogin": "Google 登录",
       "expired": "已过期",
       "expiredUnused": "已于 {{date}} 过期 · 未保存",
+      "expiredOn": "已于 {{date}} 过期",
       "expiredRunAgy": "已于 {{date}} 过期 · 运行 agy 刷新，或重新登录",
       "signInAgain": "重新登录",
       "saveShort": "保存",

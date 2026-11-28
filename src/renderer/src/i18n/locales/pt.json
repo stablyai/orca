@@ -26122,6 +26122,7 @@
       "googleLogin": "Login do Google",
       "expired": "Expirado",
       "expiredUnused": "Expirou em {{date}} · não salvo",
+      "expiredOn": "Expirou em {{date}}",
       "expiredRunAgy": "Expirou em {{date}} · execute o agy para renová-lo ou entre novamente",
       "signInAgain": "Entrar novamente",
       "saveShort": "Salvar",

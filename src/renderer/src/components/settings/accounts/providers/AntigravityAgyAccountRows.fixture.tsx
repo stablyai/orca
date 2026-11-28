@@ -187,3 +187,20 @@ export const adcWithSavedAccount = defineFixture({
       }
     })
 })
+
+export const savedLoginExpired = defineFixture({
+  width: 640,
+  render: () =>
+    rows({
+      accounts: [saved],
+      activeAccountId: saved.id,
+      selectedAccountId: saved.id,
+      currentAccount: {
+        email: saved.email,
+        subject: saved.subject,
+        authMethod: 'consumer',
+        identityKnown: true,
+        expiredAt: Date.UTC(2026, 10, 20, 6)
+      }
+    })
+})

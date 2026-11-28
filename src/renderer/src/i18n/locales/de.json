@@ -25698,6 +25698,7 @@
       "googleLogin": "Google-Anmeldung",
       "expired": "Abgelaufen",
       "expiredUnused": "Abgelaufen am {{date}} · nicht gespeichert",
+      "expiredOn": "Abgelaufen am {{date}}",
       "expiredRunAgy": "Abgelaufen am {{date}} · agy ausführen, um sie zu erneuern, oder erneut anmelden",
       "signInAgain": "Erneut anmelden",
       "saveShort": "Speichern",

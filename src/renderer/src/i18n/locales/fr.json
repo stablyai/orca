@@ -25930,6 +25930,7 @@
       "googleLogin": "Connexion Google",
       "expired": "Expirée",
       "expiredUnused": "Expirée le {{date}} · non enregistrée",
+      "expiredOn": "Expirée le {{date}}",
       "expiredRunAgy": "Expirée le {{date}} · lancez agy pour l’actualiser, ou reconnectez-vous",
       "signInAgain": "Se reconnecter",
       "saveShort": "Enregistrer",

@@ -25698,6 +25698,7 @@
       "googleLogin": "Google oturumu",
       "expired": "Süresi doldu",
       "expiredUnused": "{{date}} tarihinde süresi doldu · kaydedilmedi",
+      "expiredOn": "{{date}} tarihinde süresi doldu",
       "expiredRunAgy": "{{date}} tarihinde süresi doldu · yenilemek için agy'yi çalıştırın veya yeniden oturum açın",
       "signInAgain": "Yeniden oturum aç",
       "saveShort": "Kaydet",

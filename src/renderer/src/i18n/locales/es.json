@@ -25185,6 +25185,7 @@
       "googleLogin": "Inicio de sesión de Google",
       "expired": "Caducado",
       "expiredUnused": "Caducó el {{date}} · no guardado",
+      "expiredOn": "Caducó el {{date}}",
       "expiredRunAgy": "Caducó el {{date}} · ejecuta agy para renovarlo o vuelve a iniciar sesión",
       "signInAgain": "Volver a iniciar sesión",
       "saveShort": "Guardar",

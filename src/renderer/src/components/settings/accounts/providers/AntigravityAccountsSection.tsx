@@ -165,14 +165,17 @@ export function AntigravityAccountsSection({
   )
   // A pick moves new chats between agy's own home and Orca's, which the description follows.
   const reread = () => void run('List', undefined, true)
-  // Signing in or adding an account changes agy's login, which the account rows read again.
-  // 'idle' once the status is read is a first value, so the first sign-in after mount re-reads too.
-  const signedInFlow = !signIn.known
+  // Every sign-in that ends changes what the rows show: agy's new login, or, when cancelled or
+  // failed, its current one saved before the sign-in began. 'idle' once the status is read is a
+  // first value, so the first sign-in after mount re-reads too.
+  const flow = signIn.flow
+  const flowEnded = flow !== null && !signIn.signingIn
+  const endedFlow = !signIn.known
     ? null
-    : signIn.flow?.phase === 'signedIn'
-      ? (signIn.flow.flowId ?? 'another client')
+    : flowEnded
+      ? `${flow.flowId ?? 'another client'}:${flow.phase}`
       : 'idle'
-  useOnLaterChange(signedInFlow, reread)
+  useOnLaterChange(endedFlow, reread)
   useAgyLoginChange(state, signIn.loginRevision, reread, () => {
     setError(null)
     // The sign-in store follows the host's agy, which a WSL distro's login doesn't change.

@@ -26546,6 +26546,7 @@
       "googleLogin": "Вход Google",
       "expired": "Истёк",
       "expiredUnused": "Истёк {{date}} · не сохранён",
+      "expiredOn": "Истёк {{date}}",
       "expiredRunAgy": "Истёк {{date}} · запустите agy, чтобы обновить его, или войдите снова",
       "signInAgain": "Войти снова",
       "saveShort": "Сохранить",

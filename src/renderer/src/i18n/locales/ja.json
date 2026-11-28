@@ -25165,6 +25165,7 @@
       "googleLogin": "Google ログイン",
       "expired": "期限切れ",
       "expiredUnused": "{{date}} に期限切れ · 未保存",
+      "expiredOn": "{{date}} に期限切れ",
       "expiredRunAgy": "{{date}} に期限切れ · agy を実行して更新するか、もう一度サインインしてください",
       "signInAgain": "もう一度サインイン",
       "saveShort": "保存",
