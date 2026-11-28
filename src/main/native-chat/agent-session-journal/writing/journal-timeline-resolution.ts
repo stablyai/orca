@@ -59,8 +59,13 @@ type TimelineItemResolution =
       keepsSavedCall?: true
     }
   | { kind: 'literal'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
-  /** Written only where no row has its identity yet: a repeat of what an earlier row shows. */
-  | { kind: 'literal-if-absent'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  /** Written only where row `absentItemId` doesn't show: a repeat of what that row reports. */
+  | {
+      kind: 'literal-if-absent'
+      identity: AgentJournalItemIdentity
+      body: AgentJournalItemBody
+      absentItemId: string
+    }
   | { kind: 'acp-loss-warning'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
   | {
       kind: 'request-open'
@@ -154,7 +159,7 @@ function resolveTimelineItem(
     case 'literal':
       return resolved({ identity: resolution.identity, body: resolution.body })
     case 'literal-if-absent':
-      return view.item(agentJournalItemKey(resolution.identity))
+      return view.item(resolution.absentItemId)
         ? nothing
         : resolved({ identity: resolution.identity, body: resolution.body })
     case 'acp-loss-warning': {

@@ -13,7 +13,11 @@ import { structuredCompactionOutcome } from '../../../native-chat/agent-session-
 import { readCodexJournalRecord } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { writeCodexFailureRow, type CodexFailureStop } from './codex-frame-row-write'
+import {
+  codexTerminalRowIdentity,
+  writeCodexFailureRow,
+  type CodexFailureStop
+} from './codex-frame-row-write'
 import {
   CODEX_JOURNAL_ADMITTED,
   type CodexJournalTranslationAdmission
@@ -24,6 +28,8 @@ export type CodexCommandEnd = {
   failure: {
     row: JournalLifecycleIdentityMutationInput & { kind: 'item' }
     stop: CodexFailureStop
+    /** Codex's own error row for the turn, which this one repeats where it shows. */
+    unlessItemId?: string
   } | null
   mutations: JournalLifecycleIdentityMutationInput[]
 }
@@ -40,9 +46,11 @@ export function writeCodexCommandFailure(
   if (!end.failure) {
     return { admission: CODEX_JOURNAL_ADMITTED, mutations: end.mutations }
   }
-  const { row, stop } = end.failure
+  const { row, stop, unlessItemId } = end.failure
   if (!sink.tryReviseResolvedItem) {
-    return { admission: CODEX_JOURNAL_ADMITTED, mutations: [row, ...end.mutations] }
+    // As before: Codex's own error frame stands for the command's failure.
+    const rows = unlessItemId ? [] : [row]
+    return { admission: CODEX_JOURNAL_ADMITTED, mutations: [...rows, ...end.mutations] }
   }
   return {
     admission: writeCodexFailureRow(
@@ -50,7 +58,8 @@ export function writeCodexCommandFailure(
       row.identity,
       row.body,
       { turnScope: row.turnScope },
-      stop
+      stop,
+      unlessItemId
     ),
     mutations: end.mutations
   }
@@ -128,6 +137,7 @@ export class CodexJournalCommandTurn {
   end(
     providerTurnId: string,
     ended: {
+      threadId: string
       status: string | null
       error: string | null
       completedAt: number
@@ -145,26 +155,33 @@ export class CodexJournalCommandTurn {
       failed: ended.status !== 'completed' || detail ? (detail ? { detail } : {}) : null
     })
     const turnScope = { kind: 'turn' as const, turnItemId: agentJournalItemKey(command.identity) }
-    // Successful compaction already has Codex's marker; do not add a second status row.
-    const failure =
-      verdict.failure && !carried.failureShown
-        ? {
-            row: {
-              kind: 'item' as const,
-              identity: command.resultIdentity,
-              body: {
-                kind: 'status' as const,
-                ...agentSessionFailureWords(verdict.failure, {
-                  surface: 'row',
-                  agentName: TUI_AGENT_DISPLAY_NAMES.codex
-                }),
-                tone: 'error' as const
-              },
-              turnScope
+    // Successful compaction already has Codex's marker; do not add a second status row. After
+    // Codex's own error frame, the writer adds this row only where a Stop dropped that frame's row.
+    const failure = verdict.failure
+      ? {
+          row: {
+            kind: 'item' as const,
+            identity: command.resultIdentity,
+            body: {
+              kind: 'status' as const,
+              ...agentSessionFailureWords(verdict.failure, {
+                surface: 'row',
+                agentName: TUI_AGENT_DISPLAY_NAMES.codex
+              }),
+              tone: 'error' as const
             },
-            stop: { turnId: command.turnId, endedAt: ended.completedAt }
-          }
-        : null
+            turnScope
+          },
+          stop: { turnId: command.turnId, endedAt: ended.completedAt },
+          ...(carried.failureShown
+            ? {
+                unlessItemId: agentJournalItemKey(
+                  codexTerminalRowIdentity(ended.threadId, providerTurnId)
+                )
+              }
+            : {})
+        }
+      : null
     const mutations: JournalLifecycleIdentityMutationInput[] = [
       {
         kind: 'item',
@@ -182,7 +199,7 @@ export class CodexJournalCommandTurn {
     return { failure, mutations }
   }
 
-  // Suppress duplicate failure rows after Codex's own terminal error frame.
+  // Codex's own terminal error frame was admitted: the command's row only repeats it.
   errorShown(params: unknown): void {
     const providerTurnId = readCodexTurnId(params)
     const carried = providerTurnId ? this.carried.get(providerTurnId) : undefined

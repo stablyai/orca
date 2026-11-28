@@ -237,6 +237,34 @@ describe('a real Codex failure keeps exactly one error row', () => {
     }
   })
 
+  it('for a stopped compaction whose error notice the Stop dropped, ended without a marker later', () => {
+    for (const deferred of [false, true]) {
+      const turn = codexTurn({ deferred, command: true })
+      turn.stop('user-stop')
+      turn.notice(NOW + 29_000)
+      turn.completed(NOW + 31_000)
+      turn.drain()
+      expect(turn.errors()).toHaveLength(1)
+      expect(turn.outcome()).toBe('failure')
+    }
+  })
+
+  it('once, not twice, for a compaction whose error notice shows', () => {
+    for (const deferred of [false, true]) {
+      for (const stopped of [false, true]) {
+        const turn = codexTurn({ deferred, command: true })
+        if (stopped) {
+          turn.stop('user-stop')
+        }
+        // Past the window, so a Stop leaves this notice's row too.
+        turn.notice(NOW + 31_000)
+        turn.completed(NOW + 32_000)
+        turn.drain()
+        expect(turn.errors()).toHaveLength(1)
+      }
+    }
+  })
+
   it('for a compaction Codex ended without a marker and no Stop', () => {
     const turn = codexTurn({ command: true })
     turn.completed(NOW + 2_000)

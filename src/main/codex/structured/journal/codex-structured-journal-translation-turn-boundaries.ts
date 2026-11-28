@@ -202,6 +202,7 @@ export class CodexJournalTurnBoundaries {
     const commandEnd = writeCodexCommandFailure(
       this.deps.sink,
       this.deps.commands.end(turnId, {
+        threadId: event.threadId,
         status,
         error: readString(readRecord(readRecord(readRecord(event.params).turn).error), 'message'),
         completedAt

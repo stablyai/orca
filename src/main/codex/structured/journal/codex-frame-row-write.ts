@@ -1,4 +1,5 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalRowAttribution,
@@ -64,23 +65,35 @@ function appendRow(
     : (sink.appendItem(identity, body, options), CODEX_JOURNAL_ADMITTED)
 }
 
+/** Codex's own terminal error row for a turn of a thread. */
+export function codexTerminalRowIdentity(
+  threadId: string,
+  turnId: string
+): AgentJournalItemIdentity {
+  return {
+    provider: 'orca',
+    clientMessageId: `terminal-failure:codex:${JSON.stringify([threadId, turnId])}`
+  }
+}
+
 /** A row reporting a turn's failure, decided once, by the writer at its position: dropped when a
- *  person's Stop of that turn caused the failure (personStopDecidesFailure), and with `ifAbsent`
- *  also where a row with its identity already shows. Everything it needs is fixed now. */
+ *  person's Stop of that turn caused the failure (personStopDecidesFailure), and with
+ *  `unlessItemId` also where that row, whose error this one repeats, shows. Everything it needs is
+ *  fixed now. */
 export function writeCodexFailureRow(
   sink: StructuredAgentSessionEventSink,
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
   options: AgentJournalRowAttribution,
   stop: CodexFailureStop,
-  ifAbsent?: true
+  unlessItemId?: string
 ): CodexJournalTranslationAdmission {
   if (!sink.tryReviseResolvedItem) {
     // A sink that can't decide at its writer keeps the earlier row, as before.
-    return ifAbsent ? CODEX_JOURNAL_ADMITTED : appendRow(sink, identity, body, options)
+    return unlessItemId ? CODEX_JOURNAL_ADMITTED : appendRow(sink, identity, body, options)
   }
-  const ran = ifAbsent
-    ? { kind: 'literal-if-absent' as const, identity, body }
+  const ran = unlessItemId
+    ? { kind: 'literal-if-absent' as const, identity, body, absentItemId: unlessItemId }
     : { kind: 'literal' as const, identity, body }
   return sink.tryReviseResolvedItem(
     estimateStructuredAgentSessionItemBytes(identity, body),
@@ -98,18 +111,18 @@ export function writeCodexFrameRow(
   place: CodexFrameRowPlace
 ): CodexJournalTranslationAdmission {
   const terminalTurnId = codexTerminalTurnId(body, place.frameTurnId)
-  const identity = {
-    provider: 'orca' as const,
-    clientMessageId: terminalTurnId
-      ? `terminal-failure:codex:${JSON.stringify([place.threadId, terminalTurnId])}`
-      : `provider-frame:codex:${place.fallbackKey}`
-  }
   if (!terminalTurnId) {
+    const identity = {
+      provider: 'orca' as const,
+      clientMessageId: `provider-frame:codex:${place.fallbackKey}`
+    }
     return appendRow(sink, identity, body, attribution)
   }
+  const identity = codexTerminalRowIdentity(place.threadId, terminalTurnId)
   const stop = {
     turnId: place.stopTurnId?.(terminalTurnId) ?? terminalTurnId,
     endedAt: observedAt ?? place.receivedAt
   }
-  return writeCodexFailureRow(sink, identity, body, attribution, stop, ifAbsent)
+  const unlessItemId = ifAbsent ? agentJournalItemKey(identity) : undefined
+  return writeCodexFailureRow(sink, identity, body, attribution, stop, unlessItemId)
 }

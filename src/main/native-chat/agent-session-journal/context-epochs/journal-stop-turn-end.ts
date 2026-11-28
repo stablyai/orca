@@ -159,6 +159,8 @@ const toSecond = (at: number, round: (value: number) => number) => round(at / SE
 
 /** The stopped end's own clock as a restore kept it, to the second: a whole second the stopped end
  *  rounds to, at the Stop's second or later and within its window. */
+// Doesn't check the Stop's turn or that previousAt follows the Stop: keepsStoppedEnd calls it only
+// after a cancellation of this same turn, which that Stop already decided.
 function restoredStoppedEnd(state: TurnEndState, previousAt: number, at: number): boolean {
   const stop = state.queuePauseMarks.latestStop
   return (
