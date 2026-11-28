@@ -49,6 +49,19 @@ function ConfirmationHeader({
   )
 }
 
+function pickInitialFocus(
+  initialFocus: ConfirmationDialogOptions['initialFocus'],
+  confirm: React.RefObject<HTMLButtonElement | null>,
+  cancel: React.RefObject<HTMLButtonElement | null>,
+  input: React.RefObject<HTMLInputElement | null>
+): HTMLElement | null {
+  return initialFocus === 'confirm'
+    ? confirm.current
+    : initialFocus === 'cancel'
+      ? (cancel.current ?? confirm.current)
+      : input.current
+}
+
 export function ConfirmationDialogSurface({
   activeRequest,
   onSettle
@@ -62,6 +75,7 @@ export function ConfirmationDialogSurface({
   ) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const contentRef = useRef<HTMLDivElement>(null)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const firstInputRef = useRef<HTMLInputElement>(null)
@@ -77,6 +91,7 @@ export function ConfirmationDialogSurface({
   const options = displayedRequest?.options
   // Why Cancel: the "Don't ask again" checkbox now comes first, and Enter must not confirm by accident.
   const initialFocus = options?.initialFocus ?? (options?.fields ? undefined : 'cancel')
+  const scrollable = options?.scrollable ?? false
   const activeRequestId = activeRequest?.id
 
   // Reset per-request form inputs whenever the active request changes (including abort).
@@ -89,14 +104,15 @@ export function ConfirmationDialogSurface({
     if (activeRequestId === undefined) {
       return
     }
-    const target =
-      initialFocus === 'confirm'
-        ? confirmButtonRef.current
-        : initialFocus === 'cancel'
-          ? (cancelButtonRef.current ?? confirmButtonRef.current)
-          : firstInputRef.current
-    target?.focus()
-  }, [activeRequestId, initialFocus])
+    if (scrollable && contentRef.current) {
+      // A queued request reuses the open dialog: start it at its title, not where the last one was.
+      contentRef.current.scrollTop = 0
+    }
+    // Why preventScroll: focusing the footer would scroll a tall dialog past its title.
+    pickInitialFocus(initialFocus, confirmButtonRef, cancelButtonRef, firstInputRef)?.focus({
+      preventScroll: scrollable
+    })
+  }, [activeRequestId, initialFocus, scrollable])
 
   const openingGesture = displayedRequest?.options.ignoresOpeningGesture
   const guarded = openingGesture === true || openingGesture === 'buttons'
@@ -120,8 +136,10 @@ export function ConfirmationDialogSurface({
   return (
     <Dialog open={activeRequest !== null} onOpenChange={(open) => !open && settle(false)}>
       <DialogContent
+        ref={contentRef}
         size="confirm"
         surface={options?.surface}
+        scrollable={scrollable}
         className={options?.aboveMenus ? 'z-[80]' : undefined}
         overlayClassName={options?.aboveMenus ? 'z-[80]' : undefined}
         initialFocus={initialFocus === 'cancel' ? 'cancel' : undefined}
@@ -133,7 +151,14 @@ export function ConfirmationDialogSurface({
         onOpenAutoFocus={(event) => {
           if (activeRequest?.options.initialFocus === 'confirm') {
             event.preventDefault()
-            confirmButtonRef.current?.focus()
+            confirmButtonRef.current?.focus({ preventScroll: scrollable })
+          } else if (scrollable) {
+            event.preventDefault()
+            pickInitialFocus(initialFocus, confirmButtonRef, cancelButtonRef, firstInputRef)?.focus(
+              {
+                preventScroll: true
+              }
+            )
           }
         }}
       >

@@ -228,6 +228,8 @@ export function useConfirmBotAccess(): (
         : grant.connector
       return confirm({
         surface: 'security',
+        // Wrapped names and up to four fact rows can outgrow a 600x400 window at full UI zoom.
+        scrollable: true,
         // The first name, so a long name can't wrap the title; the full one is in the line under it.
         title: firstName
           ? translate('bots.access.titleOne', BOT_ACCESS_COPY.titleOne, {

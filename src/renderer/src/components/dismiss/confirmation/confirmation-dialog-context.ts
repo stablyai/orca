@@ -26,6 +26,9 @@ export type ConfirmationDialogOptions = {
   cancelLabel?: string
   confirmVariant?: 'default' | 'destructive'
   surface?: 'security'
+  /** Content that can outgrow a small or zoomed window: the whole dialog scrolls within it,
+   *  opening at the top so the title shows, while Tab still scrolls each button into view. */
+  scrollable?: boolean
   /** Asked while a menu stays open under it, e.g. a picker that commits on a tab, so it sits above menus. */
   aboveMenus?: boolean
   /** A notice, not a question: only the confirm button shows, and it settles true. */

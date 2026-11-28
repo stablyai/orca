@@ -12,6 +12,7 @@ import { base, stub } from './bot-connectors-host-fixture'
 import { useConfirmBotAccess, type BotAccessConfirm } from './bot-access-confirm'
 
 // The fixed dialog portals into a transformed box to reproduce narrow widths inside the fixture.
+// Without a width it portals to the page, so the browser viewport stands in for the app window.
 const bot: Bot = { ...base, name: 'Researcher', google: false, permissionMode: 'ask' }
 
 type Person = BotAccessConfirm['people'][number]
@@ -21,6 +22,10 @@ const longName: Person = {
   id: 'U-max',
   name: 'Maximiliana Fernández-Oyelaran',
   identity: '@maximiliana.fernandez-oyelaran'
+}
+const longHandle: Person = {
+  ...longName,
+  identity: '@maximiliana.fernandez-oyelaran.operations-north-america'
 }
 
 const PLACES: Record<BotAccessConnector, { connector: string; workspace: string | null }> = {
@@ -63,31 +68,43 @@ function Stage({
   grant,
   trigger
 }: {
-  width: number
+  width?: number
   grant: BotAccessConfirm
   trigger?: 'add' | 'review'
 }): React.JSX.Element {
   const [box, setBox] = useState<HTMLElement | null>(null)
+  const confirmation = (
+    <ConfirmationDialogProvider>
+      {trigger ? <Trigger grant={grant} review={trigger === 'review'} /> : <Open grant={grant} />}
+    </ConfirmationDialogProvider>
+  )
+  if (width === undefined) {
+    return confirmation
+  }
   return (
-    <div ref={setBox} className="relative h-[340px] translate-x-0 bg-background" style={{ width }}>
+    <div
+      ref={setBox}
+      className="relative translate-x-0 bg-background"
+      // At 280 the wrapped rows run taller; the capture stops at this box, not the dialog.
+      style={{ width, height: width === 280 ? 460 : 340 }}
+    >
       {box ? (
         <PortalContainerContext.Provider value={box}>
-          <ConfirmationDialogProvider>
-            {trigger ? (
-              <Trigger grant={grant} review={trigger === 'review'} />
-            ) : (
-              <Open grant={grant} />
-            )}
-          </ConfirmationDialogProvider>
+          {confirmation}
         </PortalContainerContext.Provider>
       ) : null}
     </div>
   )
 }
 
-async function waitForDialog(frame: HTMLElement): Promise<void> {
+// Looks only where this fixture's dialog portals: its stage in the frame, or the page without one.
+async function waitForDialog(root: HTMLElement): Promise<void> {
   const deadline = performance.now() + 3000
-  while (!frame.ownerDocument.querySelector('[role="dialog"], [role="alertdialog"]')) {
+  while (!root.querySelector('[data-slot="dialog-content"]')) {
+    // A render that already failed keeps its own error instead of this timeout's.
+    if (root.ownerDocument.documentElement.dataset.fixtureState === 'error') {
+      return
+    }
     if (performance.now() > deadline) {
       throw new Error('Timed out waiting for the access review dialog')
     }
@@ -96,7 +113,8 @@ async function waitForDialog(frame: HTMLElement): Promise<void> {
 }
 
 function accessFixture(options: {
-  width: 420 | 360 | 280
+  /** Omitted: the dialog sits in the page viewport, for window-size and zoom checks. */
+  width?: 420 | 360 | 280
   people: Person[]
   bot?: Partial<Bot>
   connector?: BotAccessConnector
@@ -105,7 +123,7 @@ function accessFixture(options: {
   trigger?: 'add' | 'review'
   language?: 'en' | 'zh-Hant'
 }) {
-  const { language } = options
+  const { language, width } = options
   const connector = options.connector ?? 'slack'
   const subject = { ...bot, ...options.bot }
   const grant: BotAccessConfirm = {
@@ -116,7 +134,7 @@ function accessFixture(options: {
   }
   return defineFixture({
     // The frame's own p-4 padding sits around the stage.
-    width: options.width + 32,
+    width: width === undefined ? undefined : width + 32,
     setup: () => {
       // The confirm reads the bot as listed now, so the host lists this scenario's bot.
       stub({ linearLinked: false, composio: false, bots: [subject] })
@@ -132,7 +150,7 @@ function accessFixture(options: {
         )
       }
     },
-    render: () => <Stage width={options.width} grant={grant} trigger={options.trigger} />,
+    render: () => <Stage width={width} grant={grant} trigger={options.trigger} />,
     interact: language
       ? async (frame) => {
           await setRendererUiLanguage(language)
@@ -142,12 +160,12 @@ function accessFixture(options: {
           }
           trigger.click()
           // The confirmation surface is lazy-loaded, so the dialog mounts after the click.
-          await waitForDialog(frame)
+          await waitForDialog(width === undefined ? frame.ownerDocument.body : frame)
         }
       : options.trigger
         ? undefined
         : // Opens on mount, but the lazy surface can land after the first paint on a cold load.
-          (frame) => waitForDialog(frame)
+          (frame) => waitForDialog(width === undefined ? frame.ownerDocument.body : frame)
   })
 }
 
@@ -160,6 +178,15 @@ const scenarios = {
   },
   ThreePeople: { people: many },
   LongName: { people: [longName] },
+  // Every fact row at once (computer, approvals, Google, Slack), each as long as it gets.
+  LongestFacts: {
+    people: [longHandle],
+    bot: {
+      name: 'ProjectOperationsCoordinatorNorthAmerica',
+      permissionMode: 'full-access',
+      google: true
+    } satisfies Partial<Bot>
+  },
   UnknownPermission: {
     people: [dana],
     bot: { permissionMode: undefined },
@@ -192,6 +219,9 @@ export const longSlackReviewTraditionalChinese280 = accessFixture({
   ...longSlackReview,
   language: 'zh-Hant'
 })
+export const longestFacts280 = accessFixture({ width: 280, ...scenarios.LongestFacts })
+// Size the page to the app window, e.g. 600x400 at the largest UI zoom (1.2^5): about 241x161.
+export const longestFactsInWindow = accessFixture(scenarios.LongestFacts)
 export const unknownPermission420 = accessFixture({ width: 420, ...scenarios.UnknownPermission })
 export const unknownPermission360 = accessFixture({ width: 360, ...scenarios.UnknownPermission })
 // Closed: click or Tab-and-Enter "+ Add people" to see where focus lands and whether it shows a ring.
