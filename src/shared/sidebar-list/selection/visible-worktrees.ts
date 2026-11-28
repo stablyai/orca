@@ -131,7 +131,7 @@ function addForcedIdentities(
   if (!identities || identities.length === 0) {
     return NO_FILTER_HIDDEN_IDENTITIES
   }
-  const listed = new Set(all.map(getWorktreeHostIdentity))
+  const listed = new Set<string>(all.map(getWorktreeHostIdentity))
   const added = new Set<string>()
   for (const identity of identities) {
     const worktree = listed.has(identity) ? undefined : ancestorByIdentity.get(identity)

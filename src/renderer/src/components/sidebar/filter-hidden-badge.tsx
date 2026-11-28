@@ -3,7 +3,6 @@ import { EyeOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 
 /** The tag and its accessible hint, shared by the sidebar row and Cmd+J. */
 export function useFilterHiddenCopy(): { label: string; hint: string } {
@@ -26,7 +25,7 @@ export function FilterHiddenBadge({
   const badge = (
     <Badge
       variant="referenceLabel"
-      className={cn('gap-0.5', className)}
+      className={className}
       aria-label={hint}
       data-filter-hidden-badge=""
     >

@@ -112,7 +112,6 @@
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-section-rows.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/visible-worktree-options-from-state.ts
 2 src/renderer/src/components/sidebar/worktree-list/listing/visible-worktrees.ts
-1 src/renderer/src/components/sidebar/worktree-list/listing/worktree-filter-visibility.ts
 1 src/renderer/src/components/sidebar/worktree-list/rows/ProjectGroupDialogs.tsx
 1 src/renderer/src/components/skills/SkillsPage.tsx
 3 src/renderer/src/components/skills/setup/LinearAgentSkillSetupPrompt.tsx
@@ -208,7 +207,6 @@
 2 src/renderer/src/lib/work-items/linear/useLinearIssuePublication.ts
 1 src/renderer/src/lib/work-items/linear/useLinearProviderConnected.ts
 1 src/renderer/src/lib/workspace/activation/worktree-activation.ts
-1 src/renderer/src/lib/workspace/activation/worktree-jump-navigation.ts
 1 src/renderer/src/lib/workspace/creation/surface-policy/client-creation-action-error.ts
 2 src/renderer/src/lib/workspace/creation/surface-policy/client-creation-action-policy.ts
 2 src/renderer/src/lib/workspace/ownership/repo-runtime-owner.ts
