@@ -22,6 +22,7 @@ import {
 import { providerRelayRoute } from './provider-relay-route'
 import { watchProviderRelayClient } from './provider-relay-instance-signals'
 import { agentProvenGone, provenGone } from './provider-relay-exit-probes'
+import { noteKeptProviderRelayUnderNewerOrca } from './provider-relay-kept-rebind'
 
 /** `kept`: its daemon start holds it. `gone`: proven ended. `unknown`: its daemon can't say yet. */
 export type ProviderRelayRunLiveness = 'kept' | 'gone' | 'unknown'
@@ -75,6 +76,7 @@ async function decide(
   const forget = (): void => {
     if (ask !== null && providerRelayRunAskCurrent(record.sessionId, ask)) {
       forgetListedProviderRelayChat(record.sessionId)
+      noteKeptProviderRelayUnderNewerOrca(record.sessionId, false)
     }
   }
   const route = providerRelayRoute()
@@ -95,6 +97,9 @@ async function decide(
   if (client && listing) {
     const info = listing.get(placement.relayId)
     if (info && keptProviderRelayOutstanding(info)) {
+      if (ask !== null) {
+        noteKeptProviderRelayUnderNewerOrca(record.sessionId, false)
+      }
       if (!info.attached && ask !== null) {
         await placeKeptProviderRelay(
           record.sessionId,
@@ -123,6 +128,13 @@ async function decide(
   ) {
     forget()
     return 'gone'
+  }
+  if (ask !== null && providerRelayRunAskCurrent(record.sessionId, ask)) {
+    // Its refusal says why: a newer Orca's daemon only answers once this app is updated.
+    noteKeptProviderRelayUnderNewerOrca(
+      record.sessionId,
+      route.heldByNewerOrca?.(placement.daemon.instance) === true
+    )
   }
   return 'unknown'
 }

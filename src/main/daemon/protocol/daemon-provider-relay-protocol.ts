@@ -1,4 +1,5 @@
-// Frozen relay RPC set: newer apps must be able to drive a daemon of this version unchanged.
+// Frozen relay RPC set and hello: newer apps drive a daemon of this version unchanged, and an app
+// downgraded since drives a newer daemon's kept relays with them (hello at that daemon's version).
 export const PROVIDER_RELAY_PROTOCOL_VERSION = 63
 
 export type ProviderRelayCapability = 'providerRelay' | 'providerRelayKeep' | 'providerRelayAcks'

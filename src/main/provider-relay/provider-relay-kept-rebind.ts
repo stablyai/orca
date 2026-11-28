@@ -1,14 +1,31 @@
 import { providerDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
 const KEPT_UNREACHABLE_START_DETAIL =
   "Orca can't reach this chat's agent, which may still be running, so it won't start a second one. Send again once Orca reconnects to it."
+const KEPT_UNDER_NEWER_ORCA_START_DETAIL =
+  "This chat's agent is still running under a newer version of Orca, which this version can't reach, so it won't start a second one. Update Orca to reconnect to it."
+
+/** Chats whose last unanswered run is held by a newer Orca's daemon; bounded by open chats. */
+const underNewerOrca = new Set<string>()
+
+export function noteKeptProviderRelayUnderNewerOrca(chatKey: string, held: boolean): void {
+  if (held) {
+    underNewerOrca.add(chatKey)
+  } else {
+    underNewerOrca.delete(chatKey)
+  }
+}
 
 /** A kept agent that may still run must never get a second writer beside it. */
 export class KeptProviderRelayUnreachableError extends Error {
-  readonly providerDiagnostic = providerDiagnostic(KEPT_UNREACHABLE_START_DETAIL, 'person')
+  readonly providerDiagnostic: ReturnType<typeof providerDiagnostic>
 
   constructor(readonly chatKey: string) {
     super('agent_kept_running_unreachable')
     this.name = 'KeptProviderRelayUnreachableError'
+    this.providerDiagnostic = providerDiagnostic(
+      underNewerOrca.has(chatKey) ? KEPT_UNDER_NEWER_ORCA_START_DETAIL : KEPT_UNREACHABLE_START_DETAIL,
+      'person'
+    )
   }
 }
 

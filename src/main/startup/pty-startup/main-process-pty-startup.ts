@@ -18,6 +18,7 @@ import {
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { reportDaemonPtyCwdVerdict } from '../../daemon/observability/daemon-adoption-telemetry-event'
 import { initDaemonPtyProvider } from '../../daemon/providers/lifecycle/daemon-provider-init'
+import { newerDaemonHoldsInstance } from '../../daemon/providers/routing/daemon-newer-protocol-relay-clients'
 import { resolveTerminalSpawnAdmissionMode } from '../../daemon/admission/terminal-spawn-admission-mode'
 import {
   hasAnyRecordedLegacyWslCodexPane,
@@ -243,7 +244,8 @@ export function bindTerminalRuntimeStartupServices(
         return getProviderRelayHostClients()
       },
       appVersion: app.getVersion(),
-      idleStopMs: () => nativeChatIdleStopMs(state.store?.getSettings())
+      idleStopMs: () => nativeChatIdleStopMs(state.store?.getSettings()),
+      heldByNewerOrca: (instance) => newerDaemonHoldsInstance(instance)
     })
   }
   state.firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)

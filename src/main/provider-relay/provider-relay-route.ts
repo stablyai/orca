@@ -9,6 +9,8 @@ export type ProviderRelayRoute = {
   appVersion: string
   /** The user's native-chat idle stop, read at each attach and detach. */
   idleStopMs: () => number | null
+  /** The daemon start belongs to a newer Orca's protocol, which only relays chats for this app. */
+  heldByNewerOrca?: (daemonInstance: string) => boolean
 }
 
 let route: ProviderRelayRoute | null = null
