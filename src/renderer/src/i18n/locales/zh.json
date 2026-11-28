@@ -998,7 +998,11 @@
       "inlineBlameKeywordBlame": "追溯",
       "inlineBlameKeywordGit": "git",
       "inlineBlameKeywordAuthor": "作者",
-      "inlineBlameKeywordAnnotation": "批注"
+      "inlineBlameKeywordAnnotation": "批注",
+      "blameColumnTitle": "Git blame 列",
+      "blameColumnDescription": "在行号旁显示每一行的最后修改者和修改日期",
+      "blameColumnKeywordAnnotate": "标注",
+      "blameColumnKeywordGutter": "边栏"
     },
     "openInApp": {
       "preset": {
