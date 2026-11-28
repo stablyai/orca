@@ -100,6 +100,7 @@ export function createLocalPtyShellReadinessSession(args: {
   let startupCommandCleanup: (() => void) | null = null
   if (spawn.command) {
     ptyCleanupCallbacks.set(id, () => {
+      plan.startupCommandStaging?.cleanup()
       if (shellReadyTimeout) {
         clearTimeout(shellReadyTimeout)
         shellReadyTimeout = null

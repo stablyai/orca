@@ -66,10 +66,13 @@ export async function checkPtySpawnHealth(): Promise<void> {
 /** Plan first so validation uses the host or WSL cwd that spawn will actually use. */
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const work = new TerminalCreationWork()
+  let cleanupStaging: (() => void) | undefined
+  let handedOffStaging = false
   try {
     const size = normalizePtySize(opts.cols, opts.rows)
     const env = createDaemonPtyEnvironment(opts)
     const launch = createPtyShellLaunchPlan(opts, env)
+    cleanupStaging = () => launch.startupCommandStaging?.cleanup()
 
     await preflightPtySpawn({
       validationCwd: launch.validationCwd,
@@ -90,6 +93,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
         shellArgs: launch.shellArgs,
         spawnCwd: launch.spawnCwd,
         env,
+        startupCommandStaging: launch.startupCommandStaging,
         cols: size.cols,
         rows: size.rows,
         windowsFallbackAttempts: launch.windowsFallbackAttempts,
@@ -110,7 +114,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       throw error
     }
 
-    return createDaemonPtySubprocessHandle({
+    const handle = createDaemonPtySubprocessHandle({
       process: spawned.process,
       physicalOwner: spawned.physicalOwner,
       shellPath: spawned.shellPath,
@@ -118,6 +122,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       env,
       startupCommandDeliveredInShellArgs:
         spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
+      startupCommandStaging: spawned.startupCommandStaging,
       reportsChildExitStatus: spawned.reportsChildExitStatus,
       requestedCwd: opts.cwd,
       sessionId: opts.sessionId,
@@ -125,7 +130,12 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       // Claimed here, synchronously with the handle's own subscription, so no event falls between.
       ...(spawned.claimStartupEvents ? { startupEvents: spawned.claimStartupEvents() } : {})
     })
+    handedOffStaging = true
+    return handle
   } finally {
+    if (!handedOffStaging) {
+      cleanupStaging?.()
+    }
     await work.finish()
     opts.onCreationDisposition?.(await work.completion)
   }

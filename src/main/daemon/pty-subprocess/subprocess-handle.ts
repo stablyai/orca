@@ -18,6 +18,7 @@ import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
 import { runsOnWinpty, type ConptyStartupEvents } from './conpty-startup-input-reader'
+import type { WindowsPowerShellStartupCommandStaging } from '../../providers/shell-launch/windows/shell-args'
 
 export type DaemonPtyPhysicalOwner = ReturnType<typeof createDaemonPtyPhysicalOwner>
 
@@ -31,6 +32,7 @@ export function createDaemonPtySubprocessHandle(args: {
   spawnCwd: string
   env: Record<string, string>
   startupCommandDeliveredInShellArgs: boolean
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   reportsChildExitStatus: boolean
   requestedCwd?: string
   sessionId: string
@@ -113,6 +115,7 @@ export function createDaemonPtySubprocessHandle(args: {
   const acceptExit = ({ exitCode, signal }: { exitCode: number; signal?: number }): void => {
     // Exit listeners may re-enter cleanup; retire signal authority before notifying them.
     dead = true
+    args.startupCommandStaging?.cleanup()
     clearMasterRetiredTimer()
     foreground.markDead()
     // Neutralize kill before an async socket-close SIGHUP can target a recycled PID.
@@ -262,6 +265,7 @@ export function createDaemonPtySubprocessHandle(args: {
       }
       disposed = true
       dead = true
+      args.startupCommandStaging?.cleanup()
       clearMasterRetiredTimer()
       inputClosedListener = null
       exitSubscription.dispose()

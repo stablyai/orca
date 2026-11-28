@@ -10,6 +10,10 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from '../../providers/shell-launch/macos/tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/shell-launch/windows/shell-fallback-chain'
+import {
+  isWindowsPowerShellShellPath,
+  type WindowsPowerShellStartupCommandStaging
+} from '../../providers/shell-launch/windows/shell-args'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 import { wrapPtySpawnInTerminalScope } from '../process-scopes/terminal-scopes-runtime'
 import { spawnConptyWithInputReader, type ConptyStartupEvents } from './conpty-startup-input-reader'
@@ -34,6 +38,7 @@ export type SpawnedDaemonPty = {
   shellPath: string
   spawnCwd: string
   startupCommandDeliveredInShellArgs?: boolean
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   /** False when a wrapper owns the reported status, so no exit code may be read from it. */
   reportsChildExitStatus: boolean
   /** Windows: output seen while confirming ConPTY reads input; claim before subscribing. */
@@ -54,6 +59,7 @@ export async function spawnNativeDaemonPty(args: {
   env: Record<string, string>
   cols: number
   rows: number
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   /** The primary shell's argv is Orca's interactive default, so a respawn cannot repeat a command. */
   primaryArgsRespawnSafe?: boolean
@@ -62,6 +68,11 @@ export async function spawnNativeDaemonPty(args: {
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }): Promise<SpawnedDaemonPty> {
   let reportsChildExitStatus = true
+  let activeStaging = args.startupCommandStaging
+  const discardStaging = (): void => {
+    activeStaging?.cleanup()
+    activeStaging = undefined
+  }
   let unpublishedOwner: DaemonPtyPhysicalOwner | undefined
   const spawnOnce = async (
     shellPath: string,
@@ -151,16 +162,30 @@ export async function spawnNativeDaemonPty(args: {
       shellPath: args.shellPath,
       spawnCwd: args.spawnCwd,
       reportsChildExitStatus,
+      ...(activeStaging ? { startupCommandStaging: activeStaging } : {}),
       ...(spawned.claimStartupEvents ? { claimStartupEvents: spawned.claimStartupEvents } : {})
     }
   } catch (primaryErr) {
     // A returned predecessor stays owned until exit, including failed observer/startup setup.
     await unpublishedOwner?.recover()
-    args.signal?.throwIfAborted()
+    try {
+      args.signal?.throwIfAborted()
+    } catch (error) {
+      discardStaging()
+      throw error
+    }
     if (process.platform !== 'win32') {
+      discardStaging()
       throw primaryErr
     }
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
+      if (!isWindowsPowerShellShellPath(attempt.shellPath)) {
+        discardStaging()
+        attempt.startupCommandStaging?.cleanup()
+      } else if (attempt.startupCommandStaging && attempt.startupCommandStaging !== activeStaging) {
+        discardStaging()
+        activeStaging = attempt.startupCommandStaging
+      }
       try {
         const spawned = await spawnAt(
           attempt.shellPath,
@@ -179,13 +204,20 @@ export async function spawnNativeDaemonPty(args: {
           spawnCwd: attempt.effectiveCwd,
           startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs,
           reportsChildExitStatus,
+          ...(activeStaging ? { startupCommandStaging: activeStaging } : {}),
           ...(spawned.claimStartupEvents ? { claimStartupEvents: spawned.claimStartupEvents } : {})
         }
       } catch {
         await unpublishedOwner?.recover()
-        args.signal?.throwIfAborted()
+        try {
+          args.signal?.throwIfAborted()
+        } catch (abortError) {
+          discardStaging()
+          throw abortError
+        }
       }
     }
+    discardStaging()
     throw primaryErr
   }
 }

@@ -1,6 +1,6 @@
 import { win32 as pathWin32 } from 'node:path'
-import { resolveWindowsShellLaunchArgs } from './shell-args'
-import type { WindowsShellWslContext } from './shell-args'
+import { isWindowsPowerShellShellPath, resolveWindowsShellLaunchArgs } from './shell-args'
+import type { WindowsPowerShellStartupCommandStaging, WindowsShellWslContext } from './shell-args'
 import {
   resolveWindowsPowerShellSpawnChain,
   type WindowsPowerShellResolveOptions
@@ -12,6 +12,7 @@ export type WindowsShellSpawnAttempt = {
   effectiveCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
 }
 
 function toAttempt(
@@ -19,21 +20,27 @@ function toAttempt(
   cwd: string,
   defaultCwd: string,
   wslContext: WindowsShellWslContext | undefined,
-  startupCommand: string | undefined
+  startupCommand: string | undefined,
+  startupCommandStaging: WindowsPowerShellStartupCommandStaging | undefined
 ): WindowsShellSpawnAttempt {
   const resolved = resolveWindowsShellLaunchArgs(
     shellPath,
     cwd,
     defaultCwd,
     wslContext,
-    startupCommand
+    startupCommand,
+    undefined,
+    startupCommandStaging
   )
   return {
     shellPath,
     shellArgs: resolved.shellArgs,
     effectiveCwd: resolved.effectiveCwd,
     validationCwd: resolved.validationCwd,
-    startupCommandDeliveredInShellArgs: resolved.startupCommandDeliveredInShellArgs === true
+    startupCommandDeliveredInShellArgs: resolved.startupCommandDeliveredInShellArgs === true,
+    ...(resolved.startupCommandStaging
+      ? { startupCommandStaging: resolved.startupCommandStaging }
+      : {})
   }
 }
 
@@ -47,12 +54,29 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
   startupCommand?: string
   resolveOptions?: WindowsPowerShellResolveOptions
 }): WindowsShellSpawnAttempt[] {
-  const basename = pathWin32.basename(args.shellPath).toLowerCase()
-  if (basename !== 'pwsh.exe' && basename !== 'powershell.exe') {
+  if (!isWindowsPowerShellShellPath(args.shellPath)) {
     return []
   }
+  const basename = pathWin32.basename(args.shellPath).toLowerCase()
   const chain = resolveWindowsPowerShellSpawnChain(basename, args.resolveOptions)
-  return chain.map((candidate) =>
-    toAttempt(candidate, args.cwd, args.defaultCwd, args.wslContext, args.startupCommand)
-  )
+  let startupCommandStaging: WindowsPowerShellStartupCommandStaging | undefined
+  try {
+    const attempts: WindowsShellSpawnAttempt[] = []
+    for (const candidate of chain) {
+      const attempt = toAttempt(
+        candidate,
+        args.cwd,
+        args.defaultCwd,
+        args.wslContext,
+        args.startupCommand,
+        startupCommandStaging
+      )
+      startupCommandStaging ??= attempt.startupCommandStaging
+      attempts.push(attempt)
+    }
+    return attempts
+  } catch (error) {
+    startupCommandStaging?.cleanup()
+    throw error
+  }
 }

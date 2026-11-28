@@ -1,4 +1,6 @@
-import { win32 as pathWin32 } from 'node:path'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../../../pty/shell-startup/git-bash'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { toLinuxPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
@@ -23,6 +25,7 @@ export const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
 // Includes ~400 encoded chars for the startup command mark so real commands keep the prior budget.
 const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_400
+const POWERSHELL_STAGED_COMMAND_ARG_MAX_CHARS = 30_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
 export const ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV = 'ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE'
 const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %${ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV}%%ORCA_CODEX_LAUNCH_PREFLIGHT%%${ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV}% agent hooks prepare-codex > nul 2>&1`
@@ -47,10 +50,23 @@ export type WindowsShellLaunchArgs = {
   shellArgs: string[]
   /** Startup is already in argv; suppress a second stdin write. */
   startupCommandDeliveredInShellArgs?: boolean
+  /** Staged PowerShell command shared by every launch attempt. */
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   /** Native node-pty cwd; WSL launches from Windows home and performs guest cd through argv. */
   effectiveCwd: string
   /** Requested path to validate even when WSL launches from a different native cwd. */
   validationCwd: string
+}
+
+export type WindowsPowerShellStartupCommandStaging = {
+  directoryPath: string
+  scriptPath: string
+  cleanup: () => void
+}
+
+export function isWindowsPowerShellShellPath(shellPath: string): boolean {
+  const basename = pathWin32.basename(shellPath).toLowerCase()
+  return basename === 'pwsh.exe' || basename === 'powershell.exe'
 }
 
 export type WindowsShellWslContext = {
@@ -83,26 +99,99 @@ function getPowerShellRestoreCwdCommand(cwd: string): string {
 
 function getPowerShellEncodedCommand(
   cwd: string,
-  startupCommand?: string
+  startupCommand?: string,
+  staging?: WindowsPowerShellStartupCommandStaging
 ): {
   encodedCommand: string
   startupCommandDeliveredInShellArgs?: boolean
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
 } {
   const bootstrap = `${getPowerShellOsc133Bootstrap()}${getPowerShellRestoreCwdCommand(cwd)}`
-  if (!startupCommand || startupCommand.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
-    return { encodedCommand: encodePowerShellCommand(bootstrap) }
+  const bootstrapEncodedCommand = encodePowerShellCommand(bootstrap)
+  if (!startupCommand) {
+    return { encodedCommand: bootstrapEncodedCommand }
   }
 
-  const command = `${bootstrap}\n${getPowerShellOsc133StartupCommandMark()}\n${startupCommand}`
+  const startupMark = getPowerShellOsc133StartupCommandMark()
+  const command = `${bootstrap}\n${startupMark}\n${startupCommand}`
   const encodedCommand = encodePowerShellCommand(command)
   // UTF-16/base64 expands payloads; leave margin under CreateProcess 32,767-character limit.
-  if (encodedCommand.length > POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS) {
-    return { encodedCommand: encodePowerShellCommand(bootstrap) }
+  if (encodedCommand.length <= POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS) {
+    return {
+      encodedCommand,
+      startupCommandDeliveredInShellArgs: true
+    }
   }
 
-  return {
-    encodedCommand,
-    startupCommandDeliveredInShellArgs: true
+  let startupCommandStaging = staging
+  if (!startupCommandStaging) {
+    startupCommandStaging = stagePowerShellStartupCommand(startupCommand)
+  }
+  if (startupCommandStaging) {
+    const scriptPath = quoteStartupArg(startupCommandStaging.scriptPath, 'powershell')
+    const directoryPath = quoteStartupArg(startupCommandStaging.directoryPath, 'powershell')
+    const stagedEncodedCommand = encodePowerShellCommand(
+      `${bootstrap}
+${startupMark}
+Invoke-Expression (& {
+    param([string] $__orcaStartupPath)
+    try {
+        Get-Content -LiteralPath $__orcaStartupPath -Raw -Encoding UTF8
+    } finally {
+        try { [System.IO.File]::Delete($__orcaStartupPath) } catch {}
+        try { [System.IO.Directory]::Delete(${directoryPath}) } catch {}
+    }
+} ${scriptPath})`
+    )
+    if (stagedEncodedCommand.length <= POWERSHELL_STAGED_COMMAND_ARG_MAX_CHARS) {
+      return {
+        encodedCommand: stagedEncodedCommand,
+        startupCommandDeliveredInShellArgs: true,
+        startupCommandStaging
+      }
+    }
+    if (!staging) {
+      startupCommandStaging.cleanup()
+    }
+  }
+
+  return { encodedCommand: bootstrapEncodedCommand }
+}
+
+function stagePowerShellStartupCommand(
+  startupCommand: string
+): WindowsPowerShellStartupCommandStaging | undefined {
+  let directoryPath: string | undefined
+  try {
+    directoryPath = mkdtempSync(join(tmpdir(), 'orca-powershell-startup-'))
+    const createdDirectoryPath = directoryPath
+    const scriptPath = join(createdDirectoryPath, 'startup.ps1')
+    writeFileSync(scriptPath, startupCommand, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+    let cleaned = false
+    return {
+      directoryPath: createdDirectoryPath,
+      scriptPath,
+      cleanup: () => {
+        if (cleaned) {
+          return
+        }
+        try {
+          rmSync(createdDirectoryPath, { recursive: true, force: true })
+          cleaned = true
+        } catch {
+          // Cleanup must not replace the shell error with a temp-file error.
+        }
+      }
+    }
+  } catch {
+    if (directoryPath) {
+      try {
+        rmSync(directoryPath, { recursive: true, force: true })
+      } catch {
+        // Best-effort cleanup for a partially created staging directory.
+      }
+    }
+    return undefined
   }
 }
 
@@ -126,7 +215,8 @@ export function resolveWindowsShellLaunchArgs(
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
   startupCommand?: string,
-  codexLaunchPreflightCommand?: string
+  codexLaunchPreflightCommand?: string,
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = msysDrivePathToWindows(cwd)
@@ -147,12 +237,19 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    const powerShellCommand = getPowerShellEncodedCommand(nativeCwd, startupCommand)
+    const powerShellCommand = getPowerShellEncodedCommand(
+      nativeCwd,
+      startupCommand,
+      startupCommandStaging
+    )
     // Windows status requires OSC 133 prompt/readline hooks after profiles; encoded delivery follows powershell-osc133-bootstrap.ts MDE review.
     return {
       shellArgs: ['-NoLogo', '-NoExit', '-EncodedCommand', powerShellCommand.encodedCommand],
       ...(powerShellCommand.startupCommandDeliveredInShellArgs
         ? { startupCommandDeliveredInShellArgs: true }
+        : {}),
+      ...(powerShellCommand.startupCommandStaging
+        ? { startupCommandStaging: powerShellCommand.startupCommandStaging }
         : {}),
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd

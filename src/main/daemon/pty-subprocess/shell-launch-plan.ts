@@ -55,6 +55,7 @@ export type PtyShellLaunchPlan = {
   spawnCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
+  startupCommandStaging?: WindowsShellSpawnAttempt['startupCommandStaging']
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   startupAgentRecognition: RecognizedAgentProcess | null
 }
@@ -67,6 +68,7 @@ export function createPtyShellLaunchPlan(
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
+  let startupCommandStaging: WindowsShellSpawnAttempt['startupCommandStaging']
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
@@ -125,6 +127,7 @@ export function createPtyShellLaunchPlan(
       spawnCwd = primaryAttempt.effectiveCwd
       validationCwd = primaryAttempt.validationCwd
       startupCommandDeliveredInShellArgs = primaryAttempt.startupCommandDeliveredInShellArgs
+      startupCommandStaging = primaryAttempt.startupCommandStaging
     } else {
       const resolved = resolveWindowsShellLaunchArgs(
         shellPath,
@@ -138,6 +141,7 @@ export function createPtyShellLaunchPlan(
       spawnCwd = resolved.effectiveCwd
       validationCwd = resolved.validationCwd
       startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+      startupCommandStaging = resolved.startupCommandStaging
     }
     if (isWindowsGitBashShellPath(shellPath)) {
       env.CHERE_INVOKING ??= '1'
@@ -167,6 +171,7 @@ export function createPtyShellLaunchPlan(
             validationCwd = resolved.validationCwd
             startupCommandDeliveredInShellArgs =
               resolved.startupCommandDeliveredInShellArgs === true
+            startupCommandStaging = resolved.startupCommandStaging
           }
         }
       } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
@@ -242,6 +247,7 @@ export function createPtyShellLaunchPlan(
     spawnCwd,
     validationCwd,
     startupCommandDeliveredInShellArgs,
+    ...(startupCommandStaging ? { startupCommandStaging } : {}),
     windowsFallbackAttempts,
     startupAgentRecognition
   }
