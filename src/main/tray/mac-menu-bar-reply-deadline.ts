@@ -33,6 +33,10 @@ export class MenuBarReplyDeadline {
   }
 
   resume(): void {
+    // Repeated focus events must not keep pushing back a running deadline.
+    if (!this.suspended) {
+      return
+    }
     this.suspended = false
     if (this.onExpire) {
       this.restart()

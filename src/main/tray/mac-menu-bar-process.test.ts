@@ -169,7 +169,11 @@ it('replaces a hung helper on the next probe and keeps no timer while idle', () 
   helper.send({ type: 'pong', id: ping.id })
   expect(vi.getTimerCount()).toBe(0)
   process.probe()
-  vi.advanceTimersByTime(16_000)
+  // Refocusing while the reply is outstanding must not push the deadline back.
+  for (let i = 0; i < 4; i++) {
+    vi.advanceTimersByTime(4_000)
+    process.probe()
+  }
   expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
 })
 
