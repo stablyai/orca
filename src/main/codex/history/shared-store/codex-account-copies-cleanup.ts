@@ -229,7 +229,7 @@ export async function cleanUpCodexAccountCopies(args: {
       const held = await settle(taking)
       if (!held) {
         // A hold that still arrives later is let go at once.
-        void taking.then((late) => late?.release())
+        void taking.then((late) => late?.release()).catch(() => {})
         return null
       }
       const hold = held.value

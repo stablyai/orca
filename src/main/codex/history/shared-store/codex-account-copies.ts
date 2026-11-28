@@ -132,7 +132,7 @@ export async function verifyCodexAccountCopies(args: {
   // Each launch starts after the copy the last one stopped at, so a walk the deadline cuts short
   // still reaches every copy over a few launches; folders before it are skipped unread.
   let lastVisited: string | undefined
-  const walkStop: WalkStop = { errors: 0 }
+  const walkStop: WalkStop = { failed: [] }
   for (const { root, copy, segments } of walkCopies(
     args.accountHome,
     args.storeHome,
@@ -229,7 +229,7 @@ export async function verifyCodexAccountCopies(args: {
     outOfTime = true
     tally.deferred += 1
   }
-  tally.error += walkStop.errors
+  tally.error += walkStop.failed.length
   // With 5,000 verified this launch has no room for more, oversized or not.
   const full = verified.length >= MAX_VERIFIED_PER_HOME
   for (const [index, candidate] of oversized.entries()) {
@@ -263,22 +263,24 @@ export async function verifyCodexAccountCopies(args: {
   )
   verified.push(...turn.taken)
   tally.deferred += retry.length - turn.taken.length
-  // Entries the walk didn't reach (time ran out, or a folder couldn't be listed) are kept as-is.
-  if (outOfTime || walkStop.errors > 0) {
-    for (const [name, key] of Object.entries(remembered)) {
-      if (!visited.has(name)) {
-        nextVerified[name] = key
-      }
+  // Entries the walk didn't reach are kept as-is: all of them when time ran out, else only those
+  // under a folder that couldn't be listed (the rest are gone from folders it did list).
+  const unreached = (name: string): boolean =>
+    !visited.has(name) &&
+    (outOfTime || walkStop.failed.some((folder) => folder === '' || name.startsWith(`${folder}/`)))
+  for (const [name, key] of Object.entries(remembered)) {
+    if (unreached(name)) {
+      nextVerified[name] = key
     }
-    for (const [name, key] of Object.entries(kept)) {
-      if (!visited.has(name)) {
-        nextKept[name] = key
-      }
+  }
+  for (const [name, key] of Object.entries(kept)) {
+    if (unreached(name)) {
+      nextKept[name] = key
     }
-    for (const [name, saved] of Object.entries(progress)) {
-      if (!visited.has(name)) {
-        nextProgress[name] = saved
-      }
+  }
+  for (const [name, saved] of Object.entries(progress)) {
+    if (unreached(name)) {
+      nextProgress[name] = saved
     }
   }
   // Only what can't become deletable in this streak: a differing, open or orphaned copy could.

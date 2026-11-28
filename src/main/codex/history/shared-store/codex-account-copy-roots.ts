@@ -84,9 +84,9 @@ export function compareWalkPaths(a: string[], b: string[]): number {
 export type WalkedCopy = { root: CopyRoot; copy: string; segments: string[] }
 /**
  * `at`: set when the deadline stopped the walk, where the next launch resumes (home-relative).
- * `errors`: folders that couldn't be listed and were skipped.
+ * `failed`: folders that couldn't be listed and were skipped (home-relative; '' for the home).
  */
-export type WalkStop = { at?: string; errors: number }
+export type WalkStop = { at?: string; failed: string[] }
 
 /**
  * Rollouts under `folder` in walk order, lazily; with `after`, only those past it, skipping whole
@@ -114,7 +114,7 @@ function* sortedRolloutFiles(
   } catch (error) {
     if (!isDefinitiveAbsence(error)) {
       // Skipped this launch, not the whole walk: counted, so the home isn't settled.
-      stop.errors += 1
+      stop.failed.push(segments.join('/'))
     }
     return
   }
@@ -151,11 +151,18 @@ export function* walkCopies(
   storeHome: string,
   after: string | undefined,
   deadline = Infinity,
-  stop: WalkStop = { errors: 0 }
+  stop: WalkStop = { failed: [] }
 ): Generator<WalkedCopy> {
   const cursor = after ? after.split('/') : null
   const listed = new Map<string, Dirent[]>()
-  const roots = listCopyRoots(accountHome, storeHome)
+  let found: CopyRoot[]
+  try {
+    found = listCopyRoots(accountHome, storeHome)
+  } catch {
+    stop.failed.push('')
+    return
+  }
+  const roots = found
     .map((root) => ({ root, segments: relative(accountHome, root.root).split(/[\\/]/) }))
     .sort((a, b) => compareWalkPaths(a.segments, b.segments))
   for (const { root, segments } of roots) {

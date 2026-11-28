@@ -41,7 +41,8 @@ export function readCursor(accountHome: string): CopiesCursor {
 
 /** Its own small file, so moving a cursor never rewrites the kept-copies record. */
 export function writeCursor(accountHome: string, cursor: CopiesCursor): void {
-  const text = `${JSON.stringify(cursor)}\n`
+  // Keys in one order, so the same cursor read back and saved is the same text.
+  const text = `${JSON.stringify(cursor, Object.keys(cursor).sort())}\n`
   writeIfChanged(join(accountHome, CURSOR_FILE), text, text === '{}\n')
 }
 

@@ -430,6 +430,46 @@ describe('a walk that meets trouble', () => {
     expect(result.tally.error).toBe(1)
   })
 
+  it('still answers when the account home itself cannot be listed', async () => {
+    put(storeFile(), LINE_1)
+    put(conflictCopy(), LINE_1)
+    readdirFails.add(home)
+
+    expect((await verify()).tally.error).toBe(1)
+  })
+
+  it('keeps saved results only under a folder it cannot list, not for copies gone elsewhere', async () => {
+    const later = REL.replace('2026/11/20', '2026/11/21')
+    for (const rel of [REL, later]) {
+      put(storeFile(rel), LINE_1)
+      put(conflictCopy(rel), LINE_1)
+    }
+    await verify()
+    readdirFails.add(dirname(conflictCopy()))
+    rmSync(conflictCopy(later))
+
+    await verifyCodexAccountCopies({
+      accountHome: home,
+      storeHome: store,
+      budget: { maxBytes: 4 * 1024 ** 3, deadline: Date.now() + 60_000 },
+      version: 'test-trouble-2',
+      managedAccountsRoot: join(root, 'codex-accounts')
+    })
+
+    const record: unknown = JSON.parse(
+      readFileSync(join(home, '.orca-history-copies-kept.json'), 'utf8')
+    )
+    const verified =
+      record &&
+      typeof record === 'object' &&
+      'verified' in record &&
+      record.verified &&
+      typeof record.verified === 'object'
+        ? record.verified
+        : {}
+    expect(Object.keys(verified)).toEqual([`sessions.orca-profile-merge/${REL}`])
+  })
+
   it('keeps a deeper cursor when its time is up before reaching it', async () => {
     put(storeFile(), LINE_1)
     put(conflictCopy(), LINE_1)

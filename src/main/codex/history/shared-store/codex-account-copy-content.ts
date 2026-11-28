@@ -48,16 +48,26 @@ export function originalHoldsCopy(
   const compressed = copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
   // One more byte of a `.zst` original past the copy's end, to see it isn't longer.
   const theirs = chunks(original, from, end - from + (compressed && end === size ? 1 : 0))
+  const ours = chunks(copy, from, end - from)
   let matched = from
   try {
     let pending: Buffer = Buffer.alloc(0)
-    for (const mine of chunks(copy, from, end - from)) {
+    // The clock is read before every read of either file, so none starts past the deadline.
+    for (;;) {
       if (Date.now() > deadline) {
         return { partial: true, matched }
       }
+      const step = ours.next()
+      if (step.done) {
+        break
+      }
+      const mine = step.value
       let offset = 0
       while (offset < mine.length) {
         if (pending.length === 0) {
+          if (Date.now() > deadline) {
+            return { partial: true, matched }
+          }
           const next = theirs.next()
           if (next.done) {
             return { holds: false }
@@ -79,6 +89,7 @@ export function originalHoldsCopy(
     }
     return { holds: compressed ? pending.length === 0 && theirs.next().done === true : true }
   } finally {
+    ours.return(undefined)
     theirs.return(undefined)
   }
 }

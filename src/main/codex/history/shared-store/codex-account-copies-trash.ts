@@ -117,6 +117,7 @@ export function moveCheckedCopiesToTrash(
     tally.error += passing.length
     return tally
   }
+  const moved: TrashEntry[] = []
   for (const { copy, stats, entry } of moving) {
     try {
       const target = join(trash, entry.name)
@@ -128,18 +129,16 @@ export function moveCheckedCopiesToTrash(
       tally.trashed += 1
       tally.bytesTrashed += Number(stats.size)
       entry.movedKey = keyAfterMove(target, stats)
+      moved.push(entry)
     } catch (error) {
       // Windows: a handle opened without delete sharing, which a writer's could be.
       tally[busyOnWindows(error) ? 'open' : 'error'] += 1
     }
   }
-  // Only when a key was added: otherwise the list already says everything it would.
-  if (moving.some((m) => m.entry.movedKey !== undefined)) {
-    writeList(
-      trash,
-      listName,
-      moving.map((m) => m.entry)
-    )
+  // Only the copies that moved stay listed, so a skipped name never points at another batch's
+  // file; rewritten only when that or an added key changes it.
+  if (moved.length < moving.length || moved.some((entry) => entry.movedKey !== undefined)) {
+    writeList(trash, listName, moved)
   }
   return tally
 }

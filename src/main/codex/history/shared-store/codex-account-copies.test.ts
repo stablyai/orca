@@ -1,3 +1,4 @@
+import type * as NodeCrypto from 'node:crypto'
 import type * as NodeFs from 'node:fs'
 import {
   appendFileSync,
@@ -25,6 +26,14 @@ import { listFiles, readList, TRASH_GRACE_MS } from './codex-account-copies-tras
 import { recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 
+// On: every 2-byte random part is the same, as when two moves draw the same trash name.
+const sameRandom = vi.hoisted(() => ({ on: false }))
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeCrypto>()
+  const randomBytes = (size: number): Buffer =>
+    sameRandom.on && size === 2 ? Buffer.alloc(2) : actual.randomBytes(size)
+  return { ...actual, randomBytes, default: { ...actual, randomBytes } }
+})
 // Paths whose lstat fails as on a failing disk.
 const lstatFails = vi.hoisted(() => new Set<string>())
 // Runs before each lstat, to land a write at an exact moment.
@@ -101,6 +110,11 @@ function run(
       if (options.hang === 'locks') {
         return new Promise<never>(() => {})
       }
+      if (options.hang === 'locks-then-fail') {
+        return new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('lock helper failed')), 50)
+        })
+      }
       if (options.locks === false) {
         return null
       }
@@ -173,6 +187,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  sameRandom.on = false
   lstatFails.clear()
   lstatHook.before = undefined
   rmSync(root, { recursive: true, force: true })
@@ -506,6 +521,15 @@ describe('trashed copies', () => {
 })
 
 describe('a step that never answers', () => {
+  it('handles taking the locks failing after the run gave up on it', async () => {
+    put(storeFile(), LINE_1)
+    put(conflictCopy(), LINE_1)
+
+    expect(await run({ hang: 'locks-then-fail' })).toBeNull()
+    // The failure lands after the run returned; an unhandled one would fail this test file.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  })
+
   it('abandons the run when taking the locks never answers', async () => {
     put(storeFile(), LINE_1)
     const copy = put(conflictCopy(), LINE_1)
@@ -591,6 +615,33 @@ describe('trash bookkeeping', () => {
 
     expect(tallies.map((tally) => tally.trashed)).toEqual([1, 1])
     expect(trashed()).toHaveLength(2)
+  })
+
+  it('never lists a copy whose trash name was taken, so nothing is restored in its place', async () => {
+    const days = ['2026/11/20', '2026/11/21']
+    for (const day of days) {
+      put(storeFile(REL.replace('2026/11/20', day)), LINE_1)
+      put(conflictCopy(REL.replace('2026/11/20', day)), LINE_1)
+    }
+    const { verified } = await verifyCodexAccountCopies({
+      accountHome: home,
+      storeHome: store,
+      budget: { maxBytes: 4 * 1024 ** 3, deadline: Date.now() + 60_000 },
+      version: 'test-taken',
+      managedAccountsRoot: join(root, 'codex-accounts')
+    })
+    const locks = join(root, 'locks')
+    mkdirSync(locks)
+    sameRandom.on = true
+    const tallies = verified.map((copy) => moveCheckedCopiesToTrash(home, [copy], [locks], 1_000))
+    sameRandom.on = false
+    expect(tallies.map((tally) => tally.trashed)).toEqual([1, 0])
+    const second = conflictCopy(REL.replace('2026/11/20', '2026/11/21'))
+    rmSync(second)
+
+    await afterGrace()
+
+    expect(existsSync(second)).toBe(false)
   })
 
   it('never deletes a trashed copy rewritten in place after its recheck, times put back', async () => {
