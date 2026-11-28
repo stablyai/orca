@@ -31,6 +31,7 @@ export function getRemoteServerUpdatePhaseLabel(
         'Checking update…'
       )
     case 'downloading':
+    case 'downloaded':
       return t('auto.components.settings.RemoteServerUpdateStatus.downloading', 'Downloading…')
     case 'restarting':
       return t('auto.components.settings.RemoteServerUpdateStatus.restarting', 'Restarting…')
@@ -49,6 +50,7 @@ function phaseIcon(phase: RemoteServerUpdatePhase): React.JSX.Element {
     case 'restarting':
       return <Loader2 className="animate-spin" />
     case 'downloading':
+    case 'downloaded':
       return <Download />
     case 'current':
     case 'updated':

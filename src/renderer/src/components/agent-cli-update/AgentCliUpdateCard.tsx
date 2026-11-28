@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
+import { agentCliUpdateStartable } from '../../../../shared/agent-launch/installation/agent-cli-update-runs'
 import {
-  agentCliUpdateStartable,
   runAgentCliUpdateRow,
   type AgentCliUpdateRow
 } from '../status-bar/updates/AgentCliUpdateList'

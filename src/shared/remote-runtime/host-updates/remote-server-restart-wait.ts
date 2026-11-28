@@ -3,16 +3,18 @@ import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot
 } from '../host-catalog/remote-server-update'
-import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 import { readRemoteServerInstallFailure } from './remote-server-install-failure-probe'
 import { RemoteServerUpdaterStatusError } from './remote-server-updater-polling'
 
-type RestartWaitTransport = {
+/** Just what tells a replacement process apart: its id and the version it runs. */
+export type RemoteServerRuntimeIdentity = { runtimeId: string; appVersion?: string | null }
+
+type RestartWaitTransport<Status extends RemoteServerRuntimeIdentity> = {
   getRuntimeStatus: (
     environmentId: string,
     timeoutMs?: number,
     options?: { force?: true }
-  ) => Promise<RuntimeStatus>
+  ) => Promise<Status>
   getUpdaterStatus: (
     environmentId: string,
     timeoutMs?: number
@@ -30,12 +32,12 @@ type RestartWaitTiming = {
 const RESTART_WAIT_RPC_TIMEOUT_MS = 10_000
 
 /** Wait for a new runtime on target version. Report install failure from the original process immediately; otherwise failed restart looks merely slow until budget expiry. */
-export async function waitForReplacementRuntime(
+export async function waitForReplacementRuntime<Status extends RemoteServerRuntimeIdentity>(
   environmentId: string,
-  transport: RestartWaitTransport,
+  transport: RestartWaitTransport<Status>,
   install: RemoteServerUpdateInstallResult,
   timing: RestartWaitTiming
-): Promise<RuntimeStatus> {
+): Promise<Status> {
   const now = transport.now ?? Date.now
   const deadline = now() + timing.reconnectTimeoutMs
   // Install returns before installer fires; first-tick errors belong to earlier attempts.
@@ -76,6 +78,21 @@ export async function waitForReplacementRuntime(
     if (waitMs > 0) {
       await transport.wait(waitMs)
     }
+  }
+  // A client whose timers stopped (a locked phone) reaches the deadline without having looked; one
+  // last read keeps a computer already back on the new version from reading as lost.
+  try {
+    const status = await transport.getRuntimeStatus(environmentId, RESTART_WAIT_RPC_TIMEOUT_MS, {
+      force: true
+    })
+    if (
+      status.runtimeId !== install.runtimeId &&
+      hasReachedAppVersion(status.appVersion?.trim() ?? '', install.targetVersion)
+    ) {
+      return status
+    }
+  } catch {
+    // Still away.
   }
   throw new Error('remote_update_reconnect_timeout')
 }

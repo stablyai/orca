@@ -12,6 +12,8 @@ import { forgetHostDescriptor } from '../host-descriptors/host-descriptor-store'
 import { removeHost } from './host-store'
 import { forgetKeptBots } from '../bots/kept-server-bot-listings'
 import { forgetBotAvatarClients } from '../bots/bot-avatar-uploads'
+import { forgetHostAgentCliUpdates } from '../host-screen/identity/updates/host-agent-cli-updates'
+import { forgetHostOrcaUpdate } from '../host-screen/identity/updates/host-orca-update'
 
 export async function removeHostAndCloseClient(
   hostId: string,
@@ -34,6 +36,8 @@ export async function removeHostAndCloseClient(
   forgetNativeHostQueries(queryClient, hostId)
   forgetKeptBots(hostId)
   forgetBotAvatarClients(hostId)
+  forgetHostAgentCliUpdates(hostId)
+  forgetHostOrcaUpdate(hostId)
   // After commit, cache cleanup must not delay/fail removal; later eviction can reclaim failures.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
   void deleteHostPageCache(hostId).catch(() => undefined)

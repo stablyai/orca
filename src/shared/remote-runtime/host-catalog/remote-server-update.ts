@@ -1,6 +1,8 @@
 import type { UpdateStatus } from '../../updater/update-status-types'
 
 export const REMOTE_SERVER_UPDATE_CAPABILITY = 'updater.remote-control.v1' as const
+// The host lets phones call updater.*; older hosts refuse phones them. Automatic installs still need both.
+export const REMOTE_SERVER_UPDATE_MOBILE_CAPABILITY = 'updater.mobile.v1' as const
 
 export type RemoteServerUpdateInstallMode =
   | 'interactive'
