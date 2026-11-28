@@ -6,7 +6,6 @@ import type {
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { CodexSharedServerRouter } from './codex-shared-server-router'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
-import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 import { registerPooledProviderRelayChat } from '../../../provider-relay/app-provider-relays'
 
 /** A release's outcome: whether the chat's turns are proven over (else it stays on the server for
@@ -28,6 +27,8 @@ export type CodexSharedLeaseHost = {
   backlog: (lease: CodexSharedServerLease, deltaBytes: number) => void
   /** Answers a server request no chat will take, so Codex doesn't wait on it. */
   refuse: (frame: CodexSharedServerFrame) => void
+  /** True the first time an answer to this request may be sent (one answer per request). */
+  answer: (id: number | string) => boolean
   /** Whether any of these threads has a turn running. */
   hasRunningTurn: (threads: Iterable<string>) => boolean
   /** A thread open or turn start settled, so a wait on them can re-check. */
@@ -54,65 +55,27 @@ export type CodexSharedLeaseHost = {
 
 /** What a lease on a relayed server needs from it beyond its frames. */
 export type CodexSharedLeaseRelay = {
-  /** Work the daemon carried (open, or ended while no app was attached), every chat's. */
-  openWork: () => Record<string, string[][]> | undefined
-  endedWork: () => Record<string, string[][]> | undefined
-  recordSeq: () => number | null
   /** Quit: this chat's part goes on under the daemon; nothing of it is stopped. */
-  detachForQuit: (
-    lease: CodexSharedServerLease,
-    open: Record<string, string[][]> | null
-  ) => Promise<void>
-  /** The chat was handed a frame its journal may not hold yet. */
-  dispatched: (lease: CodexSharedServerLease) => void
-  /** A reattach that couldn't finish: its threads and frames wait for the chat's next open. */
-  handBack: (lease: CodexSharedServerLease, frames: CodexSharedServerFrame[]) => void
+  detachForQuit: (lease: CodexSharedServerLease) => Promise<void>
+  /** The chat left stopping nothing: its threads go unclaimed, and the requests it was handed but
+   *  didn't answer wait for the thread's next chat. */
+  leftQuietly: (lease: CodexSharedServerLease) => void
 }
 
-/** A lease restored from a reattached server: its chat's commands keep their tag. */
-export type CodexRestoredLease = { workload: string; chat: CodexRecoveredChat }
-
-type Work = Record<string, string[][]> | undefined
-
-/** The daemon's carried work, narrowed to this chat's threads (keys start with the thread). */
-function narrowed(work: Work, threads: ReadonlySet<string>): Work {
-  return (
-    work &&
-    Object.fromEntries(
-      Object.entries(work).map(([group, keys]) => [
-        group,
-        keys.filter(([threadId]) => threadId !== undefined && threads.has(threadId))
-      ])
-    )
-  )
-}
-
-/** What a chat sees of the daemon running its shared server; absent when its run ends with this app. */
+/** What a chat sees of the daemon running its shared server; absent when its run ends with this
+ *  app. A kept run is rebuilt from Codex (thread/resume), never from replayed output. */
 export function codexSharedLeaseRelayView(
-  lease: CodexSharedServerLease,
-  reattached: boolean
+  lease: CodexSharedServerLease
 ): CodexAppServerConnection['relay'] {
-  const relay = lease.host.relay
-  if (!relay || !lease.keepable) {
+  if (!lease.host.relay || !lease.keepable) {
     return undefined
   }
   return {
-    reattached,
+    reattached: false,
     ownServer: false,
-    releaseOutput: () => releaseHeld(lease),
-    endedWork: () => narrowed(relay.endedWork(), lease.threads),
-    openWork: () => narrowed(relay.openWork(), lease.threads),
-    recordSeq: relay.recordSeq,
-    ...(lease.restored ? { keep: async () => lease.handBack() } : {})
-  }
-}
-
-/** A restored chat read its kept state: its held frames go to it in order. */
-function releaseHeld(lease: CodexSharedServerLease): void {
-  if (lease.holding) {
-    lease.holding = false
-    lease.queue.drain()
-    lease.noteWaiting()
+    releaseOutput: () => {},
+    endedWork: () => undefined,
+    openWork: () => undefined
   }
 }
 
@@ -127,10 +90,11 @@ export function registerCodexSharedLeaseChat(
   }
   // Read when asked: a server whose relay fell back to a direct spawn keeps nothing past quit.
   return registerPooledProviderRelayChat(sessionId, {
-    reattached: () => lease.restored !== null && live() && lease.host.relay !== undefined,
+    // The same writer as its kept run: its running turn is not old work to sweep.
+    reattached: () => lease.restored && live() && lease.host.relay !== undefined,
     keepable: () => lease.keepable && live() && lease.host.relay !== undefined,
-    detachForQuit: async (open) => {
-      await lease.host.relay?.detachForQuit(lease, open)
+    detachForQuit: async () => {
+      await lease.host.relay?.detachForQuit(lease)
       return true
     }
   })
@@ -155,13 +119,13 @@ export function dispatchCodexLeaseFrame(
   }
 }
 
-/** A restored chat's open ended without its run ending: what it hadn't seen goes back to wait. */
+/** The chat left stopping nothing of its run. What it never saw is dropped (Codex has it), and its
+ *  unanswered requests wait for the thread's next chat. */
 export function endCodexLeaseQuietly(lease: CodexSharedServerLease): void {
   lease.unregister()
-  const taken = lease.queue.take()
-  const frames = lease.keepsOnlyRequests ? taken.filter((frame) => frame.kind === 'request') : taken
+  lease.queue.take()
   for (const giveUp of lease.outstanding) {
     giveUp(new Error('codex app-server connection closed'))
   }
-  lease.host.relay?.handBack(lease, frames)
+  lease.host.relay?.leftQuietly(lease)
 }

@@ -31255,7 +31255,6 @@
       "action": "Sil",
       "groupRoom": "Grup odasının sohbeti silinemez",
       "workerOwed": "Bir orkestrasyon hâlâ bu sohbeti bekliyor",
-      "helperUnknown": "Bu sohbetin sunucusunda hâlâ çalışan bir yardımcı henüz belirlenemiyor. Birazdan yeniden silmeyi deneyin.",
       "home": "Yönetilen bir ajanın ana sohbeti silinemez"
     }
   },

@@ -13,11 +13,7 @@ import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-
 import type { CodexSharedServerSpec } from './codex-shared-server-key'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexLeaseRelease, CodexSharedLeaseHost } from './codex-shared-lease-host'
-import {
-  CODEX_SHARED_SERVER_BACKLOG_BYTES,
-  CodexSharedServerBacklog
-} from './codex-shared-server-backlog'
-import { CodexSharedServerRecovery } from './codex-shared-server-recovery'
+import { CodexSharedServerBacklog } from './codex-shared-server-backlog'
 import { CodexSharedServerKeep } from './codex-shared-server-keep'
 import { codexSharedRelayAs } from './codex-shared-server-relay'
 import { startCodexSharedServer, type CodexSharedServerRelayed } from './codex-shared-server-start'
@@ -44,17 +40,11 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     () => this.physicalConnection,
     this.leases
   )
-  /** A reattached server's threads that no chat has claimed yet; it never stops while any wait. */
-  readonly recovery = new CodexSharedServerRecovery(
-    (frame) => this.refuse(frame),
-    () => CODEX_SHARED_SERVER_BACKLOG_BYTES - this.backlogs.totalBytes
-  )
   readonly keep: CodexSharedServerKeep = new CodexSharedServerKeep(this)
   readonly router = new CodexSharedServerRouter(
     () => this.leases,
     (frame) => this.refuse(frame),
-    this.recovery,
-    () => this.keep.recordSeq()
+    () => this.relay?.requests
   )
   readonly ready: Promise<void>
 
@@ -106,10 +96,10 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   claim = (threadId: string, lease: CodexSharedServerLease, opened?: boolean, history?: boolean) =>
     this.router.claim(threadId, lease, opened, history)
 
-  backlog = (lease: CodexSharedServerLease, deltaBytes: number): void => {
+  backlog = (lease: CodexSharedServerLease, deltaBytes: number): void =>
     this.backlogs.change(lease, deltaBytes)
-    this.keep.queueChanged(lease)
-  }
+  /** True the first time an answer to this request may be sent. */
+  answer = (id: number | string): boolean => this.relay?.requests.answer(id) ?? true
   turnsChanged = (): void => this.turns.changed()
   hasRunningTurn = (threads: Iterable<string>): boolean =>
     [...threads].some((threadId) => this.turns.runningOn(threadId) !== undefined)
@@ -179,7 +169,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         this.releases.delete(lease)
       } else {
         this.leases.delete(lease)
-        this.keep.forget(lease)
+        if (lease.sessionId !== null && result.writerStopped) {
+          this.keep.endedChats.add(lease.sessionId)
+        }
         this.turns.changed()
         this.router.openSettled()
         this.onEnded(this)
@@ -227,7 +219,6 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
     // Only now do the chat's threads stop routing to it; their late frames are refused.
     this.leases.delete(lease)
-    this.keep.forget(lease)
     // A helper named only in history never loaded here: nothing to list, stop or unsubscribe.
     const owned = this.router.release(lease).filter((threadId) => lease.liveThreads.has(threadId))
     // Threads that opened after the chat left are let go here, and their commands stopped below.
@@ -289,8 +280,10 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
    *  server, stop the server (its exit reaps the tree); else drain it so it ends with the last. */
   private async stopIfAlone(lease: CodexSharedServerLease): Promise<void> {
     this.draining = true
-    // Threads a reattach holds for chats not open yet count as other chats on it.
-    const others = [...this.leases].some((other) => other !== lease) || !this.recovery.empty
+    // A reattached server may run kept work of chats not open here yet: those count as others.
+    const others =
+      [...this.leases].some((other) => other !== lease) ||
+      this.physicalConnection?.relay?.reattached === true
     if (others || !this.physicalConnection) {
       console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: chat work outlived cleanup`)
       return
@@ -326,8 +319,15 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   refuse(frame: CodexSharedServerFrame): void {
-    // Handed to its daemon, a held request waits there for the next attach: never answered here.
-    if (frame.kind === 'request' && !this.closed && !this.keep.toDaemon) {
+    if (frame.kind !== 'request' || this.closed || this.keep.toDaemon) {
+      // Handed to its daemon, a request waits there for the next attach: never answered here.
+      return
+    }
+    // A relayed server's request a leaving chat can't answer waits for its thread's next chat.
+    if (this.relay?.requests.unclaim(frame, (id) => this.router.isRetired(id))) {
+      return
+    }
+    if (this.answer(frame.request.id)) {
       this.physicalConnection?.respondWithError(
         frame.request.id,
         NO_OWNER_ERROR_CODE,

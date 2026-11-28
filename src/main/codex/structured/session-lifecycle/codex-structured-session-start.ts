@@ -22,7 +22,8 @@ import type { CodexSubagentExecutions } from '../background-work/codex-subagent-
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
-import { openCodexThread } from '../threads/codex-structured-thread-open'
+import { openCodexThread, readCodexRunningTurnId } from '../threads/codex-structured-thread-open'
+import { codexThreadIsActive } from '../../app-server/codex-structured-thread-facts'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
 import { withCodexSkillRootsThreadConfig } from '../launch/codex-structured-skill-roots'
 import { codexReadOnlyMcpOff } from '../prompts/codex-structured-read-only'
@@ -187,6 +188,15 @@ export async function openCodexStructuredSession(
       : { turns: [], spawns: [] }
   current()
   const keptTurns = kept.turns
+  // Reopened onto a shared server where its turn still runs: that turn is Stop's to interrupt.
+  const resumedTurnId =
+    !keptRunning && codexThreadIsActive(opened.thread)
+      ? await waitForPromiseWithSignal(
+          readCodexRunningTurnId(connection, opened.threadId, deps.requestTimeoutMs),
+          openInput.signal
+        )
+      : null
+  current()
   const configured =
     opened.serviceTier === undefined
       ? await waitForPromiseWithSignal(
@@ -219,11 +229,12 @@ export async function openCodexStructuredSession(
       ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
     },
     // A kept turn still running is Stop's to interrupt, as when it started live.
-    activeTurnIds: new Set(
-      keptTurns.flatMap((turn) =>
+    activeTurnIds: new Set([
+      ...keptTurns.flatMap((turn) =>
         turn.threadId === opened.threadId && turn.status === 'inProgress' ? [turn.turnId] : []
-      )
-    ),
+      ),
+      ...(resumedTurnId ? [resumedTurnId] : [])
+    ]),
     abortedTurnIds: new Set(),
     prompts: attempt.window.prompts,
     options: restoredCodexSessionOptions(input.options),

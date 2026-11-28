@@ -1,146 +1,97 @@
-import {
-  KEY_SEPARATOR,
-  providerRelayWorkKey,
-  ProviderRelayWorkReader,
-  type ProviderRelayWorkChange
-} from '../../../daemon/provider-relay/provider-relay-work-markers'
-import { CODEX_RELAY_WORK_MARKERS } from '../codex-app-server-relay'
-import type { CodexSharedServerTurns } from './codex-shared-server-turns'
+import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
-import { SOFT_READ_TIMEOUT_MS } from '../../structured/threads/codex-kept-loaded-threads'
-import { seedRunningCodexTurns } from './codex-shared-server-writer-stop'
-import type { CodexSharedServerRecovery } from './codex-shared-server-recovery'
-import type { CodexSharedServerLease } from './codex-shared-server-lease'
+import { readRecord } from '../codex-item-field-readers'
+import { codexThreadIsActive } from '../codex-structured-thread-facts'
 
-type OpenWork = Record<string, string[][]>
+/** Metadata reads one shared server keeps in flight at once, across every caller. */
+export const CODEX_SHARED_METADATA_READS = 4
+const READ_TIMEOUT_MS = 5_000
+/** Pages one listing reads at most; a server that keeps answering with more is unknown. */
+const MAX_PAGES = 64
 
-/** Past this many open tasks in a group the count is unknown, as the daemon's own is. */
-const MAX_GROUP_TASKS = 1_024
+type Reads = Pick<CodexAppServerConnection, 'request'>
+/** The daemon's marker groups (codex-app-server-relay.ts): `turn` [thread], `command` [thread, item]. */
+export type CodexSharedOpenWork = Record<string, string[][]>
 
-/**
- * Every chat's open work on one relayed shared server, held chats' included, read from each
- * notification with Codex's work markers (starts and ends) as the daemon reads a detached relay's.
- * Seeded with what the daemon carried at the attach; handed to the daemon when the app lets the
- * server go. Indexed by each key's first part (its thread), so an end visits only that thread's
- * tasks, never every chat's.
- */
-export class CodexSharedServerOpenWork {
-  private readonly reader = new ProviderRelayWorkReader(CODEX_RELAY_WORK_MARKERS.markers)
-  /** group → thread → open task keys. */
-  private readonly groups = new Map<string, Map<string, Set<string>>>()
-  private readonly sizes = new Map<string, number>()
-  private overflowed = false
-
-  /** The daemon's carried work at an attach, added to what notifications already showed. */
-  seed(carried: OpenWork | undefined): void {
-    for (const [group, keys] of Object.entries(carried ?? {})) {
-      for (const parts of keys) {
-        this.start(group, providerRelayWorkKey(parts))
-      }
-    }
-  }
-
-  /** Each notification the server read, as it parsed it: its line is never parsed again. */
-  observe(method: string, params: unknown): void {
-    for (const change of this.reader.readValue({ method, params })) {
-      this.apply(change)
-    }
-  }
-
-  /** The open set for a detach; null (unknown, never idle-stopped) while a turn start is unresolved:
-   *  Codex may still run it. A turn a start's reply named, not yet seen starting, counts as open. */
-  snapshot(turns: CodexSharedServerTurns): OpenWork | null {
-    const { threads, startUnresolved } = turns.open
-    if (startUnresolved || this.overflowed) {
-      return null
-    }
-    const open: OpenWork = {}
-    for (const [group, byThread] of this.groups) {
-      open[group] = [...byThread.values()].flatMap((keys) =>
-        [...keys].map((key) => key.split(KEY_SEPARATOR))
+/** Every page of a cursor listing; throws when one fails or it never ends. */
+async function readPages(
+  reads: Reads,
+  method: string,
+  params: Record<string, unknown>
+): Promise<unknown[]> {
+  const items: unknown[] = []
+  let cursor: string | null = null
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const reply = readRecord(
+      await reads.request(
+        method,
+        { ...params, ...(cursor === null ? {} : { cursor }) },
+        { timeoutMs: READ_TIMEOUT_MS }
       )
+    )
+    if (!Array.isArray(reply.data)) {
+      throw new Error(`codex ${method} answered without a list`)
     }
-    const known = new Set((open.turn ?? []).map(([threadId]) => threadId))
-    open.turn = [...(open.turn ?? []), ...threads.filter((id) => !known.has(id)).map((id) => [id])]
-    return open
+    items.push(...reply.data)
+    cursor = typeof reply.nextCursor === 'string' ? reply.nextCursor : null
+    if (cursor === null) {
+      return items
+    }
   }
+  throw new Error(`codex ${method} listed more pages than Orca reads`)
+}
 
-  private apply(change: ProviderRelayWorkChange): void {
-    if (change.effect === 'roster') {
-      // A restated roster replaces the group.
-      this.groups.delete(change.group)
-      this.sizes.set(change.group, 0)
-      change.keys.forEach((key) => this.start(change.group, key))
-    } else if (change.effect === 'start') {
-      this.start(change.group, change.key)
-    } else {
-      this.end(change.group, change.key)
-    }
+/** One loaded thread's open work: its running turn, and each background terminal's command. */
+async function readThreadWork(reads: Reads, threadId: string): Promise<CodexSharedOpenWork> {
+  const thread = readRecord(
+    readRecord(
+      await reads.request(
+        'thread/read',
+        { threadId, includeTurns: false },
+        { timeoutMs: READ_TIMEOUT_MS }
+      )
+    ).thread
+  )
+  const status = readRecord(thread.status).type
+  if (typeof status !== 'string') {
+    throw new Error('codex thread/read answered without a status')
   }
-
-  private start(group: string, key: string): void {
-    const byThread = this.groups.get(group) ?? new Map<string, Set<string>>()
-    this.groups.set(group, byThread)
-    const thread = key.split(KEY_SEPARATOR, 1)[0]!
-    const keys = byThread.get(thread) ?? new Set<string>()
-    byThread.set(thread, keys)
-    if (!keys.has(key)) {
-      keys.add(key)
-      const size = (this.sizes.get(group) ?? 0) + 1
-      this.sizes.set(group, size)
-      this.overflowed ||= size > MAX_GROUP_TASKS
-    }
+  if (status === 'notLoaded') {
+    // Unloaded since the listing: unloading ends its turn and its terminals.
+    return { turn: [], command: [] }
   }
-
-  /** Ends the task and every task under it (a closed thread ends its commands). */
-  private end(group: string, key: string): void {
-    const byThread = this.groups.get(group)
-    const thread = key.split(KEY_SEPARATOR, 1)[0]!
-    const keys = byThread?.get(thread)
-    if (!byThread || !keys) {
-      return
-    }
-    const under = key + KEY_SEPARATOR
-    for (const open of keys) {
-      if (open === key || open.startsWith(under)) {
-        keys.delete(open)
-        this.sizes.set(group, (this.sizes.get(group) ?? 1) - 1)
-      }
-    }
-    if (keys.size === 0) {
-      byThread.delete(thread)
-    }
-  }
+  const terminals = await readPages(reads, 'thread/backgroundTerminals/list', { threadId })
+  const commands = terminals.flatMap((terminal) => {
+    const itemId = readRecord(terminal).itemId
+    return typeof itemId === 'string' ? [[threadId, itemId]] : []
+  })
+  return { turn: codexThreadIsActive(thread) ? [[threadId]] : [], command: commands }
 }
 
 /**
- * The open work to hand a server off with. A reattached server ran turns no notification here
- * named (started before this attach), so each thread its chats hold, open or not, is read first:
- * a hand-off never calls a running turn idle. Null (unknown) when one couldn't be ruled out.
+ * Every running turn and background command on the server, read from Codex itself: each loaded
+ * thread's status and terminals. A waiting approval is an active turn. Null (unknown, so the daemon
+ * never idle-stops it) when any read fails or answers without what it should.
  */
-export async function codexSharedHandOffWork(
-  server: {
-    physicalConnection: CodexAppServerConnection | null
-    recovery: CodexSharedServerRecovery
-    leases: ReadonlySet<CodexSharedServerLease>
-    turns: CodexSharedServerTurns
-  },
-  work: CodexSharedServerOpenWork,
-  limited: (connection: CodexAppServerConnection) => Pick<CodexAppServerConnection, 'request'>
-): Promise<OpenWork | null> {
-  const connection = server.physicalConnection
-  if (connection?.relay?.reattached) {
-    const held = server.recovery.kept().groups.flatMap(({ threads }) => threads)
-    const leased = [...server.leases].flatMap((lease) => [...lease.threads])
-    const seeded = await seedRunningCodexTurns(
-      limited(connection),
-      [...leased, ...held.map(([threadId]) => threadId)],
-      server.turns,
-      SOFT_READ_TIMEOUT_MS
-    ).catch(() => false)
-    if (!seeded) {
-      return null
+export async function readCodexSharedOpenWork(reads: Reads): Promise<CodexSharedOpenWork | null> {
+  try {
+    const loaded = (await readPages(reads, 'thread/loaded/list', {})).filter(
+      (id): id is string => typeof id === 'string'
+    )
+    const read = await mapSettledWithConcurrency(loaded, CODEX_SHARED_METADATA_READS, (threadId) =>
+      readThreadWork(reads, threadId)
+    )
+    const turn: string[][] = []
+    const command: string[][] = []
+    for (const result of read) {
+      if (result.status !== 'fulfilled') {
+        return null
+      }
+      turn.push(...(result.value.turn ?? []))
+      command.push(...(result.value.command ?? []))
     }
+    return { turn, command }
+  } catch {
+    return null
   }
-  return work.snapshot(server.turns)
 }

@@ -6580,8 +6580,7 @@
       "failed": "Der Chat konnte nicht gelöscht werden",
       "groupRoom": "Der Chat eines Gruppenraums kann nicht gelöscht werden",
       "home": "Der Home-Chat eines verwalteten Agenten kann nicht gelöscht werden",
-      "workerOwed": "Eine Orchestrierung wartet noch auf diesen Chat",
-      "helperUnknown": "Ein Helfer, der noch auf dem Server dieses Chats läuft, kann noch nicht zugeordnet werden. Versuche das Löschen gleich erneut."
+      "workerOwed": "Eine Orchestrierung wartet noch auf diesen Chat"
     }
   },
   "mcpServers": {

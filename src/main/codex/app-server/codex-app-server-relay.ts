@@ -120,6 +120,6 @@ export function codexConnectionRelay(
     endedWork: () => child.attachResult?.endedWork,
     openWork: () => child.attachResult?.openWork,
     recordSeq: () => child.stdout?.relayRecords?.seq?.() ?? null,
-    spoolCut: () => child.attachResult?.truncatedThrough !== undefined
+    replayThrough: () => child.attachResult?.replayThroughSeq ?? 0
   }
 }

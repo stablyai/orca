@@ -2,40 +2,47 @@ import type { spawnCodexAppServerConnection } from '../codex-app-server-connecti
 import { initializeCodexAppServerConnection } from '../codex-app-server-handshake'
 import type { KeptProviderRelay } from '../../../provider-relay/app-provider-relays'
 import type { CodexSharedServer } from './codex-shared-server'
-import type { CodexRecoveredChat } from './codex-shared-recovery-group'
-import { recoverCodexSharedServerThreads } from './codex-shared-server-reattach'
 import { readProcessStartTimeMs } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
-import {
-  restoreCodexSharedRecovery,
-  type CodexSharedServerHandedBack
-} from './codex-shared-server-handback'
 
 const INITIALIZE_TIMEOUT_MS = 15_000
 
-/** A server the terminal daemon runs: its relay's key, and when kept, its relay and expected chats. */
-export type CodexSharedServerRelayed = {
-  chatKey: string
-  attach?: KeptProviderRelay
-  expected?: readonly CodexRecoveredChat[]
-  /** What its last hand-back to the daemon kept: seeded before discovery. */
-  handedBack?: CodexSharedServerHandedBack
-}
+/** A server the terminal daemon runs: its relay's key, and when kept, its relay. */
+export type CodexSharedServerRelayed = { chatKey: string; attach?: KeptProviderRelay }
 
 /**
- * Connects and initializes the server (a kept one answers from its first app's initialize). A kept
- * one's chats' threads are placed before its held output is let through, so every frame finds the
- * chat or recovery bucket it belongs to.
+ * Replayed lines a chat's thread/resume rebuilds (from history and the running turn), so a replay
+ * never adds to its snapshot. Anything else replayed (plan updates, goals, terminal input, request
+ * control) still counts.
+ */
+const REBUILT_BY_RESUME: ReadonlySet<string> = new Set([
+  'turn/started',
+  'turn/completed',
+  'item/started',
+  'item/completed',
+  'item/agentMessage/delta',
+  'item/reasoning/textDelta',
+  'item/reasoning/summaryTextDelta',
+  'item/reasoning/summaryPartAdded',
+  'item/plan/delta',
+  'item/commandExecution/outputDelta'
+])
+
+/**
+ * Connects and initializes the server (a kept one answers from its first app's initialize). Each
+ * chat rebuilds from Codex when it reopens, so a kept one's replay carries only what resume can't
+ * give back: its requests, and frames resume doesn't rebuild.
  */
 export async function startCodexSharedServer(
   server: CodexSharedServer,
   connect: typeof spawnCodexAppServerConnection,
   relayed: CodexSharedServerRelayed | undefined
 ): Promise<void> {
-  const expected = relayed?.expected
   const connection = await connect(server.spec.launch, {
     onNotification: (method, params) => {
       server.turns.observe(method, params)
-      server.keep.work.observe(method, params)
+      if (REBUILT_BY_RESUME.has(method) && replayed(server)) {
+        return
+      }
       server.router.onNotification(method, params)
     },
     onServerRequest: (request) => server.router.onServerRequest(request),
@@ -69,21 +76,15 @@ export async function startCodexSharedServer(
     void connection.close()
     throw error
   }
-  if (expected && connection.relay?.reattached) {
-    server.keep.work.seed(connection.relay.openWork())
-    // Lines the spool let go may be any held chat's: each catches up from history instead.
-    if (connection.relay.spoolCut?.()) {
-      server.recovery.cutFromNowOn()
-    }
-    if (relayed?.handedBack) {
-      restoreCodexSharedRecovery(server, relayed.handedBack, expected)
-    }
-    const unwanted = await recoverCodexSharedServerThreads({
-      connection: server.keep.limited(connection),
-      recovery: server.recovery,
-      expected
-    })
+  if (connection.relay?.reattached) {
+    // Its replay flows once the kept answer to initialize is in.
     connection.relay.releaseOutput()
-    void server.keep.endThreads(unwanted, null)
   }
+}
+
+/** The line being read now came from a kept server's replay (spooled before this attach). */
+function replayed(server: CodexSharedServer): boolean {
+  const relay = server.physicalConnection?.relay
+  const seq = relay?.recordSeq?.() ?? null
+  return relay?.reattached === true && seq !== null && seq <= (relay.replayThrough?.() ?? 0)
 }

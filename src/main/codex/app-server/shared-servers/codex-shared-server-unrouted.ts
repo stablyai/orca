@@ -19,15 +19,10 @@ export class CodexSharedServerUnrouted {
   /** A marker was evicted while an open was pending, so until opens settle any claim may have lost
    *  frames. */
   private lostUnknown = false
-  /** Markers evicted where a kept chat may own the thread: each restored chat told of fewer may
-   *  have lost frames. */
-  keptLossEpoch = 0
 
   constructor(
     private readonly drop: (frame: CodexSharedServerFrame) => void,
-    private readonly opensPending: () => boolean,
-    /** Expiry may drop a kept chat's frames (a reattach that couldn't list every thread). */
-    private readonly expiryLoses: () => boolean = () => false
+    private readonly opensPending: () => boolean
   ) {}
 
   hold(threadId: string, frame: CodexSharedServerFrame): void {
@@ -45,18 +40,6 @@ export class CodexSharedServerUnrouted {
     }
     this.timer ??= setTimeout(() => this.sweep(), UNROUTED_TTL_MS)
     this.timer.unref?.()
-  }
-
-  /** The first held frame's seq, for a relayed server's ack floor. */
-  floor(): number | null {
-    let floor: number | null = null
-    for (const bucket of this.buckets.values()) {
-      const seq = bucket.frames.find((frame) => typeof frame.seq === 'number')?.seq
-      if (typeof seq === 'number' && (floor === null || seq < floor)) {
-        floor = seq
-      }
-    }
-    return floor
   }
 
   /** The frames held for a thread a chat just claimed, in arrival order. */
@@ -77,15 +60,9 @@ export class CodexSharedServerUnrouted {
     }
     this.deferred = false
     this.lostUnknown = false
-    this.keptLossEpoch = 0
     this.lost.clear()
     this.buckets.clear()
     this.count = 0
-  }
-
-  /** Frames were dropped here that a later claim may have missed. */
-  get anyLost(): boolean {
-    return this.lost.size > 0 || this.lostUnknown || this.keptLossEpoch > 0
   }
 
   /** Whether frames held for this thread were dropped before anyone claimed it. */
@@ -93,8 +70,8 @@ export class CodexSharedServerUnrouted {
     return this.lost.delete(threadId) || this.lostUnknown
   }
 
-  /** `lost`: dropped by the cap, maybe while an open waits for these frames, or expired where a
-   *  kept chat may own them. Otherwise expiry runs with no open pending: nobody waits for them. */
+  /** `lost`: dropped by the cap, maybe while an open waits for these frames. Expiry runs only with
+   *  no open pending, so nobody is waiting for what it drops. */
   private discard(threadId: string, lost = false): void {
     for (const frame of this.take(threadId)) {
       this.drop(frame)
@@ -108,7 +85,6 @@ export class CodexSharedServerUnrouted {
       if (!oldest.done) {
         this.lost.delete(oldest.value)
         this.lostUnknown ||= this.opensPending()
-        this.keptLossEpoch += this.expiryLoses() ? 1 : 0
       }
     }
   }
@@ -133,7 +109,7 @@ export class CodexSharedServerUnrouted {
     const cutoff = Date.now() - UNROUTED_TTL_MS
     for (const [threadId, bucket] of this.buckets) {
       if (bucket.since <= cutoff) {
-        this.discard(threadId, this.expiryLoses())
+        this.discard(threadId)
       }
     }
     if (this.buckets.size > 0) {

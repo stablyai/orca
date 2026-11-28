@@ -8355,8 +8355,7 @@
       "failed": "Sohbet silinemedi",
       "groupRoom": "Grup odasının sohbeti silinemez",
       "home": "Yönetilen bir ajanın Ana sohbeti silinemez",
-      "workerOwed": "Bir orkestrasyon hâlâ bu sohbeti bekliyor",
-      "helperUnknown": "Bu sohbetin sunucusunda hâlâ çalışan bir yardımcı henüz belirlenemiyor. Birazdan yeniden silmeyi deneyin."
+      "workerOwed": "Bir orkestrasyon hâlâ bu sohbeti bekliyor"
     }
   },
   "hostMutation": {

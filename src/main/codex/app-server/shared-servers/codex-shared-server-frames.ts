@@ -2,17 +2,11 @@ import { isProviderRecord } from '../../../provider-process/provider-json-record
 import type { CodexAppServerServerRequest } from '../codex-app-server-connection-types'
 import { readCodexSubagentAnnouncements } from '../../structured/background-work/codex-subagent-activity'
 
-export type CodexSharedServerFrame = (
+export type CodexSharedServerFrame =
   | { kind: 'notification'; method: string; params: unknown }
   | { kind: 'request'; request: CodexAppServerServerRequest }
   /** A frame Codex sent that no handler could read; journaled by the chat it reaches. */
   | { kind: 'unhandled'; frameKind: string; payload: unknown }
-) & {
-  /** The daemon seq it arrived at on a relayed server; the ack floor stays at or below it. */
-  seq?: number | null
-  /** The thread it was routed by. */
-  threadId?: string | null
-}
 
 export function field(value: unknown, ...path: readonly string[]): unknown {
   let current = value

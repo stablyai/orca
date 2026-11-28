@@ -32,11 +32,3 @@ export function providerRelayPlacedRunOf(sessionId: string): ProviderRelayPlaced
   const record = records?.get(sessionId) ?? null
   return record ? providerRelayPlacedRun(record) : null
 }
-
-/** Every chat whose last run is on this relay (one linear scan, once per reattach). */
-export function providerRelayRunsPlacedOn(relayId: string): ProviderRelayPlacedRun[] {
-  return (records?.list() ?? []).flatMap((record) => {
-    const run = providerRelayPlacedRun(record)
-    return run && run.placement.relayId === relayId ? [run] : []
-  })
-}

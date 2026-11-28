@@ -47,8 +47,7 @@ export async function stopCodexLeaseWriter(
 ): Promise<boolean> {
   const options = { timeoutMs: requestTimeoutMs }
   const seeded =
-    lease.restored === null ||
-    (await seedRunningCodexTurns(reads, lease.threads, turns, requestTimeoutMs))
+    !lease.restored || (await seedRunningCodexTurns(reads, lease.threads, turns, requestTimeoutMs))
   // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
   await turns.waitUntil(
     () => lease.pendingOpens.size === 0 && !turns.anyStartPending([...lease.threads]),

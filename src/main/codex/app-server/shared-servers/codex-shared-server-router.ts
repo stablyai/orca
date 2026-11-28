@@ -9,7 +9,7 @@ import {
 } from './codex-shared-server-frames'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServerUnrouted } from './codex-shared-server-unrouted'
-import type { CodexSharedServerRecovery } from './codex-shared-server-recovery'
+import type { CodexSharedServerRequests } from './codex-shared-server-requests'
 
 const MAX_RETIRED_THREADS = 4_096
 /** The only server requests Codex sends without a thread; both are per account, and a server
@@ -18,6 +18,12 @@ const SERVER_WIDE_REQUESTS: ReadonlySet<string> = new Set([
   'account/chatgptAuthTokens/refresh',
   'attestation/generate'
 ])
+/** How long Codex waits on each (its own deadlines): with no chat open, a relayed server answers
+ *  only then, so the daemon's copy clears without answering one Codex still waits on. */
+const SERVER_WIDE_REQUEST_DEADLINES_MS: Readonly<Record<string, number>> = {
+  'account/chatgptAuthTokens/refresh': 10_000,
+  'attestation/generate': 100
+}
 
 /** Notifications Codex sends without a thread that are about the account or the server itself,
  *  so every chat would have had its own copy. Any other threadless notification may carry one
@@ -53,26 +59,16 @@ export class CodexSharedServerRouter {
     private readonly leases: () => Iterable<CodexSharedServerLease>,
     /** Answers a server request no chat can take, so Codex doesn't wait on it. */
     private readonly refuse: (frame: CodexSharedServerFrame) => void,
-    /** Threads a reattached server holds for chats that haven't claimed them yet. */
-    private readonly recovery?: CodexSharedServerRecovery,
-    /** The daemon seq of the frame being read now, on a relayed server. */
-    private readonly seq: () => number | null = () => null
+    /** A relayed server's requests: a thread's wait for its chat, never refused. */
+    private readonly requestsOf: () => CodexSharedServerRequests | undefined = () => undefined
   ) {
-    this.unrouted = new CodexSharedServerUnrouted(
-      refuse,
-      () => [...leases()].some((lease) => lease.pendingOpens.size > 0),
-      () => recovery?.discoveryPartial === true
+    this.unrouted = new CodexSharedServerUnrouted(refuse, () =>
+      [...leases()].some((lease) => lease.pendingOpens.size > 0)
     )
   }
 
-  /** Loss a hand-back must carry to the next attach. */
-  get unknownLoss(): boolean {
-    return this.unrouted.anyLost
-  }
-
-  /** A hand-back saw loss: each restored chat is told of it once. */
-  noteUnknownLoss(): void {
-    this.unrouted.keptLossEpoch += 1
+  private get requests(): CodexSharedServerRequests | undefined {
+    return this.requestsOf()
   }
 
   openSettled(): void {
@@ -91,12 +87,16 @@ export class CodexSharedServerRouter {
   /** `opened`: claimed by a thread open's reply, the only claim that can find its early frames
    *  dropped; a helper's lost frames don't cost its parent chat its running turn. */
   claim(threadId: string, lease: CodexSharedServerLease, opened = false, history = false): void {
-    if (!lease.routable) {
-      // Ended (a claim before it may have handed it back): the thread waits for the reopen.
+    // A chat that began closing takes no more threads, so its close covers every one it holds.
+    if (!lease.open) {
       return
     }
     const previous = this.owners.get(threadId)
     if (previous && previous !== lease) {
+      // One writer per thread: a live chat keeps a helper another chat's frame names.
+      if (previous.routable) {
+        return
+      }
       previous.threads.delete(threadId)
     }
     this.owners.set(threadId, lease)
@@ -111,10 +111,6 @@ export class CodexSharedServerRouter {
       }
     }
     this.retired.delete(threadId)
-    const recovered = this.recovery?.take(threadId)
-    if (recovered) {
-      this.claimRecovered(recovered, lease)
-    }
     for (const frame of this.unrouted.take(threadId)) {
       lease.liveThreads.add(threadId)
       // A held frame can name helpers of its own; claim them (and replay theirs) before delivery.
@@ -129,65 +125,28 @@ export class CodexSharedServerRouter {
     if (lost) {
       lease.liveThreads.add(threadId)
     }
-    // A restored chat hears of each unknown loss once; what it lost was its kept run's.
-    const epoch = this.unrouted.keptLossEpoch
-    const keptLost = lease.restored !== null && epoch > lease.lossEpoch
-    lease.lossEpoch = epoch
-    if (lease.restored !== null && (lost || keptLost)) {
-      lease.missed()
-    } else if (lost && opened) {
+    if (lost && opened) {
       lease.shed()
     }
-  }
-
-  /** A recovered chat's threads and their held frames, in order: the family moves whole. */
-  private claimRecovered(
-    recovered: NonNullable<ReturnType<CodexSharedServerRecovery['take']>>,
-    lease: CodexSharedServerLease
-  ): void {
-    for (const [threadId] of recovered.threads) {
-      this.owners.set(threadId, lease)
-      lease.threads.add(threadId)
-      lease.liveThreads.add(threadId)
-      this.retired.delete(threadId)
-    }
-    if (recovered.cut) {
-      lease.missed()
-    }
-    for (const frame of recovered.frames) {
-      if (!lease.routable) {
-        // Handed back mid-claim (its cut kept): its requests wait for its reopen.
-        if (frame.kind === 'request') {
-          this.recovery?.hold(frame.threadId ?? recovered.threads[0]![0], frame)
-        }
-        continue
-      }
-      if (frame.kind === 'notification') {
-        this.discover(frame.method, frame.params)
-      }
+    for (const frame of this.requests?.takeFor(threadId) ?? []) {
+      this.requests?.delivered(frame, lease)
       lease.deliver(frame)
     }
   }
 
-  /** An unresolved root's owner is now known: it moves to that owner (or its held family). */
-  ownerFound(threadId: string, parent: string): void {
-    const owner = this.owners.get(parent)
-    if (owner?.routable) {
-      this.claim(threadId, owner)
-    } else if (this.recovery && !this.recovery.join(threadId, parent)) {
-      // An ancestor no group holds yet (an unloaded helper between): it becomes the family's
-      // unresolved root, so the next retry reads its own parent.
-      this.recovery.holdUnowned(parent)
-      this.recovery.join(threadId, parent)
+  /** The chat left stopping nothing: its threads go unclaimed (not retired) for a later chat. */
+  leave(lease: CodexSharedServerLease): void {
+    for (const threadId of lease.threads) {
+      if (this.owners.get(threadId) === lease) {
+        this.owners.delete(threadId)
+      }
     }
+    lease.threads.clear()
+    this.requests?.returned(lease)
   }
 
-  /** The first seq no chat has taken that this router holds (unclaimed, or held for a claim).
-   *  Unanswered requests aren't held here: the daemon re-sends every one at each attach. */
-  floor(): number | null {
-    const floors = [this.unrouted.floor(), this.recovery?.floor() ?? null]
-    const held = floors.filter((seq): seq is number => seq !== null)
-    return held.length > 0 ? Math.min(...held) : null
+  isRetired(threadId: string): boolean {
+    return this.retired.has(threadId)
   }
 
   /** Drops one thread this chat claimed but no longer wants (a resume its caller gave up on). */
@@ -211,23 +170,6 @@ export class CodexSharedServerRouter {
     return threads
   }
 
-  /** A restored chat gave its threads back unopened: they stop routing to it, retiring nothing. */
-  handBack(lease: CodexSharedServerLease): string[] {
-    const threads = [...lease.threads]
-    for (const threadId of threads) {
-      if (this.owners.get(threadId) === lease) {
-        this.owners.delete(threadId)
-      }
-    }
-    lease.threads.clear()
-    return threads
-  }
-
-  /** Frames held for these threads while no chat owned them. */
-  takeUnrouted(threads: readonly string[]): CodexSharedServerFrame[] {
-    return threads.flatMap((threadId) => this.unrouted.take(threadId))
-  }
-
   retire(threadId: string): void {
     this.retired.add(threadId)
     if (this.retired.size > MAX_RETIRED_THREADS) {
@@ -239,8 +181,11 @@ export class CodexSharedServerRouter {
   }
 
   onNotification(method: string, params: unknown): void {
+    if (method === 'serverRequest/resolved') {
+      this.requests?.resolved(params)
+    }
     this.discover(method, params)
-    this.route({ kind: 'notification', method, params, seq: this.seq() })
+    this.route({ kind: 'notification', method, params })
   }
 
   /** Helper threads this frame hands to its parent's chat. */
@@ -252,21 +197,18 @@ export class CodexSharedServerRouter {
       const owner = parent ? this.owners.get(parent) : undefined
       if (threadId && owner?.routable && this.owners.get(threadId) !== owner) {
         this.claim(threadId, owner)
-      } else if (threadId && parent && !owner) {
-        // Under a held parent (an expected chat's, or an unresolved root) it joins that family.
-        this.recovery?.join(threadId, parent)
       }
     }
   }
 
   onServerRequest(request: CodexAppServerServerRequest): void {
-    this.route({ kind: 'request', request, seq: this.seq() })
+    this.route({ kind: 'request', request })
   }
 
   clear(): void {
     this.unrouted.clear()
     this.owners.clear()
-    this.recovery?.clear()
+    this.requests?.clear()
   }
 
   /** A parent's item naming a helper hands that helper to the parent's chat. */
@@ -276,12 +218,6 @@ export class CodexSharedServerRouter {
     }
     const parent = codexFrameThreadId(params)
     const owner = parent ? this.owners.get(parent) : undefined
-    if (parent && !owner && this.recovery?.holds(parent)) {
-      for (const child of codexChildThreadIdsInItem(field(params, 'item'))) {
-        this.recovery.join(child, parent)
-      }
-      return
-    }
     if (!owner?.routable) {
       return
     }
@@ -293,15 +229,21 @@ export class CodexSharedServerRouter {
   }
 
   private route(frame: CodexSharedServerFrame): void {
+    // A copy of a request held or settled here (a resume's or an attach's replay) is dropped.
+    if (frame.kind === 'request' && this.requests && !this.requests.admit(frame)) {
+      return
+    }
     const threadId = codexFrameThreadId(codexSharedFrameParams(frame))
     if (threadId === null) {
       this.routeServerWide(frame)
       return
     }
-    frame.threadId = threadId
     const owner = this.owners.get(threadId)
     if (owner) {
       owner.liveThreads.add(threadId)
+      if (frame.kind === 'request') {
+        this.requests?.delivered(frame, owner)
+      }
       owner.deliver(frame)
       return
     }
@@ -309,7 +251,8 @@ export class CodexSharedServerRouter {
       this.refuse(frame)
       return
     }
-    if (this.recovery?.hold(threadId, frame)) {
+    // It waits for the chat that claims its thread; only its other frames expire unclaimed.
+    if (frame.kind === 'request' && this.requests) {
       return
     }
     this.unrouted.hold(threadId, frame)
@@ -318,16 +261,12 @@ export class CodexSharedServerRouter {
   /** A frame no handler could read goes only to the chat that owns the thread it names, in order
    *  behind that chat's queue: raw content never reaches another chat. False when no chat took it. */
   onUnhandledFrame(frameKind: string, payload: unknown): boolean {
-    const frame: CodexSharedServerFrame = { kind: 'unhandled', frameKind, payload, seq: this.seq() }
+    const frame: CodexSharedServerFrame = { kind: 'unhandled', frameKind, payload }
     const threadId = codexFrameThreadId(codexSharedFrameParams(frame))
-    frame.threadId = threadId
     const owner = threadId === null ? undefined : this.owners.get(threadId)
     owner?.liveThreads.add(threadId!)
     owner?.deliver(frame)
-    // A held chat's raw frame waits with the rest of its thread's.
-    return (
-      owner !== undefined || (threadId !== null && this.recovery?.hold(threadId, frame) === true)
-    )
+    return owner !== undefined
   }
 
   /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
@@ -341,6 +280,9 @@ export class CodexSharedServerRouter {
       const first = open.find((lease) => lease.reading) ?? open[0]
       if (first) {
         first.deliver(frame)
+      } else if (this.requests) {
+        const deadline = SERVER_WIDE_REQUEST_DEADLINES_MS[frame.request.method] ?? 0
+        setTimeout(() => this.refuse(frame), deadline).unref?.()
       } else {
         this.refuse(frame)
       }

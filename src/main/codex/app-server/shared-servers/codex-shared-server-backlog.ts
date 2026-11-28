@@ -49,11 +49,6 @@ export class CodexSharedServerBacklog {
     private readonly leases: ReadonlySet<BacklogLease>
   ) {}
 
-  /** Bytes every chat's queue holds now. */
-  get totalBytes(): number {
-    return this.total
-  }
-
   /** A chat's queue grew or shrank, or it may have started waiting (delta 0). */
   change(lease: BacklogLease, deltaBytes: number): void {
     if (deltaBytes !== 0) {

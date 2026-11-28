@@ -11,7 +11,11 @@ import {
 } from '../../app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import type { CodexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
-import { readCodexThreadId } from '../../app-server/codex-structured-thread-facts'
+import {
+  readCodexThreadId,
+  readCodexTurnStatus
+} from '../../app-server/codex-structured-thread-facts'
+import { readRecord } from '../../app-server/codex-item-field-readers'
 import {
   readCodexSandboxPolicy,
   type CodexSandboxPolicy
@@ -242,4 +246,29 @@ export function reportedCodexPermissionMode(reply: Record<string, unknown>): str
   }
   // Orca's Ask is read-only, so a writable workspace is never named Ask: it edits without asking.
   return null
+}
+
+const RUNNING_TURN_READ_TIMEOUT_MS = 10_000
+
+/** The thread's running turn, read from Codex; null when none runs or the read failed. */
+export async function readCodexRunningTurnId(
+  connection: Pick<CodexAppServerConnection, 'request'>,
+  threadId: string,
+  timeoutMs: number | undefined
+): Promise<string | null> {
+  try {
+    const page = readRecord(
+      await connection.request(
+        'thread/turns/list',
+        { threadId, sortDirection: 'desc', limit: 1 },
+        { timeoutMs: timeoutMs ?? RUNNING_TURN_READ_TIMEOUT_MS }
+      )
+    )
+    const turn = readRecord(Array.isArray(page.data) ? page.data[0] : null)
+    return typeof turn.id === 'string' && readCodexTurnStatus(turn) === 'inProgress'
+      ? turn.id
+      : null
+  } catch {
+    return null
+  }
 }

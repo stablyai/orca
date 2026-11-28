@@ -8435,8 +8435,7 @@
       "failed": "Couldn't delete the chat",
       "groupRoom": "A group room's chat can't be deleted",
       "home": "A managed agent's Home Chat can't be deleted",
-      "workerOwed": "An orchestration still waits on this chat",
-      "helperUnknown": "A helper still running on this chat's server can't be identified yet. Try deleting again shortly."
+      "workerOwed": "An orchestration still waits on this chat"
     }
   },
   "mcpServers": {

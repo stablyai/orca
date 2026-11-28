@@ -60,14 +60,6 @@ export class CodexSharedServerTurns {
     return this.running.get(threadId)
   }
 
-  /** Every thread a known turn runs on, and whether any start is unanswered or still pending. */
-  get open(): { threads: string[]; startUnresolved: boolean } {
-    return {
-      threads: [...this.running.keys()],
-      startUnresolved: this.pendingStarts.size > 0 || this.unansweredStarts.size > 0
-    }
-  }
-
   anyStartPending(threads: readonly string[]): boolean {
     return threads.some(
       (threadId) => this.pendingStarts.has(threadId) || this.unansweredStarts.has(threadId)

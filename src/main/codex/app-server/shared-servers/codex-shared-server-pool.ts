@@ -25,7 +25,7 @@ import {
   noteProviderRelayReattachedFromLastRun
 } from '../../../provider-relay/provider-relay-launch-inventory'
 import { codexSharedRelayChatKey, onCodexSharedRelayChats } from './codex-shared-server-relay'
-import { codexPooledRunOf, codexRecordPooledRun } from './codex-shared-server-kept-runs'
+import { codexPooledRunOf } from './codex-shared-server-kept-runs'
 import { CodexKeptServers } from './codex-shared-server-kept-servers'
 
 /** A server with no chats waits this long for the next one before it stops. */
@@ -97,7 +97,7 @@ export class CodexSharedServerPool {
     }
     const run = this.relaying && keepable ? codexPooledRunOf(options.sessionId) : null
     const kept = run ? await this.kept.serverFor(options.sessionId, run, spec) : null
-    const server = kept?.server ?? this.liveServer(spec.key) ?? this.startServer(spec)
+    const server = kept ?? this.liveServer(spec.key) ?? this.startServer(spec)
     this.cancelIdleStop(server)
     if (kept) {
       // Its own commands keep their tag, and its threads come back with what they held.
@@ -110,10 +110,11 @@ export class CodexSharedServerPool {
       handlers,
       options.sessionId,
       spec.chatEnv,
-      kept ? { workload: kept.chat.workload, chat: kept.chat } : null,
+      kept && run ? run.workload : null,
       keepable
     )
     server.leases.add(lease)
+    server.keep.endedChats.delete(options.sessionId)
     try {
       await (this.contained.get(server) ?? server.ready)
       if (server.closed) {
@@ -127,8 +128,9 @@ export class CodexSharedServerPool {
       }
     } catch (error) {
       if (lease.restored) {
-        // A restored chat that couldn't join leaves its run as it was, for its next open.
-        lease.handBack()
+        // A kept run's chat that couldn't join leaves its run as it was, for its next open.
+        lease.endQuietly()
+        server.leases.delete(lease)
       } else {
         await server.release(lease).catch(() => {})
       }
@@ -195,7 +197,8 @@ export class CodexSharedServerPool {
     if (providerRelayQuitting() || server.leases.size > 0) {
       return
     }
-    if (server.draining && server.recovery.empty) {
+    // A relayed one may run kept work of chats not open here: Codex says, after the idle wait.
+    if (server.draining && !server.relay) {
       this.stop(server)
       return
     }
@@ -205,9 +208,8 @@ export class CodexSharedServerPool {
         if (server.leases.size > 0 || providerRelayQuitting()) {
           return
         }
-        // Threads held for chats not open here go back to the daemon with the server, never ended.
-        if (!server.recovery.empty && server.relay) {
-          this.handBack(server)
+        if (server.relay) {
+          void this.retireRelayed(server)
         } else {
           this.stop(server)
         }
@@ -222,6 +224,20 @@ export class CodexSharedServerPool {
     if (timer) {
       clearTimeout(timer)
       this.idleTimers.delete(server)
+    }
+  }
+
+  /** Stopped when Codex reports nothing open on it; otherwise its work, kept chats' too, goes on
+   *  under its daemon. */
+  private async retireRelayed(server: CodexSharedServer): Promise<void> {
+    const idle = await server.keep.idle()
+    if (server.leases.size > 0 || providerRelayQuitting() || server.exited) {
+      return
+    }
+    if (idle) {
+      this.stop(server)
+    } else {
+      this.handBack(server)
     }
   }
 
@@ -277,9 +293,5 @@ export function sharedCodexServerPool(): CodexSharedServerPool {
 }
 
 onCodexSharedRelayChats({
-  dropped: (chatKey, relay) => pool?.kept.dropped(chatKey, relay),
-  holds: (chatKey, relayId) => pool?.kept.holds(chatKey, relayId) ?? true,
-  // A deleted chat's run may be kept from an earlier run before any chat here built the pool.
-  stop: async (record) =>
-    codexRecordPooledRun(record) ? sharedCodexServerPool().kept.stopDeleted(record) : 'stopped'
+  holds: (chatKey, relayId) => pool?.kept.holds(chatKey, relayId) ?? true
 })
