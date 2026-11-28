@@ -14,7 +14,6 @@ import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadConnectStateReader } from './wsl-orcad-connect-state-snapshot'
 import type { WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
 import { pinnedWslHostLinuxUser } from './wsl-orcad-host-user'
-import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import {
   readWslAccountFacts,
   WSL_ACCOUNT_FACTS_COMMAND,
@@ -81,26 +80,25 @@ function withPlatform(platform: RemoteHostPlatform | null): { platform?: RemoteH
   return platform ? { platform } : {}
 }
 
-/** Before any deploy (#49180): the host's account must hold the paired key, or Orca would start a stranger. */
+/**
+ * Before any deploy (#49180): an unpinned host's default account must hold the paired key, or Orca
+ * would start a stranger. True when a pinned account's readable key differs from the paired one: a
+ * hint only, since the running server may still prove the paired key; a later refusal seals on it.
+ */
 export function refuseUnpairedHostAccount(
   distro: string,
   facts: WslAccountFacts,
   pairedKey: string | undefined
-): void {
+): boolean {
   if (!facts.account || !pairedKey || facts.ownKey === pairedKey) {
-    return
+    return false
   }
   const pinned = pinnedWslHostLinuxUser(distro)
   if (!pinned) {
     throw new WslHostAccountChangedError(distro, facts.account)
   }
-  // Only a readable key of the pinned account itself proves a reset; a missing one may be mid-write.
-  if (facts.ownKey && facts.account.name === pinned) {
-    throw OrcadManagedIdentityError.wslHostKeyChanged(
-      distro,
-      `the Linux user ${pinned} now holds a different host key than the one this desktop paired with`
-    )
-  }
+  // A missing key may be mid-write, and another account's key says nothing of the pinned one's.
+  return Boolean(facts.ownKey) && facts.account.name === pinned
 }
 
 /** WSL 1 runs no Linux kernel, so the pinned Node and its pty cannot run there. */
@@ -132,7 +130,7 @@ export async function holdWslDistroWithContext(
   if (facts.otherServerAccount) {
     noteWslOtherAccountServer(name, facts.otherServerAccount)
   }
-  refuseUnpairedHostAccount(name, facts, pairedOffer?.publicKeyB64)
+  const pairedKeyChanged = refuseUnpairedHostAccount(name, facts, pairedOffer?.publicKeyB64)
   // Once the hold fails, stop the probes: after dispose they fall back to fresh wsl.exe execs,
   // which would boot a distro that just went away (E9).
   const probes = new AbortController()
@@ -157,7 +155,12 @@ export async function holdWslDistroWithContext(
       readWslDefaultUserBesidePin(target, probes.signal)
     ])
     const linuxUser = facts.account?.name ?? null
-    const launchIdentity = { holder: held.outcome, linuxUser, defaultLinuxUser }
+    const launchIdentity = {
+      holder: held.outcome,
+      linuxUser,
+      defaultLinuxUser,
+      ...(pairedKeyChanged ? { pairedKeyChanged: true as const } : {})
+    }
     return { context, connectState: connectState.snapshot(), launchIdentity }
   } catch (error) {
     probes.abort(error)

@@ -6,6 +6,7 @@ import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-su
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { pinnedWslHostLinuxUser, pinWslHostLinuxUsers } from '../orcad/wsl-orcad-host-user'
+import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 const store = vi.hoisted((): { removed: string[]; pending: string[] } => ({
   removed: [],
@@ -100,6 +101,21 @@ describe('removing a WSL host whose server Orca cannot reach', () => {
     await removeWslHostServer(userDataPath, connector, { ...record, linuxUser: 'root' })
     expect(stoppedAs).toBe('root')
     expect(pinnedWslHostLinuxUser('Ubuntu-Renamed')).toBeUndefined()
+  })
+
+  // Its refusal tells the user to remove and re-add; a second Remove must not be needed for that.
+  it('removes it on the first Remove when the paired server is proven gone', async () => {
+    const connector = unreachableConnector()
+    connector.stopServer = async () => {
+      throw OrcadManagedIdentityError.wslHostKeyChanged(record.distro, 'socket closed (1006)')
+    }
+    const removal = await removeWslHostServer(userDataPath, connector, {
+      ...record,
+      linuxUser: 'qauser'
+    })
+    expect(removal.removed).toBe(true)
+    expect(removal.serverStop).toMatchObject({ stopped: false, forgotten: true })
+    expect(store).toEqual({ removed: [record.environmentId], pending: [] })
   })
 
   it('forgets it without contacting the distro', async () => {

@@ -73,6 +73,10 @@ async function verifyWslOrcadPairing(
 ): Promise<string> {
   const pairingOffer = tunneledOrcadPairingCode(launch.readiness, localPort, paired)
   const identity = await verifyIdentity(pairingOffer, launch.readiness)
+  // The account's key already differed before launch, so this refusal is a reset, not a restart.
+  if (identity.verdict === 'foreign' && launch.pairedKeyChanged) {
+    throw OrcadManagedIdentityError.wslHostKeyChanged(launch.distro, identity.detail)
+  }
   if (identity.verdict === 'foreign' || identity.verdict === 'unpaired') {
     throw orcadIdentityRefusal(launch.port, identity)
   }

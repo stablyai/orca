@@ -40,7 +40,9 @@ export class OrcadManagedIdentityError extends Error {
     explanation: string,
     detail: string,
     /** A sealed refusal, not a catch-all `foreign` answer a restart can produce. */
-    readonly sealed = false
+    readonly sealed = false,
+    /** Already names the WSL host's causes and fixes, so WSL wording never wraps it twice. */
+    private readonly wslWorded = false
   ) {
     super(`${ORCAD_IDENTITY_MISMATCH_CODE}: ${explanation}: ${detail}`)
     this.name = 'OrcadManagedIdentityError'
@@ -85,6 +87,9 @@ export class OrcadManagedIdentityError extends Error {
     distro: string,
     refused: OrcadManagedIdentityError
   ): OrcadManagedIdentityError {
+    if (refused.wslWorded) {
+      return refused
+    }
     const detail = refused.message.replace(`${ORCAD_IDENTITY_MISMATCH_CODE}: `, '')
     return new OrcadManagedIdentityError(
       refused.kind,
@@ -94,12 +99,13 @@ export class OrcadManagedIdentityError extends Error {
     )
   }
 
-  /** A pinned WSL host's account read a different key than the paired one: sealed, it ends retries. */
+  /** A pinned WSL host refused by a server whose account holds another key: sealed, it ends retries. */
   static wslHostKeyChanged(distro: string, detail: string): OrcadManagedIdentityError {
     return new OrcadManagedIdentityError(
       'foreign-port',
       wslHostServerExplanation(distro),
       detail,
+      true,
       true
     )
   }
@@ -110,6 +116,13 @@ function wslHostServerExplanation(distro: string): string {
     `the Orca server in ${distro} is not the one this desktop paired with (it was ` +
     'reinstalled or its identity was reset), so reconnecting won’t restore access. Remove ' +
     'the WSL host and add it again'
+  )
+}
+
+/** A refusal the pinned key proved, or a replaced server: no retry or reconnect can clear it. */
+export function isProvenOrcadIdentityRefusal(error: unknown): error is OrcadManagedIdentityError {
+  return (
+    error instanceof OrcadManagedIdentityError && (error.sealed || error.kind === 'replaced-server')
   )
 }
 

@@ -15,7 +15,6 @@ import {
   WSL_HOST_FACTS_COMMAND
 } from './wsl-orcad-held-context'
 import { withWslHostLinuxUser } from './wsl-orcad-host-user'
-import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 // A managed orcad's argv as `ps -eo uid=,args=` prints it; it listens on 6800 or the next free port.
 const ROOT_ORCAD =
@@ -87,29 +86,15 @@ describe('an unpinned host whose default account lacks the paired key', () => {
   })
 })
 
-// QA repro: a pinned host whose user's key was reset came back as an unsealed `foreign` refusal, so
-// liveness retried for ~80 s and ended on the "another Orca may be using that port" text.
+// A pinned account's changed key is only a hint before deploy: the server may still prove the
+// paired key, so only the handshake's refusal seals (wsl-orcad-pairing-identity.test.ts).
 describe('a pinned host whose account now holds another key', () => {
   const qauser = { account: { uid: '1001', name: 'qauser' }, ownKey: 'QQQQ' }
-  it('is a sealed, final WSL refusal before deploy; an unread key still retries', async () => {
+  it('flags a readable mismatch of the pinned account without refusing the deploy', async () => {
     await withWslHostLinuxUser('Ubuntu', 'qauser', async () => {
-      let refused: unknown
-      try {
-        refuseUnpairedHostAccount('Ubuntu', qauser, 'RRRR')
-      } catch (error) {
-        refused = error
-      }
-      expect(refused).toBeInstanceOf(OrcadManagedIdentityError)
-      // Sealed is what liveness recovery treats as final (no backoff loop).
-      expect(refused).toMatchObject({ sealed: true })
-      expect(refused).toHaveProperty(
-        'message',
-        expect.stringMatching(/^(?!.*another Orca may be using).*Remove the WSL host and add it/s)
-      )
-      expect(() =>
-        refuseUnpairedHostAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')
-      ).not.toThrow()
-      expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, 'QQQQ')).not.toThrow()
+      expect(refuseUnpairedHostAccount('Ubuntu', qauser, 'RRRR')).toBe(true)
+      expect(refuseUnpairedHostAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')).toBe(false)
+      expect(refuseUnpairedHostAccount('Ubuntu', qauser, 'QQQQ')).toBe(false)
     })
   })
 })

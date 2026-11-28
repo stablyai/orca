@@ -16,6 +16,7 @@ import type { WslHostConnector } from './wsl-host-connector-contract'
 import { noteWslHostUserAction } from './wsl-host-user-actions'
 import { forgetWslHostKeptForPeers, recordWslHostKeptForPeers } from './wsl-host-kept-for-peers'
 import { stopAsHostAccount } from './wsl-host-account-migration'
+import { isProvenOrcadIdentityRefusal } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 export type WslHostRemoval = { serverStop: WslHostServerStop; removed: boolean }
 
@@ -51,7 +52,9 @@ export async function removeWslHostServer(
         (error: unknown): WslHostServerStop => ({
           stopped: false,
           verdict: 'unverifiable',
-          reason: errorMessage(error)
+          reason: errorMessage(error),
+          // The paired server is proven gone, so nothing of this host is left to stop: one Remove.
+          ...(isProvenOrcadIdentityRefusal(error) ? { forgotten: true } : {})
         })
       )
     }
