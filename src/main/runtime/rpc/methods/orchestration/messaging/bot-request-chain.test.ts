@@ -161,6 +161,25 @@ describe("a bot request chain's limits", () => {
     expect(withChat).toHaveBeenCalledTimes(1)
   })
 
+  it('answers the same send again while the first still holds the last place with its receipt', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    alreadySent(29)
+    // The first send holds the last place while Docs' Home Chat is found for it.
+    let found: () => void = () => {}
+    withChat.mockImplementationOnce(
+      (_botId: string, work: (sessionId: string) => unknown) =>
+        new Promise((resolve) => (found = () => resolve(work(DOCS_CHAT))))
+    )
+    const last = { to: 'bot:Docs', type: 'question', subject: 'the 30th' }
+    const first = sent(RANGER_THREAD, last)
+    await vi.waitFor(() => expect(withChat).toHaveBeenCalled())
+    const again = await sent(RANGER_THREAD, last)
+    expect(again.message).toBeDefined()
+    found()
+    expect(await first).toMatchObject({ duplicate: true, message: { id: again.message.id } })
+    expect(toDocs()).toBe(30)
+  })
+
   it('counts a send its quota place once while it is both held and reserved', async () => {
     journals[RANGER_THREAD] = [message('ask')]
     alreadySent(28)

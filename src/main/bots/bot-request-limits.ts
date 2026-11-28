@@ -119,8 +119,9 @@ export function noteLimitOnce(sessionId: string, key: string | undefined, line: 
   noteInChat(sessionId, line)
 }
 
-// Sends past their pair's hold in this process, by pair: the message ids each will be stored under.
-const inFlight = new Map<string, Set<string>>()
+// Sends past their pair's hold in this process, by pair: the message id each will be stored under,
+// with its send key.
+const inFlight = new Map<string, Map<string, string | undefined>>()
 
 /**
  * Holds a place in the pair's quota for a send before anything is made or shown for it (the target's
@@ -132,23 +133,28 @@ function holdPairPlace(
   db: OrchestrationDb,
   sending: Sending,
   target: Pick<Bot, 'id' | 'name'>,
-  send: { sendKey?: string; messageId: string }
+  send: { sendKey?: string; messageId: string; purpose?: string }
 ): () => void {
   const limit = botPairLimitOf(sending, target, send.sendKey)
   if (!limit || !sending.bot) {
     return () => {}
   }
   const pair = JSON.stringify([sending.bot.id, target.id])
-  const held = inFlight.get(pair) ?? new Set<string>()
+  const held = inFlight.get(pair) ?? new Map<string, string | undefined>()
+  // The same send again while the first still holds its place takes no second one: the store answers
+  // it as that send's duplicate (status, which is sent twice, holds its own).
+  if (send.sendKey && send.purpose !== 'status' && [...held.values()].includes(send.sendKey)) {
+    return () => {}
+  }
   const sent = db.botRequestsSentWithin(
     { fromBotId: sending.bot.id, toBotId: target.id },
     limit.minutes
   )
-  const unstored = [...held].filter((messageId) => !db.getBotRequest(messageId)).length
+  const unstored = [...held.keys()].filter((messageId) => !db.getBotRequest(messageId)).length
   if (sent.count + unstored >= limit.requests) {
     limit.refuse(sent.oldestLeavesAt)
   }
-  inFlight.set(pair, held.add(send.messageId))
+  inFlight.set(pair, held.set(send.messageId, send.sendKey))
   return () => {
     held.delete(send.messageId)
     if (held.size === 0 && inFlight.get(pair) === held) {
@@ -176,7 +182,7 @@ export function holdUnderLimits(
   sending: Sending,
   target: Pick<Bot, 'id' | 'name'>,
   depth: number,
-  send: { sendKey?: string; messageId: string },
+  send: { sendKey?: string; messageId: string; purpose?: string },
   held: (() => void)[]
 ): BotRequestPairLimit | undefined {
   refuseOverChainLimit(sending, target, depth, send.sendKey)

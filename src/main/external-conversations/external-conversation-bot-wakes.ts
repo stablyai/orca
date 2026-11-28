@@ -48,7 +48,9 @@ export async function botWakeGate(
   if (!asker?.via || !link.bot) {
     return { kind: 'deliver' }
   }
-  const since = personWroteAt.get(threadOf(link)) ?? 0
+  const thread = threadOf(link)
+  // Read again after each journal read: a person's reply to another bot meanwhile counts here too.
+  const since = () => personWroteAt.get(thread) ?? 0
   const chain = botWakeChain((await botWakesBefore(chat, link.sessionId, since)) + 1)
   if (chain.kind === 'stop') {
     const key = deliveryId ? JSON.stringify([link.source, link.externalId, deliveryId]) : undefined
@@ -63,13 +65,13 @@ export async function botWakeGate(
 async function botWakesBefore(
   chat: ConversationChat,
   sessionId: string,
-  since: number
+  since: () => number
 ): Promise<number> {
   try {
     const reads = await chat.journalReads(sessionId)
     for (let latestTurns = 16; ; latestTurns *= 4) {
       const { snapshot, complete } = await reads.operationWindow({ latestTurns, turnShape: true })
-      const counted = botWakesInARow(snapshot.items, BOT_CHAIN_LIMIT, since)
+      const counted = botWakesInARow(snapshot.items, BOT_CHAIN_LIMIT, since())
       if (counted.decided || complete) {
         return counted.wakes
       }

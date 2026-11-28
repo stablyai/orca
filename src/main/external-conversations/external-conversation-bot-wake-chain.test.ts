@@ -85,7 +85,8 @@ function chatWith(
     onRead = () => {},
     onSend = () => {},
     afterRun = () => {},
-    savedAt
+    savedAt,
+    onWindow = async () => {}
   }: {
     sends?: Send[]
     returned?: unknown[][]
@@ -96,6 +97,8 @@ function chatWith(
     afterRun?: () => void
     /** The writer's time for the message it saved; absent, the send is a queued one with none. */
     savedAt?: () => number
+    /** Runs while the gate reads the chat's journal. */
+    onWindow?: () => Promise<void>
   } = {}
 ): ConversationChat {
   let send = 0
@@ -103,7 +106,10 @@ function chatWith(
   const chat = {
     deps: { store: { getConversation: () => ({ currentFence: 1 }) } },
     journalReads: async () => ({
-      operationWindow: async () => ({ complete: true, snapshot: { items, submissions: [] } })
+      operationWindow: async () => {
+        await onWindow()
+        return { complete: true, snapshot: { items, submissions: [] } }
+      }
     }),
     conversation: async () => ({
       journal: {
@@ -165,6 +171,7 @@ const deliver = (
     onSend?: (send: number) => void
     afterRun?: () => void
     savedAt?: () => number
+    onWindow?: () => Promise<void>
     id?: string
     note?: string
   } = {}
@@ -222,6 +229,17 @@ describe("another Orca bot's Slack post", () => {
     expect(await deliver(twelve)).toMatchObject({ reason: 'bot_chain_limit' })
     await deliver([], { asker: NEIL, to: 'docs' })
     expect(await deliver(twelve)).toEqual({ outcome: 'accepted' })
+  })
+
+  it("lets a bot's post through when a person replies to another bot while its journal is read", async () => {
+    const twelve = posts(12)
+    expect(
+      await deliver(twelve, {
+        onWindow: async () => {
+          await deliver([], { asker: NEIL, to: 'docs' })
+        }
+      })
+    ).toEqual({ outcome: 'accepted' })
   })
 
   it("never lets another Slack app's post free the thread, nor counts it as a bot's hop", async () => {
