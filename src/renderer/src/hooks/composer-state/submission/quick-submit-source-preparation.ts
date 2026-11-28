@@ -19,7 +19,6 @@ type QuickSubmitSourcePreparationInput = Pick<
 
 import { useCallback } from 'react'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import '@/lib/workspace/creation/new-workspace'
 import { getLinkedWorkItemWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'

@@ -1,4 +1,3 @@
-import '@/lib/workspace/creation/new-workspace-project-options'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { AgentMenuRowsTarget } from '@/components/agent/launch-menu/new-tab-agent-menu-model'

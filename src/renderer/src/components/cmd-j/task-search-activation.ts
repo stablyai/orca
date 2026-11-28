@@ -11,7 +11,6 @@ import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
 } from '../../../../shared/workspace/naming/workspace-name'
-import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 
 import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'

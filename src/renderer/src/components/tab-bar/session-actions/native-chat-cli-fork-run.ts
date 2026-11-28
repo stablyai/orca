@@ -41,8 +41,32 @@ const subscribe = (listener: () => void) => {
 // Session-only, keyed by the fork's own conversation: until its first message the fork has no
 // transcript, so the chat it was forked from is still that conversation.
 const forkOrigins = new Map<string, { sessionId: string; workspaceId: string }>()
+const MAX_FORK_ORIGINS = 100
 const forkOriginKey = (workspaceId: string, providerSessionId: string) =>
   `${workspaceId}\0${providerSessionId}`
+
+function setBoundedForkOrigin(
+  key: string,
+  origin: { sessionId: string; workspaceId: string }
+): void {
+  forkOrigins.delete(key)
+  forkOrigins.set(key, origin)
+  if (forkOrigins.size > MAX_FORK_ORIGINS) {
+    const oldest = forkOrigins.keys().next().value
+    if (oldest !== undefined) {
+      forkOrigins.delete(oldest)
+    }
+  }
+}
+
+/** Drop remembered CLI fork origins belonging to a removed workspace. */
+export function forgetNativeChatCliForkOriginsForWorktree(workspaceId: string): void {
+  for (const [key, origin] of forkOrigins) {
+    if (origin.workspaceId === workspaceId) {
+      forkOrigins.delete(key)
+    }
+  }
+}
 
 /** The pane a new tab launched in; a split keeps it on the `first` side. */
 function launchedLeafId(node: TerminalPaneLayoutNode | null | undefined): string | undefined {
@@ -63,7 +87,7 @@ function rememberForkOrigin(
       ? state.agentStatusByPaneKey.get(`${terminalTabId}:${leafId}`)?.providerSession?.id
       : undefined
     if (fork) {
-      forkOrigins.set(forkOriginKey(origin.workspaceId, fork), origin)
+      setBoundedForkOrigin(forkOriginKey(origin.workspaceId, fork), origin)
     }
     return !!fork
   }
