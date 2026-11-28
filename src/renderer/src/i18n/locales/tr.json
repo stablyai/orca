@@ -6565,6 +6565,7 @@
           "AccountSwitchList": {
             "used": "Kullanılan",
             "left": "Kalan",
+            "reset": "Sıfırlanma",
             "accounts": "Hesaplar"
           },
           "InlineUsageBars": {

@@ -41,7 +41,7 @@ import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/
 import { AccountRuntimeToggle } from '../composition/StatusBarAccountControls'
 import { InlineUsageSignInAction, InlineUsageSkeleton } from '../usage/InlineProviderUsage'
 import {
-  AccountUsageGauge,
+  AccountRowUsage,
   AccountUsageNotChecked,
   isClaudeAccountNotChecked
 } from './AccountUsageGauge'
@@ -277,7 +277,7 @@ export function ClaudeSwitcherForOwner({
   ): React.ReactNode => {
     if (target.active && !target.needsSignIn && liveActiveUsage) {
       return (
-        <AccountUsageGauge
+        <AccountRowUsage
           limits={liveActiveUsage}
           isFetching={liveActiveUsage.status === 'fetching'}
         />
@@ -288,10 +288,7 @@ export function ClaudeSwitcherForOwner({
     }
     if (inactiveUsage?.rateLimits) {
       return (
-        <AccountUsageGauge
-          limits={inactiveUsage.rateLimits}
-          isFetching={inactiveUsage.isFetching}
-        />
+        <AccountRowUsage limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
       )
     }
     // Why local only: an older host publishes no per-account readings, so "not checked" could be false.

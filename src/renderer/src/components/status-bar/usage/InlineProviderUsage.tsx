@@ -144,14 +144,12 @@ export function InlineUsageBars({
   )
 }
 
+export function hasInlineUsageWindow(limits: ProviderRateLimits): boolean {
+  return Boolean(limits.session || limits.weekly || limits.fableWeekly || limits.monthly)
+}
+
 export function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return (
-    limits?.status === 'error' &&
-    !limits.session &&
-    !limits.weekly &&
-    !limits.fableWeekly &&
-    !limits.monthly
-  )
+  return limits?.status === 'error' && !hasInlineUsageWindow(limits)
 }
 
 export function InlineUsageSignInAction({

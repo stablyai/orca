@@ -6268,6 +6268,7 @@
           "AccountSwitchList": {
             "used": "Utilisé",
             "left": "Restant",
+            "reset": "Réinitialisation",
             "accounts": "Comptes"
           },
           "InlineUsageBars": {

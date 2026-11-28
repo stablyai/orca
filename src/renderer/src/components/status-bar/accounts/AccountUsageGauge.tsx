@@ -8,6 +8,13 @@ import { getUsageRosterRowState } from '../usage/usage-roster-row-state'
 import { isClaudeUsageWaitingForClaude } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { formatUsagePercentageLabel } from '../usage/usage-percentage-label'
 import { UsageBar, UsageValue } from '../usage/usage-meter'
+import { hasInlineUsageWindow, InlineUsageBars } from '../usage/InlineProviderUsage'
+import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+
+/** Account rows follow the Usage panel's Detailed/Compact choice. */
+export function useDetailedAccountUsage(): boolean {
+  return normalizeStatusBarUsageMode(useAppStore((state) => state.statusBarUsageMode)) === 'verbose'
+}
 
 export function useNotCheckedDescription(): string {
   const t = useTranslate()
@@ -87,4 +94,19 @@ export function AccountUsageGauge({
       />
     </div>
   )
+}
+
+/** Account row usage: every window with its reset in Detailed mode, the tightest one in Compact. */
+export function AccountRowUsage({
+  limits,
+  isFetching
+}: {
+  limits: ProviderRateLimits
+  isFetching: boolean
+}): React.JSX.Element | null {
+  const detailed = useDetailedAccountUsage()
+  if (detailed && hasInlineUsageWindow(limits)) {
+    return <InlineUsageBars limits={limits} isFetching={isFetching} />
+  }
+  return <AccountUsageGauge limits={limits} isFetching={isFetching} />
 }

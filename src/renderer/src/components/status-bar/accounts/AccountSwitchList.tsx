@@ -8,6 +8,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { useDetailedAccountUsage } from './AccountUsageGauge'
 
 export function AccountSwitchList({
   heading,
@@ -20,17 +21,23 @@ export function AccountSwitchList({
   const display = normalizeUsagePercentageDisplay(
     useAppStore((state) => state.usagePercentageDisplay)
   )
+  const detailed = useDetailedAccountUsage()
   return (
     <div className="pb-1">
       <DropdownMenuLabel>
         <span className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate">{heading}</span>
           <span className="flex shrink-0 items-end gap-1 text-right">
-            <span className="min-w-9 whitespace-nowrap">
+            <span className={detailed ? 'min-w-8 whitespace-nowrap' : 'min-w-9 whitespace-nowrap'}>
               {display === 'used'
                 ? t('auto.components.status.bar.AccountSwitchList.used', 'Used')
                 : t('auto.components.status.bar.AccountSwitchList.left', 'Left')}
             </span>
+            {detailed ? (
+              <span className="w-11 shrink-0 whitespace-normal break-all">
+                {t('auto.components.status.bar.AccountSwitchList.reset', 'Reset')}
+              </span>
+            ) : null}
           </span>
         </span>
       </DropdownMenuLabel>

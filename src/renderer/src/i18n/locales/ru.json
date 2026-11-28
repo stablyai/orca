@@ -6779,6 +6779,7 @@
           "AccountSwitchList": {
             "used": "Использовано",
             "left": "Осталось",
+            "reset": "Сброс",
             "accounts": "Аккаунты"
           },
           "InlineUsageBars": {

@@ -5896,6 +5896,7 @@
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
+            "reset": "Restablecimiento",
             "accounts": "Cuentas"
           },
           "InlineUsageBars": {

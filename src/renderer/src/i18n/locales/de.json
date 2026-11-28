@@ -6565,6 +6565,7 @@
           "AccountSwitchList": {
             "used": "Verbraucht",
             "left": "Übrig",
+            "reset": "Zurücksetzung",
             "accounts": "Konten"
           },
           "InlineUsageBars": {

@@ -15,7 +15,7 @@ import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { AccountSwitchList } from '../accounts/AccountSwitchList'
 import { AccountSwitchRowItem } from '../accounts/AccountSwitchRowItem'
-import { AccountUsageGauge, AccountUsageNotChecked } from '../accounts/AccountUsageGauge'
+import { AccountRowUsage, AccountUsageNotChecked } from '../accounts/AccountUsageGauge'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { ProviderIdentityCard } from '../accounts/ProviderIdentityCard'
 import { ProviderSegment } from './StatusBarProviderSegment'
@@ -204,7 +204,11 @@ function FixtureAccountList({ children }: { children: React.ReactNode }): React.
   )
 }
 
-function cardFixture(preset: Preset, display: UsagePercentageDisplay) {
+function cardFixture(
+  preset: Preset,
+  display: UsagePercentageDisplay,
+  mode: StatusBarUsageMode = 'compact'
+) {
   const claude = claudeFor(preset)
   const accounts: {
     label: string
@@ -219,7 +223,7 @@ function cardFixture(preset: Preset, display: UsagePercentageDisplay) {
   ]
   return defineFixture({
     width: 480,
-    store: { usagePercentageDisplay: display },
+    store: { usagePercentageDisplay: display, statusBarUsageMode: mode },
     render: () => (
       <div className="h-[640px] bg-background p-3">
         <DropdownMenu defaultOpen modal={false}>
@@ -239,7 +243,7 @@ function cardFixture(preset: Preset, display: UsagePercentageDisplay) {
                   {account.usage === 'none' ? null : account.usage === 'unchecked' ? (
                     <AccountUsageNotChecked />
                   ) : (
-                    <AccountUsageGauge limits={account.usage} isFetching={false} />
+                    <AccountRowUsage limits={account.usage} isFetching={false} />
                   )}
                 </AccountSwitchRowItem>
               ))}
@@ -271,6 +275,7 @@ export const cardFullUsed = cardFixture(PRESETS.full, 'used')
 export const cardFullLeft = cardFixture(PRESETS.full, 'remaining')
 export const cardFableUsed = cardFixture(PRESETS.fable, 'used')
 export const cardFableLeft = cardFixture(PRESETS.fable, 'remaining')
+export const cardHealthyDetailed = cardFixture(PRESETS.healthy, 'used', 'verbose')
 
 export const rosterToggleFocused = defineFixture({
   ...rosterFixture(PRESETS.low, 'used'),
