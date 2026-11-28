@@ -1,13 +1,13 @@
-/**
- * The orchestrator's hold on its sidecar: until one load has read the file, no automatic step
- * runs and nothing is saved, since an empty map written back would erase other distros' declines.
- */
+/** The orchestrator's hold on its sidecar: nothing moves on its own or saves before it is read. */
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import type { WslMoveOrchestratorRecord } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMoveOrchestratorPorts } from './wsl-move-orchestrator-ports'
 
 /** Waits before re-trying a save a sharing violation refused (another process held the file). */
 export const WSL_MOVE_SIDECAR_SAVE_RETRY_MS = [50, 250, 1_000] as const
+
+type Records = Map<string, WslMoveOrchestratorRecord>
+type Replay = (record: WslMoveOrchestratorRecord) => WslMoveOrchestratorRecord
 
 function isTransientSaveError(error: unknown): boolean {
   const code = errnoCodeOrUnknown(error)
@@ -16,8 +16,13 @@ function isTransientSaveError(error: unknown): boolean {
 
 export class WslMoveOrchestratorSidecar {
   private loaded = false
+  /** After an unparseable file was set aside, any distro may have declined: hold them all. */
+  private holdAll = false
   /** Distros whose record only a newer build can parse: automatic steps leave them alone. */
   private readonly unknown = new Set<string>()
+  private readonly releasedByUser = new Set<string>()
+  /** What the user did before the file was read, replayed onto its records once it is. */
+  private readonly replays = new Map<string, Replay[]>()
   private saveRetries = 0
   private cancelRetry: (() => void) | null = null
 
@@ -25,8 +30,12 @@ export class WslMoveOrchestratorSidecar {
     private readonly ports: Pick<WslMoveOrchestratorPorts, 'load' | 'save' | 'schedule'>
   ) {}
 
-  /** The records read the first time the file is readable; null while it is not, or once read. */
-  tryLoad(): Map<string, WslMoveOrchestratorRecord> | null {
+  get isLoaded(): boolean {
+    return this.loaded
+  }
+
+  /** Merges the file into `records` once readable; returns the keys it set, or null if unread. */
+  tryAdopt(records: Records, settle: Replay): string[] | null {
     if (this.loaded) {
       return null
     }
@@ -35,26 +44,40 @@ export class WslMoveOrchestratorSidecar {
       return null
     }
     this.loaded = true
-    if (result.kind === 'missing') {
-      return new Map()
-    }
-    for (const key of result.unknownKeys) {
+    this.holdAll = result.kind === 'missing' && result.setAside === true
+    const read = result.kind === 'readable' ? result.records : new Map()
+    for (const key of result.kind === 'readable' ? result.unknownKeys : []) {
       this.unknown.add(key)
     }
-    return result.records
+    const adopted: string[] = []
+    for (const [key, record] of read) {
+      // Not the user's fresh record: their acts land on the file's, keeping what they did not decide.
+      const merged = (this.replays.get(key) ?? []).reduce(
+        (next, replay) => replay(next),
+        settle(record)
+      )
+      records.set(key, merged)
+      adopted.push(key)
+    }
+    this.replays.clear()
+    return adopted
   }
 
-  get isLoaded(): boolean {
-    return this.loaded
+  /** Remembers an act made before the file was read; no-op once it was. */
+  noteWhileUnread(key: string, replay: Replay): void {
+    if (!this.loaded) {
+      this.replays.set(key, [...(this.replays.get(key) ?? []), replay])
+    }
   }
 
   holdsAutomaticSteps(key: string): boolean {
-    return !this.loaded || this.unknown.has(key)
+    return !this.loaded || this.unknown.has(key) || (this.holdAll && !this.releasedByUser.has(key))
   }
 
-  /** The user acted on the distro: their record now replaces the one this build could not parse. */
-  releasedByUser(key: string): void {
+  /** The user acted on the distro, which ends any hold on it. */
+  release(key: string): void {
     this.unknown.delete(key)
+    this.releasedByUser.add(key)
   }
 
   /** `records` is the live map, so a retried save writes whatever is current by then. */
@@ -62,8 +85,7 @@ export class WslMoveOrchestratorSidecar {
     if (!this.loaded) {
       return
     }
-    this.cancelRetry?.()
-    this.cancelRetry = null
+    this.cancelRetryNow()
     try {
       this.ports.save(records)
       this.saveRetries = 0
@@ -81,5 +103,11 @@ export class WslMoveOrchestratorSidecar {
       // The sidecar is the orchestrator's memory, not the move's record: keep going in memory.
       console.warn('[wsl-move] Orchestrator state not saved:', error)
     }
+  }
+
+  /** Cancels a pending save retry, so it cannot overwrite a later orchestrator's file. */
+  cancelRetryNow(): void {
+    this.cancelRetry?.()
+    this.cancelRetry = null
   }
 }

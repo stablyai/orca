@@ -11,13 +11,10 @@ import type {
 } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMovedDistroVerdict } from './wsl-move-orchestrator-external-transitions'
 
-/**
- * The sidecar's read. `unreadable` (an I/O error, or a newer build's file) may hide a distro's
- * decline, so the orchestrator neither starts moves nor saves until a later load reads it.
- * `unknownKeys`: distros whose record only a newer build can parse.
- */
+/** The sidecar's read; `unreadable` may hide a decline, so nothing moves on its own or saves. */
 export type WslMoveOrchestratorLoad =
-  | { kind: 'missing' }
+  /** `setAside`: an unparseable file was renamed aside, so its declines are unknown. */
+  | { kind: 'missing'; setAside?: boolean }
   | {
       kind: 'readable'
       records: Map<string, WslMoveOrchestratorRecord>

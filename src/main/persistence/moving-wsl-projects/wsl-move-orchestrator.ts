@@ -28,21 +28,14 @@ import {
   applyWslMoveHostAddedByUser,
   applyWslMoveReleasedByUser,
   applyWslMoveUserAction,
+  releaseWslMoveForRestore,
   settleWslMoveOrchestratorRecord
 } from './orchestration/wsl-move-orchestrator-external-transitions'
 import { WslMoveOrchestratorSidecar } from './orchestration/wsl-move-orchestrator-sidecar'
+import { pruneWslMoveOrchestratorRecords } from './orchestration/wsl-move-orchestrator-prune'
 
 /** A project opened again within this window does not read the running distros again. */
 export const WSL_MOVE_ORCHESTRATOR_PROJECT_OPENED_THROTTLE_MS = 60_000
-
-/**
- * A user's own decision (a decline, or Not now) is never pruned: dropping it would let a later
- * wake undo it, e.g. re-add a host the user removed.
- */
-function recordsUserChoice(record: WslMoveOrchestratorRecord): boolean {
-  const { state } = record
-  return state.kind === 'parked' && (state.reason === 'declined' || state.reason === 'not-now')
-}
 
 export class WslMoveOrchestrator {
   private readonly records = new Map<string, WslMoveOrchestratorRecord>()
@@ -60,37 +53,31 @@ export class WslMoveOrchestrator {
 
   constructor(private readonly ports: WslMoveOrchestratorPorts) {
     this.sidecar = new WslMoveOrchestratorSidecar(ports)
-    this.adopt(this.sidecar.tryLoad())
+    this.adopt()
     void this.prune().catch((error: unknown) =>
       console.warn('[wsl-move] Could not prune inactive moves', error)
     )
   }
 
-  /** Takes in the sidecar's records once read; what the user did before that stays newer. */
-  private adopt(loaded: Map<string, WslMoveOrchestratorRecord> | null): boolean {
-    if (!loaded) {
-      return false
-    }
+  /** Merges the sidecar in once it is readable; false while it is not. */
+  private adopt(): boolean {
     const now = this.ports.now()
-    for (const [key, record] of loaded) {
-      if (this.records.has(key)) {
-        continue
+    // An unreadable journal says nothing about whether a move is finished: keep the record.
+    const finished = (distro: string) => readWslMoveFinishedMove(this.ports, distro) !== null
+    const adopted = this.sidecar.tryAdopt(this.records, (record) =>
+      settleWslMoveOrchestratorRecord(record, now, finished(record.distro))
+    )
+    for (const [key, record] of this.records) {
+      if (adopted?.includes(key)) {
+        this.scheduleFor(key, record)
       }
-      // An unreadable journal says nothing about whether a move is finished: keep the record.
-      const settled = settleWslMoveOrchestratorRecord(
-        record,
-        now,
-        readWslMoveFinishedMove(this.ports, record.distro) !== null
-      )
-      this.records.set(key, settled)
-      this.scheduleFor(key, settled)
     }
-    return true
+    return adopted !== null
   }
 
   /** Reads a sidecar the start could not (a sharing violation passes) and saves the merge. */
   private retryLoad(): void {
-    if (!this.sidecar.isLoaded && this.adopt(this.sidecar.tryLoad())) {
+    if (!this.sidecar.isLoaded && this.adopt()) {
       this.saveAndPublish()
     }
   }
@@ -180,9 +167,14 @@ export class WslMoveOrchestrator {
   hostAddedByUser(distro: string): void {
     this.retryLoad()
     const key = wslMoveJournalKey(distro)
+    const take = (record: WslMoveOrchestratorRecord) =>
+      applyWslMoveHostAddedByUser(record, this.ports.now())
+    this.sidecar.release(key)
+    // Kept even with no record yet, so a decline in a file read later is taken back too.
+    this.sidecar.noteWhileUnread(key, take)
     const current = this.records.get(key)
     if (current) {
-      this.commit(key, 'user', applyWslMoveHostAddedByUser(current, this.ports.now()))
+      this.commit(key, 'user', take(current), undefined, take)
     }
   }
 
@@ -193,11 +185,9 @@ export class WslMoveOrchestrator {
   async releasedByUser(distro: string, cause: WslMoveOrchestratorDeclineCause): Promise<void> {
     this.retryLoad()
     const key = wslMoveJournalKey(distro)
-    this.commit(
-      key,
-      'user',
-      applyWslMoveReleasedByUser(this.recordFor(key, distro), this.ports.now(), cause)
-    )
+    const decline = (record: WslMoveOrchestratorRecord) =>
+      applyWslMoveReleasedByUser(record, this.ports.now(), cause)
+    this.commit(key, 'user', decline(this.recordFor(key, distro)), undefined, decline)
     await this.prune()
   }
 
@@ -206,25 +196,17 @@ export class WslMoveOrchestrator {
    * them, and the status line would describe a distro the user no longer has.
    */
   async prune(): Promise<void> {
-    let changed = false
-    for (const [key, record] of this.records) {
-      if (this.disposed) {
-        return
-      }
-      if (this.busy.has(key) || record.state.kind === 'moving' || recordsUserChoice(record)) {
-        continue
-      }
-      const inUse = await this.ports.isDistroInUse(record.distro)
-      if (this.disposed) {
-        return
-      }
-      if (!inUse && this.records.get(key) === record && !this.busy.has(key)) {
+    const changed = await pruneWslMoveOrchestratorRecords({
+      records: this.records,
+      isBusy: (key) => this.busy.has(key),
+      isDisposed: () => this.disposed,
+      isDistroInUse: (distro) => this.ports.isDistroInUse(distro),
+      drop: (key) => {
         this.records.delete(key)
         this.timers.get(key)?.()
         this.timers.delete(key)
-        changed = true
       }
-    }
+    })
     if (changed) {
       this.saveAndPublish()
     }
@@ -242,7 +224,8 @@ export class WslMoveOrchestrator {
       return { record: current }
     }
     if (action !== 'restore') {
-      this.commit(key, 'user', this.userActionRecord(current, action))
+      const act = (record: WslMoveOrchestratorRecord) => this.userActionRecord(record, action)
+      this.commit(key, 'user', act(current), undefined, act)
       if (action !== 'not-now') {
         // The reply carries the new state; the move itself reports through status events.
         void this.trigger(distro, 'user')
@@ -253,18 +236,11 @@ export class WslMoveOrchestrator {
       return { record: current }
     }
     this.busy.add(key)
-    let release: WslMoveUseLocallyResult
-    try {
-      release = await this.ports.releaseFinishedMove(distro, options.unsavedWorkspaceIds ?? [])
-    } catch (error) {
-      release = {
-        released: false,
-        reason: 'failed',
-        detail: error instanceof Error ? error.message : 'restore_failed'
-      }
-    } finally {
-      this.busy.delete(key)
-    }
+    const release = await releaseWslMoveForRestore(
+      this.ports,
+      distro,
+      options.unsavedWorkspaceIds ?? []
+    ).finally(() => this.busy.delete(key))
     if (release.released) {
       this.commit(key, 'user', this.userActionRecord(current, action))
     }
@@ -282,6 +258,7 @@ export class WslMoveOrchestrator {
 
   dispose(): void {
     this.disposed = true
+    this.sidecar.cancelRetryNow()
     for (const cancel of this.timers.values()) {
       cancel()
     }
@@ -317,20 +294,22 @@ export class WslMoveOrchestrator {
     )
   }
 
-  /** Stores, reports and schedules a record; unchanged records cost nothing. */
+  /** Stores, reports and schedules a record; `replay` re-applies it to a sidecar read later. */
   private commit(
     key: string,
     trigger: WslMoveOrchestratorTrigger,
     next: WslMoveOrchestratorRecord,
-    cause?: WslMovePreview | WslMoveResult
+    cause?: WslMovePreview | WslMoveResult,
+    replay: (record: WslMoveOrchestratorRecord) => WslMoveOrchestratorRecord = () => next
   ): WslMoveOrchestratorRecord {
     const previous = this.records.get(key)
     if (previous === next || sameWslMoveOrchestratorRecord(previous, next)) {
       return previous ?? next
     }
     this.records.set(key, next)
+    this.sidecar.noteWhileUnread(key, replay)
     if (trigger === 'user') {
-      this.sidecar.releasedByUser(key)
+      this.sidecar.release(key)
     }
     // Every new attempt is reported too, so a backoff series shows each failure.
     if (previous?.state.kind !== next.state.kind || previous.attempts !== next.attempts) {

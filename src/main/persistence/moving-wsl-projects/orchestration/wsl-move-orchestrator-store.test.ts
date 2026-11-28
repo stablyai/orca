@@ -83,15 +83,34 @@ describe('WSL move orchestrator sidecar', () => {
     expect(stateOf(orchestrator, 'Ubuntu-C')).toMatchObject({ reason: 'not-now' })
   })
 
-  it('sets an unparseable sidecar aside and saves again', async () => {
-    const truncated = '{"version":1,"distros":{"local-wsl:ubuntu-b":'
+  it('sets an unparseable sidecar aside, saves again, and moves nothing on its own', async () => {
+    const whole = JSON.stringify({ version: 1, distros: Object.fromEntries(records('Ubuntu-B')) })
+    const truncated = whole.slice(0, -2)
     writeFileSync(path, truncated)
 
     const orchestrator = start()
+    await orchestrator.trigger('Ubuntu-B', 'connect')
     await orchestrator.userAction('Ubuntu-A', 'not-now')
+    await orchestrator.whenIdle()
 
+    expect(ports.start).not.toHaveBeenCalled()
     expect(readFileSync(`${path}.corrupt-42`, 'utf8')).toBe(truncated)
     expect(Object.keys(distrosOnDisk(path))).toEqual([wslMoveJournalKey('Ubuntu-A')])
+  })
+
+  it('takes back a decline read after the outage when the user added the host during it', () => {
+    createWslMoveOrchestratorStore(userDataPath).save(records('Ubuntu-A'))
+    renameSync(path, `${path}.held`)
+    mkdirSync(path)
+
+    const orchestrator = start()
+    orchestrator.hostAddedByUser('Ubuntu-A')
+    rmSync(path, { recursive: true })
+    renameSync(`${path}.held`, path)
+    orchestrator.hostAddedByUser('Ubuntu-B')
+
+    expect(stateOf(orchestrator, 'Ubuntu-A')).toEqual({ kind: 'pending' })
+    expect(distrosOnDisk(path)[wslMoveJournalKey('Ubuntu-A')].state).toEqual({ kind: 'pending' })
   })
 
   it("leaves a newer build's sidecar in place and moves nothing on its own", async () => {
