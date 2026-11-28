@@ -44,6 +44,7 @@ export function useTaskPageStoreBindings() {
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
+  const preflightStatusError = useAppStore((s) => s.preflightStatusError)
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
@@ -120,6 +121,7 @@ export function useTaskPageStoreBindings() {
     preflightStatus,
     preflightStatusChecked,
     preflightStatusContextKey,
+    preflightStatusError,
     selectLinearWorkspace,
     searchLinearIssues,
     listLinearIssues,

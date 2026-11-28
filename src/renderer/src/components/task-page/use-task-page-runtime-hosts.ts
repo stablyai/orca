@@ -4,7 +4,7 @@ import type { TaskPageRepoSelectionModel } from './use-task-page-repo-selection'
 import { resolveGitHubLandingPreset } from '../../../../shared/work-items/task-github-search'
 import { useAppStore } from '@/store'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import {
   type TaskProvider,
   resolveVisibleTaskProvider
@@ -177,34 +177,64 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
         })
     }
   }, [runtimeTaskSourceHostIds])
-  const nextModel = model as typeof model & {
-    defaultTaskViewPreset: typeof defaultTaskViewPreset
-    initialTaskQuery: typeof initialTaskQuery
-    preferredTaskSource: typeof preferredTaskSource
-    taskSource: typeof taskSource
-    setTaskSource: typeof setTaskSource
-    runtimePreflightMountedRef: typeof runtimePreflightMountedRef
-    runtimePreflightRequestedHostIdsRef: typeof runtimePreflightRequestedHostIdsRef
-    runtimePreflightStatusByHostId: typeof runtimePreflightStatusByHostId
-    setRuntimePreflightStatusByHostId: typeof setRuntimePreflightStatusByHostId
-    taskSourceRepoContexts: typeof taskSourceRepoContexts
-    hostRegistryById: typeof hostRegistryById
-    hostLabelById: typeof hostLabelById
-    runtimeTaskSourceHostIds: typeof runtimeTaskSourceHostIds
-  }
-  nextModel.defaultTaskViewPreset = defaultTaskViewPreset
-  nextModel.initialTaskQuery = initialTaskQuery
-  nextModel.preferredTaskSource = preferredTaskSource
-  nextModel.taskSource = taskSource
-  nextModel.setTaskSource = setTaskSource
-  nextModel.runtimePreflightMountedRef = runtimePreflightMountedRef
-  nextModel.runtimePreflightRequestedHostIdsRef = runtimePreflightRequestedHostIdsRef
-  nextModel.runtimePreflightStatusByHostId = runtimePreflightStatusByHostId
-  nextModel.setRuntimePreflightStatusByHostId = setRuntimePreflightStatusByHostId
-  nextModel.taskSourceRepoContexts = taskSourceRepoContexts
-  nextModel.hostRegistryById = hostRegistryById
-  nextModel.hostLabelById = hostLabelById
-  nextModel.runtimeTaskSourceHostIds = runtimeTaskSourceHostIds
-  return nextModel
+  const refreshRuntimePreflightHosts = useCallback(
+    async (hostIds: readonly TaskSourceContext['hostId'][]): Promise<void> => {
+      await Promise.all(
+        hostIds.map(async (hostId) => {
+          const parsed = parseExecutionHostId(hostId)
+          if (parsed?.kind !== 'runtime') {
+            return
+          }
+          setRuntimePreflightStatusByHostId((current) => {
+            const next = new Map(current)
+            next.set(hostId, { checked: false, status: null })
+            return next
+          })
+          try {
+            const status = await callRuntimeRpc<PreflightStatus>(
+              { kind: 'environment', environmentId: parsed.environmentId },
+              'preflight.check',
+              { force: true },
+              { timeoutMs: 15_000 }
+            )
+            if (!runtimePreflightMountedRef.current) {
+              return
+            }
+            setRuntimePreflightStatusByHostId((current) => {
+              const next = new Map(current)
+              next.set(hostId, { checked: true, status })
+              return next
+            })
+          } catch {
+            if (!runtimePreflightMountedRef.current) {
+              return
+            }
+            setRuntimePreflightStatusByHostId((current) => {
+              const next = new Map(current)
+              next.set(hostId, { checked: true, status: null })
+              return next
+            })
+          }
+        })
+      )
+    },
+    []
+  )
+  return Object.assign(model, {
+    defaultTaskViewPreset,
+    initialTaskQuery,
+    preferredTaskSource,
+    taskSource,
+    setTaskSource,
+    runtimePreflightMountedRef,
+    runtimePreflightRequestedHostIdsRef,
+    runtimePreflightStatusByHostId,
+    setRuntimePreflightStatusByHostId,
+    taskSourceRepoContexts,
+    hostRegistryById,
+    hostLabelById,
+    runtimeTaskSourceHostIds,
+    refreshRuntimePreflightHosts
+  })
 }
 export type TaskPageRuntimeHostsModel = ReturnType<typeof useTaskPageRuntimeHosts>
