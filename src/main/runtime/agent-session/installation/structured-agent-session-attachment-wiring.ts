@@ -20,6 +20,7 @@ const FIRST_SWEEP_DELAY_MS = 60 * 1000
 const SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 let sweeper: AgentSessionAttachmentSweeper | null = null
+let custodyWarned = false
 
 export function installAgentSessionAttachments(deps: {
   stateDirectory: string
@@ -58,7 +59,15 @@ export function installAgentSessionAttachments(deps: {
         deps.journalDatabase,
         retainedUploadIds ? () => retainedUploadIds(root) : undefined
       ),
-      onUploadRemoved: publishAgentSessionUploadRemoval
+      onUploadRemoved: publishAgentSessionUploadRemoval,
+      onLegacyCustodyUnknown: () => {
+        if (!custodyWarned) {
+          custodyWarned = true
+          console.warn(
+            "[agent-session-attachments] keeping every upload: an older Orca's chats can't be checked for them"
+          )
+        }
+      }
     },
     {
       initialDelayMs: FIRST_SWEEP_DELAY_MS,

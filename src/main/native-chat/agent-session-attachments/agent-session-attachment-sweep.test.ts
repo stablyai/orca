@@ -86,6 +86,9 @@ function facts(
   overrides: Partial<AgentSessionAttachmentSweepFacts> = {}
 ): AgentSessionAttachmentSweepFacts {
   return {
+    legacyCustodyKnown: () => true,
+    isUnclaimed: (uploadId) =>
+      !db.prepare('SELECT 1 FROM agent_session_attachment_claims WHERE upload_id=?').get(uploadId),
     listBeingSwept: () => listUploadsBeingSwept(db),
     markForSweep: (uploadId, now) =>
       journal.writeAutocommit((connection) =>
@@ -189,10 +192,7 @@ describe('sweepAgentSessionAttachments', () => {
       store,
       facts({
         markForSweep,
-        retention: {
-          isUnclaimed: () => true,
-          uploads: async () => null
-        }
+        retention: { uploads: async () => null }
       }),
       NOW
     )
@@ -205,10 +205,7 @@ describe('sweepAgentSessionAttachments', () => {
     await sweepAgentSessionAttachments(
       store,
       facts({
-        retention: {
-          isUnclaimed: () => true,
-          uploads: async () => new Set()
-        }
+        retention: { uploads: async () => new Set() }
       }),
       NOW
     )

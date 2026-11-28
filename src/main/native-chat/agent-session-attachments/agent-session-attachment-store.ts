@@ -3,7 +3,7 @@
 import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
 import type { AttachmentTextRequest } from '../../../shared/attachment-text/attachment-text-source'
 import { createHash, randomUUID } from 'node:crypto'
-import { access, appendFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { appendFile, rm, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
   sanitizeAgentSessionAttachmentName,
@@ -12,6 +12,11 @@ import {
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import { readAuthorizedDocPreviewFile } from '../../../shared/document-preview/doc-preview-file-access'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
+import {
+  createUploadFolder,
+  removeOwnedUpload,
+  writeContent
+} from './agent-session-attachment-folder-ownership'
 import { IMAGE_FILE_MIME_TYPES } from '../../../shared/file-preview/image-mime-types'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
@@ -41,6 +46,9 @@ type InFlightUpload = {
   expectedLength: number
   receivedLength: number
   writing: boolean
+  /** Set once this upload created its folder or part file, so teardown undoes only those. */
+  owned: boolean
+  part: boolean
 }
 
 export type AgentSessionAttachmentStoreOptions = {
@@ -53,7 +61,8 @@ export class AgentSessionAttachmentStore {
     ttlMs: UPLOAD_IDLE_TTL_MS,
     tooManyMessage: 'Too many attachment uploads are in progress',
     notFoundMessage: NOT_FOUND,
-    onExpire: (upload) => void removeQuietly(upload.uploadDir)
+    onExpire: (upload) => void removeOwnedUpload(upload),
+    isBusy: (upload) => upload.writing
   })
 
   // Latest content write per folder, and pending writes by file so a re-send queues nothing.
@@ -94,15 +103,23 @@ export class AgentSessionAttachmentStore {
       name,
       expectedLength: args.byteLength,
       receivedLength: 0,
-      writing: false
+      writing: true,
+      owned: false,
+      part: false
     }))
-    const uploadDir = join(this.rootDir, uploadId)
+    const upload = this.uploads.peek(uploadId)!
     try {
-      await mkdir(uploadDir, { recursive: true })
-      await writeFile(join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE), '', { flag: 'wx' })
+      await createUploadFolder(this.rootDir, upload.uploadDir)
+      upload.owned = true
+      const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      await writeFile(partPath, '', { flag: 'wx' })
+      upload.part = true
+      upload.writing = false
+      // A full idle period from now, not from a re-arm during a slow admission.
+      this.uploads.touch(uploadId)
     } catch (error) {
       this.uploads.delete(uploadId)
-      await removeQuietly(uploadDir)
+      await removeOwnedUpload(upload)
       throw error
     }
     return { uploadId }
@@ -129,8 +146,8 @@ export class AgentSessionAttachmentStore {
       upload.receivedLength = nextLength
     } finally {
       upload.writing = false
+      this.uploads.touch(args.uploadId)
     }
-    this.uploads.touch(args.uploadId)
     return { receivedBytes: upload.receivedLength }
   }
 
@@ -156,7 +173,7 @@ export class AgentSessionAttachmentStore {
       )
       return { path: finalPath, name: upload.name, byteLength: upload.receivedLength }
     } catch (error) {
-      await removeQuietly(upload.uploadDir)
+      await removeOwnedUpload(upload)
       throw error
     } finally {
       this.uploads.delete(args.uploadId)
@@ -171,16 +188,18 @@ export class AgentSessionAttachmentStore {
   /** One committed upload whose hidden part file `write` fills, renamed into place; returns its
    *  path. Not in flight meanwhile: the sweep leaves a folder this new alone for an hour. */
   async storeWith(name: string, write: (partPath: string) => Promise<void>): Promise<string> {
-    const uploadDir = join(this.rootDir, randomUUID())
-    const finalPath = join(uploadDir, sanitizeAgentSessionAttachmentName(name))
+    const upload = { uploadDir: join(this.rootDir, randomUUID()), owned: false, part: false }
+    const finalPath = join(upload.uploadDir, sanitizeAgentSessionAttachmentName(name))
     try {
-      await mkdir(uploadDir, { recursive: true })
-      const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      await createUploadFolder(this.rootDir, upload.uploadDir)
+      upload.owned = true
+      upload.part = true
+      const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
       await write(partPath)
       // Rename is the commit: nothing fallible may follow it.
       await renameFileWithWindowsRetryAsync(partPath, finalPath)
     } catch (error) {
-      await removeQuietly(uploadDir)
+      await removeOwnedUpload(upload)
       throw error
     }
     return finalPath
@@ -234,7 +253,7 @@ export class AgentSessionAttachmentStore {
         throw new Error(NOT_FOUND)
       }
       this.uploads.delete(args.uploadId)
-      await removeQuietly(upload.uploadDir)
+      await removeOwnedUpload(upload)
     }
     return { aborted: true }
   }
@@ -290,30 +309,6 @@ export class AgentSessionAttachmentStore {
       throw new Error(NOT_FOUND)
     }
     return upload
-  }
-}
-
-async function writeContent(uploadDir: string, path: string, bytes: Buffer): Promise<void> {
-  if (
-    await access(path).then(
-      () => true,
-      () => false
-    )
-  ) {
-    return
-  }
-  const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
-  try {
-    await mkdir(uploadDir, { recursive: true })
-    await writeFile(partPath, bytes)
-    await renameFileWithWindowsRetryAsync(partPath, path)
-  } catch (error) {
-    // Leave no part-only folder for a later write of the same bytes to reuse while the sweep removes it.
-    const entries = await readdir(uploadDir).catch(() => [])
-    if (entries.every((entry) => entry === AGENT_SESSION_ATTACHMENT_PART_FILE)) {
-      await removeQuietly(uploadDir)
-    }
-    throw error
   }
 }
 

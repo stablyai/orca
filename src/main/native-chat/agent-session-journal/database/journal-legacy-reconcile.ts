@@ -3,6 +3,8 @@ import { runJournalTransaction } from './journal-database'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import {
   readAdoption,
+  readJournalLegacyClaims,
+  retainReadClaims,
   adoptJournalLegacyChat,
   journalLegacyOriginalChatIds,
   retainEnumeratedClaims,
@@ -10,7 +12,6 @@ import {
   type Adoption
 } from './journal-legacy-adoption'
 import {
-  missingJournalLegacyClaims,
   insertJournalLegacyClaims,
   recoverJournalLegacyClaims,
   journalLegacyClaimsFingerprint,
@@ -28,15 +29,13 @@ import {
 import {
   keepContinuedChat,
   keepForcedCopy,
+  journalLegacyForcedCopies,
   type JournalLegacyForcedCopy
 } from './journal-legacy-copies'
 import {
   JOURNAL_LEGACY_COMPARE,
-  JOURNAL_LEGACY_COPY_DUE,
-  metaKeys,
   readMeta,
   recordJournalLegacyFailure,
-  strandedCopies,
   holdsPendingCopy,
   deleteMeta,
   revisionHoldsHistory,
@@ -47,7 +46,8 @@ import {
 } from './journal-legacy-reconcile-marks'
 import {
   JOURNAL_LEGACY_SOURCE_RECEIPT,
-  sameJournalLegacySource
+  sameJournalLegacySource,
+  type JournalLegacySourceReceipt
 } from './journal-legacy-source-receipt'
 import {
   JOURNAL_LEGACY_SOURCE_DAMAGED,
@@ -64,30 +64,31 @@ export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
  * chat beside it, so no turn it saved goes missing. Nothing here deletes a chat or its turns.
  * Terminal restore waits for this pass, so it reads no history: a copy's history converts later
  * like any unconverted chat's, and a chat needing a history compare is compared in the background.
+ * Returns the original as captured when no claim it read stayed out of this file and it held still;
+ * undefined leaves upload custody unknown.
  */
-export function reconcileJournalLegacySource(stateDirectory: string, db: Database.Database): void {
+export function reconcileJournalLegacySource(
+  stateDirectory: string,
+  db: Database.Database
+): JournalLegacySourceReceipt | undefined {
   const sourcePath = journalDatabasePath(stateDirectory)
   // Captured before reading, so a write during this pass is never taken as absorbed. Until every
   // chat here carries its revision (files converted before revisions were kept), each launch reads.
   const captured = captureJournalLegacySourceReceipt(sourcePath)
   if (captured.disposition === 'no-source-at-initialization') {
-    return
+    return captured
   }
   const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
   const unchanged = sameJournalLegacySource(saved, captured)
   const kept = readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
-  const forced = new Map<string, JournalLegacyForcedCopy>(
-    metaKeys(db, JOURNAL_LEGACY_COPY_DUE).map((id) => [id, {}])
-  )
-  for (const [id, copy] of strandedCopies(db)) {
-    forced.set(id, { stranded: copy })
-  }
+  const forced = journalLegacyForcedCopies(db)
+  // Each sweep still proves the original's claims kept; this receipt is never that proof.
   if (unchanged && kept && forced.size === 0) {
-    return
+    return captured
   }
   const source = openReconcilableJournalLegacySource(db, sourcePath, captured)
   if (!source) {
-    return
+    return captured
   }
   const receipt = JSON.stringify(captured)
   const pass: Pass = { kept, forced, baselines: [], compares: [] }
@@ -116,7 +117,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     captured.disposition === 'copied-source' &&
     !sameJournalLegacySource(receipt, captureJournalLegacySourceReceipt(sourcePath))
   ) {
-    return
+    return undefined
   }
   runJournalTransaction(db, () => {
     for (const id of settled.gone) {
@@ -138,6 +139,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
       deleteMeta(db, JOURNAL_LEGACY_SOURCE_DAMAGED)
     }
   })
+  return complete && pass.claims?.retained !== false ? captured : undefined
 }
 
 /** What one pass knows about the original, and the chats it takes as already shown here. */
@@ -150,6 +152,8 @@ type Pass = {
   /** Converted chats with no revision to compare, for the background compare. */
   compares: [string, string][]
   claimOwners?: Pick<Adoption['claims'], 'has'>
+  /** Claims the pass kept before adopting any chat, and each chat's claims missing beforehand. */
+  claims?: ReturnType<typeof retainReadClaims>
 }
 
 /**
@@ -163,13 +167,16 @@ function absorbChats(
   pass: Pass,
   walk: boolean
 ): boolean {
-  const adoption = readAdoption(source, db, walk ? null : [...pass.forced.keys()])
+  const only = walk ? null : [...pass.forced.keys()]
+  const claims = readJournalLegacyClaims(source, only)
+  pass.claims = retainReadClaims(db, claims)
+  const adoption = readAdoption(source, db, only, claims)
   pass.claimOwners = adoption.claims
   let chats: string[]
   try {
     chats = walk ? journalLegacyOriginalChatIds(source, 'saved') : [...pass.forced.keys()]
   } catch (error) {
-    retainEnumeratedClaims(db, adoption)
+    retainEnumeratedClaims(db, adoption.claims)
     throw error
   }
   const claimOnlyChats = new Set(adoption.claims.keys())
@@ -200,7 +207,7 @@ function absorbChats(
         (revision !== undefined && isSqliteCorruption(error)) ||
         db.isTransaction
       ) {
-        retainEnumeratedClaims(db, adoption)
+        retainEnumeratedClaims(db, adoption.claims)
         console.warn('[agent-session-journal] keeping chats an older Orca saved paused', error)
         return false
       }
@@ -224,7 +231,7 @@ function absorbChats(
           }
         })
       } catch (failureError) {
-        retainEnumeratedClaims(db, adoption)
+        retainEnumeratedClaims(db, adoption.claims)
         console.warn(
           '[agent-session-journal] keeping chats an older Orca saved paused',
           failureError
@@ -252,7 +259,7 @@ function absorbChat(
   pass: Pass,
   attempt: { claimsOnly: boolean; adopting: boolean }
 ): void {
-  const claims = missingJournalLegacyClaims(db, id, adoption.claims.get(id) ?? [])
+  const claims = pass.claims?.missing.get(id) ?? []
   const failure = readJournalLegacyFailure(db, id)
   let fingerprint: string | undefined
   const sameRefusal = () =>

@@ -65,6 +65,8 @@ export type JournalWriterEffect =
         | { kind: 'mark'; uploadId: string; now: number }
         | { kind: 'finish'; uploadId: string }
         | { kind: 'prune'; pairs: readonly { uploadId: string; sessionId: string }[] }
+        /** One page of this open's custody proof, from the writer request; anywhere else, unknown. */
+        | { kind: 'legacy-custody'; after: number }
     }
 
 export type JournalReceiptRowBinding = {
@@ -136,6 +138,9 @@ export function applyJournalWriterEffect(
       if (operation.kind === 'finish') {
         finishUploadSweep(db, operation.uploadId)
         return null
+      }
+      if (operation.kind === 'legacy-custody') {
+        return false
       }
       const held = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
       const failed = db.prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')

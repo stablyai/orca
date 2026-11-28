@@ -14,6 +14,8 @@ export type ChunkedUploadRegistryOptions<T> = {
   notFoundMessage: string
   /** Expiry only, not explicit deletion. */
   onExpire?: (value: T) => void
+  /** An entry still doing I/O is checked again a full idle period later instead of expiring. */
+  isBusy?: (value: T) => boolean
 }
 
 /** Bound uploads and expire idle slots so disappeared clients cannot reserve them forever. */
@@ -85,6 +87,11 @@ export class ChunkedUploadRegistry<T> {
   }
 
   private expire(uploadId: string): void {
+    const entry = this.entries.get(uploadId)
+    if (entry && this.options.isBusy?.(entry.value)) {
+      this.touch(uploadId)
+      return
+    }
     const value = this.delete(uploadId)
     if (value !== undefined) {
       this.options.onExpire?.(value)

@@ -9,15 +9,20 @@ import { parentPort, workerData } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
 import { journalDomainDatabasePath } from './database/journal-host-database'
 import {
-  initializeJournalDomainDatabase,
+  initializeJournalDomainDatabaseCustody,
   openJournalDomainDatabase
 } from './database/journal-domain-database'
+import {
+  JOURNAL_LEGACY_CUSTODY_UNKNOWN,
+  journalLegacyCustodyPage
+} from './database/journal-legacy-custody'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
 import { journalWalWriterRelief } from './database/journal-wal-writer-relief'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
 import {
   applyJournalSqlWriteRequest,
+  journalSqlLeavesForksAlone,
   journalSqlWriteDurability,
   type JournalSqlCommitResponse,
   type JournalSqlWriteContext,
@@ -59,6 +64,8 @@ let forks: JournalForkStages | undefined
 let checkpoint: JournalCheckpointOwner | undefined
 let checkpointClosing: Promise<void> | undefined
 let destinationMain: string | undefined
+// For this open only: a later open, or another writer's, reconciles and proves custody itself.
+let legacyCustody = JOURNAL_LEGACY_CUSTODY_UNKNOWN
 let readOnly = true
 let fault: unknown
 let closing = false
@@ -72,7 +79,7 @@ async function open(): Promise<void> {
   try {
     mkdirSync(dirname(workerData.filename), { recursive: true })
     if (workerData.filename === journalDomainDatabasePath(stateDirectory)) {
-      await initializeJournalDomainDatabase(stateDirectory)
+      legacyCustody = (await initializeJournalDomainDatabaseCustody(stateDirectory)).custody
     }
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
@@ -174,6 +181,8 @@ async function drain(): Promise<void> {
       executor: commands,
       forks: forks!,
       stateDirectory,
+      legacyCustodyPage: (after) =>
+        journalLegacyCustodyPage(stateDirectory, database, legacyCustody, after),
       destinationCurrent: (operation) =>
         destinationMain === legacyDestinationMain(workerData.filename) &&
         (!operation.destination ||
@@ -251,7 +260,9 @@ async function runWrites(
       journalSqlWriteDurability(list),
       urgent
     )
-    forks!.acknowledge()
+    if (!list.every(journalSqlLeavesForksAlone)) {
+      forks!.acknowledge()
+    }
     // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.
     return {
       rolledBack: false,

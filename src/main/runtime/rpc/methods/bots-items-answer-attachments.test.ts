@@ -201,6 +201,12 @@ it('claims an item answer for the chat it actually mails and replays the same an
       sweepAgentSessionAttachments(
         attachments,
         {
+          legacyCustodyKnown: () => true,
+          isUnclaimed: (uploadId) =>
+            applyJournalWriterEffect(journal.db, dir, {
+              kind: 'sweep',
+              operation: { kind: 'unclaimed', uploadId }
+            }) === true,
           listBeingSwept: () => listUploadsBeingSwept(journal.db),
           markForSweep: (id, now) =>
             journal.writeAutocommit((db) => markUnclaimedUploadForSweep(db, id, now)),
@@ -214,11 +220,6 @@ it('claims an item answer for the chat it actually mails and replays the same an
             )
           },
           retention: {
-            isUnclaimed: (uploadId) =>
-              applyJournalWriterEffect(journal.db, dir, {
-                kind: 'sweep',
-                operation: { kind: 'unclaimed', uploadId }
-              }) === true,
             uploads: async () => {
               retentionReads++
               return new Set(items.owedCommentAttachmentUploads(attachments.rootDir))

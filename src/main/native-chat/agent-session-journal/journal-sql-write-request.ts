@@ -20,6 +20,8 @@ export type JournalSqlWriteContext = {
   executor: JournalSqlCommand
   forks: JournalForkStages
   stateDirectory: string
+  /** One page of proving no upload an older Orca's journal holds is unclaimed here. */
+  legacyCustodyPage: (after: number) => boolean | number
   /** Whether the destination a durable retirement save names is still the open database. */
   destinationCurrent: (
     operation: Extract<
@@ -36,7 +38,7 @@ export async function applyJournalSqlWriteRequest(
 ): Promise<JournalSqlCommitResponse> {
   const { database, executor, forks, stateDirectory } = context
   const { command, id } = request
-  const checkpoint = forks.checkpoint()
+  const checkpoint = journalSqlLeavesForksAlone(request) ? undefined : forks.checkpoint()
   try {
     if (command.type === 'maintenance') {
       if (
@@ -64,13 +66,31 @@ export async function applyJournalSqlWriteRequest(
           type: 'effects',
           id,
           results: command.effects.map((effect) =>
-            applyJournalWriterEffect(database, stateDirectory, effect)
+            effect.kind === 'sweep' && effect.operation.kind === 'legacy-custody'
+              ? context.legacyCustodyPage(effect.operation.after)
+              : applyJournalWriterEffect(database, stateDirectory, effect)
           )
         }
   } catch (error) {
-    forks.rollback(checkpoint)
+    if (checkpoint) {
+      forks.rollback(checkpoint)
+    }
     throw error
   }
+}
+
+/** Sweep reads (claim checks, custody pages) never touch fork stages, so take no fork snapshot. */
+export function journalSqlLeavesForksAlone(request: JournalSqlWriteRequest): boolean {
+  const { command } = request
+  return (
+    command.type === 'effects' &&
+    command.effects.length > 0 &&
+    command.effects.every(
+      (effect) =>
+        effect.kind === 'sweep' &&
+        (effect.operation.kind === 'legacy-custody' || effect.operation.kind === 'unclaimed')
+    )
+  )
 }
 
 /** A durable retirement save or a fork install raises the whole transaction's sync level. */

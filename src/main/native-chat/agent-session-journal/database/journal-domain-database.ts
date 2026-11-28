@@ -26,11 +26,25 @@ import {
   JOURNAL_LEGACY_REVISIONS_KEPT,
   reconcileJournalLegacySource
 } from './journal-legacy-reconcile'
-import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import {
+  JOURNAL_LEGACY_SOURCE_RECEIPT,
+  sameJournalLegacySource
+} from './journal-legacy-source-receipt'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
+import {
+  JOURNAL_LEGACY_CUSTODY_UNKNOWN,
+  journalLegacyCustodyFrom,
+  type JournalLegacyCustodyStart
+} from './journal-legacy-custody'
+
+export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
+  return (await initializeJournalDomainDatabaseCustody(stateDirectory)).destination
+}
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
-export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
+export async function initializeJournalDomainDatabaseCustody(
+  stateDirectory: string
+): Promise<{ destination: string; custody: JournalLegacyCustodyStart }> {
   const destination = journalDomainDatabasePath(stateDirectory)
   mkdirSync(stateDirectory, { recursive: true })
   try {
@@ -39,8 +53,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     console.warn('[agent-session-journal] removing an abandoned initializer failed', error)
   }
   if (existsSync(destination)) {
-    absorbOlderOrcaWrites(stateDirectory, destination)
-    return destination
+    return { destination, custody: absorbOlderOrcaWrites(stateDirectory, destination) }
   }
   const temporary = mkdtempSync(join(stateDirectory, `.journal-domain-import-${process.pid}-`))
   try {
@@ -48,6 +61,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     const { db } = openJournalDomainDatabase(filename)
     const sourcePath = journalDatabasePath(stateDirectory)
     const sourceReceipt = captureJournalLegacySourceReceipt(sourcePath)
+    let custody = JOURNAL_LEGACY_CUSTODY_UNKNOWN
     try {
       if (existsSync(sourcePath)) {
         const source = openJournalLegacySource(sourcePath)
@@ -71,33 +85,47 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     } finally {
       db.close()
     }
+    // An original written during the copy may hold an upload claim the copy missed.
+    const after = captureJournalLegacySourceReceipt(sourcePath)
+    const held =
+      sourceReceipt.disposition === 'copied-source'
+        ? sameJournalLegacySource(JSON.stringify(sourceReceipt), after)
+        : after.disposition === sourceReceipt.disposition
     try {
       // Publish complete metadata without replacing another initializer's result.
       linkSync(filename, destination)
+      if (held) {
+        custody = journalLegacyCustodyFrom(sourcePath, sourceReceipt)
+      }
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) {
         throw error
       }
     }
-    return destination
+    return { destination, custody }
   } finally {
     rmSync(temporary, { recursive: true, force: true })
   }
 }
 
 /** Best effort: a failure leaves the original unabsorbed for the next launch, never blocks chats. */
-function absorbOlderOrcaWrites(stateDirectory: string, destination: string): void {
+function absorbOlderOrcaWrites(
+  stateDirectory: string,
+  destination: string
+): JournalLegacyCustodyStart {
   try {
     const { db, readOnly } = openJournalDomainDatabase(destination)
     try {
-      if (!readOnly) {
-        reconcileJournalLegacySource(stateDirectory, db)
-      }
+      const held = readOnly ? undefined : reconcileJournalLegacySource(stateDirectory, db)
+      return held
+        ? journalLegacyCustodyFrom(journalDatabasePath(stateDirectory), held)
+        : JOURNAL_LEGACY_CUSTODY_UNKNOWN
     } finally {
       db.close()
     }
   } catch (error) {
     console.warn('[agent-session-journal] reading chats an older Orca saved failed', error)
+    return JOURNAL_LEGACY_CUSTODY_UNKNOWN
   }
 }
 
