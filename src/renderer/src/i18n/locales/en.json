@@ -837,7 +837,8 @@
         "manualAdministratorSteps": "Manual steps",
         "restartOrca": "Restart",
         "customShellAbsolutePath": "Enter the full path to a native Windows shell executable (.exe).",
-        "customShellExample": "C:\\msys64\\usr\\bin\\zsh.exe"
+        "customShellExample": "C:\\msys64\\usr\\bin\\zsh.exe",
+        "customShellValidationFailed": "Could not verify the shell path. Try again."
       },
       "limit": {
         "label": "Maximum running terminals",

@@ -56,10 +56,23 @@ export function TerminalWindowsShellSection({
         'settings.terminal.windows.customShellAbsolutePath',
         'Enter the full path to a native Windows shell executable (.exe).'
       )
-    } else if (path && !(await window.api.shell.pathExists(path).catch(() => false))) {
-      error = t('auto.components.settings.TerminalPane.5a5eac2f44', 'Shell not found: {{value0}}', {
-        value0: path
-      })
+    } else if (path) {
+      try {
+        if (!(await window.api.shell.pathExists(path))) {
+          error = t(
+            'auto.components.settings.TerminalPane.5a5eac2f44',
+            'Shell not found: {{value0}}',
+            {
+              value0: path
+            }
+          )
+        }
+      } catch {
+        error = t(
+          'settings.terminal.windows.customShellValidationFailed',
+          'Could not verify the shell path. Try again.'
+        )
+      }
     }
     if (request === pathValidationRequest.current) {
       setPathValidation(error ? { path, error } : null)
