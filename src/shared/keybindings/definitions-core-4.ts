@@ -217,5 +217,34 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     conflictGroups: ['global', 'tabs', 'botItem'],
     searchKeywords: ['shortcut', 'bot', 'item', 'items', 'next', 'down'],
     defaultBindings: platformBindings(['Mod+Alt+ArrowDown'])
+  },
+  {
+    id: 'view.automations',
+    title: 'Toggle Automations',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'automations',
+      'automation',
+      'schedule',
+      'cron',
+      'toggle',
+      '自动化',
+      '定时',
+      '计划任务'
+    ],
+    // Why: unbound by default, matching workspace.openBoard, so no global chord is taken from terminal users.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'view.activity',
+    title: 'Toggle Activity',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'activity', 'runs', 'history', 'toggle', '活动', '运行记录'],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
   }
 ]

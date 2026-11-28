@@ -37,6 +37,7 @@ export type WindowShortcutAction =
   | { type: 'openNewWorkspace' }
   | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
+  | { type: 'togglePage'; page: 'automations' | 'activity' }
   | { type: 'toggleAgentDashboard' }
   | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
@@ -225,6 +226,14 @@ export function resolveWindowShortcutAction(
     return { type: 'openTasks' }
   }
 
+  if (keybindingMatchesAction('view.automations', input, platform, keybindings, options)) {
+    return { type: 'togglePage', page: 'automations' }
+  }
+
+  if (keybindingMatchesAction('view.activity', input, platform, keybindings, options)) {
+    return { type: 'togglePage', page: 'activity' }
+  }
+
   if (keybindingMatchesAction('dashboard.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleAgentDashboard' }
   }
@@ -294,6 +303,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'workspace.openBoard'
     case 'openTasks':
       return 'view.tasks'
+    case 'togglePage':
+      return action.page === 'automations' ? 'view.automations' : 'view.activity'
     case 'toggleAgentDashboard':
       return 'dashboard.toggle'
     case 'switchRecentTab':

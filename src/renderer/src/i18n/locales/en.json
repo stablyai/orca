@@ -26846,7 +26846,9 @@
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
       "botItemNext": "Next item",
-      "pageSearch": "Search this page"
+      "pageSearch": "Search this page",
+      "viewAutomations": "Toggle automations",
+      "viewActivity": "Toggle activity"
     },
     "group": {
       "global": "Global",

@@ -238,6 +238,11 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
+      for (const actionId of ['view.automations', 'view.activity'] as const) {
+        if (matchAppShortcut(actionId) && handlers.get(actionId)?.()) {
+          return
+        }
+      }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
         if (matchAppShortcut(actionId) && handlers.get(actionId)?.()) {
           return
