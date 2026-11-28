@@ -7,6 +7,7 @@ import { isExchangeDeviceToken } from '../../../../../shared/remote-runtime/pair
 import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import { isRecord } from '../../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { NETWORK_SOURCE_CLASSES } from '../../transports/websocket/source-admission/network-source-class'
+import { readSavedLiveActivities } from '../../../../../shared/notifications/live-activity-contract'
 
 const GRANTABLE: ReadonlySet<string> = new Set(RUNTIME_DEVICE_GRANTS)
 
@@ -95,6 +96,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
     // Bad push metadata must not fail registry load and strand all devices.
     pushRegistration: parseMobilePushRegistration(device.pushRegistration),
+    liveActivities: readSavedLiveActivities(device.liveActivities),
     parentDeviceId: typeof device.parentDeviceId === 'string' ? device.parentDeviceId : undefined,
     orcaAccount: validOrcaAccount(device.orcaAccount),
     phoneKey: typeof device.phoneKey === 'string' ? device.phoneKey : undefined,

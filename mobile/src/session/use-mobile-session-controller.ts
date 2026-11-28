@@ -1,3 +1,4 @@
+import { useSessionLiveActivity } from '../live-activities/use-session-live-activity'
 import { useLayoutEffect } from 'react'
 import { useMobileSessionItemLink } from './use-mobile-session-item-link'
 import { useMobileStructuredSessionOpening } from './use-mobile-structured-session-opening'
@@ -105,6 +106,7 @@ export function useMobileSessionController() {
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
   const openNativeSession = useMobileStructuredSessionOpening(tabSwitching)
   useNotificationPaneNavigation({ ...tabSwitching, openNativeSession })
+  useSessionLiveActivity(tabSwitching)
   useMarkViewedAgentRead(tabSwitching.client, tabSwitching.connState, tabSwitching.activeSessionTab)
   const terminalWebview = Object.assign(tabSwitching, useMobileSessionTerminalWebview(tabSwitching))
   const terminalSendActions = Object.assign(

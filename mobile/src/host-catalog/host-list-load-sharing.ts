@@ -8,6 +8,14 @@ export type HostListSnapshot = {
 // Share slow keychain reads until durable writes invalidate them (#8791).
 let inflight: Promise<HostListSnapshot> | null = null
 let revision = 0
+const listeners = new Set<() => void>()
+
+export function subscribeHostCatalogChanges(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
 // Last finished pass, so screens can seed titles synchronously; their own read still confirms it.
 let settled: HostListSnapshot | null = null
 
@@ -48,4 +56,7 @@ export function dropSharedHostListLoad(): void {
   revision += 1
   inflight = null
   settled = null
+  for (const listener of listeners) {
+    listener()
+  }
 }

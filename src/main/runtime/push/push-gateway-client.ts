@@ -17,6 +17,10 @@ import {
   type PushGatewayResult
 } from './push-gateway-response'
 import { PushGatewaySession } from './push-gateway-session'
+import type {
+  LiveActivityBootstrap,
+  LiveActivityPush
+} from '../../../shared/notifications/live-activity-contract'
 
 const RegisterResponseSchema = lazyZodSchema(() =>
   z.object({ registrationId: z.string().min(1).max(512) })
@@ -120,6 +124,22 @@ export class PushGatewayClient {
     await cancelUnreadResponseBody(response.response)
     // A gateway that no longer knows the registration is as deleted as it gets.
     return response.response.ok || response.response.status === 404
+  }
+
+  async sendLiveActivity(input: LiveActivityPush): Promise<'sent' | 'dead' | 'error'> {
+    const result = await readPushGatewayJson(
+      await this.authorized('/v1/live-activities/send', { method: 'POST', body: input }),
+      z.object({ status: z.enum(['sent', 'dead', 'error']) })
+    )
+    return result.ok ? result.value.status : 'error'
+  }
+
+  async registerLiveActivityOverview(input: LiveActivityBootstrap): Promise<boolean> {
+    const result = await readPushGatewayJson(
+      await this.authorized('/v1/live-activities/register', { method: 'POST', body: input }),
+      z.object({ registered: z.boolean() })
+    )
+    return result.ok && result.value.registered
   }
 
   async send(input: {

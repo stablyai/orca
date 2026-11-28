@@ -1,0 +1,1 @@
+{ "platforms": ["apple"], "apple": { "modules": ["OrcaLiveActivitiesModule"] } }

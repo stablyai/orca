@@ -163,7 +163,8 @@ export type RuntimeMobileSessionAgentTabStatus = Pick<
   | 'updatedAt'
   | 'evidenceObservedAt'
   | 'structuredHostOwned'
->
+> &
+  Partial<Pick<AgentStatusEntry, 'stateStartedAt' | 'turnStartedAt'>>
 
 export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionTerminalTab

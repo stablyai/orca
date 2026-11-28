@@ -1,3 +1,6 @@
+import type { MobilePushRegistrar } from './mobile-push-registrar'
+export type { MobilePushRegistrar } from './mobile-push-registrar'
+import type { LiveActivityRegistration } from '../../../../shared/notifications/live-activity-contract'
 import { agentSessionExecutionLocationsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   NotificationAttentionReadFrontiers,
@@ -65,14 +68,6 @@ export type MobileNotificationEvent =
   | MobileNotificationDispatchEvent
   | MobileNotificationDismissEvent
 
-/** The desktop push service, once it exists; absent on hosts that never started one. */
-export type MobilePushRegistrar = {
-  test(deviceId: string): Promise<MobilePushTestResult>
-  register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult>
-  unregister(deviceId: string): Promise<{ unregistered: boolean }>
-  coveredTokenDigests(request: PushCoverageRequest): Promise<string[]>
-}
-
 /** Host news for its owner with no agent turn behind it; `id` keys its cooldown and its phone notice. */
 export type OwnerNotice = {
   id: string
@@ -118,6 +113,18 @@ export class RuntimeMobileNotificationController {
 
   setPushRegistrar(registrar: MobilePushRegistrar | null): void {
     this.pushRegistrar = registrar
+  }
+
+  registerLiveActivity(deviceId: string, input: LiveActivityRegistration) {
+    return this.pushRegistrar?.registerLiveActivity?.(deviceId, input)
+  }
+
+  unregisterLiveActivity(deviceId: string, activityId: string): void {
+    this.pushRegistrar?.unregisterLiveActivity?.(deviceId, activityId)
+  }
+
+  resolveLiveActivitySession(deviceId: string, activityId: string, sessionId: string) {
+    return this.pushRegistrar?.resolveLiveActivitySession?.(deviceId, activityId, sessionId) ?? null
   }
 
   async registerPushDevice(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult> {

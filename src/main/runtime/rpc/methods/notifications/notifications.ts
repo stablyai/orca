@@ -1,3 +1,8 @@
+import {
+  LiveActivityRegistrationParams,
+  LiveActivitySessionParams,
+  LiveActivityRemovalParams
+} from '../../../../../shared/notifications/live-activity-contract'
 import type { z } from 'zod'
 import { createNotificationStreamFilter } from './notification-stream-policy'
 import { defineStreamingMethod, defineMethod, type RpcContext } from '../../core'
@@ -50,6 +55,46 @@ export async function pushCoverage(
 
 // Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
 export const NOTIFICATION_METHODS = [
+  defineMethod({
+    name: 'notifications.resolveLiveActivitySession',
+    permission: 'workspace',
+    params: LiveActivitySessionParams,
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => ({
+      target:
+        clientKind === 'mobile' && pairedDeviceId
+          ? runtime.resolveMobileLiveActivitySession(
+              pairedDeviceId,
+              params.activityId,
+              params.sessionId
+            )
+          : null
+    })
+  }),
+  defineMethod({
+    name: 'notifications.registerLiveActivity',
+    permission: 'workspace',
+    params: LiveActivityRegistrationParams,
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { registered: false }
+      }
+      return (
+        (await runtime.registerMobileLiveActivity(pairedDeviceId, params)) ?? { registered: false }
+      )
+    }
+  }),
+  defineMethod({
+    name: 'notifications.unregisterLiveActivity',
+    permission: 'workspace',
+    params: LiveActivityRemovalParams,
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { unregistered: false }
+      }
+      runtime.unregisterMobileLiveActivity(pairedDeviceId, params.activityId)
+      return { unregistered: true }
+    }
+  }),
   defineStreamingMethod({
     name: 'notifications.subscribe',
     permission: 'workspace',

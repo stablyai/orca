@@ -202,7 +202,30 @@ platform :ios do
     # This fastlane exposes the chosen profile through SIGH_NAME, not SIGH_PROFILE_MAPPING.
     profile_name = lane_context[SharedValues::SIGH_NAME]
 
-    # Archive needs explicit manual signing/team/profile; omitting DEVELOPMENT_TEAM fails signing.
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: "#{BUNDLE_ID}.activity",
+      force: true,
+    )
+    activity_profile = lane_context[SharedValues::SIGH_NAME]
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: File.join(MOBILE_ROOT, "ios", "Orca.xcodeproj"),
+      targets: [SCHEME],
+      team_id: team_id,
+      code_sign_identity: "Apple Distribution",
+      profile_name: profile_name,
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: File.join(MOBILE_ROOT, "ios", "Orca.xcodeproj"),
+      targets: ["OrcaSessionActivity"],
+      team_id: team_id,
+      code_sign_identity: "Apple Distribution",
+      profile_name: activity_profile,
+    )
+
+    # Each target carries its own profile; a global override signs the extension with the app's profile.
     build_app(
       workspace: WORKSPACE,
       scheme: SCHEME,
@@ -210,13 +233,13 @@ platform :ios do
       export_method: "app-store",
       xcargs: "DEVELOPMENT_TEAM=#{team_id} " \
         "CODE_SIGN_STYLE=Manual " \
-        "CODE_SIGN_IDENTITY='Apple Distribution' " \
-        "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
+        "CODE_SIGN_IDENTITY='Apple Distribution'",
       export_options: {
         teamID: team_id,
         signingStyle: "manual",
         provisioningProfiles: {
           BUNDLE_ID => profile_name,
+          "#{BUNDLE_ID}.activity" => activity_profile,
         },
       },
       output_directory: BUILD_OUTPUT_DIRECTORY,

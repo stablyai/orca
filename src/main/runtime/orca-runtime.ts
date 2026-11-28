@@ -16,7 +16,7 @@ import {
 } from './client/settings/runtime-workspace-view-change-events'
 import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import { sidebarFactsRuntime } from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithRelayHostNotices } from './construction/orca-runtime-relay-host-notices'
+import { RuntimeAgentOverviewProjection } from './push/live-activities/runtime-agent-overview-projection'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
@@ -67,7 +67,7 @@ import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view
 import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
+class OrcaRuntimeService extends RuntimeAgentOverviewProjection {
   protected override assertStructuredQueuedMessageAllowed(sessionId: string, messageId: string) {
     botGroups.assertBotGroupQueuedMessageAllowed(this, sessionId, messageId)
   }
@@ -192,7 +192,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
     return this.references.find(params)
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithRelayHostNotices>) {
+  constructor(...args: ConstructorParameters<typeof RuntimeAgentOverviewProjection>) {
     super(...args)
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()

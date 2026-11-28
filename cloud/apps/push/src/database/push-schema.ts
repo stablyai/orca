@@ -1,4 +1,5 @@
 import { DURABLE_PUSH_SCHEMA } from './durable-push-schema.js'
+import { LIVE_ACTIVITY_SCHEMA } from './live-activity-schema.js'
 // Applied at startup for both dialects, including additive queue tables,
 // so every column type has to read the same in SQLite and PostgreSQL.
 export const PUSH_TOKEN_INDEX_CHARS = 256
@@ -45,7 +46,7 @@ CREATE INDEX IF NOT EXISTS push_devices_token
 export function pushSchemaStatements(): string[] {
   // Comments are stripped before the split so a ';' inside one cannot cut a
   // statement in half and hand SQLite an "incomplete input" fragment.
-  return (PUSH_SCHEMA + DURABLE_PUSH_SCHEMA)
+  return (PUSH_SCHEMA + DURABLE_PUSH_SCHEMA + LIVE_ACTIVITY_SCHEMA)
     .replace(/--[^\n]*/g, '')
     .split(';')
     .map((statement) => statement.trim())

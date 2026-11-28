@@ -7333,6 +7333,26 @@
       "working": "Trabalhando"
     }
   },
+  "liveActivities": {
+    "cleanupPending": "Sua preferência foi salva. Parte da limpeza das Atividades ao Vivo está pendente e será repetida quando o host reconectar.",
+    "retryCleanup": "Tentar limpeza novamente",
+    "enable": "Atividades ao Vivo",
+    "showNames": "Mostrar nomes das sessões",
+    "description": "Veja o total de agentes dos computadores e servidores pareados. Os nomes ficam ocultos até você ativá-los.",
+    "systemDisabled": "As Atividades ao Vivo estão indisponíveis ou desativadas nos Ajustes do iOS para o Orca.",
+    "rebuild": "Instale uma versão para iOS com suporte a Atividades ao Vivo. O Expo Go não é compatível.",
+    "saveFailed": "Não foi possível atualizar as Atividades ao Vivo. Tente novamente.",
+    "deliveryFailed": "Não foi possível registrar as atualizações das Atividades ao Vivo. Atualize o host pareado e o serviço de push e abra uma sessão em andamento para tentar novamente.",
+    "working": "Trabalhando",
+    "attention": "Precisa de atenção",
+    "done": "Concluído",
+    "failed": "Falha",
+    "unavailable": "Estado indisponível",
+    "session": "Sessão",
+    "allHosts": "Todos os hosts pareados",
+    "partial": "Cobertura parcial",
+    "more": "mais"
+  },
   "chats": {
     "delete": {
       "title": "Excluir este chat?",

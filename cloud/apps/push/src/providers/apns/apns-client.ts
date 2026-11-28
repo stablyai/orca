@@ -4,6 +4,7 @@ import type { ApnsTransport } from './apns-http2-transport.js'
 import type { ApnsCredentials } from '../../config.js'
 import type { PushDelivery } from '../../delivery/push-delivery-message.js'
 import type { PushProviderOutcome } from '../push-provider-outcome.js'
+import type { LiveActivitySend } from '@orca-cloud/push-contract/live-activity-messages'
 
 const APNS_HOSTS: Record<ApnsEnvironment, string> = {
   production: 'api.push.apple.com',
@@ -54,6 +55,38 @@ export class ApnsClient {
   constructor(private readonly options: ApnsClientOptions) {
     this.now = options.now ?? Date.now
     this.authentication = new ApnsAuthenticationToken(options.credentials, this.now)
+  }
+
+  async sendLiveActivity(input: LiveActivitySend): Promise<PushProviderOutcome> {
+    if (Math.abs(input.timestamp * 1000 - this.now()) > 60_000) {
+      return { status: 'error', reason: 'expired' }
+    }
+    try {
+      const response = await this.options.transport({
+        host: APNS_HOSTS[input.apnsEnvironment],
+        path: `/3/device/${input.token}`,
+        headers: {
+          authorization: `bearer ${this.authentication.value()}`,
+          'apns-topic': `${this.options.topic}.push-type.liveactivity`,
+          'apns-push-type': 'liveactivity',
+          'apns-priority': '5',
+          'apns-expiration': String(input.timestamp + 60)
+        },
+        body: JSON.stringify({ aps: {
+          timestamp: input.timestamp,
+          event: input.event,
+          'content-state': input.content,
+          'stale-date': input.timestamp + 900,
+          ...(input.event === 'end' ? { 'dismissal-date': input.timestamp + 300 } : {})
+        } })
+      })
+      if (response.status === 200) return { status: 'sent' }
+      const reason = readReason(response.body)
+      if (response.status === 410 || DEAD_TOKEN_REASONS.has(reason)) return { status: 'dead', reason }
+      return { status: 'error', reason, retryable: response.status === 429 || response.status >= 500 }
+    } catch {
+      return { status: 'error', reason: 'transport_failed', retryable: true }
+    }
   }
 
   async send(

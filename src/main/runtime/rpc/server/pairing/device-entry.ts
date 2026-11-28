@@ -5,6 +5,7 @@ import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/p
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import type { NetworkSourceClass } from '../../transports/websocket/source-admission/network-source-class'
+import type { SavedLiveActivity } from '../../../../../shared/notifications/live-activity-contract'
 
 export type DeviceOrcaAccount = { id: string; name: string; computer?: string }
 
@@ -32,6 +33,7 @@ export type DeviceEntry = {
   pairingReach?: RuntimePairingReach
   // Persist push across desktop restart; older registries have none.
   pushRegistration?: MobilePushRegistration
+  liveActivities?: SavedLiveActivity[]
   // Relayed phones lose access with their parent desktop grant.
   parentDeviceId?: string
   // The Orca account a paired desktop says it is signed in to (a plain claim, set on each connect);

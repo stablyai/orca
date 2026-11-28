@@ -1,3 +1,4 @@
+import { liveActivityTrackParamsSchema } from '../../../live-activities/live-activity-track-contract'
 import * as z from 'zod'
 import {
   audioReadParamsSchema,
@@ -29,6 +30,7 @@ import { BRIDGE_MAX_EXTERNAL_LINK_CHARS } from '../protocol/bridge-caps'
 export const BRIDGE_NATIVE_METHOD_PREFIX = 'native.'
 
 export const BRIDGE_NATIVE_VERB_NAMES = [
+  'native.liveActivity.track',
   'native.clipboard.write',
   'native.clipboard.read',
   'native.media.pick',
@@ -108,6 +110,10 @@ export const linkOpenParamsSchema = z.strictObject({
 export const linkOpenResultSchema = z.strictObject({ opened: z.boolean() })
 
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
+  'native.liveActivity.track': {
+    params: liveActivityTrackParamsSchema,
+    result: z.object({ tracked: z.boolean() }).strict()
+  },
   'native.clipboard.write': {
     params: clipboardWriteParamsSchema,
     result: clipboardWriteResultSchema

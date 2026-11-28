@@ -1,3 +1,5 @@
+import { LiveActivityNavigation } from '../src/live-activities/use-live-activity-links'
+import { startLiveActivitySync } from '../src/live-activities/live-activity-sync'
 import { startAndroidForegroundPushPresentation } from '../src/notifications/foreground-delivery/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/dismissal/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/payload-identity/native-notification-data'
@@ -98,6 +100,7 @@ export default function RootLayout() {
 
   // Re-register rolled APNs/FCM tokens with every paired host or delivery silently stops.
   useEffect(() => startPushTokenSync(), [])
+  useEffect(() => startLiveActivitySync(), [])
   // Cold start, then foreground and timer checks on the desktop updater's cadence.
   useEffect(() => appUpdateChecker.start(), [])
   useEffect(() => startAndroidForegroundPushPresentation(), [])
@@ -196,6 +199,7 @@ export default function RootLayout() {
   return (
     <RpcClientProvider>
       <OrcaQueryProvider>
+        <LiveActivityNavigation />
         <View style={styles.root} onLayout={onNavigatorLayout}>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           <SideRailProvider>
@@ -232,6 +236,7 @@ export default function RootLayout() {
                 <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="live-activity" options={{ headerShown: false }} />
                 <Stack.Screen name="notifications" options={{ headerShown: false }} />
                 <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
                 <Stack.Screen name="troubleshoot-issue" options={{ headerShown: false }} />
