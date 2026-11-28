@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useId } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -15,13 +15,13 @@ import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices
 import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
-import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import {
   ClippedRowProviderSegment,
   ProviderSegment,
   isUsageUrgent
 } from './usage/StatusBarProviderSegment'
 import { UsageOverflowChip } from './usage/usage-overflow-chip'
+import { getUsageErrorAlertLabel } from './usage/UsageErrorAlert'
 import {
   USAGE_ROW_LEVELS,
   chooseUsageRowLayout,
@@ -44,7 +44,6 @@ export function StatusBarUsageArea({
   const t = useTranslate()
   const [usageAreaRef, usageWidths] = useUsageRowWidths()
   const {
-    antigravityAccounts,
     anyFetching,
     anyVisible,
     canSignInFromUsageRow,
@@ -85,6 +84,12 @@ export function StatusBarUsageArea({
   const shownProviders = rosterProviders.filter((p) => !usageLayout.collapsed.includes(p.provider))
   const hiddenProviders = rosterProviders.filter((p) => usageLayout.collapsed.includes(p.provider))
   const showUnitLabel = shownProviders.some((p) => usageChipShowsPercentage(p, usageMode, t))
+  // Why: chips show errors as bare alerts, so the menu button carries their messages for keyboard users.
+  const alertDescriptionId = useId()
+  const alertDescription = rosterProviders
+    .map((p) => getUsageErrorAlertLabel(p, t))
+    .filter(Boolean)
+    .join('. ')
   // Why the setting, not usageMode: the measured gap and label must not depend on the layout choice.
   const compactBar = statusBarUsageMode === 'compact'
 
@@ -120,8 +125,14 @@ export function StatusBarUsageArea({
                     compactBar ? 'gap-3.5' : 'gap-3'
                   )}
                   aria-label={t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
+                  aria-describedby={alertDescription ? alertDescriptionId : undefined}
                   title={remoteOwner?.label}
                 >
+                  {alertDescription ? (
+                    <span id={alertDescriptionId} className="sr-only">
+                      {alertDescription}
+                    </span>
+                  ) : null}
                   {showUnitLabel ? (
                     <UsageUnitLabel display={usagePercentageDisplay} compact={compactBar} />
                   ) : null}
@@ -189,16 +200,6 @@ export function StatusBarUsageArea({
                           ownerUsage={ownerUsage}
                           asSubmenu
                           triggerContent={rowNode}
-                        />
-                      )
-                    }
-                    if (p.provider === 'antigravity') {
-                      return (
-                        <AntigravityUsageMenu
-                          antigravity={p}
-                          accounts={antigravityAccounts}
-                          triggerContent={rowNode}
-                          onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
                         />
                       )
                     }
@@ -279,6 +280,7 @@ export function StatusBarUsageArea({
                   mode={levelMode(index)}
                   barMode={statusBarUsageMode}
                   countdownActive={false}
+                  measuring
                 />
               </span>
             ))

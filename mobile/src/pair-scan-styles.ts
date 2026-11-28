@@ -1,61 +1,50 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { spacing, radii, typography } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 
-export const pairScanStyles = themedStyleSheet(() => ({
+/** Text and glyphs over the camera, which stays dark in both themes. */
+export const CAMERA_INK = '#ffffff'
+
+export const pairScanStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
+    backgroundColor: colors.bgBase
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.control,
+  // Full bleed under the bar; black while the camera starts or sits paused behind the paste sheet.
+  camera: {
+    flex: 1,
+    overflow: 'hidden',
+    backgroundColor: '#000000'
+  },
+  cameraFoot: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm
+    gap: spacing.lg,
+    paddingTop: spacing.xl * 2,
+    paddingHorizontal: spacing.xl
   },
-  steps: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-    marginLeft: 7
+  cameraHint: {
+    color: CAMERA_INK,
+    fontSize: 15,
+    fontWeight: '500',
+    textAlign: 'center'
   },
-  step: {
+  cameraPaste: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
-  },
-  stepBadge: {
-    width: 22,
-    height: 22,
+    gap: spacing.sm,
+    height: 44,
+    paddingHorizontal: 20,
     borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
+    backgroundColor: 'rgba(255, 255, 255, 0.16)'
   },
-  stepNumber: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary
-  },
-  stepText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary
-  },
-  cameraWrap: {
-    flex: 1,
-    borderRadius: radii.surface,
-    overflow: 'hidden'
-  },
-  // Reserve the camera slot during paste mode so the bottom action cannot jump upward.
-  cameraPlaceholder: {
-    flex: 1,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface
-  },
-  camera: {
-    ...StyleSheet.absoluteFill
+  cameraPasteLabel: {
+    color: CAMERA_INK,
+    fontSize: 15,
+    fontWeight: '600'
   },
   reticle: {
     ...StyleSheet.absoluteFill,
@@ -99,86 +88,15 @@ export const pairScanStyles = themedStyleSheet(() => ({
     borderRightWidth: 2.5,
     borderBottomRightRadius: radii.mark
   },
+  scrollFill: { flexGrow: 1 },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm
-  },
-  subtitle: {
-    maxWidth: 310,
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
-  },
   connectingText: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
     marginTop: spacing.lg
-  },
-  logSlot: {
-    width: '100%',
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.sm
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.control
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  pasteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control
-  },
-  pasteButtonPressed: {
-    opacity: 0.6
-  },
-  pasteButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  errorActions: {
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  secondaryButton: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
   }
 }))

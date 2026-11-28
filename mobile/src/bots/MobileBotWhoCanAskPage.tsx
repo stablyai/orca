@@ -12,6 +12,7 @@ import { ListGroup, SectionHeader } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import type { Translate } from '../i18n/mobile-i18n'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
@@ -225,7 +226,9 @@ export function MobileBotWhoCanAskPage(props: {
     props.setSaving(false)
     if (failed.length > 0) {
       props.showToast(
-        mobileBotAccessCopy(t, 'fixOnlyMeFailed', { names: mobileBotAccessNames(failed) }),
+        mobileBotAccessCopy(t, 'fixOnlyMeFailed', {
+          names: mobileBotAccessNames(failed, getUiIntlLocale())
+        }),
         2400
       )
     }
@@ -310,10 +313,13 @@ function addFailedLine(error: unknown, picked: readonly BotMember[], t: Translat
   const full = readBotMembersFull(error)
   if (!full) {
     return t('bots.whoCanAsk.addFailed', 'Couldn’t add {{names}}.', {
-      names: mobileBotAccessNames(picked.map((member) => member.name || member.id))
+      names: mobileBotAccessNames(
+        picked.map((member) => member.name || member.id),
+        getUiIntlLocale()
+      )
     })
   }
-  const values = { names: mobileBotAccessNames(full.names), count: full.limit }
+  const values = { names: mobileBotAccessNames(full.names, getUiIntlLocale()), count: full.limit }
   return full.scope === 'bot'
     ? t(
         'bots.whoCanAsk.fullBot',

@@ -1,5 +1,5 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, CalendarClock, Files, Layers, List, Smartphone } from 'lucide-react'
+import { Blocks, BookOpen, CalendarClock, Files, Layers, List, Smartphone } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { useHelpMenuController } from '@/components/sidebar/chrome/help-menu-controller'
@@ -36,6 +36,7 @@ import {
   type AppRailDestinationId
 } from './app-rail-destinations'
 import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 /** Icon-only app navigation below the left titlebar; one tab stop, arrow keys move within it. */
 export function AppRail({
@@ -197,6 +198,8 @@ export function AppRail({
         return t('auto.components.sidebar.SidebarNav.artifacts', 'Artifacts')
       case 'skills':
         return t('auto.components.sidebar.SidebarNav.skills', 'Skills')
+      case 'plugins':
+        return t('auto.components.settings.PluginsSettingsSection.title', 'Plugins')
       case 'mobile':
         return t('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')
     }
@@ -217,13 +220,17 @@ export function AppRail({
         return <Files {...props} />
       case 'skills':
         return <BookOpen {...props} />
+      case 'plugins':
+        return <Blocks {...props} />
       case 'mobile':
         return <Smartphone {...props} />
     }
   }
   const shownDestinationSet = new Set<AppRailDestinationId>(shownDestinations)
   // Every page but Workspaces, in rail order, shown or not.
-  const customizeRows: AppRailCustomizeRow[] = APP_RAIL_DESTINATION_IDS.map((id) => ({
+  const customizeRows: AppRailCustomizeRow[] = APP_RAIL_DESTINATION_IDS.filter(
+    (id) => id !== 'plugins' || !isWebClientLocation()
+  ).map((id) => ({
     id,
     label: destinationLabel(id),
     icon: destinationIcon(id, 14, undefined, 'size-3.5'),
@@ -270,6 +277,7 @@ export function AppRail({
   return (
     <nav
       aria-label={navigationLabel}
+      data-app-rail-nav=""
       className="flex min-h-0 w-10 flex-1 shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
       style={style}
     >

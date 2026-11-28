@@ -81,13 +81,11 @@ export const OPERATION_MUTATIONS = {
   // Drops the context reload the workspace switch chains off its send, so the sheet keeps showing
   // the previous workspace's teams after the host accepted the change.
   'linear-workspace-context-reload': {
-    file: 'mobile-tasks-filter-pickers.tsx',
-    before: `          void linearWorkspaceSelect
-            .request(client, { workspaceId })
-            .then(() => loadLinearContext())`,
-    after: `          void linearWorkspaceSelect
-            .request(client, { workspaceId })
-            .then(() => undefined)`
+    file: 'mobile-tasks-filter-selection.ts',
+    before: `    .then((target) => linearWorkspaceSelect.request(target, { workspaceId }))
+    .then(() => loadLinearContext())`,
+    after: `    .then((target) => linearWorkspaceSelect.request(target, { workspaceId }))
+    .then(() => undefined)`
   },
   // Reads the overrides one level above the settings envelope.
   'bot-overrides-envelope': {
@@ -187,7 +185,7 @@ export const OPERATION_MUTATIONS = {
       return { kind: 'loading' }
     }`,
     after: `    if (checksFailed) {
-      return prSidebarFailureState(checksError)
+      return prSidebarFailureState(checksError, t)
     }
     if (!checks) {
       return { kind: 'loading' }

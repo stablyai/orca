@@ -33,7 +33,7 @@ export class AgentStatusProjectionState {
   activeAgentCount = 0
   readonly transitionListeners = new Set<AgentStatusChangeListener>()
   readonly transitionBatches: (readonly AgentStatusChange[])[] = []
-  activeDashboardOwners = new Set<string>()
+  activeDashboardOwners: Set<string> | null = new Set<string>()
   readonly countedRows = new Map<string, CountedRow>()
   readonly countsByWorktree = new Map<string, DashboardCounts>()
   dashboardTotals: DashboardCounts = EMPTY_COUNTS
@@ -77,6 +77,8 @@ export class AgentStatusProjectionState {
   }
   nextRank = 0
   nextRowRevision = 0
+  /** Workspaces whose rows, arrangement or summary moved in the commit being published. */
+  readonly touchedWorktrees = new Set<string>()
   freshEvidence = 0
   /** Bumped when a source gains or loses its workspace row. */
   rowOwnersRevision = 0
@@ -197,6 +199,7 @@ export class AgentStatusProjectionState {
           summary[flag] = (b.counts.get(flag) ?? 0) > 0
         }
         b.summary = summary
+        this.touchedWorktrees.add(owner)
       }
     }
     if (previous) {

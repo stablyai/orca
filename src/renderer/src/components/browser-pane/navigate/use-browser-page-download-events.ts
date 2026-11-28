@@ -11,7 +11,7 @@ export function useBrowserPageDownloadEvents({
   setResourceNotice
 }: {
   browserTabId: string
-  setResourceNotice: Dispatch<SetStateAction<string | null>>
+  setResourceNotice: (notice: string | null) => void
 }): {
   downloadStates: BrowserDownloadState[]
   setDownloadStates: Dispatch<SetStateAction<BrowserDownloadState[]>>

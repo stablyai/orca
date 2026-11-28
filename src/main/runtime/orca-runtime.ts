@@ -1,13 +1,10 @@
-import { agentQuestionNotices } from './rpc/methods/orchestration/messaging/agent-question-notices'
-import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-service'
-import { forgetPairedServerAsksOf } from './orchestration/federation/paired-server-asks/paired-server-ask-removal'
+import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-events'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
 import * as botGroupRemote from '../bots/bot-group-remote-answers'
 import { chatReplyFollowUp } from './rpc/methods/orchestration/messaging/reply-follow-up'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
-import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import { botSessionHooks } from '../bots/bot-turn-ended'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
@@ -19,7 +16,7 @@ import {
 } from './client/settings/runtime-workspace-view-change-events'
 import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import { sidebarFactsRuntime } from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithAgentQuestions } from './construction/orca-runtime-agent-questions'
+import { OrcaRuntimeWithRelayHostNotices } from './construction/orca-runtime-relay-host-notices'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
@@ -38,21 +35,15 @@ import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-r
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-runtime/session-graph/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
-import { WorkspaceReferenceQueries } from './runtime-workspace-reference-queries'
+import { createLazyWorkspaceReferenceQueries } from './workspaces/references/lazy-workspace-reference-queries'
 import { registerWorktreeCatalogRoutes } from './workspaces/catalog/worktree-catalog-live-route'
-import {
-  createReferenceAgentIndex,
-  referenceConnectionHosts
-} from './workspaces/references/runtime-reference-agents'
 import type { RuntimeReferenceFindParams } from '../../shared/workspace-attachments/runtime-reference-contracts'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './terminal/identity/moved-pane-owner-rekey'
 import * as Layout from './terminal/layout/runtime-layout-apply'
 import type { TerminalCreateOptions } from './terminal/launch/terminal-create-options'
-import {
-  installStructuredAgentAvailability as installAvailability,
-  type StructuredAgentAvailabilityReader as AvailabilityReader
-} from './agent-session/launch/structured-agent-availability'
+import type { StructuredAgentAvailabilityReader as AvailabilityReader } from './agent-session/launch/structured-agent-availability'
+import { LazyStructuredAgentAvailability } from './agent-session/launch/lazy-structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/workspace-rows/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icons/repo-icon-data-urls'
 import { runtimeIconFetch } from './sidebar-inputs/repo-icons/repo-icon-remote-fetch'
@@ -65,17 +56,18 @@ import { requireSwitchedOn } from './construction/require-sidebar-inputs-enabled
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getHostDisplayLabelOverrides } from '../../shared/execution-host/host-setting-overrides'
 import type { OrchestrationDb } from './orchestration/db/orchestration-db'
-import { continueRestoredWorkerMailSoon } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
-import { scrubBotToolSecrets } from './rpc/methods/bots-tools'
 import {
-  PeerMailRelay,
-  type PeerServerAnswerStatus
-} from './orchestration/federation/peer-mail/peer-mail-relay'
+  notifyAgentQuestionLazy,
+  startRestoredWorkerMailLazy
+} from './orchestration/restored-worker-mail-startup'
+import type { scrubBotToolSecrets } from './rpc/methods/bots-tools'
+import type { PeerServerAnswerStatus } from './orchestration/federation/peer-mail/peer-mail-relay'
+import { LazyPeerMailRelay } from './orchestration/federation/peer-mail/lazy-peer-mail-relay'
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
+class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
   protected override assertStructuredQueuedMessageAllowed(sessionId: string, messageId: string) {
     botGroups.assertBotGroupQueuedMessageAllowed(this, sessionId, messageId)
   }
@@ -96,18 +88,21 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
   }
 
   // Runs only when a bot is deleted, before its workspace goes.
-  protected override leaveBotGroups(botId: string): Promise<void> {
+  protected override async leaveBotGroups(botId: string): Promise<void> {
+    const { forgetPairedServerAsksOf } =
+      await import('./orchestration/federation/paired-server-asks/paired-server-ask-removal')
     forgetPairedServerAsksOf(this, botId)
     return botGroups.runtimeBotGroups(this).removeBot(botId)
   }
 
   /** Moves a bot's saved tool values out of its folder and Claude's config before its CLI runs. */
-  protected override scrubBotToolSecrets(bot: Parameters<typeof scrubBotToolSecrets>[1]) {
-    return scrubBotToolSecrets(this, bot)
+  protected override async scrubBotToolSecrets(bot: Parameters<typeof scrubBotToolSecrets>[1]) {
+    const { scrubBotToolSecrets: scrub } = await import('./rpc/methods/bots-tools')
+    return scrub(this, bot)
   }
 
   // Lazy: the database can open, and arm relays, while the runtime is still constructing.
-  declare private peerMailRelay: PeerMailRelay | undefined
+  declare private peerMailRelay: LazyPeerMailRelay | undefined
 
   override ensureOrchestrationFederationRelay(runId?: string, opt?: { keepAwake?: boolean }): void {
     super.ensureOrchestrationFederationRelay(runId, opt)
@@ -115,7 +110,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
   }
 
   ensureOrchestrationPeerMailRelay(environmentId?: string): void {
-    this.peerMailRelay ??= new PeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
+    this.peerMailRelay ??= new LazyPeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
     this.peerMailRelay.ensure(environmentId)
   }
 
@@ -178,19 +173,15 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
       )
     : null
 
-  private readonly references = new WorkspaceReferenceQueries({
+  private readonly references = createLazyWorkspaceReferenceQueries({
+    runtime: this,
     store: () => this.requireStore(),
     cachedWorktrees: () => this.resolvedWorktrees.peek()?.worktrees,
     scanWorktrees: () => this.listResolvedWorktrees(),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
-    agents: async (workspaceKeys) =>
-      createReferenceAgentIndex(
-        this,
-        this.getOrchestrationDbIfAvailable(),
-        conversationRecordReader(await this.openAgentSessionRecordStore()),
-        workspaceKeys,
-        referenceConnectionHosts(this.listRepos())
-      )
+    getOrchestrationDbIfAvailable: () => this.getOrchestrationDbIfAvailable(),
+    openAgentSessionRecordStore: () => this.openAgentSessionRecordStore(),
+    listRepos: () => this.listRepos()
   })
 
   listWorkspaceReferences(selector: string, cwd?: string) {
@@ -201,7 +192,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     return this.references.find(params)
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentQuestions>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithRelayHostNotices>) {
     super(...args)
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
@@ -218,16 +209,13 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     syncPRAutoRefreshCadence(this.store)
   }
 
-  /** What mobileRelay.hosts.list answers changed. */
-  notifyRelayHostsChanged(): void {
-    this.emitClientEvent({ type: 'relayHostsChanged' })
-  }
-
-  private structuredAgentAvailability?: ReturnType<typeof installAvailability>
+  private readonly structuredAgentAvailability = new LazyStructuredAgentAvailability(
+    () => this.store,
+    this
+  )
 
   /** Subscribe from first use; returns the release function. */
   subscribeStructuredAgentAvailability(read: AvailabilityReader): () => void {
-    this.structuredAgentAvailability ??= installAvailability(this.store, this)
     return this.structuredAgentAvailability.subscribe(read)
   }
 
@@ -300,10 +288,11 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
   }
 
   protected continueRestoredWorkerMail(db: OrchestrationDb): void {
-    continueRestoredWorkerMailSoon(this, db, () => this._orchestrationDb === db)
-    botGroups.startBotGroupsSoon(this, () => this._orchestrationDb === db)
+    const isCurrent = () => this._orchestrationDb === db
+    startRestoredWorkerMailLazy(this, db, isCurrent)
+    botGroups.startBotGroupsSoon(this, isCurrent)
     this.startQuestionReconciler(db, (taker, ids, chat) =>
-      agentQuestionNotices(this, taker, ids, chat)
+      notifyAgentQuestionLazy(this, taker, ids, chat)
     )
   }
 
@@ -346,8 +335,10 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
   }
 
   /** Display-only copies of paired-server layouts. */
-  getRemoteLayoutSnapshots(): Record<string, RemoteLayoutSnapshot> {
-    return this.store?.getRemoteLayoutSnapshots?.() ?? {}
+  getRemoteLayoutSnapshots(
+    environmentIds?: ReadonlySet<string>
+  ): Record<string, RemoteLayoutSnapshot> {
+    return this.store?.getRemoteLayoutSnapshots?.(environmentIds) ?? {}
   }
 
   /** Return the already-open record store without waiting. */

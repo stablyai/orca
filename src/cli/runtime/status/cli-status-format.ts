@@ -8,6 +8,7 @@ export function formatCliStatus(status: CliStatusResult): string {
       : []),
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
+    ...(status.app.restarting ? [formatRestarting(status.app.restarting)] : []),
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
@@ -24,4 +25,9 @@ function formatStatusCaller(caller: CliStatusCaller): string {
     return `none (refused: ${caller.refusal.code})`
   }
   return `${caller.orcaSessionId}${caller.live ? '' : ' (not live)'}`
+}
+
+function formatRestarting(restarting: NonNullable<CliStatusResult['app']['restarting']>): string {
+  const overdue = restarting.overdue ? ' (overdue: Orca may be down)' : ''
+  return `restarting: ${restarting.reason} since ${restarting.since}${overdue}`
 }

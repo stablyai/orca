@@ -2,7 +2,7 @@ import type {
   PRReviewDecision,
   ProviderCheckSummary
 } from '../../../../src/shared/github/pull-requests/pull-request-types'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import {
   getGitHubPRMergeChip,
   resolveGitHubPRMergeState,
@@ -51,37 +51,37 @@ function githubReviewDecision(value: string | null | undefined): PRReviewDecisio
 }
 
 // Desktop's task page labels; draft, unknown status and passed checks stay off the row, which already shows them.
-function githubMergeChipLabel(kind: GitHubPRMergeChipKind): string | null {
+function githubMergeChipLabel(t: Translate, kind: GitHubPRMergeChipKind): string | null {
   switch (kind) {
     case 'merged':
-      return translate('auto.components.github.pr.merge.state.83ecdbb4a6', 'Merged')
+      return t('auto.components.github.pr.merge.state.83ecdbb4a6', 'Merged')
     case 'closed':
-      return translate('auto.components.github.pr.merge.state.4f976d3450', 'Closed')
+      return t('auto.components.github.pr.merge.state.4f976d3450', 'Closed')
     case 'review_required':
-      return translate('auto.components.github.pr.merge.state.1f8eb81c0e', 'Approval required')
+      return t('auto.components.github.pr.merge.state.1f8eb81c0e', 'Approval required')
     case 'changes_requested':
-      return translate('auto.components.github.pr.merge.state.c606463dc2', 'Changes requested')
+      return t('auto.components.github.pr.merge.state.c606463dc2', 'Changes requested')
     case 'conflicts':
-      return translate('auto.components.github.pr.merge.state.7e8bbe3cd7', 'Conflicts')
+      return t('auto.components.github.pr.merge.state.7e8bbe3cd7', 'Conflicts')
     case 'merge_queue':
-      return translate('auto.components.github.pr.merge.state.b169f943e1', 'Merge when ready')
+      return t('auto.components.github.pr.merge.state.b169f943e1', 'Merge when ready')
     case 'merge_queue_auto_merge_on':
-      return translate('auto.components.github.pr.merge.state.autoMergeOn', 'Auto-merge on')
+      return t('auto.components.github.pr.merge.state.autoMergeOn', 'Auto-merge on')
     case 'behind':
-      return translate('auto.components.github.pr.merge.state.039c072f94', 'Behind')
+      return t('auto.components.github.pr.merge.state.039c072f94', 'Behind')
     case 'blocked':
-      return translate('auto.components.github.pr.merge.state.bf5e4c6c92', 'Blocked')
+      return t('auto.components.github.pr.merge.state.bf5e4c6c92', 'Blocked')
     case 'checks_cancelled':
-      return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+      return t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
     case 'mergeable_checks_failed':
-      return translate('auto.components.github.pr.merge.state.87fa36ac83', 'Checks failed')
+      return t('auto.components.github.pr.merge.state.87fa36ac83', 'Checks failed')
     case 'mergeable_checks_pending':
-      return translate('auto.components.github.pr.merge.state.4e2507176b', 'Checks pending')
+      return t('auto.components.github.pr.merge.state.4e2507176b', 'Checks pending')
     case 'mergeable_checks_passed':
     case 'mergeable':
-      return translate('auto.components.github.pr.merge.state.def355ff38', 'Able to merge')
+      return t('auto.components.github.pr.merge.state.def355ff38', 'Able to merge')
     case 'checking':
-      return translate('auto.components.github.pr.merge.state.f958920f3a', 'Checking')
+      return t('auto.components.github.pr.merge.state.f958920f3a', 'Checking')
     case 'draft':
     case 'merge_status_unavailable':
     case 'checks_passed':
@@ -89,42 +89,33 @@ function githubMergeChipLabel(kind: GitHubPRMergeChipKind): string | null {
   }
 }
 
-export function getGitHubMergeChip(item: GitHubWorkItem): HostedMergeChip | null {
+export function getGitHubMergeChip(t: Translate, item: GitHubWorkItem): HostedMergeChip | null {
   const input = { ...item, reviewDecision: githubReviewDecision(item.reviewDecision) }
   const chip = getGitHubPRMergeChip(resolveGitHubPRMergeState(input).kind, input)
-  const label = githubMergeChipLabel(chip.kind)
+  const label = githubMergeChipLabel(t, chip.kind)
   return label === null ? null : { label, tone: chip.tone }
 }
 
-function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
+function gitlabMergeChip(t: Translate, kind: GitLabMRMergeStateKind): HostedMergeChip | null {
   switch (kind) {
     case 'merged':
       return {
-        label: translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.fae95ae20d',
-          'Merged'
-        ),
+        label: t('auto.components.right.sidebar.gitlab.mr.merge.state.fae95ae20d', 'Merged'),
         tone: 'neutral'
       }
     case 'closed':
       return {
-        label: translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.88d044c42f',
-          'Closed'
-        ),
+        label: t('auto.components.right.sidebar.gitlab.mr.merge.state.88d044c42f', 'Closed'),
         tone: 'danger'
       }
     case 'conflicts':
       return {
-        label: translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.96b05e374c',
-          'Conflicts'
-        ),
+        label: t('auto.components.right.sidebar.gitlab.mr.merge.state.96b05e374c', 'Conflicts'),
         tone: 'danger'
       }
     case 'approval_required':
       return {
-        label: translate(
+        label: t(
           'auto.components.right.sidebar.gitlab.mr.merge.state.5105b0e584',
           'Approval required'
         ),
@@ -132,7 +123,7 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
       }
     case 'changes_requested':
       return {
-        label: translate(
+        label: t(
           'auto.components.right.sidebar.gitlab.mr.merge.state.893a999c8c',
           'Changes requested'
         ),
@@ -140,7 +131,7 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
       }
     case 'unresolved_threads':
       return {
-        label: translate(
+        label: t(
           'auto.components.right.sidebar.gitlab.mr.merge.state.01ab632a21',
           'Unresolved threads'
         ),
@@ -148,7 +139,7 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
       }
     case 'checks_must_pass':
       return {
-        label: translate(
+        label: t(
           'auto.components.right.sidebar.gitlab.mr.merge.state.bf628700f6',
           'Checks must pass'
         ),
@@ -157,7 +148,7 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
     case 'checks_running':
     case 'mergeable_checks_pending':
       return {
-        label: translate(
+        label: t(
           'auto.components.right.sidebar.gitlab.mr.merge.state.65c847ad1e',
           'Checks pending'
         ),
@@ -165,42 +156,27 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
       }
     case 'behind':
       return {
-        label: translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.382c70faeb',
-          'Behind'
-        ),
+        label: t('auto.components.right.sidebar.gitlab.mr.merge.state.382c70faeb', 'Behind'),
         tone: 'warning'
       }
     case 'checking':
       return {
-        label: translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.195917574e',
-          'Checking'
-        ),
+        label: t('auto.components.right.sidebar.gitlab.mr.merge.state.195917574e', 'Checking'),
         tone: 'neutral'
       }
     case 'blocked':
       return {
-        label: translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.4ecc0d90ee',
-          'Blocked'
-        ),
+        label: t('auto.components.right.sidebar.gitlab.mr.merge.state.4ecc0d90ee', 'Blocked'),
         tone: 'danger'
       }
     case 'mergeable_checks_failed':
       return {
-        label: translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.49ac4fec10',
-          'Checks failed'
-        ),
+        label: t('auto.components.right.sidebar.gitlab.mr.merge.state.49ac4fec10', 'Checks failed'),
         tone: 'danger'
       }
     case 'mergeable':
       return {
-        label: translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.04a3015a12',
-          'Able to merge'
-        ),
+        label: t('auto.components.right.sidebar.gitlab.mr.merge.state.04a3015a12', 'Able to merge'),
         tone: 'success'
       }
     // List reads carry no detailed merge status, so GitLab never reported why the MR can't merge yet.
@@ -211,9 +187,10 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
   }
 }
 
-export function getGitLabMergeChip(item: GitLabWorkItem): HostedMergeChip | null {
+export function getGitLabMergeChip(t: Translate, item: GitLabWorkItem): HostedMergeChip | null {
   const checks = item.checksSummary?.state
   return gitlabMergeChip(
+    t,
     resolveGitLabMRMergeState({
       state:
         item.state === 'merged' || item.state === 'closed' || item.state === 'draft'
@@ -225,9 +202,12 @@ export function getGitLabMergeChip(item: GitLabWorkItem): HostedMergeChip | null
   )
 }
 
-export function getHostedChecksLabel(item: { checksSummary?: ProviderCheckSummary }): string {
+export function getHostedChecksLabel(
+  t: Translate,
+  item: { checksSummary?: ProviderCheckSummary }
+): string {
   return getProviderChecksOutcome(item.checksSummary) === 'cancelled'
-    ? translate('pullRequest.checkStatus.cancelled', 'Cancelled')
+    ? t('pullRequest.checkStatus.cancelled', 'Cancelled')
     : getProviderChecksLabel(item.checksSummary)
 }
 

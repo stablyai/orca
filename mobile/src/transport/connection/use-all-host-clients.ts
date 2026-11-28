@@ -5,6 +5,7 @@ import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './connection-state'
 import { useRpcClientContext } from './client-context'
 import type { HostClientAcquisition } from './host-client-acquisition-registry'
+import { recomputeOn } from '../../hooks/recompute-on'
 
 type UseAllHostClientsOptions = {
   autoConnectHostIds?: readonly string[]
@@ -128,33 +129,37 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
     acquiredHostIdsRef.current = nextAcquiredHostIds
   }, [ctx, key])
 
-  return useMemo(() => {
-    const clientsByHostId = new Map(
-      ctx.getAllClients().map((entry) => [entry.hostId, entry.client])
-    )
-    return hostIds.flatMap<{
-      hostId: string
-      client: RpcClient
-      state: ConnectionState
-      path: MobileConnectionPath
-      pendingPath: MobileConnectionPath | null
-      pairingRejected: boolean
-      relayHostReachability: RelayHostReachability
-    }>((hostId) => {
-      const client = clientsByHostId.get(hostId)
-      return client
-        ? [
-            {
-              hostId,
-              client,
-              state: ctx.getState(hostId),
-              path: ctx.getActivePath(hostId),
-              pendingPath: ctx.getPendingPath(hostId),
-              pairingRejected: ctx.isPairingRejected(hostId),
-              relayHostReachability: ctx.getRelayHostReachability(hostId)
-            }
-          ]
-        : []
-    })
-  }, [ctx, hostIds, tick])
+  return useMemo(
+    () =>
+      recomputeOn([tick], () => {
+        const clientsByHostId = new Map(
+          ctx.getAllClients().map((entry) => [entry.hostId, entry.client])
+        )
+        return hostIds.flatMap<{
+          hostId: string
+          client: RpcClient
+          state: ConnectionState
+          path: MobileConnectionPath
+          pendingPath: MobileConnectionPath | null
+          pairingRejected: boolean
+          relayHostReachability: RelayHostReachability
+        }>((hostId) => {
+          const client = clientsByHostId.get(hostId)
+          return client
+            ? [
+                {
+                  hostId,
+                  client,
+                  state: ctx.getState(hostId),
+                  path: ctx.getActivePath(hostId),
+                  pendingPath: ctx.getPendingPath(hostId),
+                  pairingRejected: ctx.isPairingRejected(hostId),
+                  relayHostReachability: ctx.getRelayHostReachability(hostId)
+                }
+              ]
+            : []
+        })
+      }),
+    [ctx, hostIds, tick]
+  )
 }

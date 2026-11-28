@@ -18,10 +18,10 @@ import type { GoogleHostView } from './google/google-connect-client'
 import type { ComposioBotView } from './composio/composio-client'
 import { useComposioBot } from './composio/composio-client'
 import { useBotTools, type BotToolsCheck, type BotToolsView } from './bot-tool-checks'
-import { gitHubCardFace } from './github/BotGitHubCard'
+import { gitHubCardFace } from './github/bot-github-card-face'
 import { useGoogleHost } from './google/google-connect-client'
-import { linearCardFace } from './linear/BotLinearCard'
-import { slackCardFace } from './slack/BotSlackCard'
+import { linearCardFace } from './linear/bot-linear-card-face'
+import { slackCardFace } from './slack/bot-slack-card-face'
 import { botConnectorTitleSeparator } from './bot-connector-titles'
 import { translate } from '@/i18n/i18n'
 
@@ -68,8 +68,8 @@ export function useBotConnectorInventory(
   const hostId = bot?.hostId ?? ownBotHost().hostId
   const linear = useBotLinear(hostId, shown)
   const github = useBotGitHub(hostId, shown)
-  // No bot shown reads nothing, so the host it would read is only a placeholder.
-  const google = useGoogleHost(bot ? botTarget(bot) : ownBotHost().target, shown)
+  // No bot shown (or one without Google) reads nothing, so the host it would read is only a placeholder.
+  const google = useGoogleHost(bot ? botTarget(bot) : ownBotHost().target, bot?.google === true)
   const composio = useComposioBot(bot)
   const { view: tools } = useBotTools(bot, appsCheck)
   // Changes with the UI language, so the translated titles follow a switch.

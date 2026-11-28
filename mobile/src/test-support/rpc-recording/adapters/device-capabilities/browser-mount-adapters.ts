@@ -26,8 +26,6 @@ export function browserMountAdapters(
       let busy = false
       let error: string | null = null
       let dialog: { dialogType: string; message: string } | null = null
-      let keyboardValue = 'hello'
-      let pointerModifiers: string[] = []
       const setter =
         <T>(read: () => T, write: (value: T) => void): Dispatch<SetStateAction<T>> =>
         (next) =>
@@ -58,11 +56,9 @@ export function browserMountAdapters(
         commands = useCommands({
           client,
           frameMetadataRef: { current: FRAME_METADATA },
-          keyboardValue,
           layoutRef: { current: LAYOUT },
           onToast: (message: string) => effect('toast', { message }),
           pageParams,
-          pointerModifiers,
           sendBrowserRequest,
           setDialog: setter(
             () => dialog,
@@ -76,18 +72,6 @@ export function browserMountAdapters(
               error = value
             }
           ),
-          setKeyboardValue: setter(
-            () => keyboardValue,
-            (value) => {
-              keyboardValue = value
-            }
-          ),
-          setPointerModifiers: setter(
-            () => pointerModifiers,
-            (value) => {
-              pointerModifiers = value
-            }
-          ),
           zoomRef: { current: { scale: 1, offsetX: 0, offsetY: 0 } }
         } as unknown as Parameters<typeof useCommands>[0])
       })
@@ -97,10 +81,12 @@ export function browserMountAdapters(
             return hook.mount()
           }
           if (name === 'keyboard-text') {
-            return performHookAction(() => commands.sendKeyboardText())
+            return performHookAction(() => commands.pageInput.queue([{ text: 'hello' }]))
           }
           if (name === 'keypress') {
-            return performHookAction(() => commands.sendKeypress(String(args.key ?? 'Enter')))
+            return performHookAction(() =>
+              commands.pageInput.queue([{ key: String(args.key ?? 'Enter') }])
+            )
           }
           if (name === 'wheel') {
             return performHookAction(() => commands.sendWheel({ x: 40, y: 80 }, 0, 120, 1))
@@ -118,9 +104,7 @@ export function browserMountAdapters(
         state: () => ({
           busy,
           error,
-          dialog,
-          keyboardValue,
-          pointerModifiers: [...pointerModifiers]
+          dialog
         }),
         dispose: hook.unmount
       }

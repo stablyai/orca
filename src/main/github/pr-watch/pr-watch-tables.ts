@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS pr_event_deliveries (
   item_id  TEXT,
   PRIMARY KEY (chat_id, event_id)
 );
+CREATE INDEX IF NOT EXISTS pr_event_deliveries_pending
+  ON pr_event_deliveries (chat_id) WHERE state = 'pending';
 CREATE TABLE IF NOT EXISTS pr_pending_heads (
   pr_key        TEXT    NOT NULL,
   head_sha      TEXT    NOT NULL,
@@ -148,14 +150,11 @@ export function insertPRChatAction(db: Database.Database, action: PRChatAction):
   return Number(result.changes) > 0
 }
 
-export function readPRChatActions(db: Database.Database, prKey?: string): PRChatAction[] {
-  const rows =
-    prKey === undefined
-      ? db.prepare('SELECT * FROM pr_chat_actions ORDER BY observed_at').all()
-      : db
-          .prepare(`SELECT * FROM pr_chat_actions WHERE ${PR_KEY_SQL} = ? ORDER BY observed_at`)
-          .all(prKey)
-  return rows.flatMap(actionFromRow)
+export function readPRChatActions(db: Database.Database): PRChatAction[] {
+  return db
+    .prepare('SELECT * FROM pr_chat_actions ORDER BY observed_at')
+    .all()
+    .flatMap(actionFromRow)
 }
 
 export function hasPRChatActionFrom(

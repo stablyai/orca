@@ -230,7 +230,8 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
         tab.id,
         options.caller.navigation,
         options.caller.clientNavigationId,
-        options.caller.follows
+        options.caller.follows,
+        options.caller.showingTabId
       )
     }
   }

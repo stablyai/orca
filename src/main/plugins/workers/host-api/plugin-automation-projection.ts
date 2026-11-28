@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { PluginHostResult } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   PLUGIN_HOST_ID_MAX_LENGTH,
@@ -11,38 +12,40 @@ import {
 
 /** The parts of a stored automation plugins may read; the rest (precheck, agent arguments,
  *  launch setup, setup trust, owner) never reaches them. */
-export const automationAnswer = z.object({
-  id: z.string(),
-  name: z.string(),
-  prompt: z.string(),
-  agentId: z.string(),
-  projectId: z.string(),
-  runContext: z
-    .object({ repoId: z.string().optional(), hostId: z.string().optional() })
-    .nullable()
-    .optional(),
-  workspaceMode: z.enum(['existing', 'new_per_run']),
-  workspaceId: z.string().nullable(),
-  rrule: z.string(),
-  timezone: z.string(),
-  enabled: z.boolean(),
-  nextRunAt: z.number(),
-  /** Moves with every write: a question is about the record at this revision. */
-  updatedAt: z.number().optional(),
-  lastRunAt: z.number().optional(),
-  createdBy: z
-    .object({
-      kind: z.string(),
-      pluginKey: z.string().optional(),
-      endedAt: z.number().optional()
-    })
-    .optional(),
-  // Read only to tell whether runs use extra agent settings; never projected.
-  precheck: z.object({ command: z.string() }).nullable().optional(),
-  agentArgs: z.string().nullable().optional(),
-  extraAgentArgs: z.string().optional(),
-  launchPreferences: z.record(z.string(), z.unknown()).optional()
-})
+export const automationAnswer = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    prompt: z.string(),
+    agentId: z.string(),
+    projectId: z.string(),
+    runContext: z
+      .object({ repoId: z.string().optional(), hostId: z.string().optional() })
+      .nullable()
+      .optional(),
+    workspaceMode: z.enum(['existing', 'new_per_run']),
+    workspaceId: z.string().nullable(),
+    rrule: z.string(),
+    timezone: z.string(),
+    enabled: z.boolean(),
+    nextRunAt: z.number(),
+    /** Moves with every write: a question is about the record at this revision. */
+    updatedAt: z.number().optional(),
+    lastRunAt: z.number().optional(),
+    createdBy: z
+      .object({
+        kind: z.string(),
+        pluginKey: z.string().optional(),
+        endedAt: z.number().optional()
+      })
+      .optional(),
+    // Read only to tell whether runs use extra agent settings; never projected.
+    precheck: z.object({ command: z.string() }).nullable().optional(),
+    agentArgs: z.string().nullable().optional(),
+    extraAgentArgs: z.string().optional(),
+    launchPreferences: z.record(z.string(), z.unknown()).optional()
+  })
+)
 export type PluginAutomationRecord = z.output<typeof automationAnswer>
 
 /** The plugin created it and still owns it: its removal or disabling ends that. */

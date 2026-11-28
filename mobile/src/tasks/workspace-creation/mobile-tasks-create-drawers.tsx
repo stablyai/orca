@@ -1,15 +1,17 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
+import { useRef, useState } from 'react'
+import { View, type TextInputInstance } from 'react-native'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
-import { ChevronDown, ExternalLink, Lock } from 'lucide-react-native'
+import { groupFieldStylesSheet } from '../../components/composer-input/composer-input-styles'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
+import { ListGroup, ListRow } from '../../components/list/ListGroup'
+import { SheetHeader } from '../../components/nav-bar/SheetHeader'
+import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { PickerModal } from '../../components/sheets/PickerModal'
 import { openExternalLink } from '../../platform/external-links/external-link'
-import { styles } from '../mobile-tasks-legacy-styles'
+import { stylesSheet } from '../mobile-tasks-legacy-styles'
 import { getRepoBadgeColor } from '../repositories/mobile-tasks-repository-presentation'
 import type { RepoSummary, LinearTeam } from '../mobile-tasks-provider-detail-types'
 import {
@@ -17,15 +19,22 @@ import {
   issueSourceSlug
 } from '../item-detail/mobile-tasks-reviewer-linear'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../task-list/mobile-tasks-options'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel) {
+  return <MobileTasksCreateDrawer model={model} />
+}
+
+// New issue, drawn like New bot: Cancel · New issue · Create, then the fields and pickers as one group.
+function MobileTasksCreateDrawer({ model }: { model: ConnectionPresentationModel }) {
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const {
     createBody,
     createTask,
     createTitle,
     creatingTask,
     provider,
-    providerLabel,
     selectedCreateGitHubSources,
     selectedCreateIssuePreference,
     selectedCreateRepo,
@@ -39,172 +48,125 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
     showCreateTask,
     taskUiReady
   } = model
+  const t = useMobileTranslation()
+  const [pickingFileIn, setPickingFileIn] = useState(false)
+  const bodyRef = useRef<TextInputInstance>(null)
+  const repoProvider = provider === 'github' || provider === 'gitlab'
+  const sources =
+    provider === 'github' &&
+    selectedCreateRepo &&
+    hasGitHubIssueSourceChoice(selectedCreateGitHubSources)
+      ? selectedCreateGitHubSources
+      : null
+  const fileInSlug = (preference: 'upstream' | 'origin') =>
+    issueSourceSlug(t, preference === 'origin' ? sources?.prs : sources?.upstreamCandidate)
+  const close = () => {
+    setShowCreateTargetPicker(false)
+    setShowCreateTask(false)
+  }
+  const visible = taskUiReady && showCreateTask
+  // The picker only opens from the open sheet; a sheet that closed another way must not bring it back.
+  if (!visible && pickingFileIn) {
+    setPickingFileIn(false)
+  }
   return (
-    <BottomDrawer
-      visible={taskUiReady && showCreateTask}
-      onClose={() => {
-        setShowCreateTargetPicker(false)
-        setShowCreateTask(false)
-      }}
-    >
-      <View style={styles.sheetHeader}>
-        <View style={styles.sheetTitleRow}>
-          <TaskProviderLogo provider={provider} size={16} color={colors.textPrimary} />
-          <Text style={styles.sheetTitle}>
-            {translate('tasks.tasksCreateDrawers.newIssueTitle', 'New {{providerLabel}} Issue', {
-              providerLabel
-            })}
-          </Text>
-        </View>
-        <Text style={styles.sheetSubtitle}>
-          {provider === 'github' || provider === 'gitlab'
-            ? translate(
-                'tasks.tasksCreateDrawers.repositorySubtitle',
-                'Create an issue in the selected repository.'
-              )
-            : translate(
-                'tasks.tasksCreateDrawers.linearTeamSubtitle',
-                'Create an issue in the selected Linear team.'
-              )}
-        </Text>
-      </View>
-
-      <View style={styles.createForm}>
-        <Text style={styles.fieldLabel}>
-          {provider === 'github' || provider === 'gitlab'
-            ? translate('tasks.tasksCreateDrawers.repository', 'Repository')
-            : translate('tasks.tasksCreateDrawers.team', 'Team')}
-        </Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.targetButton,
-            styles.targetButtonOnSheet,
-            pressed && pressedStyle
-          ]}
-          disabled={!taskUiReady}
-          onPress={() => {
-            if (!taskUiReady) {
-              return
-            }
-            setShowCreateTargetPicker(true)
+    <>
+      <BottomDrawer visible={visible} dismissible={!creatingTask} onClose={close}>
+        <SheetHeader
+          title={t('tasks.tasksCreateDrawers.newIssue', 'New issue')}
+          leading={{
+            label: t('common.cancel', 'Cancel'),
+            onPress: close,
+            disabled: creatingTask
           }}
-        >
-          {provider === 'github' || provider === 'gitlab' ? (
-            <View
-              style={[
-                styles.pickerRepoDot,
-                selectedCreateTarget
-                  ? {
-                      backgroundColor: getRepoBadgeColor(
-                        'badgeColor' in selectedCreateTarget ? selectedCreateTarget : undefined
-                      )
-                    }
-                  : undefined
-              ]}
+          trailing={{
+            label: t('tasks.tasksCreateDrawers.create', 'Create'),
+            onPress: () => void createTask(),
+            disabled: !taskUiReady || !createTitle.trim(),
+            busy: creatingTask
+          }}
+        />
+        <ListGroup style={groupFieldStyles.underHeader}>
+          <MessageBox
+            key="title"
+            value={createTitle}
+            // A title is one line that wraps; Return moves on to the description.
+            onChangeText={(next) => setCreateTitle(next.replace(/\n/g, ' '))}
+            placeholder={t('tasks.tasksCreateDrawers.title', 'Title')}
+            lines={TITLE_LINES}
+            autoFocus
+            autoCapitalize="sentences"
+            returnKeyType="next"
+            submitBehavior="submit"
+            blurOnSubmit
+            onSubmitEditing={() => bodyRef.current?.focus()}
+            style={groupFieldStyles.lines}
+          />
+          <MessageBox
+            key="description"
+            inputRef={bodyRef}
+            value={createBody}
+            onChangeText={setCreateBody}
+            placeholder={t('tasks.tasksCreateDrawers.description', 'Description')}
+            style={groupFieldStyles.lines}
+          />
+          <ListRow
+            key="target"
+            title={
+              repoProvider
+                ? t('tasks.tasksCreateDrawers.repository', 'Repository')
+                : t('tasks.tasksCreateDrawers.team', 'Team')
+            }
+            value={selectedCreateTargetLabel}
+            valueIcon={
+              repoProvider && selectedCreateTarget && 'badgeColor' in selectedCreateTarget ? (
+                <View
+                  style={[
+                    styles.pickerRepoDot,
+                    { backgroundColor: getRepoBadgeColor(selectedCreateTarget) }
+                  ]}
+                />
+              ) : undefined
+            }
+            navigates
+            disabled={!taskUiReady}
+            onPress={() => setShowCreateTargetPicker(true)}
+          />
+          {sources ? (
+            <ListRow
+              key="file-in"
+              title={t('tasks.tasksCreateDrawers.fileInRow', 'File in')}
+              value={fileInSlug(selectedCreateIssuePreference)}
+              navigates
+              onPress={() => setPickingFileIn(true)}
             />
           ) : null}
-          <Text style={styles.targetButtonText} numberOfLines={1}>
-            {selectedCreateTargetLabel}
-          </Text>
-          <ChevronDown size={14} color={colors.textMuted} />
-        </Pressable>
-
-        {provider === 'github' &&
-        selectedCreateRepo &&
-        hasGitHubIssueSourceChoice(selectedCreateGitHubSources) ? (
-          <View style={styles.issueSourceBox}>
-            <Text style={styles.fieldLabel}>
-              {translate('tasks.tasksCreateDrawers.issueSource', 'Issue source')}
-            </Text>
-            <Text style={styles.issueSourceHint} numberOfLines={2}>
-              {translate('tasks.tasksCreateDrawers.fileIn', 'File in {{slug}}', {
-                slug:
-                  selectedCreateIssuePreference === 'origin'
-                    ? issueSourceSlug(selectedCreateGitHubSources?.prs)
-                    : issueSourceSlug(selectedCreateGitHubSources?.upstreamCandidate)
-              })}
-            </Text>
-            <View style={styles.issueSourceSegment}>
-              {(['upstream', 'origin'] as const).map((preference) => {
-                const selected = selectedCreateIssuePreference === preference
-                const slug =
-                  preference === 'upstream'
-                    ? issueSourceSlug(selectedCreateGitHubSources?.upstreamCandidate)
-                    : issueSourceSlug(selectedCreateGitHubSources?.prs)
-                return (
-                  <Pressable
-                    key={preference}
-                    style={({ pressed }) => [
-                      styles.issueSourceSegmentButton,
-                      selected && styles.issueSourceSegmentButtonActive,
-                      pressed && pressedStyle
-                    ]}
-                    accessibilityState={{ selected }}
-                    onPress={() =>
-                      void setGitHubIssueSourcePreference(selectedCreateRepo, preference)
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.issueSourceSegmentText,
-                        selected && styles.issueSourceSegmentTextActive
-                      ]}
-                    >
-                      {preference === 'upstream'
-                        ? translate('tasks.tasksCreateDrawers.upstream', 'Upstream')
-                        : translate('tasks.tasksCreateDrawers.origin', 'Origin')}
-                    </Text>
-                    <Text style={styles.issueSourceSlug} numberOfLines={1}>
-                      {slug}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-          </View>
-        ) : null}
-
-        <Text style={styles.fieldLabel}>
-          {translate('tasks.tasksCreateDrawers.title', 'Title')}
-        </Text>
-        <TextField
-          value={createTitle}
-          onChangeText={setCreateTitle}
-          placeholder={translate('tasks.tasksCreateDrawers.titlePlaceholder', 'Task title')}
-          autoCapitalize="sentences"
-          returnKeyType="next"
-        />
-
-        <Text style={styles.fieldLabel}>
-          {translate('tasks.tasksCreateDrawers.description', 'Description')}
-        </Text>
-        <MessageBox
-          value={createBody}
-          onChangeText={setCreateBody}
-          placeholder={translate('tasks.tasksCreateDrawers.descriptionPlaceholder', 'Add context')}
-        />
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.createButton,
-            (!taskUiReady || !createTitle.trim() || creatingTask) && styles.createButtonDisabled,
-            pressed && pressedStyle
-          ]}
-          disabled={!taskUiReady || !createTitle.trim() || creatingTask}
-          onPress={() => void createTask()}
-        >
-          {creatingTask ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.createButtonText}>
-              {translate('tasks.tasksCreateDrawers.createIssue', 'Create Issue')}
-            </Text>
-          )}
-        </Pressable>
-      </View>
-    </BottomDrawer>
+        </ListGroup>
+      </BottomDrawer>
+      <PickerModal
+        visible={visible && sources !== null && pickingFileIn}
+        title={t('tasks.tasksCreateDrawers.fileInRow', 'File in')}
+        options={(['upstream', 'origin'] as const).map((preference) => ({
+          value: preference,
+          label: fileInSlug(preference),
+          subtitle:
+            preference === 'upstream'
+              ? t('tasks.tasksCreateDrawers.upstream', 'Upstream')
+              : t('tasks.tasksCreateDrawers.origin', 'Origin')
+        }))}
+        selected={selectedCreateIssuePreference}
+        onSelect={(preference) => {
+          if (selectedCreateRepo) {
+            void setGitHubIssueSourcePreference(selectedCreateRepo, preference)
+          }
+        }}
+        onClose={() => setPickingFileIn(false)}
+      />
+    </>
   )
 }
+
+const TITLE_LINES = { min: 1, max: 3 }
 
 export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentationModel) {
   const {
@@ -216,6 +178,7 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
     setShowCreateTargetPicker,
     showCreateTargetPicker,
     showCreateTask,
+    t,
     taskUiReady
   } = model
   return (
@@ -223,8 +186,8 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
       visible={taskUiReady && showCreateTask && showCreateTargetPicker}
       title={
         provider === 'linear'
-          ? translate('tasks.tasksCreateDrawers.linearTeam', 'Linear Team')
-          : translate('tasks.tasksCreateDrawers.repository', 'Repository')
+          ? t('tasks.tasksCreateDrawers.linearTeam', 'Linear Team')
+          : t('tasks.tasksCreateDrawers.repository', 'Repository')
       }
       options={createTargetOptions}
       selected={
@@ -247,6 +210,7 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
 export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentationModel) {
   const {
     connectLinearAccount,
+    groupFieldStyles,
     linearApiKeyDraft,
     linearConnectError,
     linearConnectState,
@@ -255,94 +219,71 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
     setLinearConnectState,
     setShowLinearConnect,
     showLinearConnect,
+    t,
     taskUiReady
   } = model
+  const connecting = linearConnectState === 'connecting'
+  const close = () => {
+    if (!connecting) {
+      setShowLinearConnect(false)
+    }
+  }
   return (
     <BottomDrawer
       visible={taskUiReady && showLinearConnect}
-      onClose={() => {
-        if (linearConnectState !== 'connecting') {
-          setShowLinearConnect(false)
-        }
-      }}
+      dismissible={!connecting}
+      onClose={close}
     >
-      <View style={styles.sheetHeader}>
-        <View style={styles.sheetTitleRow}>
-          <TaskProviderLogo provider="linear" size={16} color={colors.textPrimary} />
-          <Text style={styles.sheetTitle}>
-            {translate(
-              'tasks.tasksCreateDrawers.connectLinearWorkspace',
-              'Connect Linear workspace'
-            )}
-          </Text>
-        </View>
-        <Text style={styles.sheetSubtitle}>
-          {translate(
-            'tasks.tasksCreateDrawers.linearConnectSubtitle',
-            'Paste a Personal API key to browse issues from that workspace.'
+      <SheetHeader
+        title={t('tasks.tasksCreateDrawers.connectLinear', 'Connect Linear')}
+        leading={{
+          label: t('common.cancel', 'Cancel'),
+          onPress: close,
+          disabled: connecting
+        }}
+        trailing={{
+          label: t('tasks.tasksCreateDrawers.connect', 'Connect'),
+          onPress: () => void connectLinearAccount(),
+          disabled: !linearApiKeyDraft.trim(),
+          busy: connecting
+        }}
+      />
+      <TextField
+        value={linearApiKeyDraft}
+        onChangeText={(next) => {
+          setLinearApiKeyDraft(next)
+          if (linearConnectState === 'error') {
+            setLinearConnectState('idle')
+            setLinearConnectError('')
+          }
+        }}
+        placeholder={t('tasks.tasksCreateDrawers.personalApiKey', 'Personal API key')}
+        autoFocus
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry
+        editable={!connecting}
+        onSubmitEditing={() => void connectLinearAccount()}
+        style={groupFieldStyles.underHeader}
+      />
+      {linearConnectState === 'error' && linearConnectError ? (
+        <SettingsNote error>{linearConnectError}</SettingsNote>
+      ) : (
+        <SettingsNote>
+          {t(
+            'tasks.tasksCreateDrawers.keySecurityHint',
+            'Your key is encrypted via the host OS keychain and stored locally.'
           )}
-        </Text>
-      </View>
-      <View style={styles.createForm}>
-        <Text style={styles.fieldLabel}>
-          {translate('tasks.tasksCreateDrawers.personalApiKey', 'Personal API key')}
-        </Text>
-        <TextField
-          value={linearApiKeyDraft}
-          onChangeText={(next) => {
-            setLinearApiKeyDraft(next)
-            if (linearConnectState === 'error') {
-              setLinearConnectState('idle')
-              setLinearConnectError('')
-            }
-          }}
-          placeholder="lin_api_..."
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
-          editable={linearConnectState !== 'connecting'}
-          onSubmitEditing={() => void connectLinearAccount()}
-        />
-        {linearConnectState === 'error' && linearConnectError ? (
-          <Text style={styles.detailError}>{linearConnectError}</Text>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [styles.inlineTextLink, pressed && pressedStyle]}
+        </SettingsNote>
+      )}
+      <SettingsSection>
+        <ListRow
+          title={t('tasks.tasksCreateDrawers.linearSettingsLink', 'Open Linear settings')}
+          accent
+          accessibilityRole="link"
           onPress={() => void openExternalLink('https://linear.app/settings/account/security')}
-        >
-          <ExternalLink size={13} color={colors.textSecondary} />
-          <Text style={styles.inlineTextLinkText}>
-            {translate('tasks.tasksCreateDrawers.linearSettingsLink', 'Open Linear settings')}
-          </Text>
-        </Pressable>
-        <View style={styles.securityHintRow}>
-          <Lock size={13} color={colors.textMuted} />
-          <Text style={styles.securityHintText}>
-            {translate(
-              'tasks.tasksCreateDrawers.keySecurityHint',
-              'Your key is encrypted via the host OS keychain and stored locally.'
-            )}
-          </Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [
-            styles.createButton,
-            (!linearApiKeyDraft.trim() || linearConnectState === 'connecting') &&
-              styles.createButtonDisabled,
-            pressed && pressedStyle
-          ]}
-          disabled={!linearApiKeyDraft.trim() || linearConnectState === 'connecting'}
-          onPress={() => void connectLinearAccount()}
-        >
-          {linearConnectState === 'connecting' ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.createButtonText}>
-              {translate('tasks.tasksCreateDrawers.connect', 'Connect')}
-            </Text>
-          )}
-        </Pressable>
-      </View>
+        />
+      </SettingsSection>
     </BottomDrawer>
   )
 }
@@ -351,6 +292,7 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
   const {
     openWorkspaceCreate,
     repoPickerHandoff,
+    t,
     taskUiReady,
     workspaceRepoOptions,
     workspaceRepoPickerItem,
@@ -359,7 +301,7 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
   return (
     <PickerModal
       visible={taskUiReady && workspaceRepoPickerItem != null}
-      title={translate('tasks.tasksCreateDrawers.createWorkspaceIn', 'Create Workspace In')}
+      title={t('tasks.tasksCreateDrawers.createWorkspaceIn', 'Create Workspace In')}
       options={workspaceRepoOptions}
       selected={workspaceRepos[0]?.id ?? ''}
       onSelect={(repoId) => {

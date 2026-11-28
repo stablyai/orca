@@ -1,6 +1,6 @@
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-export const groupStyles = themedStyleSheet(() => ({
+export const groupStylesSheet = themedStyleSheet((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
   inset: { padding: spacing.md },
   picture: { alignItems: 'center', paddingTop: spacing.md },

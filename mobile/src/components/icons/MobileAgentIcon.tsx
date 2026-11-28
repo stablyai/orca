@@ -3,8 +3,8 @@ import { Image, StyleSheet, Text, View } from 'react-native'
 import type { ImageSourcePropType } from 'react-native'
 import { Terminal } from 'lucide-react-native'
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
-import { colors, radii } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MOBILE_AGENT_CATALOG } from '../../agents/mobile-agent-catalog'
 import { MOBILE_AGENT_ICON_ASSETS } from './mobile-agent-icon-assets'
 import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
@@ -14,7 +14,7 @@ const iconAssets: Partial<Record<string, ImageSourcePropType>> = MOBILE_AGENT_IC
 // Match desktop/new-worktree agent branding across mobile pickers.
 
 function PiIcon({ size = 16 }: { size?: number }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return (
     <Svg width={size} height={size} viewBox="0 0 800 800">
       <Path
@@ -45,7 +45,7 @@ function OmpIcon({ size = 16 }: { size?: number }) {
 }
 
 function AiderIcon({ size = 16 }: { size?: number }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return (
     <Svg width={size} height={size} viewBox="0 0 436 436">
       <G transform="translate(0,436) scale(0.1,-0.1)" fill={colors.textPrimary} stroke="none">
@@ -76,7 +76,7 @@ function FaviconIcon({ domain, size = 16 }: { domain: string; size?: number }) {
 }
 
 function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return (
     <View
       style={[
@@ -97,7 +97,7 @@ function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number 
 }
 
 export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?: number }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   if (agentId === 'claude' || agentId === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }

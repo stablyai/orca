@@ -12,7 +12,6 @@ import type {
 } from '../../../../src/shared/connector-webhook-contract'
 import { WEBHOOK_ERROR_CODES } from '../../../../src/shared/rpc-contract/webhooks-params'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { commentRelativeTime } from '../../source-control/review/pull-request/comments/pr-comment-relative-time'
 import type { PhoneWebhook, PhoneWebhookCall } from './mobile-webhook-operations'
 
@@ -61,10 +60,8 @@ export function webhookChecks(adapter: WebhookAdapterId | null, t: Translate): s
     : t('bots.webhooks.checks.pasted', '{{sender}} signature, with your {{sender}} secret', sender)
 }
 
-function whereWords(where: WebhookWhere, t: Translate): string {
-  const values = new Intl.ListFormat(getUiIntlLocale(), { type: 'disjunction' }).format(
-    where.values ?? []
-  )
+function whereWords(where: WebhookWhere, t: Translate, intlLocale: string): string {
+  const values = new Intl.ListFormat(intlLocale, { type: 'disjunction' }).format(where.values ?? [])
   switch (where.op) {
     case '=':
     case 'in':
@@ -81,8 +78,10 @@ function whereWords(where: WebhookWhere, t: Translate): string {
 }
 
 /** "level is error or fatal, and project is web", or "Every call". */
-export function webhookOnlyWhen(filters: WebhookFilters, t: Translate): string {
-  const clauses = (filters.where ?? []).map((where) => `${where.path} ${whereWords(where, t)}`)
+export function webhookOnlyWhen(filters: WebhookFilters, t: Translate, intlLocale: string): string {
+  const clauses = (filters.where ?? []).map(
+    (where) => `${where.path} ${whereWords(where, t, intlLocale)}`
+  )
   if (filters.textContains) {
     clauses.push(
       t('bots.webhooks.where.text', 'the body contains “{{text}}”', { text: filters.textContains })

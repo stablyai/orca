@@ -12,6 +12,7 @@ import {
   sessionSearchServiceStatus
 } from '../../../../ai-vault-search/session-search-service-registry'
 import { defineMethod } from '../../core'
+import { AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY } from '../../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 import { conditionalAiVaultListResult } from '../../../../ai-vault/listing/session-list-fingerprint'
 import { restampAiVaultListResult } from '../../../../ai-vault/listing/session-list-results'
 import { copyStructuredChatConversation } from '../../../../ai-vault/structured-sessions/structured-chat-conversation-copy'
@@ -127,8 +128,11 @@ export const AI_VAULT_METHODS = [
         throw new Error(describeAiVaultScanError(String(error)))
       }
       // Web clients have no parent retagging, so stamp sessions with the runtime host they addressed.
-      const projected = projectStructuredAiVaultSessions(result, (agent) =>
-        clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent)
+      const projected = projectStructuredAiVaultSessions(
+        result,
+        (agent) => clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent),
+        // Others keep a row per conversation: old Show more counts rows; plugin resume guards match by id.
+        clientCapabilities?.includes(AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY) === true
       )
       return conditionalAiVaultListResult(
         params.executionHostId

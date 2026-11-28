@@ -94,7 +94,7 @@ is still running),
 in the background after the dev process starts. It never prompts or waits before launching the app.
 The worktree being launched is excluded from every pass except historical test caches, which use
 the idle-worktree rule. Existing bundle checks protect
-active sibling Electron bundles and recent unfinished bundles from the bundle-specific pass;
+active sibling Electron bundles and bundles built or launched in the last 15 minutes from the bundle-specific pass;
 the generated-directory pass uses its 30-day age cutoff and filesystem/Git protections.
 Background sweep output is suppressed; worker start or exit failures are reported without stopping dev. Set `ORCA_SKIP_DEV_STORAGE_RECLAIM=1` to opt out.
 The worker finishes independently if the dev app exits, and each cleanup operation has a ten-minute limit.
@@ -102,7 +102,7 @@ The worker finishes independently if the dev app exits, and each cleanup operati
 Automatic invocations also run historical test cache cleanup with the idle-worktree rule; they
 never pass `--tests-stopped`, so active worktrees keep their local checkouts.
 The repository lock prevents competing cleanup commands. Dev bundle removal checks active
-processes and recent unfinished builds, then rechecks eligibility immediately before deletion.
+processes and recently built or launched bundles, then rechecks eligibility immediately before deletion.
 An unreadable process table prevents removal.
 
 To retain older bundles during a manual sweep, run the underlying command with an age limit:

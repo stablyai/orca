@@ -10,7 +10,7 @@ import type { TerminalQuickCommand } from '../../../../../../shared/terminal/qui
 import { runQuickCommandInNewTab } from '@/lib/terminal/quick-commands/run-quick-command-in-new-tab'
 import { TerminalQuickCommandsSubmenu } from '../../../terminal-pane/quick-commands/TerminalQuickCommandsSubmenu'
 import { TerminalQuickCommandEditorDialog } from '../../../terminal-pane/quick-commands/TerminalQuickCommandEditorDialog'
-import { createTerminalQuickCommandDraft } from '../../../terminal-quick-commands/TerminalQuickCommandDialog'
+import { createTerminalQuickCommandDraft } from '../../../terminal-quick-commands/terminal-quick-command-dialog-draft'
 import { useQuickCommandEditorPresence } from '../../../tab-bar/quick-commands/quick-command-editor-presence'
 
 type QuickCommandEditor = { hostId: ExecutionHostId; command: TerminalQuickCommand }

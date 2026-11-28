@@ -26,9 +26,9 @@ import { nativeChatReceiptCopy } from './native-chat-receipt-copy'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import {
   AskQuestions,
   MobileNativeChatAskMark,
@@ -100,7 +100,8 @@ function ApprovalRecord({
   disclosureKey?: string
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const record = ownApprovalRecord(body)
   const Icon = TONE_ICON[record.tone]
@@ -161,7 +162,7 @@ function QuestionRecord({
   disclosureKey?: string
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const copy = nativeChatReceiptCopy(t)
   const subject = nativeChatReceiptSubject(body)
@@ -249,7 +250,7 @@ function PlanReceipt({
   body: AgentJournalApprovalItem
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { resolution } = body
   const device = nativeChatReceiptDevice(resolution, {
@@ -346,7 +347,7 @@ function approvalSentence(t: Translate, sentence: OwnApprovalRecordSentence): st
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   detail: { color: colors.textSecondary },
   code: { fontFamily: typography.monoFamily },
   answer: { color: colors.textPrimary },

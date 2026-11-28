@@ -273,7 +273,7 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/workspace-card/template/card-identity-parts.tsx",
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/identity/worktree-card-header-items.tsx",
     "kind": "jsx-attribute:label",
     "text": "sidebar",
     "dynamic": false,

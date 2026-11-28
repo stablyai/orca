@@ -1,3 +1,4 @@
+import type { WatchWorktreeResult } from '../../../shared/file-watch/watch-worktree-result'
 import type { PathExistenceResult } from '../../../shared/file-access/path-existence-batch'
 import type { RuntimeFileReadChunkResult } from '../../../shared/file-content/runtime-file-read'
 import type { SearchOptions, SearchResult } from '../../../shared/file-search/code-search-types'
@@ -250,8 +251,17 @@ export type FilesystemApi = {
     uploadPathsToAgentSessionAttachments: (
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ) => Promise<AgentSessionAttachmentPathUploadResult>
-    watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
-    unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    /** Local roots resolve with the outcome; remote roots resolve undefined. */
+    watchWorktree: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<WatchWorktreeResult | undefined>
+    /** With `handOver`, a local root resolves with the events queued for this window that it would otherwise miss. */
+    unwatchWorktree: (args: {
+      worktreePath: string
+      connectionId?: string
+      handOver?: boolean
+    }) => Promise<FsChangedPayload | undefined>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   notebook: {

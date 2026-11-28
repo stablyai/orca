@@ -7,13 +7,16 @@ import {
   type NativeChatTaskList
 } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { toolStyles, toolType } from '../../transcript/tool-results/mobile-native-chat-tool-styles'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import {
+  toolStylesSheet,
+  toolType
+} from '../../transcript/tool-results/mobile-native-chat-tool-styles'
 import { MobileNativeChatChecklist } from './MobileNativeChatTaskList'
 import { nativeChatTaskListCopy } from './native-chat-task-list-copy'
-import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
+import { trayStripStylesSheet } from './mobile-native-chat-tray-strip-styles'
 
 const VISIBLE_ROWS = 6
 const MAX_REMEMBERED = 64
@@ -41,7 +44,10 @@ function MobileNativeChatDockedTaskListImpl({
   list: NativeChatTaskList
   conversationKey: string
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const strip = useThemedStyles(trayStripStylesSheet)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const toolStyles = useThemedStyles(toolStylesSheet)
   const t = useMobileTranslation()
   const [open, setOpen] = useConversationOpen(conversationKey)
   const completed = nativeChatCompletedTaskCount(list)
@@ -90,7 +96,7 @@ function MobileNativeChatDockedTaskListImpl({
 
 export const MobileNativeChatDockedTaskList = memo(MobileNativeChatDockedTaskListImpl)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   lead: {
     flex: 1,
     minWidth: 0,

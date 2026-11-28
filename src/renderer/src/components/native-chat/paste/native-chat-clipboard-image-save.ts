@@ -1,4 +1,3 @@
-import { stageNativeChatPendingImage } from '../drafts/native-chat-draft-attachment-staging'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { setNativeChatPasteFailure } from '../composer/controls/native-chat-composer-notice'
@@ -9,6 +8,10 @@ import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-ch
 type ClipboardImageOwner =
   | Extract<NativeChatAttachmentOwner, { kind: 'local' | 'runtime-session' }>
   | { kind: 'remote'; clipboardImageEnvironmentId: string }
+
+export function nativeChatImagePasteFailedNotice(): string {
+  return translate('components.native-chat.composer.imagePasteFailed', 'Image paste failed.')
+}
 
 /** Owners whose attachment path is a file this client can write right now. */
 export function ownerAcceptsClipboardImage(
@@ -94,17 +97,16 @@ export async function saveNativeChatClipboardImage(
         }
       },
       error,
-      translate('components.native-chat.composer.imagePasteFailed', 'Image paste failed.')
+      nativeChatImagePasteFailedNotice()
     )
     return { status: 'failed' }
   }
 }
 
 /** With accompanying text, quietly omit image upload on unsupported servers while preserving the text paste. */
-export async function saveNativeChatPastedClipboardImage(
+export function saveNativeChatPastedClipboardImage(
   owner: NativeChatAttachmentOwner,
   paste: {
-    pendingId: string | null
     besideText: boolean
     canNotify: () => boolean
     setNotice: (notice: string, errorText?: string) => void
@@ -112,7 +114,7 @@ export async function saveNativeChatPastedClipboardImage(
     eventImage?: Blob
   }
 ): ReturnType<typeof saveNativeChatClipboardImage> {
-  const saved = await saveNativeChatClipboardImage(owner, {
+  return saveNativeChatClipboardImage(owner, {
     ready: paste.ready,
     eventImage: paste.eventImage,
     setNotice: (notice, cause, errorText) => {
@@ -126,10 +128,4 @@ export async function saveNativeChatPastedClipboardImage(
       }
     }
   })
-  return saved.status === 'saved' &&
-    owner.kind === 'local' &&
-    owner.stagingScope &&
-    !stageNativeChatPendingImage(owner.stagingScope, paste.pendingId, saved.tempPath)
-    ? { status: 'empty' }
-    : saved
 }
