@@ -2,25 +2,22 @@ import type { AgentJournalCursor } from '../../../../../shared/agent-session/jou
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import { AGENT_SESSION_DISPATCH_LIMITS } from '../../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import type { JournalWriterCommit } from '../../../agent-session-journal/journal-writer-changes'
-import { sameJournalCursor } from '../../../agent-session-journal/replay/journal-cursor'
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { ProviderReceiptConfirmation } from '../../journal-ingress/provider-receipt-publication'
 import type { Subscriber } from './agent-session-subscribe-input'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 
 import {
-  coversBeforeHandover,
+  ProviderReceiptReaders,
   receiptCursorOf,
   type Attempt,
-  type EmittedReceiptCursor,
   type ProviderReceiptDispatch,
   type ReceiptLink,
   type SessionAttempts
 } from './agent-session-provider-receipt-attempt'
 
 export class AgentSessionProviderReceipts {
-  private readonly live = new Map<string, Set<Subscriber>>()
-  private readonly emitted = new WeakMap<Subscriber, EmittedReceiptCursor>()
+  private readonly readers = new ProviderReceiptReaders()
   private readonly attempts = new Map<string, SessionAttempts>()
   private readonly bound = new WeakMap<Subscriber, Set<Attempt>>()
   private readonly owed = new WeakMap<Subscriber, Set<Attempt>>()
@@ -35,30 +32,21 @@ export class AgentSessionProviderReceipts {
     subscriber.stopped?.addEventListener('abort', () => this.drop(subscriber), { once: true })
   }
 
+  hasReaderAtHead(journal: SqlAgentSessionJournal, fence: number): boolean {
+    return this.readers.atHead(journal, fence)
+  }
+
   caughtUp(subscriber: Subscriber, journal: SqlAgentSessionJournal): void {
-    const emitted = this.emitted.get(subscriber)
-    if (
-      subscriber.stopped?.aborted ||
-      !emitted ||
-      emitted.fence !== subscriber.fence ||
-      !sameJournalCursor(emitted.cursor, journal.cursor())
-    ) {
-      return
-    }
-    const readers = this.live.get(subscriber.sessionId) ?? new Set<Subscriber>()
-    readers.add(subscriber)
-    this.live.set(subscriber.sessionId, readers)
+    this.readers.caughtUp(subscriber, journal)
   }
 
   private drop(subscriber: Subscriber): void {
-    const { sessionId } = subscriber
-    const readers = this.live.get(sessionId)
-    if (readers?.delete(subscriber) && readers.size === 0) {
-      this.live.delete(sessionId)
-    }
-    this.emitted.delete(subscriber)
+    const last = this.readers.drop(subscriber)
     for (const attempt of this.bound.get(subscriber) ?? []) {
       this.release(attempt, subscriber)
+    }
+    if (last) {
+      this.forget(subscriber.sessionId)
     }
   }
 
@@ -80,8 +68,7 @@ export class AgentSessionProviderReceipts {
   bind(dispatch: ProviderReceiptDispatch): ProviderReceiptConfirmation | undefined {
     const { journal, cursor, fence } = dispatch
     const { sessionId } = journal.identity
-    const live = this.live.get(sessionId)
-    if (!live || journal.cursor().epoch !== cursor.epoch || !dispatch.owns()) {
+    if (journal.cursor().epoch !== cursor.epoch || !dispatch.owns()) {
       return undefined
     }
     let session = this.attempts.get(sessionId)
@@ -98,12 +85,7 @@ export class AgentSessionProviderReceipts {
     ) {
       return undefined
     }
-    const readers = new Set<Subscriber>()
-    for (const reader of live) {
-      if (coversBeforeHandover(reader, this.emitted.get(reader), cursor, fence)) {
-        readers.add(reader)
-      }
-    }
+    const readers = this.readers.boundTo(dispatch)
     if (!readers.size) {
       return undefined
     }
@@ -120,6 +102,9 @@ export class AgentSessionProviderReceipts {
     link.attempt = attempt
     session.bySequence.set(cursor.sequence, attempt)
     this.attempts.set(sessionId, session)
+    if (session.bySequence.size === 1) {
+      journal.trackProviderReceiptSettlements(true)
+    }
     for (const reader of readers) {
       const attempts = this.bound.get(reader) ?? new Set<Attempt>()
       attempts.add(attempt)
@@ -188,7 +173,7 @@ export class AgentSessionProviderReceipts {
     for (const reader of readers) {
       this.schedule(reader, () => {
         try {
-          const emitted = this.emitted.get(reader)
+          const emitted = this.readers.emitted.get(reader)
           const providerReceived = emitted && this.take(reader, emitted.cursor, emitted.fence)
           if (emitted && providerReceived) {
             reader.emit({
@@ -260,6 +245,7 @@ export class AgentSessionProviderReceipts {
         this.remove(session, sequence)
       }
       this.attempts.delete(sessionId)
+      session.journal.trackProviderReceiptSettlements(false)
     }
   }
 
@@ -273,11 +259,7 @@ export class AgentSessionProviderReceipts {
       this.drop(subscriber)
     }
     let providerReceived: number[] | undefined
-    if (
-      event.type === 'batch' &&
-      !event.providerReceived &&
-      this.live.get(subscriber.sessionId)?.has(subscriber)
-    ) {
+    if (event.type === 'batch' && !event.providerReceived && this.readers.isLive(subscriber)) {
       const session = this.attempts.get(subscriber.sessionId)
       if (session?.changed.size) {
         this.fanOut(session)
@@ -287,7 +269,7 @@ export class AgentSessionProviderReceipts {
     post(providerReceived && event.type === 'batch' ? { ...event, providerReceived } : event)
     const position = receiptCursorOf(event, subscriber.fence)
     if (position) {
-      this.emitted.set(subscriber, position)
+      this.readers.posted(subscriber, position)
     }
   }
 

@@ -47,8 +47,7 @@ export function localProviderReceipt(
   const { providerReceipts, journal, record } = ctx
   const provider = journal.identity.agent
   if (
-    !providerReceipts ||
-    !journal.capturesProviderReceipts ||
+    !providerReceipts?.hasReaderAtHead(journal, ctx.fence) ||
     !isCurrent ||
     !isAgentSessionReceiptProvider(provider)
   ) {

@@ -1,3 +1,7 @@
+import {
+  createProviderReceivedStore,
+  isProviderReceiptOnly
+} from '../../../../../../../shared/agent-session/view/live-read/agent-session-provider-received'
 import { createStructuredAgentSessionReadHydrate } from './structured-agent-session-read-hydrate'
 import type { AgentProviderSessionMetadata } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
@@ -41,6 +45,7 @@ export function createReadOwner(
   const retiredHistoryRead = (): boolean => true
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
   const activations = new Map<symbol, StructuredAgentSessionReadEffects>()
+  const receipts = createProviderReceivedStore()
   const listeners = new Set<() => void>()
   const commandListeners = new Set<() => void>()
   const historyReaders = new Set<symbol>()
@@ -108,6 +113,7 @@ export function createReadOwner(
     if (state === snapshot.state && !snapshot.loadingOlder) {
       return
     }
+    receipts.trim(state.items)
     if (state.submissions !== snapshot.state.submissions) {
       activity.observe(state)
     }
@@ -142,11 +148,11 @@ export function createReadOwner(
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
-    const receiptProvider = interests.opened()
+    const receiptProvider = target.kind === 'local' ? effects.receiptProvider : undefined
     const transport = startStructuredAgentSessionReadTransport({
       receiptProvider,
-      pendingReceiptSequence: (itemId) =>
-        snapshot.state.pendingProviderAttempts?.byItem.get(itemId),
+      pendingReceiptSequence: receipts.sequence,
+      clearProviderReceived: receipts.clear,
       showsPromptSuggestions: nativeChatShowsPromptSuggestions(effects.getState().settings),
       replyText: interests.replyText,
       subscribeRetryNow: effects.subscribeRetryNow,
@@ -154,7 +160,13 @@ export function createReadOwner(
       applyEvent: (event, options) => {
         const lostCommands =
           snapshot.state.commands != null && 'commands' in event && event.commands === null
-        apply({ type: 'event', event, ...options, receiptProvider })
+        const before = snapshot.state
+        if (!isProviderReceiptOnly(event) || options?.opensSubscription) {
+          apply({ type: 'event', event, ...options })
+        }
+        if (receiptProvider) {
+          receipts.apply(event, before, snapshot.state, receiptProvider, options?.opensSubscription)
+        }
         if (
           event.type !== 'end' &&
           (event.commandsChanged || options?.opensSubscription || lostCommands)
@@ -182,17 +194,11 @@ export function createReadOwner(
       captureActiveHistoryReadGuard = () => retiredHistoryRead
       transport.dispose()
       stopActiveRun = null
-      interests.closed()
       markStale()
     }
   }
 
-  const interests = createStructuredAgentSessionReadInterests(
-    sessionId,
-    target?.kind === 'local',
-    activations,
-    () => owner.resync?.()
-  )
+  const interests = createStructuredAgentSessionReadInterests(sessionId, activations)
 
   let owner: StructuredAgentSessionReadOwner
   let retained = 0
@@ -269,13 +275,12 @@ export function createReadOwner(
       historyReaders.clear()
       activity.dispose()
       activations.clear()
-      interests.closed()
-      interests.dispose()
       listeners.clear()
       commandListeners.clear()
       stopActiveRun?.()
     },
     getSnapshot: () => snapshot,
+    receipts,
     trimHistory,
     retainHistory: () => {
       const reader = Symbol('history-reader')

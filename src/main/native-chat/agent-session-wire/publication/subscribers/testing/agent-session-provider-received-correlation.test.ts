@@ -27,7 +27,6 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
       agent: 'claude',
       providerHandle: claudeProviderHandle('provider-1', null)
     },
-    captureProviderReceipts: true,
     stateDirectory: join(fixture.root, SESSION)
   })
   const subscribers = new AgentSessionSubscribers({ now: () => 100 })
@@ -69,6 +68,7 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
       clientMessageId,
       fence: 1,
       turnScope: { kind: 'thread' },
+      captureProviderReceipt: providerReceipts.hasReaderAtHead(journal, 1),
       body
     })
   const deliver = async () => {
@@ -81,6 +81,7 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
     clientMessageId: 'A',
     fence: 1,
     submittedAt: 1,
+    captureProviderReceipt: providerReceipts.hasReaderAtHead(journal, 1),
     turnScope: { kind: 'thread' }
   })
   expect(a.dispatchCursor?.sequence).toBe(3)
@@ -96,17 +97,6 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
 
   await append('B')
   await deliver()
-  const b = await prepare('B')
-  expect(b.firstHandover).toBe(true)
-  expect(b.dispatchCursor?.sequence).toBe(6)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send only reads dispatch state and the provider's transport.
-  const claude = {
-    providerSessionId: 'provider-1',
-    dispatchWaiters: [],
-    retiredDispatchWaiters: [],
-    dispatchSequence: 0,
-    connection: { send: async () => {} }
-  } as unknown as ClaudeSession
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: receipt admission only uses location, provider and fence.
   const record = {
     location: { executionHostId: 'local', wslDistro: null },
@@ -118,6 +108,17 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
     'B',
     () => true
   )
+  const b = await prepare('B')
+  expect(b.firstHandover).toBe(true)
+  expect(b.dispatchCursor?.sequence).toBe(6)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send only reads dispatch state and the provider's transport.
+  const claude = {
+    providerSessionId: 'provider-1',
+    dispatchWaiters: [],
+    retiredDispatchWaiters: [],
+    dispatchSequence: 0,
+    connection: { send: async () => {} }
+  } as unknown as ClaudeSession
   const sendClaude = (attempt: typeof b) =>
     dispatchClaudeTurn(claude, {
       sessionId: SESSION,
@@ -224,4 +225,31 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
   ).resolves.toEqual({ turnId: 'started-turn', via: 'steer' })
   await deliver()
   expect(receipts()).toEqual([6, 10, 12])
+
+  await append('E')
+  await deliver()
+  const e = await prepare('E')
+  subscribers.close(SESSION, 'desktop')
+  const replacement: AgentSessionSubscribeEvent[] = []
+  subscribers.open({
+    id: 'desktop',
+    sessionId: SESSION,
+    journal,
+    fence: 1,
+    readsProviderReceived: true,
+    emit: (frame) => replacement.push(frame)
+  })
+  await idle()
+  const late = providerReceipts.bind({
+    journal,
+    cursor: e.dispatchCursor!,
+    clientMessageId: 'E',
+    fence: 1,
+    provider: 'codex',
+    owns: () => true
+  })
+  late?.(() => true)
+  await idle()
+  expect(replacement).toHaveLength(1)
+  expect(late).toBeUndefined()
 })

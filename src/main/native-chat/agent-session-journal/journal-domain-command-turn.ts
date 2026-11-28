@@ -76,7 +76,7 @@ export function applyJournalDomainCommandTurn(
     )
     db.exec('RELEASE journal_command_dispatch')
     appendJournalDomainInputCommit(result, commit)
-    if (operation.kind === 'command-open' && target.captureProviderReceipts) {
+    if (operation.kind === 'command-open' && operation.input.captureProviderReceipt) {
       dispatchSequence = commit.items.find(
         (item) => item.sequence === commit.cursor.sequence
       )?.sequence

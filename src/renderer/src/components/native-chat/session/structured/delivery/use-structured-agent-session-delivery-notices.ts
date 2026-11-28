@@ -16,16 +16,13 @@ import { rowsBesideStreamedText } from '../../../../../../../shared/agent-sessio
 
 /** The structured chat's delivery notices, by the message id each row renders under. */
 export function useStructuredAgentSessionDeliveryNotices(args: {
-  source: {
-    pending: readonly StructuredAgentSessionPendingSend[]
-    submissions: readonly AgentJournalSubmission[]
-    journalItems: readonly AgentJournalRenderItem[]
-  }
+  pending: readonly StructuredAgentSessionPendingSend[]
+  submissions: readonly AgentJournalSubmission[]
+  journalItems: readonly AgentJournalRenderItem[]
   agentName: string
   startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
-  const { agentName } = args
-  const { pending, submissions, journalItems } = args.source
+  const { agentName, pending, submissions, journalItems } = args
   // Only rejection wording needs journal items; pending delivery comes from submissions alone.
   const hasRejected = useHasStructuredAgentSessionRejections(submissions)
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(

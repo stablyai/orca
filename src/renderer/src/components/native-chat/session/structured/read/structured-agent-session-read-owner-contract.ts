@@ -1,3 +1,4 @@
+import type { ProviderReceivedStore } from '../../../../../../../shared/agent-session/view/live-read/agent-session-provider-received'
 import type { AgentSessionReceiptProvider } from '../../../../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import type { AppState } from '@/store/types'
 import type { StructuredAgentSessionState } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
@@ -17,6 +18,7 @@ export type StructuredAgentSessionReadSnapshot = {
 }
 
 export type StructuredAgentSessionReadOwner = {
+  receipts?: ProviderReceivedStore
   trackSend: (id: string) => {
     issue: () => void
     settle: (uncertain: boolean) => void

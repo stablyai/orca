@@ -99,7 +99,8 @@ export async function beginSubmissionHandover(
       clientMessageId,
       fence,
       turnScope: scope,
-      body
+      body,
+      captureProviderReceipt: receipt && ctx.providerReceipts?.hasReaderAtHead(ctx.journal, fence)
     })
     carried = prepared.carried
     receipt?.committed(prepared)

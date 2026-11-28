@@ -6,12 +6,7 @@ import type { StructuredAgentSessionHostWork } from '../../session/structured/us
 
 type NativeChatTranscriptRowContextInput = Omit<
   NativeChatTranscriptRowContext,
-  | 'agentName'
-  | 'receivedNotice'
-  | 'actionablePromptIds'
-  | 'timedRows'
-  | 'heldTextSession'
-  | 'savesAsRepliesGrow'
+  'agentName' | 'actionablePromptIds' | 'timedRows' | 'heldTextSession' | 'savesAsRepliesGrow'
 > & {
   session: Pick<NativeChatLiveSession, 'agent' | 'sessionId'>
   hostWork: StructuredAgentSessionHostWork | undefined
@@ -27,7 +22,6 @@ export function useNativeChatTranscriptRowContext({
   expandedTurnIds,
   latestTurnKey,
   deliveryNotices,
-  providerReceived,
   runtimeContext,
   structuredAttachments,
   onToggleExpandedTurn,
@@ -36,10 +30,6 @@ export function useNativeChatTranscriptRowContext({
   readerAtEnd,
   onRevealDiff
 }: NativeChatTranscriptRowContextInput): NativeChatTranscriptRowContext {
-  const receivedNotice = useMemo(
-    () => ({ sending: true as const, receivedBy: structuredAgentLabel(agent) }),
-    [agent]
-  )
   return useMemo<NativeChatTranscriptRowContext>(
     () => ({
       turnBot,
@@ -53,8 +43,6 @@ export function useNativeChatTranscriptRowContext({
       expandedTurnIds,
       latestTurnKey,
       deliveryNotices,
-      providerReceived,
-      receivedNotice,
       runtimeContext,
       structuredAttachments,
       onToggleExpandedTurn,
@@ -72,8 +60,6 @@ export function useNativeChatTranscriptRowContext({
       expandedTurnIds,
       latestTurnKey,
       deliveryNotices,
-      providerReceived,
-      receivedNotice,
       onRevealDiff,
       revealedDiff,
       runtimeContext,

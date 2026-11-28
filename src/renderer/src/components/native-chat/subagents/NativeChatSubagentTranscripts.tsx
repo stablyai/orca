@@ -1,3 +1,5 @@
+import { NativeChatProviderReceived } from '../messages/rows/NativeChatProviderReceived'
+import type { ProviderReceivedStore } from '../../../../../shared/agent-session/view/live-read/agent-session-provider-received'
 import { NativeChatWaitingAgentMailRowsContext } from '../queue/NativeChatWaitingAgentMailActions'
 import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -71,11 +73,13 @@ function useHeldWhileHidden<T extends readonly object[]>(
 export function NativeChatSubagentTranscripts({
   paneKey,
   find,
+  receipts,
   ...props
 }: React.ComponentProps<typeof NativeChatMessageList> & {
   /** The chat's status pane key, which also names it to the sidebar's subagent rows. */
   paneKey: string
   find: Pick<NativeChatFind, 'isOpen' | 'query'>
+  receipts?: ProviderReceivedStore
 }): React.JSX.Element {
   const host = useContext(NativeChatSubagentSheetHost)
   const stop = host?.stop
@@ -167,13 +171,15 @@ export function NativeChatSubagentTranscripts({
         <NativeChatSlackPeopleContext value={slackPeople}>
           {/* A sheet opened over an open image viewer takes the focus the viewer gives up. */}
           <NativeChatGalleryCoveredFocusContext value={sheetView}>
-            <NativeChatMessageList
-              {...props}
-              session={mainSession}
-              journalItems={mainItems}
-              isVisible={isVisible && shown === null}
-              subagentView={main}
-            />
+            <NativeChatProviderReceived value={receipts}>
+              <NativeChatMessageList
+                {...props}
+                session={mainSession}
+                journalItems={mainItems}
+                isVisible={isVisible && shown === null}
+                subagentView={main}
+              />
+            </NativeChatProviderReceived>
           </NativeChatGalleryCoveredFocusContext>
         </NativeChatSlackPeopleContext>
       </div>

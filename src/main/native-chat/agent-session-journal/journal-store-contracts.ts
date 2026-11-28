@@ -68,7 +68,6 @@ export type JournalPromptMutationInput = {
 }
 
 export type AgentSessionJournalOptions = {
-  captureProviderReceipts?: true
   identity: AgentSessionJournalIdentity
   database: JournalSqlDatabase
   now?: () => number
@@ -218,12 +217,12 @@ export type JournalShutdownCutInput = {
 export type JournalCommandOpenInput = Pick<
   Extract<ResolveDispatchInput, { state: 'pending' }>,
   'clientMessageId' | 'fence' | 'turnScope'
-> & { submittedAt: number }
+> & { submittedAt: number; captureProviderReceipt?: boolean }
 
 export type JournalHandoverInput = Pick<
   Extract<ResolveDispatchInput, { state: 'pending' }>,
   'clientMessageId' | 'fence' | 'turnScope'
-> & { body: AgentJournalMessageItem }
+> & { body: AgentJournalMessageItem; captureProviderReceipt?: boolean }
 
 export type JournalCommandSettlementInput = {
   dispatch: Extract<ResolveDispatchInput, { state: 'rejected' | 'unknown' }>

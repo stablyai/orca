@@ -26,7 +26,7 @@ const body: AgentJournalMessageItem = {
   blocks: [{ type: 'text', text: 'hello' }]
 }
 
-async function openJournal(captureProviderReceipts?: true) {
+async function openJournal() {
   return journals.open({
     identity: {
       sessionId: SESSION,
@@ -35,7 +35,6 @@ async function openJournal(captureProviderReceipts?: true) {
       agent: 'claude',
       providerHandle: claudeProviderHandle('provider-1', null)
     },
-    captureProviderReceipts,
     stateDirectory: join(fixture.root, SESSION)
   })
 }
@@ -44,7 +43,7 @@ const scope = { kind: 'thread' } as const
 
 // PR #51346: retired waiter identities must have no outstanding reader associations.
 it('detaches receipt callbacks while retaining late replay identity across 64 retirements', async () => {
-  const journal = await openJournal(true)
+  const journal = await openJournal()
   const subscribers = new AgentSessionSubscribers({ now: () => 100 })
   const registry = subscribers.providerReceipts
   journal.observeCommits((commit) => registry.observe(SESSION, journal, commit))
@@ -86,7 +85,8 @@ it('detaches receipt callbacks while retaining late replay identity across 64 re
       clientMessageId,
       fence: 1,
       body,
-      turnScope: scope
+      turnScope: scope,
+      captureProviderReceipt: registry.hasReaderAtHead(journal, 1)
     })
     const confirmation = registry.bind({
       journal,
@@ -176,52 +176,88 @@ it('detaches receipt callbacks while retaining late replay identity across 64 re
 })
 
 // PR #51346: remote hosts skip both the receipt record read and the handover result lookup.
-it.each(['ssh', 'wsl'])('keeps %s handover off the receipt capture path', async (host) => {
-  const subscribers = new AgentSessionSubscribers()
-  const location =
-    host === 'ssh'
-      ? { executionHostId: 'ssh:host' as const, wslDistro: null }
-      : { executionHostId: 'local' as const, wslDistro: 'distro' }
-  const provider = localReceiptProvider({
-    provider: 'claude',
-    location: { ...location, workspaceId: 'workspace', workspaceKind: 'git-worktree' }
-  })
-  const journal = await openJournal(provider ? true : undefined)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only these record fields.
-  const readRecord = vi.fn(() => ({ location, provider: 'claude' }) as AgentSessionRecord)
-  const receipt = providerHandoverReceipt(
-    {
-      sessionId: SESSION,
-      journal,
-      providerReceipts: subscribers.providerReceipts,
+it.each(['phone-only', 'headless local', 'ssh', 'wsl'])(
+  'keeps %s handover off the receipt capture path',
+  async (host) => {
+    const subscribers = new AgentSessionSubscribers()
+    const location =
+      host === 'ssh'
+        ? { executionHostId: 'ssh:host' as const, wslDistro: null }
+        : { executionHostId: 'local' as const, wslDistro: host === 'wsl' ? 'distro' : null }
+    const provider = localReceiptProvider({
+      provider: 'claude',
+      location: { ...location, workspaceId: 'workspace', workspaceKind: 'git-worktree' }
+    })
+    const journal = await openJournal()
+    const registry = subscribers.providerReceipts
+    const wrappers = vi.spyOn(registry, 'track')
+    const bind = vi.spyOn(registry, 'bind')
+    const capture = vi.spyOn(journal, 'trackProviderReceiptSettlements')
+    if (host !== 'headless local') {
+      subscribers.open({
+        id: host,
+        sessionId: SESSION,
+        journal,
+        fence: 1,
+        readsProviderReceived: host !== 'phone-only' && !!provider,
+        emit: () => {}
+      })
+    }
+    const commits: (number | undefined)[] = []
+    journal.observeCommits((commit) => {
+      commits.push(
+        ...(commit.publication?.promptDispatches ?? []).map(
+          (dispatch) => dispatch.previousHandoverSequence
+        )
+      )
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only these record fields.
+    const readRecord = vi.fn(() => ({ location, provider: 'claude' }) as AgentSessionRecord)
+    const receipt = providerHandoverReceipt(
+      {
+        sessionId: SESSION,
+        journal,
+        providerReceipts: subscribers.providerReceipts,
+        fence: 1,
+        record: readRecord,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: receipt eligibility never consults adapters or catalogs.
+        adapter: {} as Parameters<typeof providerHandoverReceipt>[0]['adapter'],
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: receipt eligibility never consults adapters or catalogs.
+        agents: {} as Parameters<typeof providerHandoverReceipt>[0]['agents'],
+        childWork: () => [],
+        childWorkOpen: () => false,
+        now: () => 100
+      },
+      'send',
+      () => true
+    )
+    expect(receipt).toBeUndefined()
+    expect(readRecord).not.toHaveBeenCalled()
+    await journal.appendSubmission({
+      clientMessageId: 'send',
+      payloadFingerprint: 'send',
+      body,
       fence: 1,
-      record: readRecord,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: receipt eligibility never consults adapters or catalogs.
-      adapter: {} as Parameters<typeof providerHandoverReceipt>[0]['adapter'],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: receipt eligibility never consults adapters or catalogs.
-      agents: {} as Parameters<typeof providerHandoverReceipt>[0]['agents'],
-      childWork: () => [],
-      childWorkOpen: () => false,
-      now: () => 100
-    },
-    'send',
-    () => true
-  )
-  expect(receipt).toBeUndefined()
-  expect(readRecord).not.toHaveBeenCalled()
-  await journal.appendSubmission({
-    clientMessageId: 'send',
-    payloadFingerprint: 'send',
-    body,
-    fence: 1,
-    handoverRecorded: true
-  })
-  const attempt = await journal.prepareHandover({
-    clientMessageId: 'send',
-    fence: 1,
-    body,
-    turnScope: scope
-  })
-  expect(attempt.dispatchCursor).toBeUndefined()
-  expect(attempt.firstHandover).toBe(false)
-})
+      handoverRecorded: true
+    })
+    const attempt = await journal.prepareHandover({
+      clientMessageId: 'send',
+      fence: 1,
+      body,
+      turnScope: scope,
+      captureProviderReceipt: !!receipt
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'send',
+      fence: 1,
+      state: 'unknown',
+      reason: 'ended'
+    })
+    expect([wrappers.mock.calls.length, bind.mock.calls.length, capture.mock.calls.length]).toEqual(
+      [0, 0, 0]
+    )
+    expect(commits).toEqual([undefined, undefined])
+    expect(attempt.dispatchCursor).toBeUndefined()
+    expect(attempt.firstHandover).toBe(false)
+  }
+)

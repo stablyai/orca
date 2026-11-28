@@ -176,7 +176,11 @@ export async function handOverStructuredAgentSessionCommand(
     return
   }
   const providerReceipt = localProviderReceipt(ctx, clientMessageId, isCurrent)
-  const { turn, running, dispatchCursor } = await openCommandTurn(ctx, submission)
+  const { turn, running, dispatchCursor } = await openCommandTurn(
+    ctx,
+    submission,
+    !!providerReceipt
+  )
   const beginProviderReceipt =
     dispatchCursor && providerReceipt ? () => providerReceipt(dispatchCursor) : undefined
   const instructions = body.command?.instructions
@@ -216,11 +220,13 @@ export async function handOverStructuredAgentSessionCommand(
 
 async function openCommandTurn(
   ctx: StructuredAgentSessionCommandHandoverContext,
-  submission: AgentJournalSubmission
+  submission: AgentJournalSubmission,
+  captureProviderReceipt: boolean
 ) {
   return ctx.journal.openCommand({
     clientMessageId: submission.clientMessageId,
     submittedAt: submission.submittedAt,
+    captureProviderReceipt,
     fence: ctx.fence,
     turnScope: (await contextStructuredAgentSessionCurrentWork(ctx)).turnScope()
   })

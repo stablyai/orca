@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { createProviderReceivedStore } from './agent-session-provider-received'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import { agentJournalSubmissionKey } from '../../journal/agent-session-journal-item-key'
 import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
@@ -48,39 +49,27 @@ it('applies a coalesced receipt at the same cursor and clears it on resubscribe'
     fence: 1,
     batch: { cursor, items: [], removedItemIds: [], submissions: [] }
   }
-  state = reduceStructuredAgentSession(state, {
-    type: 'event',
-    receiptProvider: 'claude',
-    event: { ...batch, batch: { ...batch.batch, items, submissions } }
-  })
-  const coalescer = createStructuredAgentSessionEventCoalescer(
-    (event) => {
-      state = reduceStructuredAgentSession(state, {
-        type: 'event',
-        event,
-        receiptProvider: 'claude'
-      })
-    },
-    { receiptProvider: 'claude' }
-  )
+  const store = createProviderReceivedStore()
+  const apply = (event: AgentSessionSubscribeEvent, opensSubscription?: boolean) => {
+    const before = state
+    state = reduceStructuredAgentSession(state, { type: 'event', event, opensSubscription })
+    store.apply(event, before, state, 'claude', opensSubscription)
+  }
+  apply({ ...batch, batch: { ...batch.batch, items, submissions } })
+  const coalescer = createStructuredAgentSessionEventCoalescer(apply, { receiptProvider: 'claude' })
   coalescer.push(batch)
   coalescer.push({ ...batch, providerReceived: [8] })
   coalescer.push(batch)
   coalescer.flush()
-  expect(state.providerReceived?.get(id)).toBe(8)
+  expect(store.provider(id)).toBe('claude')
   expect(state.submissions[0]?.dispatchState).toBe('pending')
   expect(state.working).toBeUndefined()
-  state = reduceStructuredAgentSession(state, {
-    type: 'event',
-    event: batch,
-    receiptProvider: 'claude',
-    opensSubscription: true
-  })
-  expect(state.providerReceived).toBeUndefined()
+  apply(batch, true)
+  expect(store.provider(id)).toBeUndefined()
   coalescer.push({ ...batch, providerReceived: [8] })
   coalescer.clearProviderReceived()
   coalescer.flush()
-  expect(state.providerReceived).toBeUndefined()
+  expect(store.provider(id)).toBeUndefined()
   coalescer.dispose()
 })
 
@@ -178,39 +167,46 @@ it.each([
   ['claude', 64],
   ['codex', 256]
 ] as const)('keeps the applied %s map within its own cap', (receiptProvider, limit) => {
-  const indexed = Array.from(
-    { length: limit + 1 },
-    (_, index) => [index + 1, agentJournalSubmissionKey(String(index + 1))] as const
-  )
+  const ids = Array.from({ length: limit + 1 }, (_, index) => String(index + 1))
   const cursor = { epoch: 'epoch', sequence: limit + 1 }
-  const state = {
-    ...EMPTY_STRUCTURED_AGENT_SESSION,
-    epoch: cursor.epoch,
-    cursor,
+  const items: StructuredAgentSessionState['items'] = ids.map((id, index) => ({
+    itemId: agentJournalSubmissionKey(id),
+    revision: 1,
+    sequence: index + 1,
+    observedAt: 0,
+    body: { kind: 'message', role: 'user', blocks: [] }
+  }))
+  const submissions: StructuredAgentSessionState['submissions'] = ids.map((clientMessageId) => ({
+    clientMessageId,
     fence: 1,
-    status: 'ready' as const,
-    pendingProviderAttempts: {
-      bySequence: new Map(indexed),
-      byItem: new Map(indexed.map(([sequence, id]) => [id, sequence]))
-    }
-  }
+    dispatchState: 'pending',
+    payloadFingerprint: clientMessageId,
+    providerItemId: null,
+    reason: null,
+    submittedAt: 0,
+    handedOverAt: 0,
+    resolvedAt: null
+  }))
+  const state = { ...EMPTY_STRUCTURED_AGENT_SESSION, epoch: cursor.epoch, cursor, fence: 1, items }
   const batch = {
     type: 'batch' as const,
     sessionId: 'chat',
     fence: 1,
     batch: { cursor, items: [], submissions: [], removedItemIds: [] }
   }
-  const full = reduceStructuredAgentSession(state, {
-    type: 'event',
-    receiptProvider,
-    event: { ...batch, providerReceived: indexed.slice(0, limit).map(([sequence]) => sequence) }
-  })
-  expect(full.providerReceived?.size).toBe(limit)
-  expect(
-    reduceStructuredAgentSession(full, {
-      type: 'event',
-      receiptProvider,
-      event: { ...batch, providerReceived: [limit + 1] }
-    })
-  ).toBe(full)
+  const store = createProviderReceivedStore()
+  store.apply(
+    { ...batch, batch: { ...batch.batch, items, submissions } },
+    state,
+    state,
+    receiptProvider
+  )
+  store.apply(
+    { ...batch, providerReceived: items.map(({ sequence }) => sequence) },
+    state,
+    state,
+    receiptProvider
+  )
+  store.apply({ ...batch, providerReceived: [limit + 1] }, state, state, receiptProvider)
+  expect(ids.filter((id) => store.provider(agentJournalSubmissionKey(id)))).toHaveLength(limit)
 })

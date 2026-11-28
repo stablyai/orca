@@ -1,16 +1,9 @@
-import { AGENT_SESSION_DISPATCH_LIMITS } from '../../journal/agent-session-dispatch-limits'
-import {
-  applyProviderReceived,
-  isProviderReceiptOnly,
-  providerAttemptsAfterBatch
-} from './agent-session-provider-received'
-import {
-  mergeOlderStructuredAgentSessionPage,
-  trimStructuredAgentSessionHistory
-} from './structured-agent-session-history-retention'
+import { trimStructuredAgentSessionHistory } from './structured-agent-session-history-retention'
+import type { AgentSessionCurrentRequestsMarker } from '../../requests/agent-session-current-requests-wire'
 import {
   hostClockField,
   replacePage,
+  mergeItems,
   mergeLiveItems,
   liveItemsWithinWindow,
   hasOlderAfterMerge
@@ -18,21 +11,40 @@ import {
 import {
   currentRequestsAfterEvent,
   currentRequestsState,
-  applyCurrentRequestsMarker
+  applyCurrentRequestsMarker,
+  type AgentSessionCurrentRequestsState
 } from '../../requests/agent-session-current-requests'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 import type {
-  StructuredAgentSessionAction,
-  StructuredAgentSessionState
-} from './structured-agent-session-reducer-state'
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../journal/agent-session-journal-types'
+import type {
+  AgentSessionSlashCommand,
+  AgentSessionHistoryPage,
+  AgentSessionLatestTurn,
+  AgentSessionPromptSuggestion,
+  AgentSessionSubscribeEvent,
+  AgentSessionTurnActivity
+} from '../../agent-session-wire'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuePause
+} from '../../requests/agent-session-queued-message-wire'
+import type { AgentSessionBackgroundTaskState } from '../../background-tasks/agent-session-background-task-wire'
+import type { AgentSessionRefusalReference } from '../../failures/agent-session-wire-refusals'
 import { backgroundTaskStatesEqual } from '../../background-tasks/agent-session-background-task-state-equality'
 import { admitAgentSessionBackgroundTaskState } from '../../background-tasks/agent-session-background-task-state-admission'
 import {
   LIVE_TRIM_SLACK_OWN_ITEMS,
+  MAX_RETAINED_ITEMS,
+  MAX_RETAINED_OWN_ITEMS,
   mergeSubmissions,
+  ownItemCount,
   trimRetainedItems
 } from '../structured-agent-session-item-retention'
 import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn-record'
+import { agentSessionHasOlderTranscript } from '../../conversation-context/agent-session-context-clear'
 import { queuePublicationRetainingMail } from './retain-queued-mail-blocks'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
@@ -42,15 +54,92 @@ import {
 } from '../structured-agent-session-live-turn'
 import {
   foldStructuredAgentSubagentRoster,
-  NO_STRUCTURED_AGENT_SUBAGENT_ROSTER
+  foldStructuredAgentSubagentRosterPage,
+  NO_STRUCTURED_AGENT_SUBAGENT_ROSTER,
+  type StructuredAgentSubagentRoster
 } from '../structured-agent-session-subagent-roster'
 
-export {
-  EMPTY_STRUCTURED_AGENT_SESSION,
-  type StructuredAgentHostClock,
-  type StructuredAgentSessionAction,
-  type StructuredAgentSessionState
-} from './structured-agent-session-reducer-state'
+/** Sample hostNow/receivedAt to convert host turn starts into client-clock anchors when attaching mid-turn. */
+export type StructuredAgentHostClock = {
+  hostNow: number
+  receivedAt: number
+}
+
+export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
+  epoch: string | null
+  cursor: AgentJournalCursor | null
+  fence: number | null
+  items: AgentJournalRenderItem[]
+  submissions: AgentJournalSubmission[]
+  /** Own-row trim floor grows with paging so live batches cannot undo loaded history. */
+  retainedOwnItemLimit: number
+  /** All-agent memory ceiling grows with paging too. */
+  retainedItemCap: number
+  hasOlder: boolean
+  status: 'idle' | 'loading' | 'ready' | 'error'
+  /** The failed read's own text, for logs; a surface words `readRefusal` instead. */
+  error?: string
+  /** The refusal the failed read met, when the host sent one; cleared with `error`. */
+  readRefusal?: AgentSessionRefusalReference
+  backgroundTasks?: AgentSessionBackgroundTaskState | null
+  /** Host-held drafts. Absent = no claim yet (older host); `[]`/null = empty. */
+  queuedMessages?: AgentSessionQueuedMessage[] | null
+  /** The queue's pause, published with the list; null when it sends on its own. */
+  queuePause?: AgentSessionQueuePause | null
+  /** Published with the list: the card the queue sends next once nothing runs, else null. */
+  nextQueuedMessageId?: string | null
+  commands?: AgentSessionSlashCommand[] | null
+  activity?: AgentSessionTurnActivity | null
+  /** Off the journal, so history pages and snapshots keep it; only a batch sets it. */
+  promptSuggestion?: AgentSessionPromptSuggestion | null
+  /** Absent until a frame from a host that stamps `hostNow` has been applied. */
+  hostClock?: StructuredAgentHostClock
+  /** Retain received roster entries by agent ID beyond the item window; absent until a page arrives. */
+  subagentRoster?: StructuredAgentSubagentRoster
+  /** Whole-journal turn state; older hosts omit it and require loaded-item fallback. */
+  latestTurn?: AgentSessionLatestTurn | null
+  /** Host-actionable prompts; older hosts treat every pending item as waiting. */
+  actionablePromptIds?: string[]
+  /** Host main-agent work state; older hosts derive from items/submissions. */
+  working?: boolean
+  /** Bump when a live turn revision falls outside the window so whole-journal turn readers refresh. */
+  unloadedTurnRevisions?: number
+}
+
+export type StructuredAgentSessionAction =
+  | { type: 'loading' }
+  | { type: 'trim-history' }
+  | { type: 'requests-marker'; marker: AgentSessionCurrentRequestsMarker }
+  | {
+      type: 'requests-complete'
+      marker: AgentSessionCurrentRequestsMarker
+      items: AgentJournalRenderItem[]
+    }
+  | { type: 'error'; message: string; refusal?: AgentSessionRefusalReference }
+  /** First subscription frame restates the roster even on cursor resume; an old host omitting it has no running children. */
+  | {
+      type: 'event'
+      event: AgentSessionSubscribeEvent
+      opensSubscription?: boolean
+    }
+  | { type: 'history-page'; page: AgentSessionHistoryPage }
+  | {
+      type: 'older-page'
+      requestedCursor: AgentJournalCursor
+      page: AgentSessionHistoryPage
+    }
+
+export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
+  epoch: null,
+  cursor: null,
+  fence: null,
+  items: [],
+  submissions: [],
+  retainedOwnItemLimit: MAX_RETAINED_OWN_ITEMS,
+  retainedItemCap: MAX_RETAINED_ITEMS,
+  hasOlder: false,
+  status: 'idle'
+}
 
 /** `receivedAt` is the client clock at apply time; callers pass it so the reducer stays pure. */
 export function reduceStructuredAgentSession(
@@ -58,11 +147,6 @@ export function reduceStructuredAgentSession(
   action: StructuredAgentSessionAction,
   receivedAt: number = Date.now()
 ): StructuredAgentSessionState {
-  if (action.type === 'clear-provider-received') {
-    return state.providerReceived || state.pendingProviderAttempts
-      ? { ...state, providerReceived: undefined, pendingProviderAttempts: undefined }
-      : state
-  }
   if (action.type === 'trim-history') {
     return trimStructuredAgentSessionHistory(state)
   }
@@ -93,7 +177,26 @@ export function reduceStructuredAgentSession(
     }
   }
   if (action.type === 'older-page') {
-    return mergeOlderStructuredAgentSessionPage(state, action, receivedAt)
+    const requested = action.requestedCursor
+    if (state.epoch !== requested.epoch || action.page.epoch !== requested.epoch) {
+      return state
+    }
+    const head = state.items[0]
+    // Head trim overtook the requested anchor; merging would leave a hole. Caller must retry from the new head.
+    if (head && head.sequence > requested.sequence) {
+      return state
+    }
+    const items = mergeItems(state.items, action.page.items, action.page.removedItemIds)
+    return {
+      ...state,
+      items,
+      retainedOwnItemLimit: Math.max(state.retainedOwnItemLimit, ownItemCount(items)),
+      retainedItemCap: Math.max(state.retainedItemCap, items.length),
+      subagentRoster: foldStructuredAgentSubagentRosterPage(state.subagentRoster, action.page),
+      submissions: mergeSubmissions(state.submissions, action.page.submissions, items),
+      hasOlder: agentSessionHasOlderTranscript(items, action.page.hasOlder),
+      ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
+    }
   }
   const event = action.event
   if (event.type === 'end') {
@@ -123,20 +226,6 @@ export function reduceStructuredAgentSession(
   if (state.cursor && event.batch.cursor.sequence < state.cursor.sequence) {
     return state
   }
-  const receiptProvider = action.receiptProvider
-  const receiptAuthorityChanged =
-    action.opensSubscription || (event.fence !== undefined && event.fence !== state.fence)
-  if (isProviderReceiptOnly(event) && event.batch.cursor.sequence === state.cursor?.sequence) {
-    if (!receiptProvider || receiptAuthorityChanged) {
-      return state
-    }
-    const providerReceived = applyProviderReceived(
-      state,
-      event.providerReceived,
-      AGENT_SESSION_DISPATCH_LIMITS[receiptProvider]
-    )
-    return providerReceived === state.providerReceived ? state : { ...state, providerReceived }
-  }
   const requests = currentRequestsAfterEvent(state, event, action.opensSubscription === true)
   const backgroundTasks =
     event.backgroundTasks !== undefined
@@ -159,8 +248,6 @@ export function reduceStructuredAgentSession(
     event.batch.removedItemIds.length === 0 &&
     event.batch.submissions.length === 0
   if (
-    !(receiptAuthorityChanged && (state.providerReceived || state.pendingProviderAttempts)) &&
-    !event.providerReceived?.length &&
     event.batch.cursor.sequence === state.cursor?.sequence &&
     journalUnchanged &&
     subagentRoster === (state.subagentRoster ?? NO_STRUCTURED_AGENT_SUBAGENT_ROSTER) &&
@@ -201,33 +288,18 @@ export function reduceStructuredAgentSession(
     ...merged.slice(0, merged.length - items.length)
   ]
   const lostTurnRow = outsideWindow.some((item) => readAgentJournalTurn(item.body) !== null)
-  const submissions =
-    event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
-      ? state.submissions
-      : mergeSubmissions(state.submissions, event.batch.submissions, items)
   return {
     ...state,
     ...requests,
-    ...(receiptProvider
-      ? providerAttemptsAfterBatch(
-          receiptAuthorityChanged
-            ? {}
-            : {
-                providerReceived: state.providerReceived,
-                pendingProviderAttempts: state.pendingProviderAttempts
-              },
-          event,
-          liveItems,
-          outsideWindow,
-          receiptProvider
-        )
-      : {}),
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
     items,
     subagentRoster,
     hasOlder: hasOlderAfterMerge(state.items, items, items.length < merged.length, state.hasOlder),
-    submissions,
+    submissions:
+      event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
+        ? state.submissions
+        : mergeSubmissions(state.submissions, event.batch.submissions, items),
     status: 'ready',
     error: undefined,
     readRefusal: undefined,

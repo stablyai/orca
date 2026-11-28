@@ -64,7 +64,7 @@ export function applyJournalDomainDispatchCommand(
     ...result,
     value: {
       carried,
-      ...(target.captureProviderReceipts
+      ...(input.captureProviderReceipt
         ? {
             firstHandover: submission?.handedOverAt === undefined,
             dispatchSequence: result.items.find((item) => item.sequence === result.cursor.sequence)

@@ -9,23 +9,21 @@ const signInView = { signIn: { signingIn: false, signIn: () => {} }, install: nu
 
 function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState'] }) {
   const notices = useStructuredAgentSessionDeliveryNotices({
-    source: {
-      pending: [],
-      submissions: [
-        {
-          clientMessageId: 'steer',
-          fence: 1,
-          payloadFingerprint: 'steer',
-          dispatchState: state,
-          providerItemId: null,
-          reason: state === 'rejected' ? 'Codex refused the message.' : null,
-          submittedAt: 1,
-          resolvedAt: state === 'pending' ? null : 2,
-          handoverRecorded: true
-        }
-      ],
-      journalItems: []
-    },
+    pending: [],
+    submissions: [
+      {
+        clientMessageId: 'steer',
+        fence: 1,
+        payloadFingerprint: 'steer',
+        dispatchState: state,
+        providerItemId: null,
+        reason: state === 'rejected' ? 'Codex refused the message.' : null,
+        submittedAt: 1,
+        resolvedAt: state === 'pending' ? null : 2,
+        handoverRecorded: true
+      }
+    ],
+    journalItems: [],
     agentName: 'Codex',
     startFailures: []
   })

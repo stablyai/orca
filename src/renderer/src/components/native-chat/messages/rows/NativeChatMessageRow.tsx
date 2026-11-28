@@ -45,7 +45,6 @@ import {
 export type NativeChatDeliveryNotice =
   | {
       sending: true
-      receivedBy?: string
       text?: never
       onDismiss?: never
       onEdit?: never
@@ -56,7 +55,6 @@ export type NativeChatDeliveryNotice =
     }
   | {
       sending?: never
-      receivedBy?: never
       text: string
       detail?: string
       failureKind?: string

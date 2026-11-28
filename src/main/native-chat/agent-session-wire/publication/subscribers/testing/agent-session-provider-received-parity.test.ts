@@ -87,6 +87,11 @@ it('keeps remote and paired phone frames byte-identical when they ask for local 
   const desktopSocket = await open('desktop-socket', { kind: 'desktop' }, 'runtime', true)
   const receiving = await open('desktop', { kind: 'desktop' }, 'runtime', true, true)
   await idle()
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'send' },
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'pending' }] },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
   const receipt = subscribers.providerReceipts.bind({
     journal,
     clientMessageId: 'send',
@@ -95,6 +100,8 @@ it('keeps remote and paired phone frames byte-identical when they ask for local 
     provider: 'claude',
     owns: () => true
   })
+  subscribers.deliverFrames(SESSION, journal)
+  await idle()
   receipt?.(() => true)
   await idle()
   expect(failedSends).toBe(1)

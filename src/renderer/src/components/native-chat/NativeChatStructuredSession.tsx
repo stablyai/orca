@@ -1,3 +1,4 @@
+import { isAgentSessionReceiptProvider } from '../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import { useBotLinkPrompt } from '@/lib/agent-session/open/bot-link-item-target'
 import {
   NativeChatCrewContext,
@@ -99,6 +100,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const { rewindHost, focusComposer } = useNativeChatRewindHost(props, composerRef)
   const controller = useStructuredAgentSession({
     ...props,
+    receiptProvider: isAgentSessionReceiptProvider(props.agent) ? props.agent : undefined,
     // Why: Stop and a queued card's Edit give text back to the conversation's draft, as the composer keeps it.
     composerScopeKey: structuredAgentSessionDraftScopeKey(props.sessionId),
     queueFollowUps,
@@ -133,15 +135,15 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const submits = useSubmitReveal(controller, provisionalLaunch.retry, hostHeld, focusComposer)
   const workerApprovalParty = nativeChatWorkerApprovalParty(props)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
-  const hasRejectedSubmission = useHasStructuredAgentSessionRejections(controller.submissions)
-  const needsFailureFacts =
-    submits.queuedMessages.cards.some((card) => card.state === 'returned') || hasRejectedSubmission
+  const hasRejection = useHasStructuredAgentSessionRejections(controller.submissions)
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
-    needsFailureFacts || props.agent === 'claude'
+    props.agent === 'claude' ||
+      hasRejection ||
+      submits.queuedMessages.cards.some((card) => card.state === 'returned')
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
-    source: controller,
+    ...controller,
     startFailures,
     agentName: agentLabel
   })
@@ -250,7 +252,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     kickoffSignIn: bot.signInOwed
   })
   const { colorScheme } = surface.appearance
-  const paneHeader = nativeChatPaneHeader(props, ownerWorktreeId, colorScheme, handOff)
   const findBar = <NativeChatSurfaceFindBar surface={surface} isVisible={props.isVisible} />
   return (
     <NativeChatAntigravityAuthProvider target={install.antigravityAuth}>
@@ -262,7 +263,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             className="relative [container-type:size]"
           >
             <NativeChatSubagentSheetLayer {...subagents.layer}>
-              {paneHeader}
+              {nativeChatPaneHeader(props, ownerWorktreeId, colorScheme, handOff)}
               <NativeChatWorkerAutoCloseBanner pane={props} />
               <NativeChatDockTranscript>
                 <NativeChatContextClearFade
@@ -323,7 +324,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                                 structuredAttachments
                                 runtimeContext={imageRuntimeContext}
                                 deliveryNotices={deliveryNotices}
-                                providerReceived={controller.providerReceived}
+                                receipts={controller.receipts}
                                 {...{ turnBot, botHome: bot.kickoff }}
                                 timedRows={timedRows}
                               />

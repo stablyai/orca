@@ -1,21 +1,10 @@
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import { agentJournalSubmissionKey } from '../../journal/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../journal/agent-session-journal-types'
 import {
   AGENT_SESSION_DISPATCH_LIMITS,
   type AgentSessionReceiptProvider
 } from '../../journal/agent-session-dispatch-limits'
 import type { StructuredAgentSessionState } from './structured-agent-session-reducer'
-
-type Batch = Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
-type ReceiptState = Pick<
-  StructuredAgentSessionState,
-  'providerReceived' | 'pendingProviderAttempts'
->
-export type PendingProviderAttempts = {
-  bySequence: ReadonlyMap<number, string>
-  byItem: ReadonlyMap<string, number>
-}
 
 export function isProviderReceiptOnly(event: AgentSessionSubscribeEvent): boolean {
   return (
@@ -28,122 +17,125 @@ export function isProviderReceiptOnly(event: AgentSessionSubscribeEvent): boolea
   )
 }
 
-export function applyProviderReceived(
-  state: ReceiptState,
-  stamps: readonly number[] | undefined,
-  limit: number
-): ReceiptState['providerReceived'] {
-  const previous = state.providerReceived
-  let next: Map<string, number> | undefined
-  if (stamps && state.pendingProviderAttempts) {
-    for (let index = 0; index < Math.min(stamps.length, limit); index++) {
-      const sequence = stamps[index]!
-      const itemId = state.pendingProviderAttempts.bySequence.get(sequence)
-      if (!itemId || (next ?? previous)?.get(itemId) === sequence) {
-        continue
-      }
-      if ((next ?? previous)?.size === limit) {
-        break
-      }
-      next ??= new Map(previous)
-      next.set(itemId, sequence)
+export function createProviderReceivedStore() {
+  const bySequence = new Map<number, string>()
+  const pending = new Map<string, number>()
+  const received = new Map<string, AgentSessionReceiptProvider>()
+  const listeners = new Map<string, Set<() => void>>()
+  const notify = (id: string) => listeners.get(id)?.forEach((listener) => listener())
+  const remove = (id: string) => {
+    const sequence = pending.get(id)
+    if (sequence !== undefined) {
+      bySequence.delete(sequence)
+      pending.delete(id)
+    }
+    if (received.delete(id)) {
+      notify(id)
     }
   }
-  return next ?? previous
-}
-
-export function pruneProviderAttempts(
-  state: ReceiptState,
-  removed: Iterable<string>
-): ReceiptState {
-  const before = state.pendingProviderAttempts
-  if (!before) {
-    return { providerReceived: state.providerReceived }
-  }
-  let byItem: Map<string, number> | undefined
-  let bySequence: Map<number, string> | undefined
-  let received: Map<string, number> | undefined
-  for (const itemId of removed) {
-    const sequence = (byItem ?? before.byItem).get(itemId)
-    if (sequence === undefined) {
-      continue
+  const trim = (floor: number) => {
+    for (const [id, sequence] of pending) {
+      if (sequence < floor) {
+        remove(id)
+      }
     }
-    byItem ??= new Map(before.byItem)
-    bySequence ??= new Map(before.bySequence)
-    byItem.delete(itemId)
-    bySequence.delete(sequence)
-    if (state.providerReceived?.has(itemId)) {
-      received ??= new Map(state.providerReceived)
-      received.delete(itemId)
+  }
+  const clear = () => {
+    for (const id of pending.keys()) {
+      remove(id)
     }
   }
   return {
-    pendingProviderAttempts: byItem && bySequence ? { byItem, bySequence } : before,
-    providerReceived: received ? (received.size ? received : undefined) : state.providerReceived
+    clear,
+    trim: (items: StructuredAgentSessionState['items']) => {
+      if (pending.size) {
+        trim(items[0]?.sequence ?? Infinity)
+      }
+    },
+    sequence: (id: string) => pending.get(id),
+    provider: (id: string) => received.get(id),
+    subscribe: (id: string, listener: () => void) => {
+      const row = listeners.get(id) ?? new Set()
+      row.add(listener)
+      listeners.set(id, row)
+      return () => {
+        row.delete(listener)
+        if (!row.size) {
+          listeners.delete(id)
+        }
+      }
+    },
+    apply(
+      event: AgentSessionSubscribeEvent,
+      before: StructuredAgentSessionState,
+      after: StructuredAgentSessionState,
+      provider: AgentSessionReceiptProvider,
+      opensSubscription?: boolean
+    ) {
+      if (event.type === 'end') {
+        return
+      }
+      if (event.type !== 'batch' || opensSubscription || before.fence !== after.fence) {
+        clear()
+      }
+      if (
+        event.type !== 'batch' ||
+        after.cursor?.epoch !== event.batch.cursor.epoch ||
+        after.cursor.sequence !== event.batch.cursor.sequence
+      ) {
+        return
+      }
+      const limit = AGENT_SESSION_DISPATCH_LIMITS[provider]
+      let handedOver: Set<string> | undefined
+      for (const submission of event.batch.submissions) {
+        const id = agentJournalSubmissionKey(submission.clientMessageId)
+        if (submission.dispatchState !== 'pending') {
+          remove(id)
+        } else if (submission.handedOverAt !== undefined) {
+          handedOver ??= new Set()
+          handedOver.add(id)
+        }
+      }
+      const floor = event.batch.items.length ? (after.items[0]?.sequence ?? Infinity) : undefined
+      if (floor !== undefined && pending.size && after.items[0] !== before.items[0]) {
+        trim(floor)
+      }
+      for (const item of event.batch.items) {
+        const { itemId, sequence } = item
+        const prior = pending.get(itemId)
+        if ((floor !== undefined && sequence < floor) || prior === sequence) {
+          continue
+        }
+        if (prior !== undefined) {
+          remove(itemId)
+        }
+        if (
+          handedOver?.has(itemId) &&
+          pending.size < limit &&
+          item.body.kind === 'message' &&
+          item.body.role === 'user'
+        ) {
+          pending.set(itemId, sequence)
+          bySequence.set(sequence, itemId)
+        }
+      }
+      for (const id of event.batch.removedItemIds) {
+        remove(id)
+      }
+      if (opensSubscription || (event.fence !== undefined && before.fence !== event.fence)) {
+        return
+      }
+      const stamps = event.providerReceived
+      for (let index = 0; stamps && index < Math.min(stamps.length, limit); index++) {
+        const sequence = stamps[index]!
+        const id = bySequence.get(sequence)
+        if (id && !received.has(id)) {
+          received.set(id, provider)
+          notify(id)
+        }
+      }
+    }
   }
 }
 
-export function providerAttemptsAfterBatch(
-  state: ReceiptState,
-  event: Batch,
-  items: readonly AgentJournalRenderItem[],
-  lost: readonly AgentJournalRenderItem[],
-  provider: AgentSessionReceiptProvider
-): ReceiptState {
-  const previous = state.pendingProviderAttempts
-  let touched: Set<string> | undefined
-  let pending: Set<string> | undefined
-  for (const submission of event.batch.submissions) {
-    const id = agentJournalSubmissionKey(submission.clientMessageId)
-    if (submission.dispatchState !== 'pending') {
-      ;(touched ??= new Set()).add(id)
-    } else if (submission.handedOverAt !== undefined) {
-      ;(pending ??= new Set()).add(id)
-    }
-  }
-  let candidates: Map<string, number> | undefined
-  for (const item of items) {
-    const { itemId, sequence } = item
-    if (item.body.kind !== 'message' || item.body.role !== 'user') {
-      continue
-    }
-    const before = previous?.byItem.get(itemId)
-    if (before !== undefined && before !== sequence) {
-      ;(touched ??= new Set()).add(itemId)
-    }
-    if (before !== sequence && pending?.has(itemId)) {
-      ;(candidates ??= new Map()).set(itemId, sequence)
-    }
-  }
-  for (const itemId of event.batch.removedItemIds) {
-    ;(touched ??= new Set()).add(itemId)
-    candidates?.delete(itemId)
-  }
-  for (const { itemId } of lost) {
-    ;(touched ??= new Set()).add(itemId)
-    candidates?.delete(itemId)
-  }
-  const next = touched ? pruneProviderAttempts(state, touched) : state
-  const limit = AGENT_SESSION_DISPATCH_LIMITS[provider]
-  let pendingProviderAttempts = next.pendingProviderAttempts
-  if (candidates?.size && (pendingProviderAttempts?.byItem.size ?? 0) < limit) {
-    const byItem = new Map(pendingProviderAttempts?.byItem)
-    const bySequence = new Map(pendingProviderAttempts?.bySequence)
-    for (const [id, sequence] of candidates) {
-      if (byItem.size >= limit) {
-        break
-      }
-      byItem.set(id, sequence)
-      bySequence.set(sequence, id)
-    }
-    pendingProviderAttempts = { byItem, bySequence }
-  }
-  return {
-    pendingProviderAttempts,
-    providerReceived: applyProviderReceived(
-      { ...next, pendingProviderAttempts },
-      event.providerReceived,
-      limit
-    )
-  }
-}
+export type ProviderReceivedStore = ReturnType<typeof createProviderReceivedStore>

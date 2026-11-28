@@ -115,7 +115,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     const journal = new SqlAgentSessionJournal(
       options.database,
       options.identity,
-      options.captureProviderReceipts ? { ...target, captureProviderReceipts: true } : target,
+      target,
       now,
       commit
     )
@@ -125,8 +125,8 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     return journal
   }
 
-  get capturesProviderReceipts(): boolean {
-    return this.target.captureProviderReceipts === true
+  trackProviderReceiptSettlements(track: boolean): void {
+    this.target = { ...this.target, captureProviderReceipts: track ? true : undefined }
   }
 
   /** The immutable physical position this handle opened at; never the reopen floor. */
