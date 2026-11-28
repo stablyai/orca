@@ -173,6 +173,7 @@ export function normalizeLoadedGlobalSettings(
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
     // Default-on values round-trip off-platform; macOS consumers gate the actual effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
+    holdQuitWhileAgentsWork: parsed.settings?.holdQuitWhileAgentsWork === true,
     linuxTilingWindowMode: parsed.settings?.linuxTilingWindowMode === true,
     ...migratedPortugueseUiLanguage,
     nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,

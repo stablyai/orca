@@ -10,6 +10,8 @@ import { searchKeywords, translateSearchKeyword } from '../search/settings-searc
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
+import { getHoldQuitEntries } from './general-hold-quit-search'
+export { getHoldQuitEntries } from './general-hold-quit-search'
 import { getUpdateDelayDescription, getUpdateDelayTitle } from '../updates/update-delay-copy'
 
 export const getGeneralWorkspaceSearchDescriptors = createLocalizedCatalog(() => [
@@ -95,7 +97,7 @@ export const getGeneralWorkspaceSearchDescriptors = createLocalizedCatalog(() =>
   })
 ])
 
-export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
+const getGeneralNavigationEntryCatalog = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.b180c1041b', 'Tab order'),
     description: translate(
@@ -138,6 +140,12 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+export function getGeneralNavigationSearchEntries(
+  options: { showHoldQuit?: boolean } = {}
+): SettingsSearchEntry[] {
+  return [...getGeneralNavigationEntryCatalog(), ...getHoldQuitEntries(options)]
+}
 
 export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
   {
@@ -215,6 +223,7 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
 
 type GeneralPaneSearchOptions = {
   includeProjectRuntime?: boolean
+  showHoldQuit?: boolean
 }
 
 export function getGeneralPaneSearchEntries(
@@ -222,7 +231,8 @@ export function getGeneralPaneSearchEntries(
 ): SettingsSearchEntry[] {
   return [
     ...getGeneralWorkspaceSearchEntries(),
-    ...getGeneralNavigationSearchEntries(),
+    ...getGeneralNavigationSearchEntries({ showHoldQuit: false }),
+    ...getHoldQuitEntries(options),
     ...Object.values(getGeneralConfirmationSearchEntries()),
     ...getGeneralDestinationSearchEntries(),
     ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),

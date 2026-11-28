@@ -18,6 +18,8 @@ import type { GlobalSettings } from '../../shared/settings/global-settings-types
 import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './diagnostics/react-commits/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
+import { HoldQuitNotice } from './components/HoldQuitNotice'
+import { Toaster } from './components/ui/sonner'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
 
@@ -123,6 +125,8 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
     <I18nProvider>
       <PopoutSettingsSync />
       <PopoutRoot />
+      <HoldQuitNotice />
+      <Toaster toastOptions={{ className: 'font-sans text-sm' }} />
     </I18nProvider>
   </StrictMode>
 )

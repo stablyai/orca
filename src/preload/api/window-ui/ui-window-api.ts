@@ -9,8 +9,11 @@ import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
 } from '../../../shared/editor/markdown/rich-markdown-context-menu'
+import type { HoldQuitNotice } from '../../../shared/mac-hold-quit'
 
 export type UiWindowApi = {
+  onHoldQuitNotice?: (callback: (notice: HoldQuitNotice) => void) => () => void
+  setHoldQuitActivity?: (busy: boolean) => void
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   /** One clipboard read for a whole paste: text, copied files, link HTML and image presence. */
   readClipboardPasteContent: (
