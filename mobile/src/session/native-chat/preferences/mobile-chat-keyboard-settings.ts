@@ -42,6 +42,33 @@ subscribeMirroredKey(CHAT_HARDWARE_ENTER_KEY, (raw, source) => {
   }
 })
 
+const REPAIR_ATTEMPTS = 3
+
+// A newer revision can land after this write. Repair stores what it adopted, and stops after a few tries.
+function repairStored(attemptsLeft: number): Promise<void> {
+  if (attemptsLeft <= 0) {
+    return Promise.resolve()
+  }
+  const started = revision
+  const value = String(enabled)
+  return persistMirroredReadBack(CHAT_HARDWARE_ENTER_KEY, value)
+    .then((stored) => {
+      if (revision !== started) {
+        return repairStored(attemptsLeft - 1)
+      }
+      if (stored !== value) {
+        adopt(stored)
+      }
+    })
+    .catch(() => {
+      if (revision === started) {
+        reload()
+        return
+      }
+      return repairStored(attemptsLeft - 1)
+    })
+}
+
 export function setChatHardwareEnterToSend(next: boolean): Promise<void> {
   const changed = ++revision
   adopt(String(next))
@@ -52,13 +79,14 @@ export function setChatHardwareEnterToSend(next: boolean): Promise<void> {
         adopt(raw)
         return
       }
-      // A page edit or a later toggle won. This write may have landed last, so store what that newer revision adopted.
-      return persistMirroredReadBack(CHAT_HARDWARE_ENTER_KEY, String(enabled)).then(() => undefined)
+      return repairStored(REPAIR_ATTEMPTS)
     })
     .catch(() => {
       if (revision === changed) {
         reload()
+        return
       }
+      return repairStored(REPAIR_ATTEMPTS)
     })
   return writes
 }
