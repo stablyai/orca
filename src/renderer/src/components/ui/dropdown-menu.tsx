@@ -126,6 +126,10 @@ function DropdownMenuItem({
   inset,
   variant = 'default',
   density,
+  disabled,
+  focusableWhenDisabled = false,
+  onClick,
+  onSelect,
   onPointerMove,
   onPointerLeave,
   ...props
@@ -143,18 +147,26 @@ function DropdownMenuItem({
     | 'account-row'
     | 'account-row-action'
   density?: MenuDensity
+  /** Keep an unavailable row in keyboard navigation so its status can be read. */
+  focusableWhenDisabled?: boolean
 }) {
   const rowDensity = useMenuDensity(density)
+  const inactive = disabled && focusableWhenDisabled
   return (
     <DropdownMenuPrimitive.Item
       data-slot="dropdown-menu-item"
       data-inset={inset}
       data-variant={variant}
+      disabled={disabled && !focusableWhenDisabled}
+      {...(inactive ? { 'aria-disabled': true } : {})}
+      onClick={inactive ? undefined : onClick}
+      onSelect={inactive ? (event) => event.preventDefault() : onSelect}
       className={cn(
         menuItemVariants({ density: rowDensity, menu: 'dropdown' }),
         'data-[variant=create]:rounded-[7px] data-[variant=create]:px-2 data-[variant=create]:py-1.5 data-[variant=create]:text-[12px] data-[variant=create]:leading-5 data-[variant=create]:font-medium',
         'data-[variant=account-row]:min-h-9 data-[variant=account-row]:rounded-[8px] data-[variant=account-row]:focus:bg-transparent data-[variant=account-row]:data-[current=true]:bg-transparent dark:data-[variant=account-row]:focus:bg-transparent',
         'data-[variant=account-row-action]:gap-1 data-[variant=account-row-action]:px-2.5 data-[variant=account-row-action]:text-xs data-[variant=account-row-action]:font-medium data-[variant=account-row-action]:focus:bg-transparent dark:data-[variant=account-row-action]:focus:bg-transparent',
+        inactive && 'aria-disabled:text-muted-foreground aria-disabled:opacity-100',
         className
       )}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
