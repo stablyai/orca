@@ -6,7 +6,7 @@ import {
 } from './sidebar-inputs-desktop-facts'
 export { readRuntimeDesktopSidebarFacts } from './sidebar-inputs-desktop-facts'
 
-import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
+import { onWslHostStatusesChanged } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { savedWorkspaceCatalog } from '../../persistence/profile-save-domains'
@@ -232,7 +232,8 @@ export function sidebarInputsFeedDomains(
               changed(urgent)
             }
           }),
-          getWslHostService()?.onStatusesChanged(changed)
+          // The feed can start before the WSL host service is installed; this follows it either way.
+          onWslHostStatusesChanged(changed)
         ]
         let watching = true
         void installationLoaded.then(() => {

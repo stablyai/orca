@@ -10,6 +10,7 @@ export function getWslHostService(): WslHostService | null {
 
 const statusListeners = new Set<() => void>()
 let stopForwardingStatuses: (() => void) | null = null
+const serviceListeners = new Set<(service: WslHostService) => void>()
 
 export function setWslHostService(service: WslHostService | null): void {
   stopForwardingStatuses?.()
@@ -20,6 +21,17 @@ export function setWslHostService(service: WslHostService | null): void {
         listener()
       }
     }) ?? null
+  if (service) {
+    for (const listener of serviceListeners) {
+      listener(service)
+    }
+  }
+}
+
+/** Every service installed from now on; startup sets it after the IPC that needs it registers. */
+export function onWslHostServiceSet(listener: (service: WslHostService) => void): () => void {
+  serviceListeners.add(listener)
+  return () => serviceListeners.delete(listener)
 }
 
 /** Statuses of whichever service is installed, now or later. */

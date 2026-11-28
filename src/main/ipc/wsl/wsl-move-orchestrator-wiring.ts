@@ -42,7 +42,10 @@ import {
 } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { wslHostAddRefusal } from '../../wsl/host-lifecycle/wsl-host-add-admission'
 import { runAsWslUserAct } from '../../wsl/filesystem/wsl-unc-access-gate'
-import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
+import {
+  getWslHostService,
+  onWslHostServiceSet
+} from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import { onWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-actions'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from '../ui'
 import { onWslMoveReleasedByUser, releaseWslMoveChainHere } from './wsl-move-release-here'
@@ -285,11 +288,31 @@ export function registerWslMoveOrchestrator(
       answerWslMoveSleptPanes(request.requestId, request.sleptPanes)
     }
   )
+  stopWaitingForService?.()
+  stopWaitingForService = null
   // Dark: nothing is constructed or read while the gate is closed.
-  if (!wslHostsGateOpen() || !getWslHostService() || orchestrator) {
+  if (!wslHostsGateOpen() || orchestrator) {
     return
   }
-  // Registered from registerCoreHandlers: a throw here would skip every handler after it.
+  if (getWslHostService()) {
+    startOrchestrator(store, driverDeps)
+    return
+  }
+  // Startup installs the service after this registers (and Add may create it later still).
+  stopWaitingForService = onWslHostServiceSet(() => {
+    stopWaitingForService?.()
+    stopWaitingForService = null
+    startOrchestrator(store, driverDeps)
+  })
+}
+
+let stopWaitingForService: (() => void) | null = null
+
+function startOrchestrator(store: Store, driverDeps: () => WslMoveDriverDeps): void {
+  if (orchestrator) {
+    return
+  }
+  // Runs inside registerCoreHandlers or setWslHostService: a throw would break either caller.
   try {
     const created = createOrchestrator(store, driverDeps)
     orchestrator = created
