@@ -3,6 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { BotGroupRemoteAsk as RemoteAsk } from '../../../../shared/bots/bot-group'
 import { botGroupRemoteAskLines } from '../../../../shared/bots/bot-group-remote-ask-lines'
+import { quietBotAnswer } from '../../../../shared/bot-quiet-result'
 import { NativeChatMarkdown } from '../native-chat/markdown/NativeChatMarkdown'
 import { BotAvatar } from './BotAvatar'
 
@@ -12,6 +13,16 @@ export function BotGroupRemoteAsk({ ask }: { ask: RemoteAsk }): React.JSX.Elemen
   const t = useTranslate()
   useUiLanguageRevision()
   const { answer, status, problem, detail, shortened } = botGroupRemoteAskLines(ask, t)
+  // A bot's answer, as on the phone: a quiet result never draws its marker.
+  const quiet =
+    answer === null
+      ? null
+      : quietBotAnswer(answer, {
+          botAnswer: true,
+          streaming: false,
+          inAutomationTurn: false,
+          inActingTurn: false
+        })
   return (
     <section
       data-group-remote-ask={ask.requestId}
@@ -25,7 +36,8 @@ export function BotGroupRemoteAsk({ ask }: { ask: RemoteAsk }): React.JSX.Elemen
             hostId: `runtime:${ask.environmentId}`,
             name: ask.name,
             avatar: ask.avatar,
-            avatarColor: ask.avatarColor
+            avatarColor: ask.avatarColor,
+            avatarOutfit: ask.avatarOutfit
           }}
           className="size-6 shrink-0 rounded-md text-xs"
         />
@@ -56,7 +68,12 @@ export function BotGroupRemoteAsk({ ask }: { ask: RemoteAsk }): React.JSX.Elemen
         </span>
       </div>
       {detail ? <p className="text-xs text-chat-foreground-faint">{detail}</p> : null}
-      {answer !== null ? <NativeChatMarkdown content={answer} variant="document" /> : null}
+      {quiet?.words ? <NativeChatMarkdown content={quiet.words} variant="document" /> : null}
+      {quiet?.nothingToReport ? (
+        <p className="text-xs text-chat-foreground-faint">
+          {t('bots.chat.nothingToReport', 'Nothing to report')}
+        </p>
+      ) : null}
       {shortened ? <p className="text-xs text-chat-foreground-faint">{shortened}</p> : null}
     </section>
   )

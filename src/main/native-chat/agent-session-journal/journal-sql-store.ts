@@ -108,14 +108,14 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   static async open(
     options: Pick<
       AgentSessionJournalOptions,
-      'database' | 'identity' | 'now' | 'recover' | 'onRecoveryFailure'
+      'database' | 'identity' | 'now' | 'recover' | 'keptWriter' | 'onRecoveryFailure'
     >
   ): Promise<SqlAgentSessionJournal> {
     const now = options.now ?? Date.now
     const { target, commit } = await options.database.openSession(
       options.identity,
       now(),
-      options.recover
+      options.keptWriter ? 'keptWriter' : options.recover
     )
     const journal = new SqlAgentSessionJournal(
       options.database,

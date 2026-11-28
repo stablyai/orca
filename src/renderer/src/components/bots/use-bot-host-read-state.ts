@@ -10,7 +10,13 @@ const NO_SUBSCRIPTION = (): (() => void) => () => {}
 export function useBotHostReadState(
   read: BotHostRead<unknown>,
   bot: Bot | null
-): { state: BotHostReadState; refreshFailed: boolean; retry: () => void } {
+): {
+  state: BotHostReadState
+  refreshFailed: boolean
+  /** A read landed since this surface opened: the value isn't only the kept one. */
+  landed: boolean
+  retry: () => void
+} {
   const botId = bot?.id ?? null
   const hostId = bot?.hostId ?? null
   const key = bot ? botRefKey(bot) : null
@@ -29,10 +35,12 @@ export function useBotHostReadState(
     [read, key]
   )
   const refreshFailed = useSyncExternalStore(subscribe, getRefreshFailed, getRefreshFailed)
+  const getLanded = useCallback((): boolean => (key ? read.landed(key) : false), [read, key])
+  const landed = useSyncExternalStore(subscribe, getLanded, getLanded)
   const retry = useCallback(() => {
     if (botId && hostId) {
       read.request({ hostId, id: botId })
     }
   }, [read, botId, hostId])
-  return { state, refreshFailed, retry }
+  return { state, refreshFailed, landed, retry }
 }

@@ -27,14 +27,18 @@ import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
 import type { BrowserPageSiteDisplaySource } from './browser-page-site-display-source'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { useBrowserPageCookieImport } from '../profile-routing/use-browser-page-cookie-import'
-import { switchClientHostedBrowserPageProfile } from '../client-hosted/client-hosted-browser-profile-switch'
+import { switchServerBrowserPageProfile } from '../profile-routing/server-browser-page-profile-switch'
 import { errorMessage } from '../../../../../../shared/errors/error-message'
 import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
-import { BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY } from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import {
+  BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY,
+  BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY
+} from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 const NO_PROFILES: BrowserSessionProfile[] = []
 
@@ -57,8 +61,8 @@ type BrowserToolbarMenuProps = {
   extensionsSub: React.ReactNode
   /** Set on a server's page this desktop hosts: its profiles are that server's and its jar is its own. */
   clientHostEnvironmentId?: string | null
-  /** False where another machine's browser renders the page, so this desktop can't switch or import into its session. */
-  showProfiles?: boolean
+  /** Set on a page a server renders and streams here: Profile switches it on that server; its jar takes no imports from here. */
+  streamedPage?: { environmentId: string; remotePageId: string | null } | null
   overflow: BrowserChromeOverflowMenuProps
 }
 
@@ -76,18 +80,21 @@ export function BrowserToolbarMenu({
   pageActions,
   extensionsSub,
   clientHostEnvironmentId = null,
-  showProfiles = true,
+  streamedPage = null,
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
-  const { pageRoute, detectedBrowsers, fetchDetectedBrowsers } = useBrowserPageCookieImport(
-    worktreeId,
-    clientHostEnvironmentId ? { environmentId: clientHostEnvironmentId, browserPageId } : null
-  )
+  const { pageRoute, detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers } =
+    useBrowserPageCookieImport(
+      worktreeId,
+      clientHostEnvironmentId ? { environmentId: clientHostEnvironmentId, browserPageId } : null
+    )
   // The page's own host, not the one Settings › Browser shows.
-  const profileHostId = clientHostEnvironmentId
-    ? toRuntimeExecutionHostId(clientHostEnvironmentId)
+  const profileEnvironmentId = clientHostEnvironmentId ?? streamedPage?.environmentId ?? null
+  const profileHostId = profileEnvironmentId
+    ? toRuntimeExecutionHostId(profileEnvironmentId)
     : LOCAL_EXECUTION_HOST_ID
+  const showsCookieImport = !streamedPage
   const listedProfiles = useAppStore((s) => s.browserSessionProfilesByHostId[profileHostId])
   const browserSessionProfiles = listedProfiles ?? NO_PROFILES
   const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
@@ -104,19 +111,30 @@ export function BrowserToolbarMenu({
   // Force the menu open for the tour unless a new tab page is already showing the Import hint.
   const importHintOnPage =
     isBlankTab && shouldShowBrowserImportHint({ persistedUIReady, browserImportHintHidden })
+  // The picker replaces the menu it opened from, so the tour stops holding the menu while it shows.
+  const [importPickerOpen, setImportPickerOpen] = useState(false)
   const shouldForceMenuOpen =
-    showProfiles && browserCookieTourStepActive && isActive && !importHintOnPage
+    showsCookieImport &&
+    browserCookieTourStepActive &&
+    isActive &&
+    !importHintOnPage &&
+    !importPickerOpen
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
   const [switchingProfile, setSwitchingProfile] = useState(false)
   const serverSwitchesProfiles = useRuntimeHostStatusSelector(
-    clientHostEnvironmentId,
+    profileEnvironmentId,
     (entry) =>
-      entry?.status?.capabilities?.includes(BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY) ===
-      true
+      entry?.status?.capabilities?.includes(
+        streamedPage
+          ? BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY
+          : BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY
+      ) === true
   )
+  const serverPageId = streamedPage ? streamedPage.remotePageId : browserPageId
+  const showsProfileSub = !profileEnvironmentId || Boolean(serverSwitchesProfiles && serverPageId)
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
@@ -172,7 +190,7 @@ export function BrowserToolbarMenu({
       showSiteDisplay(siteDisplaySource.read())
     }
     // A failed listing lands as [], since a real one always has Default.
-    if (open && showProfiles && !listedProfiles?.length) {
+    if (open && showsProfileSub && !listedProfiles?.length) {
       void fetchBrowserSessionProfiles(profileHostId)
     }
     setMenuOpen(open)
@@ -205,15 +223,18 @@ export function BrowserToolbarMenu({
     profileId: string | null,
     partition: string | null
   ): Promise<boolean> => {
-    if (!clientHostEnvironmentId) {
+    if (!profileEnvironmentId) {
       // Persist the partition with the profile so stale renderer mirrors cannot weaken tab isolation.
       switchBrowserTabProfile(workspaceId, profileId, partition)
       return true
     }
+    if (!serverPageId) {
+      return false
+    }
     setSwitchingProfile(true)
-    const switched = await switchClientHostedBrowserPageProfile(
-      clientHostEnvironmentId,
-      browserPageId,
+    const switched = await switchServerBrowserPageProfile(
+      profileEnvironmentId,
+      serverPageId,
       profileId ?? 'default'
     ).then(
       () => true,
@@ -253,41 +274,44 @@ export function BrowserToolbarMenu({
     }
 
     setIsCreatingProfile(true)
-    try {
-      const profile = await createBrowserSessionProfile('isolated', trimmed, profileHostId)
-      if (!profile) {
-        if (mountedRef.current) {
-          toast.error(
+    await runWithFinally(
+      async () => {
+        const profile = await createBrowserSessionProfile('isolated', trimmed, profileHostId)
+        if (!profile) {
+          if (mountedRef.current) {
+            toast.error(
+              t(
+                'auto.components.browser.pane.BrowserToolbarMenu.4d2f9f13a7',
+                'Failed to create profile.'
+              )
+            )
+          }
+          return
+        }
+
+        if (!mountedRef.current) {
+          return
+        }
+
+        setNewProfileDialogOpen(false)
+        setNewProfileName('')
+
+        if (await switchPageProfile(profile.id, profile.partition)) {
+          toast.success(
             t(
-              'auto.components.browser.pane.BrowserToolbarMenu.4d2f9f13a7',
-              'Failed to create profile.'
+              'auto.components.browser.pane.BrowserToolbarMenu.a7a86702b3',
+              'Created and switched to {{value0}} profile',
+              { value0: profile.label }
             )
           )
         }
-        return
+      },
+      () => {
+        if (mountedRef.current) {
+          setIsCreatingProfile(false)
+        }
       }
-
-      if (!mountedRef.current) {
-        return
-      }
-
-      setNewProfileDialogOpen(false)
-      setNewProfileName('')
-
-      if (await switchPageProfile(profile.id, profile.partition)) {
-        toast.success(
-          t(
-            'auto.components.browser.pane.BrowserToolbarMenu.a7a86702b3',
-            'Created and switched to {{value0}} profile',
-            { value0: profile.label }
-          )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setIsCreatingProfile(false)
-      }
-    }
+    )
   }
 
   const handleImportFromBrowser = async (
@@ -354,7 +378,7 @@ export function BrowserToolbarMenu({
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
         profile={
-          showProfiles && (!clientHostEnvironmentId || serverSwitchesProfiles)
+          showsProfileSub
             ? {
                 browserPageId,
                 allProfiles,
@@ -366,14 +390,17 @@ export function BrowserToolbarMenu({
             : null
         }
         cookieImport={
-          showProfiles
+          showsCookieImport
             ? {
                 browserPageId,
                 effectiveProfileId,
                 detectedBrowsers,
+                detectedBrowsersLoaded,
                 onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
                 browserSessionImportState,
                 pageRoute,
+                pickerOpen: importPickerOpen,
+                onPickerOpenChange: setImportPickerOpen,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
                 onImportFromFile: () => void handleImportFromFile()

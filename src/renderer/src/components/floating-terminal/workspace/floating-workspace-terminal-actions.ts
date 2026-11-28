@@ -173,6 +173,10 @@ export function isEventTargetInsideFloatingWorkspacePanel(target: EventTarget | 
   return target instanceof HTMLElement && target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
 }
 
+export function isFloatingWorkspaceKeyTarget(target: EventTarget | null): boolean {
+  return isEventTargetInsideFloatingWorkspacePanel(target) || isFloatingWorkspacePanelFocused()
+}
+
 export function resolveKeyboardWorkspaceId(
   target: EventTarget | null,
   activeWorktreeId: string | null

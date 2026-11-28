@@ -1,4 +1,4 @@
-import { app, powerMonitor, powerSaveBlocker } from 'electron'
+import { app, powerMonitor } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
@@ -6,10 +6,12 @@ import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
 import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
 import { AgentAwakeService } from '../power/agent-awake-service'
+import { bindAgentAwakeToHookStatus } from '../power/agent-awake-hook-status-binding'
 import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
+import { holdPowerSaveBlocker } from '../power/power-save-blocker-hold'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
@@ -22,6 +24,7 @@ import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-g
 import { initObservability } from '../observability/index'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import { trackUnrecoveredStallImport } from '../hang-watchdog/previous-unrecovered-stall-import'
 import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { mainProcessState as state } from './main-process-state'
@@ -50,14 +53,7 @@ export function initializeMainProcessObservers(store: Store): void {
     state.unsubscribeWakeSignalClock = feedWakeSignalClock()
   }
   // Bots' Tidy-up and Look around hold off idle sleep while they run; display sleep is fine.
-  installBackgroundRunAwakeHold(() => {
-    const id = powerSaveBlocker.start('prevent-app-suspension')
-    return () => {
-      if (powerSaveBlocker.isStarted(id)) {
-        powerSaveBlocker.stop(id)
-      }
-    }
-  })
+  installBackgroundRunAwakeHold(() => holdPowerSaveBlocker('prevent-app-suspension'))
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,
@@ -83,38 +79,11 @@ export function initializeMainProcessObservers(store: Store): void {
   )
   // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
-  const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
-    ({ before, after }) => {
-      for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
-        if (!paneKey) {
-          continue
-        }
-        const row = agentHookServer
-          .getStatusSnapshotForPane(paneKey)
-          .find((row) => !row.providerSessionOnly)
-        state.agentAwakeService?.updateStatus(
-          paneKey,
-          row
-            ? {
-                paneKey,
-                state: row.state,
-                receivedAt: row.receivedAt,
-                observedInCurrentRuntime:
-                  row.isReplay !== true && row.restoredUnconfirmed !== true && !row.paneSleep
-              }
-            : undefined
-        )
-      }
-    }
-  )
-  const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
-    state.agentAwakeService?.observeStatusFreshness(status)
-  })
+  const unsubscribeHookStatus = bindAgentAwakeToHookStatus(agentHookServer, state.agentAwakeService)
   // WSL-host agents never reach the hook server; their host's own stream reports them.
   const stopWslHostAgentAwake = startWslHostAgentAwake(state.agentAwakeService)
   state.unsubscribeAgentAwakeStatusChanges = () => {
-    unsubscribeStatusChanges()
-    unsubscribeStatusFreshness()
+    unsubscribeHookStatus()
     stopWslHostAgentAwake()
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
@@ -149,13 +118,31 @@ export function initializeMainProcessObservers(store: Store): void {
     packaged: app.isPackaged,
     platform: process.platform
   })
-  state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
+  const previousHang = reportPreviousHangDetection(getCanonicalUserDataPath())
+  state.hangDetection = previousHang.marker
+  const { unrecoveredStall } = previousHang
+  if (unrecoveredStall && state.crashReports) {
+    const store = state.crashReports
+    trackUnrecoveredStallImport(
+      import('../hang-watchdog/unrecovered-stall-report')
+        .then(async ({ importUnrecoveredStallReport }) =>
+          (await importUnrecoveredStallReport(store, unrecoveredStall))
+            ? unrecoveredStall.detectedAt
+            : null
+        )
+        .catch((error) => {
+          console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
+          return null
+        })
+    )
+  }
   if (state.hangDetection) {
     const marker = state.hangDetection
     const report = (details: NativeHangTelemetry): void => {
       track('main_thread_hang_detected', {
         unresponsive_ms: Math.round(marker.unresponsiveMs),
         self_recovered: marker.selfRecovered,
+        ...(marker.appVersion ? { detected_app_version: marker.appVersion } : {}),
         ...details
       })
     }

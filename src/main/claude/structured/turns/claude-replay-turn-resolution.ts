@@ -16,6 +16,7 @@ import type {
 } from '../claude-structured-session-state'
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeDispatchContentKey } from '../dispatch/claude-structured-dispatch-content'
+import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
@@ -65,7 +66,7 @@ export function resolveClaudeReplayTurn(
     }
     const live = session.dispatchWaiters.find((candidate) => candidate.sentUuid === member)
     if (live) {
-      settleWaiter(session, live, member, onSettledLate)
+      settleWaiter(session, live, member, onSettledLate, joinedTurn(session))
       continue
     }
     const late = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === member)
@@ -176,7 +177,7 @@ function settleLiveDispatch(
   if (isUserReplay && joinsTurn) {
     session.translator?.turnCycle.confirmProviderCycle()
   }
-  settleWaiter(session, waiter, uuid, onSettledLate)
+  settleWaiter(session, waiter, uuid, onSettledLate, joinsTurn ? joinedTurn(session) : undefined)
   return isUserReplay && !joinsTurn
     ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
     : null
@@ -189,11 +190,18 @@ function claudeResultUserMessageUuids(message: Record<string, unknown>): string[
     : []
 }
 
+/** The running turn a send joined: the provider's current turn, which another send opened. */
+function joinedTurn(session: ClaudeSession): AgentJournalAnsweredTurnIdentity | undefined {
+  const turn = session.translator?.turnCycle.identity
+  return turn ? { turn, via: 'steer' } : undefined
+}
+
 function settleWaiter(
   session: ClaudeSession,
   waiter: ClaudeDispatchWaiter,
   uuid: string,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  onSettledLate?: ClaudeLateDispatchSettlement,
+  answeredInTurn?: AgentJournalAnsweredTurnIdentity
 ): void {
   const index = session.dispatchWaiters.indexOf(waiter)
   if (index !== -1) {
@@ -205,7 +213,8 @@ function settleWaiter(
   if (waiter.clientMessageId) {
     onSettledLate?.({
       clientMessageId: waiter.clientMessageId,
-      providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+      providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid },
+      ...(answeredInTurn ? { answeredInTurn } : {})
     })
   }
 }

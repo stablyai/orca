@@ -36,6 +36,7 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
     chatUiLaunchTipVariant: null,
     setChatUiLaunchTipVariant: (variant) => set({ chatUiLaunchTipVariant: variant }),
     featureInteractions: {},
+    workspaceBoardUsedBeforeLaunch: null,
     recordFeatureInteraction: (id) => {
       let tourProgression: ReturnType<typeof getContextualTourProgressionForFeatureInteraction> =
         null

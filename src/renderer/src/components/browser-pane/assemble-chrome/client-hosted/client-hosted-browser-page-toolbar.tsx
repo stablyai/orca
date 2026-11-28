@@ -7,12 +7,9 @@ import type {
 } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import type { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
-import {
-  getRemoteRoutedOpenableExternalUrl,
-  toDisplayUrl
-} from '../../describe-page/browser-page-url-display'
+import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { useServerPageOpenExternal } from '../../describe-page/use-server-page-open-external'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import BrowserAddressBar from '../address-bar/BrowserAddressBar'
@@ -23,7 +20,13 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
-import { useClientHostedBrowserProfileId } from './use-client-hosted-browser-profile-id'
+import { BrowserPageDeviceMoveItem } from '../../navigate/device-move/browser-page-device-move-item'
+import { useServerBrowserPageProfileId } from '../profile-routing/use-server-browser-page-profile-id'
+import {
+  BrowserExtensionToolbar,
+  BrowserExtensionsMenuSub
+} from '../extensions/browser-extension-toolbar'
+import { useBrowserExtensionToolbar } from '../extensions/use-browser-extension-toolbar'
 import type {
   BrowserChromeElementTools,
   BrowserChromeMarkupTool,
@@ -75,8 +78,14 @@ export function ClientHostedBrowserPageToolbar({
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
     applyBrowserViewportPreset(browserPageId, nextId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
-  const externalUrl = getRemoteRoutedOpenableExternalUrl(browserTab.url)
-  const browserProfileId = useClientHostedBrowserProfileId(browserPageId)
+  const onOpenExternal = useServerPageOpenExternal(browserTab.url, runtimeEnvironmentId, worktreeId)
+  const browserProfileId = useServerBrowserPageProfileId(browserPageId)
+  // The page runs this desktop's extensions when its server profile is Default; main decides.
+  const extensionToolbar = useBrowserExtensionToolbar(
+    browserPageId,
+    isActive,
+    `${browserTab.url}\n${loading}`
+  )
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
@@ -141,8 +150,17 @@ export function ClientHostedBrowserPageToolbar({
           onHardReload={() => reload.runReloadTrigger('hard-reload')}
         />
       }
-      // Extensions load only into this desktop's profile sessions, not route partitions (#35178).
-      extensionActions={null}
+      extensionActions={
+        extensionToolbar &&
+        ((compact, menuTriggerRef) => (
+          <BrowserExtensionToolbar
+            browserPageId={browserPageId}
+            state={extensionToolbar}
+            compact={compact}
+            fallbackAnchorRef={menuTriggerRef}
+          />
+        ))
+      }
       {...annotateTools}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
@@ -159,11 +177,29 @@ export function ClientHostedBrowserPageToolbar({
             onFind: onOpenFind,
             onHardReload: () => reload.runReloadTrigger('hard-reload'),
             onOpenDevTools: () => void window.api.browser.openDevTools({ browserPageId }),
-            onOpenExternal: externalUrl
-              ? () => void openAppHttpLink(externalUrl, { worktreeId, destination: 'system' })
-              : null
+            onOpenExternal,
+            deviceMoveItem: (
+              <BrowserPageDeviceMoveItem
+                target={{
+                  browserPageId,
+                  worktreeId,
+                  environmentId: runtimeEnvironmentId,
+                  url: browserTab.url,
+                  destination: 'server'
+                }}
+              />
+            )
           }}
-          extensionsSub={null}
+          extensionsSub={
+            extensionToolbar ? (
+              <BrowserExtensionsMenuSub
+                browserPageId={browserPageId}
+                state={extensionToolbar}
+                anchorRef={overflow.triggerRef}
+                deferUntilClose={overflow.deferUntilClose}
+              />
+            ) : null
+          }
           clientHostEnvironmentId={runtimeEnvironmentId}
           overflow={overflow}
         />

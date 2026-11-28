@@ -8,11 +8,13 @@ import type {
 import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { WORKER_AGENT_STARTING_STAGE } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
 import {
   sessionCallerOf,
   type OrchestrationEntryCaller
 } from '../../addressing/orchestration-caller-identity'
-import { botWorkHostOf, prepareBotWorkerStart } from '../../../../bots/bot-work-runtime'
+import { botWorkHostOf } from '../../../../bots/bot-work-runtime'
+import { prepareBotWorkerStart } from '../../../../bots/bot-work-start'
 
 export type AgentCreationCard = AgentJournalAgentStartItem | AgentJournalAgentHandoffItem
 
@@ -62,6 +64,7 @@ type WorkerStarted = {
   /** False for a start whose outcome is unknown: it may yet turn out ready, so a bot still records
    *  it, but the chat shows no card for it. */
   ready: boolean
+  reusedTerminal?: boolean
   dispatchId: string
   taskId: string
   workerAddress: string
@@ -106,7 +109,7 @@ export function prepareWorkerStartCard(
     callerSession
   )
   return (args) => {
-    if (args.ready && publish) {
+    if (args.ready && !args.reusedTerminal && publish) {
       publish(() => ({
         kind: 'agent-start',
         dispatchId: args.dispatchId,
@@ -125,7 +128,9 @@ export function prepareWorkerStartCard(
         .recordWorker(groupWork.operation, args.dispatchId)
         .catch(logStartCardFailure)
     }
-    botWork(args)
+    if (!args.reusedTerminal) {
+      botWork(args)
+    }
   }
 }
 
@@ -139,7 +144,8 @@ function logStartCardFailure(error: unknown): void {
 
 /** An unknown outcome with an agent launched may yet be a running worker: a bot records it, with no
  *  card. One that failed before any agent (a lost worktree reply) is no worker at all; one still
- *  starting is recorded when its wait settles. A reused terminal is never a new worker. */
+ *  starting is recorded when its wait settles. A reused terminal is no new worker, so it gets no card
+ *  or bot record, but its Dispatch still joins the caller's group work. */
 export function recordWorkerStartOutcome(
   record: (started: WorkerStarted) => void,
   outcome: unknown,
@@ -149,8 +155,11 @@ export function recordWorkerStartOutcome(
   }
 ): void {
   const state = outcome && typeof outcome === 'object' && 'state' in outcome ? outcome.state : null
-  const { reusedTerminal, workerAddress, ...card } = started
-  if (!reusedTerminal && workerAddress && (state === 'ready' || state === 'outcome_unknown')) {
+  const stage = outcome && typeof outcome === 'object' && 'stage' in outcome ? outcome.stage : null
+  const { workerAddress, ...card } = started
+  // A structured worker holding its brief for a still-starting agent is a worker already.
+  const holdsBrief = state === 'starting' && stage === WORKER_AGENT_STARTING_STAGE
+  if (workerAddress && (state === 'ready' || state === 'outcome_unknown' || holdsBrief)) {
     record({ ...card, workerAddress, ready: state === 'ready' })
   }
 }

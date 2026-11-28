@@ -11,7 +11,7 @@ import {
   startBotSession
 } from '../../../../../bots/bot-chat-session'
 import { showBotSessionTab } from '../../../../../bots/bot-session-tab-show'
-import { botRequestSenderName, type BotRequestRecord } from '../../../../../bots/bot-request-view'
+import { botRequestChatTitle, type BotRequestRecord } from '../../../../../bots/bot-request-view'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
@@ -29,9 +29,7 @@ async function requestConversation(
       ...(record.triggeredBy ? { triggeredBy: record.triggeredBy } : {})
     }
   })
-  // A bot's own new chat is named for its subject alone; another sender's names who sent it.
-  const own = record.fromBotId === bot.id
-  const title = (own ? subject : `${botRequestSenderName(record)}: ${subject}`).slice(0, 80)
+  const title = botRequestChatTitle(record, bot.id, subject)
   await (
     await requireStructuredHost(runtime)
   )

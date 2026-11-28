@@ -121,7 +121,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'オンボーディングチェックリスト、{{value0}}/{{value1}} 完了。セットアップガイドを表示。'
   },
   'auto.components.settings.ShortcutFilterRail.02dc7d4251': {
-    ko: '바로가기 검색',
+    ko: '단축키 검색',
     zh: '搜索快捷键',
     ja: 'ショートカットを検索'
   },
@@ -205,7 +205,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'Discord'
   },
   'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1': {
-    ko: 'Orca 재시작',
+    ko: 'Orca 다시 시작',
     zh: '重启 Orca',
     ja: 'Orca を再起動'
   },
@@ -225,7 +225,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: '終了中…'
   },
   'auto.components.status.bar.ResourceUsageStatusSegment.53dd5560ae': {
-    ko: 'Orca 접기',
+    ko: 'Orca 축소',
     zh: '折叠 Orca',
     ja: 'Orca を折りたたむ'
   },
@@ -310,9 +310,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'ブロックを検索'
   },
   'auto.components.TaskPage.eec0c5c079': {
-    ko: 'Linear 이슈 검색...',
-    zh: '搜索 Linear 议题...',
-    ja: 'Linear イシューを検索...'
+    ko: '검색...',
+    zh: '搜索...',
+    ja: '検索…'
   },
   'auto.web.WebConnect.e3bcd082ac': {
     ko: 'Orca에 연결',
@@ -320,7 +320,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'Orca に接続'
   },
   'auto.App.caea5b51b9': {
-    ko: '지금 재시작',
+    ko: '지금 다시 시작',
     zh: '立即重启',
     ja: '今すぐ再起動'
   },
@@ -331,7 +331,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
     ko: '주머니 속의 워크스페이스.',
-    zh: '您的工作区就在您的口袋里',
+    zh: '你的工作区就在你的口袋里',
     ja: 'ワークスペースをポケットに。'
   },
   'auto.components.GitHubItemDialog.dbe5e2448e': {
@@ -375,7 +375,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'このイシューを登録する前に、プロジェクトワークスペースからチームを選択してください。'
   },
   'auto.components.TaskPage.94d900518d': {
-    ko: '선택한 프리셋과 일치하는 이슈가 없습니다.',
+    ko: '선택한 사전 설정과 일치하는 이슈가 없습니다.',
     zh: '没有与所选预设匹配的议题',
     ja: '選択したプリセットに一致するイシューはありません。'
   },
@@ -395,7 +395,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'GitHub イシュー'
   },
   'auto.components.settings.CommitMessageAiPane.4f722a5f53': {
-    ko: '사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 사용',
+    ko: '사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 명령 입력을 인수로 넘기려면 명령에',
     zh: '由选择自定义命令的提交消息、拉取请求和分支名称配方使用。使用',
     ja: 'カスタムコマンドを選択するコミットメッセージ、PR、ブランチ名のレシピで使用されます。使用'
   },
@@ -440,7 +440,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'アプリ名を非表示'
   },
   'auto.lib.fix.checks.agent.launch.9f00d7df0c': {
-    ko: '검사 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
+    ko: '체크 수정 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
     zh: '检查提示为空。请更新源代码管理 AI 设置',
     ja: 'チェック プロンプトが空です。ソース管理 AI 設定を更新してください。'
   },
@@ -541,7 +541,17 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.browser.search.sshWorkspaceRouting.ssh': { fr: 'ssh' },
   // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
   'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
-  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' },
+  // "Dismiss" on a bot's create offer is sent to the bot as the owner's reply, so it reads 忽略, not 关闭.
+  'components.native-chat.offerCard.dismiss': { zh: '忽略' },
+  // Bot statuses read as states (已完成), not the imperative button word 完成.
+  'bots.items.status.done': { zh: '已完成' },
+  'bots.webhooks.calls.completed': { zh: '已完成' },
+  'bots.googleSetup.progress.done': { zh: '已完成' },
+  'featureTips.botsTeammate.agentDone': { zh: '已完成' },
+  // Dismissing an Up next suggestion ignores it; the webhook's Checks are its signature checks.
+  'bots.upNext.dismiss': { zh: '忽略' },
+  'bots.webhooks.checksLabel': { zh: '验证' }
 }
 
 export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

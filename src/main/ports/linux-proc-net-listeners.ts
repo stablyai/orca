@@ -1,5 +1,5 @@
-import { getProcessOutputFields } from '../../shared/process-observation/process-output-field-scanner'
 import { parseProcAddress } from './local-workspace-port-address'
+import { parseProcNetTcpRows, PROC_NET_TCP_LISTEN_STATE } from './linux-proc-net-tcp-rows'
 
 export type ProcNetListener = { host: string; port: number; inode: number }
 
@@ -23,24 +23,15 @@ function isAnotherLoginUsersListener(uid: number, ownUid: number | undefined): b
 /** Shared hosts list every user's sockets in /proc/net; keep ours and system services', like non-root lsof on macOS. */
 export function parseProcNetTcp(content: string, ownUid: number | undefined): ProcNetListener[] {
   const results: ProcNetListener[] = []
-  const lines = content.split('\n')
-  for (let i = 1; i < lines.length; i++) {
-    const fields = getProcessOutputFields(lines[i], 10)
-    if (fields.length < 10 || fields[3] !== '0A') {
+  for (const row of parseProcNetTcpRows(content)) {
+    if (row.state !== PROC_NET_TCP_LISTEN_STATE) {
       continue
     }
-    const parsed = parseProcAddress(fields[1])
-    const uid = Number.parseInt(fields[7], 10)
-    const inode = Number.parseInt(fields[9], 10)
-    if (
-      !parsed ||
-      !Number.isFinite(inode) ||
-      inode === 0 ||
-      isAnotherLoginUsersListener(uid, ownUid)
-    ) {
+    const parsed = parseProcAddress(row.localAddress)
+    if (!parsed || row.inode === 0 || isAnotherLoginUsersListener(row.uid, ownUid)) {
       continue
     }
-    results.push({ ...parsed, inode })
+    results.push({ ...parsed, inode: row.inode })
   }
   return results
 }

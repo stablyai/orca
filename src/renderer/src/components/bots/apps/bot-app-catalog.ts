@@ -13,6 +13,7 @@ import {
   COMPOSIO_CURATED_APPS,
   type ComposioCuratedApp
 } from '../../../../../shared/composio/composio-curated-apps'
+import { botMcpAppLine } from '../../../../../shared/bots/bot-app-lines'
 
 export type { BotAppCategory }
 export { BOT_APP_CATEGORIES }
@@ -78,7 +79,7 @@ export const DIRECT_APPS: readonly BotDirectApp[] = [
 /** A row's one line: what the app does for the bot, before it is added. */
 export function directAppLine(app: BotDirectApp): string {
   if (app.route === 'mcp') {
-    return app.line
+    return botMcpAppLine(app, translate)
   }
   switch (app.connector) {
     case 'github':

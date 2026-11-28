@@ -1,8 +1,8 @@
-// One row of the Items tab: its status glyph (a check circle while selecting), title, the bot's
-// question under a Needs you row, the unseen dot and its age (a snoozed row's wake time); and the floating
-// bar while rows are checked.
+// One row of the Items tab: its status glyph (a check circle while selecting), number and title, the
+// bot's question under a Needs you row, the unseen dot and its age (a snoozed row's wake time); and the
+// floating bar while rows are checked.
 import { Pressable, Text, View } from 'react-native'
-import { Circle, CircleCheck, X } from 'lucide-react-native'
+import { Circle, CircleCheck, CircleHelp, X } from 'lucide-react-native'
 import {
   botItemActivityAt,
   formatBotItemNumber,
@@ -10,11 +10,14 @@ import {
   type BotItem
 } from '../../../../src/shared/bots/bot-items'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
+import { botItemQuestionLine } from '../../../../src/shared/bots/bot-item-ask'
 import { ListRow } from '../../components/list/ListGroup'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
@@ -47,25 +50,38 @@ export function MobileBotItemRow({
   /** In a group's list: the bot the item is from, named under its title. */
   owner?: { name: string; avatar: MobileBotAvatarSource }
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  // Only Needs you has a second line, the bot's question; In progress's spinner is its live signal.
-  const question =
-    !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : undefined
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
+  const asking = !stale && !snoozed && item.status === 'needs_you'
+  // Only Needs you and Waiting have a second line, the bot's question or what it waits on; In
+  // progress's spinner is its live signal.
+  const question = asking
+    ? itemQuestionLine(item, t)
+    : !snoozed && item.status === 'waiting'
+      ? item.wait?.text
+      : undefined
   const Check = checked ? CircleCheck : Circle
   return (
     <ListRow
       title={item.title}
-      marker={formatBotItemNumber(item.number)}
+      titlePrefix={formatBotItemNumber(item.number)}
       subtitle={owner ? undefined : question}
       subtitleLines={1}
       detail={owner ? <MobileBotItemOwnerLine owner={owner} line={question} /> : undefined}
       leading={
         checked === null ? (
-          <MobileBotItemStatusIcon
-            status={item.status}
-            live={isBotItemLive(item)}
-            stale={stale || snoozed}
-          />
+          asking ? (
+            // Needs you's own glyph, as its other asks draw theirs.
+            <CircleHelp size={17} strokeWidth={2.1} color={colors.agentQuestion} />
+          ) : (
+            <MobileBotItemStatusIcon
+              status={item.status}
+              live={isBotItemLive(item)}
+              stale={stale || snoozed}
+            />
+          )
         ) : (
           <Check
             size={18}
@@ -80,9 +96,9 @@ export function MobileBotItemRow({
           <Text style={styles.age}>
             {snoozed && item.snoozedUntil !== null
               ? t('bots.items.snooze.rowUntil', 'until {{when}}', {
-                  when: formatPhoneSnoozeTime(item.snoozedUntil, now)
+                  when: formatPhoneSnoozeTime(item.snoozedUntil, now, intlLocale)
                 })
-              : formatTimeAgo(botItemActivityAt(item, now), now)}
+              : formatTimeAgo(botItemActivityAt(item, now), now, t)}
           </Text>
         </View>
       }
@@ -99,6 +115,23 @@ export function MobileBotItemRow({
   )
 }
 
+/** What a Needs you item asks: its one question, or how many when it asks several. */
+function itemQuestionLine(item: BotItem, t: Translate): string | undefined {
+  const decisions = item.question?.decisions ?? []
+  if (decisions.length > 1) {
+    return t('bots.needs.questions', '{{count}} questions', { count: decisions.length })
+  }
+  const text = decisions[0]?.question ?? item.question?.text
+  return text ? botItemQuestionLine(text) : undefined
+}
+
+/** An ask's age in a Needs you row, in the item rows' muted style. */
+export function MobileBotAskAge({ at, now }: { at: number; now: number }) {
+  const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
+  return <Text style={styles.age}>{formatTimeAgo(at, now, t)}</Text>
+}
+
 /** In a group's list: the member a row is from, its face and name, then the row's own line. */
 export function MobileBotItemOwnerLine({
   owner,
@@ -107,7 +140,7 @@ export function MobileBotItemOwnerLine({
   owner: { name: string; avatar: MobileBotAvatarSource }
   line?: string
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.owner}>
       <MobileBotAvatar avatar={owner.avatar} size={14} />
@@ -128,7 +161,8 @@ export function MobileBotItemSelectionBar({
   onMove: () => void
   onClear: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.bar}>
@@ -155,7 +189,7 @@ export function MobileBotItemSelectionBar({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   owner: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   ownerText: { flexShrink: 1, fontSize: typography.metaSize, color: colors.textSecondary },

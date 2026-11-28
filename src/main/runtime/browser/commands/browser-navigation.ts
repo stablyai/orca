@@ -112,6 +112,15 @@ export class RuntimeBrowserNavigation {
       .setSiteColorScheme(params.colorScheme, target.worktreeId, target.browserPageId)
   }
 
+  async browserSetAudioMuted(
+    params: { muted: boolean } & BrowserCommandTargetParams
+  ): Promise<{ muted: boolean }> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .setAudioMuted(params.muted, target.worktreeId, target.browserPageId)
+  }
+
   async browserStop(params: BrowserCommandTargetParams): Promise<BrowserStopResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return this.targets.requireAgentBrowserBridge().stop(target.worktreeId, target.browserPageId)

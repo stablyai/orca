@@ -1,5 +1,5 @@
-// An item's Activity on the phone, in the desktop's order and words: comments as cards (an agent's
-// question with its question footer and quick replies), and one muted line per other event; comments
+// An item's Activity on the phone, in the desktop's order and words: comments as chat-style rows (an
+// agent's question with its question lines), and one muted line per other event; comments
 // sent from the box that the host's read doesn't show yet come last, as sent. A reply's quote shows its
 // question: scrolled to the middle and briefly lit, as the desktop's comment box does (a tap has no focus ring).
 import { useCallback, useRef, useState } from 'react'
@@ -17,26 +17,35 @@ import {
 } from 'lucide-react-native'
 import {
   botItemActivity,
+  botItemLiveAskKey,
+  botItemWaitEntryKey,
+  botItemWorkerStopReason,
   type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
-import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
   BOT_ITEM_STATUSES,
   type BotItem,
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
 import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
+import { botItemRepliedAsks } from '../../../../src/shared/bots/bot-item-replying'
+import { botItemPendingWordsBesideAnswers } from '../../../../src/shared/bots/bot-item-sent-answers'
+import {
+  isBotItemSentComment,
+  type BotItemSentAnswers
+} from '../../../../src/shared/bots/use-bot-item-question-steps'
 import {
   mobileBotItemCommentWords,
   type MobileBotItemAttachmentSource
 } from './MobileBotItemCommentAttachments'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { Translate } from '../../i18n/mobile-i18n'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { fieldName, statusWord, str } from './bot-item-activity-words'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
@@ -44,25 +53,10 @@ import { useMobileMessageTime } from '../../session/native-chat/transcript/messa
 
 const ICON = 13
 
-function str(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function fieldName(field: string, t: Translate): string {
-  return field === 'doneMeans'
-    ? t('bots.items.field.doneMeansLower', 'done means')
-    : field === 'description'
-      ? t('bots.items.field.description', 'description')
-      : t('bots.items.field.title', 'title')
-}
-
-function statusWord(value: unknown, t: Translate): string {
-  const status = BOT_ITEM_STATUSES.find((entry) => entry === value)
-  return status ? botItemStatusName(status, t) : str(value)
-}
-
 /** "changed done means ⌄": the before and after open on tap, as on the desktop. */
 function FieldChange({ by, field, change }: { by: string; field: string; change: unknown }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [open, setOpen] = useState(false)
   const diff: { from?: unknown; to?: unknown } =
@@ -96,7 +90,9 @@ function FieldChange({ by, field, change }: { by: string; field: string; change:
 }
 
 function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const by = botItemActorName(event, item, t)
   const { data } = event
   switch (event.kind) {
@@ -160,7 +156,7 @@ function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
           <Text style={styles.actor}>{by}</Text>{' '}
           {typeof data.until === 'number'
             ? t('bots.items.activity.snoozed', 'snoozed this until {{when}}', {
-                when: formatPhoneSnoozeTime(data.until, event.at)
+                when: formatPhoneSnoozeTime(data.until, event.at, intlLocale)
               })
             : t('bots.items.activity.snoozedBare', 'snoozed this')}
         </Text>
@@ -181,6 +177,7 @@ function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
 }
 
 function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'worker' }> }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const title = <Text style={styles.actor}>{entry.link.title ?? entry.link.ref}</Text>
   if (entry.phase === 'started') {
@@ -191,6 +188,7 @@ function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'w
     )
   }
   const failed = entry.link.state === 'failed' || entry.link.state === 'stopped'
+  const reason = botItemWorkerStopReason(entry.link)
   return (
     <View>
       <Text style={styles.line}>
@@ -198,6 +196,7 @@ function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'w
           ? t('bots.items.activity.workerFailed', 'Worker stopped:')
           : t('bots.items.activity.workerFinished', 'Worker finished:')}{' '}
         {title}
+        {reason ? ` - ${reason}` : null}
       </Text>
       {entry.link.report ? (
         <Text style={styles.line} numberOfLines={2}>
@@ -211,6 +210,7 @@ function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'w
 type LineEntry = Exclude<BotItemActivityEntry, { kind: 'comment' }>
 
 function EntryIcon({ entry }: { entry: LineEntry }) {
+  const colors = useMobileColors()
   if (entry.kind === 'worker') {
     if (entry.phase === 'started') {
       return <Play size={ICON} color={colors.textMuted} />
@@ -247,7 +247,10 @@ export function MobileBotItemActivity({
   events,
   attachments,
   pending,
-  onReveal
+  onReveal,
+  sent,
+  asking,
+  onQuote
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
@@ -256,8 +259,14 @@ export function MobileBotItemActivity({
   attachments: MobileBotItemAttachmentSource
   /** Scrolls the page to a span measured in the window. */
   onReveal: (y: number, height: number, animated: boolean) => void
+  /** Answers just posted as one comment. */
+  sent: BotItemSentAnswers | null
+  /** The docked answer card asks the waiting question now, so its comment doesn't repeat it. */
+  asking: boolean
+  /** Quotes a comment's words into the comment box. */
+  onQuote: (text: string) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const time = useMobileMessageTime()
   const still = useReducedMotionEnabled() === true
@@ -265,6 +274,9 @@ export function MobileBotItemActivity({
   const [flash, setFlash] = useState<{ id: string; at: number } | null>(null)
   const endFlash = useCallback(() => setFlash(null), [])
   const entries = botItemActivity(item, events)
+  // Its move shows as the Status row's subtitle while the item waits.
+  const waitKey = botItemWaitEntryKey(item, entries)
+  const liveAsk = botItemLiveAskKey(entries)
   const comments = new Set(
     entries.flatMap((entry) => (entry.kind === 'comment' ? [entry.key] : []))
   )
@@ -279,27 +291,45 @@ export function MobileBotItemActivity({
           })
         }
       : null
-  // A reply already sent answers the question, before the host's read says so.
-  const answered = pending.shown.some(({ failed }) => !failed)
+  // The questions replies on their way answer, read once rather than per row.
+  const replied = botItemRepliedAsks(pending.shown)
   return (
     <View>
       {entries.map((entry) =>
-        entry.kind === 'comment' ? (
-          <MobileBotItemCommentCard
-            key={entry.key}
-            item={item}
-            entry={answered ? { ...entry, waiting: false } : entry}
-            attachments={attachments}
-            ref={(node) => {
-              if (node) {
-                cards.current.set(entry.key, node)
-              } else {
-                cards.current.delete(entry.key)
+        // Its wait shows under Status; an answer reads on its question's lines.
+        entry.key === waitKey ? null : entry.kind === 'comment' ? (
+          entry.onAsk ? null : (
+            <MobileBotItemCommentCard
+              key={entry.key}
+              item={item}
+              // A reply already sent for this question answers it, before the host's read says so.
+              entry={
+                entry.waiting && (replied.unknown || replied.asks.has(entry.event.id))
+                  ? { ...entry, waiting: false }
+                  : entry
               }
-            }}
-            onShowQuestion={showQuestion(entry.replyTo?.eventId)}
-            {...(flash?.id === entry.key ? { flash: { at: flash.at, still, end: endFlash } } : {})}
-          />
+              attachments={attachments}
+              ref={(node) => {
+                if (node) {
+                  cards.current.set(entry.key, node)
+                } else {
+                  cards.current.delete(entry.key)
+                }
+              }}
+              onShowQuestion={showQuestion(entry.replyTo?.eventId)}
+              onShowLive={
+                entry.ended === 'replaced' && liveAsk !== entry.key
+                  ? showQuestion(liveAsk ?? undefined)
+                  : null
+              }
+              sent={sent}
+              asking={asking}
+              onQuote={onQuote}
+              {...(flash?.id === entry.key
+                ? { flash: { at: flash.at, still, end: endFlash } }
+                : {})}
+            />
+          )
         ) : (
           <View key={entry.key} style={styles.event}>
             <View style={styles.eventIcon}>
@@ -318,23 +348,30 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
-      {pending.shown.map(({ event, failed, mayHaveArrived }) => (
-        <MobileBotItemCommentCard
-          key={event.id}
-          item={item}
-          entry={{ event, waiting: false }}
-          attachments={attachments}
-          failed={
-            failed
-              ? {
-                  retry: mayHaveArrived ? null : () => pending.retry(event.id),
-                  discard: () => pending.discard(event.id)
-                }
-              : undefined
-          }
-        />
-      ))}
-      {entries.some((entry) => entry.kind === 'comment') || pending.shown.length > 0 ? null : (
+      {pending.shown.map((sending) => {
+        const { event, failed, mayHaveArrived, intent } = sending
+        // Answers posted as one comment show on their lines already: only the owner's words beside them.
+        const onLines = isBotItemSentComment({ failed, intent }, sent)
+        const beside = onLines ? botItemPendingWordsBesideAnswers(sending) : null
+        return onLines && beside === null ? null : (
+          <MobileBotItemCommentCard
+            key={event.id}
+            item={item}
+            entry={beside === null ? { event, waiting: false } : { event, waiting: false, beside }}
+            attachments={attachments}
+            failed={
+              failed
+                ? {
+                    retry: mayHaveArrived ? null : () => pending.retry(event.id),
+                    discard: () => pending.discard(event.id)
+                  }
+                : undefined
+            }
+            onQuote={failed ? undefined : onQuote}
+          />
+        )
+      })}
+      {entries.length > 0 || pending.shown.length > 0 ? null : (
         <Text style={[styles.line, styles.none]}>
           {t('bots.items.activity.noComments', 'No comments yet.')}
         </Text>
@@ -343,7 +380,7 @@ export function MobileBotItemActivity({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   event: {
     flexDirection: 'row',
     alignItems: 'flex-start',

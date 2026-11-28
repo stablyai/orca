@@ -85,7 +85,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
     const generation = ++subscriptionGeneration
     let handle: { unsubscribe: () => void } | null = null
     handle = await window.api.runtime.subscribe(
-      { method: 'session.tabs.subscribeAll', params: {} },
+      { method: 'session.tabs.subscribeAll', params: { scope: 'agent-sessions' } },
       (response) => {
         if (!isCurrent() || generation !== subscriptionGeneration) {
           return

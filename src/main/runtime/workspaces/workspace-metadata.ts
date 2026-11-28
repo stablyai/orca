@@ -3,7 +3,6 @@ import type {
   RemoteTrackingBase
 } from '../repositories/runtime-remote-fetch-controller'
 import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-refs/base-ref-drift-types'
-import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import {
@@ -21,16 +20,30 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
 import { countUnreadWorkspaces } from './metadata/unread-workspace-count'
 
+function writesWorkspaceRecords(domains: readonly string[] | undefined): boolean {
+  return domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))
+}
+
 export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase {
   countUnreadWorkspaces(): number {
     return countUnreadWorkspaces(this.store)
   }
 
-  /** Every unread write (window, phone, CLI, activation) lands in a workspace record. */
   onWorkspaceRecordsWritten(listener: () => void): () => void {
     return (
       this.store?.onStateWritten?.((domains) => {
-        if (domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))) {
+        if (writesWorkspaceRecords(domains)) {
+          listener()
+        }
+      }) ?? (() => {})
+    )
+  }
+
+  /** Every unread write (window, phone, CLI, activation) lands in a workspace record; activity stamps that keep the flags are skipped. */
+  onUnreadStateWritten(listener: () => void): () => void {
+    return (
+      this.store?.onStateWritten?.((domains, options) => {
+        if (!options?.preservesUnreadState && writesWorkspaceRecords(domains)) {
           listener()
         }
       }) ?? (() => {})
@@ -68,6 +81,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
     behind: number
     recentSubjects: string[]
   } | null> {
+    const { probeRuntimeWorktreeDrift } = await import('./metadata/runtime-worktree-drift-probe')
     return probeRuntimeWorktreeDrift({
       selector: worktreeSelector,
       store: this.store ? this.requireStore() : null,

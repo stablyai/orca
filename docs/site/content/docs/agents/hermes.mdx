@@ -48,7 +48,7 @@ Hermes runs conversations and their tools in a per-profile gateway process. The 
 - The first chat after the gateway stops can take a minute to start.
 - Tools run with the environment of whichever process started the gateway, so a variable you add to the Hermes row's **Environment** reaches tools only once the gateway restarts. Stop it with `hermes gateway stop`.
 - Closing a chat or pressing Stop cancels its turn in the gateway.
-- Hermes chats don't carry Orca's caller identity, because one gateway serves every chat on the profile. The `orca` command inside a Hermes tool therefore can't act as the chat that ran it.
+- One gateway serves every chat on the profile, so Orca's Hermes plugin hands each tool its own chat's Orca identity when the tool starts. The `orca` command inside a Hermes tool then acts as the chat or bot that ran it: orchestration, `orca bot`, `orca slack` and a bot's Google permission all work as they do in other chats. This needs Hermes 0.23.1 or later and Orca's agent status hooks for Hermes turned on. A gateway that was already running when Orca updated its plugin picks it up after `hermes gateway stop`.
 
 ## Remote hosts
 

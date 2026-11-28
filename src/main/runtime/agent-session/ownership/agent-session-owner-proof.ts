@@ -7,6 +7,18 @@ import {
 } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { proveAgentSessionOwner } from './agent-session-lease-transitions'
 
+/** A chat with no conversation yet that launched in another home keeps that home from now on;
+ *  one with a conversation never moves, since its history lives where it started. */
+export function withMovedAccountHome<T extends AgentSessionRecord>(
+  proved: T,
+  record: AgentSessionRecord,
+  moved: AgentSessionAccountHome | undefined
+): T {
+  return moved && record.providerHandleChain.length === 0
+    ? { ...proved, accountHome: moved }
+    : proved
+}
+
 /** Construction observation and owner proof share the record's existing transaction. */
 export function createAgentSessionOwnerProof(
   mutate: (
@@ -24,6 +36,8 @@ export function createAgentSessionOwnerProof(
     accountAcquisition?: { generation: string; recipe: ClaudeAccountRecipe }
     /** The account this runtime launched under, when the provider reports one. */
     launchedAccountHome?: AgentSessionAccountHome
+    /** The home a chat with no conversation yet moved to at this launch. */
+    movedAccountHome?: AgentSessionAccountHome
   }): Promise<AgentSessionRecord> =>
     mutate(args.sessionId, (record) => {
       const { launchedAccount: _previous, ...proved } = withAcquiredAgentSessionAccount(
@@ -37,11 +51,12 @@ export function createAgentSessionOwnerProof(
         args.accountAcquisition
       )
       // A runtime that reports no account leaves no stale claim about where this fence ran.
-      return args.launchedAccountHome
+      const launched = args.launchedAccountHome
         ? {
             ...proved,
             launchedAccount: { fence: args.fence, accountHome: args.launchedAccountHome }
           }
         : proved
+      return withMovedAccountHome(launched, record, args.movedAccountHome)
     })
 }

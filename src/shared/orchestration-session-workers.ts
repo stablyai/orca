@@ -51,6 +51,9 @@ export type OrchestrationSessionWorker = {
   chatSessionId: string | null
   /** The Task's recorded result, clipped; absent from older hosts. */
   summary?: string | null
+  /** Passive live status recorded via `orchestration task-update --note`; absent when unset or on older hosts. */
+  progressNote?: string | null
+  progressUpdatedAt?: number | null
   /** Epoch ms the Dispatch started. */
   startedAt: number
   /** Epoch ms the Dispatch settled; null while it runs. */
@@ -74,6 +77,14 @@ export type OrchestrationSessionWorkerActivity =
 /** Its Dispatch is still open, or out of contact and so possibly still open; its agent may be idle. */
 export function sessionWorkerIsRunning(worker: Pick<OrchestrationSessionWorker, 'state'>): boolean {
   return worker.state === 'working' || worker.state === 'unverifiable'
+}
+
+/** Its start failed before an agent ran, so it has nothing to open. Only a local worker: a paired
+ *  server's worker loses its terminal handle when released, though it ran. */
+export function sessionWorkerNeverStarted(
+  worker: Pick<OrchestrationSessionWorker, 'state' | 'address' | 'host'>
+): boolean {
+  return worker.state === 'failed' && !worker.address && worker.host === 'local'
 }
 
 /** The agent state an open worker draws: its own report (working without one, as from an older host),

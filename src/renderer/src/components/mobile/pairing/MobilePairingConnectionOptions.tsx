@@ -5,6 +5,8 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
 import { useOrcaProfileAuthStatusRefresh } from '@/components/orca-profiles/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/class-names'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { MobileRelayStatus } from '../../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
@@ -53,6 +55,7 @@ export function MobilePairingConnectionOptions({
 }): React.JSX.Element {
   const t = useTranslate()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
+  const relayBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.mobileRelay)
   const relayStatus = useMobileRelayStatus()
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
@@ -60,7 +63,7 @@ export function MobilePairingConnectionOptions({
   const configured = authStatus?.configured !== false
   const needsSignIn = value === 'automatic' && !signedIn && configured
   // Availability is a property of the build, not of the current selection.
-  const relayUnavailable = !signedIn && !configured
+  const relayUnavailable = relayBlocked || (!signedIn && !configured)
   const relayDisabled = relayMintRetrying || relayUnavailable
   const optionRefs = useRef<Record<MobilePairingConnectionMode, HTMLDivElement | null>>({
     automatic: null,
@@ -87,6 +90,17 @@ export function MobilePairingConnectionOptions({
   }
 
   const relayCell = relayStatus.cellUrl ? relayCellLabel(relayStatus.cellUrl) : null
+  const relayDescription = relayBlocked
+    ? t('settings.mobile.teamDisabledRelay', 'Orca Relay is turned off by your team. Use LAN.')
+    : relayUnavailable
+      ? t(
+          'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
+          'Orca Relay isn’t available in this build. Use LAN.'
+        )
+      : t(
+          'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
+          'Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.'
+        )
 
   useOrcaProfileAuthStatusRefresh()
 
@@ -115,17 +129,7 @@ export function MobilePairingConnectionOptions({
             'auto.components.settings.MobilePairingConnectionOptions.anywhereTitle',
             'Orca Relay'
           )}
-          description={
-            relayUnavailable
-              ? t(
-                  'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
-                  'Orca Relay isn’t available in this build. Use LAN.'
-                )
-              : t(
-                  'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
-                  'Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.'
-                )
-          }
+          description={relayDescription}
           trailing={
             relayUnavailable ? (
               <Badge variant="outline" className="text-[11px]">

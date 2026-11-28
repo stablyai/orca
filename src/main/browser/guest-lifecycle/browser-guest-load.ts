@@ -1,4 +1,5 @@
 import { BrowserError } from '../browser-error'
+import { browserNavigationError } from './browser-navigation-error'
 
 export function waitForBrowserGuestLoad(
   guest: Electron.WebContents,
@@ -9,6 +10,7 @@ export function waitForBrowserGuestLoad(
       clearTimeout(timer)
       guest.off('did-finish-load', loaded)
       guest.off('did-fail-load', failed)
+      guest.off('did-stop-loading', loaded)
       guest.off('destroyed', destroyed)
       if (error) {
         reject(error)
@@ -22,11 +24,13 @@ export function waitForBrowserGuestLoad(
       _event: Electron.Event,
       code: number,
       description: string,
-      _url: string,
+      url: string,
       main: boolean
     ): void => {
       if (main && code !== -3) {
-        finish(new BrowserError('browser_navigation_failed', description))
+        finish(
+          browserNavigationError(new BrowserError('browser_navigation_failed', description), url)
+        )
       }
     }
     const timer = setTimeout(
@@ -45,11 +49,20 @@ export function waitForBrowserGuestLoad(
     if (start) {
       void start().then(loaded, (error: unknown) => {
         if (error && typeof error === 'object' && 'errno' in error && error.errno === -3) {
+          // Aborted: a newer load runs to its stop, while a download or a cancel has already stopped.
+          if (guest.isDestroyed() || guest.isLoadingMainFrame()) {
+            guest.on('did-stop-loading', loaded)
+          } else {
+            loaded()
+          }
           return
         }
-        finish(error instanceof Error ? error : new Error('The browser page could not load'))
+        finish(browserNavigationError(error))
       })
-    } else if (!guest.isLoadingMainFrame()) {
+    } else if (guest.isLoadingMainFrame()) {
+      // isLoadingMainFrame stays true after did-finish-load until did-stop-loading, later in the same task.
+      guest.on('did-stop-loading', loaded)
+    } else {
       loaded()
     }
   })

@@ -1,4 +1,5 @@
 import type { HostedProviderRequest } from './daemon-provider-process-protocol'
+import type { ProviderRelayRequest } from './daemon-provider-relay-protocol'
 import type { TerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -43,6 +44,8 @@ export type CreateOrAttachRequest = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    /** Optional; an old daemon ignores it. */
+    startupNotice?: string
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
@@ -240,6 +243,7 @@ export type TakePendingOutputResult = {
 
 export type DaemonRequest =
   | HostedProviderRequest
+  | ProviderRelayRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest
@@ -294,6 +298,19 @@ export type GetSnapshotResult<Snapshot = TerminalSnapshot> = {
 
 export type ListSessionsResult = {
   sessions: SessionInfo[]
+  /** Daemon-owned chat agents still held, running or with output not yet collected (v63+). */
+  liveRelays?: number
+  /** Of those, the agents still running; only these end if the daemon stops (v63+). */
+  runningRelays?: number
+}
+
+/** Everything that would end if this daemon stopped: live PTYs plus live chat relays. */
+export function countLiveDaemonSessions(result: ListSessionsResult): number {
+  const relays = typeof result.liveRelays === 'number' ? result.liveRelays : 0
+  return (
+    result.sessions.filter((session) => session.isAlive).length +
+    (Number.isSafeInteger(relays) && relays > 0 ? relays : 0)
+  )
 }
 
 export type ShutdownIfIdleResult = {

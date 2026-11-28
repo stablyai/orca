@@ -4506,6 +4506,7 @@ private final class PermissionDragAssistantController: NSWindowController {
         let isVisible: Bool
     }
 
+    private static let systemSettingsBundleIdentifier = "com.apple.systempreferences"
     private let fallbackVisibleFrame: NSRect?
     private let onRefreshPermissions: () -> Void
     private let onClose: () -> Void
@@ -4668,7 +4669,7 @@ private final class PermissionDragAssistantController: NSWindowController {
 
     private func systemSettingsIsFrontmost() -> Bool {
         let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        return bundleId == "com.apple.systempreferences" || bundleId == "com.apple.SystemSettings"
+        return bundleId == Self.systemSettingsBundleIdentifier || bundleId == "com.apple.SystemSettings"
     }
 
     private func positionNearSettingsWindow(_ settingsFrame: NSRect) {
@@ -4705,12 +4706,18 @@ private final class PermissionDragAssistantController: NSWindowController {
         guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
             return nil
         }
+        let settingsProcessIdentifiers = Set(
+            NSRunningApplication.runningApplications(withBundleIdentifier: Self.systemSettingsBundleIdentifier)
+                .map(\.processIdentifier)
+        )
         var occludingFrames: [NSRect] = []
         for windowInfo in windows {
             guard let frame = cgWindowFrame(windowInfo), isNormalWindow(windowInfo), frame.width > 0, frame.height > 0 else {
                 continue
             }
-            if isSystemSettingsWindow(windowInfo), frame.width > 520, frame.height > 360 {
+            // Why: kCGWindowOwnerName is UI-localized ("系统设置"), so match the Settings process by bundle id.
+            if let pid = windowInfo[kCGWindowOwnerPID as String] as? pid_t, settingsProcessIdentifiers.contains(pid),
+               frame.width > 520, frame.height > 360 {
                 return SettingsWindowState(
                     frame: appKitFrameForCGWindowFrame(frame),
                     isVisible: !isWindowFullyCovered(frame, by: occludingFrames)
@@ -4719,13 +4726,6 @@ private final class PermissionDragAssistantController: NSWindowController {
             occludingFrames.append(frame)
         }
         return nil
-    }
-
-    private func isSystemSettingsWindow(_ windowInfo: [String: Any]) -> Bool {
-        guard let ownerName = windowInfo[kCGWindowOwnerName as String] as? String else {
-            return false
-        }
-        return ownerName == "System Settings" || ownerName == "System Preferences"
     }
 
     private func isNormalWindow(_ windowInfo: [String: Any]) -> Bool {
@@ -5327,34 +5327,38 @@ private func printPermissionStatus() {
 
 private let selfResponsibleMarker = "ORCA_COMPUTER_USE_SELF_RESPONSIBLE"
 
-// Why: Orca spawns this probe directly to own its PID, so TCC must be told to judge this helper, not Orca.
-private func becomeSelfResponsible() {
+// Why: TCC judges the spawner's responsible app, so the probe and dev agents disclaim it to be judged as this helper.
+private func becomeSelfResponsible(required: Bool) {
     typealias ResponsiblePid = @convention(c) (pid_t) -> pid_t
     typealias SetDisclaim = @convention(c) (UnsafeMutablePointer<posix_spawnattr_t?>, Bool) -> Int32
+    func fail(_ message: String) {
+        fputs("\(message)\n", stderr)
+        if required {
+            exit(70)
+        }
+    }
     let defaultHandle = UnsafeMutableRawPointer(bitPattern: -2)
     guard let responsibleSymbol = dlsym(defaultHandle, "responsibility_get_pid_responsible_for_pid"),
           let disclaimSymbol = dlsym(defaultHandle, "responsibility_spawnattrs_setdisclaim")
     else {
-        fputs("permission status needs macOS responsibility disclaim\n", stderr)
-        exit(70)
+        return fail("computer-use helper needs macOS responsibility disclaim")
     }
     if unsafeBitCast(responsibleSymbol, to: ResponsiblePid.self)(getpid()) == getpid() {
         return
     }
     guard getenv(selfResponsibleMarker) == nil else {
-        fputs("permission status helper is still attributed to its parent\n", stderr)
-        exit(70)
+        return fail("computer-use helper is still attributed to its parent")
     }
     setenv(selfResponsibleMarker, "1", 1)
     var attributes: posix_spawnattr_t?
     posix_spawnattr_init(&attributes)
-    // SETEXEC replaces this image in place, so the PID Orca owns stays the probe's PID.
+    // SETEXEC replaces this image in place, so the PID Orca owns stays the helper's PID.
     posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETEXEC))
     _ = unsafeBitCast(disclaimSymbol, to: SetDisclaim.self)(&attributes, true)
     let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
     let status = posix_spawn(nil, executable, nil, &attributes, CommandLine.unsafeArgv, environ)
-    fputs("failed to re-exec permission status helper: \(String(cString: strerror(status)))\n", stderr)
-    exit(70)
+    posix_spawnattr_destroy(&attributes)
+    fail("failed to re-exec computer-use helper: \(String(cString: strerror(status)))")
 }
 
 private func runStdio() {
@@ -5464,6 +5468,9 @@ let permissionLocale = arguments.firstIndex(of: "--locale").flatMap { index -> S
 }
 let permissionCopy = PermissionWindowCopy(localeIdentifier: permissionLocale)
 if arguments.first == "--agent" {
+    if arguments.contains("--self-responsible") {
+        becomeSelfResponsible(required: false)
+    }
     guard arguments.count >= 2 else {
         fputs("usage: orca-computer-use-macos --agent <socket-path> --token-file <token-path>\n", stderr)
         exit(2)
@@ -5489,7 +5496,7 @@ if arguments.first == "--agent" {
         copy: permissionCopy
     )
 } else if arguments.first == "--permission-status" {
-    becomeSelfResponsible()
+    becomeSelfResponsible(required: true)
     printPermissionStatus()
 } else {
     runStdio()

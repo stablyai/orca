@@ -203,6 +203,8 @@ export async function resolveMobileTouchClickPoint(
   try {
     const result = await dbg.sendCommand('Runtime.evaluate', {
       expression: mobileTouchClickExpression(x, y, radius, allowDomActivation),
+      // A tap is the user's gesture; without it Chromium silently refuses the file picker it opens.
+      userGesture: true,
       returnByValue: true,
       silent: true
     })

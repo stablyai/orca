@@ -10,7 +10,7 @@ import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { resolveServePinnedBindHost } from '../serve-launch/serve-pinned-bind-host'
 import { isOrcadSidecarLaunch } from '../../window/activation/foreground-activation-policy'
 import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
-import { registerMobileHandlers } from '../../ipc/mobile'
+import { registerLazyMobileHandlers } from '../../ipc/register-lazy-mobile-handlers'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts'
 import { registerHeadlessPtyRuntime } from '../../ipc/pty/register-headless-runtime'
 import { publishHeadlessRuntimeGraph } from '../../runtime/session-graph/headless-runtime-graph'
@@ -49,7 +49,6 @@ import { mainProcessState as state } from '../main-process-state'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../../updater/lifecycle/main-window-updater'
 import { preserveStateBeforeUpdateRestart } from '../../core-desktop/update-restart-preservation'
-import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from '../agent-accounts/agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browser-identity-mode-store'
@@ -115,7 +114,7 @@ function installRuntimeRpc(
   state.core.runtimeRpc = runtimeRpc
   runtime.setAgentSenderPeerKey(() => runtimeRpc.getE2EEPublicKey())
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
-  registerMobileHandlers(runtimeRpc, {
+  registerLazyMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
     consumePendingUnpairedDeviceAuthFailure: (webContentsId) => {
       if (
@@ -191,6 +190,8 @@ async function launchServeMode(
         idleFreeMs: () => memorySaverIdleMs(state.store?.getSettings())
       })
     )
+    // Tabs saved under a profile an older build deleted would otherwise stay listed but never load.
+    void runtime.browserCloseServerPagesOfMissingProfiles()
   }
   publishHeadlessRuntimeGraph(runtime)
   // Register SSH before binding RPC so the first paired client sees targets.
@@ -215,11 +216,11 @@ async function launchServeMode(
   await printServeReady(serveOptions)
   chatJournalHostServing()
   const store = state.store!
-  setupHeadlessServeAutoUpdater(state.nativeSettings!, {
+  setupHeadlessServeAutoUpdater(state.nativeSettings!, runtime, {
     onBeforeUpdateQuit: () =>
       preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.core.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',
-    updateInstallMode: resolveUpdateInstallMode(true)
+    isServeMode: true
   })
 }
 
@@ -279,7 +280,7 @@ export async function initializeMainProcessRuntimeLaunch(
 ): Promise<void> {
   const runtime = state.core.runtime
   const shellPathHydration = state.windowsShellPathHydration
-  if (!runtime || !shellPathHydration) {
+  if (!runtime || (process.platform === 'win32' && !shellPathHydration)) {
     throw new Error('Runtime and shell-path services must be initialized before launch')
   }
   let serveOptions: ReturnType<typeof getServeOptions> | null = null
@@ -294,7 +295,7 @@ export async function initializeMainProcessRuntimeLaunch(
   installCloudSessionShutdownFlush()
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
   installMainProcessConnectorCloud(serveOptions !== null)
-  const shellPathReady = shellPathHydration.whenReady()
+  const shellPathReady = shellPathHydration ? shellPathHydration.whenReady() : Promise.resolve()
   // Publish the same shell-PATH generation to renderer Git and terminal startup barriers.
   state.shellPathReady = shellPathReady
   // Repair known poisoned DACL before renderer initialization; the ordinary probe finishes too late to prevent its first crash.

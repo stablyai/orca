@@ -1,11 +1,7 @@
 // What the relay asks for each call: the real address and headers for one bot credential, from saved
 // headers, a source Orca fills (a hub's key), or Orca's own sign-in, which it refreshes here.
 import { createHash } from 'node:crypto'
-import {
-  readBotToolCredential,
-  readBotToolOAuth,
-  type BotToolCredential
-} from '../bot-tool-credentials'
+import { botToolCredentialsReader, type BotToolCredential } from '../bot-tool-credentials'
 import { botToolUrlOf } from '../bot-tools-path'
 import type { BotToolOAuthKey } from './bot-tool-oauth'
 import {
@@ -45,7 +41,9 @@ export type BotToolCredentialAnswer =
   | { kind: 'sign-in-needed' }
   /** Its key isn't set up here, or the app's token server didn't answer: try again later. */
   | { kind: 'unavailable' }
-  /** The bot has no such credential. */
+  /** Its tools file names it and an entry is stored, but it doesn't open on this computer. */
+  | { kind: 'unreadable' }
+  /** The tools file has no such credential. */
   | { kind: 'missing' }
 
 export type BotToolCredentialSource = (
@@ -67,7 +65,8 @@ export function botToolCredentialSource(
     const key: BotToolOAuthKey = { folder: request.folder, credentialId: request.credentialId }
     // The store opens only entries sealed for this folder and id; the address must also be the tool's.
     const toolUrl = await botToolUrlOf(request.folder, request.credentialId)
-    const signIn = readBotToolOAuth(request.folder, request.credentialId)
+    const stored = botToolCredentialsReader(request.folder)
+    const signIn = stored.oauth(request.credentialId)
     if (signIn && signIn.url !== toolUrl) {
       return { kind: 'missing' }
     }
@@ -75,8 +74,8 @@ export function botToolCredentialSource(
       let grant: Awaited<ReturnType<typeof botToolAccessToken>>
       try {
         grant = request.rejected
-          ? await refreshBotToolAccessToken(key, request.rejected, request.signal)
-          : await botToolAccessToken(key, request.signal)
+          ? await refreshBotToolAccessToken(key, request.rejected, request.signal, signIn)
+          : await botToolAccessToken(key, request.signal, signIn)
       } catch {
         // The caller hung up, or a rotated token couldn't be stored: nothing to send now.
         return { kind: 'unavailable' }
@@ -95,7 +94,11 @@ export function botToolCredentialSource(
         bearer: grant.token
       }
     }
-    const credential = readBotToolCredential(request.folder, request.credentialId)
+    const credential = stored.credential(request.credentialId)
+    if (!credential && toolUrl !== null && stored.unreadable(request.credentialId)) {
+      // A reset keychain or a copied home folder: its row asks to sign in or enter the key again.
+      return { kind: 'unreadable' }
+    }
     if (!credential || credential.url !== toolUrl) {
       return { kind: 'missing' }
     }

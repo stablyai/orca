@@ -52,7 +52,7 @@ export async function updateIssue(
       const cmd = updates.state === 'closed' ? 'close' : 'reopen'
       await glabExecFileAsync(['issue', cmd, String(issueNumber), '-R', repoFlag], {
         ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
-        ...glabHostEnvOptions(projectRef, connectionId)
+        ...glabHostEnvOptions(projectRef)
       })
     } catch (err) {
       // glab already-state transitions exit 0; any rejected command remains a real failure.
@@ -116,7 +116,7 @@ export async function updateIssue(
     try {
       await glabExecFileAsync(editArgs, {
         ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
-        ...glabHostEnvOptions(projectRef, connectionId)
+        ...glabHostEnvOptions(projectRef)
       })
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)

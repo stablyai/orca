@@ -49,8 +49,8 @@ export function cancelScreencastSubscriberFrameRetry(
   subscriber.pendingFrame = null
   subscriber.frameCredit?.release()
   subscriber.frameCredit = null
-  subscriber.releasePagePrompts?.()
-  subscriber.releasePagePrompts = null
+  subscriber.stopViewerEvents?.()
+  subscriber.stopViewerEvents = null
 }
 
 function sendSubscriberFrame(

@@ -21,6 +21,7 @@ export function retainWorkerLaunchObservation(
       this.db
         .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
         .run(options, dispatchId)
+      this.workerDockSources?.changedDispatch(dispatchId)
     }
     this.db.exec('COMMIT')
   } catch (error) {
@@ -77,7 +78,10 @@ export function failWorkerStart(
   stage: string,
   reason: string
 ): WorkerDispatchRow {
-  this.db.exec('BEGIN IMMEDIATE')
+  const ownsTransaction = !this.db.isTransaction
+  if (ownsTransaction) {
+    this.db.exec('BEGIN IMMEDIATE')
+  }
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
@@ -126,10 +130,14 @@ export function failWorkerStart(
     }
     this.closeQuestionsForDispatch(dispatchId)
     recordFailedStartDispatchIdentity(this, this.getWorkerDispatch(dispatchId) as WorkerDispatchRow)
-    this.db.exec('COMMIT')
+    if (ownsTransaction) {
+      this.db.exec('COMMIT')
+    }
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
-    this.db.exec('ROLLBACK')
+    if (ownsTransaction) {
+      this.db.exec('ROLLBACK')
+    }
     throw error
   }
 }

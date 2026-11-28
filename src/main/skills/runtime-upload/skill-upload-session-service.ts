@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { open } from 'node:fs/promises'
 import { join } from 'node:path'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import {
   SKILL_UPLOAD_CHUNK_MAX_BYTES,
   type SkillUploadBeginRequest,
@@ -26,6 +27,7 @@ export class SkillUploadSessionService {
   private readonly ownership: SkillUploadStagingOwnership
   private readonly retainedPaths = new SkillUploadRetainedPaths()
   private readonly operations = new SkillUploadOperationLifecycle()
+  private readonly sessionOperations = new Map<string, Promise<void>>()
   private disposal: Promise<void> | null = null
   private disposed = false
 
@@ -77,8 +79,7 @@ export class SkillUploadSessionService {
   }
 
   async append(request: SkillUploadChunkRequest): Promise<{ acknowledgedOffset: number }> {
-    const leaveOperation = this.operations.enter(() => this.assertAvailable())
-    try {
+    return this.runSessionOperation(request.uploadId, async () => {
       const session = await this.requireActive(request.uploadId)
       const bytes = Buffer.from(request.bytesBase64, 'base64')
       if (
@@ -117,14 +118,11 @@ export class SkillUploadSessionService {
       session.bytesReceived += bytes.length
       this.touch(session)
       return { acknowledgedOffset: session.bytesReceived }
-    } finally {
-      leaveOperation()
-    }
+    })
   }
 
   async commit(uploadId: string): Promise<{ uploadId: string }> {
-    const leaveOperation = this.operations.enter(() => this.assertAvailable())
-    try {
+    return this.runSessionOperation(uploadId, async () => {
       const session = this.sessions.get(uploadId)
       if (!session) {
         throw new Error('skill-upload-session-unavailable')
@@ -157,17 +155,14 @@ export class SkillUploadSessionService {
       session.committed = true
       this.touch(session)
       return { uploadId }
-    } finally {
-      leaveOperation()
-    }
+    })
   }
 
   async take(
     uploadId: string,
     identity: SkillUploadBeginRequest['package']
   ): Promise<{ archivePath: string; cleanup(): Promise<void> }> {
-    const leaveOperation = this.operations.enter(() => this.assertAvailable())
-    try {
+    return this.runSessionOperation(uploadId, async () => {
       const session = this.sessions.get(uploadId)
       if (!session) {
         throw new Error('skill-upload-session-unavailable')
@@ -195,21 +190,14 @@ export class SkillUploadSessionService {
           await cleanup
         }
       }
-    } finally {
-      leaveOperation()
-    }
+    })
   }
 
   async cancel(uploadId: string): Promise<void> {
     if (this.disposed) {
       return
     }
-    const leaveOperation = this.operations.enter(() => this.assertAvailable())
-    try {
-      await this.cancelSession(uploadId)
-    } finally {
-      leaveOperation()
-    }
+    await this.runSessionOperation(uploadId, () => this.cancelSession(uploadId))
   }
 
   dispose(): Promise<void> {
@@ -225,6 +213,15 @@ export class SkillUploadSessionService {
     await Promise.allSettled([...this.sessions.keys()].map((id) => this.cancelSession(id)))
     await this.retainedPaths.removeAllFailedCleanup()
     await this.removeOwnershipIfDisposed()
+  }
+
+  private async runSessionOperation<T>(uploadId: string, operation: () => Promise<T>): Promise<T> {
+    const leaveOperation = this.operations.enter(() => this.assertAvailable())
+    try {
+      return await runKeyedSerializedOperation(this.sessionOperations, uploadId, operation)
+    } finally {
+      leaveOperation()
+    }
   }
 
   private async cancelSession(uploadId: string): Promise<void> {

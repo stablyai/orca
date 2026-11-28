@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { hasOutboundCoordinatorReport } from '../../db/messages/dispatch-outbound-coordinator-report'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import { confirmUnknownWorkerStart, observeWorkerWorking } from './worker-working-observation'
@@ -13,6 +14,7 @@ import {
 import {
   approvalReportId,
   isDeliberateRest,
+  isFailedLeadTurnFence,
   presenceReportId,
   sendWorkerReport,
   stopReportId,
@@ -36,7 +38,7 @@ export type WorkerRest = Pick<WorkerTurnStop, WorkerRestFact> & {
 export type WorkerGone = Pick<
   WorkerTurnStop,
   'from' | 'lastOutput' | 'cause' | 'leftover' | 'neverStarted' | 'restartsOnMail'
-> & { reason: 'exited' | 'lost' | 'never-ready' }
+> & { reason: 'exited' | 'lost' | 'never-ready' | 'start-failed' }
 
 /** What an edge saw of its worker. `fence` names the rest: its process or chat turn and when it began,
  *  so the same rest seen twice is one fact and a new rest is another, even in the same presence. */
@@ -54,6 +56,8 @@ export type WorkerObservation =
       legacyStopKey: string
       /** The whole id, for a report those builds did not key by a stop. */
       legacyReportId?: string
+      /** A rest the coordinator already knows of: recorded with nothing to report. */
+      unreported?: true
     }
   | {
       presence: 'gone'
@@ -126,7 +130,7 @@ export function observeWorker(
     nextWorkerPresence(current, {
       presence: awaitsAPerson(rest.reason) ? 'prompt' : 'resting',
       fence: observation.fence,
-      report: storedReport(rest, observation)
+      report: observation.unreported ? null : storedReport(rest, observation)
     }),
     deps
   )
@@ -238,12 +242,7 @@ function reconcileWorkerReport(
   deps: WorkerTurnStopReportDeps
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
-  const keep = () => {
-    if (row.changed) {
-      writeWorkerPresence(db, dispatchId, row)
-    }
-    return false
-  }
+  const keep = () => (row.changed && writeWorkerPresence(db, dispatchId, row), false)
   const decided = (mailCount: number | undefined): WorkerPresenceRow => ({
     ...row,
     report: null,
@@ -262,20 +261,28 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(undefined))
     return false
   }
-  // Left undecided: the same rest seen again is decided again. Going away, or a failed request the
-  // chat showed, is never deliberate; a rest of a worker its coordinator is stopping is no news.
-  if (
-    !isWorkerGone(rest.reason) &&
-    (db.isWorkerStopRequested(dispatchId) || isDeliberateRest(db, target, rest, deps))
-  ) {
+  if (!isWorkerGone(rest.reason) && db.isWorkerStopRequested(dispatchId)) {
     return keep()
   }
-  // An idle finish answers the coordinator's mail the worker took, so it is news once per mail taken: a later
-  // idle turn (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
   const finishedMail =
     rest.reason === 'finished'
       ? (rest.mailTaken ?? readCoordinatorMailCount(db, dispatchId))
       : undefined
+  if (!isWorkerGone(rest.reason) && isDeliberateRest(db, target, rest, deps)) {
+    const transientlyHeld =
+      deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
+      db.awaitsAnswerToLatestQuestion(dispatchId) ||
+      (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId))
+    if (
+      rest.reason === 'finished' &&
+      !transientlyHeld &&
+      hasOutboundCoordinatorReport(db, target, rest)
+    ) {
+      writeWorkerPresence(db, dispatchId, decided(finishedMail))
+      return false
+    }
+    return keep()
+  }
   if (
     (finishedMail !== undefined &&
       row.reportedMailCount !== null &&
@@ -291,7 +298,9 @@ function reconcileWorkerReport(
       ? approvalReportId(dispatchId, rest.approval.approvalId)
       : 'backgroundWait' in rest && rest.backgroundWait
         ? stopReportId(dispatchId, `background:${rest.backgroundWait.since}`)
-        : presenceReportId(dispatchId, row.generation)
+        : isFailedLeadTurnFence(row.fence)
+          ? stopReportId(dispatchId, row.fence)
+          : presenceReportId(dispatchId, row.generation)
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )

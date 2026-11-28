@@ -13,6 +13,7 @@ export function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> 
     quitAndInstall: () => Promise.resolve(),
     dismissNudge: () => Promise.resolve(),
     dismissAvailableUpdate: () => Promise.resolve(),
+    snoozeRequiredUpdate: () => Promise.resolve(),
     getLinuxPackageInstallInstructions: () => Promise.reject(new Error(desktopOnlyMessage)),
     showLinuxPackage: () => Promise.reject(new Error(desktopOnlyMessage)),
     // Why: the web client cannot install a desktop build, so channel switching

@@ -22,14 +22,15 @@ import { resolveGitRouteForHost } from '../../providers/execution-host-provider-
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { withCheckoutLock } from '../../git/worktrees/checkout/branch-switch'
 import {
+  BRANCH_NAME_ENVIRONMENT_FAILED_HEADLINE,
+  BRANCH_PUBLISHED_CHECK_FAILED_HEADLINE
+} from '../../../shared/worktree/branch-auto-rename-failure-headlines'
+import {
   probeBranchUpstream,
   resolveUniqueBranchName,
   type GitExec
 } from '../../git/worktrees/checkout/branch-rename'
-import {
-  generateBranchNameFromContext,
-  resolveCommitMessageSettings as resolveTextGenerationParams
-} from '../../text-generation/commit-message-text-generation'
+import type { resolveCommitMessageSettings as resolveTextGenerationParams } from '../../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
@@ -197,15 +198,16 @@ async function runAutoRename(
   if (upstreamProbe.outcome === 'probe-failed') {
     // Failed probes must remain retryable rather than entering the settled cache.
     const probeError = upstreamProbe.message.replace(/\s+/g, ' ').trim()
-    deps.setRenameError(
-      worktreeId,
-      `Could not check whether the branch is published: ${probeError}`
-    )
+    deps.setRenameError(worktreeId, `${BRANCH_PUBLISHED_CHECK_FAILED_HEADLINE} ${probeError}`)
     return failed(`upstream probe failed: ${probeError}`, false)
   }
 
   const settings = deps.getSettings()
   const hostKey = getCommitMessageModelDiscoveryHostKey(null)
+  const {
+    generateBranchNameFromContext,
+    resolveCommitMessageSettings: resolveTextGenerationParams
+  } = await import('../../text-generation/commit-message-text-generation')
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
     deps.setRenameError(worktreeId, resolvedParams.error)
@@ -220,7 +222,7 @@ async function runAutoRename(
 
   const target = await resolveGenerationTarget(worktreePath, params.agentId, deps)
   if (!target) {
-    deps.setRenameError(worktreeId, 'Could not prepare the branch-name generation environment.')
+    deps.setRenameError(worktreeId, BRANCH_NAME_ENVIRONMENT_FAILED_HEADLINE)
     return failed('could not prepare generation environment', false)
   }
 

@@ -11,6 +11,7 @@ import {
   type GoogleSetupStep
 } from '../../shared/google/google-setup-run'
 import { GOOGLE_SERVICE_CHOICES, type GoogleServiceChoice } from '../../shared/google/google-scopes'
+import type { GoogleSetupChange } from './google-setup-runs'
 
 const GOOGLE_SETUP_STEPS_SET: ReadonlySet<string> = new Set(GOOGLE_SETUP_STEPS)
 const GOOGLE_SERVICE_SET: ReadonlySet<string> = new Set(GOOGLE_SERVICE_CHOICES)
@@ -55,6 +56,14 @@ export function isPersonOwnedStep(
     PERSON_STEPS.has(step) || run.personStep === step || run.steps[step]?.status === 'needs-user'
   )
 }
+
+export const GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE =
+  'Finished outside the card: Google is connected and ready.'
+
+/** A Done after Orca already finished the run from a working sign-in: it changes nothing. */
+export const lateDone = (change: GoogleSetupChange): boolean =>
+  change.action === 'done' ||
+  (change.action === 'answer' && change.card === 'step' && change.values[0] === 'done')
 
 /** Whether the bot may click on the step: false while the person does the clicking. */
 export const botClicks = (

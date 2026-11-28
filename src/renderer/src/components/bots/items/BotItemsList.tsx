@@ -26,7 +26,7 @@ import { useBotPanelFold, type BotPanelFoldId } from '../use-bot-panel-fold'
 import { BotNeedsYouSection, type BotNeedsYouAsks } from '../BotNeedsYouSection'
 import { botNeedsYouCount } from '../../../../../shared/bots/bot-now'
 import { BotItemRow, type BotItemRowAction } from './BotItemRow'
-import { BotItemCancelDialog } from './BotItemCancelDialog'
+import { useBotItemStatusNotes } from './BotItemStatusNoteDialog'
 import { BotItemSelectionPill } from './BotItemSelectionPill'
 import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-name'
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
@@ -79,7 +79,6 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   const t = useTranslate()
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
-  const [canceling, setCanceling] = useState<readonly BotItem[] | null>(null)
   const ordered = useMemo(() => BOT_ITEM_GROUP_IDS.flatMap((id) => groups[id]), [groups])
   // Every row's number column fits the widest number, so titles start in one column at #100 too.
   const numberColumn = useMemo(
@@ -143,13 +142,15 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     }
   }
 
+  const notes = useBotItemStatusNotes((items, to, note) => void move(items, to, note))
+
   const act = useLatestHandler((item: BotItem, action: BotItemRowAction): void => {
     if (action.kind === 'open') {
       onOpen(item)
     } else if (action.kind === 'done') {
       void move([item], 'done')
     } else {
-      setCanceling([item])
+      void move([item], 'canceled')
     }
   })
 
@@ -183,21 +184,12 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
         <BotItemSelectionPill
           items={selectedItems}
           snoozing={snoozing}
-          onMove={(to) =>
-            to === 'canceled' ? setCanceling(selectedItems) : void move(selectedItems, to)
-          }
+          botOf={botOf}
+          onMove={(to) => notes.move(selectedItems, to)}
           onClear={() => setSelected(new Set())}
         />
       ) : null}
-      <BotItemCancelDialog
-        items={canceling}
-        onCancel={(reason) => {
-          const items = canceling ?? []
-          setCanceling(null)
-          void move(items, 'canceled', reason)
-        }}
-        onClose={() => setCanceling(null)}
-      />
+      {notes.dialog}
       {snoozing.dialog}
     </div>
   )
@@ -255,7 +247,7 @@ function BotItemGroup({
   // into another): they measure again before it's painted. A folded group's count changes nothing;
   // other height changes reach them through the list's resize, a frame later.
   const drawnRows = open ? (id === 'needs_you' ? items.length : Math.min(shown, items.length)) : -1
-  const present = items.length > 0 || (id === 'needs_you' && owner.outside.count > 0)
+  const present = items.length > 0
   const hasAllClear = allClear != null
   useLayoutEffect(() => viewport.flush(), [drawnRows, present, hasAllClear, viewport])
   // Only an open window draws rows: a folded group, or Needs you, copies none.
@@ -280,8 +272,7 @@ function BotItemGroup({
   // Needs you counts the rows it lists, asks first; runs a sign-in stopped are context, not counted.
   const count = needsYou ? botNeedsYouCount(asks.needs.length, items.length) : total
   // A group's Needs you also says what its bots need elsewhere, which its count leaves out.
-  const outside = needsYou ? owner.outside.count : 0
-  if (count === 0 && outside === 0) {
+  if (count === 0) {
     return null
   }
   const row = (item: BotItem, tabbable?: boolean): React.JSX.Element => (
@@ -411,24 +402,6 @@ function BotItemGroup({
             </button>
           ) : null}
         </>
-      ) : null}
-      {open && outside > 0 ? (
-        <p className="py-0.5 pl-8 pr-2 text-xs text-muted-foreground">
-          {owner.outside.of === 'room'
-            ? t('bots.groups.items.outsideRoom', '{{count}} more outside this room', {
-                count: outside,
-                defaultValue_one: '{{count}} more outside this room'
-              })
-            : owner.outside.of === 'thread'
-              ? t('bots.groups.items.outsideThread', '{{count}} more outside this thread', {
-                  count: outside,
-                  defaultValue_one: '{{count}} more outside this thread'
-                })
-              : t('bots.groups.items.outside', '{{count}} more outside this group', {
-                  count: outside,
-                  defaultValue_one: '{{count}} more outside this group'
-                })}
-        </p>
       ) : null}
     </section>
   )

@@ -42,7 +42,7 @@ export function resolveGitCommand(
       return resolveCommand('git', wslGitArgs(args, options), options.cwd, distro, {
         wslGitReadEnvironment: environment,
         env: options.env,
-        terminationBarrier: options.terminationBarrier
+        terminationBarrier: Boolean(options.terminationBarrier)
       })
     }
     void getWslGitReadEnvironment(distro)
@@ -104,7 +104,7 @@ export function resolveGitCommandWithoutProbe(
     useWslLoginShell: Boolean(options.wslDistro),
     captureLoginShellOutput,
     env: options.env,
-    terminationBarrier: options.terminationBarrier
+    terminationBarrier: Boolean(options.terminationBarrier)
   })
 }
 

@@ -63,9 +63,9 @@ const button = (name: string): HTMLButtonElement => {
 }
 const title = (): string | null =>
   container.querySelector('[data-testid="native-chat-question-card-title"]')!.textContent
-const step = (index: number): void => {
-  const control = getByRole(container, 'button', { name: new RegExp(`^Step ${index + 1}(,|$)`) })
-  act(() => control.click())
+/** Moves one question with the header's arrows. */
+const step = (direction: 'Previous question' | 'Next question'): void => {
+  act(() => button(direction).click())
 }
 /** Picks an option on the current step and lets the single-select auto-advance run. */
 const pick = (optionIndex: number): void => {
@@ -113,8 +113,8 @@ it('offers no Skip on a required question and takes Submit back to it instead of
   })
   expect(title()).toBe('Question 2?')
 
-  // Jumping past it by its step chip: the last step says Next and returns to it rather than sending.
-  step(2)
+  // Stepping past it by the header arrow: the last step says Next and returns to it rather than sending.
+  step('Next question')
   act(() => button('Next').click())
   expect(onAnswer).not.toHaveBeenCalled()
   expect(title()).toBe('Question 2?')
@@ -162,10 +162,10 @@ it('counts a picked choice with an empty label as an answer to a required questi
   pick(1)
   pick(0)
   // The non-final required step, revisited: its empty-label pick lets Next through.
-  step(1)
+  step('Previous question')
   expect(button('Next').disabled).toBe(false)
   // The final required step submits on its empty-label pick.
-  step(2)
+  step('Next question')
   pick(0)
   expect(onAnswer).toHaveBeenCalledWith({
     kind: 'answers',

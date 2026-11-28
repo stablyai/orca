@@ -7,6 +7,7 @@
 import { existsSync } from 'node:fs'
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import { hardenOrchestrationDatabaseFiles } from '../../../runtime/orchestration/db/database-file-permissions'
+import { isOrchestrationDbBeingReplaced } from '../../../runtime/orchestration/db/orchestration-db-file'
 import Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { registerWslMoveDesktopRewriteStore } from './wsl-move-desktop-rewrite-stores'
@@ -198,6 +199,10 @@ export function rewriteWslMoveOrchestrationHistoryFile(
 ): void {
   if (!existsSync(databasePath)) {
     return
+  }
+  // Quit is swapping in a compacted copy; a write now would be lost. The move retries next launch.
+  if (isOrchestrationDbBeingReplaced(databasePath)) {
+    throw new Error('The orchestration database is being replaced at quit.')
   }
   const db = new Database(databasePath, { fileMustExist: true, timeout: BUSY_TIMEOUT_MS })
   try {

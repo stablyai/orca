@@ -1,4 +1,5 @@
 import { isAllowedPluginGitUrl } from './plugin-install-lockfile'
+import { getPublicForgeProviderForHost } from '../../git/remotes/public-forge-host'
 
 /** `ref` is empty when the input names no version: main resolves the newest version tag. */
 export type PluginGitInstallInput = { url: string; ref: string }
@@ -16,6 +17,7 @@ export type PluginGitInstallInputParseResult =
 const MAX_REF_LENGTH = 255
 const SHORTHAND_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+$/
 const SCP_PATTERN = /^[^\s@/:]+@[A-Za-z0-9.-]+:[^\s]+$/
+const GITLAB_PAGE_KINDS = new Set(['tree', 'tags', 'releases', 'commit'])
 
 /** `git check-ref-format` rules plus no leading `-`, so a ref can never read as an option. */
 export function isSafePluginGitRef(ref: string): boolean {
@@ -39,7 +41,7 @@ export function isSafePluginGitRef(ref: string): boolean {
 
 /**
  * What users paste: `owner/repo`, a repository URL with or without `.git`, an SSH URL, or a
- * GitHub/GitLab release, tag, branch or commit page. `#ref` still pins a version explicitly.
+ * GitHub/GitLab release, tag, branch, commit or file page. `#ref` still pins a version explicitly.
  */
 export function parsePluginGitInstallInput(input: string): PluginGitInstallInputParseResult {
   let value = input.trim()
@@ -112,49 +114,78 @@ function pageRef(
   segments: string[],
   hostname: string
 ): { repositoryLength: number; ref: string } | null {
-  const decode = (parts: string[]): string => {
-    try {
-      return parts.map(decodeURIComponent).join('/')
-    } catch {
-      // Why a control character: an undecodable ref must fail isSafePluginGitRef.
-      return '\u0000'
-    }
-  }
   // GitLab: /group/sub/repo/-/tree/<ref>, /-/tags/<tag>, /-/releases/<tag>, /-/commit/<sha>.
   const gitLabMarker = segments.indexOf('-')
-  if (gitLabMarker !== -1) {
-    if (gitLabMarker < 2) {
-      return null
-    }
-    const [kind, ...rest] = segments.slice(gitLabMarker + 1)
-    const named = kind === 'tree' || kind === 'tags' || kind === 'releases' || kind === 'commit'
-    return { repositoryLength: gitLabMarker, ref: named ? decode(rest) : '' }
+  if (gitLabMarker !== -1 && gitLabMarker < 2) {
+    return null
   }
-  // GitHub: /owner/repo/tree/<ref>; Gitea/Forgejo/Codeberg: /owner/repo/src/{branch,tag,commit}/<ref>.
-  if (segments.length >= 3) {
-    const [kind, ...rest] = segments.slice(2)
-    if (kind === 'tree' || kind === 'commit') {
-      return { repositoryLength: 2, ref: decode(rest) }
-    }
-    if (
-      kind === 'src' &&
-      hostname !== 'bitbucket.org' &&
-      rest.length >= 2 &&
-      (rest[0] === 'branch' || rest[0] === 'tag' || rest[0] === 'commit')
-    ) {
-      // Why exclude Bitbucket: its /src/<ref>/<path> layout belongs on the fallback path.
-      // Why one segment for commit: a sha has no slash, so the rest is a file path.
-      return {
-        repositoryLength: 2,
-        ref: decode(rest.slice(1, rest[0] === 'commit' ? 2 : undefined))
-      }
-    }
-    if (kind === 'releases') {
-      return { repositoryLength: 2, ref: rest[0] === 'tag' ? decode(rest.slice(1)) : '' }
-    }
-    if (kind === 'tags' || kind === 'branches' || kind === 'commits') {
-      return { repositoryLength: 2, ref: '' }
+  const page = ownerRepoPageRef(segments, hostname)
+  // Why only public owner/repo forges: elsewhere `/group/sub/tree/p/-/blob/main` is a GitLab
+  // project under a subgroup named `tree`, so the `-` must stay GitLab's separator.
+  if (page && (gitLabMarker === -1 || hasOnlyOwnerRepoPaths(hostname))) {
+    return page
+  }
+  if (gitLabMarker !== -1) {
+    const [kind, ...rest] = segments.slice(gitLabMarker + 1)
+    return {
+      repositoryLength: gitLabMarker,
+      ref: GITLAB_PAGE_KINDS.has(kind) ? decodeRef(rest) : ''
     }
   }
   return segments.length >= 2 ? { repositoryLength: segments.length, ref: '' } : null
+}
+
+function hasOnlyOwnerRepoPaths(hostname: string): boolean {
+  const provider = getPublicForgeProviderForHost(hostname)
+  return provider === 'github' || provider === 'gitea'
+}
+
+/**
+ * GitHub: /owner/repo/tree/<ref>, /blob/<ref>/<path>;
+ * Gitea/Forgejo/Codeberg: /owner/repo/src/{branch,tag,commit}/<ref>.
+ */
+function ownerRepoPageRef(
+  segments: string[],
+  hostname: string
+): { repositoryLength: number; ref: string } | null {
+  const [kind, ...rest] = segments.slice(2)
+  if (kind === 'tree' || kind === 'commit') {
+    return { repositoryLength: 2, ref: decodeRef(rest) }
+  }
+  if (
+    kind === 'src' &&
+    hostname !== 'bitbucket.org' &&
+    rest.length >= 2 &&
+    (rest[0] === 'branch' || rest[0] === 'tag' || rest[0] === 'commit')
+  ) {
+    // Why exclude Bitbucket: its /src/<ref>/<path> layout belongs on the fallback path.
+    // Why one segment for commit: a sha has no slash, so the rest is a file path.
+    return {
+      repositoryLength: 2,
+      ref: decodeRef(rest.slice(1, rest[0] === 'commit' ? 2 : undefined))
+    }
+  }
+  if (kind === 'releases') {
+    return { repositoryLength: 2, ref: rest[0] === 'tag' ? decodeRef(rest.slice(1)) : '' }
+  }
+  // Why no ref for blob: /blob/<ref>/<path> can't be split when the ref has a `/`. Why GitHub
+  // and Codeberg only: elsewhere `blob` can be a GitLab subgroup name.
+  if (
+    kind === 'tags' ||
+    kind === 'branches' ||
+    kind === 'commits' ||
+    (kind === 'blob' && hasOnlyOwnerRepoPaths(hostname))
+  ) {
+    return { repositoryLength: 2, ref: '' }
+  }
+  return null
+}
+
+function decodeRef(parts: string[]): string {
+  try {
+    return parts.map(decodeURIComponent).join('/')
+  } catch {
+    // Why a control character: an undecodable ref must fail isSafePluginGitRef.
+    return '\u0000'
+  }
 }

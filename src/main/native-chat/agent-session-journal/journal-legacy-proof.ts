@@ -6,8 +6,12 @@ import {
 import {
   decodeLegacySourceProving,
   decodeLegacySourceRefusal,
+  isLegacyProofLayout,
   LEGACY_PROOF_COPIES_TABLE,
+  LEGACY_PROOF_HISTORICAL_LAYOUT,
   LEGACY_PROOF_LAYOUT,
+  type LegacyProofLayout,
+  LEGACY_SOURCE_INVENTORY,
   LEGACY_SOURCE_REFUSAL_POLICY,
   type LegacyProofCounts,
   type LegacySourceProving,
@@ -83,7 +87,10 @@ export class JournalLegacyProof {
       this.frontier.cursor.after === null
     const at = fresh ? savedCursor(saved, observation) : null
     if (at) {
-      this.frontier = createLegacyProofFrontier({ ...at.cursor, check: true }, at)
+      this.frontier = {
+        ...createLegacyProofFrontier({ ...at.cursor, check: true }, at),
+        historical: at.layout === LEGACY_PROOF_HISTORICAL_LAYOUT
+      }
     }
   }
 
@@ -107,6 +114,11 @@ export class JournalLegacyProof {
   /** Which shapes builds left behind an inventory refusal saw. */
   get refusalArtifact(): LegacySourceRefusal['artifact'] {
     return this.refusal?.artifact
+  }
+
+  /** The layout this proof's progress, held and retiring records are saved under. */
+  get layout(): LegacyProofLayout {
+    return this.frontier.historical ? LEGACY_PROOF_HISTORICAL_LAYOUT : LEGACY_PROOF_LAYOUT
   }
 
   /** True when this exact original was refused before; the proof isn't run again for it. */
@@ -148,7 +160,8 @@ export class JournalLegacyProof {
           proof: observation.proof,
           store: observation.store,
           reason: error.reason,
-          ...(error.artifact ? { artifact: error.artifact } : {})
+          ...(error.artifact ? { artifact: error.artifact } : {}),
+          inventory: LEGACY_SOURCE_INVENTORY
         }
         await this.saveRefusal()
       }
@@ -164,7 +177,7 @@ export class JournalLegacyProof {
     const proving: LegacySourceProving = {
       version: 2,
       phase: 'proving',
-      layout: LEGACY_PROOF_LAYOUT,
+      layout: this.layout,
       proof: observation.proof,
       store: observation.store,
       cursor,
@@ -203,7 +216,7 @@ export class JournalLegacyProof {
 function savedCursor(
   saved: string | null,
   observation: LegacyProofObservation
-): { cursor: LegacyProofCursor; counts?: LegacyProofCounts } | null {
+): { cursor: LegacyProofCursor; layout: LegacyProofLayout; counts?: LegacyProofCounts } | null {
   const proving = decodeLegacySourceProving(saved)
   if (proving) {
     if (proving.proof !== observation.proof || proving.store !== observation.store) {
@@ -213,10 +226,11 @@ function savedCursor(
     return proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
       ? {
           cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null },
+          layout: proving.layout,
           // Copies already converted are gone from the original's mappings, so their count stands.
           counts: proving.counts
         }
-      : { cursor: proving.cursor, counts: proving.counts }
+      : { cursor: proving.cursor, layout: proving.layout, counts: proving.counts }
   }
   let retiring: unknown
   try {
@@ -224,17 +238,17 @@ function savedCursor(
   } catch {
     return null
   }
-  const proven =
-    typeof retiring === 'object' &&
+  return typeof retiring === 'object' &&
     retiring !== null &&
     'phase' in retiring &&
     // Only a deletion cut short: a held proof is no standing permission, so a deleting build walks again.
     retiring.phase === 'retiring' &&
     'layout' in retiring &&
-    retiring.layout === LEGACY_PROOF_LAYOUT &&
+    isLegacyProofLayout(retiring.layout) &&
     'proof' in retiring &&
     retiring.proof === observation.proof &&
     'store' in retiring &&
     retiring.store === observation.store
-  return proven ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null } } : null
+    ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null }, layout: retiring.layout }
+    : null
 }

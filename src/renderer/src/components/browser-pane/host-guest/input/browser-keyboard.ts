@@ -1,3 +1,5 @@
+import { BROWSER_KEYBOARD_PROXY_SELECTOR } from '@/lib/text-input/focus/editable-target'
+
 type EditableTargetLike = {
   isContentEditable?: boolean
   closest?: (selector: string) => unknown
@@ -8,7 +10,8 @@ export function isEditableKeyboardTarget(target: EventTarget | EditableTargetLik
     target && typeof target === 'object' && ('closest' in target || 'isContentEditable' in target)
       ? (target as EditableTargetLike)
       : null
-  if (!element) {
+  // A streamed page's keyboard proxy stands for the page, as a focused webview does.
+  if (!element || element.closest?.(BROWSER_KEYBOARD_PROXY_SELECTOR)) {
     return false
   }
 

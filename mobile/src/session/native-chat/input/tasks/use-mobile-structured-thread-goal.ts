@@ -20,6 +20,7 @@ import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
 import { AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY } from '../../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { useRouteRelaysCapability } from '../../../../worktree/execution-hosts/workspace-server-context'
+import { translate } from '../../../../i18n/mobile-i18n'
 
 export type MobileStructuredThreadGoal = {
   /** Scopes the strip's expansion to the conversation. */
@@ -115,7 +116,8 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
           // As on desktop, an objective it may not hold stays in the composer; the strip shows what landed.
           onSendError(
             mobileAgentSessionWriteNoticeText(
-              agentSessionWriteNoticeParts({ kind: 'unconfirmed' }, 'goal')
+              agentSessionWriteNoticeParts({ kind: 'unconfirmed' }, 'goal'),
+              translate
             )
           )
         }

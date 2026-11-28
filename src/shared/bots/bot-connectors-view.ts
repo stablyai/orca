@@ -4,7 +4,13 @@ import { botLinearWorkspaces, botSlackApps, type Bot } from '../bot-types'
 import { CONNECTOR_OFFER_NAMES, type ConnectorOfferSource } from './bot-connector-offer'
 import type { GoogleAccountView, GoogleServiceReadiness } from '../google/google-connect-types'
 import { GOOGLE_SERVICE_INFO } from '../google/google-scopes'
-import { googleBotConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
+import { botGoogleConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
+import {
+  botGoogleAccess,
+  botGoogleDefault,
+  googleEmailKey,
+  type GoogleDefaultRead
+} from '../google/google-bot-accounts'
 
 export type BotConnectorService = {
   source: ConnectorOfferSource
@@ -33,19 +39,31 @@ export type BotConnectorsView = {
   workspacesNote?: string
 }
 
-export const GH_SIGNED_OUT = 'Run `gh auth login` on this computer.'
+/** The GitHub line while gh is signed out: on a headless Orca server, by its name (orcaSignInServer). */
+export function ghSignedOutGap(server: string | null): string {
+  return server
+    ? `gh is signed out on ${server}. Ask your owner to run \`gh auth login\` on ${server}.`
+    : 'gh is signed out on this computer. Ask your owner to run `gh auth login` here.'
+}
 export const GH_MISSING = 'Install the GitHub CLI (gh) on this computer, then run `gh auth login`.'
+export const GH_UNREAD =
+  "Orca couldn't read gh's sign-in on this computer; `gh auth status` shows it."
 export const LINEAR_NO_KEY =
   'Connect Linear to your bot, or add a Linear API key in Settings › Integrations.'
 
 // linear: a Linear API key or a Connect Linear login on this computer.
 // google: the Google accounts connected on this computer; absent from hosts that report none.
 // googleApp: whether this computer has a Google app (client) to sign in with.
+// googleDefault: this computer's default as the host reads it: an account, none, or unreadable.
+// gh: absent when gh's sign-in couldn't be read (a timeout, a locked keyring), so it isn't called signed out.
+// server: this host's name when it is a headless Orca server; null on a computer with Orca's window.
 export type LocalSignIns = {
-  gh: 'signed-in' | 'signed-out' | 'missing'
+  gh?: 'signed-in' | 'signed-out' | 'missing'
+  server?: string | null
   linear: boolean
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
+  googleDefault?: GoogleDefaultRead
 }
 
 const OFFER_GOOGLE = '`orca bot connectors --offer google`'
@@ -65,32 +83,47 @@ const GOOGLE_STATES: Record<GoogleServiceReadiness['state'], string> = {
 
 /** Google's row: the owner's accounts on this computer, if the owner turned Google on for this bot. */
 function googleService(
-  bot: Pick<Bot, 'google'>,
-  accounts: readonly GoogleAccountView[],
-  app: boolean
+  bot: Pick<Bot, 'google' | 'googleAccounts'>,
+  hostAccounts: readonly GoogleAccountView[],
+  app: boolean,
+  computerDefault: GoogleDefaultRead
 ): BotConnectorService {
-  const connected = accounts.filter((account) => account.status === 'connected')
-  const { allowed, host } = googleBotConnectState({
-    allowed: bot.google === true,
+  // Only the accounts the bot may use, and the default its calls without --account go to: the
+  // host's rule, so an unreadable default marks none.
+  const { allowed, host, accounts } = botGoogleConnectState(bot, {
     client: app,
-    accounts
+    accounts: hostAccounts
   })
+  const read = botGoogleDefault(botGoogleAccess(bot), computerDefault)
+  const defaultAccount = 'email' in read ? read.email : null
+  const isDefault = (account: GoogleAccountView): boolean =>
+    defaultAccount !== null && googleEmailKey(account.email) === defaultAccount
+  const connected = accounts.filter((account) => account.status === 'connected')
   const gap = !allowed
     ? `Run ${OFFER_GOOGLE} to ask your owner.`
     : host === 'connected'
       ? undefined
-      : GOOGLE_HOST_GAPS[host]
-  const detail = connected
-    .map(
+      : accounts.length === 0 && hostAccounts.length > 0
+        ? `None of the Google accounts on this computer is chosen for you; ${OFFER_GOOGLE} asks your owner.`
+        : GOOGLE_HOST_GAPS[host]
+  // A signed-out default stays listed: calls without --account still go to it, and fail.
+  const signedOutDefault = accounts.find(
+    (account) => isDefault(account) && account.status !== 'connected'
+  )
+  const detail = [
+    ...(signedOutDefault
+      ? [`${signedOutDefault.email} (default): signed out, needs reconnecting`]
+      : []),
+    ...connected.map(
       (account) =>
-        `${account.email}: ${account.services
+        `${account.email}${isDefault(account) ? ' (default)' : ''}: ${account.services
           .map(
             (service) =>
               `${GOOGLE_SERVICE_INFO[service.service].label} ${GOOGLE_STATES[service.state]}`
           )
           .join(', ')}`
     )
-    .join('; ')
+  ].join('; ')
   return {
     source: 'google',
     tool: 'orca gmail|calendar|contacts',
@@ -114,7 +147,10 @@ export type CloudSource = { source: string; approveUrl?: string }
  * Cloud's sources, when it answered; without them, the Slack app this computer set up stands.
  */
 export function botConnectorServices(
-  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google'>,
+  bot: Pick<
+    Bot,
+    'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google' | 'googleAccounts'
+  >,
   local: LocalSignIns,
   cloud?: readonly CloudSource[]
 ): BotConnectorService[] {
@@ -130,7 +166,14 @@ export function botConnectorServices(
       signedIn: local.gh === 'signed-in',
       ...(local.gh === 'signed-in'
         ? {}
-        : { gap: local.gh === 'missing' ? GH_MISSING : GH_SIGNED_OUT }),
+        : {
+            gap:
+              local.gh === 'missing'
+                ? GH_MISSING
+                : local.gh === 'signed-out'
+                  ? ghSignedOutGap(local.server ?? null)
+                  : GH_UNREAD
+          }),
       wakes: bot.github !== null
     },
     {
@@ -150,7 +193,16 @@ export function botConnectorServices(
       wakes: slack,
       ...(cloudSlack?.approveUrl ? { approveUrl: cloudSlack.approveUrl } : {})
     },
-    ...(local.google ? [googleService(bot, local.google, local.googleApp === true)] : [])
+    ...(local.google
+      ? [
+          googleService(
+            bot,
+            local.google,
+            local.googleApp === true,
+            local.googleDefault ?? { email: null }
+          )
+        ]
+      : [])
   ]
 }
 
@@ -161,7 +213,10 @@ function serviceLines(service: BotConnectorService, botName: string): string[] {
     ? service.actsAs === 'bot'
       ? 'Connected.'
       : 'Signed in.'
-    : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
+    : // GitHub's signed-out line says so itself.
+      service.source === 'github' && service.gap !== GH_MISSING
+      ? (service.gap ?? '')
+      : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
   const wakes =
     service.source === 'slack' || service.source === 'google'
       ? null

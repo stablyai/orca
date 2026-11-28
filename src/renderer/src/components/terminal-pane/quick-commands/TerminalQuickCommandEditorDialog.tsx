@@ -12,12 +12,14 @@ export function TerminalQuickCommandEditorDialog({
   command,
   hostId,
   onOpenChange,
-  onSave
+  onSave,
+  onCloseAutoFocus
 }: {
   command: TerminalQuickCommand
   hostId: ExecutionHostId
   onOpenChange: (open: boolean) => void
   onSave: (command: TerminalQuickCommand) => Promise<boolean>
+  onCloseAutoFocus?: (event: Event) => void
 }): React.JSX.Element {
   const repos = useAppStore((store) => store.repos)
   const agentPromptMaxLength = useAppStoreWithHostStatuses((_state, statuses) =>
@@ -36,6 +38,7 @@ export function TerminalQuickCommandEditorDialog({
       agentPromptMaxLength={agentPromptMaxLength}
       onOpenChange={onOpenChange}
       onSave={onSave}
+      onCloseAutoFocus={onCloseAutoFocus}
     />
   )
 }

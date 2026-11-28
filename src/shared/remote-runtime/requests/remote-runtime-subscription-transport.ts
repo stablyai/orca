@@ -46,7 +46,8 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     requestId,
     deviceToken: connection.credential.deviceToken,
     method,
-    params
+    params,
+    idlePassive: options?.idlePassive
   })
   return await new Promise((resolve, reject) => {
     const handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)

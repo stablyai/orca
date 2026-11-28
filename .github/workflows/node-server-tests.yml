@@ -198,14 +198,30 @@ jobs:
         with:
           bun-version-file: config/.bun-version
           no-cache: true
+      - name: Restore cached Bun orcad for the cross-runtime tests
+        id: bun-orcad-cache
+        if: runner.os == 'Linux'
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/bun-orcad
+          key: bun-orcad-v1-${{ runner.os }}-${{ runner.arch }}-f4092c06d639ee13ad446261dcabc78b27a21fbc-${{ hashFiles('config/.bun-version') }}
       - name: Build the last Bun orcad for the cross-runtime tests
         id: bun-orcad
         background: true
         shell: bash
         env:
           BUN_ORCAD_COMMIT: f4092c06d639ee13ad446261dcabc78b27a21fbc
+          BUN_ORCAD_CACHE_HIT: ${{ steps.bun-orcad-cache.outputs.cache-hit }}
         run: |
           if [ "$RUNNER_OS" != Linux ]; then exit 0; fi
+          if [ "$BUN_ORCAD_CACHE_HIT" = true ] && [ -f "$RUNNER_TEMP/bun-orcad/orcad.js" ]; then
+            echo "Using cached Bun orcad from $RUNNER_TEMP/bun-orcad"
+            echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"
+            echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          rm -rf -- "$RUNNER_TEMP/bun-orcad"
           git fetch --no-tags --depth=1 origin "$BUN_ORCAD_COMMIT"
           git worktree add --detach "$RUNNER_TEMP/bun-orcad-source" "$BUN_ORCAD_COMMIT"
           pnpm --dir "$RUNNER_TEMP/bun-orcad-source" install --frozen-lockfile --ignore-scripts
@@ -239,9 +255,10 @@ jobs:
         with:
           name: orcad-mobile-web-bundle
           path: out/mobile-web
-      # Narrow test-only runs skip the shared producer but still need a page.
-      - uses: ./.github/actions/build-mobile-web-bundle
-        if: needs.changes.outputs.qualification == 'false'
+      # Narrow test-only runs skip the shared producer and never ship orcad; write a valid placeholder page.
+      - name: Write placeholder mobile web bundle for non-qualification tests
+        if: needs.changes.outputs.qualification == 'false' && !inputs.build_template
+        run: node config/scripts/build/mobile-web-app/write-placeholder-mobile-web-bundle.mjs
       - run: pnpm build:orcad
         env:
           ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ runner.os == 'Windows' && steps.dependencies.outcome == 'success' }}
@@ -250,8 +267,18 @@ jobs:
         env:
           ORCA_BUN_ORCAD_SLOT: ${{ steps.bun-orcad.outputs.slot }}
           BUN_EXECUTABLE: ${{ steps.bun-orcad.outputs.executable }}
+      - name: Save cached Bun orcad for the cross-runtime tests
+        if: >-
+          success() && runner.os == 'Linux' &&
+          steps.bun-orcad-cache.outputs.cache-hit != 'true' &&
+          github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/bun-orcad
+          key: bun-orcad-v1-${{ runner.os }}-${{ runner.arch }}-f4092c06d639ee13ad446261dcabc78b27a21fbc-${{ hashFiles('config/.bun-version') }}
       - name: Build the host-target desktop server template
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && (needs.changes.outputs.qualification != 'false' || inputs.build_template)
         run: node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets linux-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}-glibc
       # Only a Windows runner compiles it; arm64 cross-compiles here.
       # Before the Node 18 check below: the build script imports TypeScript, which Node 18 cannot load.

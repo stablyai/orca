@@ -36,7 +36,7 @@ export function useMobileNativeChatRowRenderer({
 }): ({ item, index }: { item: NativeChatMessage; index: number }) => React.JSX.Element {
   const t = useMobileTranslation()
   const unsentNotices = useMemo(
-    () => mobileNativeChatUnsentNotices(turnJournal, agent),
+    () => mobileNativeChatUnsentNotices(turnJournal, agent, t),
     [turnJournal, agent, t]
   )
   const { resolveRow: resolveTurnRow, onToggleTurn } = turns

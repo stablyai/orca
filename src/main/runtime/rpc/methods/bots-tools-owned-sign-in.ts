@@ -38,7 +38,7 @@ function signInOwner(callerSessionId: string | undefined, context: RpcContext): 
 }
 
 /** Fixed copy for a sign-in failure; never provider text. */
-async function inHostWords<T>(work: () => Promise<T>): Promise<T> {
+export async function inHostWords<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work()
   } catch (error) {

@@ -23,6 +23,7 @@ export const NOT_HOST_TWINNED_PARAMS = new Map([
   ['AutomationPersistence.automationId', 'automation ids are minted UUIDs'],
   ['HostRepoCatalogSnapshotPersistence.environmentId', 'the id names the host itself'],
   ['OrcadSourceExportPersistence.targetId', 'the id names the host itself'],
+  ['PairedPortForwardPersistence.environmentId', 'the id names the host itself'],
   ['RemoteLayoutSnapshotPersistence.environmentId', 'the id names the host itself'],
   ['SessionHostPartitionOperations.hostId', 'the id names the host itself'],
   ['SshLeaseRecoveryOperations.targetId', 'the id names the host itself'],
@@ -37,6 +38,7 @@ const UNIQUE_FOLDER_ID = 'folder workspace ids are minted UUIDs, one row per id 
 /** Matches exempt by method, with the reason. Keep each reason true. */
 export const NOT_HOST_TWINNED = new Map([
   ['AutomationPersistence.advanceAutomationNextRun', 'automation ids are minted UUIDs'],
+  ['AutomationPersistence.advanceAutomationNextRuns', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.deleteAutomation', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.disableAutomations', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.updateAutomation', 'automation ids are minted UUIDs'],

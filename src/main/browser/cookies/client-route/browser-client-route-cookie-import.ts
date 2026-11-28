@@ -15,7 +15,7 @@ import { resolveBrowserRoutePartitionBinding } from '../../routing/partitions/br
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { validateBrowserRouteProfile } from '../../routing/sessions/browser-route-profile-validation'
 import { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
-import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { browserClientPageCookieJar } from '../../client-pages/lifecycle/browser-client-page-cookie-jars'
 
 type ClientRouteCookieImportTarget = {
@@ -70,7 +70,7 @@ async function importIntoClientRoutePartition(
   if (destination.isProfileJar(imported.partition)) {
     // Badge this desktop’s server-route jar, rather than the local profile jar.
     await recordClientRouteCookieImportSource({
-      environmentId: target.environmentId,
+      route: target.environmentId,
       profileId: destination.profileId,
       source: { ...imported.source.badge, importedAt: Date.now() }
     })
@@ -198,6 +198,23 @@ function deriveRoutePartition(
     },
     storageScope: routeIdentity.storageScope
   })
+}
+
+/** The jar a page or import already bound for this profile on the route; null when none has. Never creates a binding; it migrates an older build's one the same way import does. */
+export function boundRoutePartition(
+  routeIdentity: ClientRouteIdentity,
+  browserProfileId: string
+): string | null {
+  const bindings = currentBrowserRoutePartitionBindingStore()
+  const derived = deriveRoutePartition(routeIdentity, browserProfileId, bindings)
+  const persisted = bindings.get(derived.partition)
+  if (persisted === null) {
+    return null
+  }
+  if (persisted !== derived.bindingFingerprint) {
+    throw new Error('browser_route_partition_binding_conflict')
+  }
+  return derived.partition
 }
 
 export function bindRoutePartition(

@@ -10,6 +10,7 @@ import {
   cancelPendingSettingsDeepLinkTargetWatch,
   getSettingsNavGroupDefinitionsForSearch
 } from '../navigation/settings-navigation-foundations'
+import { cancelPendingSettingsTargetFocus } from '../navigation/settings-target-focus'
 import type { SettingsSearchResult } from '../navigation/settings-search-results'
 
 export function useSettingsNavigationActions(
@@ -18,6 +19,7 @@ export function useSettingsNavigationActions(
     | 'setHighlightedSettingsTarget'
     | 'generalSubPage'
     | 'setGeneralSubPage'
+    | 'setMcpServerSubPage'
     | 'activeSectionId'
     | 'setActiveSectionId'
     | 'setPendingNavRequestTick'
@@ -31,6 +33,7 @@ export function useSettingsNavigationActions(
     activeSectionId,
     setHighlightedSettingsTarget,
     setGeneralSubPage,
+    setMcpServerSubPage,
     setActiveSectionId,
     setPendingNavRequestTick,
     setSettingsSearchQuery,
@@ -42,7 +45,9 @@ export function useSettingsNavigationActions(
     contentScrollRef,
     pendingNavSectionRef,
     pendingScrollTargetRef,
-    pendingScrollTargetWatchRef
+    pendingScrollTargetWatchRef,
+    pendingFocusTargetRef,
+    pendingFocusWatchRef
   } = interactions
   const scrollToSection = useCallback(
     async (sectionId: string): Promise<void> => {
@@ -62,8 +67,10 @@ export function useSettingsNavigationActions(
       pendingNavSectionRef.current = null
       pendingScrollTargetRef.current = null
       cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
+      cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
       setHighlightedSettingsTarget(null)
       setGeneralSubPage(null)
+      setMcpServerSubPage(null)
       releaseNativeAccounts()
       setActiveSectionId(sectionId)
     },
@@ -75,8 +82,11 @@ export function useSettingsNavigationActions(
       pendingNavSectionRef,
       pendingScrollTargetRef,
       pendingScrollTargetWatchRef,
+      pendingFocusTargetRef,
+      pendingFocusWatchRef,
       setActiveSectionId,
       setGeneralSubPage,
+      setMcpServerSubPage,
       setHighlightedSettingsTarget,
       setSettingsSearchQuery,
       settingsSearchQuery
@@ -94,6 +104,7 @@ export function useSettingsNavigationActions(
       }
       cancelSettingsListReveal()
       setHighlightedSettingsTarget(null)
+      cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
       pendingNavSectionRef.current = sectionId
       pendingScrollTargetRef.current = result.targetId
       // Pending refs cannot schedule the jump effect; trigger a render.
@@ -104,6 +115,8 @@ export function useSettingsNavigationActions(
       confirmDiscardSourceControlAiPromptChanges,
       pendingNavSectionRef,
       pendingScrollTargetRef,
+      pendingFocusTargetRef,
+      pendingFocusWatchRef,
       releaseNativeAccounts,
       setHighlightedSettingsTarget,
       setPendingNavRequestTick
@@ -114,6 +127,7 @@ export function useSettingsNavigationActions(
     if (!(await confirmDiscardSourceControlAiPromptChanges())) {
       return
     }
+    cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
     pendingNavSectionRef.current = 'computer-use'
     pendingScrollTargetRef.current = 'computer-use'
     if (settingsSearchQuery !== '') {
@@ -126,6 +140,8 @@ export function useSettingsNavigationActions(
     confirmDiscardSourceControlAiPromptChanges,
     pendingNavSectionRef,
     pendingScrollTargetRef,
+    pendingFocusTargetRef,
+    pendingFocusWatchRef,
     setPendingNavRequestTick,
     setSettingsSearchQuery,
     settingsSearchQuery

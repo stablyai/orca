@@ -1,6 +1,7 @@
 import { app, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { constants } from 'node:fs'
-import { copyFile, mkdir, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
 import type { Store } from '../../../persistence/loading-store/store'
 import {
@@ -16,8 +17,8 @@ import { assertSshMutationExpectation } from '../../../ssh/connection/authority/
 import { renameLocalPathSerializedByDestination } from '../../../filesystem/destination-serialized-local-rename'
 import {
   assertNotExists,
-  rethrowWithUserMessage
-} from '../../../filesystem/local-file-io/filesystem-create-path-guards'
+  createLocalFile
+} from '../../../filesystem/local-file-io/filesystem-create-path'
 import type {
   ImportItemResult,
   ResolveDroppedPathsResult
@@ -37,8 +38,11 @@ import { sweepAbandonedRuntimeUploadTempPath } from '../../runtime-transfers/run
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { windowsFsPath } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
 
-export function registerFilesystemMutationHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerFilesystemMutationHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'fs:createFile',
     async (
       _event,
@@ -54,17 +58,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         throw new SshHostNotServedError(args.connectionId)
       }
       const filePath = windowsFsPath(await resolveDesktopAuthorizedPath(args.filePath, store))
-      await mkdir(dirname(filePath), { recursive: true })
-      try {
-        // Exclusive creation closes the existence-check race.
-        await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
-      } catch (error) {
-        rethrowWithUserMessage(error, filePath)
-      }
+      await createLocalFile(filePath)
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:createDir',
     async (
       _event,
@@ -86,7 +84,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   )
 
   // Cross-volume rename propagates EXDEV through IPC.
-  ipcMain.handle(
+  ipc.handle(
     'fs:rename',
     async (
       _event,
@@ -117,7 +115,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:copy',
     async (
       _event,
@@ -152,7 +150,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:importExternalPaths',
     async (
       _event,
@@ -197,7 +195,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:stageExternalPathsForRuntimeUpload',
     async (
       _event,
@@ -218,7 +216,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   )
 
   // Main owns handles and runtime sockets; renderer retains commit/rollback orchestration without file bytes.
-  ipcMain.handle(
+  ipc.handle(
     'fs:uploadExternalFileToRuntime',
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
       const userDataPath = app.getPath('userData')
@@ -248,7 +246,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   )
 
   // Terminal drops reference local paths in place; explorer imports copy into a picked destination.
-  ipcMain.handle(
+  ipc.handle(
     'fs:resolveDroppedPathsForAgent',
     async (
       _event,

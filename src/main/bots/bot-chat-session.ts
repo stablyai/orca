@@ -33,6 +33,7 @@ import {
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import type { BotController } from './bot-controller'
 import { closeReplacedBotChat, dropReplacedChatMail } from './bot-chat-replacement'
+import { carryQueuedMessages, type QueuedCarryHost } from './bot-chat-queued-carry'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
@@ -40,15 +41,7 @@ import { BotSessionRefusedError } from './bot-session-refused-error'
 import { showBotSessionTab } from './bot-session-tab-show'
 import { supportedStructuredSeedOptions } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
-export type BotChatHost = StructuredAgentTurnHost &
-  BotHomeHost & {
-    deps: {
-      store: Pick<
-        StructuredAgentSessionHost['deps']['store'],
-        'getConversation' | 'requireWritableRecord'
-      >
-    }
-  }
+export type BotChatHost = StructuredAgentTurnHost & BotHomeHost & QueuedCarryHost
 
 export type BotChatDependencies = {
   bots: Pick<BotController, 'list' | 'setChatSession'>
@@ -73,6 +66,8 @@ export type BotRunFields = {
   triggeredBy?: AutomationTriggeredBy
   automationRun?: AutomationRunMessage
   images?: readonly { path: string }[]
+  /** The prompt's message id; an automation run's is derived from the run so a restart finds its turn. */
+  messageId?: string
 }
 
 /** A message to a bot's session, as native chat sends it. */
@@ -124,6 +119,7 @@ export function botChatSessions(deps: BotChatDependencies) {
     await deps.createChat(bot, sessionId)
     // Saved before anything else can fail, so the bot never loses a Chat it made.
     await deps.bots.setChatSession(bot.id, sessionId)
+    await carryQueuedMessages(host, bot.chatSessionId, sessionId)
     await deps.dropUnreadMail(bot, bot.chatSessionId)
     await nameNewHome(host, { ...bot, chatSessionId: sessionId }, bot.chatSessionId)
     return sessionId
@@ -185,7 +181,7 @@ export function botChatSessions(deps: BotChatDependencies) {
       turn: {
         body,
         ...(from ? {} : { personsMessage: true }),
-        operationId: mintAgentSessionOperationId(Date.now()),
+        operationId: run?.messageId ?? mintAgentSessionOperationId(Date.now()),
         expectedRuntimeFence: host.deps.store.requireWritableRecord(sessionId).lease.runtimeFence,
         delivery: 'queue'
       }

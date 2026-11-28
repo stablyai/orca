@@ -1,4 +1,8 @@
 import {
+  boundPayload,
+  PROVIDER_FRAME_PAYLOAD_LIMITS
+} from '../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import {
   agentSessionFailureFact,
   providerDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
@@ -171,7 +175,15 @@ export class AcpTurnFailures {
                 text:
                   diagnostic?.text ??
                   this.dialect.failedTurnText?.(stopReason) ??
-                  `${this.agentName ?? 'The agent'} ended this turn with an error.`
+                  `${this.agentName ?? 'The agent'} ended this turn with an error.`,
+                // The agent's own line, under Details, behind the sentence drawn from it.
+                ...(evidence.frame && {
+                  providerFrame: {
+                    provider: this.agentName ?? 'agent',
+                    kind: 'failure-notice',
+                    payload: boundPayload(evidence.frame, PROVIDER_FRAME_PAYLOAD_LIMITS)
+                  }
+                })
               })
         },
         join

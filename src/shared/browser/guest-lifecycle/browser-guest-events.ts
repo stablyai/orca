@@ -50,6 +50,9 @@ export type BrowserDownloadRequestedEvent = {
   totalBytes: number | null
   mimeType: string | null
   savePath: string
+  /** Set when a feature in Orca took the download (e.g. "Google setup in Orca"): shown as where it
+   *  went instead of savePath, a private file the feature deletes, so there is nothing to open or copy. */
+  claimLabel?: string
   status: 'downloading'
 }
 
@@ -68,16 +71,16 @@ export type BrowserDownloadFinishedEvent = {
   savePath: string | null
   /** Present only when a client-hosted page's download was written to the remote workspace instead. */
   remoteDestination?: { workspaceRelativePath: string; hostLabel: string }
+  /** As on the requested event. */
+  claimLabel?: string
   /** Human-readable UI copy only; must never contain secrets. */
   error: string | null
 }
 
-export type BrowserContextMenuRequestedEvent = {
-  browserPageId: string
+/** What a right-click landed on, read from the guest's own context-menu params. */
+export type BrowserContextMenuTarget = {
   x: number
   y: number
-  screenX: number
-  screenY: number
   pageUrl: string
   linkUrl: string | null
   selectionText: string
@@ -95,6 +98,12 @@ export type BrowserContextMenuRequestedEvent = {
   } | null
   /** Null unless the click landed on an image. `url` is the raw src, which may be data: or blob:. */
   image: { url: string; canCopy: boolean } | null
+}
+
+export type BrowserContextMenuRequestedEvent = BrowserContextMenuTarget & {
+  browserPageId: string
+  screenX: number
+  screenY: number
   /** Browser-extension items for this right-click (local extension profiles only). */
   extensionMenu?: BrowserExtensionContextMenuPayload
 }

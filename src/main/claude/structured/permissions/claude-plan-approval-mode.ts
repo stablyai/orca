@@ -11,6 +11,7 @@ import {
   recordClaudeBuildPermissionMode,
   setClaudeAllowedPermissionMode
 } from './claude-permission-mode-ladder'
+import { claudePermissionPickHolds } from './claude-permission-picks'
 
 /** This process's requested mode, else the mode it opened in; anything else asks for each edit. */
 export function claudePlanApprovalMode(
@@ -54,6 +55,14 @@ export function claudeBuildPermissionMode(
   })
 }
 
+/** Sessions whose approved plan's exit is in flight: Plan is being left already. */
+const exitingPlan = new WeakSet<Pick<ClaudeSession, 'launchIntent'>>()
+
+/** A live pick made now goes out behind the exit instead of waiting for Plan to be left. */
+export function claudeLeavingPlanOnApproval(session: Pick<ClaudeSession, 'launchIntent'>): boolean {
+  return exitingPlan.has(session)
+}
+
 function logPlanExitFailure(error: unknown): void {
   try {
     console.warn('[claude] leaving Plan mode after an approved plan failed:', error)
@@ -68,7 +77,9 @@ function logPlanExitFailure(error: unknown): void {
 export function leaveClaudePlanModeOnApproval(
   session: ClaudeSession,
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
-  reply: PermissionResult
+  reply: PermissionResult,
+  /** Written first, ahead of the allow: a kept agent's Full access picked in Plan is asked of Claude. */
+  askFirst?: () => Promise<void> | undefined
 ): void {
   const mode = session.orderedPermissionMode
     ? session.orderedPermissionMode()
@@ -76,20 +87,35 @@ export function leaveClaudePlanModeOnApproval(
   if (prompt.toolName !== 'ExitPlanMode' || reply.behavior !== 'allow' || mode !== 'plan') {
     return
   }
-  try {
+  const leave = (): Promise<void> => {
+    const holds = claudePermissionPickHolds(session)
     const write = setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session))
     const request = session.permissionModeRequests
-    void write.then(
+    return write.then(
       (restored) => {
+        // A kept agent's pick made while this was in flight was only recorded (the chat still
+        // looked in Plan), so it goes out now rather than leaving the older mode running.
+        if (!holds()) {
+          return leave()
+        }
         if (restored !== undefined && session.permissionModeRequests === request) {
           session.appliedInputOptions.set('interactionMode', 'default')
           recordClaudeBuildPermissionMode(session, restored)
         }
+        return undefined
       },
       (error: unknown) => {
-        if (session.permissionModeRequests !== request) {
-          return
+        if (session.permissionModeRequests === request) {
+          throw error
         }
+      }
+    )
+  }
+  try {
+    exitingPlan.add(session)
+    const asked = askFirst?.()
+    ;(asked ? asked.then(leave) : leave())
+      .catch((error: unknown) => {
         // Claude accepted a step out of Plan before a later one went unanswered: the chat has
         // left Plan, and its fallback is owed again.
         if (error instanceof ClaudePermissionModeUnsettled) {
@@ -97,9 +123,10 @@ export function leaveClaudePlanModeOnApproval(
           session.appliedInputOptions.delete('buildPermissionMode')
         }
         logPlanExitFailure(error)
-      }
-    )
+      })
+      .finally(() => exitingPlan.delete(session))
   } catch (error) {
+    exitingPlan.delete(session)
     logPlanExitFailure(error)
   }
 }

@@ -22,10 +22,12 @@ export const BOT_GOOGLE_SETUP_COMMAND_SPECS: CommandSpec[] = [
     path: ['bot', 'google-setup', 'start'],
     summary: 'Start Google setup for this bot, or pick up the one already running',
     usage:
-      'orca bot google-setup start [--mode do-it-for-me|guide-here|guide-browser] [--page <browser page id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'page'],
+      'orca bot google-setup start [--mode do-it-for-me|guide-here|guide-browser] [--page <browser page id>] [--new-app] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'page', 'new-app'],
+    booleanFlags: ['new-app'],
     notes: [
       FROM_CHAT,
+      '--new-app makes a new Google app when this computer already has one (without it, start shows the Connect card): for another company, when Google refused a sign-in through the current app, or for a work account without the unverified-app warning. Not for adding another account the current app works for. New sign-ins then use the new app; accounts already connected keep theirs.',
       'Until your owner picks a path on the card, you only read pages (Guide me here); --mode guide-browser when they asked to use their own browser. --page names the browser page the setup runs in.'
     ]
   },

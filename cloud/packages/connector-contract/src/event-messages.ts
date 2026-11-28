@@ -110,7 +110,8 @@ export const CONNECTOR_REPLY_OUTCOMES = [
 export const ConnectorReplyOutcomeSchema = z.enum(CONNECTOR_REPLY_OUTCOMES)
 
 // Prose is the answer: present, with words, and within the answer limit exactly when answered.
-// turnId (the turn-started `at`) is for presentation only; the delivery ids key everything.
+// turnId: the turn its machine recorded as answering these deliveries (its turn-started `at`); a
+// cloud closes that turn on it. The delivery ids key everything else.
 export const ConnectorReplyEventSchema = z
   .object({
     kind: z.literal('reply'),
@@ -132,7 +133,9 @@ export const ConnectorReplyEventSchema = z
     links: OptionalWorkLinksSchema,
     turnId: EpochMsSchema.optional(),
     // How long the answered turn ran, by the machine's clock; shown under the answer.
-    tookMs: z.number().int().positive().optional()
+    tookMs: z.number().int().positive().optional(),
+    // A turn done without an answer ran a tool call that may have acted; its line asks to check first.
+    toolsRan: z.literal(true).optional()
   })
   .refine((reply) => reply.deliveryIds.includes(reply.answerDeliveryId))
   .refine((reply) => (reply.outcome === 'answered') === (reply.prose !== undefined))

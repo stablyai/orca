@@ -8,9 +8,9 @@ import {
   SquareTerminal,
   StickyNote
 } from 'lucide-react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
 import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
 import {
@@ -21,7 +21,6 @@ import {
   ListRow
 } from '../../components/list/ListGroup'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
-import { getWorktreeGitIdentityDisplay } from '../../../../src/shared/worktree/row-display/git-identity-display'
 import {
   buildWorkspaceDetailLinks,
   buildWorkspaceOrigin,
@@ -62,16 +61,26 @@ function checkLabels(t: Translate): Record<string, string> {
 }
 
 export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: string) => void }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const { row, onOpenLink } = props
-  const identity = getWorktreeGitIdentityDisplay({ branch: row.branch })
   const origin = buildWorkspaceOrigin(row)
   const OriginIcon = origin?.kind === 'automation' ? CalendarClock : SquareTerminal
   const notes = workspaceNotes(row)
   const rows: ReactNode[] = buildWorkspaceDetailLinks(row).map((item) => (
     <LinkRow key={item.key} item={item} onOpen={onOpenLink} />
   ))
+  if (origin) {
+    rows.push(
+      <ListRow
+        key="origin"
+        testID="workspace-origin"
+        title={originLabel(origin, t)}
+        leading={<OriginIcon size={ICON_SIZE} color={colors.textSecondary} />}
+      />
+    )
+  }
   if (notes) {
     rows.push(
       // Notes wrap and stay selectable, which a ListRow title cannot; laid out on the same grid.
@@ -85,35 +94,13 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
       </View>
     )
   }
-  return (
-    <>
-      <View style={styles.header}>
-        <Text style={styles.heading} numberOfLines={1}>
-          {row.displayName || row.repo}
-        </Text>
-        {identity?.kind === 'branch' ? (
-          <Text style={styles.branch} numberOfLines={1}>
-            {identity.branchName}
-          </Text>
-        ) : null}
-        {origin ? (
-          <View style={styles.origin} testID="workspace-origin">
-            <OriginIcon size={12} color={colors.textMuted} style={styles.originIcon} />
-            <Text style={styles.originText} numberOfLines={2}>
-              {originLabel(origin, t)}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-      {rows.length > 0 && (
-        <View testID="workspace-details">
-          <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
-            {rows}
-          </ListGroup>
-        </View>
-      )}
-    </>
-  )
+  return rows.length > 0 ? (
+    <View testID="workspace-details">
+      <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+        {rows}
+      </ListGroup>
+    </View>
+  ) : null
 }
 
 function originLabel(origin: WorkspaceOrigin, t: Translate): string {
@@ -132,9 +119,9 @@ function originLabel(origin: WorkspaceOrigin, t: Translate): string {
 }
 
 function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const state = item.state ?? ''
-  const color = prStateColor(state)
+  const color = prStateColor(state, colors)
   // GitLab draws every open MR with the merge glyph.
   if (item.type === 'mr' && state !== 'closed' && state !== 'draft') {
     return <GitMerge size={ICON_SIZE} color={color} />
@@ -143,7 +130,7 @@ function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
 }
 
 function LinkIcon({ item }: { item: WorkspaceDetailLink }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   if (item.type !== 'issue') {
     return <ReviewIcon item={item} />
   }
@@ -168,8 +155,8 @@ function linkMeta(item: WorkspaceDetailLink, t: Translate): string {
 }
 
 function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: string) => void }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const url = item.url
   const meta = linkMeta(item, t)
   return (
@@ -196,37 +183,7 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
   )
 }
 
-const styles = themedStyleSheet(() => ({
-  header: {
-    paddingHorizontal: LIST_ROW_PADDING,
-    paddingBottom: spacing.sm
-  },
-  heading: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  branch: {
-    marginTop: 1,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
-    color: colors.textMuted
-  },
-  origin: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    marginTop: spacing.xs
-  },
-  originIcon: {
-    marginTop: 2
-  },
-  originText: {
-    flex: 1,
-    fontSize: typography.metaSize,
-    lineHeight: 16,
-    color: colors.textMuted
-  },
+const stylesSheet = themedStyleSheet((colors) => ({
   group: {
     marginBottom: spacing.md
   },

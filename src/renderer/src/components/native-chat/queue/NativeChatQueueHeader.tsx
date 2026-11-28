@@ -41,32 +41,39 @@ export function NativeChatQueueHeader({
   })
   return (
     <div data-native-chat-dock-pinned className="flex h-8 items-center gap-1 px-1.5">
-      <button
-        ref={foldRef}
-        type="button"
-        className="group/queue-header flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        aria-expanded={expanded}
-        aria-controls={listId}
-        onClick={onToggle}
-      >
-        <span className="min-w-0 truncate">
-          {pause && !expanded ? <span>{state} · </span> : null}
-          <span className="font-medium text-foreground group-hover/queue-header:text-accent-foreground">
-            {expanded ? state : hiddenCount}
-          </span>
+      {count === 0 ? (
+        // Only agent mail is waiting, drawn in the transcript: nothing to fold here.
+        <span className="flex h-6 min-w-0 flex-1 items-center px-1.5 font-medium text-foreground">
+          <span className="truncate">{state}</span>
         </span>
-        {expanded ? (
-          <ChevronUp className="size-3 shrink-0" aria-hidden />
-        ) : (
-          <ChevronDown className="size-3 shrink-0" aria-hidden />
-        )}
-        {attentionCaption ? (
-          <span className="flex min-w-0 items-center gap-1 text-destructive">
-            <AlertCircle className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">{attentionCaption}</span>
+      ) : (
+        <button
+          ref={foldRef}
+          type="button"
+          className="group/queue-header flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={onToggle}
+        >
+          <span className="min-w-0 truncate">
+            {pause && !expanded ? <span>{state} · </span> : null}
+            <span className="font-medium text-foreground group-hover/queue-header:text-accent-foreground">
+              {expanded ? state : hiddenCount}
+            </span>
           </span>
-        ) : null}
-      </button>
+          {expanded ? (
+            <ChevronUp className="size-3 shrink-0" aria-hidden />
+          ) : (
+            <ChevronDown className="size-3 shrink-0" aria-hidden />
+          )}
+          {attentionCaption ? (
+            <span className="flex min-w-0 items-center gap-1 text-destructive">
+              <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{attentionCaption}</span>
+            </span>
+          ) : null}
+        </button>
+      )}
       {pause ? (
         <>
           {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}

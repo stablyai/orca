@@ -43,6 +43,7 @@ export function botsTipDemo(t: Translate) {
     madeBy: null,
     question: { eventId: 'question', text: question },
     closeNote: null,
+    wait: null,
     links: [],
     version: 1,
     lastEventId: 'question',

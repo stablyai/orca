@@ -5,7 +5,8 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalConnectorDelivery } from '../../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { connectorReplyTurnStamps } from '../../../shared/agent-session/journal/journal-connector-reply-turn'
+import { connectorReplyStampsOf } from '../../../shared/agent-session/journal/journal-connector-reply-turn'
+import { journalTurnAnsweredMessages } from '../../../shared/agent-session/journal/journal-turn-answered-messages'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
@@ -13,12 +14,14 @@ import { journalCanonicalItemId, journalVisibleItem } from './journal-sql-item-r
 import type { JournalSqlScope } from './journal-sql-scope'
 
 /** Whom a turn acts for rests on its opener and the deliveries it answered (connectorReplyTurnStamps).
- *  stamps null: no turn row, so nothing is proven. */
+ *  messages: those it answered (journalTurnAnsweredMessages). stamps and messages null: no turn
+ *  row, so nothing is proven. */
 export type JournalTurnAttribution = {
   cursor: AgentJournalCursor
   turnItemId: string | null
   opener: AgentJournalRenderItem | null
   stamps: AgentJournalConnectorDelivery[] | null
+  messages: AgentJournalRenderItem[] | null
 }
 
 /** A turn's row, opener and steered sends, each found by index: work is the turn's own rows (every
@@ -35,7 +38,7 @@ export function readJournalDomainTurnAttribution(
     item && item.sequence <= through ? item : null
   const row = ended(turnRow(scope, turnId, through))
   if (!row) {
-    return { cursor, turnItemId: null, opener: null, stamps: null }
+    return { cursor, turnItemId: null, opener: null, stamps: null, messages: null }
   }
   const turn = readAgentJournalTurn(row.body)
   const opener = !turn
@@ -64,11 +67,13 @@ export function readJournalDomainTurnAttribution(
     const item = ended(journalVisibleItem(scope.db, scope.prefix, key))
     return item ? [item] : []
   })
+  const messages = journalTurnAnsweredMessages({ items, submissions }, opener, row.itemId)
   return {
     cursor,
     turnItemId: row.itemId,
     opener,
-    stamps: connectorReplyTurnStamps({ items, submissions }, opener, row.itemId)
+    stamps: connectorReplyStampsOf(opener, messages),
+    messages
   }
 }
 

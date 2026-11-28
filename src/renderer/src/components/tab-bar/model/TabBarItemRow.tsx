@@ -35,6 +35,9 @@ import { BotAvatar } from '../../bots/BotAvatar'
 import { BotGroupTabIcon, useBotGroupTabMembers } from '../../bots/BotGroupTabIcon'
 import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'
 import { botGroupRoomSessions } from '@/lib/bot-group-room-sessions'
+import { renameBotGroupRoom } from '@/lib/bot-group-room-rename'
+import { botGroupRenameErrorMessage } from '../../bots/bot-presentation'
+import { toast } from 'sonner'
 import { terminalTabHasUnreadActivity } from '../terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -88,7 +91,6 @@ function TabBarItemRow({
   const chatNaming = useStructuredChatTabNaming(
     item.type === 'agent-session' ? item.data : undefined
   )
-  const conversationName = chatNaming.name
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
@@ -98,6 +100,9 @@ function TabBarItemRow({
   )
   const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
   const homeRule = useBotHomeRuleApplies(bot)
+  // Why: Orca names a bot's main chat "Home" in its record; that name reads in the UI language.
+  const conversationName =
+    isBotChat && chatNaming.name === 'Home' ? t('bots.tabs.homeTitle', 'Home') : chatNaming.name
   const ruledHome = useAppStore(
     (state) =>
       state.workspaceSessionReady &&
@@ -248,6 +253,14 @@ function TabBarItemRow({
         onActivate={actions.activateAgentSession}
         onToggleExpand={() => {}}
         canSplitTerminal={false}
+        // A room's name is its group's or its thread's, kept on the group's host, not on this tab.
+        onSetCustomTitle={(_tabId, name) => {
+          renameBotGroupRoom(
+            item.data.entityId,
+            name,
+            item.data.customLabel ?? item.data.label
+          ).catch((error: unknown) => toast.error(botGroupRenameErrorMessage(error)))
+        }}
         identityIcon={<BotGroupTabIcon members={roomMembers} />}
         identityDetail={
           roomMembers.length > 0 ? roomMembers.map((member) => member.name).join(', ') : undefined

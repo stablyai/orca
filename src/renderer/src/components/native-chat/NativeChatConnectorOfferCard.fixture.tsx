@@ -90,6 +90,28 @@ export const githubConnected = defineFixture({
   render: () => <Offers sources={['github']} />
 })
 
+// gh signed out on the bot's computer: still Connected, with one line on what to run there.
+export const githubConnectedGhSignedOut = defineFixture({
+  width: 560,
+  setup: () => {
+    stubBots({ ...scout, github: {} })
+    Reflect.set(window.api, 'botGitHub', {
+      state: async () => ({
+        ok: true,
+        value: {
+          installUrl: 'https://github.com/apps/orca-ide/installations/new',
+          account: { userId: '42', login: 'cos-orca' },
+          installations: [{ installationId: '1', accountLogin: 'stablyai', repositories: null }],
+          defaultBotId: null,
+          gh: 'signed-out'
+        }
+      }),
+      members: notAnswered
+    })
+  },
+  render: () => <Offers sources={['github']} />
+})
+
 export const githubConnectedNarrow = defineFixture({
   width: 380,
   setup: () => stubBots({ ...scout, github: {} }),
@@ -103,20 +125,20 @@ const inbox: Bot = {
   name: 'Inbox helper',
   members: [{ id: 'U2', name: 'Nora', source: 'slack' }]
 }
+const ownerAccount = {
+  email: 'owner@example.com',
+  status: 'connected',
+  connectedAt: 1,
+  services: [{ service: 'gmail', state: 'ready' }]
+}
 const signedIn = {
   client: { clientId: 'fixture.apps.googleusercontent.com', projectId: 'fixture' },
-  accounts: [
-    {
-      email: 'owner@example.com',
-      status: 'connected',
-      connectedAt: 1,
-      services: [{ service: 'gmail', state: 'ready' }]
-    }
-  ],
+  accounts: [ownerAccount],
+  defaultAccount: 'owner@example.com',
   bots: []
 }
 
-function stubGoogle(bot: Bot): void {
+function stubGoogle(bot: Bot, google: Record<string, unknown> = signedIn): void {
   let current = bot
   publishBots([current])
   const runtime: unknown = window.api.runtime
@@ -127,7 +149,21 @@ function stubGoogle(bot: Bot): void {
         return { ok: true, result: { bots: [current] } }
       }
       if (method === 'google.status') {
-        return { ok: true, result: signedIn }
+        return { ok: true, result: google }
+      }
+      if (method === 'google.signIn.start') {
+        // Google's chooser is open in the browser; the card waits on it.
+        const prompt = {
+          authorizeUrl:
+            'https://accounts.google.com/o/oauth2/v2/auth?prompt=select_account%20consent',
+          redirectUri: 'http://127.0.0.1:1/',
+          expiresAt: Date.now() + 300_000,
+          browserOpened: true
+        }
+        return { ok: true, result: { flowId: 'flow', revision: 1, phase: 'waiting', prompt } }
+      }
+      if (method === 'google.signIn.wait') {
+        return new Promise(() => {})
       }
       if (method === 'google.bot.set') {
         // The owner's Turn on: the card reads the bot's new state.
@@ -167,19 +203,19 @@ function GoogleOffer({ bot }: { bot: Bot }): React.JSX.Element {
   )
 }
 
-// Signed in on this computer, Google off for the bot: the card asks to connect.
+// Signed in on this computer, Google off for the bot: use that account, or sign in to another.
 export const googleOff = defineFixture({
   width: 640,
   setup: () => stubGoogle(inbox),
   render: () => <GoogleOffer bot={inbox} />
 })
 
-// One click on Connect: the Who-can-ask confirm, since Nora can ask too.
+// One click on Use: the Who-can-ask confirm, since Nora can ask too.
 export const googleConnectConfirm = defineFixture({
   width: 640,
   setup: () => stubGoogle(inbox),
   render: () => <GoogleOffer bot={inbox} />,
-  interact: () => clickWhenShown('Connect')
+  interact: () => clickWhenShown('Use owner@example.com')
 })
 
 // Turn on in that confirm: the card reads Connected, with no other step.
@@ -188,8 +224,63 @@ export const googleTurnedOn = defineFixture({
   setup: () => stubGoogle(inbox),
   render: () => <GoogleOffer bot={inbox} />,
   interact: async () => {
-    await clickWhenShown('Connect')
+    await clickWhenShown('Use owner@example.com')
     await clickWhenShown('Turn on')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
+
+// No account on this computer yet: one Connect, which opens Google's account chooser.
+export const googleNoAccount = defineFixture({
+  width: 640,
+  setup: () => stubGoogle(inbox, { ...signedIn, accounts: [], defaultAccount: null }),
+  render: () => <GoogleOffer bot={inbox} />
+})
+
+// A computer on an Orca too old to keep a default: today's one button, nothing to add.
+export const googleOldHost = defineFixture({
+  width: 640,
+  setup: () => stubGoogle(inbox, { ...signedIn, defaultAccount: undefined }),
+  render: () => <GoogleOffer bot={inbox} />
+})
+
+// The default is signed out at Google: reconnect it, or use another account.
+export const googleDefaultSignedOut = defineFixture({
+  width: 640,
+  setup: () =>
+    stubGoogle(inbox, {
+      ...signedIn,
+      accounts: [{ ...ownerAccount, status: 'reconnect' }]
+    }),
+  render: () => <GoogleOffer bot={inbox} />
+})
+
+// Already on for the bot: Connected, with another account to add.
+export const googleConnected = defineFixture({
+  width: 640,
+  setup: () => stubGoogle({ ...inbox, google: true }),
+  render: () => <GoogleOffer bot={{ ...inbox, google: true }} />
+})
+
+// The card added a second account: it names it, and the default stays.
+export const googleConnectedAnother = defineFixture({
+  width: 640,
+  setup: () =>
+    stubGoogle({
+      ...inbox,
+      google: true,
+      offerAnswers: [{ cardId: 'offer-google', sent: { chosen: ['me@gmail.com'] } }]
+    }),
+  render: () => <GoogleOffer bot={{ ...inbox, google: true }} />
+})
+
+// Use another account: the card waits on Google's account chooser in place.
+export const googleUseAnotherWaiting = defineFixture({
+  width: 640,
+  setup: () => stubGoogle(inbox),
+  render: () => <GoogleOffer bot={inbox} />,
+  interact: async () => {
+    await clickWhenShown('Use another account')
     await new Promise((resolve) => setTimeout(resolve, 300))
   }
 })

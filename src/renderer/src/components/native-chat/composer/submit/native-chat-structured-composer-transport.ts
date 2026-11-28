@@ -54,6 +54,8 @@ export type NativeChatStructuredComposerTransport = {
   contextUsage?: StructuredAgentContextUsage | null
   /** The agent's guess at the next prompt, absent while a queued message will be sent next. */
   promptSuggestion?: AgentSessionPromptSuggestion | null
+  /** Presentation owner of a staged composer; its transport and attachments remain local. */
+  pendingCreationId?: string
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
@@ -62,7 +64,7 @@ export type NativeChatStructuredComposerTransport = {
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
   /** Present only where the host manages this agent's MCP servers; `/mcp` opens Orca's MCP tray. */
-  mcpPanel?: NativeChatMcpTrayState
+  mcpPanel?: NativeChatMcpTrayState & { agent: string; agentLabel: string }
   /** Present only where this chat can fork; `run` answers with a notice when it didn't fork. */
   fork?: { run: () => string | null }
   onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void

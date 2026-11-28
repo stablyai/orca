@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { getByRole, queryByRole } from '@testing-library/react'
+import { getByLabelText, getByRole, queryByLabelText, queryByRole } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard, type NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -64,6 +64,51 @@ const tabsOrSpaces: AskPrompt = {
 }
 
 describe('NativeChatQuestionCard', () => {
+  it('shows the question once in the band and omits its header, count, and arrows for one step', () => {
+    renderCard({ prompt: tabsOrSpaces })
+
+    expect(
+      container.querySelectorAll('[data-testid="native-chat-question-card-title"]')
+    ).toHaveLength(1)
+    expect(
+      container.querySelector('[data-testid="native-chat-question-card-title"]')?.textContent
+    ).toBe('Do you prefer tabs or spaces?')
+    expect(container.textContent).not.toContain('Indent')
+    expect(container.textContent?.match(/Do you prefer tabs or spaces\?/g)).toHaveLength(1)
+    expect(container.textContent).not.toContain('1 of 1')
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(0)
+  })
+
+  it('shows the count and step arrows only for multi-step questions', () => {
+    renderCard({
+      prompt: { questions: [{ ...question('One'), header: 'Hidden header' }, question('Two')] }
+    })
+
+    expect(container.textContent).toContain('1 of 2')
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
+    expect(card().getAttribute('aria-label')).toBe('One?, 1 of 2')
+  })
+
+  it('shows a multi-step question once even when its header repeats it', () => {
+    const repeatedQuestion = 'Which slice should I open first?'
+    renderCard({
+      prompt: {
+        questions: [
+          {
+            question: repeatedQuestion,
+            header: repeatedQuestion,
+            multiSelect: false,
+            options: [{ label: 'One' }]
+          },
+          question('Two')
+        ]
+      }
+    })
+
+    expect(container.textContent?.match(/Which slice should I open first\?/g)).toHaveLength(1)
+    expect(card().getAttribute('aria-label')).toBe('Which slice should I open first?, 1 of 2')
+  })
+
   it('arrows past a title checkbox into the multiline answer and leaves only at its text edges', () => {
     container.setAttribute('data-native-chat-root', 'true')
     act(() => {
@@ -187,7 +232,8 @@ describe('NativeChatQuestionCard', () => {
     // With nothing answered, the last step still offers Skip, which dismisses.
     expect(getByRole(container, 'button', { name: 'Skip' })).toBeTruthy()
 
-    act(() => getByRole(container, 'button', { name: 'One' }).click())
+    act(() => getByRole(container, 'button', { name: 'Previous question' }).click())
+    act(() => getByRole(container, 'button', { name: 'Previous question' }).click())
     act(() => optionRows()[1]!.click())
     act(() => vi.runAllTimers())
     skip()
@@ -226,7 +272,7 @@ describe('NativeChatQuestionCard', () => {
     const onAnswer = vi.fn()
     renderCard({ prompt: { questions: [question('One'), question('Two')] }, onAnswer })
     expect(document.activeElement).toBe(card())
-    expect(card().getAttribute('aria-label')).toBe('One, 1 of 2: One?')
+    expect(card().getAttribute('aria-label')).toBe('One?, 1 of 2')
     expect(optionRows().map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
     // Enter on the card with nothing answered neither picks option 1 nor moves on.
     pressKey({ key: 'Enter' }, card())
@@ -250,9 +296,11 @@ describe('NativeChatQuestionCard', () => {
     ])
   })
 
-  it('jumps from the step bar, marks answered steps and moves back from step 2', () => {
+  it('steps with the header arrows, marks an answered step and moves back from step 2', () => {
     vi.useFakeTimers()
     renderCard({ prompt: { questions: [question('One'), question('Two'), question('Three')] } })
+    // The count and the two arrows are the only step controls; no per-step bar.
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
     expect(getByRole(container, 'button', { name: 'Previous question' })).toHaveProperty(
       'disabled',
       true
@@ -261,8 +309,12 @@ describe('NativeChatQuestionCard', () => {
     act(() => optionRows()[0]!.click())
     act(() => vi.runAllTimers())
     expect(container.textContent).toContain('2 of 3')
-    expect(getByRole(container, 'button', { name: 'One, answered' })).toBeTruthy()
-    act(() => getByRole(container, 'button', { name: 'Three' }).click())
+    expect(queryByLabelText(container, 'Answered')).toBeNull()
+    act(() => getByRole(container, 'button', { name: 'Previous question' }).click())
+    expect(container.textContent).toContain('1 of 3')
+    expect(getByLabelText(container, 'Answered')).toBeTruthy()
+    act(() => getByRole(container, 'button', { name: 'Next question' }).click())
+    act(() => getByRole(container, 'button', { name: 'Next question' }).click())
     expect(container.textContent).toContain('3 of 3')
     expect(getByRole(container, 'button', { name: 'Next question' })).toHaveProperty(
       'disabled',

@@ -46,6 +46,10 @@ export function reloadBrowserPageWebview(
   webview: Electron.WebviewTag,
   { ignoreCache }: { ignoreCache: boolean }
 ): BrowserPageWebviewReloadResult {
+  // No page yet while it waits for its profile's extensions; it loads once they are ready.
+  if (webview.dataset.orcaAttachWaiting) {
+    return 'not-ready'
+  }
   try {
     webview.getWebContentsId()
   } catch {

@@ -53,6 +53,8 @@ export class AcpToolTimeline {
   private readonly tools = new Map<string, ToolSnapshot>()
   // Closing updates may omit fields; only their running journal copies are previews.
   private readonly whole = new Map<string, { input?: unknown; output?: string }>()
+  /** Running calls whose start a cut replay lost; their saved rows keep what updates omit. */
+  private readonly unseen = new Set<string>()
   // Kept after the task settles: its row is still Orca's inference, and settled reports latch.
   private readonly backgrounded = new BoundedMap<string, AcpBackgroundTaskUpdate | true>({
     maxEntries: 128
@@ -102,6 +104,19 @@ export class AcpToolTimeline {
       })
     }
     return { events, tasks }
+  }
+
+  /** A task an earlier app made of a call, still running: the call's updates report it again. */
+  restateBackgrounded(task: { taskId: string; parentToolUseId?: string }): void {
+    if (task.parentToolUseId === task.taskId && !this.backgrounded.has(task.taskId)) {
+      this.backgrounded.set(task.taskId, true)
+    }
+  }
+
+  /** The call with its whole input; a running journal copy holds only a preview. */
+  wholeCall(toolCallId: string, body: AgentJournalToolCallItem): AgentJournalToolCallItem {
+    const input = this.whole.get(toolCallId)?.input
+    return input === undefined ? body : { ...body, input }
   }
 
   /** Orca inferred this task from a call still running at its turn's end. */
@@ -240,12 +255,21 @@ export class AcpToolTimeline {
     } else {
       this.tools.delete(update.toolCallId)
     }
+    // A call this run never saw start (a cut replay; its row is saved): every update keeps that row.
+    if (!previous && 'sessionUpdate' in raw && raw.sessionUpdate === 'tool_call_update') {
+      this.unseen.add(update.toolCallId)
+    }
+    const unseen = this.unseen.has(update.toolCallId)
+    if (state !== 'running') {
+      this.unseen.delete(update.toolCallId)
+    }
     const events: ProviderTimelineEvent[] = [
       {
         type: state === 'running' ? (previous ? 'item.update' : 'item.open') : 'item.close',
         item: `tool:${update.toolCallId}`,
         body,
-        join
+        join,
+        ...(unseen ? { keepsSavedCall: true as const } : {})
       }
     ]
     for (const content of update.content ?? []) {
@@ -286,6 +310,10 @@ export class AcpToolTimeline {
     return false
   }
 
+  runningIds(turn: string): string[] {
+    return [...this.tools].filter(([, snapshot]) => snapshot.turn === turn).map(([id]) => id)
+  }
+
   turn(toolCallId: string): string | undefined {
     return this.tools.get(toolCallId)?.turn ?? this.owners.get(`tool:${toolCallId}`)?.turn
   }
@@ -295,6 +323,7 @@ export class AcpToolTimeline {
       if (key.startsWith('tool:')) {
         this.tools.delete(key.slice(5))
         this.whole.delete(key.slice(5))
+        this.unseen.delete(key.slice(5))
         this.endedCalls.set(key.slice(5), true)
       }
     }
@@ -303,6 +332,7 @@ export class AcpToolTimeline {
   dispose(): void {
     this.tools.clear()
     this.whole.clear()
+    this.unseen.clear()
     this.backgrounded.clear()
     this.endedCalls.clear()
   }

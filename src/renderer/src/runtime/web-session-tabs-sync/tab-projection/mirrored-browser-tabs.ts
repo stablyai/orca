@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../../shared/browser/browser-metadata-redaction'
 import {
   browserInitializationPresentation,
   browserInitializationReceiptCurrent,
@@ -39,7 +40,12 @@ export function findBrowserWorkspaceForRemotePage(
     const pages = state.browserPagesByWorkspace[workspace.id] ?? []
     for (const page of pages) {
       const handle = state.remoteBrowserPageHandlesByPageId[page.id]
-      if (handle?.environmentId === environmentId && handle.remotePageId === remotePageId) {
+      // A relaunch restores streamed pages without a handle; their saved server page id still names this row.
+      const identity = handle ?? {
+        environmentId: page.browserRuntimeEnvironmentId,
+        remotePageId: page.remoteBrowserPageId
+      }
+      if (identity.environmentId === environmentId && identity.remotePageId === remotePageId) {
         return {
           workspace,
           page,
@@ -243,7 +249,7 @@ export function buildMirroredBrowserTabs(
           reconciliation?.handle.placement
         )
     )
-    const nextPage: BrowserPage = {
+    const nextPage: BrowserPage = redactBrowserMetadata({
       id: pageId,
       workspaceId,
       worktreeId: snapshot.worktree,
@@ -261,7 +267,7 @@ export function buildMirroredBrowserTabs(
       createdAt,
       browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
-    }
+    })
     // Reuse requires workspaceId equality or removed-workspace cleanup misses the retained page list.
     const page = existing && browserPageEqual(existing.page, nextPage) ? existing.page : nextPage
     const existingPageIds = existing?.workspace.pageIds
@@ -291,6 +297,9 @@ export function buildMirroredBrowserTabs(
       previousPage: existing?.page,
       preservesLoading,
       certificateFailure: tab.certificateFailure ?? null,
+      audible: tab.audible === true,
+      audioMuted: tab.audioMuted === true,
+      agentDriving: tab.agentDriving === true,
       remotePageId: tab.browserPageId,
       initializationPresentation: presentation,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),

@@ -43,7 +43,7 @@ export class TerminalWorkerRestartOffers {
   /** The ids among these that name a worker's Dispatch, offered or since settled, never a chat. */
   owned(ids: readonly string[]): string[] {
     const db = this.deps.getDb()
-    return db ? ids.filter((id) => db.getDispatchContextById(id) !== null) : []
+    return db ? ids.filter((id) => Boolean(db.getDispatchContextById(id))) : []
   }
 
   /** A person's Resume: each worker resumes once in its own conversation, as with the setting on. */

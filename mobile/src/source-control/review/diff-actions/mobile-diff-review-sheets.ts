@@ -8,8 +8,8 @@ export type ReviewSheet =
   | { kind: 'composer'; composer: ComposerState }
   | { kind: 'completion' }
   | { kind: 'files' }
-  /** Lines picked in the diff, inclusive, waiting for a note to send or post. */
-  | { kind: 'range'; startLine: number; line: number }
+  /** Lines picked in the diff, inclusive, in the file `itemKey` names, waiting for a note to send or post. */
+  | { kind: 'range'; startLine: number; line: number; itemKey: string }
 
 export type ReviewSheetKind = ReviewSheet['kind']
 

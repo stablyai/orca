@@ -1,6 +1,7 @@
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
 import { isAgentChildWorkKind } from '../../../../agent-status/child-work/agent-status-child-work-liveness'
 import { runsOrcaOrchestrationWait } from '../../../../cli/orca-cli-invocations'
+import { redactString } from '../../../../observability/redactor'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'idle',
@@ -32,6 +33,20 @@ export type ClaudeBackgroundAgentTask = {
   running: boolean
   /** Teammate IDs never match lifecycle agent_ids and stay running even after completion, so they prove no per-agent state. */
   teammate: boolean
+}
+
+// Claude keeps its artifact live-updates and presence sockets open all session and leaves them out of its own in-flight work, but hook rows drop the ambient flag.
+const CLAUDE_AMBIENT_ARTIFACT_MONITOR_PREFIXES = [
+  'live updates for artifact ',
+  'presence on artifact '
+]
+
+function isClaudeAmbientArtifactMonitor(taskType: string, description: unknown): boolean {
+  return (
+    taskType === 'monitor' &&
+    typeof description === 'string' &&
+    CLAUDE_AMBIENT_ARTIFACT_MONITOR_PREFIXES.some((prefix) => description.startsWith(prefix))
+  )
 }
 
 /** Absent/malformed inventory on older Claude builds means retain the tracked roster; never clear it. */
@@ -81,6 +96,9 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       hasRunningNonAgentTask ||= !isTerminal
       continue
     }
+    if (isClaudeAmbientArtifactMonitor(taskType, obj.description)) {
+      continue
+    }
     const isAgentTask = isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(taskType))
     // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
     if (!isAgentTask && !isTerminal) {
@@ -96,7 +114,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
         (text): text is string => typeof text === 'string' && text.trim().length > 0
       )
       if (!runsOrcaOrchestrationWait(obj.command)) {
-        runningNonAgentTaskCommands.push(command?.trim() ?? 'background task')
+        // Why: these reach worker status, the CLI and the orchestration DB, so credentials never leave here.
+        runningNonAgentTaskCommands.push(command ? redactString(command.trim()) : 'background task')
       }
     }
     if (!isAgentTask) {

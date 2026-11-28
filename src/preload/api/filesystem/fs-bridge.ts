@@ -1,3 +1,4 @@
+import type { WatchWorktreeResult } from '../../../shared/file-watch/watch-worktree-result'
 import type { PathExistenceResult } from '../../../shared/file-access/path-existence-batch'
 import { ipcRenderer, webUtils } from 'electron'
 import type {
@@ -21,7 +22,10 @@ import type {
   AgentSessionAttachmentUploadTarget
 } from '../../../shared/agent-session/agent-session-attachments'
 import type { SearchResult } from '../../../shared/file-search/code-search-types'
-import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
+import type {
+  FsChangedPayload,
+  FsWatchPausedPayload
+} from '../../../shared/file-watch/filesystem-change-event'
 import type {
   ImportItemResult,
   ResolveDroppedPathsResult
@@ -192,8 +196,11 @@ export const fsApi = {
     wakeWslDistro?: boolean
   }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
     ipcRenderer.invoke('fs:stat', args),
-  hasSymlinkBelowRoot: (args: { rootPath: string; path: string }): Promise<boolean> =>
-    ipcRenderer.invoke('fs:hasSymlinkBelowRoot', args),
+  findSymlinkBelowRoot: (args: {
+    rootPath: string
+    path: string
+    which: 'first' | 'deepest'
+  }): Promise<string | null> => ipcRenderer.invoke('fs:findSymlinkBelowRoot', args),
   pathsExist: (args: {
     filePaths: string[]
     connectionId?: string
@@ -261,14 +268,25 @@ export const fsApi = {
     args: AgentSessionAttachmentUploadTarget & { paths: string[] }
   ): Promise<AgentSessionAttachmentPathUploadResult> =>
     ipcRenderer.invoke('fs:uploadPathsToAgentSessionAttachments', args),
-  watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('fs:watchWorktree', args),
-  unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('fs:unwatchWorktree', args),
+  watchWorktree: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<WatchWorktreeResult | undefined> => ipcRenderer.invoke('fs:watchWorktree', args),
+  unwatchWorktree: (args: {
+    worktreePath: string
+    connectionId?: string
+    handOver?: boolean
+  }): Promise<FsChangedPayload | undefined> => ipcRenderer.invoke('fs:unwatchWorktree', args),
   onFsChanged: (callback: (payload: FsChangedPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: FsChangedPayload) =>
       callback(payload)
     ipcRenderer.on('fs:changed', listener)
     return () => ipcRenderer.removeListener('fs:changed', listener)
+  },
+  onWatchPaused: (callback: (payload: FsWatchPausedPayload) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: FsWatchPausedPayload) =>
+      callback(payload)
+    ipcRenderer.on('fs:watchPaused', listener)
+    return () => ipcRenderer.removeListener('fs:watchPaused', listener)
   }
 } satisfies PreloadApi['fs']

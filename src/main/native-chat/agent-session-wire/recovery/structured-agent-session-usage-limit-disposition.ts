@@ -1,5 +1,6 @@
 import type { HostUsageLimitCut, SwitchReset } from './structured-agent-session-usage-limit-chain'
 import { USAGE_LIMIT_CONTINUE_CHAIN_LIMIT } from './structured-agent-session-usage-limit-chain'
+import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
 
 /** Whether the connector requests a usage-limit cut owes still wait for its automatic continue
  *  (Phase 1 §1.5). */
@@ -20,15 +21,34 @@ export const openUsageLimitChats = (store: OpenChats): string[] => [
 export const isUsageLimitChatOpen = (store: OpenChats, id: string): boolean =>
   store.isSessionTabVisible(id) || store.isSessionInBackground(id)
 
+/** Everything but a reset to wait for: Orca would continue this cut once it has one. */
+export function usageLimitCutContinuable(
+  host: Pick<UsageLimitContinueDeps['host'], 'store' | 'usageLimitAutoContinue'>,
+  id: string,
+  cut: HostUsageLimitCut
+): boolean {
+  const record = host.store.getRecord(id)
+  return (
+    cut.chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT &&
+    host.usageLimitAutoContinue?.isEnabled() === true &&
+    record !== null &&
+    record.location.executionHostId === host.store.hostId &&
+    !host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
+    isUsageLimitChatOpen(host.store, id) &&
+    !cancelsCut(record.usageLimitContinueCancel, cut)
+  )
+}
+
 type Cancel = { turnItemId: string; resetsAt: number } | undefined
 
-/** A person's cancel of this very cut. A switch's time is not kept, so its cut matches by turn. */
+/** A person's cancel of this very cut. A switch's or room's time is not kept, so a cut whose
+ *  reset they stand in for, or would once seen, matches by turn. */
 export const cancelsCut = (
   cancel: Cancel,
   cut: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt'> & SwitchReset
 ) =>
   cancel?.turnItemId === cut.turnItemId &&
-  (cut.resetFromSwitch === true || cancel.resetsAt === cut.resetsAt)
+  (cut.resetFromSwitch === true || cut.resetsAt === undefined || cancel.resetsAt === cut.resetsAt)
 
 /** Pending through a temporary hold (asleep workspace, moving attribution, an unread reset);
  *  ambiguous after a send that threw unconfirmed; ended once no continue will come for this cut:

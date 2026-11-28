@@ -11,6 +11,8 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 
 type RepositorySourceControlAiCustomCommandProps = {
+  /** Deep-link anchor, so a failing repo command can open Settings on this row. */
+  sectionId: string
   value: string | undefined
   source: SourceControlAiSettings
   // onChange drafts the value locally (per keystroke); onCommit persists it (on blur / mode change).
@@ -23,6 +25,7 @@ function isRepoCommand(value: string | undefined): boolean {
 }
 
 export function RepositorySourceControlAiCustomCommand({
+  sectionId,
   value,
   source,
   onChange,
@@ -35,7 +38,12 @@ export function RepositorySourceControlAiCustomCommand({
   const mode =
     hasRepoCommand || forceRepoMode ? CUSTOM_COMMAND_MODE_REPO : CUSTOM_COMMAND_MODE_INHERIT
   return (
-    <div data-settings-row="" className="space-y-2 py-3">
+    <div
+      id={sectionId}
+      data-settings-section={sectionId}
+      data-settings-row=""
+      className="scroll-mt-8 space-y-2 py-3"
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-0.5">
           <Label className="text-xs font-medium">

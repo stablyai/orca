@@ -5,6 +5,7 @@ import type {
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentChildWorkRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work'
+import type { AgentChildWorkReconcileOutcome } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence-admission'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
   parseAgentStatusSubject,
@@ -36,7 +37,7 @@ export type StructuredAgentSessionStatusSink = StructuredAgentSessionStatusPubli
     subject: AgentStatusStructuredSessionSubject,
     evidence: AgentChildWorkEvidence[],
     provider: AgentSessionRecord['provider']
-  ) => void
+  ) => AgentChildWorkReconcileOutcome | null | void
   readChildWork?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkView[]
   /** Includes host-only facts omitted from views. */
   readChildWorkRecords?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkRecord[]

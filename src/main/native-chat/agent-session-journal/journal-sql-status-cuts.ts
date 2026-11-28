@@ -91,25 +91,40 @@ export function readJournalSqlUsageLimitCut(
   if (!latest || latest.verdict !== 'failure') {
     return null
   }
-  for (const { item } of state.select({
-    kind: 'scoped-statuses',
-    turnItemId: latest.item.itemId,
-    floor
-  })) {
-    const displayed = state.displayed(item.itemId)
-    const limit = displayed && nativeChatUsageLimitOfRow(displayed)
-    if (limit) {
-      const fence = state.itemFence(latest.item.itemId)
-      return {
-        turnItemId: latest.item.itemId,
-        chain: readUsageLimitChain(state, latest.item.itemId),
-        ...(fence === undefined ? {} : { fence }),
-        ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
-        turnEndedAt: latest.item.recoveredAt ?? latest.lifecycle.completedAt
-      }
-    }
+  const limit = readJournalSqlTurnUsageLimit(state, latest.item.itemId, floor)
+  if (!limit) {
+    return null
   }
-  return null
+  const fence = state.itemFence(latest.item.itemId)
+  return {
+    turnItemId: latest.item.itemId,
+    chain: readUsageLimitChain(state, latest.item.itemId),
+    ...(fence === undefined ? {} : { fence }),
+    ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
+    turnEndedAt: latest.item.recoveredAt ?? latest.lifecycle.completedAt
+  }
+}
+
+/** The usage limit a turn's own status rows report, whatever else is pending in the chat. */
+export function readJournalSqlTurnUsageLimit(
+  state: JournalSqlStatusContext,
+  turnItemId: string,
+  floor = 0
+): ReturnType<typeof nativeChatUsageLimitOfRow> | null {
+  const { scope } = state
+  const row = scope.db
+    .prepare(`SELECT item_id FROM journal_items INDEXED BY journal_items_stop_turn
+    WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND kind='status' AND turn_item_id=?
+      AND json_extract(payload_json,'$.body.failure.kind')='usageLimitReached'
+      ${floor ? 'AND sequence>?' : ''}
+    ORDER BY sequence,sequence_index,ordinal LIMIT 1`)
+    .get(...scope.prefix, turnItemId, ...(floor ? [floor] : []))
+  if (typeof row?.item_id !== 'string') {
+    return null
+  }
+  scope.examined(row)
+  const displayed = state.displayed(row.item_id)
+  return displayed && nativeChatUsageLimitOfRow(displayed)
 }
 
 /** Follow only the automatic opener joins; unrelated requests end the chain. */

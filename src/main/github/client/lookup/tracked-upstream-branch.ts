@@ -1,39 +1,47 @@
+import type { GitReviewBranchSource } from '../../../../shared/git/remotes/git-review-branch-source'
 import {
-  readGitReviewBranchSources,
-  type GitReviewBranchSource
-} from '../../../../shared/git/remotes/git-review-branch-source'
-import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
-import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
-import {
-  TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS,
   trackedUpstreamSnapshotCache,
   trackedUpstreamSnapshotInFlight,
   trackedUpstreamSnapshotGenerations,
   beginTrackedUpstreamSnapshotProbe,
   finishTrackedUpstreamSnapshotProbe,
-  pruneTrackedUpstreamSnapshotCache,
+  currentTrackedUpstreamSnapshotPublishSeq,
+  publishTrackedUpstreamSnapshot,
+  deleteTrackedUpstreamSnapshot,
   parseTrackedUpstreamBranch,
   getCacheableTrackedUpstreamSnapshot,
   doesTrackedUpstreamCacheConfigSignatureMatch,
-  getTrackedUpstreamBranchCacheKey,
+  getTrackedUpstreamRoute,
   type TrackedUpstreamBranch,
+  type TrackedUpstreamSnapshotCacheEntry,
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
-import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  TRACKED_UPSTREAM_ROUTE_CHANGED,
+  probeRawTrackedUpstreamBranches,
+  probeTrackedUpstreamSnapshot,
+  type TrackedUpstreamLocalGitOptions
+} from './tracked-upstream-probe'
+
 export async function getTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,
   connectionId?: string | null,
-  localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
+  localGitOptions: TrackedUpstreamLocalGitOptions = {},
+  force = false
 ): Promise<TrackedUpstreamBranch | null> {
   const snapshot = await getTrackedUpstreamSnapshot(
     repoPath,
     branchName,
     connectionId,
-    localGitOptions
+    localGitOptions,
+    false,
+    force
   )
+  if (snapshot.rawUpstreamsByBranchName) {
+    const raw = snapshot.rawUpstreamsByBranchName.get(branchName)
+    return raw ? parseTrackedUpstreamRef(raw) : null
+  }
   return snapshot.upstreamsByBranchName.get(branchName) ?? null
 }
 
@@ -41,7 +49,7 @@ export async function getReviewBranchSource(
   repoPath: string,
   branchName: string,
   connectionId?: string | null,
-  localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {},
+  localGitOptions: TrackedUpstreamLocalGitOptions = {},
   force = false
 ): Promise<GitReviewBranchSource> {
   const snapshot = await getTrackedUpstreamSnapshot(
@@ -52,7 +60,8 @@ export async function getReviewBranchSource(
     true,
     force
   )
-  const source = snapshot.reviewSources?.get(branchName)
+  const source =
+    snapshot.reviewSourceResolver?.(branchName) ?? snapshot.reviewSources?.get(branchName)
   if (snapshot.probeFailed || !source || source instanceof Error) {
     throw new Error('Cannot establish the branch review source')
   }
@@ -62,157 +71,207 @@ export async function getReviewBranchSource(
 async function getTrackedUpstreamSnapshot(
   repoPath: string,
   branchName: string,
-  connectionId?: string | null,
-  localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {},
-  includeReviewSources = false,
-  force = false
+  connectionId: string | null | undefined,
+  localGitOptions: TrackedUpstreamLocalGitOptions,
+  includeReviewSources: boolean,
+  force: boolean
 ): Promise<TrackedUpstreamSnapshotProbeResult> {
-  const cacheKey = getTrackedUpstreamBranchCacheKey(repoPath, connectionId, localGitOptions)
+  const args = [
+    repoPath,
+    branchName,
+    connectionId,
+    localGitOptions,
+    includeReviewSources,
+    force
+  ] as const
+  const first = await lookupTrackedUpstreamSnapshot(...args)
+  if (first.coherent) {
+    return first
+  }
+  // A probe that saw config or its Git route change may mix both sides; one fresh attempt is usually coherent.
+  const second = await lookupTrackedUpstreamSnapshot(...args)
+  return second.coherent ? second : failTrackedUpstreamSnapshot(second)
+}
+
+function failTrackedUpstreamSnapshot(
+  result: TrackedUpstreamSnapshotProbeResult
+): TrackedUpstreamSnapshotProbeResult {
+  return { ...result, cacheable: false, coherent: false, probeFailed: true }
+}
+
+function snapshotFromEntry(
+  entry: TrackedUpstreamSnapshotCacheEntry
+): TrackedUpstreamSnapshotProbeResult {
+  return { ...entry, cacheable: true, coherent: true, probeFailed: false }
+}
+
+async function lookupTrackedUpstreamSnapshot(
+  repoPath: string,
+  branchName: string,
+  connectionId: string | null | undefined,
+  localGitOptions: TrackedUpstreamLocalGitOptions,
+  includeReviewSources: boolean,
+  force: boolean
+): Promise<TrackedUpstreamSnapshotProbeResult> {
+  const route = getTrackedUpstreamRoute(repoPath, connectionId, localGitOptions)
+  const { cacheKey } = route
+  const routeIsCurrent = () =>
+    getTrackedUpstreamRoute(repoPath, connectionId, localGitOptions).runsIn === route.runsIn
   const serves = (
-    value: Pick<TrackedUpstreamSnapshotProbeResult, 'upstreamsByBranchName' | 'reviewSources'>
+    value: Pick<
+      TrackedUpstreamSnapshotProbeResult,
+      | 'expiresAt'
+      | 'upstreamsByBranchName'
+      | 'rawUpstreamsByBranchName'
+      | 'reviewSources'
+      | 'reviewSourceResolver'
+    >
   ): boolean =>
-    value.upstreamsByBranchName.has(branchName) &&
-    (!includeReviewSources || value.reviewSources?.has(branchName) === true)
-  const cached = trackedUpstreamSnapshotCache.get(cacheKey)
-  if (
-    cached &&
-    !force &&
-    cached.expiresAt > Date.now() &&
-    serves(cached) &&
+    value.expiresAt > Date.now() &&
+    (value.rawUpstreamsByBranchName?.has(branchName) === true ||
+      value.upstreamsByBranchName.has(branchName)) &&
+    (!includeReviewSources ||
+      value.reviewSourceResolver !== undefined ||
+      value.reviewSources?.has(branchName) === true)
+  const validate = async (
+    value: Pick<TrackedUpstreamSnapshotProbeResult, 'expiresAt' | 'gitConfigSignature'>,
+    allowUnsignedHit = false
+  ): Promise<boolean> =>
     (await doesTrackedUpstreamCacheConfigSignatureMatch(
-      cached,
+      value,
       repoPath,
-      connectionId,
-      localGitOptions
-    ))
-  ) {
-    return { ...cached, cacheable: true, probeFailed: false }
+      route,
+      allowUnsignedHit
+    )) && value.expiresAt > Date.now()
+  const join = async (
+    probe: Promise<TrackedUpstreamSnapshotProbeResult>
+  ): Promise<TrackedUpstreamSnapshotProbeResult | undefined> => {
+    const result = await probe
+    const valid = result.cacheable && serves(result) && (await validate(result))
+    if (!routeIsCurrent()) {
+      return TRACKED_UPSTREAM_ROUTE_CHANGED
+    }
+    return valid ? result : undefined
   }
+
+  // Refresh bypasses the entry for this caller; a usable old snapshot stays until replacement.
+  const cached = force ? undefined : trackedUpstreamSnapshotCache.get(cacheKey)
   if (cached) {
-    trackedUpstreamSnapshotCache.delete(cacheKey)
+    if (serves(cached)) {
+      const valid = await validate(cached, true)
+      if (!routeIsCurrent()) {
+        return TRACKED_UPSTREAM_ROUTE_CHANGED
+      }
+      if (valid) {
+        return snapshotFromEntry(cached)
+      }
+      deleteTrackedUpstreamSnapshot(cacheKey, cached)
+    } else if (cached.expiresAt <= Date.now()) {
+      deleteTrackedUpstreamSnapshot(cacheKey, cached)
+    }
+    // A valid entry that lacks this branch or a resolver stays until a successful probe replaces it.
   }
-  const inFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
-  if (inFlight && !force) {
-    const result = await inFlight
-    if (serves(result)) {
+  const inFlight = force ? undefined : trackedUpstreamSnapshotInFlight.get(cacheKey)
+  if (inFlight) {
+    const result = await join(inFlight)
+    if (result) {
       return result
     }
     const retry = trackedUpstreamSnapshotInFlight.get(cacheKey)
     if (retry && retry !== inFlight) {
-      const fresh = await retry
-      if (serves(fresh)) {
+      const fresh = await join(retry)
+      if (fresh) {
         return fresh
       }
     }
   }
   const generation = beginTrackedUpstreamSnapshotProbe(cacheKey)
+  const startSeq = currentTrackedUpstreamSnapshotPublishSeq()
   const probe = probeTrackedUpstreamSnapshot(
     repoPath,
     connectionId,
     localGitOptions,
-    includeReviewSources ? branchName : undefined
+    includeReviewSources ? branchName : undefined,
+    route
   )
   trackedUpstreamSnapshotInFlight.set(cacheKey, probe)
+  let result: TrackedUpstreamSnapshotProbeResult
+  let superseded: boolean
   try {
-    const result = await probe
-    if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
-      trackedUpstreamSnapshotCache.set(cacheKey, {
+    result = await probe
+    if (!routeIsCurrent()) {
+      return failTrackedUpstreamSnapshot(result)
+    }
+    superseded = trackedUpstreamSnapshotGenerations.get(cacheKey) !== generation
+    const now = Date.now()
+    if (result.cacheable && !superseded && result.expiresAt > now) {
+      const previous =
+        force && !includeReviewSources ? trackedUpstreamSnapshotCache.get(cacheKey) : undefined
+      if (
+        previous?.reviewSourceResolver &&
+        previous.expiresAt > now &&
+        (!route.signed ||
+          (result.gitConfigSignature && previous.gitConfigSignature === result.gitConfigSignature))
+      ) {
+        // Return fresh refs to the forced caller without displacing a valid review snapshot.
+        return result
+      }
+      publishTrackedUpstreamSnapshot(cacheKey, {
         ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
+        ...(result.rawUpstreamsByBranchName
+          ? { rawUpstreamsByBranchName: result.rawUpstreamsByBranchName }
+          : {}),
         ...(result.reviewSources ? { reviewSources: result.reviewSources } : {}),
-        expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
+        ...(result.reviewSourceResolver
+          ? { reviewSourceResolver: result.reviewSourceResolver }
+          : {}),
+        expiresAt: result.expiresAt
       })
-      pruneTrackedUpstreamSnapshotCache(Date.now())
     }
-    if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== generation) {
-      const fresh = trackedUpstreamSnapshotCache.get(cacheKey)
-      if (fresh && serves(fresh)) {
-        return { ...fresh, cacheable: true, probeFailed: false }
-      }
-    }
-    return result
   } finally {
     if (trackedUpstreamSnapshotInFlight.get(cacheKey) === probe) {
       trackedUpstreamSnapshotInFlight.delete(cacheKey)
     }
     finishTrackedUpstreamSnapshotProbe(cacheKey, generation)
   }
-}
-
-export async function probeTrackedUpstreamSnapshot(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {},
-  reviewBranchName?: string
-): Promise<TrackedUpstreamSnapshotProbeResult> {
-  const startingGitConfigSignature = await readLocalGitConfigSignature({
-    repoPath,
-    connectionId: connectionId ?? null,
-    ...localGitOptions
-  })
-  let { probeFailed, upstreamsByBranchName } = await probeTrackedUpstreamBranches(
-    repoPath,
-    connectionId,
-    localGitOptions
-  )
-  let reviewSources: Map<string, GitReviewBranchSource | Error> | undefined
-  if (reviewBranchName && !probeFailed) {
-    try {
-      requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
-      if (!upstreamsByBranchName.has(reviewBranchName)) {
-        upstreamsByBranchName.set(reviewBranchName, null)
+  if (superseded) {
+    // Only a newer, still-valid publication beats this probe's own answer; an older survivor never does.
+    const fresh = trackedUpstreamSnapshotCache.get(cacheKey)
+    if (fresh && fresh.publishedSeq > startSeq && serves(fresh)) {
+      const valid = await validate(fresh)
+      if (!routeIsCurrent()) {
+        return failTrackedUpstreamSnapshot(result)
       }
-      reviewSources = await readGitReviewBranchSources(
-        (args) => gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions }),
-        upstreamsByBranchName.keys()
-      )
-    } catch {
-      probeFailed = true
+      if (valid) {
+        return snapshotFromEntry(fresh)
+      }
     }
   }
-  const endingGitConfigSignature = await readLocalGitConfigSignature({
-    repoPath,
-    connectionId: connectionId ?? null,
-    ...localGitOptions
-  })
-  const isLocalHostRuntime = !connectionId && !localGitOptions.wslDistro
-  const configSignatureChanged =
-    isLocalHostRuntime && startingGitConfigSignature !== endingGitConfigSignature
-  const gitConfigSignature =
-    startingGitConfigSignature === endingGitConfigSignature ? endingGitConfigSignature : undefined
-  return {
-    // Do not cache failed snapshots; later lookups must be able to retry.
-    cacheable: !configSignatureChanged && !probeFailed,
-    probeFailed,
-    ...(gitConfigSignature ? { gitConfigSignature } : {}),
-    upstreamsByBranchName,
-    ...(reviewSources ? { reviewSources } : {})
-  }
+  return result
 }
 
 export async function probeTrackedUpstreamBranches(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
+  localGitOptions: TrackedUpstreamLocalGitOptions = {}
 ): Promise<{
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
 }> {
-  const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
-  requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
-  try {
-    const result = await gitExecFileAsync(args, {
-      cwd: repoPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-      ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
-    })
-    return {
-      probeFailed: false,
-      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
-    }
-  } catch {
+  const { probeFailed, rawUpstreamsByBranchName } = await probeRawTrackedUpstreamBranches(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
+  if (probeFailed) {
     return { probeFailed: true, upstreamsByBranchName: new Map() }
   }
+  const upstreamsByBranchName = new Map<string, TrackedUpstreamBranch | null>()
+  for (const [branch, raw] of rawUpstreamsByBranchName) {
+    upstreamsByBranchName.set(branch, parseTrackedUpstreamRef(raw))
+  }
+  return { probeFailed: false, upstreamsByBranchName }
 }
 
 export function parseTrackedUpstreamBranches(

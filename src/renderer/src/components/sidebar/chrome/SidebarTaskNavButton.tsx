@@ -11,11 +11,12 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { cn } from '@/lib/class-names'
+import { SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME } from './sidebar-nav-controls'
 import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
-import { getTaskPresetQuery } from '../../../../../shared/work-items/task-preset-query'
+import { getGitHubLandingQuery } from '../../../../../shared/work-items/task-github-search'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -78,7 +79,9 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
+  const landingTaskQuery = useAppStore((s) =>
+    getGitHubLandingQuery(s.taskResumeState, s.settings?.defaultTaskViewPreset)
+  )
   const preferredVisibleTaskProviders = React.useMemo(
     () => normalizeVisibleTaskProviders(rawVisibleTaskProviders),
     [rawVisibleTaskProviders]
@@ -130,21 +133,9 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     const activeGitRepo = activeRepo && isGitRepoKind(activeRepo) ? activeRepo : null
     const firstGitRepo = activeGitRepo ?? repos.find((r) => isGitRepoKind(r))
     if (firstGitRepo?.path) {
-      prefetchWorkItems(
-        firstGitRepo.id,
-        firstGitRepo.path,
-        PER_REPO_FETCH_LIMIT,
-        getTaskPresetQuery(defaultTaskViewPreset)
-      )
+      prefetchWorkItems(firstGitRepo.id, firstGitRepo.path, PER_REPO_FETCH_LIMIT, landingTaskQuery)
     }
-  }, [
-    activeRepoId,
-    defaultTaskViewPreset,
-    prefetchWorkItems,
-    repoMap,
-    repos,
-    resolvedDefaultTaskSource
-  ])
+  }, [activeRepoId, landingTaskQuery, prefetchWorkItems, repoMap, repos, resolvedDefaultTaskSource])
 
   const hideTasksButton = React.useCallback(() => {
     void updateSettings({ showTasksButton: false })
@@ -176,10 +167,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
             )}
           >
             <List
-              className={cn(
-                'size-4 shrink-0',
-                !tasksActive && 'text-worktree-sidebar-foreground/30'
-              )}
+              className={cn('size-4 shrink-0', !tasksActive && SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME)}
               strokeWidth={tasksActive ? 2.25 : 1.75}
             />
             <span className="flex-1">

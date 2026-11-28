@@ -10,6 +10,7 @@ import {
 } from './terminal-write-pipeline-health'
 import { removeTransientCursorShowSequences } from './pane-terminal-cursor-sequencing'
 import { takeQueuedChunk } from './pane-terminal-output-queue-chunks'
+import { noteTerminalWebglAtlasOutput } from '../terminal-rendering/terminal-webgl-atlas-memory-rebuild'
 import { recordTerminalOutputQueueDebugPressure } from './pane-terminal-output-scheduler-debug'
 import { clearForegroundRelease } from './pane-terminal-foreground-queue-state'
 import {
@@ -72,7 +73,8 @@ export function composeParsedCallback(
   terminal: ForegroundTerminalOutputTarget,
   onParsed: TerminalOutputParsedCallback | undefined,
   ackCreditsParsed: (() => void) | undefined,
-  pacer: (() => void) | undefined
+  pacer: (() => void) | undefined,
+  parsedData: string
 ): TerminalOutputParsedCallback {
   // Always provide completion: it settles pipeline health, avoiding a needless probe round-trip for every healthy idle pane.
   return () => {
@@ -82,6 +84,10 @@ export function composeParsedCallback(
       ackCreditsParsed?.()
       pacer?.()
       settleTerminalWriteStallWatch(terminal)
+      if (parsedData) {
+        // At parse, so output queued before an atlas rebuild re-arms the atlas it actually grew.
+        noteTerminalWebglAtlasOutput(terminal)
+      }
     }
   }
 }
@@ -134,7 +140,8 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
               entry.terminal,
               queuedWrite.onParsed,
               ackCreditsParsed,
-              pacer
+              pacer,
+              queuedWrite.data
             ),
             onWriteFailure: composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
           }
@@ -142,7 +149,13 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
       : writeBackgroundTerminalChunk(
           entry.terminal,
           queuedWrite.data,
-          composeParsedCallback(entry.terminal, queuedWrite.onParsed, ackCreditsParsed, pacer),
+          composeParsedCallback(
+            entry.terminal,
+            queuedWrite.onParsed,
+            ackCreditsParsed,
+            pacer,
+            queuedWrite.data
+          ),
           composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
         )
     if (!writeAccepted) {

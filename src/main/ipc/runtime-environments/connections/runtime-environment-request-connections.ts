@@ -30,6 +30,7 @@ import {
 } from './runtime-environment-transport-generation'
 import { noteRuntimeEnvironmentSharedControlContact } from '../status/runtime-environment-contact-loss'
 import { declareWslHostClient } from '../../../wsl/host-lifecycle/wsl-host-client-declaration'
+import { onWslHostIdleStopCleared } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
 import { declarePairedDesktopAccount } from './paired-desktop-account-declaration'
 
 type CachedRuntimeConnection = {
@@ -116,13 +117,15 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   signal?: AbortSignal,
   prepareRequest?: RuntimeRequestPreparation,
   prepareGuard?: RuntimeRequestGuard,
-  responseTimeoutMs?: number
+  responseTimeoutMs?: number,
+  idlePassive?: boolean
 ): Promise<RuntimeRpcResponse<TResult>> {
   const connection = getSharedControlConnection(environmentId, pairedConnection)
   return connection.request(method, params, timeoutMs, envelope, signal, {
     prepareRequest,
     prepareGuard,
-    responseTimeoutMs
+    responseTimeoutMs,
+    idlePassive
   })
 }
 
@@ -141,7 +144,10 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
     call.timeoutMs,
     undefined,
     call.signal,
-    { beforeSend: () => void (statusSocket = shared.socketGeneration.peek()) }
+    {
+      beforeSend: () => void (statusSocket = shared.socketGeneration.peek()),
+      idlePassive: call.idlePassive
+    }
   )
   if (!status.ok || status.result.runtimeId !== expectedRuntimeId) {
     return null
@@ -160,7 +166,12 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
       call.timeoutMs,
       call.envelope,
       call.signal,
-      { beforeSend, prepareRequest: call.prepareRequest, prepareGuard: call.prepareGuard }
+      {
+        beforeSend,
+        prepareRequest: call.prepareRequest,
+        prepareGuard: call.prepareGuard,
+        idlePassive: call.idlePassive
+      }
     )
   } catch (error) {
     if (socketChanged) {
@@ -234,6 +245,9 @@ export function ensureRemoteRuntimeSharedControlConnection(
   }
 }
 
+// A woken host's held control socket reopens at once, replaying its streams (#46567).
+onWslHostIdleStopCleared(reconnectRemoteRuntimeSharedControlConnection)
+
 export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
   for (const { connection } of sharedControlConnections.values()) {
     connection.retryNow()
@@ -256,7 +270,6 @@ function getSharedControlConnection(
     const connection: RemoteRuntimeSharedControlConnection =
       new RemoteRuntimeSharedControlConnection(pairedConnection, {
         environmentId,
-        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
         ...sharedControlEnvironmentPolicy(environmentId),
         // Ws pongs can come from a relay hop or a runtime whose request path is stuck (#39785).
         appHeartbeat: {},

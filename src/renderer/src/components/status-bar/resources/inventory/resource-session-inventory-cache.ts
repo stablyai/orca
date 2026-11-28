@@ -3,7 +3,10 @@ import {
   type PtyListedSession,
   type PtySessionLifecycle
 } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
-import { isResourceViewInactive } from '../../../../../../shared/diagnostics/resource-view-admission'
+import {
+  isOutdatedSessionListing,
+  isResourceViewInactive
+} from '../../../../../../shared/diagnostics/resource-view-admission'
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   type DaemonSessionInventory,
@@ -12,6 +15,8 @@ import {
 } from './resource-session-inventory'
 
 const COOLDOWN_MS = 100
+// Back-to-back outdated listings mean nonstop churn; past this many the list is reported stale.
+const OUTDATED_RETRY_LIMIT = 3
 const EXIT_PUBLICATION_MS = 50
 
 /** One request survives view epochs, but only its dispatching epoch may publish it. */
@@ -19,11 +24,14 @@ export class ResourceSessionInventoryCache {
   private state: {
     sessionInventory: DaemonSessionInventory
     sessionsError: boolean
+    /** True while an outdated listing is being read again; the list shown can't back an action. */
+    rereading: boolean
     observedAt: number | null
     loading: boolean
   } = {
     sessionInventory: EMPTY_DAEMON_SESSION_INVENTORY,
     sessionsError: false,
+    rereading: false,
     observedAt: null,
     loading: false
   }
@@ -40,6 +48,7 @@ export class ResourceSessionInventoryCache {
   private exitPublicationTimer: ReturnType<typeof setTimeout> | null = null
   private inventoryChanged = false
   private lastStarted = -Infinity
+  private outdatedRetries = 0
 
   constructor(
     private list: () => Promise<PtyListedSession[]>,
@@ -78,6 +87,7 @@ export class ResourceSessionInventoryCache {
     this.active = active
     this.epoch++
     this.pendingRefresh = false
+    this.outdatedRetries = 0
     if (!active) {
       if (this.timer) {
         clearTimeout(this.timer)
@@ -174,15 +184,28 @@ export class ResourceSessionInventoryCache {
         }
         this.known = deduped
         this.identitiesByIncarnation = identitiesByIncarnation
+        this.outdatedRetries = 0
         this.publishInventory({
           sessionsError: false,
+          rereading: false,
           observedAt: Date.now()
         })
       })
       .catch((error: unknown) => {
-        if (this.active && epoch === this.epoch && !isResourceViewInactive(error)) {
-          this.publish({ sessionsError: true })
+        if (!this.active || epoch !== this.epoch || isResourceViewInactive(error)) {
+          return
         }
+        // A healthy daemon whose answer a spawn or exit outdated: read again, never show it as down.
+        if (isOutdatedSessionListing(error) && this.outdatedRetries < OUTDATED_RETRY_LIMIT) {
+          this.outdatedRetries += 1
+          this.pendingRefresh = true
+          if (!this.state.rereading) {
+            this.publish({ rereading: true })
+          }
+          return
+        }
+        this.outdatedRetries = 0
+        this.publish({ sessionsError: true, rereading: false })
       })
       .finally(() => {
         this.tombstones.clear()
