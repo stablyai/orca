@@ -23,6 +23,9 @@ export type WslMoveOrchestratorLoad =
     }
   | { kind: 'unreadable' }
 
+/** `droppingLostHold`: the answer may drop a `stateLost` hold, so only proven-local drives count. */
+export type WslMoveInUseCheck = { droppingLostHold?: boolean }
+
 export type WslMoveHostReadiness = 'ready' | 'not-running' | 'unverifiable' | 'failed'
 
 /** The newest finished move of a distro, as R38's check needs it. */
@@ -44,7 +47,7 @@ export type WslMoveOrchestratorPorts = {
   /** E11: the user's Remove of the distro's host has not proven its server stopped. */
   hostRemovalPending: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro has a WSL host record or bridge projects; a distro with neither is pruned. */
-  isDistroInUse: (distro: string) => boolean | Promise<boolean>
+  isDistroInUse: (distro: string, check?: WslMoveInUseCheck) => boolean | Promise<boolean>
   /** Whether the distro still has a WSL host record; never connects. */
   hasHost: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro's host connection is ready now; never connects. Gates timer steps. */
