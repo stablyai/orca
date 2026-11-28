@@ -1,0 +1,123 @@
+import { Pressable, Text } from 'react-native'
+import { composerInputStylesSheet } from '../components/composer-input/composer-input-styles'
+import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import type { ComposerUsageMeterReadout } from './composer-usage-meter-readout'
+import { ComposerUsageTrack } from './ComposerUsageTrack'
+
+/** The space between the wide meter's label, bar and percent. */
+export const COMPOSER_USAGE_WIDE_GAP = spacing.sm
+
+/** One line, reset label · bar · percent, sized from the composer's free room. */
+export function ComposerUsageWideMeter({
+  layout,
+  accessibilityLabel,
+  resetsIn,
+  resetsInCompact,
+  percentLabel,
+  readout,
+  color,
+  paceMarkerPercent = null,
+  onPress
+}: {
+  layout: { width: number; resetText: 'full' | 'compact' }
+  accessibilityLabel: string
+  resetsIn: string
+  resetsInCompact: string
+  percentLabel: string
+  readout: ComposerUsageMeterReadout
+  color: string
+  paceMarkerPercent?: number | null
+  onPress: () => void
+}): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  // Keep focus in the composer field so the idle pill does not unmount the bar mid-tap.
+  const keepsFocus = useKeyboardPersistingTaps('always')
+
+  return (
+    <Pressable
+      ref={keepsFocus}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.meter,
+        { width: layout.width },
+        pressed && composerInputStyles.pressed
+      ]}
+      testID="composer-usage-meter"
+    >
+      <Text style={[styles.text, styles.label]} numberOfLines={1}>
+        {layout.resetText === 'full' ? resetsIn : resetsInCompact}
+      </Text>
+      <ComposerUsageTrack
+        readout={readout}
+        color={color}
+        wide
+        paceMarkerPercent={paceMarkerPercent}
+      />
+      <Text style={[styles.text, styles.percent]} numberOfLines={1}>
+        {percentLabel}
+      </Text>
+    </Pressable>
+  )
+}
+
+/** The full reset label and the percent at the wide meter's size, for a hidden measuring row. */
+export function ComposerUsageWideMeasure({
+  resetsIn,
+  percentLabel,
+  onResetWidth,
+  onPercentWidth
+}: {
+  resetsIn: string
+  percentLabel: string
+  onResetWidth: (width: number) => void
+  onPercentWidth: (width: number) => void
+}): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+
+  return (
+    <>
+      <Text
+        style={[styles.text, styles.label]}
+        onLayout={(event) => onResetWidth(event.nativeEvent.layout.width)}
+      >
+        {resetsIn}
+      </Text>
+      <Text
+        style={[styles.text, styles.percent]}
+        onLayout={(event) => onPercentWidth(event.nativeEvent.layout.width)}
+      >
+        {percentLabel}
+      </Text>
+    </>
+  )
+}
+
+const stylesSheet = themedStyleSheet((colors) => ({
+  meter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: COMPOSER_USAGE_WIDE_GAP,
+    minHeight: 32,
+    borderRadius: radii.pill
+  },
+  text: {
+    fontSize: typography.bodySize,
+    lineHeight: 18,
+    color: colors.textSecondary,
+    flexShrink: 0,
+    fontVariant: ['tabular-nums']
+  },
+  label: {
+    color: colors.textMuted
+  },
+  percent: {
+    fontWeight: '600',
+    color: colors.textPrimary
+  }
+}))

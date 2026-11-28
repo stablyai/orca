@@ -8,6 +8,9 @@ import type {
 const SESSION_WINDOW_MINUTES = 300
 const WEEKLY_WINDOW_MINUTES = 10_080
 
+export const MUSE_NO_USAGE_YET_NOTICE =
+  'Muse has no usage data for this window yet; it appears after your first Muse turn'
+
 export type MuseUsageReading =
   | { kind: 'ok'; limits: ProviderRateLimits }
   | { kind: 'no-allowance'; failureKind: UsageRateLimitFailureKind; message: string }
@@ -77,6 +80,28 @@ export function parseMuseUsageStdout(stdout: string, now: number): MuseUsageRead
     return null
   }
   const allowance = payload.allowance
+  // Muse's server meters a window only once it is used; clients show this as no usage, not no allowance.
+  if (allowance === null && payload.reason === 'server_sent_no_usage') {
+    return {
+      kind: 'ok',
+      limits: {
+        provider: 'muse',
+        session: {
+          usedPercent: 0,
+          windowMinutes: SESSION_WINDOW_MINUTES,
+          resetsAt: null,
+          resetDescription: null
+        },
+        weekly: null,
+        updatedAt: now,
+        planType: null,
+        error: null,
+        notice: MUSE_NO_USAGE_YET_NOTICE,
+        status: 'ok',
+        usageMetadata: { source: 'cli', attemptedSources: ['cli'] }
+      }
+    }
+  }
   if (allowance === null) {
     return { kind: 'no-allowance', ...describeMissingAllowance(payload.reason) }
   }
