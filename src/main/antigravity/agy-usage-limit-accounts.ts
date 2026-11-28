@@ -12,12 +12,12 @@ export const AGY_USAGE_LIMIT_ACCOUNTS = {
     if (!onHostAgy(record)) {
       return undefined
     }
-    const current = AGY_HOST_SELECTION.current()
-    if (current === null) {
+    if (AGY_HOST_SELECTION.current() === null) {
       // Nothing read the saved accounts since Orca started; the next sweep pass has them.
       void AGY_HOST_SELECTION.atLaunch()
     }
-    return current || undefined
+    // None while a launch is known to fail to move there: releasing would hit the same limit.
+    return AGY_HOST_SELECTION.target() || undefined
   },
   accountLabel: (provider: string, accountId: string): string | undefined =>
     provider === 'antigravity' ? (AGY_HOST_SELECTION.email(accountId) ?? undefined) : undefined,
@@ -29,5 +29,5 @@ export const AGY_USAGE_LIMIT_ACCOUNTS = {
     }),
   /** Part of the attribution witness: a new selection makes every agy hold attribute again. */
   witness: (provider: string): string =>
-    provider === 'antigravity' ? `:${AGY_HOST_SELECTION.current() ?? ''}` : ''
+    provider === 'antigravity' ? `:${AGY_HOST_SELECTION.target() ?? ''}` : ''
 }
