@@ -21,6 +21,8 @@ import type {
 } from '../../shared/agent-session/journal/journal-connector-reply'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorReplyBody } from './connector-replies'
+import { parkPreparedAnswer } from './connector-event-queue'
+import { deferredAnswerRetryMs } from './connector-outbox'
 
 export type ConnectorReplyJournal = {
   read(sessionId?: string): Promise<JournalConnectorReplyRow[]>
@@ -52,6 +54,7 @@ export type ConnectorReplyRoute = {
   client: ConnectorReplyClient | null
   outbox: boolean | undefined
   presentations?: boolean
+  presentationGeneration?: number
   setAside?: Pick<ReadonlySet<string>, 'has'>
 }
 
@@ -85,8 +88,12 @@ export class ConnectorReplyOutbox {
   private nextPageAfter: string | null = null
   private rescan = false
   private readonly deferred = new Set<string>()
+  private readonly deferredOrdinary = new Set<string>()
+  private readonly parked = new Set<string>()
   private retired = false
   private retry: ReturnType<typeof setTimeout> | null = null
+  private preparedRetry: ReturnType<typeof setTimeout> | null = null
+  private preparedRetries = 0
 
   constructor(
     readonly account: string,
@@ -112,15 +119,31 @@ export class ConnectorReplyOutbox {
     ids.forEach((id) => this.inFlight.delete(id))
   }
 
-  released(ids: readonly string[], retry: boolean, prepared = false): void {
+  released(ids: readonly string[], retry: boolean, preparedFailure?: ConnectorFailure): void {
     this.forget(ids)
-    if (retry) {
-      if (prepared || this.hooks.route().presentations) {
-        ids.forEach((id) => this.deferred.add(id))
+    if (preparedFailure && parkPreparedAnswer(preparedFailure)) {
+      // A retry timer for other work must never re-admit a definitively refused answer.
+      ids.forEach((id) => this.parked.add(id))
+    } else if (preparedFailure) {
+      this.deferPrepared(ids, preparedFailure)
+    } else if (retry) {
+      if (this.hooks.route().presentations) {
+        ids.forEach((id) => this.deferredOrdinary.add(id))
       }
       this.retryLater()
     }
     this.advancePage()
+  }
+
+  presentationTransportChanged(): void {
+    this.parked.clear()
+    this.deferred.clear()
+    this.deferredOrdinary.clear()
+    this.stopPreparedRetry()
+    this.resetPages()
+    if (this.running) {
+      this.again = true
+    }
   }
 
   resetPages(): void {
@@ -138,6 +161,7 @@ export class ConnectorReplyOutbox {
     try {
       await journal.sent(ids.map((deliveryId) => ({ account: this.account, deliveryId })))
       this.forget(ids)
+      ids.forEach((id) => this.parked.delete(id))
       this.advancePage()
     } catch (error) {
       this.forget(ids)
@@ -157,7 +181,11 @@ export class ConnectorReplyOutbox {
   retire(): void {
     this.retired = true
     this.inFlight.clear()
+    this.deferred.clear()
+    this.deferredOrdinary.clear()
+    this.parked.clear()
     this.stopRetry()
+    this.stopPreparedRetry()
   }
 
   /** Sends what the journal holds the way the current hello takes it. A call while one runs makes
@@ -185,7 +213,7 @@ export class ConnectorReplyOutbox {
     }
     const route = this.hooks.route()
     const boundedEvents =
-      route.outbox && (route.presentations || this.nextPageAfter !== null || this.deferred.size > 0)
+      route.outbox && (route.presentations || this.nextPageAfter !== null)
     if (boundedEvents && this.inFlight.size > 0) {
       this.awaitingPage = true
       this.rescan = true
@@ -212,7 +240,11 @@ export class ConnectorReplyOutbox {
         return
       }
       const current = this.hooks.route()
-      if (current.presentations !== route.presentations || current.outbox !== route.outbox) {
+      if (
+        current.presentationGeneration !== route.presentationGeneration ||
+        current.presentations !== route.presentations ||
+        current.outbox !== route.outbox
+      ) {
         this.resetPages()
         this.again = true
         return
@@ -223,8 +255,11 @@ export class ConnectorReplyOutbox {
           (row): row is Filled =>
             row.account === this.account &&
             row.fill !== undefined &&
+            (route.outbox === undefined || route.presentations || !row.fill.presentation) &&
             !this.inFlight.has(row.deliveryId) &&
             !this.deferred.has(row.deliveryId) &&
+            !this.deferredOrdinary.has(row.deliveryId) &&
+            !this.parked.has(row.deliveryId) &&
             !route.setAside?.has(row.deliveryId)
         )
         .map(fitReplyProse)
@@ -298,7 +333,6 @@ export class ConnectorReplyOutbox {
           return null
         }
         if (row.fill.presentation && !presentations) {
-          this.scheduleRetry()
           continue
         }
         const posted = await client.post(drainReplyBody(row, conversation, client.hostName))
@@ -306,7 +340,19 @@ export class ConnectorReplyOutbox {
           return null
         }
         if (!posted.ok) {
-          this.scheduleRetry()
+          if (row.fill.presentation) {
+            if (route.presentationGeneration !== this.hooks.route().presentationGeneration) {
+              this.again = true
+              return null
+            }
+            if (parkPreparedAnswer(posted)) {
+              this.parked.add(row.deliveryId)
+            } else {
+              this.deferPrepared([row.deliveryId], posted)
+            }
+          } else {
+            this.scheduleRetry()
+          }
           continue
         }
       }
@@ -332,11 +378,30 @@ export class ConnectorReplyOutbox {
     }
     this.retry = setTimeout(() => {
       this.retry = null
-      this.deferred.clear()
+      this.deferredOrdinary.clear()
       this.resetPages()
       this.hooks.wake()
     }, RETRY_MS)
     this.retry.unref?.()
+  }
+
+  private deferPrepared(ids: readonly string[], failure: ConnectorFailure): void {
+    ids.forEach((id) => this.deferred.add(id))
+    if (!this.preparedRetry) {
+      this.preparedRetry = setTimeout(() => {
+        this.preparedRetry = null
+        this.deferred.clear()
+        this.resetPages()
+        this.hooks.wake()
+      }, deferredAnswerRetryMs(this.preparedRetries++, failure))
+      this.preparedRetry.unref?.()
+    }
+  }
+
+  private stopPreparedRetry(): void {
+    clearTimeout(this.preparedRetry ?? undefined)
+    this.preparedRetry = null
+    this.preparedRetries = 0
   }
 
   private stopRetry(): void {

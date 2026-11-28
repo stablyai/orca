@@ -4,9 +4,9 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attachments/agent-session-attachment-claims'
+import { migrateJournalDomainSchema } from './database/journal-domain-migrations'
 import { applyJournalDomainControlCommand } from './journal-domain-control-command'
 import { applyJournalDomainItem, type JournalDomainItemWrite } from './journal-domain-item'
-import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { readJournalSqlQueue } from './journal-sql-queue-read'
 import { JournalSqlScope } from './journal-sql-scope'
 

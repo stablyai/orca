@@ -111,6 +111,7 @@ export class ConnectorPollClient {
   }
 
   start(): void {
+    this.options.events.resetPresentationTransport()
     // A disable disposes the seam; nothing here may outlive it.
     this.seam.signal.addEventListener('abort', () => this.stop(), {
       once: true,

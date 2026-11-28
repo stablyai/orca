@@ -118,12 +118,12 @@ export class ConnectorTurnEvents {
           .then(() => installedLeaveLines()?.turnEndsTaken(reportedTurnEnds(batch)))
       },
       onSplit: (batch) => this.trace.split(batch),
-      deferRefused: (event, failure) => deferPreparedTurnEnd(event, failure?.status),
+      deferRefused: deferPreparedTurnEnd,
       deferredReady: () => this.replyFlush?.(),
       onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
         if (isReplyEvent(item) && item.presentation) {
-          this.replies.released(replyDeliveryIds([item]), true, true)
+          this.replies.released(replyDeliveryIds([item]), true, failure)
           return true
         }
         // A turn end the cloud won't take lets its leave's line go.
@@ -179,8 +179,7 @@ export class ConnectorTurnEvents {
   /** Set before the hello's watch starts, so its events match what that cloud reads. */
   useCloudFeatures(features: ReadonlySet<string>, helloRev?: number): void {
     if (presentationTransportChanged(this.cloudFeatures, features)) {
-      this.presentationGeneration++
-      this.outbox.retryDeferred(true)
+      this.resetPresentationTransport()
     }
     this.cloudFeatures = features
     // Under a hello without it (the kill switch), this hello's snapshot lets replies in transit go,
@@ -200,6 +199,13 @@ export class ConnectorTurnEvents {
         }
       }
     }
+  }
+
+  /** A new transport or changed capabilities can take work this receiver could not. */
+  resetPresentationTransport(): void {
+    this.presentationGeneration++
+    this.outbox.retryDeferred(true)
+    this.replies.presentationTransportChanged()
   }
 
   takesPresentedEvents(turnEnd: boolean): boolean {
@@ -257,6 +263,7 @@ export class ConnectorTurnEvents {
       },
       outbox: this.repliesOutbox,
       presentations: takesSlackAnswerPresentation(this.cloudFeatures),
+      presentationGeneration: this.presentationGeneration,
       setAside: this.setAside
     }
   }

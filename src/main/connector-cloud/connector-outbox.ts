@@ -2,7 +2,12 @@ import { CONNECTOR_MAX_RETRY_AFTER_MS, type ConnectorFailure } from './connector
 
 const RETRY_BASE_MS = 1_000
 const RETRY_MAX_MS = 30_000
-const DEFERRED_ANSWER_RETRY_MS = 30_000
+
+/** Prepared answers can keep their bodies through transient refusal without fixed-rate retries. */
+export function deferredAnswerRetryMs(attempt: number, failure?: ConnectorFailure): number {
+  const delay = Math.min(30_000 * 2 ** attempt, CONNECTOR_MAX_RETRY_AFTER_MS)
+  return Math.max(delay, Math.min(failure?.retryAfterMs ?? 0, CONNECTOR_MAX_RETRY_AFTER_MS))
+}
 
 /** Random doubling from 1 s to 30 s (or maxMs); a cloud's Retry-After wins when longer, up to 10 minutes. */
 export function connectorRetryDelayMs(
@@ -33,8 +38,9 @@ export class ConnectorOutbox<T> {
   private items: T[]
   private stamp: ConnectorStamp | null = null
   private readonly deferredItems = new Set<T>()
-  private readonly sizeRefusedItems = new Set<T>()
+  private readonly parkedItems = new Set<T>()
   private deferredRetry: ReturnType<typeof setTimeout> | undefined
+  private deferredRetries = 0
 
   constructor(
     private readonly options: {
@@ -88,7 +94,8 @@ export class ConnectorOutbox<T> {
     this.deferredRetry = undefined
     this.deferredItems.clear()
     if (capabilityChanged) {
-      this.sizeRefusedItems.clear()
+      this.parkedItems.clear()
+      this.deferredRetries = 0
     }
   }
 
@@ -120,14 +127,14 @@ export class ConnectorOutbox<T> {
   }
 
   private readyItems(): readonly T[] {
-    if (this.deferredItems.size === 0 && this.sizeRefusedItems.size === 0) {
+    if (this.deferredItems.size === 0 && this.parkedItems.size === 0) {
       return this.items
     }
     const ready: T[] = []
     const deferred: T[] = []
     for (const item of this.items) {
       const target =
-        this.deferredItems.has(item) || this.sizeRefusedItems.has(item) ? deferred : ready
+        this.deferredItems.has(item) || this.parkedItems.has(item) ? deferred : ready
       target.push(item)
     }
     this.items = [...ready, ...deferred]
@@ -167,14 +174,14 @@ export class ConnectorOutbox<T> {
         this.items.unshift(held.stateOnly)
       }
       this.stamp = { ...stamp, size: held.stateOnly === undefined ? 0 : 1 }
-      const waiting = held.untilChange ? this.sizeRefusedItems : this.deferredItems
+      const waiting = held.untilChange ? this.parkedItems : this.deferredItems
       waiting.add(held.answer)
       this.notify()
       if (!held.untilChange && !this.deferredRetry) {
         this.deferredRetry = setTimeout(() => {
           this.retryDeferred()
           this.options.deferredReady?.()
-        }, DEFERRED_ANSWER_RETRY_MS)
+        }, deferredAnswerRetryMs(this.deferredRetries++, failure))
         this.deferredRetry.unref?.()
       }
       return null

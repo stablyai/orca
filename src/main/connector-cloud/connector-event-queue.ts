@@ -9,6 +9,7 @@ import {
   CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
 } from '../../shared/connectors/slack-answer-presentation'
 import { jsonBytes } from './connector-snapshot'
+import type { ConnectorFailure } from './connector-cloud-request'
 
 const MAX_TURN_ENDS = 200
 // Live events past this are dropped oldest first; a fresh hello and snapshot then restate them.
@@ -42,12 +43,16 @@ export const isPreparedTurnEnd = (
   presentation: NonNullable<TurnEnded['presentation']>
 } => isTurnEnded(event) && event.presentation !== undefined
 
-export function deferPreparedTurnEnd(event: ConnectorEvent, status?: number | null) {
+export function parkPreparedAnswer(failure?: ConnectorFailure): boolean {
+  return failure?.status === 400 || failure?.status === 413
+}
+
+export function deferPreparedTurnEnd(event: ConnectorEvent, failure?: ConnectorFailure) {
   if (!isPreparedTurnEnd(event)) {
     return undefined
   }
-  const untilChange = status === 413
-  if (untilChange) {
+  const untilChange = parkPreparedAnswer(failure)
+  if (failure?.status === 413) {
     console.warn('[connector] a prepared Slack answer exceeds the receiver limit and remains owed')
   }
   if ('stateOnlyQueued' in event) {

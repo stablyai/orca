@@ -300,6 +300,111 @@ const preparedEnd = {
   presentation: typedAnswer
 } satisfies ConversationEvent
 
+it.each([
+  { route: 'events', withdrawn: false },
+  { route: 'events', withdrawn: true },
+  { route: 'direct', withdrawn: false },
+  { route: 'direct', withdrawn: true }
+])(
+  'parks a prepared $route reply without idle retry after withdrawal=$withdrawn',
+  async ({ route, withdrawn }) => {
+    const feature = route === 'events' ? [CONNECTOR_REPLIES_OUTBOX_FEATURE] : []
+    const capable = [
+      CONNECTOR_SLACK_PRESENTATION_FEATURE,
+      CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+    ]
+    const rows = new Map<string, JournalConnectorReplyRow>()
+    const acknowledged: string[] = []
+    const direct: ConnectorReplyBody[] = []
+    let reads = 0
+    let accepting = false
+    const events = new ConnectorTurnEvents(h.userDataPath, 'ada', undefined, {
+      journal: () => ({
+        read: async () => [...rows.values()],
+        readOwed: async (_account, after, limit) => {
+          reads++
+          return [...rows.values()]
+            .filter((entry) => after === null || entry.deliveryId > after)
+            .slice(0, limit)
+        },
+        fillOutcomes: async () => false,
+        sent: async (keys) =>
+          keys.forEach(({ deliveryId }) => {
+            acknowledged.push(deliveryId)
+            rows.delete(deliveryId)
+          })
+      }),
+      onOwed: () => {},
+      post: async (body) => {
+        direct.push(body)
+        return body.presentation && !accepting
+          ? refusal(400, 'invalid_request')
+          : { ok: true, value: {} }
+      },
+      hostName: () => 'laptop'
+    })
+    h.fake.features = withdrawn ? feature : [...feature, ...capable]
+    h.fake.presentedEventStatus = 400
+    const { client, emit } = h.startClient(fakeSeam(), events)
+    onTestFinished(() => client.stop())
+    await settle()
+    rows.set(row.deliveryId, {
+      ...row,
+      fill: {
+        ...row.fill!,
+        prose: slackAnswerText(typedAnswer),
+        presentation: typedAnswer,
+        turnStartedAt: 8
+      }
+    })
+    emit(preparedEnd)
+    await events.drainReplies()
+    await settle()
+    // The initial parser refusal may replace its hello before definitively rejecting this batch.
+    h.poll([])
+    await settle(12_000)
+    expect(rows.has('d1')).toBe(true)
+    expect(h.fake.events).toContainEqual(
+      expect.objectContaining({ turnId: preparedEnd.turnId, stateOnly: true })
+    )
+    const work = () => ({
+      reads,
+      direct: direct.length,
+      requests: h.fake.requestsTo(CONNECTOR_PATHS.events).length,
+      compatibility: h.fake.requestsTo(CONNECTOR_SLACK_PRESENTATION_EVENTS_PATH).length
+    })
+    const parkedWork = work()
+    await settle(10 * 60_000)
+    expect(work()).toEqual(parkedWork)
+
+    rows.set('d2', { ...row, deliveryId: 'd2', fill: { ...row.fill!, answerDeliveryId: 'd2' } })
+    await events.drainReplies()
+    await settle()
+    expect(acknowledged).toEqual(['d2'])
+    expect(rows.has('d1')).toBe(true)
+
+    accepting = true
+    h.fake.presentedEventStatus = undefined
+    h.fake.features = [
+      ...feature,
+      CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+      CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+    ]
+    h.fake.answerPoll({ status: 409, body: { error: 'hello_required', reason: 'features' } })
+    await settle(32_000)
+    expect(acknowledged).toEqual(['d2', 'd1'])
+    const recovered = route === 'events' ? h.fake.events : direct.slice(parkedWork.direct)
+    expect(recovered.filter((item) => isRecord(item) && item.answerDeliveryId === 'd1')).toEqual([
+      expect.objectContaining({ turnId: 8, presentation: typedAnswer })
+    ])
+    expect(
+      h.fake.events.filter(
+        (item) => isRecord(item) && item.turnId === preparedEnd.turnId && item.presentation
+      )
+    ).toHaveLength(1)
+  }
+)
+
 it('sends the same stamped prepared answer after a persistent parser refusal', async () => {
   h.fake.features = [
     CONNECTOR_SLACK_PRESENTATION_FEATURE,
