@@ -30642,7 +30642,11 @@
         "snoozedBare": "snoozed this",
         "unsnoozed": "unsnoozed this",
         "snoozeEnded": "Back from snooze early",
-        "waitingOn": "Waiting on"
+        "waitingOn": "Waiting on",
+        "withdrawnTimePassed": "Ask withdrawn — {{time}} passed",
+        "withdrawnWorkerFinished": "Ask withdrawn — worker {{name}} finished",
+        "withdrawnWorkerFailed": "Ask withdrawn — worker {{name}} failed",
+        "withdrawnWorkerStopped": "Ask withdrawn — worker {{name}} was stopped"
       },
       "cancel": {
         "confirmMany": "Cancel {{count}}",
@@ -30833,7 +30837,8 @@
         "sendSomeLabel": "Send {{count}} of {{total}} answers",
         "changeAnswer": "{{question}}: {{answer}}. Change answer",
         "heldImagesLimit": "Your answers go as one comment, which takes up to {{max}} images. Send the answers held so far first, or remove some.",
-        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Send the answers held so far first, or remove some."
+        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Send the answers held so far first, or remove some.",
+        "withdrawn": "Withdrawn — no reply needed"
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {

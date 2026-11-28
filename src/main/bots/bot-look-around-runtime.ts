@@ -99,9 +99,10 @@ export function bindLookAroundToAutomations(
     void Promise.resolve()
       .then(() => runtimeTidyUpRunner(runtime).tick())
       .catch((error: unknown) => console.warn('[bots] tidy-up tick failed', error))
-    // A usage-limit wait whose reset passed with no continue scheduled ends on this minute.
+    // A usage-limit wait whose reset passed with no continue scheduled ends on this minute, as does an
+    // ask whose --while settled.
     void Promise.resolve()
-      .then(() => runtime.botItems.usageLimitTick(Date.now()))
-      .catch((error: unknown) => console.warn('[bots] usage-limit tick failed', error))
+      .then(() => runtime.botItems.minuteTick(Date.now()))
+      .catch((error: unknown) => console.warn('[bots] items minute tick failed', error))
   }
 }

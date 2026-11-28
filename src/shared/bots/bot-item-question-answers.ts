@@ -26,11 +26,12 @@ export type BotItemQuestionAnswers = {
   byOrder: boolean[]
   /** Lines still open, and the agent still waiting on them. */
   waiting: boolean
-  /** Why its open lines take no answer: a later ask came, or the owner sent answers skipping them. */
+  /** Why its open lines take no answer: a later ask came, the owner sent answers skipping them, or
+   *  Orca withdrew it (`--while` settled). */
   ended: BotItemAskEnd | null
 }
 
-export type BotItemAskEnd = 'replaced' | 'skipped'
+export type BotItemAskEnd = 'replaced' | 'skipped' | 'withdrawn'
 
 /** The end an ask's card names: while a line no comment or send answered stays open to nothing, even
  *  one showing an answer held on this device, which only goes back to the box. */
@@ -147,6 +148,9 @@ export function botItemQuestionPairing(
   const asked = new Set<string>()
   for (const event of events) {
     if (endsAsks(event)) {
+      if (event.data.cause === 'withdrawn' && open?.entry.answers.includes(null)) {
+        open.entry.ended = 'withdrawn'
+      }
       open = null
       continue
     }

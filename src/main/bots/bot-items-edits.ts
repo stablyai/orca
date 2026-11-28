@@ -17,6 +17,8 @@ import {
   type BotItemWriteOutcome
 } from './bot-items-input'
 import { BotItemsReads } from './bot-items-reads'
+import { eventRecordOf } from './bot-items-rows'
+import { botItemAskWhileOf, type BotItemAskWhile } from '../../shared/bots/bot-item-ask-while'
 import type { BotItemRecord } from './bot-items-schema'
 
 type TextField = 'title' | 'description' | 'doneMeans'
@@ -128,7 +130,8 @@ export class BotItemsEdits extends BotItemsReads {
             ...images,
             ...(changes.ask && changes.askedInConversation
               ? { askedInConversation: changes.askedInConversation }
-              : {})
+              : {}),
+            ...this.askWhileOfComment(item, changes)
           }
         : undefined
     // Asking again while already Needs you is a new question, and Waiting on something new a new wait;
@@ -168,6 +171,8 @@ export class BotItemsEdits extends BotItemsReads {
         changes.note && status !== 'done' && waitNote === undefined ? { note: changes.note } : {}
       eventId = this.appendEvent(uid, 'edited', actor, { fields, ...note }, mail, now)
     }
+    // Before the comment, so the ask and its move stay side by side in Activity.
+    eventId = this.linkAskWhile(item, changes, actor, mail, now) ?? eventId
     const comment =
       commentData === undefined
         ? null
@@ -177,6 +182,54 @@ export class BotItemsEdits extends BotItemsReads {
       eventId = move(comment)
     }
     return { uid, eventId }
+  }
+
+  /** What keeps the comment's ask open: this set's `--while`, or, for a Needs you comment that asks
+   *  nothing on an item already waiting on an ask, that ask's own, since the comment becomes the
+   *  item's question while the ask still waits. */
+  private askWhileOfComment(
+    item: BotItemRecord,
+    changes: BotItemSetInput
+  ): { while?: BotItemAskWhile } {
+    if (changes.askWhile) {
+      return { while: changes.askWhile }
+    }
+    if (changes.ask || changes.status !== 'needs_you' || item.status !== 'needs_you') {
+      return {}
+    }
+    const ask = this.waitingAsk(item)
+    const row =
+      ask === null ? undefined : this.db.prepare('SELECT * FROM item_events WHERE id = ?').get(ask)
+    const kept = row === undefined ? null : botItemAskWhileOf(eventRecordOf(row).data.while)
+    return kept ? { while: kept } : {}
+  }
+
+  /** The worker `--while` names, linked unless the item links it already; past the item's link
+   *  bound the whole set is refused. */
+  private linkAskWhile(
+    item: BotItemRecord,
+    changes: BotItemSetInput,
+    actor: BotItemBotActor,
+    mail: boolean,
+    now: number
+  ): number | null {
+    const held = this.links(item.uid)
+    const fresh = uniqueBotItemLinks(changes.askWhileLinks ?? []).filter(
+      (link) => !held.some((entry) => entry.kind === link.kind && entry.ref === link.ref)
+    )
+    if (fresh.length === 0) {
+      return null
+    }
+    const eventId = this.appendEvent(
+      item.uid,
+      'linked',
+      actor,
+      { links: fresh.map(linkWords) },
+      mail,
+      now
+    )
+    this.insertLinks(item.uid, fresh, eventId)
+    return eventId
   }
 
   private writeFields(
@@ -218,6 +271,12 @@ export function assertBotItemSetInput(changes: BotItemSetInput): void {
   }
   if (changes.status === 'waiting') {
     botItemWaitText(changes.note, WAIT_WORDS)
+  }
+  if (changes.askWhile !== undefined && (changes.status !== 'needs_you' || !changes.ask)) {
+    throw new BotItemError(
+      'invalid_argument',
+      '--while goes with --status needs-you and an --ask: it keeps that question open.'
+    )
   }
   if (changes.ask !== undefined && changes.status !== 'needs_you') {
     throw new BotItemError('invalid_argument', '--ask goes with --status needs-you.')

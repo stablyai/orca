@@ -8,9 +8,11 @@ import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
+import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
 import { readTextOrFileFlag } from '../arguments/command-body-input'
 import { printResult } from '../output/command-result-output'
 import {
@@ -25,6 +27,8 @@ import { callBots, findBot } from './bot'
 import { botItemAskAdviceWithout } from '../../shared/bots/bot-item-ask-advice'
 import { botItemAskFromFlags, botItemAskParams } from './bot-item-ask-flags'
 import { BOT_ITEM_ASK_BOOLEAN_FLAGS } from '../specs/bot-items'
+import { BOTS_ITEM_ASK_WHILE_CAPABILITY } from '../../shared/bot-runtime-capabilities'
+import { assertHostCapability } from '../accounts/host-sign-in-driver'
 import {
   formatBotItemList,
   formatBotItemShow,
@@ -136,6 +140,25 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     }
     const ask = botItemAskFromFlags(ctx, BOT_ITEM_ASK_BOOLEAN_FLAGS)
     const comment = await readTextOrFileFlag(flags, cwd, 'comment', false)
+    const given = getOptionalStringFlagAllowingEmpty(flags, 'while')?.split(REPEATED_FLAG_SEPARATOR)
+    if (given && given.length > 1) {
+      throw new RuntimeClientError('invalid_argument', 'Give --while once. Nothing was posted.')
+    }
+    const askWhile = given?.[0]
+    if (askWhile !== undefined) {
+      if (!askWhile.trim()) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--while takes dispatch:<worker id> or until:<date and time>.'
+        )
+      }
+      // An older host would post the ask and drop the condition.
+      await assertHostCapability(
+        ctx,
+        BOTS_ITEM_ASK_WHILE_CAPABILITY,
+        'This Orca keeps no --while; update it, or ask without --while. Nothing was posted.'
+      )
+    }
     await write(ctx, 'bots.items.set', {
       item: itemId(flags),
       ...(expectedVersion === undefined ? {} : { expectedVersion }),
@@ -146,7 +169,8 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...optional('note', await readTextOrFileFlag(flags, cwd, 'note', false)),
       ...optional('reason', await readTextOrFileFlag(flags, cwd, 'reason', false)),
       ...(ask ? botItemAskParams(ask, comment) : optional('comment', comment)),
-      ...files(flags, cwd)
+      ...files(flags, cwd),
+      ...optional('while', askWhile)
     })
   },
   'bot item comment': async (ctx) => {

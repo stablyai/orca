@@ -102,6 +102,10 @@ export const BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY = 'bots.google-phone-s
 // steering its running turn. An older host only takes them typed.
 export const BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY = 'bots.offer-answer.v1' as const
 
+// Host keeps a Needs you ask open only `--while` its worker runs or its time hasn't passed, then
+// withdraws it (bots.items.set `while`); an older host drops the field, so the CLI refuses it there.
+export const BOTS_ITEM_ASK_WHILE_CAPABILITY = 'bots.item-ask-while.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -129,5 +133,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
   BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY,
   BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY,
-  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY
+  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY,
+  BOTS_ITEM_ASK_WHILE_CAPABILITY
 ] as const

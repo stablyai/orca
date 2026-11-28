@@ -67,7 +67,9 @@ export const BotItemsSet = lazyZodSchema(() =>
     /** With needs-you: the comment's body (`--comment`), its question lines (`--ask`) and quick replies (`--option`). */
     ask: BotItemAskSchema.optional(),
     /** Attached to the comment `comment` or `ask` writes. */
-    files: Files
+    files: Files,
+    /** With `ask`: what keeps it open (`--while dispatch:<id>|until:<time>`); Orca withdraws it after. */
+    while: z.string().optional()
   })
 )
 

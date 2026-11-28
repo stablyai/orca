@@ -184,10 +184,12 @@ function chatSentence(act: BotAct, chat: string, t: Translate): string {
   }
 }
 
-/** How a line names another chat: Home Chat, its title, or "Another chat". */
-function chatName(chat: BotItemNoteChat | 'other-agent' | null, t: Translate): string {
-  if (chat === 'other-agent') {
-    return t('bots.items.chat.anotherAgent', 'Another agent')
+type NamedBy = BotItemNoteChat | 'other-agent' | 'orca'
+
+/** How a line names another chat: Home Chat, its title, "Another chat", or Orca. */
+function chatName(chat: NamedBy | null, t: Translate): string {
+  if (chat === 'other-agent' || chat === 'orca') {
+    return chat === 'orca' ? 'Orca' : t('bots.items.chat.anotherAgent', 'Another agent')
   }
   return chat?.home
     ? t('bots.items.homeChat', 'Home Chat')
@@ -205,7 +207,7 @@ function actKey({ added, ...act }: { added: boolean } & BotAct): string {
 function botLines(
   entries: readonly BotItemNoteEntry[],
   t: Translate,
-  by?: BotItemNoteChat | 'other-agent' | null
+  by?: NamedBy | null
 ): BotItemNoteLine[] {
   const sentence = (act: { added: boolean } & BotAct): Around => {
     if (by === undefined) {
@@ -213,7 +215,7 @@ function botLines(
     }
     const name = chatName(by, t)
     const link = act.act === 'link' ? act.link : undefined
-    return by && by !== 'other-agent'
+    return typeof by === 'object' && by !== null
       ? around(
           chatSentence(act, CHAT, t),
           { chatId: by.chatId, name, ...(by.home ? { home: true as const } : {}) },
@@ -309,7 +311,7 @@ export function botItemNoteLines(note: BotItemNoteView, t: Translate): BotItemNo
   }
   return by === 'bot'
     ? botLines(note.entries, t)
-    : botLines(note.entries, t, typeof by === 'object' || by === 'other-agent' ? by : null)
+    : botLines(note.entries, t, by === 'other-chat' ? null : by)
 }
 
 /** A folded run of the owner's quick changes to one item: first → last status and how many. */

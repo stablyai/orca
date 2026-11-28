@@ -10,6 +10,8 @@ import {
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
+import { botItemAskWithdrawnWords } from '../../shared/bots/bot-item-ask-while'
+import { botItemWithdrawalAfter } from './bot-item-withdrawal-read'
 import { BotItemError } from './bot-item-error'
 import { BotItemsWrites } from './bot-items-writes'
 import {
@@ -88,6 +90,17 @@ export class BotItemsOwner extends BotItemsWrites {
         throw new BotItemError(
           'item_changed',
           `Item ${item.number} has a new question. Read it, then reply.`
+        )
+      }
+      // A reply to a question Orca withdrew would land as a plain comment the bot reads as no answer.
+      const withdrawn =
+        !asking && !plain && questionEventId !== undefined
+          ? botItemWithdrawalAfter(this.db, uid, questionEventId)
+          : null
+      if (withdrawn) {
+        throw new BotItemError(
+          'item_changed',
+          `Orca withdrew this question on item ${item.number} — ${botItemAskWithdrawnWords(withdrawn)}. No reply needed; refresh to see the latest, or add a comment if you still want to weigh in.`
         )
       }
       // While the bot asks, a comment not sent as plain is the answer: it names the question (a quick

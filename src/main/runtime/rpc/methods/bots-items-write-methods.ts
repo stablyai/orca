@@ -17,6 +17,11 @@ import { defineMethod } from '../core'
 import { addItem } from './bots-items-add'
 import { admitBotItemFiles } from './bots-items-bot-files'
 import { BotItemError } from '../../../bots/bot-item-error'
+import { botItemAskWhileWorker } from '../../../bots/bot-item-ask-while-worker'
+import {
+  parseBotItemAskWhile,
+  type BotItemAskWhile
+} from '../../../../shared/bots/bot-item-ask-while'
 import { assertBotItemSetInput, assertBotItemVersion } from '../../../bots/bot-items-edits'
 import { assertBotItemAttach, assertBotItemOwnerWrite } from '../../../bots/bot-items-tables'
 import {
@@ -51,12 +56,30 @@ const SET = defineMethod({
     if (params.files?.length && !comment?.trim() && !ask) {
       throw new BotItemError('invalid_argument', '--file goes with --comment. Nothing was posted.')
     }
-    if (params.files?.length || expectedVersion !== undefined) {
-      // Refuse stale writes before admitting files. The transaction checks again.
-      assertBotItemSetInput({ title, description, doneMeans, status, note, reason, comment, ask })
+    const db = context.runtime.getOrchestrationDb()
+    const askWhile = params.while === undefined ? undefined : hostAskWhile(params.while, db)
+    if (params.files?.length || expectedVersion !== undefined || askWhile) {
+      // Refuse stale or invalid writes before admitting files. The transaction checks again.
+      assertBotItemSetInput({
+        title,
+        description,
+        doneMeans,
+        status,
+        note,
+        reason,
+        comment,
+        ask,
+        askWhile
+      })
       assertBotItemOwnerWrite(item, writer.actor, status)
       assertBotItemVersion(item, expectedVersion)
     }
+    const askWhileLinks =
+      askWhile?.kind === 'dispatch'
+        ? linksOutsideLinkedChains(db, await store.links(item.uid), [
+            { kind: 'dispatch', ref: askWhile.ref }
+          ])
+        : undefined
     // With an ask, the files go under its own context; its comment is the host's rendering of it.
     const words = ask ? (ask.context ?? '') : (comment ?? '')
     const attached = await admitBotItemFiles(context, item, words, params.files)
@@ -91,6 +114,8 @@ const SET = defineMethod({
       comment,
       ask,
       images,
+      askWhile,
+      askWhileLinks,
       ...asked
     }
     const defined = Object.fromEntries(
@@ -101,9 +126,35 @@ const SET = defineMethod({
     // A tip back to the bot when its ask may be hard to read; the ask is already posted as written.
     const advice =
       status === 'needs_you' && result.eventId !== null ? botItemAskAdvice({ comment, ask }) : null
-    return advice ? { ...result, advice } : result
+    // Echoed so the CLI confirms what this host keeps, never only what it sent.
+    const kept = askWhile && result.eventId !== null ? { askWhile } : {}
+    return advice ? { ...result, ...kept, advice } : { ...result, ...kept }
   }
 })
+
+/** `--while` as this host can keep it: a worker that runs now, or a time to come. */
+function hostAskWhile(value: string, db: OrchestrationDb): BotItemAskWhile {
+  const parsed = parseBotItemAskWhile(value, Date.now())
+  if (!parsed.ok) {
+    throw new BotItemError('invalid_argument', `${parsed.message} Nothing was posted.`)
+  }
+  if (parsed.value.kind === 'dispatch') {
+    const state = botItemAskWhileWorker(db, parsed.value.ref)
+    if (state === 'unknown') {
+      throw new BotItemError(
+        'invalid_argument',
+        `Orca couldn't verify that worker dispatch:${parsed.value.ref} is running here. Nothing was posted.`
+      )
+    }
+    if (state !== 'running') {
+      throw new BotItemError(
+        'invalid_argument',
+        `Worker dispatch:${parsed.value.ref} already ended; ask without --while, or name a running worker. Nothing was posted.`
+      )
+    }
+  }
+  return parsed.value
+}
 
 const COMMENT = defineMethod({
   name: 'bots.items.comment',

@@ -27,8 +27,15 @@ export type BotItemNoteEntry = BotItemNoteItem & BotItemNoteChange
 export type BotItemNoteChat = { kind: 'chat'; chatId: string; title: string | null; home?: true }
 
 /** Who made the changes: this chat's bot, the owner, another of the bot's chats (`'other-chat'`:
- *  one gone by then, or a note written before notes named it), or another agent. */
-export type BotItemNoteBy = 'bot' | 'owner' | 'other-chat' | 'other-agent' | BotItemNoteChat
+ *  one gone by then, or a note written before notes named it), another agent, or Orca itself (an
+ *  older client draws that as another chat). */
+export type BotItemNoteBy =
+  | 'bot'
+  | 'owner'
+  | 'other-chat'
+  | 'other-agent'
+  | 'orca'
+  | BotItemNoteChat
 
 /** Display-only journal card. `noteId` names it once, so a retried write draws it once. */
 export type AgentJournalBotItemNoteItem = {
