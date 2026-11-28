@@ -93,21 +93,32 @@ function collectAgentTerminalIds(state: AppState): Set<string> {
   return agents
 }
 
+// Why coalesced: status writes arrive per hook event and a scan walks every tab and pane.
+const ARRIVAL_SCAN_MS = 1000
+
 /** Calls `onAppear` once per agent id, the first time a terminal running it exists. Returns the unsubscribe. */
 export function watchAgentTerminalArrivals(onAppear: (agent: string) => void): () => void {
   const seen = new Set<string>()
-  const report = (state: AppState): void => {
-    for (const agent of collectAgentTerminalIds(state)) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const report = (): void => {
+    timer = null
+    for (const agent of collectAgentTerminalIds(useAppStore.getState())) {
       if (!seen.has(agent)) {
         seen.add(agent)
         onAppear(agent)
       }
     }
   }
-  report(useAppStore.getState())
-  return useAppStore.subscribe((state, previous) => {
-    if (didSourcesChange(state, previous)) {
-      report(state)
+  report()
+  const unsubscribe = useAppStore.subscribe((state, previous) => {
+    if (timer === null && didSourcesChange(state, previous)) {
+      timer = setTimeout(report, ARRIVAL_SCAN_MS)
     }
   })
+  return () => {
+    unsubscribe()
+    if (timer !== null) {
+      clearTimeout(timer)
+    }
+  }
 }
