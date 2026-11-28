@@ -36,6 +36,8 @@ type HostEntry = {
   slots: PrioritySemaphore
   /** The failed rows of runs whose answer never arrived (a dropped connection), until a check reads them. */
   unanswered: Map<AgentCliUpdateAgent, AgentCliUpdateRun>
+  /** When each agent's update last landed, so a check sent before it can't offer it again. */
+  updatedAt: Map<AgentCliUpdateAgent, number>
 }
 
 // Kept per paired computer while the app runs, so leaving Edit computer never orphans a run.
@@ -50,7 +52,8 @@ function entryFor(hostId: string): HostEntry {
       check: null,
       checkedAt: 0,
       slots: new PrioritySemaphore(AGENT_CLI_UPDATES_AT_ONCE),
-      unanswered: new Map()
+      unanswered: new Map(),
+      updatedAt: new Map()
     }
     entries.set(hostId, entry)
   }
@@ -104,12 +107,16 @@ function checkEntry(
     return Promise.resolve()
   }
   if (entry.check) {
-    return entry.check
+    // A forced check must be asked after whatever made it necessary, not answered by an older one.
+    return force ? entry.check.then(() => checkEntry(hostId, entry, client, true)) : entry.check
   }
   if (!force && Date.now() - entry.checkedAt < CHECK_REUSE_MS) {
     return Promise.resolve()
   }
-  entry.checkedAt = Date.now()
+  const sentAt = Date.now()
+  entry.checkedAt = sentAt
+  // Only runs already unanswered when this check is sent can be read from its reply.
+  const lost = [...entry.unanswered]
   const check = agentCliUpdatesCheck
     .request(
       client,
@@ -117,9 +124,15 @@ function checkEntry(
       { timeoutMs: AGENT_CLI_UPDATE_CHECK_TIMEOUT_MS }
     )
     .then((reply) => {
-      const updates = agentCliUpdatesCheck.interpret(reply)
-      const lost = [...entry.unanswered]
-      entry.unanswered.clear()
+      // An update that landed after this check was sent is newer than the check's answer.
+      const updates = agentCliUpdatesCheck
+        .interpret(reply)
+        .filter((update) => (entry.updatedAt.get(update.agent) ?? 0) <= sentAt)
+      for (const [agent, row] of lost) {
+        if (entry.unanswered.get(agent) === row) {
+          entry.unanswered.delete(agent)
+        }
+      }
       write(hostId, entry, (host) => {
         // A run whose answer was lost is unknown, not failed: once the computer no longer offers that
         // update the row goes (its CLI may have updated, or no longer reads), never claiming success.
@@ -160,6 +173,7 @@ function settleRun(
     writeRun(hostId, entry, agent, failed)
     return failed
   }
+  entry.updatedAt.set(agent, Date.now())
   write(hostId, entry, (host) => {
     const runs = { ...host.runs }
     delete runs[agent]
@@ -193,7 +207,9 @@ export async function runHostAgentCliUpdate(
   ).finally(release)
   const settled = settleRun(hostId, entry, agent, result)
   if (late && settled) {
-    // A late answer still decides the row, unless a newer run has replaced it.
+    // The ceiling only means the answer is late: a check can already read the CLI, and a later
+    // answer from the host still decides the row unless something replaced it.
+    markUnanswered(hostId, entry, client, agent, settled)
     void late.then((answer) => {
       if (entry.state.runs[agent] === settled) {
         settleAnswer(hostId, entry, client, agent, answer)
