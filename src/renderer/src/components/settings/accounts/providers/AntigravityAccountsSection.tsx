@@ -176,7 +176,8 @@ export function AntigravityAccountsSection({
       ? `${flow.flowId ?? 'another client'}:${flow.phase}`
       : 'idle'
   useOnLaterChange(endedFlow, reread)
-  useAgyLoginChange(state, signIn.loginRevision, reread, () => {
+  // agy's login on the host doesn't change a WSL distro's.
+  useAgyLoginChange(state, chats ? signIn.loginRevision : null, reread, () => {
     setError(null)
     // The sign-in store follows the host's agy, which a WSL distro's login doesn't change.
     if (chats) {

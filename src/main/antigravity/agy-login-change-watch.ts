@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from 'node:fs'
-import { access, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { antigravityChatSignIn } from './antigravity-chat-account'
@@ -7,16 +7,19 @@ import { getAntigravityWindowsHome } from './native-windows-credentials'
 import { readAntigravityMacOSCredentialRevision } from './native-macos-credentials'
 
 const SETTLE_MS = 500
+const REWATCH_MS = 1000
 
 let loginRevision = 0
-// By store folder. A folder agy hasn't created yet is waited for from its nearest existing parent;
-// a watch that failed is tried again on the next call.
+// By store folder. A folder agy hasn't created yet is waited for from its nearest existing parent.
 const watchers = new Map<string, FSWatcher>()
 // What each store held when last read; a write that leaves agy's login as it was is ignored.
 const seen = new Map<string, string>()
-const pending = new Set<AgyLoginStore>()
+// Stores to check once changes settle, by folder.
+const pending = new Map<string, AgyLoginStore>()
 let settle: ReturnType<typeof setTimeout> | null = null
 let followers = 0
+// Moves when the last follower leaves, so checks begun before then publish nothing.
+let generation = 0
 
 type AgyLoginStore = { dir: string; file: string; keychain: boolean }
 
@@ -53,35 +56,39 @@ function agyLoginStores(home: string): AgyLoginStore[] {
 }
 
 /** The login keychain holds every app's passwords, so only agy's item, read by its attributes
- *  (no access dialog), says whether agy's login changed; a write in the same second as the last
- *  one can't be told apart, so it counts. */
-async function storeContents(store: AgyLoginStore): Promise<string> {
+ *  (no access dialog), says whether agy's login changed. `uncertain`: agy wrote it within the
+ *  last second, when another write would keep the same attributes, so the read counts as a change. */
+async function storeContents(
+  store: AgyLoginStore
+): Promise<{ contents: string; uncertain: boolean }> {
   if (store.keychain) {
     const revision = await readAntigravityMacOSCredentialRevision().catch(() => undefined)
     return revision === undefined
-      ? 'unreadable'
+      ? { contents: 'unreadable', uncertain: false }
       : revision === null
-        ? 'none'
-        : revision.settled
-          ? revision.fingerprint
-          : `${revision.fingerprint}:${Date.now()}`
+        ? { contents: 'none', uncertain: false }
+        : { contents: revision.fingerprint, uncertain: !revision.settled }
   }
   const file = await stat(join(store.dir, store.file)).catch(() => null)
-  return file ? `${file.ino}:${file.size}:${file.mtimeMs}` : 'none'
+  return { contents: file ? `${file.ino}:${file.size}:${file.mtimeMs}` : 'none', uncertain: false }
 }
 
 async function publishChanges(): Promise<void> {
-  const stores = [...pending]
+  const at = generation
+  const stores = [...pending.values()]
   pending.clear()
   let moved = false
   for (const store of stores) {
-    const contents = await storeContents(store)
-    if (seen.get(store.dir) !== contents) {
+    const { contents, uncertain } = await storeContents(store)
+    if (at !== generation) {
+      return
+    }
+    if (uncertain || seen.get(store.dir) !== contents) {
       seen.set(store.dir, contents)
       moved = true
     }
   }
-  if (moved && followers > 0) {
+  if (moved) {
     loginRevision += 1
     // A new revision makes every sign-in subscriber publish, carrying the login revision.
     antigravityChatSignIn.set(antigravityChatSignIn.get().value)
@@ -89,7 +96,10 @@ async function publishChanges(): Promise<void> {
 }
 
 function changed(store: AgyLoginStore): void {
-  pending.add(store)
+  if (followers === 0) {
+    return
+  }
+  pending.set(store.dir, store)
   if (settle) {
     clearTimeout(settle)
   }
@@ -116,13 +126,12 @@ function attach(store: AgyLoginStore, home: string): void {
           if (toStore) {
             changed(store)
           }
-          // The store's folder itself may have gone away: wait for it again from its parent.
+          // The store's folder itself may have been removed or replaced: follow the one there now.
           if (event === 'rename') {
-            void access(dir).catch(() => {
-              if (watchers.get(dir) === watcher) {
-                moveOn()
-              }
-            })
+            void stat(dir).then(
+              (now) => now.ino !== folder && watchers.get(dir) === watcher && moveOn(),
+              () => watchers.get(dir) === watcher && moveOn()
+            )
           }
           return
         }
@@ -130,6 +139,13 @@ function attach(store: AgyLoginStore, home: string): void {
           moveOn()
         }
       })
+      let folder: number | null = null
+      if (target === dir) {
+        void stat(dir).then(
+          (now) => (folder = now.ino),
+          () => {}
+        )
+      }
       // A folder on the way to the store appeared, or the store's folder went away: watch from the
       // nearest folder that exists, and read once in case agy wrote its login meanwhile.
       const moveOn = () => {
@@ -138,9 +154,20 @@ function attach(store: AgyLoginStore, home: string): void {
         attach(store, home)
         changed(store)
       }
+      // Windows reports a removed folder as a watch error: watch again shortly.
       watcher.on('error', () => {
         watcher.close()
+        if (watchers.get(dir) !== watcher) {
+          return
+        }
         watchers.delete(dir)
+        const at = generation
+        setTimeout(() => {
+          if (at === generation && !watchers.has(dir)) {
+            attach(store, home)
+            changed(store)
+          }
+        }, REWATCH_MS).unref?.()
       })
       watchers.set(dir, watcher)
       return
@@ -165,11 +192,12 @@ export function watchAgyLoginChanges(): () => void {
   } catch {
     // Nothing to watch on this host.
   }
+  const at = generation
   for (const store of stores) {
     if (!watchers.has(store.dir)) {
       attach(store, home)
-      void storeContents(store).then((contents) => {
-        if (!seen.has(store.dir)) {
+      void storeContents(store).then(({ contents }) => {
+        if (at === generation && !seen.has(store.dir)) {
           seen.set(store.dir, contents)
         }
       })
@@ -183,11 +211,17 @@ export function watchAgyLoginChanges(): () => void {
     released = true
     followers -= 1
     if (followers === 0) {
+      generation += 1
       for (const watcher of watchers.values()) {
         watcher.close()
       }
       watchers.clear()
       seen.clear()
+      pending.clear()
+      if (settle) {
+        clearTimeout(settle)
+        settle = null
+      }
     }
   }
 }
