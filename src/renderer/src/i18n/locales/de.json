@@ -18841,6 +18841,12 @@
           "tooLarge": "{{value0}} ist zu groß, um in {{value1}} geöffnet zu werden ({{value2}}; das Limit ist {{value3}}).",
           "unsupported": "{{value0}} kann diese Datei an ihrem Speicherort nicht lesen. Aktualisiere den Orca-Server, auf dem sie liegt, oder wechsle zu „Quelle“.",
           "readFailed": "{{value0}} konnte für {{value1}} nicht gelesen werden. {{value2}}"
+        },
+        "EditorPanelHeaderPath": {
+          "3c8f0d21a6": "Wird geladen…",
+          "5d0a8b17c3": "{{value0}} durchsuchen",
+          "7e2c1a9b04": "Dieser Ordner konnte nicht aufgelistet werden.",
+          "9b14e6c2d0": "Dieser Ordner ist leer."
         }
       },
       "diff": {

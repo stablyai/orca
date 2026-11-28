@@ -18841,6 +18841,12 @@
           "open": "Varsayılan uygulamayla aç",
           "downloadOpen": "İndir ve aç",
           "openFailed": "Bu bilgisayardaki hiçbir uygulama dosyayı açamadı."
+        },
+        "EditorPanelHeaderPath": {
+          "3c8f0d21a6": "Yükleniyor…",
+          "5d0a8b17c3": "{{value0}} klasörüne göz at",
+          "7e2c1a9b04": "Bu klasör listelenemedi.",
+          "9b14e6c2d0": "Bu klasör boş."
         }
       },
       "diff": {

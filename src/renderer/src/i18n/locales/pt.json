@@ -15718,6 +15718,12 @@
           "open": "Abrir com o app padrão",
           "downloadOpen": "Baixar e abrir",
           "openFailed": "Nenhum app neste computador abriu este arquivo."
+        },
+        "EditorPanelHeaderPath": {
+          "3c8f0d21a6": "Carregando…",
+          "5d0a8b17c3": "Navegar por {{value0}}",
+          "7e2c1a9b04": "Não foi possível listar esta pasta.",
+          "9b14e6c2d0": "Esta pasta está vazia."
         }
       },
       "skills": {

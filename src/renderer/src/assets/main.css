@@ -1977,9 +1977,53 @@ html.native-shell .app-layout {
   white-space: nowrap;
 }
 
+.editor-header-path--breadcrumbs {
+  display: flex;
+  align-items: baseline;
+  cursor: default;
+}
+
 .editor-header-path:hover,
 .editor-header-path:focus-visible {
   color: var(--foreground);
+}
+
+.editor-header-path--breadcrumbs:hover,
+.editor-header-path--breadcrumbs:focus-visible {
+  color: var(--muted-foreground);
+}
+
+.editor-header-path-segment {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 1px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: inherit;
+}
+
+.editor-header-path-segment:hover,
+.editor-header-path-segment:focus-visible {
+  color: var(--foreground);
+}
+
+.editor-header-path-segment-current {
+  color: var(--foreground);
+}
+
+.editor-header-path-separator,
+.editor-header-path-preview-suffix {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.editor-header-path-separator {
+  padding: 0 2px;
+  opacity: 0.55;
+  user-select: none;
 }
 
 .editor-header-path--static {

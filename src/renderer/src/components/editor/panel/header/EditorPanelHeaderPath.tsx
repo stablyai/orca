@@ -19,6 +19,8 @@ import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
 import { splitPathForDisplay } from './editor-path-display'
 import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
+import { EditorHeaderPathBreadcrumbs } from './EditorHeaderPathBreadcrumbs'
+import { canNavigateEditorHeaderPath } from './editor-header-path-segments'
 
 type EditorPanelHeaderPathProps = {
   activeFile: OpenFile
@@ -42,6 +44,7 @@ export function EditorPanelHeaderPath({
   const headerCopyState = getEditorHeaderCopyState(activeFile, t)
   const displayPath = splitPathForDisplay(headerCopyState.pathLabel)
   const canCopyHeaderPath = headerCopyState.copyText !== null
+  const canNavigatePath = canNavigateEditorHeaderPath(activeFile)
   // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
   const isVirtualEditorTab = isVirtualEditorFile(activeFile)
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
@@ -105,6 +108,12 @@ export function EditorPanelHeaderPath({
               }
             }}
             onBlur={commitRename}
+          />
+        ) : canNavigatePath ? (
+          <EditorHeaderPathBreadcrumbs
+            key={activeFile.id}
+            activeFile={activeFile}
+            pathTitle={headerCopyState.pathTitle}
           />
         ) : (
           <button
