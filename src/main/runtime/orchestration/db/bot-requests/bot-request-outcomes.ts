@@ -4,6 +4,7 @@
 import type { MessageRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { BotRequestRow } from './bot-request-store'
+import { settleRequests } from '../messages/settled-request-mail'
 
 export const BOT_REQUEST_OUTCOMES = ['answered', 'posted', 'unanswered', 'dropped'] as const
 export type BotRequestOutcome = (typeof BOT_REQUEST_OUTCOMES)[number]
@@ -16,18 +17,23 @@ CREATE TABLE IF NOT EXISTS bot_request_outcomes (
 );
 `
 
-/** Records an outcome unless one stands; true when this one was recorded. */
+/** Records an outcome unless one stands, and reads its mail; true when this one was recorded.
+ *  `continues`: the chat reruns the turn after a usage limit, so the mail stays for it to read. */
 export function recordBotRequestOutcome(
   this: OrchestrationDb,
   messageId: string,
-  outcome: BotRequestOutcome
+  outcome: BotRequestOutcome,
+  continues = false
 ): boolean {
-  const recorded =
-    this.db
-      .prepare('INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)')
-      .run(messageId, outcome).changes > 0
-  settleAwaitedQuestion(this, messageId)
-  return recorded
+  const settled = settleRequests(this, continues ? 'keep-unread' : 'orca', () => {
+    const recorded =
+      this.db
+        .prepare('INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)')
+        .run(messageId, outcome).changes > 0
+    settleAwaitedQuestion(this, messageId)
+    return recorded ? [messageId] : []
+  })
+  return settled.length > 0
 }
 
 /** Any outcome ends what its asker may still be owed, so nothing decided later sends it again. */
@@ -47,13 +53,16 @@ export function recordBotAnswer(
   if (before === 'answered') {
     return null
   }
-  this.db
-    .prepare(
-      `INSERT INTO bot_request_outcomes (message_id, outcome) VALUES (?, 'answered')
+  settleRequests(this, 'reply', () => {
+    this.db
+      .prepare(
+        `INSERT INTO bot_request_outcomes (message_id, outcome) VALUES (?, 'answered')
        ON CONFLICT(message_id) DO UPDATE SET outcome = 'answered'`
-    )
-    .run(messageId)
-  settleAwaitedQuestion(this, messageId)
+      )
+      .run(messageId)
+    settleAwaitedQuestion(this, messageId)
+    return [messageId]
+  })
   return { posted: before === 'posted' }
 }
 

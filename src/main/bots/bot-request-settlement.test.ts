@@ -43,7 +43,16 @@ import { exposeUtcTimestamp } from '../runtime/orchestration/db/utc-timestamp'
 // answered it, the real orchestration database holds the request and takes the notice. Stubbed:
 // only which bot owns the chat and where the host's journal reads come from.
 
-const live = vi.hoisted((): { reads: unknown } => ({ reads: null }))
+const live = vi.hoisted((): { reads: unknown; limit: string | null } => ({
+  reads: null,
+  limit: null
+}))
+// Stubbed: whether Orca has scheduled a "continue" for the chat after a usage limit.
+vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () => ({
+    readUsageLimitContinue: async () => (live.limit ? { state: live.limit } : null)
+  })
+}))
 vi.mock('./bot-session-tabs', async (original) => ({
   ...(await original<typeof SessionTabs>()),
   botOfSession: () => ({ id: 'helper' })
@@ -69,6 +78,7 @@ let now = 1_800_000_000_000
 let ordinal = 0
 
 beforeEach(() => {
+  live.limit = null
   directory = mkdtempSync(join(tmpdir(), 'orca-bot-request-settlement-'))
   journalDb = new Database(join(directory, 'journal.sqlite'))
   migrateJournalDomainSchema(journalDb)
@@ -297,10 +307,13 @@ it('tells the asker of a request folded into a turn when that turn ends, and not
     'unanswered',
     null
   ])
+  // Settled requests are read, so the chat's next check doesn't hand them over again as new.
+  expect(db.getUnreadMessages('orca_session_id:chat').map((m) => m.id)).toEqual([r3])
 
   turn('turn-b', 'm3', 'success')
   await settleBotRequestTurn(runtime(), 'chat', 'turn-b', { outcome: 'success' })
   expect(db.getBotRequestOutcome(r3)).toBe('unanswered')
+  expect(db.getUnreadMessages('orca_session_id:chat')).toEqual([])
 })
 
 it('tells the asker its request failed when the turn that answered it fails', async () => {
@@ -316,6 +329,17 @@ it('tells the asker its request failed when the turn that answered it fails', as
     expect.stringContaining("Helper's turn failed with an error. It ended without answering"),
     expect.stringContaining("Helper's turn failed with an error. It ended without answering")
   ])
+})
+
+it('leaves a request unread when its chat continues after a usage limit, so the rerun reads it', async () => {
+  live.limit = 'scheduled'
+  const r1 = request('first')
+  send('m1', r1, null, { turn: TURN_A, via: 'start' })
+  turn('turn-a', 'm1', 'failure')
+
+  await settleBotRequestFailure(runtime(), failedTurn(agentJournalItemKey(TURN_A)))
+  expect(db.getBotRequestOutcome(r1)).toBe('unanswered')
+  expect(db.getUnreadMessages('orca_session_id:chat').map((m) => m.id)).toEqual([r1])
 })
 
 it('names the host terminal cap when a worker start the failed turn made was refused at it', async () => {

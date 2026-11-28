@@ -13,6 +13,7 @@ import {
 import { startRestingQuestionReconciler } from '../../../../orchestration/mailbox/questions/question-reconciler.test-fixture'
 import { testOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { remoteAskNotices, retryRemoteAskNotices } from './remote-ask-notices'
+import { stampQuestionTakes } from '../../../../orchestration/db/messages/mail-taker'
 
 const call = vi.hoisted(() => ({ send: vi.fn() }))
 vi.mock('../../../../orchestration/federation/remote-owned/remote-owned-calls', () => ({
@@ -95,6 +96,26 @@ describe("a paired worker's question its coordinator here stopped on", () => {
       requestId: `question-notice:${id}`
     })
     expect(getRemoteOwnedQuestion(db, id)).toMatchObject({ ended: 'unanswered', awaiting: null })
+  })
+
+  it('reads it once told unanswered, though its pointer handover left it unread', async () => {
+    call.send.mockResolvedValue({})
+    const reconciler = start()
+    const id = askedFromBox()
+    stampQuestionTakes(db, [id], { kind: 'session', sessionId: COORDINATOR })
+    await decided(reconciler)
+
+    expect(getRemoteOwnedQuestion(db, id)?.ended).toBe('unanswered')
+    expect(db.getMessageById(id)?.read).toBe(1)
+  })
+
+  it('reads it once answered there, though its pointer handover left it unread', () => {
+    const id = askedFromBox()
+    stampQuestionTakes(db, [id], { kind: 'session', sessionId: COORDINATOR })
+    recordRemoteAskAnswered(db, id)
+
+    expect(getRemoteOwnedQuestion(db, id)?.ended).toBe('answered')
+    expect(db.getMessageById(id)?.read).toBe(1)
   })
 
   it('keeps it owed while that computer is unreachable, and sends it on its next pull', async () => {
