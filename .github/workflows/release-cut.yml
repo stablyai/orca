@@ -927,7 +927,6 @@ jobs:
     uses: ./.github/workflows/qualified-orcad-template.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
-      fast_runners: false
 
   # Server-only Linux tarballs from the same qualified template. Nothing depends on this job, so a
   # failure here never holds the desktop release.
