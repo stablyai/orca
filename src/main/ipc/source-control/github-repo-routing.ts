@@ -1,5 +1,8 @@
 import { resolve } from 'node:path'
-import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId
+} from '../../../shared/execution-host/execution-host'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult
@@ -150,7 +153,7 @@ export function isPRRefreshCandidateRegistered(
 }
 
 export function getGitHubRepoConnectionId(repo: Repo): string | null {
-  return repo.connectionId ?? null
+  return getRepoRoutingConnectionId(repo)
 }
 
 export function getGitHubLocalGitOptionArgs(

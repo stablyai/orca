@@ -8,9 +8,9 @@ import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-i
 import { parseTaskQuery } from '../../../../shared/work-items/task-query'
 import { acquire, release } from '../../execution/github-operation-slots'
 
-import { resolveIssueGitHubApiRepositorySource } from '../../repositories/github-api-repository'
+import { resolveGitHubWorkItemSources } from '../../repositories/github-api-repository'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
-import { normalizeWorkItemPage, resolvePrWorkItemSource } from './work-item-list-request'
+import { normalizeWorkItemPage } from './work-item-list-request'
 import { listRecentWorkItems, listQueriedWorkItems } from './work-item-pages'
 import { isTaskRepositoryIneligible } from '../../../git/remotes/task-repository-eligibility'
 export async function listWorkItems(
@@ -37,15 +37,10 @@ export async function listWorkItems(
         }
       }
     }
-    const [issueResolved, prResolved] = await Promise.all([
-      resolveIssueGitHubApiRepositorySource(repoPath, preference, connectionId, localGitOptions),
-      resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
-    ])
-    const issueOwnerRepo = issueResolved.source
-    const prOwnerRepo = prResolved.source
+    const { source, originCandidate, upstreamCandidate, fellBack } =
+      await resolveGitHubWorkItemSources(repoPath, preference, connectionId, localGitOptions)
     const ineligible =
-      !issueOwnerRepo &&
-      !prOwnerRepo &&
+      !source &&
       (await isTaskRepositoryIneligible(repoPath, 'github', connectionId, localGitOptions))
     await acquire()
     try {
@@ -53,8 +48,8 @@ export async function listWorkItems(
       const partial = !trimmedQuery
         ? await listRecentWorkItems(
             repoPath,
-            issueOwnerRepo,
-            prOwnerRepo,
+            source,
+            source,
             limit,
             requestedPage,
             connectionId,
@@ -63,8 +58,8 @@ export async function listWorkItems(
           )
         : await listQueriedWorkItems(
             repoPath,
-            issueOwnerRepo,
-            prOwnerRepo,
+            source,
+            source,
             parseTaskQuery(trimmedQuery),
             limit,
             requestedPage,
@@ -83,14 +78,14 @@ export async function listWorkItems(
       return {
         items: partial.items,
         sources: {
-          issues: issueOwnerRepo,
-          prs: prOwnerRepo,
-          originCandidate: prResolved.originCandidate,
-          upstreamCandidate: prResolved.upstreamCandidate,
+          issues: source,
+          prs: source,
+          originCandidate,
+          upstreamCandidate,
           ...(ineligible ? { ineligible: true as const } : {})
         },
         ...(errors ? { errors } : {}),
-        ...(issueResolved.fellBack ? { issueSourceFellBack: true } : {})
+        ...(fellBack ? { issueSourceFellBack: true } : {})
       }
     } finally {
       release()

@@ -8,6 +8,7 @@ import type {
   PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { HostPROutcomeRecorder } from '../../../github/pull-requests/refresh/host-pr-cache-backfill'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
@@ -62,20 +63,19 @@ export class RuntimeHostedReviewCommands {
 
   async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const options = this.deps.getExecutionOptions(repo)
-    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
-    return options
-      ? getRepoSlug(repo.path, connectionId, options)
-      : getRepoSlug(repo.path, connectionId)
+    // A nested SSH ID needs its owning runtime. This probe only reads local checkouts.
+    if (getRepoRoutingConnectionId(repo)) {
+      return null
+    }
+    return getRepoSlug(repo.path, null, this.deps.getExecutionOptions(repo))
   }
 
   async getRepoUpstream(repoSelector: string): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const options = this.deps.getExecutionOptions(repo)
-    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
-    return options
-      ? getRepoUpstream(repo.path, connectionId, options)
-      : getRepoUpstream(repo.path, connectionId)
+    if (getRepoRoutingConnectionId(repo)) {
+      return null
+    }
+    return getRepoUpstream(repo.path, null, this.deps.getExecutionOptions(repo))
   }
 
   async getRepoPRForBranch(

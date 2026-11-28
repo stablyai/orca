@@ -97,7 +97,7 @@ export type ListWorkItemsResult<T> = {
     /** Raw origin independent of preferences; compare candidates without inferring from effective PR source.
      * Absent from older hosts' results: unavailable evidence, distinct from a present unresolved `null`. */
     originCandidate?: GitHubOwnerRepo | null
-    /** Raw upstream independent of preferences; selector visibility/tooltips need it even when effective issues source is origin. */
+    /** Configured upstream or discovered fork parent, including when the user selects origin. */
     upstreamCandidate?: GitHubOwnerRepo | null
   }
   errors?: {

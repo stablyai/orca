@@ -18,8 +18,11 @@ export async function resolvePullRequestLookupCandidates(
     const origin = await getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions)
     return origin ? [origin] : []
   }
-  return (await resolveGitHubApiRepositoryCandidates(repoPath, connectionId, localGitOptions))
-    .candidates
+  return (
+    await resolveGitHubApiRepositoryCandidates(repoPath, connectionId, localGitOptions, {
+      includeForkParent: true
+    })
+  ).candidates
 }
 
 /** A caller-pinned repository (CI-line watch or saved linked PR URL): its configured remote, or the
