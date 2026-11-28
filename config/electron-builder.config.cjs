@@ -714,7 +714,11 @@ module.exports = {
       '/Contents/Resources/agent-browser-darwin-[^/]+$',
       ...macTerminalHostSignIgnore
     ],
-    extendInfo: macUsageDescriptions,
+    extendInfo: {
+      ...macUsageDescriptions,
+      // App Nap throttles occluded apps and associated helpers to PRI 4 / E-cores.
+      NSAppSleepDisabled: true
+    },
     // Local macOS builds need no release credentials; hardening/notarization stay on explicit release paths.
     hardenedRuntime: isMacRelease,
     // Dev notarization preserves TCC identifier/team identity across cdhash changes; unticketed hourly updates otherwise lose folder grants with EPERM and no prompt.
