@@ -133,6 +133,6 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       detailsRow: card.settings?.worktreeCardDetailsRow !== false,
       agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'
     },
-    env: { projectGroups: card.projectGroups.length > 0 }
+    env: { projectGroups: card.hasProjectGroups }
   }
 }

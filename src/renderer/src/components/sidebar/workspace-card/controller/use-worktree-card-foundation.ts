@@ -21,7 +21,11 @@ import {
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
-import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
+import {
+  EMPTY_WORKSPACE_PORTS,
+  shouldBeginWorktreeRename,
+  type WorktreeCardProps
+} from './worktree-card-model'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
@@ -31,8 +35,9 @@ const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppSt
 export function useWorktreeCardFoundation({
   worktree,
   repo,
-  compactLine = false
-}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'compactLine'>) {
+  compactLine = false,
+  renameRowKey
+}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'compactLine'> & { renameRowKey?: string }) {
   // Static store actions never trigger re-renders; read once without registering 12 per-card subscriptions.
   const {
     openModal,
@@ -48,12 +53,14 @@ export function useWorktreeCardFoundation({
     fetchIssue,
     fetchLinearIssue
   } = getAppStoreState()
-  const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
+  const shouldBeginRename = useAppStore((s) =>
+    shouldBeginWorktreeRename(s.renamingWorktreeId, worktree.id, renameRowKey)
+  )
   const settings = useAppStore((s) => s.settings)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
-  const projectGroups = useAppStore((s) => s.projectGroups)
+  const hasProjectGroups = useAppStore((s) => s.projectGroups.length > 0)
   // A one-line card is always the Compact card, which only the default style has.
   const drawsNewCards = useAppStore(selectDrawsNewWorktreeCards)
   const newCardStyle = drawsNewCards && !compactLine
@@ -165,11 +172,12 @@ export function useWorktreeCardFoundation({
   })
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
-  const workspacePorts = useAppStore(
-    (s) =>
-      getWorkspacePortsByWorktreeId(s.workspacePortScan?.result).get(worktree.id) ??
-      EMPTY_WORKSPACE_PORTS
-  )
+  const workspacePorts = useAppStore((s) => {
+    const scanResult = s.workspacePortScan?.result
+    return scanResult
+      ? (getWorkspacePortsByWorktreeId(scanResult).get(worktree.id) ?? EMPTY_WORKSPACE_PORTS)
+      : EMPTY_WORKSPACE_PORTS
+  })
 
   // Avoid per-card host-qualified scans; twins use direct SSH status for this status-only chip.
   const sshOwnerEnvironmentId = useAppStore((s) =>
@@ -228,7 +236,7 @@ export function useWorktreeCardFoundation({
     setWorkspaceUnreadByUser,
     deleteFolderWorkspace,
     setActiveWorktree,
-    renamingWorktreeId,
+    shouldBeginRename,
     setRenamingWorktreeId,
     fetchHostedReviewForBranch,
     settings,
@@ -236,7 +244,7 @@ export function useWorktreeCardFoundation({
     fetchLinearIssue,
     cardProps,
     agentActivityDisplayMode,
-    projectGroups,
+    hasProjectGroups,
     newCardStyle,
     compactCards,
     cardDetails,
