@@ -322,10 +322,9 @@ export function BotBackupModelsPage({
       if (request === statusRequest.current) {
         setLoadError(true)
       }
-    } finally {
-      if (request === statusRequest.current) {
-        setLoading(false)
-      }
+    }
+    if (request === statusRequest.current) {
+      setLoading(false)
     }
   }, [bot])
 

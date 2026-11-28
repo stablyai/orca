@@ -34,15 +34,17 @@ export function useMobileBotBackupUsageLimit(input: {
     let current = true
     void (async () => {
       try {
-        const listed = botsListRead.interpret(await botsListRead.request(client, {}))
-        if (!current || listed.kind !== 'bots') {
+        const listed = botsListRead.interpret(await botsListRead.request(client))
+        if (!current || !listed.accepted) {
           return
         }
         const matched = listed.value.bots.find(
           (bot) =>
             bot.chatSessionId === sessionId ||
             (sourceIdentity !== undefined &&
-              sourceIdentity.includes(folderWorkspaceKey(bot.folderWorkspaceId)))
+              sourceIdentity.endsWith(
+                `,${JSON.stringify(folderWorkspaceKey(bot.folderWorkspaceId))}]`
+              ))
         )
         if (!matched) {
           return
@@ -54,9 +56,7 @@ export function useMobileBotBackupUsageLimit(input: {
             { failWhenDisconnected: true }
           )
         )
-        const ready =
-          status.entries.find((entry) => entry.state === 'ready')?.entry ??
-          matched.backupModels?.order[0]
+        const ready = status.entries.find((entry) => entry.state === 'ready')?.entry
         if (current && ready) {
           setBackupOffer({ turnItemId, botId: matched.id, target: ready })
         }
@@ -104,7 +104,7 @@ export function useMobileBotBackupUsageLimit(input: {
       .finally(() => setBackupSwitchingCut((current) => (current === cutId ? null : current)))
   }, [client, sessionId, activeOffer, backupSwitching])
 
-  return activeOffer || backupContinueFailedCut === turnItemId
+  return activeOffer || (backupContinueFailedCut !== null && backupContinueFailedCut === turnItemId)
     ? {
         backupSwitchLabel: activeOffer
           ? (activeOffer.target.model ?? botAgentLabel(activeOffer.target.agent))

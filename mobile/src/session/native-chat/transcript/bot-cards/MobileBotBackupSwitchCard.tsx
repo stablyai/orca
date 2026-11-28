@@ -3,7 +3,7 @@ import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/c
 import { formatUsageLimitResetClock } from '../../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
 import type { NativeChatBotCardValues } from '../../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import {
   MobileNativeChatEventName,
   MobileNativeChatEventRow
@@ -24,6 +24,7 @@ export function MobileBotBackupSwitchCard({
   fontScale: number
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
   const targetLabel = modelDisplay(switched.toAgent, switched.toModel)
   const fromLabel = modelDisplay(switched.fromAgent, switched.fromModel)
   const toPrimary = switched.direction === 'to-primary'

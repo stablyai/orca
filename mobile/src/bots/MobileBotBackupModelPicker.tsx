@@ -1,17 +1,17 @@
 // Searchable picker for choosing a bot backup model grouped by agent on mobile.
 import { useMemo, useState, type ReactNode } from 'react'
-import { TextInput, View } from 'react-native'
-import type {
-  BotBackupCatalogOption,
-  BotBackupModelEntry
+import { StyleSheet, View } from 'react-native'
+import {
+  botModelTargetKey,
+  type BotBackupCatalogOption,
+  type BotBackupModelEntry
 } from '../../../src/shared/bots/bot-backup-models'
-import { botModelTargetKey } from '../../../src/shared/bots/bot-backup-models'
+import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { ListRow } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors, radius, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { spacing } from '../theme/mobile-theme'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 
 export function MobileBotBackupModelPicker(props: {
@@ -96,15 +96,11 @@ export function MobileBotBackupModelPicker(props: {
       />
       {props.banner}
       <View style={styles.searchWrap}>
-        <TextInput
+        <MobileSearchField
           value={query}
           onChangeText={setQuery}
           placeholder={t('bots.settings.backupModelsSearch', 'Search models…')}
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-          autoCorrect={false}
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
+          editable={!props.disabled}
         />
       </View>
       {grouped.length === 0 ? (
@@ -146,19 +142,9 @@ export function MobileBotBackupModelPicker(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const styles = StyleSheet.create({
   searchWrap: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
   }
-}))
+})

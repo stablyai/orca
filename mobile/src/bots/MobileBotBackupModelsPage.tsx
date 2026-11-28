@@ -1,6 +1,6 @@
 // Bot backup models settings page on mobile: active failover banner, order, mode, and add picker.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Pressable, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react-native'
 import { isBotAgent } from '../../../src/shared/bot-types'
 import {
@@ -20,8 +20,8 @@ import { SwitchRow } from '../host-screen/workspace-options/workspace-option-row
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors, feedback, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { feedback, spacing } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botBackupReturn, botBackupStatusRead, type SheetBot } from './bot-sheet-operations'
 import { botAgentLabel, botSaveErrorMessage } from './mobile-bot-sheet-copy'
@@ -82,6 +82,7 @@ export function MobileBotBackupModelsPage(props: {
   showToast: (message: string, durationMs?: number) => void
 }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
   const { bot, client, online } = props
   const [statusState, setStatusState] = useState<{
     botId: string
@@ -342,7 +343,7 @@ export function MobileBotBackupModelsPage(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const styles = StyleSheet.create({
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -354,4 +355,4 @@ const styles = themedStyleSheet(() => ({
   disabled: {
     opacity: feedback.disabledOpacity
   }
-}))
+})

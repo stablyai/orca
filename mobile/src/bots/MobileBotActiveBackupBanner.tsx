@@ -5,8 +5,9 @@ import type { BotActiveBackup } from '../../../src/shared/bots/bot-backup-models
 import { formatUsageLimitResetClock } from '../../../src/shared/agent-session/failures/agent-session-usage-limit'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsSection } from '../settings/settings-screen-frame'
-import { colors, feedback, radius, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { feedback, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 export function MobileBotActiveBackupBanner(props: {
   activeBackup: BotActiveBackup
@@ -17,6 +18,8 @@ export function MobileBotActiveBackupBanner(props: {
   onReturnNow: () => void
 }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { activeBackup, targetLabel, primaryLabel } = props
   return (
     <SettingsSection>
@@ -62,7 +65,7 @@ export function MobileBotActiveBackupBanner(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   activeBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -89,8 +92,8 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.sm,
     paddingVertical: 6
   },
