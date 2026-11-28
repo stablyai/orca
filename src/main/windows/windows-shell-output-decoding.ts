@@ -1,7 +1,9 @@
 import { isUtf8 } from 'node:buffer'
+import { runProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { loadWindowsNativeRegistry } from './windows-native-registry'
 
-// cmd.exe writes its own messages to pipes in the OEM code page; these are the OEM pages TextDecoder supports.
+// cmd.exe and reg.exe write their own text to pipes in the OEM code page; these are the OEM pages TextDecoder supports.
 const OEM_CODE_PAGE_ENCODINGS: Record<string, string> = {
   '866': 'ibm866',
   '874': 'windows-874',
@@ -11,25 +13,52 @@ const OEM_CODE_PAGE_ENCODINGS: Record<string, string> = {
   '950': 'big5',
   '1258': 'windows-1258'
 }
+const OEM_CODE_PAGE_KEY = 'SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage'
 
 let windowsOemDecoder: TextDecoder | null | undefined
+let windowsOemPageKnown = false
+let windowsOemDecoderWithoutAddon: Promise<TextDecoder | null> | undefined
+
+function oemDecoderFor(codePage: unknown): TextDecoder | null {
+  const encoding = typeof codePage === 'string' ? OEM_CODE_PAGE_ENCODINGS[codePage] : undefined
+  return encoding ? new TextDecoder(encoding) : null
+}
 
 function readWindowsOemDecoder(): TextDecoder | null {
   if (windowsOemDecoder === undefined) {
     windowsOemDecoder = null
     try {
       const registry = loadWindowsNativeRegistry()
-      const codePage = registry.getRegistryKey(
-        registry.HK.LM,
-        'SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage'
-      )?.OEMCP?.value
-      const encoding = typeof codePage === 'string' ? OEM_CODE_PAGE_ENCODINGS[codePage] : undefined
-      windowsOemDecoder = encoding ? new TextDecoder(encoding) : null
+      const page = registry.getRegistryKey(registry.HK.LM, OEM_CODE_PAGE_KEY)?.OEMCP?.value
+      // Known once the addon answered, even for a page TextDecoder lacks (reg.exe would name the same one).
+      windowsOemPageKnown = true
+      windowsOemDecoder = oemDecoderFor(page)
     } catch {
-      // No registry addon (server slots) or no ICU support for the page: decode as UTF-8.
+      // Without the registry addon the page stays unknown; without ICU support for it, decode as UTF-8.
     }
   }
   return windowsOemDecoder
+}
+
+/** Without the registry addon (server slots, the relay), reg.exe names the page in ASCII. */
+function readWindowsOemDecoderWithoutAddon(): Promise<TextDecoder | null> {
+  windowsOemDecoderWithoutAddon ??= runProcess({
+    program: windowsSystem32Binary('reg.exe'),
+    args: ['query', `HKLM\\${OEM_CODE_PAGE_KEY}`, '/v', 'OEMCP'],
+    timeoutMs: 1_000
+  }).then(
+    ({ code, stdout }) => {
+      try {
+        return code === 0
+          ? oemDecoderFor(/^\s*OEMCP\s+REG_SZ\s+(\d+)\s*$/im.exec(stdout)?.[1])
+          : null
+      } catch {
+        return null
+      }
+    },
+    () => null
+  )
+  return windowsOemDecoderWithoutAddon
 }
 
 // Output cut mid-character by a kill or flush stays UTF-8 rather than turning its whole line into OEM text.
@@ -61,11 +90,27 @@ function decodeMixedShellOutputLines(bytes: Buffer, oemDecoder: TextDecoder): st
   return lines.join('\n')
 }
 
+function needsOemDecoder(bytes: Buffer): boolean {
+  return process.platform === 'win32' && !isUtf8BeforeCutCharacter(bytes)
+}
+
+function decodeWith(oemDecoder: TextDecoder | null, bytes: Buffer): string {
+  return oemDecoder ? decodeMixedShellOutputLines(bytes, oemDecoder) : bytes.toString('utf8')
+}
+
 export function decodeWindowsShellOutput(bytes: Buffer): string {
   // Check UTF-8 first so plain output never loads the registry addon.
-  const oemDecoder =
-    process.platform === 'win32' && !isUtf8BeforeCutCharacter(bytes)
-      ? readWindowsOemDecoder()
-      : null
-  return oemDecoder ? decodeMixedShellOutputLines(bytes, oemDecoder) : bytes.toString('utf8')
+  return decodeWith(needsOemDecoder(bytes) ? readWindowsOemDecoder() : null, bytes)
+}
+
+/** For callers that can await: where there is no registry addon (server slots, the relay), reg.exe names the page. */
+export async function decodeWindowsShellOutputAsync(bytes: Buffer): Promise<string> {
+  if (!needsOemDecoder(bytes)) {
+    return bytes.toString('utf8')
+  }
+  const oemDecoder = readWindowsOemDecoder()
+  return decodeWith(
+    oemDecoder ?? (windowsOemPageKnown ? null : await readWindowsOemDecoderWithoutAddon()),
+    bytes
+  )
 }
