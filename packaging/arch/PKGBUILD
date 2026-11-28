@@ -1,0 +1,82 @@
+# Source-of-truth recipe for Orca's official pacman repository (stablyai/orca issue #45651).
+# This is NOT an AUR submission. packaging/arch/build.sh renders it per release (pkgver and
+# checksums) and runs makepkg to produce the binary orca-ide-*.pkg.tar.zst files published on
+# GitHub Releases. It repackages the stable upstream .deb, so there is no compile step and one
+# x86_64 host can produce both architectures.
+#
+# Why each checksum array stays on one line: build.sh replaces these lines with sed.
+
+pkgname=orca-ide
+pkgver=1.4.214
+pkgrel=1
+pkgdesc='Next-gen IDE for parallel agentic development'
+arch=('x86_64' 'aarch64')
+url='https://github.com/stablyai/orca'
+license=('MIT')
+depends=(
+  'alsa-lib'
+  'at-spi2-core'
+  'gtk3'
+  'libnotify'
+  'libsecret'
+  'libxss'
+  'libxtst'
+  'mesa'
+  'nss'
+  'python'
+  'python-gobject'
+  'util-linux-libs'
+  'xdg-utils'
+  'xclip'
+  'xdotool'
+  'xorg-server-xvfb'
+)
+optdepends=('libappindicator-gtk3: tray icon support on desktops that need it')
+# Why: Electron ships prebuilt, already-stripped binaries; stripping again can break them.
+options=('!strip' '!debug')
+
+source=("LICENSE::https://raw.githubusercontent.com/stablyai/orca/main/LICENSE")
+source_x86_64=("${pkgname}-${pkgver}-x86_64.deb::${url}/releases/download/v${pkgver}/orca-ide_${pkgver}_amd64.deb")
+source_aarch64=("${pkgname}-${pkgver}-aarch64.deb::${url}/releases/download/v${pkgver}/orca-ide_${pkgver}_arm64.deb")
+noextract=("${pkgname}-${pkgver}-x86_64.deb" "${pkgname}-${pkgver}-aarch64.deb")
+
+# Real BLAKE2 sums of the v1.4.214 assets; build.sh recomputes and injects them for each release.
+b2sums=('fdce4a5f4313d37ca3f4a68dc9c31a242cd7f0fb7eae5a9764b9ca79b9316d328d2374154443338f9addc9134490c95fd1973c79c307d5f228f0f37dd6e3fa45')
+b2sums_x86_64=('63abff42c1ad42b3cbfdc308fdd67c9f07332822ce9f7e6a4b6fa3dd7cc57e604ad4fb4a3e7a8bdd4de88ee8570e3a1cfd05b370a959a2379f11dee57effd948')
+b2sums_aarch64=('f0d241c050ee427f44500e5ac98c3ff3d27163c2ad89a3245c715a0472d40aec4f35e0dcc8a74230619aa64bc680afceac930418fbe8ab5c6474ae2e7144b6ee')
+
+package() {
+  local deb="${srcdir}/${pkgname}-${pkgver}-${CARCH}.deb"
+  local data
+  data="$(bsdtar -tf "$deb" | grep -E '^data\.tar(\.[a-z0-9]+)?$' | head -n 1)"
+  if [[ -z "$data" ]]; then
+    echo "No data.tar.* member found in $deb" >&2
+    return 1
+  fi
+  bsdtar -xOf "$deb" "$data" | bsdtar -xpf - -C "$pkgdir"
+
+  # Why: the .deb's postinst normally does this; pacman packages carry modes directly.
+  local dir
+  for dir in "$pkgdir"/opt/*/; do
+    if [[ -f "${dir}chrome-sandbox" ]]; then
+      chmod 4755 "${dir}chrome-sandbox"
+    fi
+  done
+
+  # Same CLI registration as resources/linux/packaging/after-install.sh, owned by the package.
+  local shim="/opt/Orca/resources/bin/orca-ide"
+  if [[ ! -x "${pkgdir}${shim}" ]]; then
+    shim="$(cd "$pkgdir" && find opt -path '*/resources/bin/orca-ide' -type f | head -n 1)"
+    if [[ -z "$shim" ]]; then
+      echo "orca-ide CLI shim not found under /opt in $deb" >&2
+      return 1
+    fi
+    shim="/${shim}"
+  fi
+  install -dm755 "$pkgdir/usr/bin"
+  ln -sfn "$shim" "$pkgdir/usr/bin/orca-ide"
+
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # Debian changelog only; Arch packages do not ship it.
+  rm -rf "$pkgdir/usr/share/doc"
+}

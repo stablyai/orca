@@ -1,0 +1,308 @@
+name: Arch Linux Repo Publish
+
+# Build Orca's official pacman repository (#45651) from a stable release's .deb assets and publish
+# it on GitHub Releases. pacman repo DBs key entries by pkgname, so each architecture gets its own
+# repo on its own prerelease tag (arch-repo-x86_64, arch-repo-aarch64); pacman.conf selects one
+# with `Server = .../releases/download/arch-repo-$arch`. Prerelease + --latest=false keeps these
+# tags from ever becoming the app's "latest" release, which the updater and download links follow.
+# Manual dispatch only for now; wiring this into release-cut.yml is a follow-up.
+
+on:
+  pull_request:
+    paths:
+      - 'packaging/arch/**'
+      - '.github/workflows/arch-repo-publish.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag to package (e.g. v1.4.214)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    permissions:
+      contents: read
+    steps:
+      # Why: archlinux:base-devel ships without git, and actions/checkout falls back to a REST
+      # tarball without it; install git so checkout behaves like every other workflow.
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed git gnupg pacman-contrib
+
+      - name: Checkout orca
+        uses: actions/checkout@v6
+
+      - name: Syntax check
+        run: |
+          set -euo pipefail
+          bash -n packaging/arch/build.sh
+          bash -n packaging/arch/PKGBUILD
+
+      # Why: exercises the real build.sh path (render, makepkg with overridden CARCH for both
+      # arches, signing, repo-add, alias copies) without downloading ~360 MB of real .debs.
+      # Dummy .debs with the same layout are placed in ORCA_DEB_DIR so nothing is fetched, and a
+      # throwaway passphrase-less key stands in for the CI signing key.
+      - name: Smoke test with dummy packages
+        run: |
+          set -euo pipefail
+          useradd -m builder
+          smoke=/home/builder/smoke
+          mkdir -p "$smoke/debs" "$smoke/root/opt/Orca/resources/bin" "$smoke/root/usr/share/doc/orca-ide"
+          printf '#!/bin/sh\necho dummy\n' >"$smoke/root/opt/Orca/resources/bin/orca-ide"
+          chmod 755 "$smoke/root/opt/Orca/resources/bin/orca-ide"
+          : >"$smoke/root/opt/Orca/chrome-sandbox"
+          : >"$smoke/root/usr/share/doc/orca-ide/changelog"
+          cd "$smoke"
+          echo 2.0 >debian-binary
+          bsdtar -cJf data.tar.xz -C root .
+          bsdtar -cJf control.tar.xz -C root ./usr
+          for deb_arch in amd64 arm64; do
+            bsdtar --format ar -cf "debs/orca-ide_0.0.1_${deb_arch}.deb" debian-binary control.tar.xz data.tar.xz
+          done
+          cd - >/dev/null
+          chown -R builder: /home/builder
+
+          as_builder() { runuser -u builder -- env HOME=/home/builder GNUPGHOME=/home/builder/gnupg "$@"; }
+          as_builder mkdir -m 700 /home/builder/gnupg
+          as_builder gpg --batch --passphrase '' --quick-gen-key 'Orca smoke test <smoke@invalid>' ed25519 sign never
+          key=$(as_builder gpg --batch --with-colons --list-secret-keys | awk -F: '$1=="fpr"{print $10; exit}')
+
+          as_builder env ORCA_DEB_DIR="$smoke/debs" \
+            bash packaging/arch/build.sh 0.0.1 "$smoke/out-unsigned"
+          as_builder env ORCA_DEB_DIR="$smoke/debs" GPGKEY="$key" \
+            bash packaging/arch/build.sh 0.0.1 "$smoke/out"
+
+          for arch in x86_64 aarch64; do
+            repo="$smoke/out/$arch"
+            pkg="$repo/orca-ide-0.0.1-1-${arch}.pkg.tar.zst"
+            for f in "$pkg" "$pkg.sig" orca.db orca.files orca.db.sig orca.files.sig orca-arch-key.asc VERSION; do
+              [[ "$f" = /* ]] || f="$repo/$f"
+              [[ -f "$f" && ! -L "$f" ]] || { echo "::error::missing or symlinked $f" >&2; exit 1; }
+            done
+            grep -qx "arch = ${arch}" <(bsdtar -xOf "$pkg" .PKGINFO)
+            bsdtar -tvf "$pkg" | grep -q 'usr/bin/orca-ide -> /opt/Orca/resources/bin/orca-ide'
+            bsdtar -tvf "$pkg" | grep -E 'opt/Orca/chrome-sandbox$' | grep -q '^-rwsr-xr-x'
+            bsdtar -tvf "$pkg" | grep -q 'usr/share/licenses/orca-ide/LICENSE'
+            # Why: a negated pipeline never trips set -e, so fail explicitly.
+            if bsdtar -tf "$pkg" | grep -q 'usr/share/doc'; then
+              echo "::error::$pkg still ships usr/share/doc" >&2
+              exit 1
+            fi
+            bsdtar -tf "$repo/orca.db" | grep -q "^orca-ide-0.0.1-1/desc$"
+            as_builder gpg --batch --verify "$pkg.sig" "$pkg"
+            as_builder gpg --batch --verify "$repo/orca.db.sig" "$repo/orca.db"
+            [[ ! -e "$smoke/out-unsigned/$arch/orca.db.sig" && -f "$smoke/out-unsigned/$arch/orca.db" ]]
+          done
+          echo "Smoke test passed"
+
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    # Why: each publish prunes assets its own DB does not reference, so two parallel publishes
+    # could delete each other's packages. Serialize publishes only; PR validation is not queued.
+    concurrency:
+      group: arch-repo-publish
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Resolve tag and version
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # Why: only stable desktop tags. RCs would pull every Arch user onto prereleases, and
+          # mobile-v* tags have no .deb assets.
+          if [[ ! "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unsupported tag shape (need stable vX.Y.Z): $INPUT_TAG" >&2
+            exit 1
+          fi
+          echo "tag=$INPUT_TAG" >>"$GITHUB_OUTPUT"
+          echo "version=${INPUT_TAG#v}" >>"$GITHUB_OUTPUT"
+
+      - name: Check signing configuration
+        id: signing
+        env:
+          ARCH_GPG_PRIVATE_KEY: ${{ secrets.ARCH_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ARCH_GPG_PRIVATE_KEY" ]]; then
+            echo "Arch repo signing not configured; skipping"
+            echo "configured=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Install tools
+        if: steps.signing.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed git github-cli gnupg pacman-contrib
+
+      - name: Checkout orca
+        if: steps.signing.outputs.configured == 'true'
+        uses: actions/checkout@v6
+
+      # makepkg refuses to run as root, so the build runs as an unprivileged user that owns a
+      # temporary GNUPGHOME. The key must be a dedicated, passphrase-less CI signing key.
+      - name: Import signing key
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          ARCH_GPG_PRIVATE_KEY: ${{ secrets.ARCH_GPG_PRIVATE_KEY }}
+          ARCH_GPG_KEY_ID: ${{ secrets.ARCH_GPG_KEY_ID }}
+        run: |
+          set -euo pipefail
+          useradd -m builder
+          gnupghome=/home/builder/gnupg
+          install -d -m 700 -o builder -g builder "$gnupghome"
+          printf '%s\n' "$ARCH_GPG_PRIVATE_KEY" \
+            | runuser -u builder -- env GNUPGHOME="$gnupghome" gpg --batch --import
+          gpg_builder() { runuser -u builder -- env GNUPGHOME="$gnupghome" gpg --batch "$@"; }
+          # ARCH_GPG_KEY_ID is only an optional selector (it may be a short ID); the full
+          # fingerprint is always resolved from GPG and used for signing and the release notes.
+          key="$ARCH_GPG_KEY_ID"
+          if [[ -z "$key" ]]; then
+            key=$(gpg_builder --with-colons --list-secret-keys | awk -F: '$1=="fpr"{print $10; exit}')
+          fi
+          if [[ -z "$key" ]]; then
+            echo "::error::No secret key found after importing ARCH_GPG_PRIVATE_KEY" >&2
+            exit 1
+          fi
+          # Why: take the fpr record that follows the primary (pub) record, and require exactly
+          # one matching primary key so an ambiguous selector cannot pick the wrong key.
+          listing=$(gpg_builder --with-colons --fingerprint "$key") || {
+            echo "::error::Could not resolve a fingerprint for the selected signing key" >&2
+            exit 1
+          }
+          pubs=$(awk -F: '$1=="pub"{n++} END{print n+0}' <<<"$listing")
+          fpr=$(awk -F: '$1=="pub"{want=1; next} want && $1=="fpr"{print $10; exit}' <<<"$listing")
+          if [[ "$pubs" != 1 || ! "$fpr" =~ ^[0-9A-Fa-f]{40,64}$ ]]; then
+            echo "::error::Could not resolve a unique full fingerprint (40-64 hex) for the signing key" >&2
+            exit 1
+          fi
+          if ! gpg_builder --list-secret-keys "$fpr" >/dev/null 2>&1; then
+            echo "::error::No secret key available for fingerprint $fpr" >&2
+            exit 1
+          fi
+          echo "Signing key fingerprint: $fpr"
+          echo "GNUPGHOME_BUILDER=$gnupghome" >>"$GITHUB_ENV"
+          echo "FINGERPRINT_BUILDER=$fpr" >>"$GITHUB_ENV"
+
+      - name: Build signed repo
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Public release assets; curl fallback in build.sh needs no token, so none is passed.
+          runuser -u builder -- env HOME=/home/builder GNUPGHOME="$GNUPGHOME_BUILDER" \
+            GPGKEY="$FINGERPRINT_BUILDER" ORCA_REPO="$REPO" \
+            bash packaging/arch/build.sh "${VERSION}" /home/builder/out
+          echo "OUT_DIR=/home/builder/out" >>"$GITHUB_ENV"
+
+      - name: Publish to arch-repo releases
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          fpr="$FINGERPRINT_BUILDER"
+          if [[ ! "$fpr" =~ ^[0-9A-Fa-f]{40,64}$ ]]; then
+            echo "::error::FINGERPRINT_BUILDER is not a full fingerprint: '$fpr'" >&2
+            exit 1
+          fi
+          db_assets=(orca.db orca.db.sig orca.files orca.files.sig)
+          backup_root=$(mktemp -d)
+          trap 'rm -rf "$backup_root"' EXIT
+          for arch in x86_64 aarch64; do
+            release="arch-repo-${arch}"
+            dir="$OUT_DIR/$arch"
+            notes="Official pacman repository for Orca on ${arch}, currently ${TAG}. Not an app release.
+          Add to /etc/pacman.conf:
+
+              [orca]
+              SigLevel = PackageRequired DatabaseRequired TrustedOnly
+              Server = https://github.com/${REPO}/releases/download/arch-repo-\$arch
+
+          Signing key: orca-arch-key.asc (fingerprint ${fpr}). See https://github.com/${REPO}/tree/main/packaging/arch."
+            if ! gh release view "$release" --repo "$REPO" >/dev/null 2>&1; then
+              gh release create "$release" --repo "$REPO" --prerelease --latest=false \
+                --title "Arch Linux repository (${arch})" --notes "$notes"
+            else
+              gh release edit "$release" --repo "$REPO" --prerelease --latest=false --notes "$notes"
+            fi
+
+            # Why: packages go first and the DB last, so the published DB never references a
+            # package that is not downloadable yet; the old DB stays valid while packages upload.
+            # Stale assets are pruned only after the new DB is fully published. The signing key
+            # asset is always kept (and refreshed by the upload).
+            gh release upload "$release" --repo "$REPO" --clobber "$dir"/*.pkg.tar.zst "$dir"/*.pkg.tar.zst.sig
+
+            # Why: --clobber is not atomic across files. Back up the published DB/sig set into a
+            # separate dir (never $dir, which holds the fresh build) so a partial upload can be
+            # rolled back instead of leaving a DB with a missing or stale signature.
+            backup="$backup_root/$arch"
+            mkdir -p "$backup"
+            existing=$(gh release view "$release" --repo "$REPO" --json assets -q '.assets[].name')
+            had=()
+            for a in "${db_assets[@]}"; do
+              if grep -qxF "$a" <<<"$existing"; then had+=("$a"); fi
+            done
+            if (( ${#had[@]} )); then
+              patterns=()
+              for a in "${had[@]}"; do patterns+=(--pattern "$a"); done
+              gh release download "$release" --repo "$REPO" --dir "$backup" "${patterns[@]}"
+              for a in "${had[@]}"; do
+                [[ -f "$backup/$a" ]] || { echo "::error::Backup of $a from $release failed" >&2; exit 1; }
+              done
+            fi
+
+            set +e
+            gh release upload "$release" --repo "$REPO" --clobber \
+              "$dir/orca.db" "$dir/orca.db.sig" "$dir/orca.files" "$dir/orca.files.sig" \
+              "$dir/orca-arch-key.asc" "$dir/VERSION"
+            upload_status=$?
+            set -e
+            if (( upload_status != 0 )); then
+              echo "::error::DB/signature upload to $release failed; restoring previous DB set" >&2
+              restore_ok=1
+              if (( ${#had[@]} )); then
+                restore=()
+                for a in "${had[@]}"; do restore+=("$backup/$a"); done
+                gh release upload "$release" --repo "$REPO" --clobber "${restore[@]}" || restore_ok=0
+              fi
+              now=$(gh release view "$release" --repo "$REPO" --json assets -q '.assets[].name') || { now=""; restore_ok=0; }
+              for a in "${db_assets[@]}"; do
+                if [[ " ${had[*]} " != *" $a "* ]] && grep -qxF "$a" <<<"$now"; then
+                  echo "Deleting newly added $a from $release"
+                  gh release delete-asset "$release" "$a" --repo "$REPO" --yes || restore_ok=0
+                fi
+              done
+              if (( ! restore_ok )); then
+                echo "::error::Restoring the previous DB set on $release failed; check the release manually" >&2
+              fi
+              exit 1
+            fi
+
+            while IFS= read -r asset; do
+              [[ -n "$asset" ]] || continue
+              [[ "$asset" == "orca-arch-key.asc" ]] && continue
+              if [[ ! -e "$dir/$asset" ]] && [[ "$asset" =~ (\.pkg\.tar\.zst|\.sig|^orca\.(db|files).*)$ ]]; then
+                echo "Deleting stale asset $asset from $release"
+                gh release delete-asset "$release" "$asset" --repo "$REPO" --yes
+              fi
+            done < <(gh release view "$release" --repo "$REPO" --json assets -q '.assets[].name')
+          done
