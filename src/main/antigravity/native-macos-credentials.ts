@@ -67,7 +67,10 @@ export class AntigravityKeychainAccessError extends Error {}
 const unanswered = () =>
   new AntigravityKeychainAccessError("The keychain didn't answer. Unlock it and try again.")
 
-function readFailure(result: Awaited<ReturnType<typeof runProcess>>): Error {
+/** A refused or unanswered keychain call, or null when the failure was something else. */
+function accessFailure(
+  result: Awaited<ReturnType<typeof runProcess>>
+): AntigravityKeychainAccessError | null {
   if (result.timedOut || result.code === NO_DIALOG) {
     return unanswered()
   }
@@ -76,7 +79,13 @@ function readFailure(result: Awaited<ReturnType<typeof runProcess>>): Error {
       "Orca was denied access to agy's login in the keychain. Allow it when asked to show or switch accounts."
     )
   }
-  return new Error('The Antigravity macOS credential store could not be read.')
+  return null
+}
+
+function readFailure(result: Awaited<ReturnType<typeof runProcess>>): Error {
+  return (
+    accessFailure(result) ?? new Error('The Antigravity macOS credential store could not be read.')
+  )
 }
 
 /** agy's keychain item as its attributes describe it, read without the secret so macOS asks for no
@@ -183,11 +192,11 @@ export async function writeAntigravityMacOSCredential(
     throw new Error('Antigravity credentials exceed the macOS credential command limit.')
   }
   const result = await runSecurity(['-i'], secretWaitMs(), input)
-  if (result.timedOut) {
-    throw unanswered()
-  }
   if (result.code !== 0 || result.timedOut || result.signal || result.outputTruncated) {
-    throw new Error('The Antigravity macOS credential store could not be updated.')
+    throw (
+      accessFailure(result) ??
+      new Error('The Antigravity macOS credential store could not be updated.')
+    )
   }
   const actual = await readAntigravityMacOSCredential(target)
   if (actual?.contents !== contents) {

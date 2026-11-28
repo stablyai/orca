@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { readAntigravityMacOSCredentialRevision } from './native-macos-credentials'
+import {
+  AntigravityKeychainAccessError,
+  readAntigravityMacOSCredentialRevision,
+  writeAntigravityMacOSCredential
+} from './native-macos-credentials'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 
@@ -42,4 +46,17 @@ it('fingerprints agy’s keychain item from its attributes alone, changing when 
     expect(spec.args).not.toContain('-w')
     expect(spec.args).not.toContain('-g')
   }
+})
+
+it('reports a refused or unanswered keychain write as keychain access, and other failures as not', async () => {
+  const login = JSON.stringify({ access_token: 'a', refresh_token: 'r', token_type: 'Bearer' })
+  for (const code of [36, 51, 128]) {
+    answer({ code })
+    await expect(writeAntigravityMacOSCredential(login)).rejects.toBeInstanceOf(
+      AntigravityKeychainAccessError
+    )
+  }
+  answer({ code: 1 })
+  const other = await writeAntigravityMacOSCredential(login).catch((error: unknown) => error)
+  expect(other).not.toBeInstanceOf(AntigravityKeychainAccessError)
 })
