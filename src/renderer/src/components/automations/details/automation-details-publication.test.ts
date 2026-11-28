@@ -76,6 +76,51 @@ function large(id: string, chars: number): AutomationRun {
   }
 }
 
+it('preserves an admitted selected run when only a definition exceeds capacity', async () => {
+  const h = setup('old')
+  h.pages[0].resolve(page(['10'], null))
+  await flush()
+  h.exact[0].resolve({ kind: 'run', run: run('old') })
+  await flush()
+  const selected = h.controller.getSnapshot().selected
+  h.controller.replaceDefinition(makeAutomation({ id: 'a', prompt: 'x'.repeat(13 * 1024 * 1024) }))
+  expect(h.controller.getSnapshot().definition.error?.kind).toBe('failed')
+  expect(h.controller.getSnapshot().selected).toBe(selected)
+  expect(selected?.status).toBe('ready')
+})
+
+it.each(['success', 'error'] as const)(
+  'detaches an invalidated older flight without letting its %s release the replacement flight',
+  async (outcome) => {
+    const h = setup()
+    h.pages[0].resolve(page(['10'], 'A'))
+    await flush()
+    h.controller.loadMore()
+    h.controller.reload()
+    h.pages[2].resolve(page(['11'], 'B'))
+    await flush()
+    h.controller.loadMore()
+    expect(h.listRunsPage.mock.calls.at(-1)?.[2].cursor).toBe('B')
+    if (outcome === 'success') {
+      h.pages[1].resolve(page(['9'], 'obsolete'))
+    } else {
+      h.pages[1].reject(new Error('obsolete'))
+    }
+    await flush()
+    h.controller.loadMore()
+    expect(h.listRunsPage.mock.calls.map((call) => call[2].cursor)).toEqual([
+      undefined,
+      'A',
+      undefined,
+      'B'
+    ])
+    h.pages[3].resolve(page(['8'], null))
+    await flush()
+    expect(h.controller.getSnapshot().runs.value.map((row) => row.id)).toEqual(['11', '8'])
+    expect(h.controller.getSnapshot().runs.olderError).toBeNull()
+  }
+)
+
 it('stages coverage and pagination with admission across two controllers sharing the real byte budget', async () => {
   const resident = setup()
   resident.pages[0].resolve({ runs: [large('resident', 10 * 1024 * 1024)], nextCursor: null })
@@ -187,6 +232,32 @@ it('keeps an admitted exact terminal and link when a held older page supplies it
   expect(snapshot.selected?.run?.chatSessionId).toBe('terminal-chat')
   expect(snapshot.runs.coverageIds).toEqual(['10', 'old', '9'])
   expect(snapshot.runs.nextCursor).toBe('after-old')
+})
+
+it('fences the superseded exact answer but admits its follow-up started after the newer page', async () => {
+  const h = setup('old')
+  h.pages[0].resolve(page(['10'], null))
+  await flush()
+  h.controller.retrySelected()
+  h.controller.reload()
+  h.pages[1].resolve({
+    runs: [{ ...run('old', 1, 'dispatched'), chatSessionId: 'new-link' }],
+    nextCursor: null
+  })
+  await flush()
+  h.exact[0].resolve({ kind: 'run', run: run('old') })
+  await flush()
+  expect(h.controller.getSnapshot().selected?.run).toMatchObject({
+    status: 'dispatched',
+    chatSessionId: 'new-link'
+  })
+  expect(h.exact).toHaveLength(2)
+  h.exact[1].resolve({ kind: 'run', run: { ...run('old'), chatSessionId: 'new-link' } })
+  await flush()
+  expect(h.controller.getSnapshot().selected?.run).toMatchObject({
+    status: 'completed',
+    chatSessionId: 'new-link'
+  })
 })
 
 it('keeps a refused page remedy through an independent exact update until that acquisition is admitted', async () => {

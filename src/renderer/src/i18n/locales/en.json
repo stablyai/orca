@@ -19453,9 +19453,7 @@
           "active": "Active",
           "runNowStarting": "Starting…",
           "moreActions": "More actions for {{name}}",
-          "moreNotices": "+{{count}} more",
-          "starting": "Starting…",
-          "deleteEllipsis": "Delete…"
+          "moreNotices": "+{{count}} more"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -19884,7 +19882,8 @@
           "occurrencesWithLatestCount_one": "{{count}} time, most recently {{date}}"
         },
         "capabilityProbe": {
-          "createIdempotencyUpdateRequired": "Moving automations to this host requires a newer Orca server. Update the HUB and try again."
+          "createIdempotencyUpdateRequired": "Moving automations to this host requires a newer Orca server. Update the HUB and try again.",
+          "definitionUpdateRequired": "Update Orca on this computer to read automation details."
         },
         "editDraft": {
           "unsupportedSchedule": "This automation has an unsupported saved schedule. Pick a supported schedule before saving changes."

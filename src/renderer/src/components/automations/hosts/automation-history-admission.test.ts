@@ -54,6 +54,7 @@ it('requires an update for both pre-flag bounded hosts and truly unbounded hosts
 it('binds the admitted history read to the probed receiver even when the pairing revision stays the same', async () => {
   let receiver = 'capable-runtime'
   let historyAcquired = false
+  let expectedRuntimeId: string | undefined
   vi.stubGlobal('window', {
     api: {
       runtimeEnvironments: {
@@ -66,6 +67,7 @@ it('binds the admitted history read to the probed receiver even when the pairing
               result: { ...response.result, capabilities: ['automation.bounded-history.v1'] }
             }
           }
+          expectedRuntimeId = request.expectedEnvironmentRuntimeId
           if (request.expectedEnvironmentRuntimeId !== receiver) {
             throw new Error('Receiver changed before send')
           }
@@ -79,6 +81,7 @@ it('binds the admitted history read to the probed receiver even when the pairing
     'Receiver changed before send'
   )
   expect(historyAcquired).toBe(false)
+  expect(expectedRuntimeId).toBe('capable-runtime')
 })
 
 it.each(['old', 'replacement', 'same'] as const)(

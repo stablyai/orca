@@ -85,11 +85,13 @@ export function admitAutomationDetailSnapshot(
             }
           : next.runs,
       selected:
-        previous.selected?.runId === next.selected?.runId && previous.selected?.run
-          ? { ...previous.selected, status: 'error', error }
-          : next.selected
-            ? { ...next.selected, status: 'error', run: null, error }
-            : null
+        next.selected === previous.selected
+          ? previous.selected
+          : previous.selected?.runId === next.selected?.runId && previous.selected?.run
+            ? { ...previous.selected, status: 'error', error }
+            : next.selected
+              ? { ...next.selected, status: 'error', run: null, error }
+              : null
     }
     retainAutomationPayload(key, payload(next))
   }

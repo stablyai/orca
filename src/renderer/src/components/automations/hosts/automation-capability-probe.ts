@@ -179,7 +179,10 @@ export function assertAutomationDefinitionSupported(
   return assertReceiverCapability(
     authority,
     AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE
+    translate(
+      'auto.components.automations.capabilityProbe.definitionUpdateRequired',
+      'Update Orca on this computer to read automation details.'
+    )
   )
 }
 

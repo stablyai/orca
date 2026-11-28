@@ -33,8 +33,9 @@ export abstract class AutomationDetailsSelection {
     protected readonly deps: AutomationDetailsDeps,
     runId: string | null
   ) {
-    this.exactRuns = new AutomationExactRunReader((owner, runId) =>
-      deps.readRun(owner, automationId, runId)
+    this.exactRuns = new AutomationExactRunReader(
+      (owner, runId) => deps.readRun(owner, automationId, runId),
+      () => this.selectedRead
     )
     this.snapshot = {
       owner,
@@ -126,11 +127,9 @@ export abstract class AutomationDetailsSelection {
     if (!selected.run) {
       this.update({ selected: { ...selected, status: 'loading', run: null } })
     }
-    const read = this.selectedRead
-    void this.exactRuns.request(this.snapshot.owner, selected.runId, this.exactVersion).then(
-      (result) => this.settleSelected(read, selected.runId, result),
-      (error: unknown) => this.settleSelected(read, selected.runId, { kind: 'error', error })
-    )
+    void this.exactRuns
+      .request(this.snapshot.owner, selected.runId, this.exactVersion)
+      .then(({ revision, result }) => this.settleSelected(revision, selected.runId, result))
   }
 
   private settleSelected(read: number, runId: string, result: AutomationRunRead): void {

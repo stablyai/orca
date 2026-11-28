@@ -4,7 +4,8 @@ import React, { useId } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { translate } from '@/i18n/i18n'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { formatAutomationDateTime, getAutomationRunStatusLabel } from '../automation-page-parts'
 import { getAutomationRunContent } from './automation-run-content'
@@ -28,8 +29,8 @@ const DOT_CLASS = {
 } as const
 
 /** The run's status in a line: its status, then why it failed or was skipped. */
-export function automationRunSummary(run: AutomationRun): string {
-  const status = getAutomationRunStatusLabel(run.status)
+export function automationRunSummary(run: AutomationRun, t: Translate = translate): string {
+  const status = getAutomationRunStatusLabel(run.status, t)
   const error = run.error ? automationRunErrorText(run) : null
   return error ? `${status}: ${error}` : status
 }
@@ -57,7 +58,7 @@ function RunRow({
   const intlLocale = useIntlLocale()
   const bodyId = useId()
   const tone = runTone(run)
-  const summary = automationRunSummary(run)
+  const summary = automationRunSummary(run, t)
   const expandable = expanded !== undefined
   return (
     <li className={cn('min-w-0 rounded-md', expanded && 'bg-accent/60')}>
@@ -97,7 +98,7 @@ function RunRow({
               !expanded && 'line-clamp-2'
             )}
           >
-            <span className="sr-only">{getAutomationRunStatusLabel(run.status)}: </span>
+            <span className="sr-only">{getAutomationRunStatusLabel(run.status, t)}: </span>
             {summary}
           </span>
         </span>

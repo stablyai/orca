@@ -17,6 +17,82 @@ vi.mock('@/app-shell/platform/paired-web-client-host', () => ({
 }))
 afterEach(cleanup)
 
+it('reacquires a selected row under a new captured owner without reselection or a token change', async () => {
+  const owner = (revision: number) => ({
+    authority: { kind: 'runtime' as const, environmentId: 'e', pairingRevision: revision },
+    selector: { kind: 'self' as const }
+  })
+  const environment = automationOwnerEnvironment('e', 1)
+  useAppStore.setState({ runtimeEnvironments: [environment] })
+  replaceRuntimeEnvironmentRevisions([environment], { retired: [], sameHost: [] })
+  let oldReply!: (value: unknown) => void
+  const old = new Promise<unknown>((resolve) => {
+    oldReply = resolve
+  })
+  const acquired: number[] = []
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    writable: true,
+    value: {
+      runtime: {},
+      runtimeEnvironments: {
+        call: async (request: { method: string; expectedEnvironmentPairingRevision?: number }) => {
+          if (request.method === 'status.get') {
+            return createCompatibleRuntimeStatusResponse('origin')
+          }
+          const revision = request.expectedEnvironmentPairingRevision ?? -1
+          acquired.push(revision)
+          return {
+            ok: true,
+            result:
+              revision === 1 ? await old : { runs: [makeRun({ id: 'fresh' })], nextCursor: null }
+          }
+        }
+      }
+    }
+  })
+  const row = {
+    key: 'remote-a',
+    automation: makeAutomation({ id: 'a' }),
+    hostLabel: 'Remote',
+    usageSummary: null
+  }
+  const outcomes: SelectedAutomationRunHistoryOutcome[] = []
+  const input: SelectedAutomationRunHistoryInput = {
+    selected: row,
+    context: {
+      authority: owner(1).authority,
+      capturedOwners: new Map([[row.key, { owner: owner(1), selector: owner(1).selector }]])
+    },
+    navigation: null,
+    reloadToken: 0,
+    acquisitionToken: 0,
+    legacyTarget: () => null,
+    onSettled: (outcome) => outcomes.push(outcome)
+  }
+  const view = renderHook((props) => useSelectedAutomationRunHistory(props), {
+    initialProps: input
+  })
+  await waitFor(() => expect(acquired).toEqual([1]))
+  const next = automationOwnerEnvironment('e', 2)
+  await act(async () => {
+    useAppStore.setState({ runtimeEnvironments: [next] })
+    replaceRuntimeEnvironmentRevisions([next], { retired: ['e'], sameHost: [] })
+  })
+  view.rerender({
+    ...input,
+    context: {
+      authority: owner(2).authority,
+      capturedOwners: new Map([[row.key, { owner: owner(2), selector: owner(2).selector }]])
+    },
+    navigation: { automationId: 'a', runId: 'fresh', hostId: 'runtime:e', owner: owner(2) }
+  })
+  await waitFor(() => expect(outcomes.at(-1)?.runs[0]?.id).toBe('fresh'))
+  await act(async () => oldReply({ runs: [makeRun({ id: 'obsolete' })], nextCursor: null }))
+  expect(acquired).toEqual([1, 2])
+  expect(outcomes.at(-1)?.runs[0]?.id).toBe('fresh')
+})
+
 it('does not restart the selected twin for a checking handoff and ignores its late history after admitted selection', async () => {
   Object.defineProperty(window, 'api', {
     configurable: true,

@@ -98,6 +98,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
         )
         if (admitted && this.snapshot.runs.nextCursor !== previous.nextCursor) {
           this.moreRead += 1
+          this.moreFlight = false
         }
         if (admitted) {
           this.settleSelectedFromRuns()
@@ -166,6 +167,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
 
   protected releaseRuns(): void {
     this.moreRead += 1
+    this.moreFlight = false
     this.exactPublications.clear()
     this.exactVersion += 1
     this.runWaiters.forEach((resolve) => resolve([]))
@@ -197,7 +199,9 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
       })
       .then(
         (page) => {
-          this.moreFlight = false
+          if (read === this.moreRead) {
+            this.moreFlight = false
+          }
           if (this.disposed || read !== this.moreRead || ownerEpoch !== this.ownerEpoch) {
             return
           }
@@ -234,7 +238,9 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
           }
         },
         (error: unknown) => {
-          this.moreFlight = false
+          if (read === this.moreRead) {
+            this.moreFlight = false
+          }
           if (this.disposed || read !== this.moreRead || ownerEpoch !== this.ownerEpoch) {
             return
           }

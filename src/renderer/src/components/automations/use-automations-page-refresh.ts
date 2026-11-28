@@ -49,10 +49,37 @@ export function useAutomationsPageRefresh({
   list,
   destination
 }: {
-  store: AutomationsPageStoreState
-  local: AutomationsPageLocalState
-  list: AutomationsPageListState
-  destination: AutomationsPageDestinationState
+  store: Pick<
+    AutomationsPageStoreState,
+    | 'fetchAllWorktrees'
+    | 'startupWorktreeRefreshCompleted'
+    | 'pendingAutomationRunNavigation'
+    | 'runtimeEnvironments'
+    | 'selectedId'
+  >
+  local: Pick<
+    AutomationsPageLocalState,
+    | 'setIsLoading'
+    | 'setAutomations'
+    | 'setAutomationHostTargetKey'
+    | 'setFailedAuthorityKeys'
+    | 'setPageView'
+    | 'isLoading'
+    | 'automationHostTargetKey'
+    | 'setRelativeNow'
+    | 'runHistoryReloadToken'
+    | 'selectedRowKey'
+    | 'selectedAutomationRuns'
+    | 'runHistoryAcquisitionToken'
+    | 'setSelectedAutomationRuns'
+  >
+  list: Pick<AutomationsPageListState, 'selectedRow'> & {
+    scopedExternal: Pick<AutomationsPageListState['scopedExternal'], 'reload'>
+  }
+  destination: Pick<
+    AutomationsPageDestinationState,
+    'automationHostTargetFor' | 'automationDispatchContext' | 'getDefaultTarget'
+  >
 }) {
   const {
     fetchAllWorktrees,
@@ -75,6 +102,7 @@ export function useAutomationsPageRefresh({
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
   const reloadExternalManagers = scopedExternal.reload
+  const refreshSequence = useRef(0)
   // Only listings the pending link itself started count, so a failed focus refresh never drops it.
   const [pendingListingFailures, setPendingListingFailures] = useState<PendingListingFailures>({
     navigation: null,
@@ -86,6 +114,7 @@ export function useAutomationsPageRefresh({
       awaitExternalManagers?: boolean
       forPendingNavigation?: boolean
     }): Promise<void> => {
+      const sequence = ++refreshSequence.current
       const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
       if (pendingNavigation && !admitAutomationNavigation(pendingNavigation)) {
         setIsLoading(false)
@@ -105,9 +134,10 @@ export function useAutomationsPageRefresh({
       try {
         const nextAutomations = await listAutomationsForTarget(target)
         if (
-          pendingNavigation?.owner &&
-          (useAppStore.getState().pendingAutomationRunNavigation !== pendingNavigation ||
-            !admitAutomationNavigation(pendingNavigation))
+          sequence !== refreshSequence.current ||
+          (pendingNavigation?.owner &&
+            (useAppStore.getState().pendingAutomationRunNavigation !== pendingNavigation ||
+              !admitAutomationNavigation(pendingNavigation)))
         ) {
           return
         }
@@ -123,6 +153,9 @@ export function useAutomationsPageRefresh({
           return next
         })
       } catch {
+        if (sequence !== refreshSequence.current) {
+          return
+        }
         setFailedAuthorityKeys((current) => new Set(current).add(authorityKey))
         if (
           options?.forPendingNavigation &&

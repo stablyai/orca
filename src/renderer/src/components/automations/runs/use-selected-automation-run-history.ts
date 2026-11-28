@@ -103,12 +103,17 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     token: number | undefined
   } | null>(null)
   const selected = input.selected
+  const captured = selected
+    ? capturedAutomationOwner(input.context.capturedOwners, selected.key)
+    : null
   const previous = acquired.current
   let request = previous
   if (
     selected &&
     (!previous ||
       previous.selected.key !== selected.key ||
+      (captured &&
+        capturedAutomationOwnerKey(previous.captured) !== capturedAutomationOwnerKey(captured)) ||
       previous.token !== input.acquisitionToken)
   ) {
     const captured = capturedAutomationOwner(input.context.capturedOwners, selected.key)
