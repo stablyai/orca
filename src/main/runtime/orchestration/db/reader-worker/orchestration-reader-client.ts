@@ -42,9 +42,8 @@ const IN_PLACE: {
 } = {
   connectorWorkerCandidates: (connection, args) =>
     readConnectorWorkerCandidates(connection, args.sessionIds, args.now),
-  botGroupTurnSource: async (connection, args) => {
-    const { readBotGroupTurnSource } = await import('./bot-group-turn-source')
-    return readBotGroupTurnSource(connection.db, args)
+  botGroupTurnSource: () => {
+    throw new Error('Group turn detail reads require a durable orchestration database.')
   }
 }
 

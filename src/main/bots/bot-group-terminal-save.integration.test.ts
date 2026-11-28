@@ -12,13 +12,13 @@ import { BotGroupStore } from './bot-group-store'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import type { BotGroupTurn } from '../../shared/bots/bot-group'
 
-const live = vi.hoisted(() => ({
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test setup assigns production-shaped values before each case.
-  groups: null as BotGroupRuntime | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test setup assigns the rig host before each case.
-  host: null as QueuedMessageTestRig['host'] | null,
-  notices: [] as unknown[]
-}))
+const live = vi.hoisted(
+  (): {
+    groups: BotGroupRuntime | null
+    host: QueuedMessageTestRig['host'] | null
+    notices: unknown[]
+  } => ({ groups: null, host: null, notices: [] })
+)
 
 vi.mock('./bot-chat-session', () => ({
   requireStructuredHost: async () => live.host
@@ -57,8 +57,8 @@ beforeEach(async () => {
     members: [{ botId: 'bot-1', sessionId }],
     replyMode: { kind: 'mentions' }
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The callback reads only the store in this fixture.
-  live.groups = { store } as BotGroupRuntime
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture uses only the store member of this partial runtime.
+  live.groups = { store } as unknown as BotGroupRuntime
   live.host = rig.host
   live.notices = []
 })

@@ -49,7 +49,7 @@ it('recovers the page with zero repeated reply bodies and one changed body at bo
           turns
         })
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- Only store-backed posts are seeded.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only store-backed posts are seeded.
       const runtime = { store, mailTurnChecks: new Map() } as unknown as BotGroupRuntime
       const load = (keys?: string[]) => readBotGroup(runtime, group.id, undefined, undefined, keys)
       const initial = load([])

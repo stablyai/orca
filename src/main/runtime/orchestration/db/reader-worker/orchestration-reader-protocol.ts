@@ -1,9 +1,20 @@
 // Electron-free: shared by the orchestration reader thread and its client.
 import type { ConnectorWorkerCandidates } from '../connector-workers/connector-worker-candidates'
-import type {
-  BotGroupTurnSource,
-  BotGroupTurnSourceInput
-} from '../../../../bots/bot-group-turn-source'
+import type { BotGroupTurnDetailPage } from '../../../../../shared/bots/use-bot-group-turn-details'
+
+export type BotGroupTurnSourceInput = {
+  groupId: string
+  threadId?: string
+  operationId: string
+  messageId: string
+  version: number
+  before?: number
+}
+
+export type BotGroupTurnSource =
+  | { kind: 'journal'; sessionId: string; turnItemId?: string }
+  | { kind: 'frozen'; page: BotGroupTurnDetailPage }
+  | null
 
 /** Each read the thread runs, by name, with its arguments and answer. */
 export type OrchestrationReads = {
