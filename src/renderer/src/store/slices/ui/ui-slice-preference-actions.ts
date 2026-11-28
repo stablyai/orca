@@ -43,6 +43,7 @@ import {
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 import { createUiBotPreferenceActions } from './ui-slice-bot-preference-actions'
 import { toggleCollapsedGroupSet } from './collapsed-group-toggle'
+import { clearGroupByModeCollapsedGroups } from '../../../../../shared/sidebar-list/sections/group-keys'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -52,10 +53,18 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setSidebarBody: (body) => set({ sidebarBody: body }),
 
     groupBy: 'repo',
-    // Why: group keys are mode-specific, so clear collapsed state on mode switch — stale keys are meaningless and accumulate.
+    // Why: drop only stale mode-specific group keys; keep orthogonal folds (Bots, Projects, hosts, pinned, lineage).
     setGroupBy: (g) => {
-      window.api.ui.set({ groupBy: g, collapsedGroups: [] }).catch(console.error)
-      set({ groupBy: g, collapsedGroups: new Set<string>() })
+      const { groupBy, collapsedGroups } = get()
+      if (groupBy === g) {
+        return
+      }
+      const next = clearGroupByModeCollapsedGroups(collapsedGroups)
+      const changed = next !== collapsedGroups
+      window.api.ui
+        .set(changed ? { groupBy: g, collapsedGroups: [...next] } : { groupBy: g })
+        .catch(console.error)
+      set(changed ? { groupBy: g, collapsedGroups: next } : { groupBy: g })
     },
 
     sortBy: 'recent',
