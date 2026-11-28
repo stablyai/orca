@@ -84,14 +84,10 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         return
       }
       const actionId = page === 'automations' ? 'view.automations' : 'view.activity'
-      const toggle = createPageToggleHandlers(
-        store.activeView,
-        useAppStore.getState,
-        (_id, run) => {
-          run()
-          return true
-        }
-      ).find(([id]) => id === actionId)
+      const toggle = createPageToggleHandlers(store.activeView, useAppStore.getState, (id, run) => {
+        runBuiltInOrReplacement(id, run)
+        return true
+      }).find(([id]) => id === actionId)
       toggle?.[1]()
     })
   )
