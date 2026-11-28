@@ -26,11 +26,11 @@ export type StructuredAgentSessionIdleDeath = {
   reason: string | null
 }
 
-/** A person closed the chat while its provider ran; `closedBy` names who and where, when known. */
+/** A person closed the chat while its provider ran; `closedBy` names who and where. */
 export type StructuredAgentSessionPersonClose = {
   sessionId: string
   fence: number
-  closedBy: string | null
+  closedBy: string
 }
 
 type Death = {

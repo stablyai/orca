@@ -144,7 +144,7 @@ it('never resends a kept prompt whose chat the person closed after recovery sent
   const chat = await quitBeforeTheAgentGotIt()
   chat.holdNextStart()
   await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
-  await chat.host.close(SESSION, 'user-close')
+  await chat.host.close(SESSION, { closedBy: 'a person in the desktop app' })
   await restartAgain(chat)
   await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
   expect(await sendsOf(chat)).toHaveLength(1)

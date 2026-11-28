@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -34,6 +35,14 @@ import {
 } from './chat-worker-provider-death'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from '../../../rpc/methods/structured-sessions/conversation/structured-agent-session-close-method'
 import type { RpcContext } from '../../../rpc/core'
+import { closeMobileStructuredSessionPresentation } from '../../../session-tabs/chat/structured-session-tab-presentation'
+import {
+  noteStructuredAgentSessionClose,
+  refusingStructuredAgentSessionCreatesClosedFirst,
+  resetStructuredAgentSessionClosesBeforeCreateForTests
+} from '../../../rpc/methods/structured-sessions/creation/structured-agent-session-close-before-create'
+import { releaseStoppedStructuredWorker } from '../../../rpc/methods/orchestration/worker/stop/structured-worker-dispatch-stop'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { observeChatWorkerWorking } from './chat-worker-turn-stops'
 
 const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
@@ -53,9 +62,43 @@ afterEach(async () => {
   db = undefined
 })
 
+function startWorkerDispatch(database: OrchestrationDb, taskId: string, keptOpen: boolean) {
+  const { dispatch } = database.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskId,
+    startOptions: {}
+  })
+  const paneKey = mintStructuredWorkerPaneKey(SESSION)
+  database.prepareStartingWorkerAuthority({
+    dispatchId: dispatch.id,
+    handle: HANDLE,
+    paneKey,
+    processIncarnation: structuredWorkerProcessIncarnation(SESSION),
+    hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
+    worktreeId: HOST_TEST_LOCATION.workspaceId,
+    terminalOwnership: 'created',
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  database.markWorkerDispatchReady(dispatch.id)
+  if (keptOpen) {
+    database.keepWorkerTerminalOpen(paneKey)
+  }
+  return dispatch
+}
+
 async function startWorker({
   unavailableErrorRead = false,
-  autoContinue = { enabled: false }
+  autoContinue = { enabled: false },
+  assignee = 'worker',
+  keptOpen = false
+}: {
+  unavailableErrorRead?: boolean
+  autoContinue?: { enabled: boolean }
+  /** `chat`: the chat is assigned the task directly, with no worker row. */
+  assignee?: 'worker' | 'chat'
+  keptOpen?: boolean
 } = {}) {
   const database = new OrchestrationDb(':memory:')
   db = database
@@ -65,24 +108,20 @@ async function startWorker({
     coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
   })
   const task = database.createTask({ spec: 'inspect a file', runId: run.id })
-  const { dispatch } = database.createStartingWorkerDispatch({
-    creator: { kind: 'system' },
-    maxDepth: 10,
-    taskId: task.id,
-    startOptions: {}
-  })
-  database.prepareStartingWorkerAuthority({
-    dispatchId: dispatch.id,
-    handle: HANDLE,
-    paneKey: mintStructuredWorkerPaneKey(SESSION),
-    processIncarnation: structuredWorkerProcessIncarnation(SESSION),
-    hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
-    worktreeId: HOST_TEST_LOCATION.workspaceId,
-    terminalOwnership: 'created',
-    effects: [],
-    setupState: 'not_applicable'
-  })
-  database.markWorkerDispatchReady(dispatch.id)
+  const dispatch =
+    assignee === 'chat'
+      ? database.createDispatchContext({
+          taskId: task.id,
+          assigneeHandle: formatOrcaSessionAddress(SESSION),
+          creator: { kind: 'system' },
+          maxDepth: 10
+        })
+      : startWorkerDispatch(database, task.id, keptOpen)
+  const forgottenMail: string[] = []
+  const workerRuntime = {
+    forgetStructuredSessionMail: (sessionId: string) => forgottenMail.push(sessionId),
+    notifyMessageArrived: () => {}
+  }
 
   const deps = { getDb: () => database, notify: () => {}, isWaitingForMail: () => false }
   const reports: Promise<void>[] = []
@@ -103,7 +142,15 @@ async function startWorker({
       },
       onIdleProviderDeath: (death) => reportChatWorkerProviderDeath(death, deps),
       onPersonClosedProvider: (closed) =>
-        reportChatWorkerClosedByPerson(closed, 'test-runtime', deps)
+        reportChatWorkerClosedByPerson(
+          closed,
+          {
+            runtimeEpoch: 'test-runtime',
+            releaseFor: (dispatchId) =>
+              releaseStoppedStructuredWorker(workerRuntime, database, dispatchId)
+          },
+          deps
+        )
     }
   })
   rig = current
@@ -222,6 +269,7 @@ async function startWorker({
     current,
     database,
     run,
+    forgottenMail,
     task,
     dispatch,
     journal,
@@ -354,11 +402,10 @@ it('escalates a usage limit once while Orca keeps continuing the worker, and aga
   expect(reports[1]).not.toHaveProperty('orcaContinues')
 })
 
-it('stops a working chat worker a person closes from a phone and tells its coordinator who closed it', async () => {
-  const worker = await startWorker()
-  const exits = vi.spyOn(console, 'info')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close handler reads only these runtime members and the caller identity.
-  const phone = {
+// The close handler reads only these runtime members and the caller identity.
+function phoneClose(deviceId: string): RpcContext {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close handler reads only these runtime members, the caller and its client kind.
+  return {
     runtime: {
       bots: { list: () => [] },
       currentLocalStructuredSessionPresentation: () => null,
@@ -366,10 +413,16 @@ it('stops a working chat worker a person closes from a phone and tells its coord
       retireStructuredAgentSessionTabFromSnapshot: () => false,
       removeCapturedStructuredSessionSavedTabs: () => {}
     },
-    caller: { kind: 'paired-device', deviceId: 'phone-7' },
-    clientKind: undefined
+    caller: { kind: 'paired-device', deviceId },
+    clientKind: 'mobile',
+    clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
   } as unknown as RpcContext
-  await STRUCTURED_AGENT_SESSION_CLOSE_METHOD.handler({ sessionId: SESSION }, phone)
+}
+
+it('stops a working chat worker a person closes from a phone and tells its coordinator who closed it', async () => {
+  const worker = await startWorker()
+  const exits = vi.spyOn(console, 'info')
+  await STRUCTURED_AGENT_SESSION_CLOSE_METHOD.handler({ sessionId: SESSION }, phoneClose('phone-7'))
 
   expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('stopped')
   expect(worker.database.getDispatchContextById(worker.dispatch.id)?.status).toBe('failed')
@@ -377,14 +430,118 @@ it('stops a working chat worker a person closes from a phone and tells its coord
   expect(mail).toHaveLength(1)
   expect(mail[0]).toMatchObject({ subject: 'Worker was closed before it finished' })
   expect(mail[0]?.body).toContain(
-    'was closed by a person on paired device phone-7 before it finished'
+    'was closed by a person on a paired phone phone-7 before it finished'
   )
+  expect(mail[0]?.body).toContain('closed as stopped')
   expect(exits).toHaveBeenCalledWith(
     expect.stringContaining('provider-exit'),
     expect.objectContaining({
       closeCause: 'user-close',
-      closeReason: 'a person on paired device phone-7'
+      closeReason: 'a person on a paired phone phone-7'
     })
   )
   exits.mockRestore()
+  // As worker-stop does, its session's parked mail is let go.
+  expect(worker.forgottenMail).toContain(SESSION)
+})
+
+it('stops a chat worker its user kept open once that person closes it', async () => {
+  const worker = await startWorker({ keptOpen: true })
+  await STRUCTURED_AGENT_SESSION_CLOSE_METHOD.handler({ sessionId: SESSION }, phoneClose('phone-7'))
+
+  expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('stopped')
+  const mail = worker.database.getUnreadRunMailbox(worker.run.id, 20, ['escalation'])
+  expect(mail).toHaveLength(1)
+  expect(mail[0]?.body).toContain('closed as stopped')
+})
+
+it('reports a chat assigned the task directly as stopped once a person closes it', async () => {
+  const worker = await startWorker({ assignee: 'chat' })
+  await STRUCTURED_AGENT_SESSION_CLOSE_METHOD.handler({ sessionId: SESSION }, phoneClose('phone-7'))
+
+  expect(worker.database.getDispatchContextById(worker.dispatch.id)?.status).toBe('failed')
+  const mail = worker.database.getUnreadRunMailbox(worker.run.id, 20, ['escalation'])
+  expect(mail).toHaveLength(1)
+  expect(mail[0]?.body).toContain('closed as stopped')
+  expect(mail[0]?.body).not.toContain('Stop the worker')
+})
+
+it('names who closed a chat while its create was still under way', async () => {
+  const worker = await startWorker()
+  const exits = vi.spyOn(console, 'info')
+  // The create comes from the desktop; a phone closes the chat before the create answers.
+  const create = refusingStructuredAgentSessionCreatesClosedFirst(async () => {
+    noteStructuredAgentSessionClose(SESSION, 'a person on a paired phone phone-9', true)
+    return { ok: true }
+  })
+  const creator = { ...phoneClose('phone-9'), caller: { kind: 'desktop' as const } }
+  await create({ envelope: { sessionId: SESSION } }, creator)
+
+  expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('stopped')
+  expect(exits).toHaveBeenCalledWith(
+    expect.stringContaining('provider-exit'),
+    expect.objectContaining({ closeReason: 'a person on a paired phone phone-9' })
+  )
+  exits.mockRestore()
+  resetStructuredAgentSessionClosesBeforeCreateForTests()
+})
+
+const CHAT_TAB = {
+  type: 'agent-session',
+  id: `agent-session:${SESSION}`,
+  title: 'Worker',
+  sessionId: SESSION,
+  agent: 'codex',
+  isActive: true
+} as const
+
+/** Closes the chat's tab as a client's session.tabs.close does; the window records each stage it
+ *  is asked for, with whether the chat's agent still ran at that moment. */
+async function closeChatTab(
+  worker: Awaited<ReturnType<typeof startWorker>>,
+  failHostClose = false
+) {
+  const { sessions } = worker.current.host.collaboratorsForTests()
+  const asked: string[] = []
+  const window = {
+    closeSessionTab: async (_tabId: string, _worktreeId: string, stage?: { stage: string }) => {
+      asked.push(`${stage?.stage ?? 'close'}:${sessions.get(SESSION)?.child ? 'running' : 'ended'}`)
+      if (failHostClose && stage?.stage === 'confirm') {
+        // The host went away between the window's answer and the host close.
+        setStructuredAgentSessionHost(null)
+      }
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same runtime members the close handler reads; a chat close reads no others.
+  const runtime = phoneClose('phone-7').runtime as unknown as Parameters<
+    typeof closeMobileStructuredSessionPresentation
+  >[0]['runtime']
+  const closed = await closeMobileStructuredSessionPresentation({
+    tab: CHAT_TAB,
+    worktreeId: HOST_TEST_LOCATION.workspaceId,
+    reason: 'user',
+    closedBy: 'a person in the desktop app',
+    local: () => true,
+    rows: () => undefined,
+    notifier: window,
+    runtime
+  })
+  return { asked, closed }
+}
+
+it('lets a chat tab leave the window only once its host close landed', async () => {
+  const worker = await startWorker()
+  expect(await closeChatTab(worker)).toEqual({
+    asked: ['confirm:running', 'drop:ended'],
+    closed: true
+  })
+})
+
+it('keeps a chat tab in the window when its host close fails', async () => {
+  const worker = await startWorker()
+  expect(await closeChatTab(worker, true)).toEqual({
+    asked: ['confirm:running', 'failed:running'],
+    closed: false
+  })
+  expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('ready')
 })

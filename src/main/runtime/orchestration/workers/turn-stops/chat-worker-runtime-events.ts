@@ -10,6 +10,7 @@ import {
   reportChatWorkerClosedByPerson,
   reportChatWorkerProviderDeath
 } from './chat-worker-provider-death'
+import { releaseStoppedStructuredWorker } from '../../../rpc/methods/orchestration/worker/stop/structured-worker-dispatch-stop'
 import { RuntimeStructuredAgentHost } from '../../../agent-session/installation/runtime-structured-agent-host'
 
 export abstract class RuntimeChatWorkerEvents extends RuntimeStructuredAgentHost {
@@ -41,6 +42,14 @@ export abstract class RuntimeChatWorkerEvents extends RuntimeStructuredAgentHost
 
   /** A chat worker a person closed mid-work is stopped, and the Run that dispatched it is told. */
   onStructuredPersonClosedProviderForMail(closed: StructuredAgentSessionPersonClose): void {
-    reportChatWorkerClosedByPerson(closed, this.getRuntimeId(), this.workerTurnStopReportDeps)
+    const db = this.workerTurnStopReportDeps.getDb()
+    reportChatWorkerClosedByPerson(
+      closed,
+      {
+        runtimeEpoch: this.getRuntimeId(),
+        releaseFor: (dispatchId) => releaseStoppedStructuredWorker(this, db, dispatchId)
+      },
+      this.workerTurnStopReportDeps
+    )
   }
 }

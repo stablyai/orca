@@ -3,14 +3,17 @@ import type {
   RuntimeSessionTabCloseReason
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionAgentTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import { closeRenderedStructuredSessionTab } from './structured-session-renderer-close'
+import {
+  closeRenderedStructuredSessionTab,
+  closeRenderedStructuredSessionTabAround
+} from './structured-session-renderer-close'
 import {
   captureInstalledStructuredSessionSurface,
   closeCapturedStructuredSession,
   type StructuredSessionSurfaceRuntime
 } from '../../agent-session/lifecycle/structured-agent-session-close'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { structuredAgentSessionTabCloseCause } from './structured-agent-session-tab-close-cause'
+import { structuredAgentSessionTabClose } from './structured-agent-session-tab-close-cause'
 import { isReopenedChatTabId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { savedSessionId } from '../../agent-session/lifecycle/saved-structured-agent-session-restoration'
@@ -95,7 +98,8 @@ export async function closeMobileStructuredSessionPresentation(input: {
   tab: RuntimeMobileSessionAgentTab
   worktreeId: string
   reason?: RuntimeSessionTabCloseReason
-  closedBy?: string
+  /** Who asked for the close: a person's close names them in the chat's exit record. */
+  closedBy: string
   local: () => boolean
   rows: () => RuntimeMobileSessionTabsSnapshot['tabs'] | undefined
   notifier: Parameters<typeof closeRenderedStructuredSessionTab>[0]
@@ -105,6 +109,23 @@ export async function closeMobileStructuredSessionPresentation(input: {
   const hostlessRaw =
     !host && (input.reason === undefined || input.reason === 'user') && input.local()
   const surface = captureInstalledStructuredSessionSurface(input.tab.sessionId, input.runtime)
+  if (host) {
+    // The window keeps the tab until its chat's host close lands, so a failed close strands nothing.
+    return closeRenderedStructuredSessionTabAround(
+      input.notifier,
+      input.tab.id,
+      input.worktreeId,
+      async () =>
+        getStructuredAgentSessionHost() === host &&
+        closeCapturedStructuredSession(
+          host,
+          input.tab.sessionId,
+          structuredAgentSessionTabClose(input.reason, input.closedBy),
+          surface,
+          input.runtime
+        )
+    )
+  }
   await closeRenderedStructuredSessionTab(input.notifier, input.tab.id, input.worktreeId)
   if (hostlessRaw) {
     if (!getStructuredAgentSessionHost() && input.local()) {
@@ -120,19 +141,6 @@ export async function closeMobileStructuredSessionPresentation(input: {
         )
       }
     }
-    return false
   }
-  if (getStructuredAgentSessionHost() !== host) {
-    return false
-  }
-  return host
-    ? closeCapturedStructuredSession(
-        host,
-        input.tab.sessionId,
-        structuredAgentSessionTabCloseCause(input.reason),
-        surface,
-        input.runtime,
-        input.closedBy
-      )
-    : false
+  return false
 }

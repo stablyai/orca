@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { isLocalSessionTabCloseOwned } from '@/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
 import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
@@ -53,7 +55,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   )
 
   unsubs.push(
-    window.api.ui.onSessionTabCloseRequest(({ requestId, tabId, worktreeId, expiresAt }) => {
+    window.api.ui.onSessionTabCloseRequest((request) => {
+      const { requestId, tabId, worktreeId, expiresAt, stage } = request
       const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
       const store = useAppStore.getState()
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
@@ -79,9 +82,27 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
           Math.max(0, expiresAt - Date.now())
         )
       }
+      if (stage === 'drop' || stage === 'failed') {
+        // Main's host close for this chat landed, or did not: only then does its tab leave.
+        if (stage === 'failed' && !isLocalSessionTabCloseOwned(worktreeId, tabId)) {
+          toast.error(
+            translate('sessionTabs.chatCloseFailed', "Couldn't close this chat."),
+            request.error ? { description: request.error } : undefined
+          )
+        }
+        const closed =
+          stage === 'drop' && closeMobileSessionTabInStore(store, worktreeId, localTabId)
+        respond(closed || stage === 'failed' ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
+        return
+      }
       const closeAndRespond = (): void => {
         if (expiresAt !== undefined && Date.now() >= expiresAt) {
           respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
+          return
+        }
+        if (stage === 'confirm') {
+          // The tab stays until main's host close lands.
+          respond()
           return
         }
         try {

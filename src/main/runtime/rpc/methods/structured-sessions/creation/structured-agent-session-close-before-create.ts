@@ -13,16 +13,21 @@ import {
 
 // Per-launch ids prevent cross-create matches; cap entries whose create never arrives.
 const MAX_CLOSED_BEFORE_CREATE = 256
-const closedBeforeCreate = new Set<string>()
+/** Each chat closed before its create landed, and who closed it. */
+const closedBeforeCreate = new Map<string, string>()
 const createsUnderWay = new Map<string, number>()
 
 /** `hasRecord`: a create already committed, so this is an ordinary close unless one is under way. */
-export function noteStructuredAgentSessionClose(sessionId: string, hasRecord: boolean): void {
+export function noteStructuredAgentSessionClose(
+  sessionId: string,
+  closedBy: string,
+  hasRecord: boolean
+): void {
   if (hasRecord && !createsUnderWay.has(sessionId)) {
     return
   }
-  closedBeforeCreate.add(sessionId)
-  for (const oldest of closedBeforeCreate) {
+  closedBeforeCreate.set(sessionId, closedBy)
+  for (const [oldest] of closedBeforeCreate) {
     if (closedBeforeCreate.size <= MAX_CLOSED_BEFORE_CREATE) {
       break
     }
@@ -58,19 +63,20 @@ export function refusingStructuredAgentSessionCreatesClosedFirst<
   return async (params, ctx) => {
     const { sessionId } = params.envelope
     createsUnderWay.set(sessionId, (createsUnderWay.get(sessionId) ?? 0) + 1)
-    let closedFirst = false
+    // Who closed it first, read when the create answers.
+    let closedBy: string | undefined
     let surface: StructuredSessionSurface | null = null
     try {
       const result = await create(params, ctx, (actual) => {
         surface = actual
       })
-      closedFirst = closedBeforeCreate.has(sessionId)
+      closedBy = closedBeforeCreate.get(sessionId)
       // The record stays on disk, as for any closed chat; the refusal only says the launch is off.
-      return closedFirst
+      return closedBy !== undefined
         ? { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
         : result
     } catch (error) {
-      closedFirst = closedBeforeCreate.has(sessionId)
+      closedBy = closedBeforeCreate.get(sessionId)
       throw error
     } finally {
       const remaining = (createsUnderWay.get(sessionId) ?? 1) - 1
@@ -80,9 +86,9 @@ export function refusingStructuredAgentSessionCreatesClosedFirst<
         createsUnderWay.delete(sessionId)
       }
       // Any answer, a refusal or a throw past commit included, may have left the chat made.
-      if (closedFirst) {
+      if (closedBy !== undefined) {
         // Logged, not thrown: the client must still hear that the chat was closed first.
-        await closeCreatedChat(ctx, sessionId, surface).catch((error: unknown) =>
+        await closeCreatedChat(ctx, sessionId, surface, closedBy).catch((error: unknown) =>
           console.warn(
             '[structured-agent-session] closing a chat closed before create failed',
             error
@@ -97,13 +103,14 @@ export function refusingStructuredAgentSessionCreatesClosedFirst<
 async function closeCreatedChat(
   ctx: RpcContext,
   sessionId: string,
-  surface: StructuredSessionSurface | null
+  surface: StructuredSessionSurface | null,
+  closedBy: string
 ): Promise<void> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return
   }
-  await closeCapturedStructuredSession(host, sessionId, 'user-close', surface, ctx.runtime)
+  await closeCapturedStructuredSession(host, sessionId, { closedBy }, surface, ctx.runtime)
 }
 
 export function resetStructuredAgentSessionClosesBeforeCreateForTests(): void {

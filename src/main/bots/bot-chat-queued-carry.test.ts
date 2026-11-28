@@ -111,7 +111,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
       createChat: async (_bot, sessionId) => (createChat ?? attach)(sessionId),
       showTab: async () => {},
       closeChat: async (sessionId) => {
-        await current.host.close(sessionId, 'user-close')
+        await current.host.close(sessionId, { closedBy: 'a person in the desktop app' })
         // Someone opens the closed chat from its history and starts editing a card.
         const { queuedMessages } = (await current.host.conversation(sessionId)).journal
         const editing = await queuedMessages.get('editing')

@@ -163,6 +163,9 @@ export type StructuredAgentSessionCloseCause = Extract<
   'user-close' | 'evict'
 >
 
+/** How a chat is closed: evicted by Orca, or by a person, who is named for its exit record. */
+export type StructuredAgentSessionClose = 'evict' | { closedBy: string }
+
 /** Idle cache eviction also retains waiting cards so unseen closes cannot introduce reopen pauses. */
 export async function structuredAgentSessionConversationClosable(
   session: StructuredAgentSessionHostSession,

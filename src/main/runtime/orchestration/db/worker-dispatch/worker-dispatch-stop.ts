@@ -62,7 +62,9 @@ export function listHelperDispatchIds(this: OrchestrationDb, creatorDispatchId: 
 export function beginWorkerStop(
   this: OrchestrationDb,
   dispatchId: string,
-  runtimeEpoch: string
+  runtimeEpoch: string,
+  /** A person's close already ended the worker, including one its user kept open. */
+  options: { closedByPerson?: true } = {}
 ):
   | { disposition: 'stopping'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
   | { disposition: 'already_settled'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
@@ -87,7 +89,9 @@ export function beginWorkerStop(
       commitLifecycleWriteTransaction(this.db, transaction)
       return { disposition: 'already_settled', worker, dispatch }
     }
-    refuseStopWhileKeptOpen(this, dispatchId)
+    if (!options.closedByPerson) {
+      refuseStopWhileKeptOpen(this, dispatchId)
+    }
     // A different runtime epoch may retry a stranded stop; this epoch must preserve its in-flight stopping verdict for the exit event.
     if (!isWorkerStoppable(worker) && !isStopStrandedByAnotherRuntime(worker, runtimeEpoch)) {
       throw new OrchestrationError(

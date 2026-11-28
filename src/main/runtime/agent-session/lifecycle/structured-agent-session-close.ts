@@ -3,7 +3,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { runsForBot } from '../../../bots/bot-session-tabs'
-import type { StructuredAgentSessionCloseCause } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
+import type { StructuredAgentSessionClose } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import {
   observeStructuredSession,
   structuredSessionCloseSettled
@@ -269,17 +269,16 @@ export async function retireCapturedStructuredSessionSurface(
 export async function closeCapturedStructuredSession(
   host: StructuredAgentSessionHost,
   sessionId: string,
-  cause: StructuredAgentSessionCloseCause,
+  close: StructuredAgentSessionClose,
   surface: StructuredSessionSurface | null,
-  runtime: StructuredSessionSurfaceRuntime & Partial<Pick<OrcaRuntimeService, 'bots'>>,
-  closedBy?: string
+  runtime: StructuredSessionSurfaceRuntime & Partial<Pick<OrcaRuntimeService, 'bots'>>
 ): Promise<boolean> {
   if (surface && !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime)) {
     return false
   }
   // A bot's thread or run keeps working when its tab closes; it waits in the bot's Activity.
   const keepRunning =
-    cause === 'user-close' && runtime.bots !== undefined && runsForBot(runtime.bots, sessionId)
+    close !== 'evict' && runtime.bots !== undefined && runsForBot(runtime.bots, sessionId)
   const result = await retireCapturedStructuredSessionSurface(
     host,
     sessionId,
@@ -294,7 +293,7 @@ export async function closeCapturedStructuredSession(
     return false
   }
   if (!keepRunning) {
-    await host.close(sessionId, cause, undefined, closedBy)
+    await host.close(sessionId, close)
   }
   return result.committed
 }

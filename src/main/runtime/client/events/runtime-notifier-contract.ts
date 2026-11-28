@@ -26,6 +26,7 @@ import type {
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSleepNotice } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import type { SessionTabCloseStage } from '../../../../shared/workspace-layout/client-views/session-tab-close'
 import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type {
   WorktreeBaseStatusEvent,
@@ -145,7 +146,12 @@ export type RuntimeNotifier = {
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
   /** `userInitiated` lets a chat tab move the window to another worktree. */
   focusEditorTab?(tabId: string, worktreeId: string, options?: { userInitiated: true }): void
-  closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
+  /** `stage` splits a chat tab's close around the host close main runs between them. */
+  closeSessionTab?(
+    tabId: string,
+    worktreeId: string,
+    stage?: { stage: SessionTabCloseStage; error?: string }
+  ): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /** The window moves a client's pane to a new tab, since it owns the layout; rejects when it cannot answer. */
   movePaneToNewTab?(

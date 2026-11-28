@@ -21,7 +21,7 @@ import {
   holdClosedStructuredAgentSessionSends,
   closeStructuredAgentSessionConversationUnderSerialize,
   stopStructuredAgentSessionAgentUnderSerialize,
-  type StructuredAgentSessionCloseCause
+  type StructuredAgentSessionClose
 } from './structured-agent-session-host-lifetime'
 
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
@@ -302,12 +302,11 @@ export function createStructuredAgentSessionConversationLifetime(
         return session
       })
     },
-    /** Retain history and unsent text; a refused close cuts no handover or start. `closedBy`: who. */
+    /** Retain history and unsent text; a refused close cuts no handover or start. */
     close: (
       sessionId: string,
-      cause: StructuredAgentSessionCloseCause,
-      admit?: (work: StructuredAgentSessionCloseWork) => boolean,
-      closedBy?: string
+      close: StructuredAgentSessionClose,
+      admit?: (work: StructuredAgentSessionCloseWork) => boolean
     ) => {
       if (!admit) {
         cutClosingStructuredAgentSession(host, sessionId)
@@ -320,7 +319,7 @@ export function createStructuredAgentSessionConversationLifetime(
         if (deps().store.selectWritableRecord(sessionId).kind !== 'unreadable') {
           host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
         }
-        await holdStopClose(sessionId, () => stopClosedChat(host, sessionId, cause, closedBy))
+        await holdStopClose(sessionId, () => stopClosedChat(host, sessionId, close))
       })
     }
   }

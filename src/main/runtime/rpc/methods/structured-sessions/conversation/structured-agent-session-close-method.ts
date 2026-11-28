@@ -26,10 +26,12 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
     requireStructuredCapability(ctx)
     // A bot's thread or run keeps working when its tab closes; it waits in the bot's Activity.
     const keepRunning = runsForBot(ctx.runtime.bots, params.sessionId)
+    const closedBy = describeRpcCaller(ctx.caller, ctx.clientKind)
     // Record close before requiring host so even failed closes fence racing creates.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && !keepRunning) {
       noteStructuredAgentSessionClose(
         params.sessionId,
+        closedBy,
         (getStructuredAgentSessionHost()?.deps.store.getConversation(params.sessionId) ?? null) !==
           null
       )
@@ -49,12 +51,7 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
       }
     } finally {
       if (!keepRunning) {
-        await host.close(
-          params.sessionId,
-          'user-close',
-          undefined,
-          describeRpcCaller(ctx.caller, ctx.clientKind)
-        )
+        await host.close(params.sessionId, { closedBy })
       }
     }
     return { ok: true as const }

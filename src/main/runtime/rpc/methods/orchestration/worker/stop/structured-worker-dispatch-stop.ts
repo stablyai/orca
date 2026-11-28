@@ -2,7 +2,11 @@ import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { WorkerStopReceipt } from '../../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import type { StructuredWorkerIdentity } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { stopStructuredWorker } from '../../structured-workers/orchestration-structured-worker-lifecycle'
+import {
+  resolveStructuredWorkerForDispatch,
+  stopStructuredWorker
+} from '../../structured-workers/orchestration-structured-worker-lifecycle'
+import { releaseStructuredWorkerSession } from '../../structured-workers/orchestration-structured-worker-session'
 
 /** Stops a worker that runs as a chat session; one whose agent is still starting stops once that start ends. */
 export async function stopStructuredDispatch(
@@ -83,5 +87,19 @@ export function unknownReceipt(
     alreadySettled: false,
     processAction,
     lastError: worker.last_error
+  }
+}
+
+/** What worker-stop does once a chat worker's Dispatch is stopped: drop its session binding and
+ *  parked mail, and wake status readers. Read before the stop settles; run after it committed. */
+export function releaseStoppedStructuredWorker(
+  runtime: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail' | 'notifyMessageArrived'>,
+  db: OrchestrationDb | null,
+  dispatchId: string
+): () => void {
+  const sessionId = db ? resolveStructuredWorkerForDispatch(db, dispatchId)?.sessionId : undefined
+  return () => {
+    releaseStructuredWorkerSession(sessionId, runtime)
+    runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
   }
 }

@@ -45,11 +45,18 @@ export function reportChatWorkerProviderDeath(
   }
 }
 
-/** A person closed a running chat worker: the close stops it as worker-stop would, and its
+/** How a person's close stops a chat worker: worker-stop's settle, then its release. */
+export type ClosedChatWorkerStop = {
+  runtimeEpoch: string
+  /** Read before the settle; the returned release runs once the stop committed. */
+  releaseFor: (dispatchId: string) => () => void
+}
+
+/** A person closed a running chat worker: it is stopped as worker-stop stops one, and its
  *  coordinator hears who closed it, since the worker never reports for itself. */
 export function reportChatWorkerClosedByPerson(
   closed: StructuredAgentSessionPersonClose,
-  runtimeEpoch: string,
+  stop: ClosedChatWorkerStop,
   deps: WorkerTurnStopReportDeps
 ): void {
   try {
@@ -61,6 +68,8 @@ export function reportChatWorkerClosedByPerson(
       if (isWorkerStartOrStopUndecided(db.getWorkerDispatch(dispatch.id)?.state)) {
         continue
       }
+      const release = stop.releaseFor(dispatch.id)
+      let stopped = false
       observeWorker(
         db,
         { kind: 'local', dispatch },
@@ -68,32 +77,26 @@ export function reportChatWorkerClosedByPerson(
           presence: 'gone',
           fence: `closed:${closed.sessionId}:${closed.fence}`,
           legacyStopKey: `closed:${closed.sessionId}:${closed.fence}`,
-          gone: {
-            from,
-            reason: 'exited',
-            closedBy: closed.closedBy ?? 'a person',
-            lastOutput: undefined
-          },
+          gone: { from, reason: 'exited', closedBy: closed.closedBy, lastOutput: undefined },
           settle: () => {
-            // A worker the user keeps open refuses the stop; its coordinator still hears of the close.
-            try {
-              if (db.beginWorkerStop(dispatch.id, runtimeEpoch).disposition !== 'stopping') {
-                return undefined
-              }
+            const begun = db.beginWorkerStop(dispatch.id, stop.runtimeEpoch, {
+              closedByPerson: true
+            })
+            if (begun.disposition === 'context_only') {
+              // A chat assigned work without a worker row is released as stopped right there.
+              stopped = begun.state === 'stopped' && !begun.alreadySettled
+            } else if (begun.disposition === 'stopping') {
               db.settleWorkerStop(dispatch.id)
-              return 'stopped'
-            } catch (error) {
-              console.warn(
-                '[orchestration] settling a closed chat worker failed',
-                dispatch.id,
-                error
-              )
-              return undefined
+              stopped = true
             }
+            return stopped ? 'stopped' : undefined
           }
         },
         deps
       )
+      if (stopped) {
+        release()
+      }
     }
   } catch (error) {
     console.warn('[orchestration] chat worker close report failed', closed.sessionId, error)

@@ -19,7 +19,7 @@ import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/brows
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { applyBrowserSessionTabSelection } from '../../browser/tabs/browser-session-tab-selection-snapshot'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type { StructuredAgentSessionCloseCause } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
+import type { StructuredAgentSessionClose } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import { chatTabId, withChatTabChanges, type ChatTabChange } from './agent-session-tab-layout'
 import { createChatTabLayoutQueue } from './agent-session-tab-layout-queue'
 import type * as LayoutCommands from '../../terminal/layout/runtime-layout-apply'
@@ -65,14 +65,14 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
 
   protected async closeStructuredAgentSessionTab(
     tab: RuntimeMobileSessionAgentTab,
-    cause: StructuredAgentSessionCloseCause,
+    close: StructuredAgentSessionClose,
     surface: StructuredSessionSurface | null
   ): Promise<boolean> {
     const host = getStructuredAgentSessionHost()
     if (!host) {
       return false
     }
-    return closeCapturedStructuredSession(host, tab.sessionId, cause, surface, this)
+    return closeCapturedStructuredSession(host, tab.sessionId, close, surface, this)
   }
 
   // Refused echo closes need a newer snapshot so clients restore the still-live mirror they already pruned.

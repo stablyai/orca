@@ -1,32 +1,37 @@
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import {
   stopStructuredAgentSessionAgentUnderSerialize,
-  type StructuredAgentSessionCloseCause,
+  type StructuredAgentSessionClose,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
 
 /** Stops a closed chat's provider; one a person's close ended while running is news to whoever
- *  started it. `closedBy` names who closed it. Call under the session's serialization. */
+ *  started it. Call under the session's serialization. */
 export async function stopClosedChat(
   host: { context: () => StructuredAgentSessionLifetimeContext },
   sessionId: string,
-  cause: StructuredAgentSessionCloseCause,
-  closedBy: string | undefined
+  close: StructuredAgentSessionClose
 ): Promise<void> {
   const context = host.context()
   const session = context.sessions.get(sessionId)
   const running = session?.child
-  await stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, {
-    cause,
-    ...(closedBy ? { reason: closedBy } : {})
-  })
+  await stopStructuredAgentSessionAgentUnderSerialize(
+    context,
+    sessionId,
+    close === 'evict' ? { cause: 'evict' } : { cause: 'user-close', reason: close.closedBy }
+  )
   const ended = session?.lastEndedChild
   if (
+    close !== 'evict' &&
     running &&
     ended?.cause === 'user-close' &&
     ended.rootGone &&
     sameProviderChild(ended, running)
   ) {
-    context.deps.onPersonClosedProvider?.({ sessionId, fence: ended.fence, closedBy: ended.reason })
+    context.deps.onPersonClosedProvider?.({
+      sessionId,
+      fence: ended.fence,
+      closedBy: close.closedBy
+    })
   }
 }
