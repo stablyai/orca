@@ -33,11 +33,30 @@ export function createProcessTableSnapshotReader<T = string>(
   const ttlMs = deps.ttlMs ?? PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
   let cached: Snapshot<T> | null = null
   let expiryTimer: ReturnType<typeof setTimeout> | null = null
+  let lastUsedMs = 0
   let inFlight: Promise<T> | null = null
   let inFlightCapturedAtMs = 0
   let inFlightMode: ProcessTableCaptureMode | null = null
   let sequence = 0
   let freshQueued: { promise: Promise<T>; startSequence: number | null } | null = null
+
+  // Release rows and ps stdout once unused for the TTL; a cleanup batch still reading this capture keeps it.
+  function armExpiry(next: Snapshot<T>, delayMs: number): void {
+    expiryTimer = setTimeout(() => {
+      expiryTimer = null
+      if (cached !== next) {
+        return
+      }
+      const remainingMs = ttlMs - (deps.now() - lastUsedMs)
+      // A clock that moved backward reads as more than the TTL left; release rather than wait on it.
+      if (remainingMs > 0 && remainingMs <= ttlMs) {
+        armExpiry(next, remainingMs)
+      } else {
+        cached = null
+      }
+    }, delayMs)
+    expiryTimer.unref?.()
+  }
 
   async function runSnapshot(mode: ProcessTableCaptureMode = 'poll'): Promise<T> {
     // Stamp evidence age at capture start (or its oldest input), TTL at completion: slow captures must remain old
@@ -54,17 +73,12 @@ export function createProcessTableSnapshotReader<T = string>(
       const value = await promise
       const next: Snapshot<T> = { value, capturedAtMs, completedAtMs: deps.now() }
       cached = next
+      lastUsedMs = next.completedAtMs
       clearTimeout(expiryTimer ?? undefined)
-      expiryTimer =
-        ttlMs > 0 && Number.isFinite(ttlMs)
-          ? setTimeout(() => {
-              expiryTimer = null
-              if (cached === next) {
-                cached = null
-              }
-            }, ttlMs)
-          : null
-      expiryTimer?.unref?.()
+      expiryTimer = null
+      if (ttlMs > 0 && Number.isFinite(ttlMs)) {
+        armExpiry(next, ttlMs)
+      }
       return value
     } finally {
       if (inFlight === promise) {
@@ -106,6 +120,7 @@ export function createProcessTableSnapshotReader<T = string>(
   async function captureAfter(afterMs: number, signal?: AbortSignal): Promise<T> {
     signal?.throwIfAborted()
     if (cached && cached.capturedAtMs >= afterMs) {
+      lastUsedMs = deps.now()
       return cached.value
     }
     // Only a capture deliberately started after the boundary can authorize cleanup. A poll may

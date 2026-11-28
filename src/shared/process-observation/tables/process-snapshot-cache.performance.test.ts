@@ -45,24 +45,30 @@ it('does not join a poll that later reports argv captured before the cleanup bou
 })
 
 it.each([300, 3_000])(
-  'shares one elapsed capture across %i checks from one action',
+  'shares one elapsed capture across %i checks from one action, then releases it',
   async (count) => {
-    let now = 100
-    const runPs = vi.fn(async () => {
-      now += 600
-      return { rows: ['shell'] }
-    })
-    const reader = createProcessTableSnapshotReader({ runPs, now: () => now })
-    const boundary = now
-    for (let index = 0; index < count; index += 4) {
-      const observations = await Promise.all(
-        Array.from({ length: 4 }, () => reader.getSnapshotWithAge(boundary))
-      )
-      expect(observations[0]?.value.rows).toEqual(['shell'])
-      now += 50
+    vi.useFakeTimers({ now: 100, toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      const runPs = vi.fn(async () => {
+        vi.advanceTimersByTime(600)
+        return { rows: ['shell'] }
+      })
+      const reader = createProcessTableSnapshotReader({ runPs, now: () => Date.now() })
+      const boundary = Date.now()
+      for (let index = 0; index < count; index += 4) {
+        const observations = await Promise.all(
+          Array.from({ length: 4 }, () => reader.getSnapshotWithAge(boundary))
+        )
+        expect(observations[0]?.value.rows).toEqual(['shell'])
+        // Each round is short, but the whole batch runs far past the TTL.
+        vi.advanceTimersByTime(50)
+      }
+      expect(runPs).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(600)
+      expect((await reader.getSnapshotWithAge(boundary)).value.rows).toEqual(['shell'])
+      expect(runPs).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
     }
-    expect(runPs).toHaveBeenCalledTimes(1)
-    expect((await reader.getSnapshotWithAge(now)).value.rows).toEqual(['shell'])
-    expect(runPs).toHaveBeenCalledTimes(2)
   }
 )
