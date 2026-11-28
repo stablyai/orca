@@ -3,7 +3,7 @@ import { getDefaultSettings } from '../../../../../shared/orca-profiles/constant
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import type { ReleaseBuild } from '../../../../../shared/updater/release-channel'
 import { updaterCodedMessage } from '../../../../../shared/updater/updater-failure-copy'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { useAppStore } from '@/store'
 import { GeneralSupportStarAction } from '../general/GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'

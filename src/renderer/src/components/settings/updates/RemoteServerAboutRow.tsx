@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { cn } from '@/lib/class-names'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { getRemoteServerUpdatePhaseLabel } from '../runtime-environments/updates/RemoteServerUpdateStatus'
 import {
   getRemoteServerEntryHelp,

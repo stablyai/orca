@@ -1,8 +1,8 @@
 import type React from 'react'
 import { Fragment } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import { getRemoteServerNewerThanClientVersion } from '../../../../../shared/remote-runtime/host-updates/remote-server-version-skew'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { UPDATING_PHASES, getSessionsMayDropLabel } from './server-restart-copy'
 
 type SummaryPart = { id: string; text: string; count: number; destructive?: boolean }

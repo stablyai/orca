@@ -1,5 +1,5 @@
 import type { Translate } from '@/i18n/use-translate'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 
 /** Phases where a started update is still in flight for that server. */
 export const UPDATING_PHASES = new Set<RemoteServerUpdateEntry['phase']>([

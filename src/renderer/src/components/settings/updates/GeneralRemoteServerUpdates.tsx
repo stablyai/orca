@@ -9,7 +9,7 @@ import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import type { RemoteServerUpdateCheck } from '@/store/slices/runtime-host-updates/remote-server-updates'
 import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
 import { SearchableSetting } from '../section-layout/SearchableSetting'

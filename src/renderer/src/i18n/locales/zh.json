@@ -1339,8 +1339,8 @@
     },
     "automaticUpdates": {
       "title": "自动更新",
-      "description": "在支持此功能的桌面安装中，Orca 会在定期检查时下载符合条件的更新，并自动重启以完成安装。",
-      "saveFailed": "无法保存自动更新设置。"
+      "description": "在支持此功能的桌面安装中，Orca 会在定期检查时下载符合条件的更新，并自动重启以完成安装",
+      "saveFailed": "无法保存自动更新设置"
     },
     "cloudConsole": {
       "manageInBrowser": "在浏览器中管理",
@@ -8839,7 +8839,7 @@
           "02dc082e70": "无法开始更新下载",
           "ceb579abaf": "检查应用程序更新并安装较新的 Orca 版本",
           "6d27bd46e3": "检查更新",
-          "externallyManagedVersionAvailable": "版本 {{version}} 已可用。Orca 无法自行安装此版本，请通过系统软件包管理器更新。"
+          "externallyManagedVersionAvailable": "版本 {{version}} 已可用。Orca 无法自行安装此版本，请通过系统软件包管理器更新"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "从工作区的“打开方式”菜单中选择可用的应用程序",
@@ -13148,12 +13148,12 @@
           "leaveToTerminalLabel": "交由终端处理"
         },
         "ReleaseChannelSection": {
-          "switchFailed": "无法切换到此版本。",
+          "switchFailed": "无法切换到此版本",
           "loadingBuilds": "正在加载版本…",
           "noBuilds": "未找到版本",
           "refresh": "刷新版本列表",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "只能在桌面应用中切换版本。",
+          "webUnavailable": "只能在桌面应用中切换版本",
           "downloadInstaller": "下载安装程序",
           "manualInstallHint": "“{{value0}}”渠道的 Windows 版本未签名，应用内更新无法将其安装到已签名的版本上。请运行一次下载的安装程序，Windows 会提示发布者未知。此后可以在这里切换版本，包括切回{{stable}}",
           "stableLabel": "稳定版",
