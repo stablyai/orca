@@ -86,6 +86,18 @@ describe('AtomicSnapshotWriter', () => {
     expect(tmpFiles()).toEqual([])
   })
 
+  it('keeps a synchronous snapshot when an earlier async request has not serialized yet', async () => {
+    const writer = new AtomicSnapshotWriter(() => file)
+    const pending = writer.write(() => 'stale')
+    writer.writeSync(() => 'newest')
+    await pending
+    expect(readFileSync(file, 'utf8')).toBe('newest')
+
+    await writer.write(() => 'later')
+    expect(readFileSync(file, 'utf8')).toBe('later')
+    expect(tmpFiles()).toEqual([])
+  })
+
   it('close() stops queued and in-flight async writes from publishing', async () => {
     const writer = new AtomicSnapshotWriter(() => file)
     const queued = vi.fn(() => 'queued')
