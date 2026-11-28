@@ -14,7 +14,6 @@ import {
   groupAgentSessionMcpServers,
   ORCA_MCP_SOURCE
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
-import { MobilePendingButton } from '../../../components/controls/MobilePendingButton'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { TextField } from '../../../components/composer-input/TextField'
 import type { Translate } from '../../../i18n/mobile-i18n'
@@ -30,8 +29,10 @@ import {
 } from './mobile-native-chat-mcp-server-copy'
 import { mcpPanelStylesSheet as stylesSheet } from './mobile-native-chat-mcp-panel-styles'
 import { McpStatusMark as StatusMark } from './mobile-native-chat-mcp-status-mark'
+import { McpButton } from './mobile-native-chat-mcp-button'
 import { composerInputStylesSheet } from '../../../components/composer-input/composer-input-styles'
 import { useThemedStyles } from '../../../theme/themed-styles'
+import { useSignInLinkCopy } from '../../../bots/tools/use-sign-in-link-copy'
 
 type McpAction = Exclude<AgentSessionMcpOperation, { action: 'status' }>
 
@@ -214,6 +215,16 @@ function McpServerRow({
   const enabled = mine?.action === 'toggle' ? mine.enabled : server.status !== 'disabled'
   const refusal = agentSessionMcpRowFailure(server, failure, signingIn)
   const finishExternal = (): void => run({ action: 'reconnect', server: server.name })
+  // This phone's shell can't open a link this long: the page is copied for the browser instead.
+  const linkCopy = useSignInLinkCopy(signingIn?.url ?? null)
+  const copying = signingIn !== null && !linkCopy.opensHere
+  const copyLink = copying ? (
+    <McpButton
+      label={linkCopy.copied ? t('common.copied', 'Copied') : t('chat.mcp.copyLink', 'Copy link')}
+      tone="plain"
+      onPress={linkCopy.copyLink}
+    />
+  ) : null
   return (
     <View>
       <View style={styles.row}>
@@ -230,16 +241,19 @@ function McpServerRow({
           ]}
           numberOfLines={1}
         >
-          {signingIn
-            ? signingIn.finish === 'external'
-              ? t('chat.mcp.status.finishOnPage', 'Finish on the page that opened')
-              : t('chat.mcp.status.waitingForSignIn', 'Waiting for sign-in…')
-            : result?.status === 'not-running' && server.status === 'not-started'
-              ? '' // The notice above already says they connect on the next message.
-              : mobileMcpServerStatusLine(server, t)}
+          {copying
+            ? t('chat.mcp.status.openInBrowser', 'Open in browser')
+            : signingIn
+              ? signingIn.finish === 'external'
+                ? t('chat.mcp.status.finishOnPage', 'Finish on the page that opened')
+                : t('chat.mcp.status.waitingForSignIn', 'Waiting for sign-in…')
+              : result?.status === 'not-running' && server.status === 'not-started'
+                ? '' // The notice above already says they connect on the next message.
+                : mobileMcpServerStatusLine(server, t)}
         </Text>
         {signingIn ? (
           <>
+            {copyLink}
             {signingIn.finish === 'external' ? (
               <McpButton
                 label={t('common.done', 'Done')}
@@ -248,7 +262,7 @@ function McpServerRow({
                 disabled={busy}
                 onPress={finishExternal}
               />
-            ) : (
+            ) : copying ? null : (
               <McpButton
                 label={t('chat.mcp.openAgain', 'Open again')}
                 tone="plain"
@@ -289,6 +303,11 @@ function McpServerRow({
           </>
         )}
       </View>
+      {linkCopy.copyFailed ? (
+        <Text style={styles.rowFailure} accessibilityLiveRegion="polite">
+          {t('chat.mcp.copyFailed', 'Couldn’t copy the link.')}
+        </Text>
+      ) : null}
       {refusal ? (
         <Text style={styles.rowFailure} accessibilityLiveRegion="polite">
           {refusal.kind === 'signInUnfinished'
@@ -362,46 +381,5 @@ function McpPasteBox({
         />
       </View>
     </View>
-  )
-}
-
-function McpButton({
-  label,
-  tone,
-  tall = false,
-  busy = false,
-  disabled = false,
-  onPress
-}: {
-  label: string
-  tone: 'primary' | 'secondary' | 'plain'
-  tall?: boolean
-  busy?: boolean
-  disabled?: boolean
-  onPress: () => void
-}) {
-  const styles = useThemedStyles(stylesSheet)
-  const colors = useMobileColors()
-  return (
-    <MobilePendingButton
-      label={label}
-      pending={busy}
-      disabled={disabled}
-      onPress={onPress}
-      hitSlop={tall ? undefined : 6}
-      style={[
-        styles.button,
-        tall && styles.buttonTall,
-        tone === 'primary' && styles.buttonPrimary,
-        tone === 'secondary' && styles.buttonSecondary,
-        tone === 'plain' && styles.buttonPlain
-      ]}
-      labelStyle={[
-        styles.buttonLabel,
-        tone === 'primary' && styles.buttonLabelPrimary,
-        tone === 'plain' && styles.buttonLabelPlain
-      ]}
-      spinnerColor={tone === 'primary' ? colors.bgBase : colors.textPrimary}
-    />
   )
 }
