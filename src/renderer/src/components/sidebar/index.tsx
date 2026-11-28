@@ -23,7 +23,6 @@ import WorkspaceKanbanDrawer from './workspace-board/surface/WorkspaceKanbanDraw
 import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/class-names'
 import { FolderPlus, Loader2 } from 'lucide-react'
-import { ActivityThreadCollapseContext } from '@/components/activity/thread-list/activity-thread-collapse-context'
 import { useSidebarProjectDrop } from './project-admission/drop/useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBoardPanel'
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
@@ -139,26 +138,7 @@ function Sidebar({
   )
   const [agentBadgeTarget, setAgentBadgeTarget] = React.useState<HTMLSpanElement | null>(null)
   const agentsScrollTopRef = React.useRef(0)
-  // Retain collapse state and scroll geometry across Agents-list unmounts.
-  const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
-    ReadonlySet<string>
-  >(() => new Set())
-  const agentsCollapseState = useMemo(
-    () => ({
-      collapsedGroupKeys: agentsCollapsedGroupKeys,
-      onToggleGroupCollapse: (groupKey: string) =>
-        setAgentsCollapsedGroupKeys((prev) => {
-          const next = new Set(prev)
-          if (next.has(groupKey)) {
-            next.delete(groupKey)
-          } else {
-            next.add(groupKey)
-          }
-          return next
-        })
-    }),
-    [agentsCollapsedGroupKeys]
-  )
+  // Retain scroll geometry across Agents-list unmounts.
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
@@ -260,20 +240,18 @@ function Sidebar({
       <React.Suspense
         fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
       >
-        <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
-          <SidebarAgentsList
-            active={sidebarBody === 'agents'}
-            readFilter={agentReadFilter}
-            setReadFilter={setAgentReadFilter}
-            groupBy={agentGroupBy}
-            setGroupBy={setAgentGroupBy}
-            query={agentQuery}
-            setQuery={setAgentQuery}
-            optionsTarget={agentOptionsTarget}
-            badgeTarget={agentBadgeTarget}
-            scrollTopRef={agentsScrollTopRef}
-          />
-        </ActivityThreadCollapseContext.Provider>
+        <SidebarAgentsList
+          active={sidebarBody === 'agents'}
+          readFilter={agentReadFilter}
+          setReadFilter={setAgentReadFilter}
+          groupBy={agentGroupBy}
+          setGroupBy={setAgentGroupBy}
+          query={agentQuery}
+          setQuery={setAgentQuery}
+          optionsTarget={agentOptionsTarget}
+          badgeTarget={agentBadgeTarget}
+          scrollTopRef={agentsScrollTopRef}
+        />
       </React.Suspense>
       {sidebarBody !== 'agents' && (
         <>

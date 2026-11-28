@@ -33,6 +33,7 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsShowSearch',
   'agentsReadFilter',
   'agentsGroupBy',
+  'agentsCollapsedGroups',
   'activityClearedAtByPaneKey',
   'manuallyUnreadTurnsByPaneKey',
   // The moved-to-WSL list belongs to the desktop that ran the move; hosts' strict ui.set rejects both.

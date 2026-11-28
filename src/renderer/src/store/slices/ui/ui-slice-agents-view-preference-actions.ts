@@ -1,9 +1,35 @@
 import type { UISlice, UISliceSet } from './ui-slice-contract'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import {
   DEFAULT_AGENTS_GROUP_BY,
-  DEFAULT_AGENTS_READ_FILTER
+  DEFAULT_AGENTS_READ_FILTER,
+  normalizeActivityGroupBy,
+  normalizeThreadReadFilter
 } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import { normalizeVisibleExecutionHostIds } from '../../../../../shared/execution-host/execution-host'
+import { toggleCollapsedGroupSet } from './collapsed-group-toggle'
+
+/** Persisted Agents-view presentation, with each field's absent-value default. */
+export function hydrateAgentsViewPresentation(
+  ui: PersistedUIState
+): Pick<
+  UISlice,
+  | 'agentsShowChildAgents'
+  | 'agentsCompactMode'
+  | 'agentsShowSearch'
+  | 'agentsReadFilter'
+  | 'agentsGroupBy'
+  | 'agentsCollapsedGroups'
+> {
+  return {
+    agentsShowChildAgents: ui.agentsShowChildAgents === true,
+    agentsCompactMode: ui.agentsCompactMode !== false,
+    agentsShowSearch: ui.agentsShowSearch !== false,
+    agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
+    agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),
+    agentsCollapsedGroups: new Set(ui.agentsCollapsedGroups ?? [])
+  }
+}
 
 /** Agents-view preferences; each setter persists immediately and stays separate from workspace-nav state. */
 export function createAgentsViewPreferenceActions(set: UISliceSet): Partial<UISlice> {
@@ -58,6 +84,14 @@ export function createAgentsViewPreferenceActions(set: UISliceSet): Partial<UISl
     setAgentsGroupBy: (v) => {
       set({ agentsGroupBy: v })
       window.api.ui.set({ agentsGroupBy: v }).catch(console.error)
-    }
+    },
+    // Why: keys outlive empty groups so a folded group stays folded when it refills.
+    agentsCollapsedGroups: new Set<string>(),
+    toggleAgentsCollapsedGroup: (key) =>
+      set((s) => {
+        const next = toggleCollapsedGroupSet(s.agentsCollapsedGroups, key)
+        window.api.ui.set({ agentsCollapsedGroups: [...next] }).catch(console.error)
+        return { agentsCollapsedGroups: next }
+      })
   }
 }

@@ -90,6 +90,7 @@ export function mergeHostWebUIState(
     agentsShowSearch: local.agentsShowSearch,
     agentsReadFilter: local.agentsReadFilter,
     agentsGroupBy: local.agentsGroupBy,
+    agentsCollapsedGroups: local.agentsCollapsedGroups,
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
     manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey,
     wslMovedSectionCollapsed: local.wslMovedSectionCollapsed,
