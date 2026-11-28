@@ -1,4 +1,4 @@
-// A hook's repo-locating Git env would aim real-Git suites at the outer repo; keep GIT_EXEC_PATH and config, which the compat lane sets.
+// A hook's repo-locating Git env would aim real-Git suites and E2E repo seeding at the outer repo; keep GIT_EXEC_PATH and config, which the compat lane sets.
 for (const name of [
   'GIT_DIR',
   'GIT_WORK_TREE',

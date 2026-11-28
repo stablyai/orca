@@ -1,5 +1,7 @@
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/terminal/daemon/newer-daemon-hold'
+import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { isHoldingForNewerProtocolDaemon } from './daemon-newer-protocol-hold'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import type { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
@@ -26,4 +28,25 @@ export async function routeSpawnOrHold(
     throw new Error(NEWER_DAEMON_HOLD_ERROR)
   }
   return resolution.provider
+}
+
+/** This build's "not found" for a session a newer daemon may still run is no proof it ended: hold, so its pane keeps its binding. */
+export async function attachOrHold(
+  opts: PtySpawnOptions,
+  sessionId: string,
+  ownerResolver: Pick<DaemonSessionOwnerResolver<DaemonPtyAdapter>, 'spawnAttachOnly'>,
+  current: Pick<DaemonPtyAdapter, 'hasRestorableHistory'>
+): Promise<PtySpawnResult> {
+  try {
+    return await ownerResolver.spawnAttachOnly({ ...opts, sessionId })
+  } catch (error) {
+    if (
+      error instanceof SessionNotFoundError &&
+      isHoldingForNewerProtocolDaemon() &&
+      current.hasRestorableHistory(sessionId)
+    ) {
+      throw new Error(NEWER_DAEMON_HOLD_ERROR)
+    }
+    throw error
+  }
 }
