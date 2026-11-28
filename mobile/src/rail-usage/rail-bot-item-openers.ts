@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -53,7 +53,7 @@ export function useRailBotItemOpeners({
         openMobileSession({
           hostId: target.pairedHostId,
           worktreeId: opened.worktreeId,
-          paneKey: structuredAgentSessionPaneKey(opened.tabId, id),
+          paneKey: chatPaneKey(id),
           name: bot.name,
           ...(target.executionHost === LOCAL_EXECUTION_HOST_ID
             ? {}
