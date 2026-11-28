@@ -88,13 +88,29 @@ export class OrcadManagedIdentityError extends Error {
     const detail = refused.message.replace(`${ORCAD_IDENTITY_MISMATCH_CODE}: `, '')
     return new OrcadManagedIdentityError(
       refused.kind,
-      `the Orca server in ${distro} is not the one this desktop paired with (it was ` +
-        'reinstalled or its identity was reset), so reconnecting won’t restore access. Remove ' +
-        'the WSL host and add it again',
+      wslHostServerExplanation(distro),
       detail,
       refused.sealed
     )
   }
+
+  /** A pinned WSL host's account read a different key than the paired one: sealed, it ends retries. */
+  static wslHostKeyChanged(distro: string, detail: string): OrcadManagedIdentityError {
+    return new OrcadManagedIdentityError(
+      'foreign-port',
+      wslHostServerExplanation(distro),
+      detail,
+      true
+    )
+  }
+}
+
+function wslHostServerExplanation(distro: string): string {
+  return (
+    `the Orca server in ${distro} is not the one this desktop paired with (it was ` +
+    'reinstalled or its identity was reset), so reconnecting won’t restore access. Remove ' +
+    'the WSL host and add it again'
+  )
 }
 
 /** Status code of a refusal automatic retries can't clear (the pairing must change); null otherwise. */

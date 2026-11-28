@@ -11,10 +11,11 @@ import {
 } from './wsl-orcad-account-facts'
 import {
   readWslHostFacts,
-  refuseUnpairedDefaultAccount,
+  refuseUnpairedHostAccount,
   WSL_HOST_FACTS_COMMAND
 } from './wsl-orcad-held-context'
 import { withWslHostLinuxUser } from './wsl-orcad-host-user'
+import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 // A managed orcad's argv as `ps -eo uid=,args=` prints it; it listens on 6800 or the next free port.
 const ROOT_ORCAD =
@@ -74,14 +75,41 @@ describe('WSL account facts parsing', () => {
 describe('an unpinned host whose default account lacks the paired key', () => {
   const qauser = { account: { uid: '1001', name: 'qauser' }, ownKey: 'QQQQ' }
   it('is refused before deploy unless that account holds the key or the host is pinned', async () => {
-    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'RRRR')).toThrow(/qauser/)
-    expect(() =>
-      refuseUnpairedDefaultAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')
-    ).toThrow(/qauser/)
-    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'QQQQ')).not.toThrow()
-    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, undefined)).not.toThrow()
-    await withWslHostLinuxUser('Ubuntu', 'root', async () =>
-      expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'RRRR')).not.toThrow()
+    expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, 'RRRR')).toThrow(/qauser/)
+    expect(() => refuseUnpairedHostAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')).toThrow(
+      /qauser/
     )
+    expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, 'QQQQ')).not.toThrow()
+    expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, undefined)).not.toThrow()
+    await withWslHostLinuxUser('Ubuntu', 'root', async () =>
+      expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, 'RRRR')).not.toThrow()
+    )
+  })
+})
+
+// QA repro: a pinned host whose user's key was reset came back as an unsealed `foreign` refusal, so
+// liveness retried for ~80 s and ended on the "another Orca may be using that port" text.
+describe('a pinned host whose account now holds another key', () => {
+  const qauser = { account: { uid: '1001', name: 'qauser' }, ownKey: 'QQQQ' }
+  it('is a sealed, final WSL refusal before deploy; an unread key still retries', async () => {
+    await withWslHostLinuxUser('Ubuntu', 'qauser', async () => {
+      let refused: unknown
+      try {
+        refuseUnpairedHostAccount('Ubuntu', qauser, 'RRRR')
+      } catch (error) {
+        refused = error
+      }
+      expect(refused).toBeInstanceOf(OrcadManagedIdentityError)
+      // Sealed is what liveness recovery treats as final (no backoff loop).
+      expect(refused).toMatchObject({ sealed: true })
+      expect(refused).toHaveProperty(
+        'message',
+        expect.stringMatching(/^(?!.*another Orca may be using).*Remove the WSL host and add it/s)
+      )
+      expect(() =>
+        refuseUnpairedHostAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')
+      ).not.toThrow()
+      expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, 'QQQQ')).not.toThrow()
+    })
   })
 })

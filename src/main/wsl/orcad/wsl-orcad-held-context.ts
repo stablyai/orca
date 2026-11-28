@@ -14,6 +14,7 @@ import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadConnectStateReader } from './wsl-orcad-connect-state-snapshot'
 import type { WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
 import { pinnedWslHostLinuxUser } from './wsl-orcad-host-user'
+import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import {
   readWslAccountFacts,
   WSL_ACCOUNT_FACTS_COMMAND,
@@ -80,14 +81,25 @@ function withPlatform(platform: RemoteHostPlatform | null): { platform?: RemoteH
   return platform ? { platform } : {}
 }
 
-/** Before any deploy (#49180): an unpinned host's default account must hold the paired key, or Orca would start a stranger. */
-export function refuseUnpairedDefaultAccount(
+/** Before any deploy (#49180): the host's account must hold the paired key, or Orca would start a stranger. */
+export function refuseUnpairedHostAccount(
   distro: string,
   facts: WslAccountFacts,
   pairedKey: string | undefined
 ): void {
-  if (facts.account && pairedKey && facts.ownKey !== pairedKey && !pinnedWslHostLinuxUser(distro)) {
+  if (!facts.account || !pairedKey || facts.ownKey === pairedKey) {
+    return
+  }
+  const pinned = pinnedWslHostLinuxUser(distro)
+  if (!pinned) {
     throw new WslHostAccountChangedError(distro, facts.account)
+  }
+  // Only a readable key of the pinned account itself proves a reset; a missing one may be mid-write.
+  if (facts.ownKey && facts.account.name === pinned) {
+    throw OrcadManagedIdentityError.wslHostKeyChanged(
+      distro,
+      `the Linux user ${pinned} now holds a different host key than the one this desktop paired with`
+    )
   }
 }
 
@@ -120,7 +132,7 @@ export async function holdWslDistroWithContext(
   if (facts.otherServerAccount) {
     noteWslOtherAccountServer(name, facts.otherServerAccount)
   }
-  refuseUnpairedDefaultAccount(name, facts, pairedOffer?.publicKeyB64)
+  refuseUnpairedHostAccount(name, facts, pairedOffer?.publicKeyB64)
   // Once the hold fails, stop the probes: after dispose they fall back to fresh wsl.exe execs,
   // which would boot a distro that just went away (E9).
   const probes = new AbortController()
