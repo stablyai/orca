@@ -228,7 +228,8 @@ export function NativeChatCrossVendorFrame({
     open: open && control !== null,
     worktreeId: control?.worktreeId ?? null,
     target: control?.target ?? LOCAL_TARGET,
-    currentAgent: control?.currentAgent ?? ''
+    currentAgent: control?.currentAgent ?? '',
+    botOnly: control?.botOnly ?? false
   })
   const [pick, setPick] = useState<TuiAgent | null>(null)
   if (!control) {

@@ -4,6 +4,8 @@ import type { RuntimeClientTarget } from '../../../../../../../shared/remote-run
 
 export type NativeChatCrossVendorControl = {
   currentAgent: string
+  /** A bot's Home Chat: only agents a bot can run on are offered. */
+  botOnly: boolean
   worktreeId: string | null
   target: RuntimeClientTarget
   /** Why another vendor cannot take over now (a turn is running); null when it can. */

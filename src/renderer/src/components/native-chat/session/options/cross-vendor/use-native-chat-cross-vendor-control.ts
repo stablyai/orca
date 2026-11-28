@@ -5,9 +5,13 @@ import { isTuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NativeChatStructuredViewProps } from '../../../native-chat-view-types'
 import type { NativeChatCrossVendorControl } from './native-chat-cross-vendor-context'
-import { switchNativeChatToVendor } from './native-chat-cross-vendor-switch'
+import {
+  switchBotHomeChatToVendor,
+  switchNativeChatToVendor
+} from './native-chat-cross-vendor-switch'
 
-/** Null where a chat cannot hand its conversation to another agent: a bot's chat, or no workspace. */
+/** Null where a chat cannot hand its conversation to another agent: a bot's other chats, or no
+ *  workspace. A bot's Home Chat moves the bot itself to the picked agent. */
 export function useNativeChatCrossVendorControl(input: {
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'sessionId' | 'agent' | 'target'>
   worktreeId: string | null
@@ -15,8 +19,8 @@ export function useNativeChatCrossVendorControl(input: {
   reportError: (text: string | null) => void
 }): NativeChatCrossVendorControl | null {
   const { pane, worktreeId, isWorking, reportError } = input
-  // A bot's chats keep the bot's own agent.
-  const isBotChat = useBotForWorkspace(worktreeId) !== null
+  const bot = useBotForWorkspace(worktreeId)
+  const botHome = bot !== null && bot.chatSessionId === pane.sessionId
   const t = useTranslate()
   const [switching, setSwitching] = useState<TuiAgent | null>(null)
   const inFlight = useRef(false)
@@ -28,16 +32,19 @@ export function useNativeChatCrossVendorControl(input: {
       inFlight.current = true
       setSwitching(agent)
       reportError(null)
-      void switchNativeChatToVendor({
-        worktreeId,
+      const request = {
         target: pane.target,
-        sourceTabId: pane.tabId,
         sourceSessionId: pane.sessionId,
         sourceAgent: pane.agent,
         agent,
         ...(model ? { model } : {}),
         ...(effort ? { effort } : {})
-      }).then((outcome) => {
+      }
+      void (
+        bot && botHome
+          ? switchBotHomeChatToVendor({ ...request, bot })
+          : switchNativeChatToVendor({ ...request, worktreeId, sourceTabId: pane.tabId })
+      ).then((outcome) => {
         inFlight.current = false
         setSwitching(null)
         if (!outcome.ok) {
@@ -46,14 +53,15 @@ export function useNativeChatCrossVendorControl(input: {
         }
       })
     },
-    [worktreeId, pane.target, pane.tabId, pane.sessionId, pane.agent, reportError]
+    [worktreeId, pane.target, pane.tabId, pane.sessionId, pane.agent, reportError, bot, botHome]
   )
-  const available = Boolean(worktreeId) && !isBotChat && isTuiAgent(pane.agent)
+  const available = Boolean(worktreeId) && (bot === null || botHome) && isTuiAgent(pane.agent)
   return useMemo(
     () =>
       available
         ? {
             currentAgent: pane.agent,
+            botOnly: bot !== null,
             worktreeId,
             target: pane.target,
             blockedReason: isWorking
@@ -66,6 +74,6 @@ export function useNativeChatCrossVendorControl(input: {
             switchTo
           }
         : null,
-    [available, pane.agent, worktreeId, pane.target, isWorking, switching, switchTo, t]
+    [available, pane.agent, worktreeId, pane.target, isWorking, switching, switchTo, t, bot]
   )
 }

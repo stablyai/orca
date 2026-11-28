@@ -10,6 +10,9 @@ import { StructuredAgentSessionCreateAbandonedError } from '@/lib/agent-session/
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { nativeChatForkSurfaceAddress } from '../../../messages/actions/native-chat-fork-launch'
+import { openBotChat, updateBot } from '@/lib/bot-catalog'
+import { botLaunchFromChoices } from '../../../../../../../shared/bots/bot-launch'
+import { isBotAgent, type Bot } from '../../../../../../../shared/bot-types'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -112,6 +115,52 @@ export async function switchNativeChatToVendor(
   // The earlier chat stays in Session History; its tab gives way to the continuation.
   state.closeUnifiedTab(request.sourceTabId, { preserveWorktreeSelection: true })
   return { ok: true, sessionId: launch.sessionId }
+}
+
+/** A bot's Home Chat: the bot moves to `agent`, its Home starts fresh there, and the earlier Home
+ *  conversation is handed to it, so the Home tab carries on with the new agent. */
+export async function switchBotHomeChatToVendor(
+  request: Omit<NativeChatCrossVendorSwitchRequest, 'sourceTabId' | 'worktreeId'> & { bot: Bot }
+): Promise<NativeChatCrossVendorSwitchOutcome> {
+  const agentLabel = structuredAgentLabel(request.agent)
+  if (!isBotAgent(request.agent)) {
+    return reportFailure(
+      agentLabel,
+      translate(
+        'components.native-chat.crossVendor.botUnsupported',
+        "Bots can't run on this agent yet."
+      )
+    )
+  }
+  const launch = botLaunchFromChoices({
+    ...(request.model ? { model: request.model } : {}),
+    ...(request.effort ? { options: { effort: request.effort } } : {})
+  })
+  const previous = { agent: request.bot.agent, launch: request.bot.launch ?? null }
+  let sessionId: string
+  try {
+    const updated = await updateBot(request.bot, { agent: request.agent, launch: launch ?? null })
+    sessionId = await openBotChat(updated)
+  } catch (error) {
+    await updateBot(request.bot, previous).catch(() => undefined)
+    return reportFailure(agentLabel, errorText(error))
+  }
+  if (sessionId === request.sourceSessionId) {
+    return reportFailure(
+      agentLabel,
+      translate('components.native-chat.crossVendor.botHomeKept', 'The bot kept its current chat.')
+    )
+  }
+  try {
+    await callStructuredAgentSession(request.target, 'agentSession.crossVendorHandoff', {
+      sessionId,
+      sourceSessionId: request.sourceSessionId
+    })
+  } catch (error) {
+    // The new Home runs without the conversation; say so where the person is now looking.
+    return reportFailure(agentLabel, errorText(error))
+  }
+  return { ok: true, sessionId }
 }
 
 function reportFailure(agentLabel: string, detail: string): NativeChatCrossVendorSwitchOutcome {

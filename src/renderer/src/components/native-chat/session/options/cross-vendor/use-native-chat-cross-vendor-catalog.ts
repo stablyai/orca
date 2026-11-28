@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
+import { isBotAgent } from '../../../../../../../shared/bot-types'
 import { translate } from '@/i18n/i18n'
 import type { AgentSessionUnavailable } from '../../../../../../../shared/agent-session/failures/agent-session-availability'
 import { detectAgentSessionContinuationAgents } from '@/lib/agent-session/launch/continuation/launch-agent-session-continuation'
@@ -30,8 +31,9 @@ export function useNativeChatCrossVendorCatalog(input: {
   worktreeId: string | null
   target: RuntimeClientTarget
   currentAgent: string
+  botOnly?: boolean
 }): CrossVendorCatalog {
-  const { open, worktreeId, target, currentAgent } = input
+  const { open, worktreeId, target, currentAgent, botOnly = false } = input
   const [catalog, setCatalog] = useState<CrossVendorCatalog>({ vendors: null, models: {} })
   useEffect(() => {
     if (!open || !worktreeId) {
@@ -56,6 +58,7 @@ export function useNativeChatCrossVendorCatalog(input: {
       const vendors = offered.filter(
         (agent) =>
           isTuiAgentEnabled(agent, state.settings?.disabledTuiAgents) &&
+          (!botOnly || isBotAgent(agent)) &&
           (agent === currentAgent ||
             agentChoiceOpensAsChat(state, agent, workspace, detected, 'chat'))
       )
@@ -106,7 +109,7 @@ export function useNativeChatCrossVendorCatalog(input: {
       )
     })()
     return () => abort.abort()
-  }, [open, worktreeId, target, currentAgent])
+  }, [open, worktreeId, target, currentAgent, botOnly])
   return catalog
 }
 

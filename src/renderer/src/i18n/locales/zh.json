@@ -22005,7 +22005,9 @@
         "notSignedIn": "未登录",
         "cliMissing": "此主机未安装",
         "notRunnable": "无法在此主机上启动",
-        "waitForTurn": "请等待当前回复完成或停止它，再切换代理。"
+        "waitForTurn": "请等待当前回复完成或停止它，再切换代理。",
+        "botUnsupported": "Bot 暂不支持在此代理上运行。",
+        "botHomeKept": "Bot 保留了当前聊天。"
       }
     },
     "tab": {
