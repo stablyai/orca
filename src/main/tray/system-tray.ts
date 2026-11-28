@@ -242,7 +242,6 @@ function replaceFailedHelperTray(failed: MacMenuBarTray, reason: 'fallback' | 'o
   void failed.destroy()
   if (reason === 'off') {
     tray = null
-    reportMenuBarHost('helper-gave-up')
     return
   }
   tray = createNativeTray(baseTrayImage, trayOptions)

@@ -48,6 +48,9 @@ export function inProcessMenuBarHost(): MenuBarHost {
 export function markMacMenuBarHelperUnavailable(next: 'in-process' | 'off'): void {
   fellBack = next === 'in-process'
   launchHost = next
+  if (next === 'off') {
+    reportMenuBarHost('helper-gave-up')
+  }
 }
 
 // The startup `tray-created` milestone fires once, whichever caller created the icon first.

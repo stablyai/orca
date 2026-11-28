@@ -222,6 +222,22 @@ it('turns the icon off when helpers hang after a long healthy run', () => {
   expect(onUnavailable.mock.calls).toEqual([['off']])
 })
 
+it('keeps the icon when hangs are hours apart', () => {
+  const onUnavailable = vi.fn()
+  const { owner: process } = failingOwner(onUnavailable)
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const helper = helpers.at(-1)!
+    helper.send({ type: 'ready' })
+    helper.send({ type: 'applied', id: helper.requests.at(-1)!.id })
+    vi.advanceTimersByTime(2 * 60 * 60_000)
+    process.probe()
+    vi.advanceTimersByTime(16_000)
+    helper.exit()
+    vi.advanceTimersByTime(5_000)
+  }
+  expect(onUnavailable).not.toHaveBeenCalled()
+})
+
 it('turns the icon off, never in-process, when started helpers keep hanging', () => {
   const onUnavailable = vi.fn()
   failingOwner(onUnavailable)
