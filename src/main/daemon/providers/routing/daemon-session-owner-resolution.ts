@@ -40,8 +40,14 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     this.providers = [...providers]
   }
 
-  // Proven-gone or retired providers contribute no rows, so removing them leaves in-flight inventories valid.
-  forgetProvider(provider: T): void {
+  /** A retired provider listed rows until it left; inventories begun before must not restore its routes. */
+  retireProvider(provider: T): void {
+    this.forgetProvider(provider)
+    this.invalidateInventory()
+  }
+
+  // Proven-gone providers contribute no rows, so removing them leaves in-flight inventories valid.
+  private forgetProvider(provider: T): void {
     const index = this.providers.indexOf(provider)
     if (index !== -1) {
       this.providers.splice(index, 1)

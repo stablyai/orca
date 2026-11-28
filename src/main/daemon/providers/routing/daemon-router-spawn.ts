@@ -34,7 +34,7 @@ export class DaemonRouterSpawn {
       legacy: () => state.legacy,
       drop: (adapter) => {
         if (dropLegacyAdapter(adapter, state.legacy, state.subscriptions())) {
-          state.ownerResolver().forgetProvider(adapter)
+          state.ownerResolver().retireProvider(adapter)
         }
       },
       ...(state.legacyIdleRetirementTiming ? { timing: state.legacyIdleRetirementTiming } : {})
@@ -50,9 +50,11 @@ export class DaemonRouterSpawn {
       // An older generation that retired under this spawn owned nothing; route again without it.
       // A spawn the current generation took is never sent twice: its reply may only have been lost.
       const { target } = attempt
+      // Attach-only picks its owner internally; any held generation may be the one that refused it.
+      const reached = target ?? (opts.attachOnly ? 'any' : undefined)
       if (
         target === this.state.current() ||
-        !(await this.legacyIdle.settleHeldRetirements(error, generations, target))
+        !(await this.legacyIdle.settleHeldRetirements(error, generations, reached))
       ) {
         throw error
       }

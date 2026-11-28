@@ -72,13 +72,13 @@ export class DaemonRouterLegacyIdleRetirement {
   async settleHeldRetirements(
     error: unknown,
     generationsAtStart: number,
-    target: DaemonPtyAdapter | undefined
+    target: DaemonPtyAdapter | 'any' | undefined
   ): Promise<boolean> {
     if (!mayComeFromRetirement(error)) {
       return false
     }
     // Refused while an older generation decided past the fence: route again once it has answered.
-    const decision = target ? this.preRpc.pendingDecision(target) : undefined
+    const decision = target && target !== 'any' ? this.preRpc.pendingDecision(target) : undefined
     if (decision) {
       await decision
       return true
@@ -86,7 +86,7 @@ export class DaemonRouterLegacyIdleRetirement {
     const held = this.options.legacy().filter((adapter) => this.modes.get(adapter) === 'held')
     // Only the generation the spawn reached can have refused it before its close arrives.
     const settled = await Promise.all(
-      held.map((adapter) => this.confirmRetired(adapter, adapter === target))
+      held.map((adapter) => this.confirmRetired(adapter, target === 'any' || adapter === target))
     )
     return settled.includes(true) || this.options.legacy().length < generationsAtStart
   }
