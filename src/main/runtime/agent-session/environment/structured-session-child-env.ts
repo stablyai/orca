@@ -23,10 +23,7 @@ import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-ch
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
 import { REMOTE_RUNTIME_SELECTOR_ENV_KEYS } from '../../../ipc/pty/host-env/inherited-orca-identity-env'
 import { resolveStructuredWorkerIdentityForSession } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import {
-  LAYOUT_OWNER_ENV,
-  LAYOUT_OWNER_RESOLVED_ENV
-} from '../../../../shared/workspace-layout/layout-owner-startup'
+import { LAYOUT_OWNER_ENV_KEYS } from '../../../../shared/workspace-layout/layout-owner-startup'
 
 /** Remove inherited pane identity so hooks and the CLI cannot attribute the chat to the host's launching pane; the seal keeps a worker's own handle. */
 export const STRUCTURED_CHILD_ENV_TO_DELETE: readonly string[] = [
@@ -40,8 +37,7 @@ export const STRUCTURED_CHILD_ENV_TO_DELETE: readonly string[] = [
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ...AGENT_HOOK_RUNTIME_ENV_KEYS,
   // Orca's own layout path, as in terminals (build-mode-env.ts).
-  LAYOUT_OWNER_ENV,
-  LAYOUT_OWNER_RESOLVED_ENV
+  ...LAYOUT_OWNER_ENV_KEYS
 ]
 
 export type SealedStructuredSessionChild = {

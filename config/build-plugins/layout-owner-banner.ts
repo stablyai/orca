@@ -1,5 +1,7 @@
 // Rolldown evaluates shared chunks before index.js's first import, so the layout owner is resolved in
 // its banner: the switch module reads it as a const and must never see a later value.
+import { resolve } from 'node:path'
+import { buildSync } from 'esbuild'
 import type { Plugin } from 'vite'
 import {
   LAYOUT_OWNER_ENV,
@@ -10,13 +12,31 @@ import {
 } from '../../src/shared/workspace-layout/layout-owner-startup'
 
 const MARKER = '/* orca: resolve layout owner */'
+const SERVE_MODE_ARGV = resolve('src/main/startup/serve-launch/serve-mode-argv.ts')
+
+/** Preflight's own serve detection, bundled in so a CLI-form `serve` launch is a server here too. */
+function serveModeArgvModule(): string {
+  const { outputFiles } = buildSync({
+    entryPoints: [SERVE_MODE_ARGV],
+    bundle: true,
+    format: 'iife',
+    globalName: 'serveModeArgv',
+    platform: 'node',
+    target: 'node18',
+    charset: 'ascii',
+    write: false,
+    logLevel: 'silent'
+  })
+  return outputFiles[0].text
+}
 
 /** Same rules as resolveHostLayoutOwner (src/main/layout-owner/host-layout-owner.ts). */
 export function createLayoutOwnerBanner(): string {
   return `${MARKER}
 ;(() => {
   const env = process.env
-  const server = process.argv.includes('--serve') || env.ORCA_ORCAD_SIDECAR === '1'
+  ${serveModeArgvModule()}
+  const server = serveModeArgv.argvRequestsServeMode(process.argv) || env.ORCA_ORCAD_SIDECAR === '1'
   const name = server ? ${JSON.stringify(SERVER_LAYOUT_OWNER_ENV)} : ${JSON.stringify(LAYOUT_OWNER_ENV)}
   let raw = env[name] || undefined
   let source = name

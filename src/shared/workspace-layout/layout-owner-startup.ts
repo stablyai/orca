@@ -10,6 +10,12 @@ export const LAYOUT_OWNER_ENV = 'ORCA_LAYOUT_OWNER'
 export const SERVER_LAYOUT_OWNER_ENV = 'ORCA_SERVER_LAYOUT_OWNER'
 /** The host's resolved value; every host recomputes it, so an inherited copy is a parent's. */
 export const LAYOUT_OWNER_RESOLVED_ENV = 'ORCA_LAYOUT_OWNER_RESOLVED'
+/** Every layout-owner variable: none may reach a user's terminal or agent, where it would switch their Orca or Vitest. */
+export const LAYOUT_OWNER_ENV_KEYS = [
+  LAYOUT_OWNER_ENV,
+  SERVER_LAYOUT_OWNER_ENV,
+  LAYOUT_OWNER_RESOLVED_ENV
+] as const
 export const LAYOUT_OWNER_FLAG_FILE_NAME = 'layout-owner-mode'
 /** Where the desktop banner read the flag from; main compares it with the final userData. */
 export const LAYOUT_OWNER_FLAG_DIR_KEY = '__orcaLayoutOwnerFlagDir'

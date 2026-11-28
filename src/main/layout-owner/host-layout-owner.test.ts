@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { buildSync } from 'esbuild'
 import { describe, expect, it } from 'vitest'
@@ -59,10 +60,19 @@ describe('host layout owner', () => {
       for (const flag of [undefined, 'main\n', 'window', 'junk']) {
         for (const env of envs) {
           const expected = resolveHostLayoutOwner({ server, env, readFlag: () => flag }).owner
-          const settled = runBanner({ argv: server ? ['orca', '--serve'] : ['orca'], env, flag })
-          expect(settled.ORCA_LAYOUT_OWNER_RESOLVED, JSON.stringify({ server, flag, env })).toBe(
-            expected
-          )
+          // Electron's own flag, and the CLI form preflight normalizes later (serve-mode-argv.ts).
+          const argvs = server
+            ? [
+                ['orca', '--serve'],
+                ['Orca', 'serve', '--json']
+              ]
+            : [['orca']]
+          for (const argv of argvs) {
+            const settled = runBanner({ argv, env, flag })
+            expect(settled.ORCA_LAYOUT_OWNER_RESOLVED, JSON.stringify({ argv, flag, env })).toBe(
+              expected
+            )
+          }
           if (server) {
             const orcadEnv = { ...env }
             settleServerLayoutOwnerEnv(orcadEnv)
@@ -92,14 +102,18 @@ describe('host layout owner', () => {
   })
 
   it('settles in orcad before anything imports the switch module', () => {
-    const claims = [
-      '../memory/host-malloc-tunables-claim',
-      '../ipc/pty/host-env/inherited-orca-identity-claim',
-      './server-layout-owner-claim'
-    ]
-    for (const claim of claims) {
+    // Every import orcad's entry runs up to and including the claim: esbuild evaluates them in order.
+    const orcadMain = path.resolve(__dirname, '../orcad/main.ts')
+    const specifiers = [
+      ...readFileSync(orcadMain, 'utf8').matchAll(/^import\s[^']*?'([^']+)'/gm)
+    ].map((match) => match[1])
+    const claimIndex = specifiers.indexOf('../layout-owner/server-layout-owner-claim')
+    expect(claimIndex).toBeGreaterThan(-1)
+    for (const specifier of specifiers.slice(0, claimIndex + 1)) {
       const { metafile } = buildSync({
-        entryPoints: [path.resolve(__dirname, `${claim}.ts`)],
+        entryPoints: [
+          specifier.startsWith('.') ? path.resolve(path.dirname(orcadMain), specifier) : specifier
+        ],
         bundle: true,
         platform: 'node',
         packages: 'external',

@@ -193,6 +193,9 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         app.evaluate(({ app }) => app.getPath('home'))
       )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+      const page = await app.firstWindow({ timeout: 120_000 })
+      await page.waitForLoadState('domcontentloaded')
+      await expectAppTookLayoutOwner(app, homeIsolation.env, page)
     } catch (error) {
       await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
       await removeUserDataDirAfterShutdown(userDataDir)
@@ -222,7 +225,6 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // Allow the full budget for first-window creation on cold isolated profiles.
     const page = await electronApp.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
-    await expectAppTookLayoutOwner(electronApp, page)
 
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
 

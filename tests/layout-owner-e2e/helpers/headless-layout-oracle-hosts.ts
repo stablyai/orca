@@ -10,6 +10,7 @@ import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../../src/shared/node-runtime/node-runtime-pin'
 import { cleanupE2EDaemons } from './electron-process-shutdown'
 import { launchHeadlessPairedRuntimeHost } from './headless-paired-runtime-host'
+import { expectRuntimeTookLayoutOwner } from './layout-owner-build'
 import { cliServeProfile, spawnUntilReady, type ReadyProcess } from './orca-serve-cli-host'
 
 export type HeadlessHostKind = 'orcad' | 'electron'
@@ -112,6 +113,8 @@ async function startOrcadHost(
     await cleanupE2EDaemons(profile.userDataDir)
     throw new Error(`orcad serve is not usable: ${serve.ready.daemon}\n${serve.stderr()}`)
   }
+  const client = new RuntimeClient(profile.userDataDir, 30_000, null, null)
+  await expectRuntimeTookLayoutOwner(client, env)
   return {
     kind: 'orcad',
     userDataDir: profile.userDataDir,
@@ -126,6 +129,7 @@ async function startOrcadHost(
       }
       await whileStopped?.()
       serve = await launch()
+      await expectRuntimeTookLayoutOwner(client, env)
     },
     dispose: async () => {
       await serve?.stop()

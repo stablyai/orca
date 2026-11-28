@@ -155,9 +155,7 @@ export async function launchHeadlessPairedRuntimeHost(
         launchedApp.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
       ).then((home) => assertElectronResolvedIsolatedHome(home, isolation)),
       // Only an executable this checkout built reads the server setting.
-      options.executablePath
-        ? undefined
-        : expectServerTookLayoutOwner(launchedApp, isolation.env.ORCA_SERVER_LAYOUT_OWNER)
+      options.executablePath ? undefined : expectServerTookLayoutOwner(launchedApp, isolation.env)
     ])
     let serveProcess = launchedApp
     // Do not re-close an app after failed relaunch or disposal can replace the launch error.
@@ -184,6 +182,9 @@ export async function launchHeadlessPairedRuntimeHost(
         serveProcess = relaunched
         serveProcessOpen = true
         await readServeReadiness(relaunched, { requirePairingOffer: false })
+        if (!options.executablePath) {
+          await expectServerTookLayoutOwner(relaunched, isolation.env)
+        }
       },
       dispose: async () => {
         const socketDir = agentBrowserSocketDir

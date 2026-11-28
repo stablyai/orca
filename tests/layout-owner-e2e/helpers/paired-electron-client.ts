@@ -234,7 +234,7 @@ export async function launchPairedElectronClient(
     )
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
-    await expectAppTookLayoutOwner(app, page)
+    await expectAppTookLayoutOwner(app, homeIsolation.env, page)
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
     await page.waitForFunction(
       () => window.__store?.getState().workspaceSessionReady === true,
