@@ -3,7 +3,6 @@ import { MobileSegmentedControl } from '../components/controls/MobileSegmentedCo
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   composerUsageWindowToggleChoices,
   type ComposerUsageWindowChoice,
@@ -21,8 +20,6 @@ export function ComposerUsageWindowPicker({
   windows?: readonly UsageWindowEntry[]
 }) {
   const styles = useThemedStyles(stylesSheet)
-
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const choice = useComposerUsageWindow()
   const choices = windows

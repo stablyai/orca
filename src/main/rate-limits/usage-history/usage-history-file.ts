@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   parseUsageHistory,
@@ -22,13 +23,15 @@ export type PersistedUsageHistory = {
 // Far above a full store (128 series of 168 points is ~1 MB); anything larger is not ours to parse.
 export const USAGE_HISTORY_FILE_MAX_BYTES = 4 * 1024 * 1024
 
-const FileSchema = z.object({
-  version: z.literal(2),
-  activeAccounts: z.record(z.string(), z.string()),
-  series: z.array(
-    z.looseObject({ provider: z.string(), account: z.string(), windowId: z.string() })
-  )
-})
+const FileSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(2),
+    activeAccounts: z.record(z.string(), z.string()),
+    series: z.array(
+      z.looseObject({ provider: z.string(), account: z.string(), windowId: z.string() })
+    )
+  })
+)
 
 /** Reads the saved store; version 1 (flat `provider:window` keys) carries over as unattributed. */
 export function parseUsageHistoryFile(raw: unknown): PersistedUsageHistory {

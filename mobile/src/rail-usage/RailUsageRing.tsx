@@ -53,7 +53,7 @@ export function RailUsageRing({
     return null
   }
   const readout = composerUsageMeterReadout(entry.window.usedPercent, display)
-  const fill = usageWindowPaceColor(entry.window, now, thresholds)
+  const fill = usageWindowPaceColor(entry.window, now, thresholds, colors)
   const marker = usagePaceMarkerPercent(entry.window, now, display)
   const provider = getProviderDisplayName(usage.provider)
   const vars = {
