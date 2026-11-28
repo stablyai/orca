@@ -47,14 +47,17 @@ export async function createUploadFolder(rootDir: string, uploadDir: string): Pr
   await mkdir(uploadDir)
 }
 
-export type OwnedUploadFolder = { uploadDir: string; owned: boolean }
+/** `owned` once this store made the folder; `part` once it made, or handed out, the part file. */
+export type OwnedUploadFolder = { uploadDir: string; owned: boolean; part: boolean }
 
 /** Undoes an upload this store made: its part file, then its folder only if nothing else is in it. */
 export async function removeOwnedUpload(upload: OwnedUploadFolder): Promise<void> {
   if (!upload.owned) {
     return
   }
-  const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
-  await rm(partPath, { force: true }).catch(() => {})
+  if (upload.part) {
+    const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+    await rm(partPath, { force: true }).catch(() => {})
+  }
   await rmdir(upload.uploadDir).catch(() => {})
 }

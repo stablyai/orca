@@ -46,8 +46,9 @@ type InFlightUpload = {
   expectedLength: number
   receivedLength: number
   writing: boolean
-  /** Set once this upload created its folder, so teardown may undo that and nothing else. */
+  /** Set once this upload created its folder or part file, so teardown undoes only those. */
   owned: boolean
+  part: boolean
 }
 
 export type AgentSessionAttachmentStoreOptions = {
@@ -103,7 +104,8 @@ export class AgentSessionAttachmentStore {
       expectedLength: args.byteLength,
       receivedLength: 0,
       writing: true,
-      owned: false
+      owned: false,
+      part: false
     }))
     const upload = this.uploads.peek(uploadId)!
     try {
@@ -111,7 +113,10 @@ export class AgentSessionAttachmentStore {
       upload.owned = true
       const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
       await writeFile(partPath, '', { flag: 'wx' })
+      upload.part = true
       upload.writing = false
+      // A full idle period from now, not from a re-arm during a slow admission.
+      this.uploads.touch(uploadId)
     } catch (error) {
       this.uploads.delete(uploadId)
       await removeOwnedUpload(upload)
@@ -141,8 +146,8 @@ export class AgentSessionAttachmentStore {
       upload.receivedLength = nextLength
     } finally {
       upload.writing = false
+      this.uploads.touch(args.uploadId)
     }
-    this.uploads.touch(args.uploadId)
     return { receivedBytes: upload.receivedLength }
   }
 
@@ -183,11 +188,12 @@ export class AgentSessionAttachmentStore {
   /** One committed upload whose hidden part file `write` fills, renamed into place; returns its
    *  path. Not in flight meanwhile: the sweep leaves a folder this new alone for an hour. */
   async storeWith(name: string, write: (partPath: string) => Promise<void>): Promise<string> {
-    const upload = { uploadDir: join(this.rootDir, randomUUID()), owned: false }
+    const upload = { uploadDir: join(this.rootDir, randomUUID()), owned: false, part: false }
     const finalPath = join(upload.uploadDir, sanitizeAgentSessionAttachmentName(name))
     try {
       await createUploadFolder(this.rootDir, upload.uploadDir)
       upload.owned = true
+      upload.part = true
       const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
       await write(partPath)
       // Rename is the commit: nothing fallible may follow it.

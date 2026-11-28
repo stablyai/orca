@@ -201,6 +201,9 @@ it('never expires an upload while it is writing', async () => {
   await vi.advanceTimersByTimeAsync(TTL_PAST)
   releaseAdmission()
   const { uploadId } = await admitting
+  // A whole idle period from when admission finished, not from the re-arm during it.
+  await vi.advanceTimersByTimeAsync(4.5 * 60 * 1000)
+  expect(store.isUploadInFlight(uploadId)).toBe(true)
   const releaseAppend = hold(join(root, uploadId))
   const appending = store.appendChunk({
     callerKey: 'phone',
@@ -244,6 +247,7 @@ it('keeps the part and the committed file when expiry lands during a slow commit
   const release = hold(part)
   const committing = store.commitUpload({ callerKey: 'phone', uploadId })
   await vi.advanceTimersByTimeAsync(TTL_PAST)
+  expect(store.isUploadInFlight(uploadId)).toBe(true)
   expect(await readFile(part, 'utf8')).toBe('mine')
   release()
   const committed = await committing
