@@ -1,11 +1,4 @@
 import { isWslUncPath } from './wsl-paths'
-export {
-  areLocalWindowsWslPathAliases,
-  getLocalWindowsWslPathIdentity,
-  isWslUncPathForCallerLinuxPath,
-  isWslUncPathForLinuxMountedPath,
-  type LocalWindowsWslPathIdentity
-} from './wsl-path-aliases'
 
 const SLASH_CHAR_CODE = '/'.charCodeAt(0)
 

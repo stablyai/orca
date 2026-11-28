@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   isPathInsideOrEqual,
-  isWslUncPathForCallerLinuxPath,
-  isWslUncPathForLinuxMountedPath,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
 } from './cross-platform-path'
+import { isWslUncPathForCallerLinuxPath, isWslUncPathForLinuxMountedPath } from './wsl-path-aliases'
 
 describe('isWslUncPathForCallerLinuxPath', () => {
   const UBUNTU = 'Ubuntu-24.04'

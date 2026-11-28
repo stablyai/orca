@@ -16,11 +16,11 @@ import {
 } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { legacyWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachment-legacy'
 import { getWorkspaceReferenceIdentity } from '../../../../shared/workspace-attachments/workspace-reference-identity'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import {
-  isPathInsideOrEqual,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
-} from '../../../../shared/file-access/cross-platform-path'
+} from '../../../../shared/file-access/wsl-path-aliases'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { branchSelectorMatches, runtimePathsEqual } from '../catalog/runtime-worktree-path-identity'
 import { storedNameMatcher } from '../../../../shared/text/typed-name-normalization'
