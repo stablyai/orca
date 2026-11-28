@@ -1,4 +1,4 @@
-import { CopyX, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { CopyX, Pencil, Pin, PinOff, Sparkles, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -105,6 +105,9 @@ type SortableTabContextMenuProps = {
   onCloseToLeft: (tabId: string) => void
   onCloseSplitPane?: () => void
   onRenameOpen: () => void
+  /** Native chats whose host advertises regenerate-name; absent on terminal tabs. */
+  onAiRename?: () => void
+  aiRenaming?: boolean
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
   /** Only terminal-backed agent tabs can switch view; structured chats have no terminal beneath them. */
@@ -134,6 +137,8 @@ export function SortableTabContextMenu({
   onCloseOthers,
   onCloseSplitPane,
   onRenameOpen,
+  onAiRename,
+  aiRenaming = false,
   onSetTabColor,
   onTogglePin,
   canToggleViewMode = false,
@@ -235,6 +240,14 @@ export function SortableTabContextMenu({
           <Pencil className="size-3.5" />
           {t('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
           {renameShortcut ? <ContextMenuShortcut>{renameShortcut}</ContextMenuShortcut> : null}
+        </ContextMenuItem>
+      ) : null}
+      {closable && onAiRename ? (
+        <ContextMenuItem onSelect={onAiRename} disabled={aiRenaming}>
+          <Sparkles className="size-3.5" />
+          {aiRenaming
+            ? t('components.tab.bar.SortableTabContextMenu.aiRenaming', 'Renaming…')
+            : t('components.tab.bar.SortableTabContextMenu.aiRename', 'AI Rename')}
         </ContextMenuItem>
       ) : null}
       <div className="px-2.5 py-1.5">

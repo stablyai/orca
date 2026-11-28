@@ -46,3 +46,46 @@ export const open = defineFixture({
     )
   }
 })
+
+export const openNativeChat = defineFixture({
+  width: 360,
+  render: function NativeChatMenuFixture() {
+    const trigger = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+      trigger.current?.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, clientX: 16, clientY: 8 })
+      )
+    }, [])
+    return (
+      <div className="relative h-[460px] overflow-hidden bg-background">
+        <FixtureCodeBackdrop />
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <button ref={trigger}>Tab</button>
+          </ContextMenuTrigger>
+          <SortableTabContextMenu
+            open
+            tab={{ id: 'tab-1', worktreeId: 'wt-1', color: null }}
+            unifiedTabId="tab-1"
+            groupId="group-1"
+            isActive
+            tabCount={3}
+            hasTabsToRight
+            hasTabsToLeft={false}
+            isPinned={false}
+            nativeChat={{ sessionId: 'session-1', agent: 'claude' }}
+            onActivate={noop}
+            onClose={noop}
+            onCloseOthers={noop}
+            onCloseToRight={noop}
+            onCloseToLeft={noop}
+            onRenameOpen={noop}
+            onAiRename={noop}
+            onSetTabColor={noop}
+            onTogglePin={noop}
+          />
+        </ContextMenu>
+      </div>
+    )
+  }
+})

@@ -37,6 +37,7 @@ import { useTerminalTabActivity } from './use-terminal-tab-activity'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 
 import { useNativeChatNamingFailure } from '../session-actions/use-native-chat-naming-failure'
+import { useNativeChatAiRename } from '../session-actions/use-native-chat-ai-rename'
 import { ForkMarkedName } from '../../native-chat/fork/ForkMarkedName'
 import { BOT_HOME_TAB_LABEL_CLASSES, BotHomeTabAccent } from '../../bots/home-chat/BotHomeTabAccent'
 
@@ -89,6 +90,7 @@ export default function SortableTab({
   const t = useTranslate()
   const canClose = closable && !isPinned
   const naming = useNativeChatNamingFailure(namingFailure)
+  const aiRename = useNativeChatAiRename(nativeChat, tab.worktreeId)
   // A chat's status and unread rows name it by its conversation's pane address.
   const statusTabId = nativeChat ? chatPaneAddressTabId(nativeChat.sessionId) : tab.id
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
@@ -396,6 +398,8 @@ export default function SortableTab({
             onCloseToLeft={onCloseToLeft}
             onCloseSplitPane={onCloseSplitPane}
             onRenameOpen={handleRenameOpen}
+            onAiRename={aiRename?.rename}
+            aiRenaming={aiRename?.renaming}
             onSetTabColor={onSetTabColor}
             onTogglePin={onTogglePin}
             canToggleViewMode={canToggleViewMode}

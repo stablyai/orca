@@ -7,6 +7,10 @@ import {
   createStructuredChatNamingWork,
   type NamingRequest
 } from './conversation-naming/structured-chat-naming-work'
+import {
+  startStructuredChatNameRegenerate,
+  writeGeneratedConversationName
+} from './conversation-naming/structured-chat-naming-regenerate'
 import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/observations/structured-agent-session-status-observation'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
@@ -68,7 +72,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     const store = deps.getStore()
     return (
       !!store &&
-      generationStillCurrent(store, request.record) &&
+      generationStillCurrent(store, request.record, request.automatic) &&
       (!request.automatic || deps.getSettings().nativeChatAutoName !== false)
     )
   }
@@ -76,19 +80,26 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     applicable,
     prepare,
     execute: async (request, firstPrompt) => {
-      if (!applicable(request)) {
+      const record = request.automatic
+        ? request.record
+        : deps.getStore()?.getRecord(request.record.sessionId)
+      if (!record) {
+        return
+      }
+      const live = { ...request, record }
+      if (!applicable(live)) {
         return
       }
       const name = await generateName(
-        request.record,
+        live.record,
         firstPrompt,
-        request.record.conversationName ?? '',
-        request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
-        () => applicable(request)
+        live.record.conversationName ?? '',
+        live.automatic ? GENERATION_RETRY_DELAYS_MS : [],
+        () => applicable(live)
       )
       const store = deps.getStore()
-      if (name && store && applicable(request)) {
-        await setName(store, request.record, name)
+      if (name && store && applicable(live)) {
+        await setName(store, live.record, name)
       }
     },
     changed: (record) => refresh(record.location.workspaceId, record.sessionId),
@@ -165,23 +176,27 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
   }
 
   async function setName(store: NamingStore, record: AgentSessionRecord, name: string) {
-    const named = await store.compareAndSetConversationName(
-      record.sessionId,
+    const named = await writeGeneratedConversationName({
+      store,
+      record,
       name,
-      record.conversationName ?? null,
-      contextId(record)
-    )
+      contextId: contextId(record)
+    })
     if (named) {
       forget(record.sessionId)
       refresh(named.location.workspaceId, named.sessionId)
     }
   }
 
-  const generationStillCurrent = (store: NamingStore, record: AgentSessionRecord) => {
+  const generationStillCurrent = (
+    store: NamingStore,
+    record: AgentSessionRecord,
+    automatic: boolean
+  ) => {
     const current = store.getRecord(record.sessionId)
     return (
       current !== null &&
-      current.conversationNameSource !== 'user' &&
+      (!automatic || current.conversationNameSource !== 'user') &&
       current.conversationName === record.conversationName &&
       contextId(current) === contextId(record)
     )
@@ -264,14 +279,9 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     },
     regenerate: (sessionId) => {
       const record = deps.getStore()?.getRecord(sessionId)
-      if (!record) {
-        return false
-      }
-      work.run(record, false)
-      return true
+      return record ? startStructuredChatNameRegenerate({ record, run: work.run }) : false
     },
-    // Not a job: a pending generation must not swallow the user's rename. The record's 'user'
-    // source is what makes that generation's later write refuse.
+    // Not a job: the record's 'user' source makes a later generation write refuse.
     setUserName: async (sessionId, name, write, onApplied) => {
       const store = deps.getStore()
       if (!store?.getRecord(sessionId)) {

@@ -18,6 +18,7 @@ import {
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../../shared/execution-host/execution-host'
 import {
@@ -137,6 +138,8 @@ export function canPaneOfferResumeInNewChat(
 export type NativeChatTabSession = {
   sessionId: string
   agent: AgentType | undefined
+  /** Host stamped on the tab; absent tabs resolve the owner from the workspace. */
+  executionHostId?: ExecutionHostId
 }
 
 export type NativeChatCliForkIdentity = {
