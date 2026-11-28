@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithMobileTookFloor } from './mobile-terminal-activity'
+import { windowShowsPty } from '../../session-tabs/person/person-workspace-target'
 
 // Finite holds must exceed legacy 300ms debounce and cannot exceed one hour.
 const MOBILE_AUTO_RESTORE_FIT_MIN_MS = 5_000
@@ -86,7 +87,9 @@ export abstract class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRunti
     this.setDriver(ptyId, { kind: 'desktop' })
     if (this.terminalFitOverrides.has(ptyId)) {
       this.terminalFitOverrides.delete(ptyId)
-      this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
+      if (windowShowsPty(this.ptysById.get(ptyId))) {
+        this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
+      }
       this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
     }
   }

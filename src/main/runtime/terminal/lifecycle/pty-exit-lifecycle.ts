@@ -18,6 +18,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { windowShowsPty } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerModelWait {
   protected abstract pruneDisconnectedPtyRecords(): void
@@ -227,7 +228,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
 
       if (this.terminalFitOverrides.has(ptyId)) {
         this.terminalFitOverrides.delete(ptyId)
-        this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
+        if (windowShowsPty(pty)) {
+          this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
+        }
         this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
       }
       // Clear and notify driver state so dead panes cannot retain mobile lock banners.

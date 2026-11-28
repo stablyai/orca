@@ -22,6 +22,7 @@ import type {
 import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 import { TerminalAgentTurnNews } from './terminal-agent-turn-news'
+import type { RuntimeClientEventBus } from '../../client/events/runtime-client-event-bus'
 import { TerminalHooklessNews, type TerminalHooklessNewsItem } from './terminal-hookless-news'
 
 export type TerminalAgentWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
@@ -49,9 +50,8 @@ export type TerminalAgentPhonePushDeps = {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
   translate?: (key: string, fallback: string) => string
   dispatch: (event: MobileNotificationDispatchEvent) => void
-  /** Title edges and bells reach a window as facts; without one, this lane tells the phones. The
-   *  host lists' terminals' alone: a teammate's own terminal never pushes to the owner. */
-  onTerminalSideEffects: (listener: (batch: TerminalSideEffectBatch) => void) => () => void
+  /** Title edges and bells reach a window as facts; without one, this lane tells the phones. */
+  onClientEvent: RuntimeClientEventBus['on']
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
   now: () => number
 }
@@ -104,7 +104,14 @@ export class TerminalAgentPhonePush {
       setTimer: (run, delayMs) => deps.setTimer(run, delayMs),
       now: () => deps.now()
     })
-    deps.onTerminalSideEffects((batch) => this.noteTerminalSideEffects(batch))
+    deps.onClientEvent(
+      (event) => {
+        if (event.type === 'terminalSideEffects') {
+          this.noteTerminalSideEffects(event.batch)
+        }
+      },
+      { consumesTerminalSideEffects: true }
+    )
   }
 
   observe(change: AgentPaneChange): void {

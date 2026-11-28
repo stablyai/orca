@@ -2,6 +2,7 @@
 // saved in the teammates' session partition. Clients still address the Home; this maps a call to it.
 import type { Bot } from '../../../../shared/bot-types'
 import {
+  homeOfPersonWorkspace,
   isPersonWorkspaceKey,
   parsePersonWorkspaceKey,
   personWorkspaceKey
@@ -60,11 +61,34 @@ export function tabListOfPty(pty: Pick<RuntimePtyWorktreeRecord, 'holder' | 'wor
     : pty.worktreeId
 }
 
-/** Whether the owner's window shows a PTY, and so sizes it; a record not yet made is the window's. */
+/** Whether the owner's window shows and sizes a PTY, and hears of its fits: not a teammate's own.
+ *  A PTY with no record yet is the window's own spawn in flight. */
 export function windowShowsPty(
   pty: Pick<RuntimePtyWorktreeRecord, 'holder' | 'worktreeId'> | undefined
 ): boolean {
-  return !pty || windowOwns(tabListOfPty(pty))
+  return pty === undefined || windowOwns(tabListOfPty(pty))
+}
+
+/** Whether a PTY's facts (output, use, liveness) feed the owner's sidebar, notifications and
+ *  devices: the host list's alone, and never one whose list is unknown (no record). */
+export function hostListPty(
+  pty: Pick<RuntimePtyWorktreeRecord, 'holder' | 'worktreeId'> | undefined
+): boolean {
+  return pty !== undefined && windowOwns(tabListOfPty(pty))
+}
+
+/** The workspace a client names for a tab list: a teammate's own is their agent's Home. */
+export function toWireWorkspaceId(worktreeId: string): string {
+  return (isPersonWorkspaceKey(worktreeId) && homeOfPersonWorkspace(worktreeId)) || worktreeId
+}
+
+/** Whether a caller hears of a tab list's events: the list their calls on its workspace land in. */
+export function callerTakesTabList(
+  agents: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
+  list: string,
+  scope: RpcCallerScope | undefined
+): boolean {
+  return resolveTabListTarget(agents, toWireWorkspaceId(list), scope).list === list
 }
 
 /** The PTYs a caller's workspace-wide act takes (`ptyInList`): their own in their agent's Home, the

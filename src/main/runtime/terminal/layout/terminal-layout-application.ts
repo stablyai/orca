@@ -115,23 +115,26 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
     const overrideChanged = (prevFitOverride != null) !== (target.kind === 'phone')
     if (target.kind === 'remote-desktop' || modeChanged || overrideChanged) {
       // Arm cascade suppression before desktop-fit notifications can provoke collateral renderer resizes.
+      // Only the window hears of, and remeasures on, a fit of a terminal it shows.
+      const windowShows = windowShowsPty(this.ptysById.get(ptyId))
       if (target.kind === 'desktop') {
         this.lastRendererSizes.delete(ptyId)
-        // Only the window remeasures on a fit notice; a PTY it does not show provokes no cascade.
-        if (windowShowsPty(this.ptysById.get(ptyId))) {
+        if (windowShows) {
           this.suppressResizesForMs(500)
         }
       }
-      this.notifier?.terminalFitOverrideChanged(
-        ptyId,
-        target.kind === 'phone'
-          ? 'mobile-fit'
-          : target.kind === 'remote-desktop'
-            ? 'remote-desktop-fit'
-            : 'desktop-fit',
-        target.cols,
-        target.rows
-      )
+      if (windowShows) {
+        this.notifier?.terminalFitOverrideChanged(
+          ptyId,
+          target.kind === 'phone'
+            ? 'mobile-fit'
+            : target.kind === 'remote-desktop'
+              ? 'remote-desktop-fit'
+              : 'desktop-fit',
+          target.cols,
+          target.rows
+        )
+      }
       this.notifyFitOverrideListeners(
         ptyId,
         target.kind === 'phone'

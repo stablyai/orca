@@ -42,10 +42,7 @@ import {
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { WorktreeRowsChanges } from '../client/events/worktree-rows-change-events'
-import {
-  hostListTerminalSideEffects,
-  inHostListPane
-} from '../terminal/output/host-list-terminal-events'
+import { inHostListPane } from '../terminal/output/terminal-tab-list-classification'
 import { readTerminalAgentWorkspaceLabels } from '../push/notifications/terminal-agent-workspace-labels'
 import {
   TerminalAgentPhonePush,
@@ -60,11 +57,6 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
     inHostList: (paneKey) => inHostListPane(paneKey, (identity) => this.getStatusTabList(identity)),
     now: Date.now
   })
-  /** The owner's sidebar and notifications read these; a teammate's own terminal is not their news. */
-  readonly onHostListTerminalSideEffects = hostListTerminalSideEffects(
-    (listener, options) => this.onClientEvent(listener, options),
-    (ptyId) => this.ptysById.get(ptyId)
-  )
   private readonly terminalAgentPhonePush = new TerminalAgentPhonePush({
     // Pending desktop windows seed missed state without announcing it; do not duplicate their phone pushes.
     hasWindow: () =>
@@ -81,7 +73,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
     translate: (key, fallback) =>
       getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
     dispatch: (event) => this.mobileNotifications.dispatch(event),
-    onTerminalSideEffects: (listener) => this.onHostListTerminalSideEffects(listener),
+    onClientEvent: (listener, options) => this.onClientEvent(listener, options),
     setTimer: unrefTimer,
     now: Date.now
   })

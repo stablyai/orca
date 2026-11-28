@@ -87,7 +87,8 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
           store: this.store,
           watchChanges: this.crewChanges.subscribeWithIdle,
           watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
-          watchClient: (listener) => this.onClientEvent(listener)
+          // Every list's terminals: a crew shows workers wherever they run.
+          watchClient: (listener) => this.onClientEvent(listener, { tabLists: 'every' })
         },
         wake,
         relevance,

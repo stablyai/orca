@@ -37,6 +37,7 @@ import {
   wslMoveProjectRefForWorkspace
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { ownsHostReadMarks } from '../../bots/team-share/teammate-rules'
+import { hostListPty } from '../session-tabs/person/person-workspace-target'
 import type { RpcCallerScope } from '../rpc/callers/rpc-caller-scope'
 
 /**
@@ -64,7 +65,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     store: () => this.store,
     isWriteFenced: (worktreeId) =>
       isWslMoveProjectBlocked(this.store ?? undefined, wslMoveProjectRefForWorkspace(worktreeId)),
-    onTerminalSideEffects: (listener) => this.onHostListTerminalSideEffects(listener),
+    onClientEvent: (listener, options) => this.onClientEvent(listener, options),
     isViewing: (worktreeId, paneKey) => this.workspaceViewers.isViewing(worktreeId, paneKey),
     onStampsWritten: (worktreeId) => {
       this.invalidateResolvedWorktreeCache()
@@ -96,7 +97,12 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     super(...args)
     this.workspaceActivityFacts.revision.onChange(() => this.sidebarTemporal.noteActivityChange())
     this.store?.onUIChanged?.(() => this.sidebarTemporal.noteViewChange())
-    this.terminalRunFacts.onInput((ptyId, now) => this.terminalUse.noteTerminalUse(ptyId, now))
+    this.terminalRunFacts.onInput((ptyId, now) => {
+      // Typing in a teammate's own terminal is not the owner's use of their workspace.
+      if (hostListPty(this.ptysById.get(ptyId))) {
+        this.terminalUse.noteTerminalUse(ptyId, now)
+      }
+    })
     // Before any store attaches, so its rows reach the stamps as seeds; titles flow without one.
     this.sortStamps.attachAgentTransitions(this.agentTransitions)
     // Only this layer's enabled stamps pay for byte scanning; hookless titles then reach all detector readers.
@@ -106,7 +112,8 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
           this.agentTransitions.noteTerminalSideEffects(event.batch)
         }
       },
-      { consumesTerminalSideEffects: true }
+      // Every list's: the detector feeds orchestration, and splits the owner's feeds itself.
+      { consumesTerminalSideEffects: true, tabLists: 'every' }
     )
     // A Done may re-tier.
     this.onWorkspaceRecordsWritten(() => this.sortStamps.noteRecordsWritten())
@@ -147,7 +154,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
             }
           }
           for (const pty of this.ptysById.values()) {
-            if (pty.worktreeId === worktreeId) {
+            if (pty.worktreeId === worktreeId && hostListPty(pty)) {
               ptyIds.add(pty.ptyId)
             }
           }

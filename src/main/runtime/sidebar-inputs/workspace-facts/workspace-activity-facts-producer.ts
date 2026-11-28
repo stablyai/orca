@@ -51,6 +51,8 @@ export class WorkspaceActivityFactsProducer {
     private readonly deps: {
       readSurfaces: (worktreeId: string) => WorkspaceSurfaceActivity
       resolveTabWorktreeId: (tabId: string) => string | undefined
+      /** False for a teammate's own terminal's pane, whose agent is never the owner's row's. */
+      inHostList: (paneKey: string) => boolean
       clock: SidebarClock
     }
   ) {}
@@ -111,7 +113,9 @@ export class WorkspaceActivityFactsProducer {
 
   private refreshAgentPane(paneKey: string): void {
     const previous = this.agentPanes.get(paneKey)
-    const next = this.toAgentPane(this.agentStore?.getStatusSnapshotForPane(paneKey) ?? [])
+    const next = this.deps.inHostList(paneKey)
+      ? this.toAgentPane(this.agentStore?.getStatusSnapshotForPane(paneKey) ?? [])
+      : null
     if (previous) {
       this.agentPanes.delete(paneKey)
       const panes = this.agentPanesByWorktree.get(previous.worktreeId)

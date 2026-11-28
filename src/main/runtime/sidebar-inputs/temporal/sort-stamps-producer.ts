@@ -2,6 +2,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type {
   AgentPhase,
   AgentTransition
@@ -45,9 +46,11 @@ export type SortStampsSources = {
   store: () => SortStampsStore | null
   /** A WSL move freezes the project; stamps are background bookkeeping it drops. */
   isWriteFenced: (worktreeId: string) => boolean
-  /** The host lists' terminal side effects, so the host scans its own bytes for bells; a teammate's
-   *  own terminal is not the owner's news. */
-  onTerminalSideEffects: (listener: (batch: TerminalSideEffectBatch) => void) => () => void
+  /** Consumes terminal side effects, so the host scans its own bytes for bells. */
+  onClientEvent: (
+    listener: (event: RuntimeClientEvent) => void,
+    options: { consumesTerminalSideEffects: true }
+  ) => () => void
   /** Whether a client is looking at the workspace, or at the pane's tab. */
   isViewing: (worktreeId: string, paneKey: string | null) => boolean
   /** A record's stamps or unread flag changed; clients re-list it. */
@@ -64,7 +67,14 @@ export class SortStampsProducer {
   private readonly panes = new Map<string, TrackedPane>()
 
   constructor(private readonly sources: SortStampsSources) {
-    sources.onTerminalSideEffects((batch) => this.noteTerminalSideEffects(batch))
+    sources.onClientEvent(
+      (event) => {
+        if (event.type === 'terminalSideEffects') {
+          this.noteTerminalSideEffects(event.batch)
+        }
+      },
+      { consumesTerminalSideEffects: true }
+    )
   }
 
   /** Follows the host lists' panes; subscribe before the detector attaches to its store. */
