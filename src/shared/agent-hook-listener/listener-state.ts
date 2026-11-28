@@ -24,6 +24,7 @@ import {
   movePaneScopedMapEntries,
   movePaneScopedSetEntries
 } from './pane-scoped-cache-entries'
+import { ProviderHookStateSlots } from './state/provider-hook-state-slots'
 import type { JcodeUserPromptEvidence } from './providers/jcode/jcode-session-files'
 import type { JcodeHelperPermissionWait } from './providers/jcode/jcode-helper-permission-wait'
 import type { HookRootAttempt } from './presence/hook-process-root-evidence'
@@ -37,6 +38,7 @@ import type { ClaudePromptTurns } from './providers/claude/lifecycle/claude-prom
 
 /** Per-listener-instance caches needing per-PTY teardown; Orca's main process and the relay each get their own, never shared. */
 export type HookListenerState = {
+  providerState: ProviderHookStateSlots
   warnedVersions: Set<string>
   warnedEnvs: Set<string>
   lastPromptByPaneKey: Map<string, string>
@@ -130,7 +132,9 @@ export function createHookListenerState(
   options: AgentStatusLegacyAdapterOptions = {}
 ): HookListenerState {
   const adapter = createAgentStatusLegacyAdapter(options)
+  const providerState = new ProviderHookStateSlots()
   const state: HookListenerState = {
+    providerState,
     warnedVersions: new Set(),
     warnedEnvs: new Set(),
     lastPromptByPaneKey: new Map(),
@@ -148,10 +152,10 @@ export function createHookListenerState(
     claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
     claudeRunningNonAgentTasksByPaneKey: new Map(),
     claudeActiveSessionCronPaneKeys: new Set(),
-    claudeLaunchedBackgroundTasksByPaneKey: new Map(),
+    claudeLaunchedBackgroundTasksByPaneKey: providerState.createMap(true),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
-    claudePromptTurnsByPaneKey: new Map(),
-    claudeSessionOwnerByPaneKey: new Map(),
+    claudePromptTurnsByPaneKey: providerState.createMap(false),
+    claudeSessionOwnerByPaneKey: providerState.createMap(true),
     hookRootAttempts: new Map(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
@@ -215,6 +219,7 @@ export function getLegacyStatusListingOrder(
 }
 
 export function clearPaneProcessCacheState(state: HookListenerState, paneKey: string): void {
+  state.providerState.clearPane(paneKey)
   deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.jcodeTurnPromptByPaneKey, paneKey)
@@ -223,15 +228,12 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   deletePaneScopedCacheEntry(state.antigravityChildWorkByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   deletePaneScopedCacheEntry(state.claudeConsumedCompactPromptIdByPaneKey, paneKey)
-  state.claudePromptTurnsByPaneKey.delete(paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeOpenToolUsesByPaneKey.delete(paneKey)
   state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-  state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
-  state.claudeSessionOwnerByPaneKey.delete(paneKey)
   retireCodexPaneTranscripts(state, paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
   state.codexAsyncQuestionsByPaneKey.delete(paneKey)
@@ -271,6 +273,7 @@ export function movePaneCacheState(
   if (fromPaneKey === toPaneKey) {
     return
   }
+  state.providerState.movePane(fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
   moveLegacyAgentStatuses(state, fromPaneKey, toPaneKey)
@@ -280,15 +283,12 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.jcodeHelperPermissionWaitByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.claudePromptTurnsByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeOpenToolUsesByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeRunningNonAgentTasksByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.claudeLaunchedBackgroundTasksByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.claudeSessionOwnerByPaneKey, fromPaneKey, toPaneKey)
   retireCodexPaneTranscripts(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexAsyncQuestionsByPaneKey, fromPaneKey, toPaneKey)
@@ -317,6 +317,7 @@ export function clearPaneTurnCacheState(state: HookListenerState, paneKey: strin
 }
 
 export function clearAllListenerCaches(state: HookListenerState): void {
+  state.providerState.clearAll()
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
   clearLegacyAgentStatuses(state)
@@ -326,7 +327,6 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.jcodeHelperPermissionWaitByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()
   state.claudeConsumedCompactPromptIdByPaneKey.clear()
-  state.claudePromptTurnsByPaneKey.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
@@ -335,8 +335,6 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
   state.claudeRunningNonAgentTasksByPaneKey.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
-  state.claudeLaunchedBackgroundTasksByPaneKey.clear()
-  state.claudeSessionOwnerByPaneKey.clear()
   retireCodexPaneTranscripts(state)
   state.codexLeadStateByPaneKey.clear()
   state.codexAsyncQuestionsByPaneKey.clear()
