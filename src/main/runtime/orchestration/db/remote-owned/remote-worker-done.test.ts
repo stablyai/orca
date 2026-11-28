@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
+import { readWorkerReportFile } from '../messages/worker-report-file'
 import { createRootDispatch } from '../root-dispatch-test-fixture'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
@@ -58,7 +59,15 @@ describe('worker_done from a worker on a paired server', () => {
   }
 
   /** Sends worker_done on the server, imports everything it queued home, and rereads it here. */
-  function deliverWorkerDone(dispatchId: string, payload: { taskId: string; dispatchId: string }) {
+  function deliverWorkerDone(
+    dispatchId: string,
+    payload: {
+      taskId: string
+      dispatchId: string
+      reportPath?: string
+      reportContentBase64?: string
+    }
+  ) {
     const sent = server.insertMessage({
       from: 'term_worker',
       to: `run:${peerRunId}`,
@@ -102,7 +111,17 @@ describe('worker_done from a worker on a paired server', () => {
       requestKey: KEY,
       peerRunId
     })
-    const { result, message } = deliverWorkerDone(dispatchId, { taskId: TASK, dispatchId })
+    const contentBase64 = Buffer.alloc(512 * 1024, 'R').toString('base64')
+    const { result, message } = deliverWorkerDone(dispatchId, {
+      taskId: TASK,
+      dispatchId,
+      reportPath: 'worker-only/report.bin',
+      reportContentBase64: contentBase64
+    })
+    expect(readWorkerReportFile(home, message.id)).toMatchObject({
+      dispatchId,
+      contentBase64
+    })
     expect(result).toEqual({ action: 'ignored' })
     expect(message).toMatchObject({ type: 'worker_done', subject: 'done', body: 'report' })
   })

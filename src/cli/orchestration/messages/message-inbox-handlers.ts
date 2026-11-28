@@ -1,4 +1,5 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
+import { readWorkerReport } from './worker-report-file'
 import { printResult } from '../../output/command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
@@ -61,12 +62,28 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration inbox': async ({ flags, client, json }) => {
     const full = flags.has('full')
     const run = getPresentStringFlag(flags, 'run')
+    const terminal = getPresentStringFlag(flags, 'terminal')
+    const report = getPresentStringFlag(flags, 'report')
+    if (report) {
+      const file = await readWorkerReport(client, report, { run, terminal })
+      if (json || process.stdout.isTTY) {
+        printResult(
+          file,
+          json,
+          (value) =>
+            `SHA-256 ${value.sha256}. Redirect stdout to save the original bytes, or use --json.`
+        )
+      } else {
+        process.stdout.write(Buffer.from(file.result.contentBase64, 'base64'))
+      }
+      return
+    }
     const result = await client.call<{
       messages: MessageSummary[]
       count: number
     }>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getPresentStringFlag(flags, 'terminal'),
+      terminal,
       run
     })
     // Why: a server older than v1.4.257 (reachable via --environment) drops `run` and returns every Run's mail.

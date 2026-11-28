@@ -105,12 +105,15 @@ function peerRunMailStatements(row: string): [string, string] {
          'homeRunId', pr.home_run_id, 'peerRunId', pr.run_id,
          'message', json_object(
            'from', ${row}.from_handle, 'type', ${row}.type, 'subject', ${row}.subject,
-           'body', ${row}.body, 'payload', ${row}.payload, 'priority', ${row}.priority,
+           'body', ${row}.body, 'payload', CASE WHEN f.message_id IS NULL THEN ${row}.payload
+             ELSE json_set(${row}.payload, '$.reportContentBase64', f.content_base64) || '' END,
+           'priority', ${row}.priority,
            'threadId', ${row}.thread_id, 'replyTo', ${row}.reply_to
          ),
          'dispatchId', p.dispatch_id, 'taskId', p.task_id
        ) AS payload
      FROM peer_runs pr
+     LEFT JOIN worker_report_files f ON f.message_id = ${row}.id
      LEFT JOIN message_dispatch_provenance p ON p.message_id = ${row}.id
        AND p.dispatch_id IN (SELECT id FROM dispatch_contexts WHERE run_id = pr.run_id)
      WHERE ${row}.to_handle = 'run:' || pr.run_id
@@ -140,6 +143,10 @@ export function createPeerRunQueueTriggers(db: Database.Database): void {
   db.exec('BEGIN IMMEDIATE')
   try {
     db.exec(`
+      CREATE TABLE IF NOT EXISTS worker_report_files (
+        message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+        content_base64 TEXT NOT NULL
+      );
       ${PEER_RUN_DISPATCH_STATE_VIEW_SQL}
       DROP TRIGGER IF EXISTS trg_peer_run_mail_insert;
       DROP TRIGGER IF EXISTS trg_peer_run_mail_reroute;

@@ -34,7 +34,7 @@ import {
   splitForItem,
   startWorkerFollowUp
 } from './worker-follow-up'
-import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { prepareLocalWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
   followThroughWorkerReport,
@@ -119,10 +119,10 @@ export const ORCHESTRATION_SEND_METHODS = [
         payload: runGroup ? undefined : params.payload,
         type: params.type
       })
-      const finished = runGroup
+      const workerSend = runGroup
         ? undefined
-        : finishedWorkerSend(db, { ...sender, processIncarnation }, routing, params)
-      ;({ params, routing } = finished ?? { params, routing })
+        : prepareLocalWorkerSend(db, { ...sender, processIncarnation }, routing, params)
+      ;({ params, routing } = workerSend ?? { params, routing })
       assertSendParamsDeliverable(params)
 
       let to = params.to
@@ -283,7 +283,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           recordMutationReceipt,
           markWorkerDoneMutationEffectFree,
           withSendWarnings: (sent) =>
-            finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent)
+            workerSend?.receipt?.(withSendWarnings(sent)) ?? withSendWarnings(sent)
         })
         followThroughWorkerReport(
           runtime,

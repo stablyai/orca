@@ -67,6 +67,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'With --to bot:<name>, --chat <id> (from `orca bot chats`) lands it in that chat of the bot instead of its Home Chat, and --chat new starts a new chat on the bot for a handoff or question, titled from --subject. Without --chat it lands in the Home Chat, whoever your turn is for. All three work for your own bot too; only the chat you send from is refused, and nothing is sent.',
       "Mail about one of a bot's items goes to the chat that owns it: --item <n> with --to bot:<name> (yours too) lands it there, or in the Home Chat once that chat is gone. --file <path> (repeat it) sends files with it, copied to that bot's computer. With --to dispatch:<id> of a worker that has finished, --item <n> starts its follow-up for that item, as worker-start --item does, so its report names the item.",
       "worker_done is an exact-Dispatch signal and cannot target groups; omit --to to use the Dispatch's Run mailbox. worker_done requires --outcome succeeded or --outcome failed. failed means only that the worker could not finish (e.g. no access to the repo); finished work is succeeded even when results are bad (e.g. tests found bugs), with the problems listed in the body.",
+      'With worker_done, --report-path captures up to 512 KiB from the worker CLI host. Its message ID reopens those bytes with orchestration inbox --report <message_id> while the mailbox record is retained.',
       'From a worker, an omitted recipient defaults to its coordinator, also after it finished; mail sent after finishing, worker_done included, leaves the finished task unchanged.',
       'Use --to dispatch:<id> for attempt-specific coordinator guidance; Orca durably relays it to a connected worker server.',
       'A worker_done with the active task/dispatch IDs completes that task only from the dispatched pane. When stable pane identity is unavailable, the sender handle must exactly match the dispatch assignee; injected preambles include the correct --from value.',
@@ -128,10 +129,11 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'inbox'],
     summary: 'Show messages across (or for) recipients',
     usage:
-      'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--run <run_id>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'run', 'full'],
+      'orca orchestration inbox [--report <message_id> | --limit <n>] [--terminal <handle>] [--run <run_id>] [--full] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'report', 'limit', 'terminal', 'run', 'full'],
     identityFlagRoles: { terminal: 'target' },
     notes: [
+      '--report <message_id> writes the captured file bytes to stdout. Redirect to a file, or use --json for base64, SHA-256, dispatch and original path.',
       'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.',
       'Without --terminal or --run it lists every mailbox on this Orca. --run <run_id> keeps all mail in that Run, including mail to its workers; --terminal run:<run_id> keeps only the coordinator mailbox.'
     ]

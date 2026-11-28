@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { RuntimeClientError } from '../../runtime/connection/types'
+import { RuntimeClientError, type RuntimeCallOptions } from '../../runtime/connection/types'
 import type { RuntimeClient } from '../../runtime/client'
 import { readRetryRequestFlag } from './retry-request-flag'
 import { orchestrationMutationRecoveryError } from './orchestration-mutation-recovery'
@@ -15,7 +15,10 @@ export async function callOrchestrationMutation<TResult>(
   flags: Map<string, string | boolean>,
   method: string,
   params: unknown,
-  options?: { timeoutMs?: number; orchestrationCapability?: string },
+  options?: Pick<
+    RuntimeCallOptions,
+    'timeoutMs' | 'orchestrationCapability' | 'orchestrationReplayOnly' | 'requestSelection'
+  >,
   retryBudgetMs = 0
 ) {
   // Reuse one request id so retries replay the mutation instead of applying it twice.
@@ -30,7 +33,7 @@ export async function callOrchestrationMutation<TResult>(
   // exactly one, replay-only, and only to a runtime that proves it enforces that.
   let timedOut = false
   for (let delayMs = 1_000; ; delayMs = Math.min(delayMs * 2, MAX_RETRY_DELAY_MS)) {
-    const replayOnly = timedOut && sentError !== undefined
+    const replayOnly = options?.orchestrationReplayOnly || (timedOut && sentError !== undefined)
     try {
       return requestId
         ? await client.call<TResult>(method, params, {
@@ -39,7 +42,7 @@ export async function callOrchestrationMutation<TResult>(
             ...(replayOnly
               ? {
                   orchestrationReplayOnly: true as const,
-                  requestSelection: replayOnlyRecipientCheck(params)
+                  requestSelection: replayOnlyRecipientCheck(params, options?.requestSelection)
                 }
               : {})
           })

@@ -1,3 +1,4 @@
+import { readWorkerReportFile } from '../../../../orchestration/db/messages/worker-report-file'
 import { ORCHESTRATION_REPLY_METHOD } from './reply-method'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { inspectedRunAccess, taskCreateAccess, taskUpdateAccess } from '../access/run-access-rules'
@@ -20,7 +21,11 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     name: 'orchestration.inbox',
     permission: 'workspace',
     params: InboxParams,
-    access: { kind: 'reads', targets: { terminal: 'party', run: 'run' }, collection: true },
+    access: {
+      kind: 'reads',
+      targets: { terminal: 'party', run: 'run', report: 'message' },
+      collection: true
+    },
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       // Why: an empty list for a mistyped Run (or a `run:` mailbox address) reads as "no mail".
@@ -29,6 +34,16 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
           ? ' --run takes the bare Run id; --terminal takes the run:<id> mailbox.'
           : ''
         throw new OrchestrationError('run_not_found', `Run ${params.run} was not found.${hint}`)
+      }
+      if (params.report) {
+        const to = params.terminal
+          ? resolveOrchestrationParty(params.terminal, db).address
+          : undefined
+        return {
+          messages: [],
+          count: 0,
+          reportFile: readWorkerReportFile(db, params.report, params.run, to)
+        }
       }
       // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
       const messages = params.terminal

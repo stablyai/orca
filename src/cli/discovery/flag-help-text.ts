@@ -95,7 +95,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'task-title': '--task-title <text>    Concise title for an orchestration task',
   'dispatch-id': '--dispatch-id <id>    Dispatch id to include in orchestration payload JSON',
   'files-modified': '--files-modified <csv> Comma-separated files for orchestration payload JSON',
-  'report-path': '--report-path <path>  Report path to include in orchestration payload JSON',
+  'report-path':
+    '--report-path <path>  With worker_done, capture this file (up to 512 KiB); retrieve with orchestration inbox --report <message_id>',
   phase: '--phase <text>        Worker phase to include in orchestration payload JSON',
   'timeout-ms': '--timeout-ms <ms>     Maximum wait time before timing out',
   'to-element-index': '--to-element-index <n> Destination element index from get-app-state',

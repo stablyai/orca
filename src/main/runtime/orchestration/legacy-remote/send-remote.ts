@@ -7,6 +7,8 @@ import { waitForFederatedLifecycleSettlement } from './federation-lifecycle-sett
 import { bindCoordinatorMutationPayload } from '../workers/reports/dispatch-message-binding'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { z } from 'zod'
+import { assertReportPathCaptured } from '../../rpc/methods/orchestration/messaging/send-params-checks'
+import { unpackWorkerReport } from '../db/messages/worker-report-file'
 import { parseRemoteWorkerPayload } from '../../rpc/methods/orchestration/messaging/message-payload'
 import type { SendParams } from '../../rpc/methods/orchestration/messaging/send-params'
 import { rejectFederatedExplicitTarget } from '../../rpc/methods/orchestration/routing'
@@ -69,6 +71,20 @@ export async function sendRemoteMessage(args: {
     )
   }
 
+  let relayPayload = bindCoordinatorMutationPayload(
+    type,
+    params.payload,
+    remoteAttachment.dispatch_id
+  )
+  if (type === 'worker_done') {
+    assertReportPathCaptured(payload)
+    if (payload.dispatchId === undefined && typeof payload.reportContentBase64 === 'string') {
+      relayPayload = JSON.stringify({ ...payload, dispatchId: remoteAttachment.dispatch_id })
+    }
+    // Refuse malformed bytes before they enter the homeward queue.
+    unpackWorkerReport(relayPayload)
+  }
+
   const supportsLifecycleSettlement =
     remoteAttachment.protocol_version >=
     ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
@@ -84,7 +100,7 @@ export async function sendRemoteMessage(args: {
       priority: params.priority ?? 'normal',
       threadId: params.threadId ?? null,
       ...(args.replyTo ? { replyTo: args.replyTo } : {}),
-      payload: bindCoordinatorMutationPayload(type, params.payload, remoteAttachment.dispatch_id)
+      payload: relayPayload
     }),
     ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})
   })
@@ -109,6 +125,10 @@ export async function sendRemoteMessage(args: {
   return {
     relay: {
       messageId: relay.message_id,
+      // The home owns the mailbox; this sender can replay its receipt after its source file is gone.
+      ...(type === 'worker_done' && typeof payload.reportContentBase64 === 'string'
+        ? { reportContentBase64: payload.reportContentBase64 }
+        : {}),
       sequence: relay.sequence,
       dispatchId: relay.dispatch_id,
       destination: 'run_home',

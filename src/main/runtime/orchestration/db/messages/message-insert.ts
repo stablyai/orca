@@ -4,6 +4,7 @@ import type {
   MessageDeliveryContract,
   MessageRow
 } from '../orchestration-records'
+import { unpackWorkerReport } from './worker-report-file'
 import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -40,6 +41,25 @@ export type MessageInsert = {
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
+  // A report sent after settlement reaches the coordinator as ordinary status mail.
+  const file =
+    msg.type === 'worker_done' ||
+    (msg.type === 'status' && msg.payload?.includes('"reportContentBase64"'))
+      ? unpackWorkerReport(msg.payload)
+      : undefined
+  if (file) {
+    const id = msg.id ?? generateId('msg')
+    return this.commitWorkerDoneMessageMutation(() => {
+      this.db
+        .prepare('INSERT INTO worker_report_files (message_id, content_base64) VALUES (?, ?)')
+        .run(id, file.contentBase64)
+      return insertMessageRow.call(this, { ...msg, id, payload: file.payload })
+    })
+  }
+  return insertMessageRow.call(this, msg)
+}
+
+function insertMessageRow(this: OrchestrationDb, msg: MessageInsert): MessageRow {
   // Unbound senders get a lazily created unbound Run; the legacy Run denotes pre-Runs data to skew probes.
   const runId = msg.runId ?? UNBOUND_RUN_ID
   if (msg.runId == null) {

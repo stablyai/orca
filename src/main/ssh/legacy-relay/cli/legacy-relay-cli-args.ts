@@ -33,7 +33,11 @@ export function parseLegacyRelayCliArgs(argv: readonly string[]): LegacyRelayCli
       flags.set(assignment, true)
     }
   }
-  return { command: commandPath.join(' '), flags }
+  const command = commandPath.join(' ')
+  if (command === 'orchestration inbox' && flags.has('report')) {
+    throw new Error('Open a current Orca terminal to retrieve a captured report by message ID.')
+  }
+  return { command, flags }
 }
 
 /** A valued flag the shell emptied parses as `true`; dropping it would change the command. */
@@ -72,6 +76,11 @@ export function retryRequestFlag(flags: Map<string, string | boolean>): string |
 
 /** `--payload`, or the structured flags the worker preamble uses instead of raw JSON. */
 export function messagePayload(flags: Map<string, string | boolean>): string | undefined {
+  if (stringFlag(flags, 'type') === 'worker_done' && flags.has('report-path')) {
+    throw new Error(
+      'This older SSH terminal cannot capture --report-path. Open a new terminal on this host, or send the report in --body.'
+    )
+  }
   const raw = stringFlag(flags, 'payload')
   const fields = {
     taskId: stringFlag(flags, 'task-id'),

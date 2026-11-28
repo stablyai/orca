@@ -17,6 +17,8 @@ import { RuntimeClientError } from '../../runtime/connection/types'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { requireWorkerDoneSettlement } from '../workers/orchestration-worker-settlement'
+import { reportFileRecipient, reportReplay } from './worker-report-file'
+import { readRetryRequestFlag } from '../recovery/retry-request-flag'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
@@ -108,6 +110,11 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
 
     // Preserve the env handle across remints for older runtimes' lifecycle ownership checks.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const captureReport = type === 'worker_done' && flags.has('report-path')
+    const retryReport = captureReport ? readRetryRequestFlag(flags) : undefined
+    const originalReport = retryReport ? await reportReplay(client, retryReport) : undefined
+    const needsReportFiles =
+      captureReport && (!originalReport || originalReport.contentBase64 !== undefined)
     const sendParams = {
       from,
       to,
@@ -122,7 +129,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       type,
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
-      payload: getOptionalStructuredMessagePayload(flags),
+      payload: await getOptionalStructuredMessagePayload(flags, cwd, originalReport),
       // Pane keys survive remints; sessions instead authenticate by injected id, never inherited pane keys.
       senderPaneKey:
         from === undefined || readInjectedAgentSessionId()
@@ -137,7 +144,11 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       flags,
       'orchestration.send',
       sendParams,
-      dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined,
+      {
+        ...(dispatchCapability ? { orchestrationCapability: dispatchCapability } : {}),
+        ...(needsReportFiles ? { requestSelection: reportFileRecipient(sendParams) } : {}),
+        ...(originalReport ? { orchestrationReplayOnly: true } : {})
+      },
       // Workers report once before ending their turn; retry outages and timeouts so worker_done is not lost.
       // The 120 s budget bounds retry starts: a backoff must fit inside it, and a retry starts only if
       // it is still open after the backoff. Each attempt can then wait out the send's own inactivity

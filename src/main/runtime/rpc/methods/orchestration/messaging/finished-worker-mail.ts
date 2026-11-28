@@ -7,6 +7,8 @@ import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-contex
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { MessageRouting } from '../routing'
+import { parseRemoteWorkerPayload } from './message-payload'
+import { assertReportPathCaptured } from './send-params-checks'
 
 /** A terminal also proves its process, so a new process in the same pane is not taken for the old worker;
  *  a session caller is already bound to its own identity. */
@@ -49,26 +51,31 @@ export function finishedWorkerDispatch(
   return task && reportCorrectsUnobservedPrompt(dispatch, task) ? undefined : dispatch
 }
 
-/** Mail from a finished worker is ordinary mail to its coordinator, so no report or escalation reopens the Task. */
-export function finishedWorkerSend<P extends { to?: string; type?: string }>(
+/** Binds local report files to their worker. A finished worker's mail reaches its coordinator without reopening its Task. */
+export function prepareLocalWorkerSend<P extends { to?: string; type?: string; payload?: string }>(
   db: OrchestrationDb,
   sender: FinishedSender,
   routing: MessageRouting,
   params: P
 ):
-  | { params: P; routing: MessageRouting; receipt: <T extends object>(receipt: T) => T }
+  | { params: P; routing: MessageRouting; receipt?: <T extends object>(receipt: T) => T }
   | undefined {
   const finished = finishedWorkerDispatch(db, sender, routing, params.type)
-  if (!finished) {
-    return undefined
-  }
-  if (params.type === 'worker_done') {
+  if (finished && params.type === 'worker_done') {
     refuseStaleWorkerDone(db, sender, finished)
+  }
+  const payload =
+    params.type === 'worker_done'
+      ? bindLocalWorkerReport(db, sender, params.payload, routing.dispatch, finished)
+      : params.payload
+  if (!finished) {
+    return payload === params.payload ? undefined : { params: { ...params, payload }, routing }
   }
   const ownDispatch = !params.to || params.to === `dispatch:${finished.id}`
   return {
     params: {
       ...params,
+      payload,
       type: isDispatchMutationMessageType(params.type) ? 'status' : params.type,
       to: ownDispatch ? dispatchReportMailbox(db, finished) : params.to
     },
@@ -86,6 +93,47 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
           }
         : receipt
   }
+}
+
+function bindLocalWorkerReport(
+  db: OrchestrationDb,
+  sender: FinishedSender,
+  payload: string | undefined,
+  dispatch: DispatchContextRow | undefined,
+  finished: DispatchContextRow | undefined
+): string | undefined {
+  let report: Record<string, unknown>
+  try {
+    report = parseRemoteWorkerPayload(payload)
+  } catch {
+    // Leave malformed payloads to the existing message validation.
+    return payload
+  }
+  // Finished reports become status mail before the worker_done validation runs.
+  if (finished) {
+    assertReportPathCaptured(report)
+  }
+  if (typeof report.reportContentBase64 !== 'string') {
+    return payload
+  }
+  // Finished worker mail has already checked the sender and any newer Dispatch.
+  const active =
+    finished ?? db.getActiveDispatchForIdentity(sender.address, sender.paneKey ?? undefined)
+  const target = finished ?? dispatch
+  if (
+    !target ||
+    !isDispatchAssignee(target, sender.address, sender.paneKey) ||
+    (active && active.id !== target.id) ||
+    (report.dispatchId !== undefined && report.dispatchId !== target.id)
+  ) {
+    throw new OrchestrationError(
+      'dispatch_inactive',
+      'No matching Dispatch was found for this worker report. Nothing was sent.'
+    )
+  }
+  return report.dispatchId === undefined
+    ? JSON.stringify({ ...report, dispatchId: target.id })
+    : payload
 }
 
 /** A worker_done naming an earlier Dispatch would land as plain mail while the open one stays unsettled. */

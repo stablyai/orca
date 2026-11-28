@@ -239,6 +239,58 @@ describe('restart-reissued worker handle across finished and federated Dispatche
   })
 
   describe('worker for another computer', () => {
+    const report = {
+      taskId: 'task_remote_restart',
+      outcome: 'succeeded',
+      reportPath: 'summary.txt',
+      reportContentBase64: 'cmVwb3J0'
+    }
+
+    it.each([{}, { dispatchId: REMOTE_DISPATCH }])(
+      'relays the captured report under its active Dispatch with payload fields %j',
+      async (dispatch) => {
+        setupFederatedWorker()
+        await expect(
+          send('worker_done', { ...report, dispatchId: 'ctx_previous' })
+        ).rejects.toMatchObject({ code: 'dispatch_inactive' })
+
+        await expect(send('worker_done', { ...report, ...dispatch })).resolves.toMatchObject({
+          relay: { accepted: true, dispatchId: REMOTE_DISPATCH }
+        })
+        const items = db.listPendingFederationRelay(REMOTE_DISPATCH, 'to_home')
+        expect(items).toHaveLength(1)
+        const message = JSON.parse(items[0].payload)
+        expect(JSON.parse(message.payload)).toEqual({
+          ...report,
+          dispatchId: REMOTE_DISPATCH
+        })
+      }
+    )
+
+    it('leaves the worker ready to submit a smaller report when its encoded message exceeds the relay limit', async () => {
+      setupFederatedWorker()
+      const submit = (size: number) =>
+        send('worker_done', {
+          ...report,
+          dispatchId: REMOTE_DISPATCH,
+          reportContentBase64: Buffer.alloc(size, 'a').toString('base64')
+        })
+
+      for (const size of [48 * 1024 - 96, 64 * 1024, 64 * 1024]) {
+        await expect(submit(size)).rejects.toMatchObject({
+          code: 'relay_quota_exceeded',
+          data: { effectsApplied: false, limitBytes: 65536, encodedBytes: expect.any(Number) }
+        })
+        expect(remoteRelayKinds()).toEqual([])
+        expect(db.getRemoteDispatchAttachment(REMOTE_DISPATCH)?.state).toBe('ready')
+      }
+      await expect(submit(4 * 1024)).resolves.toMatchObject({
+        relay: { accepted: true, sequence: 1 },
+        lifecycle: { action: 'completed' }
+      })
+      expect(remoteRelayKinds()).toEqual(['worker_done'])
+    })
+
     it('relays an escalation and a question to the Run home through its stale handle', async () => {
       setupFederatedWorker()
 
