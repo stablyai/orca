@@ -4,7 +4,13 @@ import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import type * as Crypto from 'node:crypto'
-const fault = vi.hoisted(() => ({ path: '', uuid: '' }))
+const fault = vi.hoisted(() => ({
+  path: '',
+  uuid: '',
+  partial: '',
+  hold: '',
+  held: Promise.resolve()
+}))
 // The next upload id, so a test can name a folder that already exists.
 vi.mock('node:crypto', async (original) => {
   const crypto = await original<typeof Crypto>()
@@ -26,6 +32,27 @@ vi.mock('node:fs/promises', async (original) => {
         throw Object.assign(new Error('listing failed'), { code: 'EIO' })
       }
       return fs.readdir(...args)
+    },
+    // Writes some bytes, then fails as a full disk would.
+    writeFile: async (...args: Parameters<typeof fs.writeFile>) => {
+      if (String(args[0]) === fault.partial) {
+        await fs.writeFile(args[0], 'partial')
+        throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+      }
+      return fs.writeFile(...args)
+    },
+    // Slow I/O the test releases, so expiry can land in the middle of it.
+    mkdir: async (...args: Parameters<typeof fs.mkdir>) => {
+      if (fault.hold && String(args[0]) === fault.hold) {
+        await fault.held
+      }
+      return fs.mkdir(...args)
+    },
+    appendFile: async (...args: Parameters<typeof fs.appendFile>) => {
+      if (fault.hold && String(args[0]).startsWith(fault.hold)) {
+        await fault.held
+      }
+      return fs.appendFile(...args)
     }
   }
 })
@@ -35,8 +62,7 @@ import { AgentSessionAttachmentStore } from './agent-session-attachment-store'
 const roots: string[] = []
 afterEach(async () => {
   vi.useRealTimers()
-  fault.path = ''
-  fault.uuid = ''
+  Object.assign(fault, { path: '', uuid: '', partial: '', hold: '', held: Promise.resolve() })
   for (const root of roots.splice(0)) {
     await rm(root, { recursive: true, force: true })
   }
@@ -135,4 +161,44 @@ it('still completes uploads and leaves nothing behind when one fails alone', asy
   const failed = await stage('c.png')
   await store.abortUpload({ callerKey: 'phone', uploadId: failed.uploadId })
   expect(await exists(join(root, failed.uploadId))).toBe(false)
+})
+
+it('removes the partial file a failed content write left in a folder it made', async () => {
+  const { store } = await storeIn()
+  const path = store.storeContent(Buffer.from('partial bytes'), '.png')
+  fault.partial = join(dirname(path), AGENT_SESSION_ATTACHMENT_PART_FILE)
+  await store.whenWritten(path)
+  expect(await exists(dirname(path))).toBe(false)
+})
+
+it('expires an upload only between its writes', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  const { root, store, stage } = await storeIn()
+  const hold = (path: string) => {
+    let release = () => {}
+    fault.held = new Promise<void>((resolve) => (release = resolve))
+    fault.hold = path
+    return () => release()
+  }
+  fault.uuid = TAKEN
+  const releaseAdmission = hold(join(root, TAKEN))
+  const admitting = stage('a.png')
+  await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+  releaseAdmission()
+  await expect(admitting).rejects.toThrow('Attachment upload was not found')
+  expect(await exists(join(root, TAKEN))).toBe(false)
+
+  const { uploadId } = await stage('b.png')
+  const releaseAppend = hold(join(root, uploadId))
+  const appending = store.appendChunk({
+    callerKey: 'phone',
+    uploadId,
+    offset: 0,
+    contentBase64: 'bWluZQ=='
+  })
+  await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+  releaseAppend()
+  await appending
+  const part = join(root, uploadId, AGENT_SESSION_ATTACHMENT_PART_FILE)
+  expect(await readFile(part, 'utf8')).toBe('mine')
 })

@@ -3,7 +3,7 @@
 import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
 import type { AttachmentTextRequest } from '../../../shared/attachment-text/attachment-text-source'
 import { createHash, randomUUID } from 'node:crypto'
-import { access, appendFile, mkdir, rm, rmdir, writeFile } from 'node:fs/promises'
+import { appendFile, rm, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
   sanitizeAgentSessionAttachmentName,
@@ -12,6 +12,11 @@ import {
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import { readAuthorizedDocPreviewFile } from '../../../shared/document-preview/doc-preview-file-access'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
+import {
+  createUploadFolder,
+  removeOwnedUpload,
+  writeContent
+} from './agent-session-attachment-folder-ownership'
 import { IMAGE_FILE_MIME_TYPES } from '../../../shared/file-preview/image-mime-types'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
@@ -55,7 +60,12 @@ export class AgentSessionAttachmentStore {
     ttlMs: UPLOAD_IDLE_TTL_MS,
     tooManyMessage: 'Too many attachment uploads are in progress',
     notFoundMessage: NOT_FOUND,
-    onExpire: (upload) => void removeOwnedUpload(upload)
+    onExpire: (upload) => {
+      // Active I/O finishes first; anything it leaves is the sweep's.
+      if (!upload.writing) {
+        void removeOwnedUpload(upload)
+      }
+    }
   })
 
   // Latest content write per folder, and pending writes by file so a re-send queues nothing.
@@ -96,7 +106,7 @@ export class AgentSessionAttachmentStore {
       name,
       expectedLength: args.byteLength,
       receivedLength: 0,
-      writing: false,
+      writing: true,
       owned: false
     }))
     const upload = this.uploads.peek(uploadId)!
@@ -105,6 +115,11 @@ export class AgentSessionAttachmentStore {
       upload.owned = true
       const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
       await writeFile(partPath, '', { flag: 'wx' })
+      upload.writing = false
+      // Expired while admitting: nothing can append to it now.
+      if (!this.uploads.has(uploadId)) {
+        throw new Error(NOT_FOUND)
+      }
     } catch (error) {
       this.uploads.delete(uploadId)
       await removeOwnedUpload(upload)
@@ -298,51 +313,6 @@ export class AgentSessionAttachmentStore {
     return upload
   }
 }
-
-async function writeContent(uploadDir: string, path: string, bytes: Buffer): Promise<void> {
-  if (
-    await access(path).then(
-      () => true,
-      () => false
-    )
-  ) {
-    return
-  }
-  const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
-  let created: string | undefined
-  let wrote = false
-  try {
-    created = await mkdir(uploadDir, { recursive: true })
-    await writeFile(partPath, bytes)
-    wrote = true
-    await renameFileWithWindowsRetryAsync(partPath, path)
-  } catch (error) {
-    // Undo only what this write made: a reused folder's other files, listed or not, stay for the sweep.
-    if (wrote) {
-      await rm(partPath, { force: true }).catch(() => {})
-    }
-    if (created !== undefined) {
-      await rmdir(uploadDir).catch(() => {})
-    }
-    throw error
-  }
-}
-
-/** Makes a new upload folder or fails: an existing one, whoever made it, is never adopted. */
-async function createUploadFolder(rootDir: string, uploadDir: string): Promise<void> {
-  await mkdir(rootDir, { recursive: true })
-  await mkdir(uploadDir)
-}
-
-/** Undoes an upload this store made: its part file, then its folder only if nothing else is in it. */
-async function removeOwnedUpload({ uploadDir, owned }: { uploadDir: string; owned: boolean }) {
-  if (owned) {
-    await rm(join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE), { force: true }).catch(noop)
-    await rmdir(uploadDir).catch(noop)
-  }
-}
-
-function noop(): void {}
 
 export async function removeQuietly(path: string): Promise<void> {
   // Retry cleanup failures at the next sweep.
