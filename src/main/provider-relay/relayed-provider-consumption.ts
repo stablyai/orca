@@ -14,6 +14,8 @@ export type ProviderRelayRecordTaking = {
   taken: () => void
   /** The reader dropped lines without a record each, so its count no longer lines up. */
   uncounted: () => void
+  /** The daemon seq of the record the reader is handling now; null when the count can't say. */
+  seq?: () => number | null
 }
 
 /**
@@ -70,6 +72,7 @@ export class RelayedProviderConsumption {
   constructor(private readonly onTaken: () => void) {}
 
   readonly taking: ProviderRelayRecordTaking = {
+    seq: () => (this.mode === 'claimed' ? (this.after[this.head] ?? null) : null),
     claim: () => {
       if (this.mode === 'unclaimed') {
         this.mode = 'claimed'

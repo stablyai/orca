@@ -20,6 +20,8 @@ import {
 } from '../items/codex-collab-agent-tool-call'
 import {
   keptCodexThreadIds,
+  openSavedCodexCommands,
+  savedRunningCodexRows,
   seedCarriedKeptCodexCommands,
   seedKeptCodexCommandOutput,
   type KeptCodexSpawn,
@@ -31,6 +33,7 @@ import {
   agentSessionFailureFact,
   providerDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 const PRIMARY_RETRY_MS = 500
@@ -42,7 +45,12 @@ const KEPT_UNREACHABLE_DETAIL =
 type Connection = Pick<CodexAppServerConnection, 'request'>
 
 /** What a kept agent says of itself at reattach: each thread's turns and its children. */
-export type KeptCodexSnapshot = { turns: KeptCodexTurn[]; spawns: KeptCodexSpawn[] }
+export type KeptCodexSnapshot = {
+  turns: KeptCodexTurn[]
+  spawns: KeptCodexSpawn[]
+  /** Commands open on a shared server, from the chat's saved running rows ([threadId, itemId]). */
+  open?: string[][]
+}
 
 type ThreadRead = { turn: KeptCodexTurn | null; source: ChildSource | null }
 
@@ -130,6 +138,8 @@ export async function readKeptCodexSnapshot(input: {
   carriedThreadIds?: readonly string[]
   /** The app-server runs for this chat alone (never a shared one). */
   ownServer: boolean
+  /** Running commands saved under a history import's key (`thread\0item`): seeded onto that row. */
+  historyRows?: ReadonlyMap<string, AgentJournalItemIdentity>
   timeoutMs: number
   onError: (threadId: string, error: unknown) => void
 }): Promise<KeptCodexSnapshot> {
@@ -194,7 +204,7 @@ export async function readKeptCodexSnapshot(input: {
       return []
     }
     turns.push(turn)
-    seedTurn(input.translator, turn)
+    seedTurn(input.translator, turn, input.historyRows)
     // A child spawned in this turn may still run though no carried work names it.
     return turn.items.flatMap((item) =>
       item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE ? readReceiverThreadIds(item) : []
@@ -265,14 +275,16 @@ export async function readKeptCodexSnapshot(input: {
 /** A latest turn's messages keep the live run's numbering; its running commands keep their rows. */
 function seedTurn(
   translator: Pick<CodexJournalTranslator, 'seedTurnOrdinals' | 'seedRunningItems'>,
-  turn: KeptCodexTurn
+  turn: KeptCodexTurn,
+  historyRows?: ReadonlyMap<string, AgentJournalItemIdentity>
 ): void {
   const { threadId, turnId, items } = turn
   // A command still running (a background one outlives its turn) streams on after the reattach.
   const running = items.filter(
     (item) => item.type === 'commandExecution' && item.status === 'inProgress'
   )
-  const identities = translator.seedRunningItems(threadId, turnId, running)
+  const saved = running.map((item) => historyRows?.get(`${threadId}\u0000${item.id}`))
+  const identities = translator.seedRunningItems(threadId, turnId, running, saved)
   turn.running = running.map((item, i) => ({ itemId: item.id, identity: identities[i]! }))
   // A turn that finished while detached still replays its last messages, numbered as live.
   translator.seedTurnOrdinals(
@@ -293,14 +305,21 @@ export async function openKeptCodexState(input: {
   translator: CodexJournalTranslator
   chatKey: string
   threadId: string
-  journal: { reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'itemBody'> } | null
+  journal: {
+    reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'itemBody' | 'visitItems'>
+  } | null
   timeoutMs: number
   onError: (threadId: string, error: unknown) => void
 }): Promise<KeptCodexSnapshot> {
   const { connection, translator, journal } = input
+  const saved =
+    connection.relay?.rebuilt === true
+      ? await savedRunningCodexRows(journal?.reads, input.threadId).catch(() => null)
+      : null
   const snapshot = await readKeptCodexSnapshot({
     ...input,
-    carriedThreadIds: keptCodexThreadIds(connection.relay),
+    carriedThreadIds: [...keptCodexThreadIds(connection.relay), ...(saved?.helpers ?? [])],
+    ...(saved ? { historyRows: saved.historyRows } : {}),
     ownServer: connection.relay?.ownServer === true
   }).catch(async (error: unknown) => {
     input.onError(input.threadId, error)
@@ -315,11 +334,12 @@ export async function openKeptCodexState(input: {
     )
   })
   await seedKeptCodexCommandOutput(translator, journal, snapshot.turns)
+  const open = saved ? openSavedCodexCommands(snapshot.turns, saved.commands) : undefined
   await seedCarriedKeptCodexCommands(
     translator,
     journal,
     snapshot.turns,
-    connection.relay?.openWork()?.command
+    connection.relay?.openWork()?.command ?? open
   )
-  return snapshot
+  return open ? { ...snapshot, open } : snapshot
 }

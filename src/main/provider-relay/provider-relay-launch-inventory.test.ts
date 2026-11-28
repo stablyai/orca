@@ -6,11 +6,11 @@ import {
   listKeptProviderRelays,
   registerReattachableProviderRelayAgent,
   beginProviderRelayRunAsk,
-  dropListedProviderRelay,
   forgetProviderRelayRunVerdict,
   noteProviderRelayRunVerdict,
   providerRelayRunUnknown
 } from './provider-relay-launch-inventory'
+import { dropListedProviderRelay } from './provider-relay-chat-drop'
 
 const ended = (chatKey: string, agent: string, unread: boolean): ProviderRelayInfo => ({
   relayId: `r-${chatKey}`,

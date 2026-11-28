@@ -73,7 +73,9 @@ export type CodexJournalTranslator = {
   seedRunningItems: (
     threadId: string,
     turnId: string,
-    items: readonly CodexThreadItem[]
+    items: readonly CodexThreadItem[],
+    /** The row each already has, when its key isn't the live one (a history import's). */
+    identities?: readonly (AgentJournalItemIdentity | undefined)[]
   ) => AgentJournalItemIdentity[]
   /** The output a kept command's row already saved, so what streams next continues after it. */
   seedRunningOutput: (threadId: string, itemId: string, output: string | null) => void

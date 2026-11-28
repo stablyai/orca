@@ -1,7 +1,10 @@
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { jsonObject } from '../../../../shared/json-stream/json-value-property'
 import { codexNonMessageIdentity, type CodexThreadItem } from '../items/codex-thread-item-identity'
@@ -70,16 +73,21 @@ export async function seedCarriedKeptCodexCommands(
       running.map(({ itemId }) => `${threadId}\u0000${itemId}`)
     )
   )
-  for (const [threadId, itemId] of journal ? open : []) {
+  // A saved row's own key ([threadId, itemId, key]) when it came from a history import.
+  for (const [threadId, itemId, savedKey] of journal ? open : []) {
     const turnId = turns.find((turn) => turn.threadId === threadId)?.turnId
     if (!threadId || !itemId || !turnId || seeded.has(`${threadId}\u0000${itemId}`)) {
       continue
     }
-    const key = agentJournalItemKey(codexNonMessageIdentity(threadId, turnId, itemId))
-    const body = await journal!.reads.itemBody(key).catch(() => null)
+    // The live row wins; a history import's row only when no live one exists. Seeded once.
+    const liveKey = agentJournalItemKey(codexNonMessageIdentity(threadId, turnId, itemId))
+    const live = await journal!.reads.itemBody(liveKey).catch(() => null)
+    const fromHistory = live?.kind !== 'tool-call' ? savedKey : undefined
+    const body = fromHistory ? await journal!.reads.itemBody(fromHistory).catch(() => null) : live
     if (body?.kind !== 'tool-call') {
       continue
     }
+    seeded.add(`${threadId}\u0000${itemId}`)
     const input = jsonObject(body.input) ?? {}
     const item = {
       type: 'commandExecution',
@@ -88,7 +96,8 @@ export async function seedCarriedKeptCodexCommands(
       command: input.command ?? null,
       cwd: input.cwd ?? null
     }
-    translator.seedRunningItems(threadId, turnId, [item])
+    const identity = fromHistory ? (parseAgentJournalItemKey(fromHistory) ?? undefined) : undefined
+    translator.seedRunningItems(threadId, turnId, [item], [identity])
     if (body.output) {
       translator.seedRunningOutput(
         threadId,
@@ -185,4 +194,116 @@ function endedLately(
   completedAt: number | null | undefined
 ): boolean {
   return typeof completedAt !== 'number' || typeof since !== 'number' || completedAt >= since
+}
+
+/**
+ * A shared server's chat rebuilds its own thread from Codex, not its helpers': a helper turn that
+ * ended while no app was attached gets its end here, as a kept agent's replay would give it, so its
+ * rows and card don't stay running.
+ */
+export function settleKeptCodexHelperTurns(
+  translator: Pick<CodexJournalTranslator, 'handle' | 'flush'>,
+  sessionId: string,
+  primaryThreadId: string,
+  turns: readonly KeptCodexTurn[]
+): void {
+  for (const { threadId, turnId, status, items, completedAt } of turns) {
+    if (threadId === primaryThreadId || status === null || status === 'inProgress') {
+      continue
+    }
+    const notify = (method: string, params: Record<string, unknown>) =>
+      translator.handle({ type: 'notification', sessionId, threadId, method, params })
+    notify('turn/started', { threadId, turn: { id: turnId, status: 'inProgress' } })
+    // A background command still running was seeded as such; its end arrives live.
+    for (const item of items.filter((entry) => entry.status !== 'inProgress')) {
+      notify('item/completed', { threadId, turnId, item })
+    }
+    const ended = typeof completedAt === 'number' ? { completedAt } : {}
+    notify('turn/completed', { threadId, turn: { id: turnId, status, items: [], ...ended } })
+  }
+  translator.flush()
+}
+
+/** The Codex thread and item a saved item row came from, read from its key. */
+function codexRowAddress(itemId: string): [string, string] | null {
+  const identity = parseAgentJournalItemKey(itemId)
+  const id = identity?.provider === 'orca' ? identity.clientMessageId : ''
+  if (id.startsWith('codex-item:')) {
+    const rest = id.slice('codex-item:'.length)
+    const at = rest.indexOf(':')
+    return at > 0 ? [rest.slice(0, at), rest.slice(at + 1)] : null
+  }
+  if (id.startsWith('codex-history-item:')) {
+    try {
+      const parts: unknown = JSON.parse(id.slice('codex-history-item:'.length))
+      return Array.isArray(parts) && typeof parts[1] === 'string' && typeof parts[3] === 'string'
+        ? [parts[1], parts[3]]
+        : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/**
+ * What a shared server's chat saved as still running, since a shared server carries no open work:
+ * helper threads with a running row (one may have ended while no app was attached, so its latest
+ * turn is read from Codex), and running commands ([threadId, itemId]), whose saved output the
+ * live stream continues; Codex's history can leave a running command out.
+ */
+export async function savedRunningCodexRows(
+  reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'visitItems'> | undefined,
+  primaryThreadId: string
+): Promise<{
+  helpers: string[]
+  commands: string[][]
+  historyRows: Map<string, AgentJournalItemIdentity>
+}> {
+  const helpers = new Set<string>()
+  const commands: string[][] = []
+  const historyRows = new Map<string, AgentJournalItemIdentity>()
+  const live = new Set<string>()
+  await reads?.visitItems({ kinds: ['tool-call'] }, (itemId, _sequence, body) => {
+    const address = body.kind === 'tool-call' && body.state === 'running' && codexRowAddress(itemId)
+    if (!address) {
+      return
+    }
+    if (address[0] !== primaryThreadId) {
+      helpers.add(address[0])
+    }
+    if (body.kind === 'tool-call' && Object.hasOwn(jsonObject(body.input) ?? {}, 'command')) {
+      commands.push([...address, itemId])
+      const at = `${address[0]}\u0000${address[1]}`
+      const identity = parseAgentJournalItemKey(itemId)
+      if (
+        identity?.provider === 'orca' &&
+        identity.clientMessageId.startsWith('codex-history-item:')
+      ) {
+        historyRows.set(at, identity)
+      } else {
+        live.add(at)
+      }
+    }
+  })
+  // A command with a live row streams there; only a history-only one keeps its imported row.
+  live.forEach((at) => historyRows.delete(at))
+  return { helpers: [...helpers], commands, historyRows }
+}
+
+/** The saved running commands still open: on a thread Codex just read (an older row it can't
+ *  vouch for isn't restated as running), and not reported ended there. */
+export function openSavedCodexCommands(
+  turns: readonly KeptCodexTurn[],
+  commands: readonly string[][]
+): string[][] {
+  const read = new Set(turns.map(({ threadId }) => threadId))
+  const ended = new Set(
+    turns.flatMap(({ threadId, items }) =>
+      items.flatMap((item) => (item.status === 'inProgress' ? [] : [`${threadId}\u0000${item.id}`]))
+    )
+  )
+  return commands.filter(
+    ([threadId, itemId]) => read.has(threadId ?? '') && !ended.has(`${threadId}\u0000${itemId}`)
+  )
 }

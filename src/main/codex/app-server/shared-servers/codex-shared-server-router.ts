@@ -9,6 +9,7 @@ import {
 } from './codex-shared-server-frames'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServerUnrouted } from './codex-shared-server-unrouted'
+import type { CodexSharedServerRequests } from './codex-shared-server-requests'
 
 const MAX_RETIRED_THREADS = 4_096
 /** The only server requests Codex sends without a thread; both are per account, and a server
@@ -17,6 +18,12 @@ const SERVER_WIDE_REQUESTS: ReadonlySet<string> = new Set([
   'account/chatgptAuthTokens/refresh',
   'attestation/generate'
 ])
+/** How long Codex waits on each (its own deadlines): with no chat open, a relayed server answers
+ *  only then, so the daemon's copy clears without answering one Codex still waits on. */
+const SERVER_WIDE_REQUEST_DEADLINES_MS: Readonly<Record<string, number>> = {
+  'account/chatgptAuthTokens/refresh': 10_000,
+  'attestation/generate': 100
+}
 
 /** Notifications Codex sends without a thread that are about the account or the server itself,
  *  so every chat would have had its own copy. Any other threadless notification may carry one
@@ -51,11 +58,17 @@ export class CodexSharedServerRouter {
   constructor(
     private readonly leases: () => Iterable<CodexSharedServerLease>,
     /** Answers a server request no chat can take, so Codex doesn't wait on it. */
-    private readonly refuse: (frame: CodexSharedServerFrame) => void
+    private readonly refuse: (frame: CodexSharedServerFrame) => void,
+    /** A relayed server's requests: a thread's wait for its chat, never refused. */
+    private readonly requestsOf: () => CodexSharedServerRequests | undefined = () => undefined
   ) {
     this.unrouted = new CodexSharedServerUnrouted(refuse, () =>
       [...leases()].some((lease) => lease.pendingOpens.size > 0)
     )
+  }
+
+  private get requests(): CodexSharedServerRequests | undefined {
+    return this.requestsOf()
   }
 
   openSettled(): void {
@@ -74,8 +87,17 @@ export class CodexSharedServerRouter {
   /** `opened`: claimed by a thread open's reply, the only claim that can find its early frames
    *  dropped; a helper's lost frames don't cost its parent chat its running turn. */
   claim(threadId: string, lease: CodexSharedServerLease, opened = false, history = false): void {
+    // Ended (a claim before it may have handed it back): the thread waits for the chat's reopen. A
+    // closing chat still takes the helpers it announces, so its close interrupts them too.
+    if (!lease.routable) {
+      return
+    }
     const previous = this.owners.get(threadId)
     if (previous && previous !== lease) {
+      // One writer per thread: a live chat keeps a helper another chat's frame names.
+      if (previous.routable) {
+        return
+      }
       previous.threads.delete(threadId)
     }
     this.owners.set(threadId, lease)
@@ -107,6 +129,25 @@ export class CodexSharedServerRouter {
     if (lost && opened) {
       lease.shed()
     }
+    for (const frame of this.requests?.takeFor(threadId) ?? []) {
+      this.requests?.delivered(frame, lease)
+      lease.deliver(frame)
+    }
+  }
+
+  /** The chat left stopping nothing: its threads go unclaimed (not retired) for a later chat. */
+  leave(lease: CodexSharedServerLease): void {
+    for (const threadId of lease.threads) {
+      if (this.owners.get(threadId) === lease) {
+        this.owners.delete(threadId)
+      }
+    }
+    lease.threads.clear()
+    this.requests?.returned(lease)
+  }
+
+  isRetired(threadId: string): boolean {
+    return this.retired.has(threadId)
   }
 
   /** Drops one thread this chat claimed but no longer wants (a resume its caller gave up on). */
@@ -141,6 +182,9 @@ export class CodexSharedServerRouter {
   }
 
   onNotification(method: string, params: unknown): void {
+    if (method === 'serverRequest/resolved') {
+      this.requests?.resolved(params)
+    }
     this.discover(method, params)
     this.route({ kind: 'notification', method, params })
   }
@@ -165,6 +209,7 @@ export class CodexSharedServerRouter {
   clear(): void {
     this.unrouted.clear()
     this.owners.clear()
+    this.requests?.clear()
   }
 
   /** A parent's item naming a helper hands that helper to the parent's chat. */
@@ -185,6 +230,10 @@ export class CodexSharedServerRouter {
   }
 
   private route(frame: CodexSharedServerFrame): void {
+    // A copy of a request held or settled here (a resume's or an attach's replay) is dropped.
+    if (frame.kind === 'request' && this.requests && !this.requests.admit(frame)) {
+      return
+    }
     const threadId = codexFrameThreadId(codexSharedFrameParams(frame))
     if (threadId === null) {
       this.routeServerWide(frame)
@@ -193,11 +242,18 @@ export class CodexSharedServerRouter {
     const owner = this.owners.get(threadId)
     if (owner) {
       owner.liveThreads.add(threadId)
+      if (frame.kind === 'request') {
+        this.requests?.delivered(frame, owner)
+      }
       owner.deliver(frame)
       return
     }
     if (this.retired.has(threadId)) {
       this.refuse(frame)
+      return
+    }
+    // It waits for the chat that claims its thread; only its other frames expire unclaimed.
+    if (frame.kind === 'request' && this.requests) {
       return
     }
     this.unrouted.hold(threadId, frame)
@@ -225,6 +281,9 @@ export class CodexSharedServerRouter {
       const first = open.find((lease) => lease.reading) ?? open[0]
       if (first) {
         first.deliver(frame)
+      } else if (this.requests) {
+        const deadline = SERVER_WIDE_REQUEST_DEADLINES_MS[frame.request.method] ?? 0
+        setTimeout(() => this.refuse(frame), deadline).unref?.()
       } else {
         this.refuse(frame)
       }

@@ -1,9 +1,58 @@
+import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
+import { readRecord } from '../codex-item-field-readers'
+import { readCodexTurnStatus } from '../codex-structured-thread-facts'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexSharedServerTurns } from './codex-shared-server-turns'
+import { listCodexLoadedThreads } from './codex-shared-server-open-work'
 
 /** How long an interrupted turn has to report turn/completed before Stop counts it unproven. */
 const TURN_STOP_PROOF_MS = 10_000
+
+type Reads = Pick<CodexAppServerConnection, 'request'>
+
+/** Turns that started before this app attached are in no notification it read: each thread with
+ *  none known is read, and a running one noted. False when a read failed (its state is unknown). */
+export async function seedRunningCodexTurns(
+  reads: Reads,
+  threads: Iterable<string>,
+  turns: CodexSharedServerTurns,
+  timeoutMs: number
+): Promise<boolean> {
+  const unknown = [...threads].filter((threadId) => turns.runningOn(threadId) === undefined)
+  const settled = await mapSettledWithConcurrency(unknown, 4, async (threadId) => {
+    const page = readRecord(
+      await reads.request(
+        'thread/turns/list',
+        { threadId, sortDirection: 'desc', limit: 1 },
+        { timeoutMs }
+      )
+    )
+    const turn = readRecord(Array.isArray(page.data) ? page.data[0] : null)
+    if (typeof turn.id === 'string' && readCodexTurnStatus(turn) === 'inProgress') {
+      turns.noteStarted(threadId, turn.id)
+    }
+  })
+  return settled.every((read) => read.status === 'fulfilled')
+}
+
+/** A kept run's threads that may still run here: those the server lists as loaded, marked live so
+ *  cleanup reaches them. Null when the listing fails: a quiet helper can't be told apart then. */
+async function keptRunThreads(
+  reads: Reads,
+  lease: CodexSharedServerLease
+): Promise<string[] | null> {
+  const loaded = await listCodexLoadedThreads(reads).catch(() => null)
+  if (!loaded) {
+    return null
+  }
+  for (const threadId of lease.threads) {
+    if (loaded.has(threadId)) {
+      lease.liveThreads.add(threadId)
+    }
+  }
+  return [...lease.liveThreads]
+}
 
 /** Interrupts every turn on the chat's threads, the helpers it announces meanwhile included;
  *  the chat keeps routing them until each turn is proven over. */
@@ -11,9 +60,19 @@ export async function stopCodexLeaseWriter(
   physical: Pick<CodexAppServerConnection, 'request'>,
   lease: CodexSharedServerLease,
   turns: CodexSharedServerTurns,
-  requestTimeoutMs: number
+  requestTimeoutMs: number,
+  /** The server's shared, limited reads, for a restored chat's turns. */
+  reads: Reads = physical
 ): Promise<boolean> {
   const options = { timeoutMs: requestTimeoutMs }
+  // A kept run's helpers came back through history, not live frames: those still loaded here may
+  // run (a quiet one sends nothing), so they're stopped like live ones.
+  const kept = lease.restored ? await keptRunThreads(reads, lease) : []
+  // Unlisted, the close stays unproven: the chat keeps routing its threads and the server runs on.
+  const seeded =
+    kept !== null && (await seedRunningCodexTurns(reads, kept, turns, requestTimeoutMs))
+  // A read that failed may fail again: a retry waits for a change, or a slow timer.
+  lease.readsFailed = !seeded
   // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
   await turns.waitUntil(
     () => lease.pendingOpens.size === 0 && !turns.anyStartPending([...lease.threads]),
@@ -47,6 +106,7 @@ export async function stopCodexLeaseWriter(
   }
   const threads = [...lease.threads, ...lease.abandonedThreads]
   return (
+    seeded &&
     lease.pendingOpens.size === 0 &&
     !turns.anyStartPending(threads) &&
     threads.every((threadId) => turns.runningOn(threadId) === undefined)

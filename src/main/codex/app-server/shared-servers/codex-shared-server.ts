@@ -1,6 +1,8 @@
-import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
+import {
+  spawnCodexAppServerConnection,
+  spawnRelayedCodexAppServerConnection
+} from '../codex-app-server-connection'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
-import { initializeCodexAppServerConnection } from '../codex-app-server-handshake'
 import {
   stopCodexSharedChatWorkload,
   unsubscribeCodexThreads,
@@ -9,19 +11,18 @@ import {
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
 import type { CodexSharedServerSpec } from './codex-shared-server-key'
-import type {
-  CodexLeaseRelease,
-  CodexSharedLeaseHost,
-  CodexSharedServerLease
-} from './codex-shared-server-lease'
+import type { CodexSharedServerLease } from './codex-shared-server-lease'
+import type { CodexLeaseRelease, CodexSharedLeaseHost } from './codex-shared-lease-host'
 import { CodexSharedServerBacklog } from './codex-shared-server-backlog'
+import { CodexSharedServerKeep } from './codex-shared-server-keep'
+import { codexSharedRelayAs } from './codex-shared-server-relay'
+import { startCodexSharedServer, type CodexSharedServerRelayed } from './codex-shared-server-start'
 import { CodexSharedServerTurns } from './codex-shared-server-turns'
 import { stopCodexLeaseWriter } from './codex-shared-server-writer-stop'
 import { CodexSharedServerRouter } from './codex-shared-server-router'
 import { retiringHungCodexServers } from './codex-shared-server-hang-watch'
 
 const RELEASE_REQUEST_TIMEOUT_MS = 5_000
-const INITIALIZE_TIMEOUT_MS = 15_000
 const NO_OWNER_ERROR_CODE = -32000
 
 /** One Codex app-server many chats lease; each chat's threads route to that chat alone. */
@@ -29,17 +30,21 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   readonly leases = new Set<CodexSharedServerLease>()
   /** Not offered to new chats; stops once its last chat leaves. */
   draining = false
-  private physical: CodexAppServerConnection | null = null
   private hasExited = false
   private reaping: Promise<void> | null = null
   /** Threads a leaving chat is still cleaning up; a chat resuming one waits for that. */
   private readonly releasingThreads = new Map<string, Promise<void>>()
   private readonly releases = new WeakMap<CodexSharedServerLease, Promise<CodexLeaseRelease>>()
-  private readonly turns = new CodexSharedServerTurns()
-  private readonly backlogs = new CodexSharedServerBacklog(() => this.physical, this.leases)
+  readonly turns = new CodexSharedServerTurns()
+  private readonly backlogs = new CodexSharedServerBacklog(
+    () => this.physicalConnection,
+    this.leases
+  )
+  readonly keep: CodexSharedServerKeep = new CodexSharedServerKeep(this)
   readonly router = new CodexSharedServerRouter(
     () => this.leases,
-    (frame) => this.refuse(frame)
+    (frame) => this.refuse(frame),
+    () => this.relay?.requests
   )
   readonly ready: Promise<void>
 
@@ -47,48 +52,31 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     readonly spec: CodexSharedServerSpec,
     private readonly onEnded: (server: CodexSharedServer) => void,
     connect: typeof spawnCodexAppServerConnection = spawnCodexAppServerConnection,
-    private readonly sweep?: CodexSharedServerProcessSweep
+    readonly sweep?: CodexSharedServerProcessSweep,
+    /** Run under the terminal daemon (a kept one's relay and chats, when it is reattached). */
+    readonly relayed?: CodexSharedServerRelayed
   ) {
-    this.ready = this.start(retiringHungCodexServers(connect))
+    const opener = relayed
+      ? spawnRelayedCodexAppServerConnection(
+          codexSharedRelayAs(relayed.chatKey, this.keep, relayed.attach)
+        )
+      : connect
+    this.ready = startCodexSharedServer(this, retiringHungCodexServers(opener), relayed)
   }
 
-  private async start(connect: typeof spawnCodexAppServerConnection): Promise<void> {
-    const connection = await connect(this.spec.launch, {
-      onNotification: (method, params) => {
-        this.turns.observe(method, params)
-        this.router.onNotification(method, params)
-      },
-      onServerRequest: (request) => this.router.onServerRequest(request),
-      onUnhandledFrame: (kind, payload) => {
-        if (!this.router.onUnhandledFrame(kind, payload)) {
-          console.warn(`[codex-shared-server] ${kind}`, this.pid ?? '')
-        }
-      },
-      onClose: (error) => {
-        // Unusable from here even before its exit is proven; new chats must not pick it.
-        this.draining = true
-        for (const lease of this.leases) {
-          lease.serverClosing(error)
-        }
-      },
-      onExit: (error) => this.onExit(error)
-    }).catch((error: unknown) => {
-      this.onExit(error instanceof Error ? error : new Error(String(error)))
-      throw error
-    })
-    this.physical = connection
-    try {
-      await initializeCodexAppServerConnection(connection, INITIALIZE_TIMEOUT_MS)
-    } catch (error) {
-      // A server that never initialized serves nobody; the next chat gets a fresh one.
-      this.draining = true
-      void connection.close()
-      throw error
-    }
+  /** The transport, once connected (startCodexSharedServer sets it). */
+  physicalConnection: CodexAppServerConnection | null = null
+
+  /** Present once the daemon runs it, so its chats can outlive this app. */
+  get relay(): CodexSharedServerKeep | undefined {
+    return this.physicalConnection?.relay ? this.keep : undefined
   }
+
+  /** A chat left: a close waiting on a change re-checks. */
+  ended = (): void => (this.turns.changed(), this.onEnded(this))
 
   get pid(): number | undefined {
-    return this.physical?.pid
+    return this.physicalConnection?.pid
   }
 
   get exited(): boolean {
@@ -96,27 +84,23 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   get closed(): boolean {
-    return this.hasExited || this.physical === null || this.physical.closed
+    return this.hasExited || this.physicalConnection === null || this.physicalConnection.closed
   }
 
   get connection(): CodexAppServerConnection {
-    if (!this.physical) {
+    if (!this.physicalConnection) {
       throw new Error('codex shared app-server is not running')
     }
-    return this.physical
+    return this.physicalConnection
   }
 
-  claim(
-    threadId: string,
-    lease: CodexSharedServerLease,
-    opened?: boolean,
-    history?: boolean
-  ): void {
+  claim = (threadId: string, lease: CodexSharedServerLease, opened?: boolean, history?: boolean) =>
     this.router.claim(threadId, lease, opened, history)
-  }
 
   backlog = (lease: CodexSharedServerLease, deltaBytes: number): void =>
     this.backlogs.change(lease, deltaBytes)
+  /** True the first time an answer to this request may be sent. */
+  answer = (id: number | string): boolean => this.relay?.requests.answer(id) ?? true
   turnsChanged = (): void => this.turns.changed()
   hasRunningTurn = (threads: Iterable<string>): boolean =>
     [...threads].some((threadId) => this.turns.runningOn(threadId) !== undefined)
@@ -132,10 +116,12 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         this.hasExited ||
         this.leases.size < others ||
         running().some((turnId) => !seen.has(turnId) && !lease.refusedInterrupts.has(turnId)) ||
-        (lease.pendingOpens.size === 0 &&
+        (!lease.readsFailed &&
+          lease.pendingOpens.size === 0 &&
           !this.turns.anyStartPending(threads()) &&
           !this.hasRunningTurn(threads())),
-      null
+      // A failed read may pass once the server recovers, unannounced: retry, 30 s backing off to 5 min.
+      lease.readsFailed ? Math.min(30_000 * 2 ** lease.readRetries++, 300_000) : null
     )
   }
 
@@ -186,6 +172,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         this.releases.delete(lease)
       } else {
         this.leases.delete(lease)
+        if (lease.sessionId !== null && result.writerStopped && result.workloadGone) {
+          this.keep.endedChats.add(lease.sessionId)
+        }
         this.turns.changed()
         this.router.openSettled()
         this.onEnded(this)
@@ -200,7 +189,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   private async stopLeaseWork(lease: CodexSharedServerLease): Promise<CodexLeaseRelease> {
-    const physical = this.physical
+    const physical = this.physicalConnection
     if (!physical) {
       return { writerStopped: true, workloadGone: true }
     }
@@ -212,8 +201,14 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       return this.reapedVerdict()
     }
     const writerStopped =
-      !this.physical ||
-      (await stopCodexLeaseWriter(this.physical, lease, this.turns, RELEASE_REQUEST_TIMEOUT_MS))
+      !this.physicalConnection ||
+      (await stopCodexLeaseWriter(
+        this.physicalConnection,
+        lease,
+        this.turns,
+        RELEASE_REQUEST_TIMEOUT_MS,
+        this.keep.limited(this.physicalConnection, { priority: -1 })
+      ))
     if (!writerStopped && !this.hasExited) {
       await this.stopIfAlone(lease)
     }
@@ -273,9 +268,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.router.retire(threadId)
     lease.abandonedThreads.add(threadId)
     const letGo =
-      !this.physical || this.closed
+      !this.physicalConnection || this.closed
         ? Promise.resolve(false)
-        : unsubscribeCodexThreads(this.physical, [threadId], RELEASE_REQUEST_TIMEOUT_MS)
+        : unsubscribeCodexThreads(this.physicalConnection, [threadId], RELEASE_REQUEST_TIMEOUT_MS)
     lease.abandoning.add(letGo)
     return letGo
   }
@@ -288,19 +283,23 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
    *  server, stop the server (its exit reaps the tree); else drain it so it ends with the last. */
   private async stopIfAlone(lease: CodexSharedServerLease): Promise<void> {
     this.draining = true
-    if ([...this.leases].some((other) => other !== lease) || !this.physical) {
+    // A reattached server may run kept work of chats not open here yet: those count as others.
+    const others =
+      [...this.leases].some((other) => other !== lease) ||
+      this.physicalConnection?.relay?.reattached === true
+    if (others || !this.physicalConnection) {
       console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: chat work outlived cleanup`)
       return
     }
-    await this.physical.close()
+    await this.physicalConnection.close()
   }
 
   /** Whether the process's descendants (the chats' commands) were proven gone when it closed. */
   workloadVerdict(): DescendantTreeVerdict {
-    if (!this.physical) {
+    if (!this.physicalConnection) {
       return 'exited'
     }
-    return this.physical.closeResult?.tree ?? 'unverifiable'
+    return this.physicalConnection.closeResult?.tree ?? 'unverifiable'
   }
 
   /** Settles once an exited server's process tree has been reaped and judged. */
@@ -313,15 +312,26 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   async stop(): Promise<boolean> {
     this.draining = true
     await this.ready.catch(() => {})
-    if (!this.physical) {
+    if (!this.physicalConnection) {
       return true
     }
-    return (await this.physical.close()) && this.physical.closeResult?.root === 'exited'
+    return (
+      (await this.physicalConnection.close()) &&
+      this.physicalConnection.closeResult?.root === 'exited'
+    )
   }
 
   refuse(frame: CodexSharedServerFrame): void {
-    if (frame.kind === 'request' && !this.closed) {
-      this.physical?.respondWithError(
+    if (frame.kind !== 'request' || this.closed || this.keep.toDaemon) {
+      // Handed to its daemon, a request waits there for the next attach: never answered here.
+      return
+    }
+    // A relayed server's request a leaving chat can't answer waits for its thread's next chat.
+    if (this.relay?.requests.unclaim(frame, (id) => this.router.isRetired(id))) {
+      return
+    }
+    if (this.answer(frame.request.id)) {
+      this.physicalConnection?.respondWithError(
         frame.request.id,
         NO_OWNER_ERROR_CODE,
         'no Orca chat holds this thread'
@@ -329,7 +339,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
   }
 
-  private onExit(error: Error): void {
+  exitedWith(error: Error): void {
     if (this.hasExited) {
       return
     }
@@ -338,7 +348,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.turns.endAll()
     this.backlogs.dispose()
     // Root exit says nothing of the commands it ran; reap and judge the tree for every chat.
-    const physical = this.physical
+    const physical = this.physicalConnection
     this.reaping = physical
       ? physical.close().then(
           () => {},

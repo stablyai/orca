@@ -6,10 +6,13 @@ import {
   codexOpenedThreadId,
   codexTurnId
 } from './codex-shared-server-frames'
-import type { CodexSharedLeaseHost } from './codex-shared-server-lease'
+import type { CodexSharedLeaseHost } from './codex-shared-lease-host'
 
 const OPENS_THREAD = new Set(['thread/start', 'thread/resume', 'thread/fork'])
 const CARRIES_HISTORY = new Set(['thread/resume', 'thread/read', 'thread/turns/list'])
+/** Reads of thread state, held to the server's few at once: every chat reopening at app start
+ *  reads its threads, and together they mustn't burst into one Codex process. */
+const METADATA_READS = new Set(['thread/read', 'thread/turns/list', 'thread/loaded/list'])
 
 /** Codex sets this on every command a chat's threads run, so its leftovers are found by lease. */
 export const CODEX_SHARED_LEASE_ENV = 'ORCA_CODEX_SHARED_LEASE'
@@ -21,6 +24,8 @@ export type CodexLeaseRequestOwner = {
   readonly id: string
   readonly chatEnv: Readonly<Record<string, string>>
   readonly open: boolean
+  /** Quit handed its part to the daemon: it reads nothing more. */
+  readonly handedOff: boolean
   readonly host: CodexSharedLeaseHost
   /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
   readonly pendingOpens: Set<Promise<unknown>>
@@ -96,7 +101,11 @@ export async function sendCodexLeaseRequest(
   const turnThreadId =
     method === 'turn/start' && typeof params?.threadId === 'string' ? params.threadId : null
   let callerGone = false
-  const sent = host.connection.request(
+  const via =
+    (METADATA_READS.has(method) &&
+      host.relay?.metadataReads(() => owner.open && !owner.handedOff)) ||
+    host.connection
+  const sent = via.request(
     method,
     opensThread ? withLeaseTag(params, owner.id, owner.chatEnv) : params,
     {
@@ -122,7 +131,7 @@ export async function sendCodexLeaseRequest(
         if (CARRIES_HISTORY.has(method) && owner.open && !callerGone) {
           // A helper another chat already holds stays with it, with its liveness and cleanup.
           for (const child of codexChildThreadIdsInHistory(result)) {
-            if (!owner.heldByOther(child)) {
+            if (owner.open && !owner.heldByOther(child)) {
               owner.claim(child, false, true)
             }
           }

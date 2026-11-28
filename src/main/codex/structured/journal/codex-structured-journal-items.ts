@@ -96,7 +96,10 @@ export class CodexJournalItems {
       return { handled: false }
     }
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
-    const identity = this.identityFor(event.threadId, turnId, item)
+    // A running tool keeps the row it streams to (a seeded one's own, even once out of the cache).
+    const tracked = this.activeItems.get(codexStructuredItemKey(event.threadId, item.id))?.identity
+    const identity =
+      tracked?.provider === 'orca' ? tracked : this.identityFor(event.threadId, turnId, item)
     // Count echoes for stable resume ordinals, but user bubbles come from submissions.
     if (source === 'live' && item.type === 'userMessage') {
       const echo = readCodexDispatchEcho(item, identity, this.deps.dispatchEchoes)
@@ -210,8 +213,8 @@ export class CodexJournalItems {
   }
 
   /** A kept agent's running command: later output streams onto its row with its saved fields. */
-  seedRunning(threadId: string, turnId: string, item: CodexThreadItem): AgentJournalItemIdentity {
-    return this.track(threadId, turnId, item, this.identityFor(threadId, turnId, item))
+  seedRunning(thread: string, turn: string, item: CodexThreadItem, id?: AgentJournalItemIdentity) {
+    return this.track(thread, turn, item, id ?? this.identityFor(thread, turn, item))
   }
 
   private track(
@@ -258,10 +261,7 @@ export class CodexJournalItems {
     })
     this.identities.set(key, identity)
     while (this.identities.size > MAX_CODEX_IDENTITY_ENTRIES) {
-      const oldest = this.identities.keys().next().value
-      if (typeof oldest === 'string') {
-        this.identities.delete(oldest)
-      }
+      this.identities.delete(this.identities.keys().next().value ?? '')
     }
     while (this.details.size > MAX_CODEX_DETAIL_ENTRIES) {
       const oldest = this.details.keys().next().value

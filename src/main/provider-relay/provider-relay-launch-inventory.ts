@@ -4,11 +4,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { readFile } from 'node:fs/promises'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
-import {
-  forgetProviderRelayRunVerdict,
-  providerRelayRunAskUnfenced,
-  providerRelayRunUnknown
-} from './provider-relay-run-verdicts'
+import { providerRelayRunAskUnfenced, providerRelayRunUnknown } from './provider-relay-run-verdicts'
 export {
   beginProviderRelayRunAsk,
   forgetIdleProviderRelayRunVerdict,
@@ -18,6 +14,12 @@ export {
   providerRelayRunAskCurrent,
   providerRelayRunUnknown
 } from './provider-relay-run-verdicts'
+
+import {
+  providerRelayAgentShared,
+  registerSharedProviderRelayAgent,
+  type SharedProviderRelayAgent
+} from './provider-relay-shared-agents'
 
 const LIST_TIMEOUT_MS = 3_000
 /** Launch waits this long for the daemon before treating its relays as unknown (not absent). */
@@ -55,7 +57,12 @@ const keepableProviders = new Set<string>()
 
 export function registerReattachableProviderRelayAgent(
   agent: string,
-  options: { opensEnded?: boolean; provider?: string } = {}
+  options: {
+    opensEnded?: boolean
+    provider?: string
+    /** One agent serves many chats; it hears a chat (deleted) that no longer wants its part. */
+    shared?: SharedProviderRelayAgent
+  } = {}
 ): void {
   reattachableAgents.add(agent)
   if (options.provider) {
@@ -63,6 +70,9 @@ export function registerReattachableProviderRelayAgent(
   }
   if (options.opensEnded) {
     opensEndedAgents.add(agent)
+  }
+  if (options.shared) {
+    registerSharedProviderRelayAgent(agent, options.shared)
   }
 }
 
@@ -123,7 +133,10 @@ export async function placeKeptProviderRelay(
     return
   }
   // The row and its token are published together, so no ask ever sees a row whose token is pending.
-  const token = await sharedTokenRead(chatKey, relay.info)
+  // A shared agent carries the token of whichever chat started it, never this chat's.
+  const token = providerRelayAgentShared(relay.info.agent)
+    ? null
+    : await sharedTokenRead(chatKey, relay.info)
   if (!providerRelayRunAskUnfenced(chatKey, ask) || placed()) {
     return
   }
@@ -335,21 +348,6 @@ export function forgetKeptProviderRelay(chatKey: string, relay: KeptProviderRela
 export function keptRunningProviderRelayPid(chatKey: string): number | null {
   const relay = keptProviderRelay(chatKey)
   return relay && keptProviderRelayOutstanding(relay.info) ? relay.info.pid : null
-}
-
-/** Ended relays found at launch are dropped once their chat cold-resumes. */
-/** `keepUnread`: output no app took stays with the daemon (it expires there); a deleted chat drops it. */
-export function dropListedProviderRelay(chatKey: string, keepUnread = false): void {
-  if (!keepUnread) {
-    forgetProviderRelayRunVerdict(chatKey)
-  }
-  const relay = keptProviderRelay(chatKey)
-  if (relay) {
-    forgetKeptProviderRelay(chatKey, relay)
-    if (!keepUnread || !keptProviderRelayUnread(relay.info)) {
-      void relay.channel.close(relay.info.relayId).catch(() => {})
-    }
-  }
 }
 
 /** Chats whose agent this app reattached from the last run; it stays true after that agent ends. */

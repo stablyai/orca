@@ -6,6 +6,7 @@ import {
 } from '../provider-process/provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../shared/agent-launch/startup/parent-agent-session-env'
 import { resolveProviderExecPath } from '../provider-process/provider-exec-path'
+import { inspectMacProcessCodeIdentity } from '../daemon/executable-host/macos/daemon-mac-code-identity'
 import {
   missingProviderRelayCapability,
   traceProviderRelayCapabilityFallback
@@ -50,10 +51,25 @@ export function providerRelaySpawnSpec(
   }
 }
 
-/** On macOS the daemon may lack permission for the chat's folder; only a readable one relays. */
-export async function daemonReadsFolder(client: DaemonClient, cwd: string): Promise<boolean> {
+/**
+ * On macOS the daemon may lack permission for the chat's folder; only a readable one relays. An
+ * agent serving several chats' folders (`anyFolder`) can't be probed for each, so its daemon must
+ * also run a bundle that still resolves: an updated app's older daemon may read home but not a
+ * protected worktree its chats use.
+ */
+export async function daemonReadsFolder(
+  client: DaemonClient,
+  cwd: string,
+  anyFolder = false
+): Promise<boolean> {
   if (process.platform !== 'darwin') {
     return true
+  }
+  if (anyFolder) {
+    const image = await inspectMacProcessCodeIdentity(client.getDaemonIdentity()?.pid)
+    if (image.identity !== 'resolved' && image.identity !== 'parked') {
+      return false
+    }
   }
   try {
     const reply = await client.request<{ outcome?: unknown } | null>(

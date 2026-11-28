@@ -31,6 +31,9 @@ export type CodexHistoryJournalView = {
   known: ReadonlySet<string>
   terminal?: ReadonlySet<string>
   assistants?: ReadonlySet<string>
+  /** Turns with a tool row still saved as running: a later read may hold its end (a background
+   *  command that finished while no app watched), so they are read again. */
+  openTools?: ReadonlySet<string>
   /** Latest represented turn by journal position, including within a batch. */
   latest: string | null
   latestPosition: AgentJournalPosition | null
@@ -52,6 +55,9 @@ export async function readCodexHistoryJournalView(
     const nativePromptKeys = new Set<string>()
     const lifecycles = new Set<string>()
     const assistants = new Set<string>()
+    /** Running tool rows' turn rows (a command's own key names its item, its scope its turn). */
+    const openScopes = new Set<string>()
+    const turnOfRow = new Map<string, string>()
     let latest: string | null = null
     let latestPosition: AgentJournalPosition | null = null
     const positions = new Map<string, AgentJournalPosition>()
@@ -84,6 +90,10 @@ export async function readCodexHistoryJournalView(
           if (!isRootAgentJournalItem(attribution)) {
             return
           }
+          const scope = attribution.turnScope
+          if (body.kind === 'tool-call' && body.state === 'running' && scope?.kind === 'turn') {
+            openScopes.add(scope.turnItemId)
+          }
           if (
             identity?.provider === 'legacy' &&
             identity.agent === 'codex' &&
@@ -99,6 +109,9 @@ export async function readCodexHistoryJournalView(
           if (turnId) {
             if (body.kind === 'message' && body.role === 'assistant') {
               assistants.add(turnId)
+            }
+            if (body.kind === 'turn') {
+              turnOfRow.set(itemId, turnId)
             }
             const turn = readAgentJournalTurn(body)
             if (turn && turn.state !== 'running' && turn.state !== 'unverifiable') {
@@ -155,6 +168,7 @@ export async function readCodexHistoryJournalView(
       known,
       terminal: lifecycles,
       assistants,
+      openTools: new Set([...openScopes].flatMap((row) => turnOfRow.get(row) ?? [])),
       latest,
       latestPosition,
       hasRows,
@@ -205,6 +219,7 @@ export function sameCodexHistoryJournalView(
     JSON.stringify(a.latestPosition) === JSON.stringify(b.latestPosition) &&
     JSON.stringify([...(a.terminal ?? [])]) === JSON.stringify([...(b.terminal ?? [])]) &&
     JSON.stringify([...(a.assistants ?? [])]) === JSON.stringify([...(b.assistants ?? [])]) &&
+    JSON.stringify([...(a.openTools ?? [])]) === JSON.stringify([...(b.openTools ?? [])]) &&
     a.known.size === b.known.size &&
     [...a.known].every((id) => b.known.has(id)) &&
     sameNativePromptKeys(a.nativePromptKeys, b.nativePromptKeys)

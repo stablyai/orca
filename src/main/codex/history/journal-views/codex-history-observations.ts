@@ -89,6 +89,8 @@ export function createCodexHistoryObservations(input: {
           .filter((key) => turn[key] != null)
           .map((key) => [key, turn[key]])
       )
+      // A saved start is Orca's receipt time, which rarely equals Codex's: its status still counts.
+      target.reported = next.status ?? target.reported
       const constraints = { ...target.source, ...savedTurnFacts(target.saved) }
       const validTurn =
         compatibleHistoryStatus(constraints.status, next.status) &&

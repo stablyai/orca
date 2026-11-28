@@ -44,6 +44,17 @@ export class CodexSharedLeaseQueue {
     return this.pending
   }
 
+  /** Every held frame, in order, for another holder; nothing is refused. */
+  take(): CodexSharedServerFrame[] {
+    const taken = this.frames.slice(this.head).flatMap((slot) => (slot ? [slot.frame] : []))
+    const held = this.heldBytes
+    this.frames = []
+    this.head = 0
+    this.heldBytes = 0
+    this.owner.backlog(-held)
+    return taken
+  }
+
   /** Drops every held frame; held requests are refused so Codex doesn't wait on them. */
   drop(): void {
     for (const slot of this.frames.slice(this.head)) {
@@ -51,10 +62,11 @@ export class CodexSharedLeaseQueue {
         this.owner.refuse(slot.frame)
       }
     }
-    this.owner.backlog(-this.heldBytes)
+    const held = this.heldBytes
     this.frames = []
     this.head = 0
     this.heldBytes = 0
+    this.owner.backlog(-held)
   }
 
   drain(): void {

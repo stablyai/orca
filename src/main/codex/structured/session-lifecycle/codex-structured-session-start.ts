@@ -1,5 +1,8 @@
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
-import { restateKeptCodexBackgroundWork } from '../threads/codex-kept-turn-ordinals'
+import {
+  restateKeptCodexBackgroundWork,
+  settleKeptCodexHelperTurns
+} from '../threads/codex-kept-turn-ordinals'
 import { openKeptCodexState, type KeptCodexSnapshot } from '../threads/codex-kept-snapshot'
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
@@ -134,6 +137,9 @@ export async function openCodexStructuredSession(
   const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
   // A kept app-server's output since the last ack is replayed in order instead of history catch-up.
   const keptRunning = connection.relay?.reattached === true
+  // A kept run on a shared server replays nothing: it catches up from history, then reads its
+  // running state (numbering, commands, helpers) as a replayed one does.
+  const rebuilt = connection.relay?.rebuilt === true
   if (
     !keptRunning &&
     translator &&
@@ -150,6 +156,7 @@ export async function openCodexStructuredSession(
           sink,
           returnedTurns,
           paginate: opened.historyMode === 'paginated' || returnedTurns.length === 0,
+          liveTurns: rebuilt,
           subagentExecutions: start.subagentExecutions,
           onReceipt: (clientMessageId, providerIdentity) =>
             deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity }),
@@ -165,7 +172,7 @@ export async function openCodexStructuredSession(
   }
   // The agent's own state first; the replay released after it only fills in content.
   const kept: KeptCodexSnapshot =
-    keptRunning && translator
+    (keptRunning || rebuilt) && translator
       ? await waitForPromiseWithSignal(
           openKeptCodexState({
             connection,
@@ -253,6 +260,10 @@ export async function openCodexStructuredSession(
   }
   current()
   sessions.set(sessionId, session)
+  // Before the frames buffered since the open: those helper ends came first.
+  if (rebuilt && translator) {
+    settleKeptCodexHelperTurns(translator, sessionId, opened.threadId, keptTurns)
+  }
   for (const event of attempt.window.drain()) {
     event()
   }
@@ -260,7 +271,7 @@ export async function openCodexStructuredSession(
     session.backgroundTasks,
     keptTurns,
     connection.relay?.endedWork()?.command,
-    connection.relay?.openWork()?.command,
+    connection.relay?.openWork()?.command ?? kept.open,
     kept.spawns
   )
   connection.relay?.releaseOutput()
