@@ -15,17 +15,45 @@ type Pending = {
   revision: number
   raw: string
   before: Promise<TerminalInputScreen>
-  effect?: ReturnType<typeof inputEffect>
+  effect?: ReturnType<typeof inputEffect>['effect']
+  recovery?: boolean
+  overflow?: boolean
 }
 
-function inputEffect(
-  raw: string,
-  draft: string | null
-): { draft: string; submitted: string | null } | null {
+function escapeEnd(raw: string, start: number): number {
+  const kind = raw[start + 1]
+  if (!kind) {
+    return -1
+  }
+  if (kind === '[') {
+    for (let index = start + 2; index < raw.length; index += 1) {
+      if (raw[index] >= '@' && raw[index] <= '~') {
+        const end = index + (raw[index] === 'M' && index === start + 2 ? 3 : 0)
+        return end < raw.length ? end : -1
+      }
+    }
+    return -1
+  }
+  if (']P_X^'.includes(kind)) {
+    for (let index = start + 2; index < raw.length; index += 1) {
+      if (kind === ']' && raw[index] === '\x07') {
+        return index
+      }
+      if (raw[index] === '\x1b' && raw[index + 1] === '\\') {
+        return index + 1
+      }
+    }
+    return -1
+  }
+  return kind === 'O' ? (start + 2 < raw.length ? start + 2 : -1) : start + 1
+}
+
+function inputEffect(raw: string, draft: string | null) {
   let text = draft ?? ''
   let submitted: string | null = null
   let paste = false
   let known = true
+  let complete = true
   for (let index = 0; index < raw.length; index += 1) {
     if (raw.startsWith(BRACKETED_PASTE_START, index)) {
       paste = true
@@ -38,10 +66,20 @@ function inputEffect(
       continue
     }
     const char = raw[index]
+    if (char === '\x1b' && !paste) {
+      known = false
+      submitted = null
+      const end = escapeEnd(raw, index)
+      if (end < 0) {
+        complete = false
+        break
+      }
+      index = end
+      continue
+    }
     if (char === '\x15' && !paste) {
       text = ''
       submitted = null
-      known = true
     } else if ((char === '\x7f' || char === '\b') && !paste) {
       text = [...text].slice(0, -1).join('')
       submitted = null
@@ -56,7 +94,10 @@ function inputEffect(
       submitted = null
     }
   }
-  return known && !paste ? { draft: text, submitted } : null
+  return {
+    effect: known && !paste ? { draft: text, submitted } : null,
+    complete: complete && !paste
+  }
 }
 
 function echoCount(lines: readonly string[], text: string): number {
@@ -102,10 +143,18 @@ export class TerminalInputObservation {
 
   record(ptyId: string, revision: number, data: string): void {
     const pending = this.pending.get(ptyId)
-    if (pending) {
+    const previous = pending && pending.effect == null ? inputEffect(pending.raw, '') : undefined
+    // A fresh write can recover opaque editing only through a new, matching submitted echo.
+    const recovery =
+      pending &&
+      !pending.overflow &&
+      previous?.complete &&
+      (previous.effect === null || pending.effect === null)
+    if (pending && !recovery) {
       pending.revision = revision
       pending.effect = undefined
-      pending.raw = pending.raw.length + data.length <= 65_536 ? pending.raw + data : '\x00'
+      pending.overflow ||= pending.raw.length + data.length > 65_536
+      pending.raw = pending.overflow ? '\x00' : pending.raw + data
     } else {
       // Capture the current parse chain before provider.write can synchronously produce output.
       let before: Promise<TerminalInputScreen>
@@ -114,7 +163,13 @@ export class TerminalInputObservation {
       } catch {
         before = Promise.resolve(unknownScreen)
       }
-      this.pending.set(ptyId, { revision, raw: data.length <= 65_536 ? data : '\x00', before })
+      this.pending.set(ptyId, {
+        revision,
+        raw: data.length <= 65_536 ? data : '\x00',
+        before,
+        recovery: Boolean(recovery),
+        overflow: data.length > 65_536
+      })
     }
   }
 
@@ -136,18 +191,22 @@ export class TerminalInputObservation {
       return
     }
     if (pending.effect === undefined) {
-      pending.effect = inputEffect(pending.raw, before.draft)
+      pending.effect = inputEffect(pending.raw, before.draft).effect
     }
     const effect = pending.effect
     if (!effect) {
       return
     }
     const changedDraft =
-      effect.submitted === null && effect.draft !== before.draft && screen.draft === effect.draft
+      !pending.recovery &&
+      effect.submitted === null &&
+      effect.draft !== before.draft &&
+      screen.draft === effect.draft
     const submitted =
       effect.submitted !== null &&
       echoCount(screen.lines, effect.submitted) > echoCount(before.lines, effect.submitted)
     const submittedComposerCleared =
+      !pending.recovery &&
       effect.submitted !== null &&
       before.draft === effect.submitted &&
       effect.draft === '' &&
