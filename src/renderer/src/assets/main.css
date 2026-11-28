@@ -2520,6 +2520,12 @@ html.native-shell .app-layout {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
+/* Opt-in continuous rotation for high-refresh displays (#39119); :where() keeps specificity equal to the base rule so offscreen and reduced-motion overrides still win. */
+:where(:root[data-smooth-spinners]) .agent-working-spinner,
+:where(:root[data-smooth-spinners]) .loading-spinner {
+  animation-timing-function: linear;
+}
+
 /* Offscreen subtrees pause their loops; spinners drop their animation instead so reveal re-anchors phase. */
 [data-animation-offscreen],
 [data-animation-offscreen] * {

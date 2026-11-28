@@ -996,6 +996,19 @@
         },
         "08c854149e": "Reduce visual effects"
       },
+      "smoothSpinners": {
+        "title": "Smooth spinners",
+        "description": "Animate loading spinners continuously at your display's refresh rate instead of 12 FPS. Uses slightly more GPU power while agents are working.",
+        "keywords": {
+          "spinner": "spinner",
+          "animation": "animation",
+          "smooth": "smooth",
+          "fps": "fps",
+          "choppy": "choppy",
+          "refreshRate": "refresh rate",
+          "performance": "performance"
+        }
+      },
       "appIcon": {
         "importCustom": "Custom…",
         "replaceCustom": "Replace custom icon…",

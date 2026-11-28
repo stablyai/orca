@@ -36,6 +36,11 @@ import type { UiLanguageSettings } from '../i18n/ui-language-settings'
 import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
 import type { StatusBarMemorySettings } from '../diagnostics/status-bar-memory-settings'
 
+type AnimationSettings = {
+  /** Use continuous display-refresh rotation for spinners instead of 12 FPS stepped frames (#39119). */
+  smoothSpinners?: boolean
+}
+
 type DesktopWindowSettings = {
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean
@@ -68,6 +73,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   TerminalScrollSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
+  AnimationSettings &
   DesktopWindowSettings &
   EditorSaveSettings &
   BotsGlobalSettings &

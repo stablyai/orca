@@ -20,6 +20,7 @@ import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store/index'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
+import { useSmoothSpinners } from './hooks/theme/use-smooth-spinners'
 import { registerBackgroundWorkerPausedIpcBridge } from './hooks/ipc-events/native-app/background-worker-paused-ipc-bridge'
 
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
@@ -32,6 +33,7 @@ function SpaceWindowRoot(): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const activeModal = useAppStore((state) => state.activeModal)
   useReduceVisualEffects(settings?.reduceVisualEffects)
+  useSmoothSpinners(settings?.smoothSpinners)
   useAppThemePaint()
 
   useEffect(() => {
