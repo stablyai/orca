@@ -17,6 +17,7 @@ import {
   NativeChatReplyRevealsContext,
   useNativeChatHeldReveals
 } from '../../markdown/native-chat-reply-reveals'
+import { useAppStore } from '@/store'
 
 function translatedHeadline(
   headline: NativeChatReasoningHeadline,
@@ -48,7 +49,10 @@ export function NativeChatReasoningRow({
   const t = useTranslate()
   // Keyed like the live line, so a block opened while it streamed lands open, and windowing keeps it.
   const disclosureKey = nativeChatReasoningDisclosureKey(message.id)
-  const disclosure = useNativeChatDisclosure(disclosureKey, false)
+  const expandedByDefault = useAppStore(
+    (state) => state.settings?.nativeChatReasoningExpanded === true
+  )
+  const disclosure = useNativeChatDisclosure(disclosureKey, expandedByDefault)
   // Held outside the collapsible body, so collapsing and reopening a streaming thought resumes its reveal.
   const heldReveals = useNativeChatHeldReveals(disclosureKey)
   if (!markdown.trim()) {
