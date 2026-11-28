@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useFocusEffect } from 'expo-router'
 import * as z from 'zod'
 import { DELEGATED_PHONE_SERVER_OFFER_METHOD } from '../../../../src/shared/remote-runtime/pairing/delegated-phone-server-offer-contract'
 import type { Translate } from '../../i18n/mobile-i18n'
@@ -59,8 +60,8 @@ export async function requestServerOwnPairing(args: {
   }
 }
 
-/** One request per open sheet: the row shows it is working, and a reply that lands after the
- *  sheet closed, moved to another row or left the screen is dropped. */
+/** One request per open sheet: the row shows it is working, and a reply is dropped once that sheet
+ *  session ends (closed, reopened, moved to another row, or the screen lost focus). */
 export function useServerOwnPairingRequest(openRowId: string | null): {
   pending: boolean
   start: (
@@ -68,32 +69,30 @@ export function useServerOwnPairingRequest(openRowId: string | null): {
     onAnswer: (answer: ServerOwnPairing) => void
   ) => void
 } {
-  const [pendingRowId, setPendingRowId] = useState<string | null>(null)
-  const openRow = useRef(openRowId)
-  useEffect(() => {
-    openRow.current = openRowId
-    return () => {
-      openRow.current = null
-    }
-  }, [openRowId])
+  const [pending, setPending] = useState(false)
+  const session = useRef(0)
+  const endSession = useCallback(() => {
+    session.current += 1
+    setPending(false)
+  }, [])
+  // Each open row is a session; closing, reopening or switching rows ends it.
+  useEffect(() => endSession, [openRowId, endSession])
+  useFocusEffect(useCallback(() => endSession, [endSession]))
   const start = useCallback(
     (
       args: Parameters<typeof requestServerOwnPairing>[0],
       onAnswer: (answer: ServerOwnPairing) => void
     ) => {
-      const rowId = openRow.current
-      if (rowId === null) {
-        return
-      }
-      setPendingRowId(rowId)
+      const mine = session.current
+      setPending(true)
       void requestServerOwnPairing(args).then((answer) => {
-        setPendingRowId((current) => (current === rowId ? null : current))
-        if (openRow.current === rowId) {
+        if (session.current === mine) {
+          setPending(false)
           onAnswer(answer)
         }
       })
     },
     []
   )
-  return { pending: pendingRowId !== null && pendingRowId === openRowId, start }
+  return { pending, start }
 }
