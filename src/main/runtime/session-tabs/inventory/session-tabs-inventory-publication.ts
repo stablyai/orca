@@ -10,6 +10,10 @@ import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees } from './sess
 // shows up within this long, while a burst of reads still shares one census.
 const LOCAL_TERMINAL_CENSUS_REUSE_MS = 1_000
 
+// Why bounded: an old client is withheld until the renderer publishes (it would prune tabs from
+// an unpublished list), but a host whose graph never publishes must refuse, not hang the call.
+export const SESSION_TABS_INVENTORY_PUBLICATION_WAIT_MS = 30_000
+
 export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees {
   /** A workspace's chat tabs, from the tab state alone: no PTY inventory, which only terminal tabs need.
    *  Bot reads (chats tree, Activity, Look around) ask this for a bot home, which has no terminals. */
@@ -27,12 +31,21 @@ export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntime
     )
   }
 
-  protected waitForSessionTabsInventoryPublication(signal?: AbortSignal): Promise<void> {
+  protected waitForSessionTabsInventoryPublication(
+    signal?: AbortSignal,
+    timeoutMs = SESSION_TABS_INVENTORY_PUBLICATION_WAIT_MS
+  ): Promise<void> {
     if (this.getAuthoritativeSessionTabsInventoryEpoch() !== null) {
       return Promise.resolve()
     }
     return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup()
+        reject(new Error('runtime_unavailable'))
+      }, timeoutMs)
+      timer.unref?.()
       const cleanup = (): void => {
+        clearTimeout(timer)
         this.sessionTabsInventoryWaiters.delete(onPublished)
         signal?.removeEventListener('abort', onAbort)
       }
