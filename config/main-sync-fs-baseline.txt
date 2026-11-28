@@ -511,7 +511,6 @@
 2 src/main/updater/linux-package/linux-update-package-type.ts
 6 src/main/updater/serve-update-handoff.ts
 2 src/main/usage/provider-lifecycle/usage-provider-store-lifecycle.ts
-1 src/main/usage/scan-worker/usage-scan-worker-spawn.ts
 1 src/main/warp-themes/discovery.ts
 1 src/main/webhooks/webhook-call-file.ts
 2 src/main/webhooks/webhook-host-ledger.ts

@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
@@ -35,10 +34,6 @@ function defaultWorkerFactory(): Worker {
     currentWorkerEntryLayout(__dirname),
     USAGE_SCAN_WORKER_ENTRY_FILENAME
   )
-  // Reject missing entries synchronously; never await a worker that cannot become ready.
-  if (!existsSync(workerPath)) {
-    throw new Error(`Usage scan worker entry not found: ${workerPath}`)
-  }
   return spawnWorkerThread(workerPath, { name: 'orca-usage-scan' })
 }
 

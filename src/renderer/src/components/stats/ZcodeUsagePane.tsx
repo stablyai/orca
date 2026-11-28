@@ -7,7 +7,8 @@ import { ZcodeUsageDetails } from './ZcodeUsageDetails'
 import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatTokens, formatUpdatedAt } from './usage-formatters'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 // Why: generic labels reuse the OpenCode pane's keys so panes share one translation.
 const RANGE_OPTIONS: ZcodeUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -41,6 +42,8 @@ const RANGE_LABELS: Record<ZcodeUsageRange, string> = {
 }
 
 export function ZcodeUsagePane(): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const scanState = useAppStore((state) => state.zcodeUsageScanState)
   const summary = useAppStore((state) => state.zcodeUsageSummary)
   const daily = useAppStore((state) => state.zcodeUsageDaily)
@@ -65,8 +68,8 @@ export function ZcodeUsagePane(): React.JSX.Element {
     void setZcodeUsageEnabled(enabled)
   }
 
-  const title = translate('auto.components.stats.ZcodeUsagePane.title', 'ZCode Usage Tracking')
-  const enableLabel = translate(
+  const title = t('auto.components.stats.ZcodeUsagePane.title', 'ZCode Usage Tracking')
+  const enableLabel = t(
     'auto.components.stats.ZcodeUsagePane.enableLabel',
     'Enable ZCode usage analytics'
   )
@@ -76,7 +79,7 @@ export function ZcodeUsagePane(): React.JSX.Element {
       <UsageTrackingPaneShell
         enabled={false}
         title={title}
-        disabledDescription={translate(
+        disabledDescription={t(
           'auto.components.stats.ZcodeUsagePane.disabledDescription',
           'Reads the local ZCode CLI usage database to show token, model, and session stats.'
         )}
@@ -106,7 +109,7 @@ export function ZcodeUsagePane(): React.JSX.Element {
         <>
           {formatUpdatedAt(scanState.lastScanCompletedAt)}
           {scanState.lastScanError
-            ? translate(
+            ? t(
                 'auto.components.stats.OpenCodeUsagePane.6cc7782458',
                 ' • Last scan error: {{value0}}',
                 { value0: scanState.lastScanError }
@@ -117,27 +120,24 @@ export function ZcodeUsagePane(): React.JSX.Element {
       isRefreshing={scanState.isScanning}
       hasData={hasAnyData}
       enableLabel={enableLabel}
-      optionsLabel={translate(
-        'auto.components.stats.ZcodeUsagePane.optionsLabel',
-        'ZCode usage options'
-      )}
-      filtersLabel={translate('auto.components.stats.OpenCodeUsagePane.01583b30aa', 'Filters')}
-      refreshAriaLabel={translate(
+      optionsLabel={t('auto.components.stats.ZcodeUsagePane.optionsLabel', 'ZCode usage options')}
+      filtersLabel={t('auto.components.stats.OpenCodeUsagePane.01583b30aa', 'Filters')}
+      refreshAriaLabel={t(
         'auto.components.stats.ZcodeUsagePane.refreshAriaLabel',
         'Refresh ZCode usage'
       )}
-      refreshLabel={translate('auto.components.stats.OpenCodeUsagePane.603cd138dc', 'Refresh')}
+      refreshLabel={t('auto.components.stats.OpenCodeUsagePane.603cd138dc', 'Refresh')}
       filterSections={[
         <UsageFilterRadioGroup
           key="scope"
-          label={translate('auto.components.stats.OpenCodeUsagePane.40d283c837', 'Scope')}
+          label={t('auto.components.stats.OpenCodeUsagePane.40d283c837', 'Scope')}
           value={scope}
           options={SCOPE_OPTIONS}
           onValueChange={(value) => void setZcodeUsageScope(value)}
         />,
         <UsageFilterRadioGroup
           key="range"
-          label={translate('auto.components.stats.OpenCodeUsagePane.b5ed5c9fd0', 'Range')}
+          label={t('auto.components.stats.OpenCodeUsagePane.b5ed5c9fd0', 'Range')}
           value={range}
           options={RANGE_OPTIONS.map((value) => ({ value, label: RANGE_LABELS[value] }))}
           onValueChange={(value) => void setZcodeUsageRange(value)}
@@ -148,7 +148,7 @@ export function ZcodeUsagePane(): React.JSX.Element {
           {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
         </>
       }
-      emptyMessage={translate(
+      emptyMessage={t(
         'auto.components.stats.ZcodeUsagePane.emptyMessage',
         'No local ZCode usage found yet for this scope.'
       )}
@@ -158,55 +158,43 @@ export function ZcodeUsagePane(): React.JSX.Element {
       <>
         <div className="grid gap-3 md:grid-cols-3">
           <StatCard
-            label={translate('auto.components.stats.OpenCodeUsagePane.d637a892ed', 'Input tokens')}
+            label={t('auto.components.stats.OpenCodeUsagePane.d637a892ed', 'Input tokens')}
             value={formatTokens(summary?.inputTokens ?? 0)}
             icon={<Sparkles className="size-4" />}
           />
           <StatCard
-            label={translate('auto.components.stats.OpenCodeUsagePane.7aa4d8ce35', 'Output tokens')}
+            label={t('auto.components.stats.OpenCodeUsagePane.7aa4d8ce35', 'Output tokens')}
             value={formatTokens(summary?.outputTokens ?? 0)}
             icon={<Activity className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.ZcodeUsagePane.cacheReadInput',
-              'Cache read input'
-            )}
+            label={t('auto.components.stats.ZcodeUsagePane.cacheReadInput', 'Cache read input')}
             value={formatTokens(summary?.cacheReadInputTokens ?? 0)}
             icon={<DatabaseZap className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.ZcodeUsagePane.cacheWriteInput',
-              'Cache write input'
-            )}
+            label={t('auto.components.stats.ZcodeUsagePane.cacheWriteInput', 'Cache write input')}
             value={formatTokens(summary?.cacheWriteInputTokens ?? 0)}
             icon={<DatabaseZap className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.OpenCodeUsagePane.5a65d68b77',
-              'Reasoning output'
-            )}
+            label={t('auto.components.stats.OpenCodeUsagePane.5a65d68b77', 'Reasoning output')}
             value={formatTokens(summary?.reasoningOutputTokens ?? 0)}
             icon={<Brain className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.OpenCodeUsagePane.7e9433469a',
-              'Sessions / Events'
-            )}
-            value={`${(summary?.sessions ?? 0).toLocaleString(getIntlLocale())} / ${(summary?.events ?? 0).toLocaleString(getIntlLocale())}`}
+            label={t('auto.components.stats.OpenCodeUsagePane.7e9433469a', 'Sessions / Events')}
+            value={`${(summary?.sessions ?? 0).toLocaleString(intlLocale)} / ${(summary?.events ?? 0).toLocaleString(intlLocale)}`}
             icon={<FolderKanban className="size-4" />}
           />
           <StatCard
-            label={translate('auto.components.stats.UsageOverviewPane.3887b94ce5', 'Total tokens')}
+            label={t('auto.components.stats.UsageOverviewPane.3887b94ce5', 'Total tokens')}
             value={formatTokens(summary?.totalTokens ?? 0)}
             icon={<Sigma className="size-4" />}
           />
         </div>
         <p className="px-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.stats.ZcodeUsagePane.noCostNote',
             'The ZCode usage database records tokens but not cost, so no cost estimate is shown.'
           )}
