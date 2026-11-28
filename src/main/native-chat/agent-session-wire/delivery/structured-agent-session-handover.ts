@@ -94,7 +94,12 @@ export async function beginSubmissionHandover(
   const queued = submission.queuedMessageId !== undefined
   let dispatchCursor: AgentJournalCursor | undefined
   let claudeUuidUnused: boolean
-  const providerReceipt = localProviderReceipt(ctx, clientMessageId, () => ownsChild(), attempt?.signal)
+  const providerReceipt = localProviderReceipt(
+    ctx,
+    clientMessageId,
+    () => ownsChild(),
+    attempt?.signal
+  )
   const beginProviderReceipt: BeginProviderReceipt | undefined = providerReceipt
     ? () => {
         const unused = claudeUuidUnused

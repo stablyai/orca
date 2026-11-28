@@ -1,6 +1,9 @@
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import { agentJournalSubmissionKey } from '../../journal/agent-session-journal-item-key'
-import type { AgentJournalRenderItem, AgentJournalSubmission } from '../../journal/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../journal/agent-session-journal-types'
 
 // Claude's MAX_ACTIVE_DISPATCH_WAITERS and Codex's pending dispatch echo cap.
 export const MAX_AGENT_SESSION_PROVIDER_RECEIPTS = 64
@@ -42,7 +45,8 @@ export function providerReceivedAfterBatch(
   }
   return next.size === 0
     ? undefined
-    : previous?.size === next.size && [...next].every(([id, sequence]) => previous.get(id) === sequence)
+    : previous?.size === next.size &&
+        [...next].every(([id, sequence]) => previous.get(id) === sequence)
       ? previous
       : next
 }

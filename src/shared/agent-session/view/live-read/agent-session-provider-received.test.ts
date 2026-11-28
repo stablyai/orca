@@ -54,7 +54,11 @@ it('applies a coalesced receipt at the same cursor and clears it on resubscribe'
   expect(state.providerReceived?.get(id)).toBe(8)
   expect(state.submissions[0]?.dispatchState).toBe('pending')
   expect(state.working).toBeUndefined()
-  state = reduceStructuredAgentSession(state, { type: 'event', event: batch, opensSubscription: true })
+  state = reduceStructuredAgentSession(state, {
+    type: 'event',
+    event: batch,
+    opensSubscription: true
+  })
   expect(state.providerReceived).toBeUndefined()
   coalescer.push({ ...batch, providerReceived: [8] })
   coalescer.clearProviderReceived()

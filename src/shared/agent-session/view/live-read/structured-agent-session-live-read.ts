@@ -178,6 +178,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       reconnectScheduler.noteDelivered()
     }
     if (event.type === 'snapshot' || event.type === 'reset') {
+      coalescer.clearProviderReceived()
       requestReader.invalidate()
       coalescer.flush()
       if (!isCurrentOpenGeneration(eventOpenGeneration)) {

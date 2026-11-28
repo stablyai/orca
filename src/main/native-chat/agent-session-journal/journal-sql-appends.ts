@@ -223,7 +223,9 @@ export abstract class SqlJournalAppends {
       carried,
       firstHandover,
       dispatchCursor:
-        dispatchSequence === undefined ? undefined : { epoch: cursor.epoch, sequence: dispatchSequence }
+        dispatchSequence === undefined
+          ? undefined
+          : { epoch: cursor.epoch, sequence: dispatchSequence }
     }
   }
 
@@ -238,7 +240,9 @@ export abstract class SqlJournalAppends {
     return {
       ...opened,
       dispatchCursor:
-        dispatchSequence === undefined ? undefined : { epoch: cursor.epoch, sequence: dispatchSequence }
+        dispatchSequence === undefined
+          ? undefined
+          : { epoch: cursor.epoch, sequence: dispatchSequence }
     }
   }
 

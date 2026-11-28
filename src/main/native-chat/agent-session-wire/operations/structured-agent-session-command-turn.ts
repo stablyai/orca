@@ -216,19 +216,24 @@ export async function handOverStructuredAgentSessionCommand(
   }
 }
 
-
 export function localProviderReceipt(
-  ctx: Pick<StructuredAgentSessionCommandHandoverContext, 'providerReceipts' | 'journal' | 'record' | 'fence'>,
+  ctx: Pick<
+    StructuredAgentSessionCommandHandoverContext,
+    'providerReceipts' | 'journal' | 'record' | 'fence'
+  >,
   clientMessageId: string,
   isCurrent?: () => boolean,
   signal?: AbortSignal
-): ((cursor: AgentJournalCursor, claudeUuidUnused?: boolean) => ReturnType<BeginProviderReceipt>) | undefined {
+):
+  | ((cursor: AgentJournalCursor, claudeUuidUnused?: boolean) => ReturnType<BeginProviderReceipt>)
+  | undefined {
   const { providerReceipts, journal } = ctx
+  if (!providerReceipts || !isCurrent) {
+    return undefined
+  }
   const record = ctx.record()
   const provider = record?.provider
   if (
-    !providerReceipts ||
-    !isCurrent ||
     !record ||
     record.location.executionHostId !== 'local' ||
     record.location.wslDistro !== null ||
@@ -236,20 +241,22 @@ export function localProviderReceipt(
   ) {
     return undefined
   }
-  return (cursor, claudeUuidUnused = true) => withProviderReceipt(() => {
-    const fence = ctx.fence
-    if (provider === 'claude' && !claudeUuidUnused) {
-      return undefined
-    }
-    return providerReceipts.bind({
-      journal,
-      clientMessageId,
-      cursor,
-      fence,
-      provider,
-      owns: () => !signal?.aborted && isCurrent() && ctx.record()?.lease.runtimeFence === fence
+  return (cursor, claudeUuidUnused = true) =>
+    withProviderReceipt(() => {
+      const fence = ctx.fence
+      if (provider === 'claude' && !claudeUuidUnused) {
+        return undefined
+      }
+      return providerReceipts.bind({
+        journal,
+        clientMessageId,
+        cursor,
+        fence,
+        provider,
+        owns: () =>
+          !signal?.aborted && ctx.fence === fence && isCurrent() && ctx.record()?.lease.runtimeFence === fence
+      })
     })
-  })
 }
 
 async function openCommandTurn(

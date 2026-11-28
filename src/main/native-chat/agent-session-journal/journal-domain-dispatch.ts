@@ -295,6 +295,7 @@ export function applyJournalDomainDispatch(
     {
       clientMessageId: input.clientMessageId,
       state: input.state,
+      previousHandoverSequence: attempt?.handover?.sequence,
       ...(current?.queuedMessageId ? { queuedMessageId: current.queuedMessageId } : {})
     }
   ]

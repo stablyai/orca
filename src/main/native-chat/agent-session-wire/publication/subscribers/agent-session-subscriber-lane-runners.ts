@@ -29,7 +29,13 @@ export function subscriberLaneRunners(
   const { sessionId } = subscriber
   return {
     catchUp: async ({ journal, port, hostNow, activity }) => {
-      await deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity })
+      await deliverToSubscriber(port, {
+        subscriber,
+        journal,
+        hostNow,
+        emitCheckpoint: false,
+        activity
+      })
       if (subscriber.readsProviderReceived) {
         owner.caughtUp(subscriber, journal)
       }

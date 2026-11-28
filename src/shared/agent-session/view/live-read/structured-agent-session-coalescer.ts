@@ -77,8 +77,9 @@ function addToHeld(held: HeldBatches, right: Batch): void {
   }
   const left = held.merged ?? held.first
   if (
-    left.batch.cursor.epoch !== right.batch.cursor.epoch ||
-    (right.fence !== undefined && right.fence !== left.fence)
+    held.providerReceived &&
+    (left.batch.cursor.epoch !== right.batch.cursor.epoch ||
+      (right.fence !== undefined && right.fence !== left.fence))
   ) {
     held.providerReceived = undefined
   }

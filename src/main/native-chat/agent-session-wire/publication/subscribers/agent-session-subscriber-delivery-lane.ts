@@ -222,6 +222,7 @@ export class SubscriberDeliveryLane {
     while (!this.active) {
       const entry = this.pending.shift()
       if (!entry) {
+        // Give waiting ordinary work first claim without splitting its coalescing.
         const receipt = this.receiptJob
         this.receiptJob = undefined
         if (receipt && this.runners.runnable()) {

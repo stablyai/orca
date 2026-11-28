@@ -308,7 +308,9 @@ export function reduceStructuredAgentSession(
     ...state,
     ...requests,
     ...(previousReceived || state.providerReceived || event.providerReceived
-      ? { providerReceived: providerReceivedAfterBatch(previousReceived, event, items, submissions) }
+      ? {
+          providerReceived: providerReceivedAfterBatch(previousReceived, event, items, submissions)
+        }
       : {}),
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,

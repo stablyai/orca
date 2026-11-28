@@ -4,9 +4,18 @@ import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-
 import { claudeProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 import { SubscriberDeliveryLane } from '../agent-session-subscriber-delivery-lane'
-import { fixture, journals, SESSION } from './structured-agent-session-subscriber-contract.test-fixture'
+import {
+  fixture,
+  journals,
+  SESSION
+} from './structured-agent-session-subscriber-contract.test-fixture'
 
-it.each([[2, 1], [20, 1], [2, 3], [20, 3]])(
+it.each([
+  [2, 1],
+  [20, 1],
+  [2, 3],
+  [20, 3]
+])(
   'keeps catch-up first and standalone work proportional to %i receipts and %i local readers',
   async (count, windows) => {
     const journal = await journals.open({
@@ -20,11 +29,19 @@ it.each([[2, 1], [20, 1], [2, 3], [20, 3]])(
       stateDirectory: join(fixture.root, SESSION)
     })
     const subscribers = new AgentSessionSubscribers({ now: () => 100 })
-    const idle = () => vi.waitFor(() => expect(subscribers.retention(new Set())).toEqual([]))
+    const idle = async () => {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      await vi.waitFor(() => expect(subscribers.retention(new Set())).toEqual([]))
+    }
     const open = (id: string, readsProviderReceived: boolean, boundedFrames = false) => {
       const events: AgentSessionSubscribeEvent[] = []
       const close = subscribers.open({
-        id, sessionId: SESSION, journal, fence: 1, readsProviderReceived, boundedFrames,
+        id,
+        sessionId: SESSION,
+        journal,
+        fence: 1,
+        readsProviderReceived,
+        boundedFrames,
         emit: (event) => events.push(event)
       })
       return { events, close }
@@ -45,7 +62,12 @@ it.each([[2, 1], [20, 1], [2, 3], [20, 3]])(
         )
         const cursor = journal.cursor()
         const receive = subscribers.providerReceipts.bind({
-          journal, clientMessageId: `covered-${index}`, cursor, fence: 1, provider: 'claude', owns: () => true
+          journal,
+          clientMessageId: `covered-${index}`,
+          cursor,
+          fence: 1,
+          provider: 'claude',
+          owns: () => true
         })
         sends.push({ receive, sequence: cursor.sequence })
       }
@@ -68,8 +90,12 @@ it.each([[2, 1], [20, 1], [2, 3], [20, 3]])(
 
       for (let index = 0; index < count; index++) {
         const receive = subscribers.providerReceipts.bind({
-          journal, clientMessageId: `standalone-${index}`, cursor: journal.cursor(), fence: 1,
-          provider: 'claude', owns: () => true
+          journal,
+          clientMessageId: `standalone-${index}`,
+          cursor: journal.cursor(),
+          fence: 1,
+          provider: 'claude',
+          owns: () => true
         })
         receive?.(() => true)
         receive?.(() => true)
@@ -78,7 +104,10 @@ it.each([[2, 1], [20, 1], [2, 3], [20, 3]])(
       desktop.forEach(({ events }, index) => {
         expect(events).toHaveLength(originalCounts[index]! + 1 + count)
         expect(events.at(-1)).toEqual({
-          type: 'batch', sessionId: SESSION, fence: 1, providerReceived: [journal.cursor().sequence],
+          type: 'batch',
+          sessionId: SESSION,
+          fence: 1,
+          providerReceived: [journal.cursor().sequence],
           batch: { cursor: journal.cursor(), items: [], removedItemIds: [], submissions: [] }
         })
       })

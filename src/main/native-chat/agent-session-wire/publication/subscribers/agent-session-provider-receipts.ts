@@ -7,7 +7,6 @@ import type { SqlAgentSessionJournal } from '../../../agent-session-journal/jour
 import type { Subscriber } from './agent-session-subscribe-input'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 
-type Batch = Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
 type Dispatch = {
   journal: SqlAgentSessionJournal
   clientMessageId: string
@@ -64,7 +63,9 @@ export class AgentSessionProviderReceipts {
       return undefined
     }
     const readers = new Set(
-      [...live].filter((reader) => this.emitted.get(reader)?.epoch === cursor.epoch && reader.fence === fence)
+      [...live].filter(
+        (reader) => this.emitted.get(reader)?.epoch === cursor.epoch && reader.fence === fence
+      )
     )
     if (!readers.size) {
       return undefined
@@ -98,16 +99,15 @@ export class AgentSessionProviderReceipts {
       this.schedule(reader, () => {
         try {
           const cursor = this.emitted.get(reader)
-          if (cursor) {
-            const event = this.stamp(reader, {
+          const providerReceived = cursor && this.take(reader, cursor, reader.fence)
+          if (cursor && providerReceived) {
+            reader.emit({
               type: 'batch',
               sessionId: reader.sessionId,
               fence: reader.fence,
-              batch: emptyAgentSessionBatch(cursor)
+              batch: emptyAgentSessionBatch(cursor),
+              providerReceived
             })
-            if (event.providerReceived) {
-              reader.emit(event)
-            }
           }
         } catch {
           // Losing a receipt must leave transcript delivery running.
@@ -118,7 +118,8 @@ export class AgentSessionProviderReceipts {
 
   private isPending(attempt: Attempt): boolean {
     return (
-      this.attempts.get(attempt.journal.identity.sessionId)?.get(attempt.clientMessageId) === attempt &&
+      this.attempts.get(attempt.journal.identity.sessionId)?.get(attempt.clientMessageId) ===
+        attempt &&
       attempt.owns() &&
       attempt.pending?.() === true
     )
@@ -130,12 +131,18 @@ export class AgentSessionProviderReceipts {
       return
     }
     for (const [id, attempt] of attempts) {
-      if (attempt.journal !== journal || attempt.cursor.epoch !== commit.cursor.epoch || !attempt.owns()) {
+      if (
+        attempt.journal !== journal ||
+        attempt.cursor.epoch !== commit.cursor.epoch ||
+        !attempt.owns()
+      ) {
         attempts.delete(id)
       }
     }
     for (const change of commit.publication?.promptDispatches ?? []) {
-      attempts.delete(change.clientMessageId)
+      if (attempts.get(change.clientMessageId)?.cursor.sequence === change.previousHandoverSequence) {
+        attempts.delete(change.clientMessageId)
+      }
     }
     if (!attempts.size) {
       this.attempts.delete(sessionId)
@@ -151,7 +158,9 @@ export class AgentSessionProviderReceipts {
     if (event.type === 'snapshot' || event.type === 'reset') {
       this.drop(subscriber)
     }
-    subscriber.emit(event.type === 'batch' ? this.stamp(subscriber, event) : event)
+    const providerReceived =
+      event.type === 'batch' ? this.take(subscriber, event.batch.cursor, event.fence) : undefined
+    subscriber.emit(providerReceived && event.type === 'batch' ? { ...event, providerReceived } : event)
     if (event.type === 'batch') {
       this.emitted.set(subscriber, event.batch.cursor)
     } else if (event.type !== 'end') {
@@ -159,16 +168,19 @@ export class AgentSessionProviderReceipts {
     }
   }
 
-  private stamp(subscriber: Subscriber, event: Batch): Batch {
-    if (subscriber.stopped?.aborted || event.fence !== subscriber.fence) {
-      return event
+  private take(
+    subscriber: Subscriber,
+    cursor: AgentJournalCursor,
+    fence: number | undefined
+  ): number[] | undefined {
+    if (subscriber.stopped?.aborted || fence !== subscriber.fence) {
+      return undefined
     }
-    const cursor = event.batch.cursor
     let providerReceived: number[] | undefined
     for (const attempt of this.attempts.get(subscriber.sessionId)?.values() ?? []) {
       if (
         attempt.readers.has(subscriber) &&
-        attempt.fence === event.fence &&
+        attempt.fence === fence &&
         attempt.cursor.epoch === cursor.epoch &&
         attempt.cursor.sequence <= cursor.sequence &&
         this.isPending(attempt)
@@ -178,6 +190,6 @@ export class AgentSessionProviderReceipts {
         providerReceived.push(attempt.cursor.sequence)
       }
     }
-    return providerReceived ? { ...event, providerReceived } : event
+    return providerReceived
   }
 }

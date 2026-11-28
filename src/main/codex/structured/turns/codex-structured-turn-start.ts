@@ -169,9 +169,10 @@ export async function startCodexTurn(
               input.onReply?.()
               if (received && origin && readCodexTurnId(reply, true)) {
                 withProviderReceipt(() =>
-                  received(() =>
-                    host.dispatchEchoes.requestOrigin(input.clientMessageId)?.sequence ===
-                    origin.sequence
+                  received(
+                    () =>
+                      host.dispatchEchoes.requestOrigin(input.clientMessageId)?.sequence ===
+                      origin.sequence
                   )
                 )
               }
