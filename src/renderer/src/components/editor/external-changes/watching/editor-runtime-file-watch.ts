@@ -2,8 +2,15 @@ import type { FsChangedPayload } from '../../../../../../shared/file-watch/files
 import { subscribeRuntimeFileChanges } from '@/runtime/files/watching/runtime-file-watch-client'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import {
+  isRuntimeEnvironmentPairingChangedError,
+  refreshRuntimeEnvironmentsAfterPairingChange
+} from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+
+// A reconnect can refuse the re-watch while main swaps transports; nothing else re-watches until the next contact change.
+const PAIRING_REFUSAL_RETRY_DELAYS_MS = [250, 1_000, 4_000]
 
 export function subscribeEditorRuntimeFileWatch(
   target: EditorExternalWatchTarget & { runtimeEnvironmentId: string },
@@ -14,11 +21,43 @@ export function subscribeEditorRuntimeFileWatch(
   let disposed = false
   let attempt = 0
   let unsubscribe: (() => void) | null = null
+  let pairingRetries = 0
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+  const clearRetry = (): void => {
+    if (retryTimer) {
+      clearTimeout(retryTimer)
+      retryTimer = null
+    }
+  }
+  const retryAfterPairingRefusal = (error: unknown, failedAttempt: number): boolean => {
+    if (retryTimer) {
+      return true
+    }
+    const delayMs = PAIRING_REFUSAL_RETRY_DELAYS_MS[pairingRetries]
+    if (delayMs === undefined || !isRuntimeEnvironmentPairingChangedError(error)) {
+      return false
+    }
+    pairingRetries += 1
+    retryTimer = setTimeout(() => {
+      retryTimer = null
+      if (!disposed && attempt === failedAttempt) {
+        // Catalog first, so a real re-pairing retries with the new revision.
+        void refreshRuntimeEnvironmentsAfterPairingChange(error).finally(() => {
+          if (!disposed && attempt === failedAttempt) {
+            start(true)
+          }
+        })
+      }
+    }, delayMs)
+    return true
+  }
 
   const start = (recovering: boolean): void => {
     if (disposed) {
       return
     }
+    clearRetry()
     const currentAttempt = ++attempt
     unsubscribe?.()
     unsubscribe = null
@@ -38,10 +77,11 @@ export function subscribeEditorRuntimeFileWatch(
       }
     }
     const fail = (error: unknown): void => {
-      if (isCurrent()) {
-        settleInstall(recovering)
-        onError(error)
+      if (!isCurrent() || retryAfterPairingRefusal(error, currentAttempt)) {
+        return
       }
+      settleInstall(recovering)
+      onError(error)
     }
     void subscribeRuntimeFileChanges(
       {
@@ -58,6 +98,7 @@ export function subscribeEditorRuntimeFileWatch(
       fail,
       () => {
         if (isCurrent()) {
+          pairingRetries = 0
           settleInstall(true)
         }
       }
@@ -75,9 +116,10 @@ export function subscribeEditorRuntimeFileWatch(
       })
       .catch(fail)
   }
-  const stopContact = subscribeRuntimeHostContactRegained(target.runtimeEnvironmentId, () =>
+  const stopContact = subscribeRuntimeHostContactRegained(target.runtimeEnvironmentId, () => {
+    pairingRetries = 0
     start(true)
-  )
+  })
   const stopRetirement = onRuntimeEnvironmentsRetired((ids) => {
     if (ids.includes(target.runtimeEnvironmentId)) {
       dispose()
@@ -89,6 +131,7 @@ export function subscribeEditorRuntimeFileWatch(
     }
     disposed = true
     attempt += 1
+    clearRetry()
     unsubscribe?.()
     unsubscribe = null
     stopContact()
