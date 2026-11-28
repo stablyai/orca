@@ -173,6 +173,33 @@ it('lets the switching client’s choice override the host’s setting', async (
   expect(events).toEqual([])
 })
 
+it('hands a CLI switch on a desktop host to its window, which restarts its own terminals', async () => {
+  const { runtime, events } = await runtimeWithAgyTerminal({
+    settings: { antigravityAccountSwitchRunningSessions: 'restart' }
+  })
+  runtime.attachWindow(1)
+  const accountSelectedElsewhere = vi.fn()
+  runtime.setNotifier({ accountSelectedElsewhere } as never)
+  selectHostAccount('next')
+
+  expect(await runtime.onAntigravityAccountSwitched({ from: 'prev', to: 'next' })).toEqual({})
+  await settled()
+  expect({ calls: accountSelectedElsewhere.mock.calls, events }).toEqual({
+    calls: [
+      [
+        'antigravity',
+        {
+          previousAccountId: 'prev',
+          accountId: 'next',
+          terminals: [{ ptyId: AGY, accountId: 'prev' }],
+          accountEmails: {}
+        }
+      ]
+    ],
+    events: []
+  })
+})
+
 it.each([
   ['an SSH terminal', { connectionId: 'ssh-1' }],
   ['a WSL terminal', { isWsl: true }]
