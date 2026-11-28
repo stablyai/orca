@@ -71,6 +71,8 @@ export type AgentSessionAcquisition = {
   acquisitionGeneration: string
   /** The account home this child launched under, when its launch follows the selection. */
   accountHome?: AgentSessionAccountHome
+  /** The home a chat with no conversation yet moved to at this launch, which it keeps. */
+  movedAccountHome?: AgentSessionAccountHome
 }
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
@@ -131,6 +133,8 @@ export type StructuredAgentSessionEndedEvent = {
   observedAt?: number
   /** Failed startup proves none of its handed-over work ran. */
   startupUnanswered?: true
+  /** A kept agent that had ended before this acquisition reattached it: no send reached it. */
+  endedBeforeAcquire?: true
 }
 
 /** Readiness never waits for optional option reports. */
@@ -273,6 +277,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
+  /** Narrow declared steering to the live acquisition's negotiated support. */
+  steeringMode?(sessionId: string): 'inject' | 'queue' | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */
   requiresModelTransitionRestart?(input: {
     sessionId: string
@@ -290,6 +296,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
+  /** This acquisition reattached a kept agent that had already ended; it only replays its output. */
+  endedBeforeAcquire?(sessionId: string, acquisitionGeneration: string): boolean
   /** This exact acquisition's ending before the host committed it ready, as the adapter reads it. */
   startupEnding?(
     sessionId: string,

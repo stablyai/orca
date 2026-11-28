@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from 'react'
-import { Alert } from 'react-native'
 import { BOTS_GROUPS_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
@@ -7,7 +6,8 @@ import type { HostScreenController } from '../host-screen/use-host-screen-contro
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { hostBotsKey, readHostBots } from './host-bots-read'
 import type { PhoneBot } from './host-bots-operations'
-import { confirmMobileBotGroupDelete } from './mobile-bot-group-delete'
+import { MobileBotGroupDeleteConfirm } from './MobileBotGroupDeleteConfirm'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { MobileBotGroupMembers } from './MobileBotGroupMembers'
 import { MobileBotsReorderSheet } from './MobileBotsReorderSheet'
 import type { ListedHostBots } from './host-bot-listing'
@@ -44,6 +44,8 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
     local.bots.length + local.groups.length > 1
   const [actions, setActions] = useState<BotGroup | null>(null)
   const [editing, setEditing] = useState<BotGroup | 'new' | null>(null)
+  const [deleting, setDeleting] = useState<BotGroup | null>(null)
+  const [deleteFailure, setDeleteFailure] = useState<string | null>(null)
   // The members sheet picks from the host's full bots, read only when it opens.
   const [bots, setBots] = useState<PhoneBot[]>([])
   const open = (group: Pick<BotGroup, 'id'>) =>
@@ -68,7 +70,6 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
         actions={botCreateMenuActions({
           t,
           botCount: newBot?.botCount ?? 0,
-          hostLabel: controller.state.hostName,
           onNewBot: () => newBot?.open(),
           onNewGroup: () => edit('new'),
           onReorder: canReorder ? () => setReordering(true) : null
@@ -92,18 +93,24 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
               edit(actions)
             }
           },
-          onDelete:
-            actions && client
-              ? () =>
-                  confirmMobileBotGroupDelete({
-                    client,
-                    group: actions,
-                    t,
-                    onDeleted: changed,
-                    onError: (message) => Alert.alert(message)
-                  })
-              : null
+          onDelete: actions && client ? () => setDeleting(actions) : null
         })}
+      />
+      {client && hostId ? (
+        <MobileBotGroupDeleteConfirm
+          client={client}
+          hostId={hostId}
+          group={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={changed}
+          onError={setDeleteFailure}
+        />
+      ) : null}
+      <ConfirmModal
+        visible={deleteFailure !== null}
+        title={deleteFailure ?? ''}
+        cancelLabel={null}
+        onCancel={() => setDeleteFailure(null)}
       />
       {editing && client ? (
         <MobileBotGroupMembers
@@ -124,7 +131,9 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
   )
   return {
     supported,
-    chooseNew: (next, botCount) => (supported ? setNewBot({ open: next, botCount }) : next()),
+    // With New bot the only choice, + opens it straight away instead of a one-row menu.
+    chooseNew: (next, botCount) =>
+      supported && (botCount >= 2 || canReorder) ? setNewBot({ open: next, botCount }) : next(),
     showActions: setActions,
     open,
     sheets

@@ -80,7 +80,7 @@ async function pick(label: string): Promise<void> {
   })
 }
 
-it('offers no Skip on a required question and takes Submit back to it instead of sending', async () => {
+it('offers no Skip on a required question and takes Send back to it instead of sending', async () => {
   vi.useFakeTimers()
   const onAnswer = vi.fn(async (_encoded: string) => true)
   act(() => {
@@ -108,8 +108,8 @@ it('offers no Skip on a required question and takes Submit back to it instead of
   expect(shows('Question 2?')).toBe(true)
 
   await pick('2 A')
-  expect(footer('Submit').props.disabled).toBe(false)
-  await act(async () => footer('Submit').props.onPress())
+  expect(footer('Send').props.disabled).toBe(false)
+  await act(async () => footer('Send').props.onPress())
   expect(decodeAgentSessionQuestionAnswers(onAnswer.mock.calls[0]![0])).toEqual([
     { questionId: 'q1', optionIds: ['q1:b'] },
     { questionId: 'q2', optionIds: ['q2:a'] },
@@ -117,7 +117,7 @@ it('offers no Skip on a required question and takes Submit back to it instead of
   ])
 })
 
-it('keeps Submit idle on an unanswered required last question', async () => {
+it('keeps Send idle on an unanswered required last question', async () => {
   vi.useFakeTimers()
   act(() => {
     tree = createWithQueryClient(
@@ -130,7 +130,7 @@ it('keeps Submit idle on an unanswered required last question', async () => {
 
   await pick('1 B')
   expect(shows('Question 2?')).toBe(true)
-  expect(footer('Submit').props.disabled).toBe(true)
+  expect(footer('Send').props.disabled).toBe(true)
 })
 
 it('counts a picked choice with an empty label as an answer to a required question', async () => {
@@ -160,5 +160,39 @@ it('counts a picked choice with an empty label as an answer to a required questi
     { questionId: 'q1', optionIds: ['q1:b'] },
     { questionId: 'q2', optionIds: ['q2:empty'] },
     { questionId: 'q3', optionIds: ['q3:empty'] }
+  ])
+})
+
+it("keeps a single-select's choice tapped again, while multi-select still untoggles", async () => {
+  vi.useFakeTimers()
+  const onAnswer = vi.fn(async (_encoded: string) => true)
+  act(() => {
+    tree = createWithQueryClient(
+      createElement(MobileNativeChatStructuredAsk, {
+        questions: [question(1, true), { ...question(2, true), multiSelect: true }],
+        onAnswer
+      })
+    )
+  })
+
+  const step = (label: string): void => {
+    const tab = tree.root.find(
+      (node) =>
+        isHost(node, 'Pressable') && node.findAll((n) => n.props.children === label).length > 0
+    )
+    act(() => tab.props.onPress())
+  }
+  await pick('1 A')
+  expect(shows('Question 2?')).toBe(true)
+  step('Step 1')
+  await pick('1 A')
+  step('Step 2')
+  await pick('2 A')
+  await pick('2 B')
+  await pick('2 A')
+  await act(async () => footer('Send').props.onPress())
+  expect(decodeAgentSessionQuestionAnswers(onAnswer.mock.calls[0]![0])).toEqual([
+    { questionId: 'q1', optionIds: ['q1:a'] },
+    { questionId: 'q2', optionIds: ['q2:b'] }
   ])
 })

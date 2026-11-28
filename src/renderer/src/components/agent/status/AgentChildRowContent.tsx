@@ -1,6 +1,7 @@
 import React from 'react'
 import type { AgentChildRowModel } from '../../../../../shared/agent-status/presentation/agent-child-row-model'
 import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
+import { cn } from '@/lib/class-names'
 import type { StateIndicatorTooltipSide } from '@/components/agent/status/StateIndicatorTooltip'
 import { agentChildRowText } from './agent-child-row-text'
 
@@ -11,6 +12,7 @@ type AgentChildRowContentProps = {
   leadClassName: string
   trailClassName: string
   separator: string
+  lineClassName?: string
   /** Overrides the dot's hover label; null suppresses it for an existing tooltip. */
   dotTitle?: string | null
   tooltipSide?: StateIndicatorTooltipSide
@@ -31,6 +33,7 @@ export const AgentChildRowContent = React.memo(function AgentChildRowContent({
   leadClassName,
   trailClassName,
   separator,
+  lineClassName,
   dotTitle,
   tooltipSide,
   lineTitle = false,
@@ -49,7 +52,7 @@ export const AgentChildRowContent = React.memo(function AgentChildRowContent({
       />
       {icon}
       <span
-        className="min-w-0 flex-1 truncate"
+        className={cn('min-w-0 flex-1 truncate', lineClassName)}
         title={
           lineTitle
             ? `${lead}${trail ? `${separator}${trail}` : ''}${lineTitleDetail ? `\n${lineTitleDetail}` : ''}`

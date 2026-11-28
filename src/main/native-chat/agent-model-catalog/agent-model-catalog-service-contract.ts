@@ -82,6 +82,8 @@ export type AgentModelCatalogReadParams = {
   waitForListing?: boolean
   /** Answer only from the saved entry and held reason; start, join or re-check no listing. */
   savedOnly?: boolean
+  /** A user's Refresh: the catalog this read resolves to lists again first. */
+  relist?: true
   verifiedOnly?: boolean
   legacy?: boolean
   /** Old options readers need account-default presentation, never launch or admission proof. */

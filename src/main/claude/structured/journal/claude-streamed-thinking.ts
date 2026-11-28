@@ -53,21 +53,28 @@ export function createClaudeStreamedThinking(deps: {
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: deps.producer,
-    persist: (identity, text, options, ended) => {
+    sink: deps.sink,
+    liveBody: (text) => journalReasoningBody(text, { state: 'running' }),
+    persist: (identity, text, options, ended, onCommitted) => {
       const body = journalReasoningBody(
         text,
         ended ? endedJournalReasoning(ended.completedAt) : { state: 'running' }
       )
       if (body) {
         const startedAt = open.get(agentJournalItemKey(identity))?.startedAt
-        deps.sink.appendItem(identity, body, {
-          ...options,
-          turnScope: deps.turnScope(),
-          // Preserve block start time despite delayed text or writes.
-          ...(startedAt === undefined ? {} : { observedAt: startedAt }),
-          // Preserve terminal writes under pressure so reasoning cannot remain open.
-          ...(ended ? { lifecycle: true } : {})
-        })
+        deps.sink.appendItem(
+          identity,
+          body,
+          {
+            ...options,
+            turnScope: deps.turnScope(),
+            // Preserve block start time despite delayed text or writes.
+            ...(startedAt === undefined ? {} : { observedAt: startedAt }),
+            // Preserve terminal writes under pressure so reasoning cannot remain open.
+            ...(ended ? { lifecycle: true } : {})
+          },
+          onCommitted
+        )
         deps.sink.publish()
       }
     }
@@ -91,6 +98,9 @@ export function createClaudeStreamedThinking(deps: {
       if (restarted !== null) {
         finish({ completedAt: observedAt }, restarted)
       }
+      if (blocks.placeAt(frame)) {
+        return true
+      }
       const delta = blocks.observe(frame, observedAt)
       if (!delta) {
         return false
@@ -108,7 +118,9 @@ export function createClaudeStreamedThinking(deps: {
     /** Close the streamed row if present; only streaming gives us an observed end time. */
     finalize: (
       envelope: ClaudeMessageEnvelope,
-      observedAt: number
+      observedAt: number,
+      /** A relay continuation's final: with no streamed block, its block stop places it. */
+      continued = false
     ): ClaudeReasoningFinal | null => {
       if (!envelope.content.some((part) => claudeRecord(part)?.type === 'thinking')) {
         return null
@@ -117,14 +129,27 @@ export function createClaudeStreamedThinking(deps: {
       const identity =
         streamed?.identity ?? claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
       const key = agentJournalItemKey(identity)
+      const retired = streamed?.retired ? agentJournalItemKey(streamed.retired) : key
       // A textless final frame still closes its streamed row.
-      const text = claudeThinkingText(envelope) ?? checkpoints.latest(key) ?? ''
-      checkpoints.forget(key)
-      open.delete(key)
+      const text = claudeThinkingText(envelope) ?? checkpoints.latest(retired) ?? ''
+      for (const each of new Set([key, retired])) {
+        checkpoints.forget(each)
+        open.delete(each)
+      }
+      if (streamed?.retired) {
+        deps.sink.appendTombstone(streamed.retired, { lifecycle: true })
+      }
       const body = journalReasoningBody(
         text,
         endedJournalReasoning(streamed ? observedAt : undefined)
       )
+      const { messageId } = envelope
+      if (body && !streamed && continued && messageId) {
+        blocks.holdUnplaced({ ...envelope, messageId }, (row) => {
+          deps.sink.appendItem(row, body, { turnScope: deps.turnScope(), lifecycle: true })
+          deps.sink.appendTombstone(identity, { lifecycle: true })
+        })
+      }
       return body
         ? { identity, body, ...(streamed ? { startedAt: streamed.startedAt } : {}) }
         : null
@@ -147,6 +172,9 @@ export function createClaudeStreamedThinking(deps: {
     },
     get pending() {
       return checkpoints.pending
+    },
+    get unsaved() {
+      return checkpoints.unsaved
     }
   }
 }

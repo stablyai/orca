@@ -1,4 +1,5 @@
 // A bot's Activity, built on its execution host from the host's own facts, so every client reads the same rows.
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { Automation } from '../../shared/automations/automation-definition'
@@ -15,17 +16,16 @@ import { worktreesUnderHomes } from './bot-handed-workspaces'
 import { readPairedHandedAgents } from './bot-paired-handed-agents'
 import type { BotHandedAgentObservation } from '../../shared/bots/bot-activity-handed-agents'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { latestLiveAgentStatusRowsByPaneKey } from '../../shared/agent-status/live-agent-status-rows'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import type { BotUpNext } from '../../shared/bots/bot-look-around'
 import { lookAroundUpNext } from './bot-look-around-state'
 import { lookAroundDueAt, lookAroundNextAt } from './bot-look-around-schedule'
 import { botLookAround } from '../../shared/bots/bot-look-around'
 import { createSharedBotBuilds } from './shared-bot-builds'
 import type { BotActivityRead } from '../../shared/bots/bot-activity-schema'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 /** The chats and panes whose Dispatches are the bot's workers. */
 export type BotWorkerCreators = { orcaSessionIds: string[]; paneKeys: string[] }
@@ -49,6 +49,8 @@ export type BotActivityHost = {
   recordedWorkers: (creators: BotWorkerCreators) => Promise<readonly BotRecordedWorker[]>
   /** The ids of the worktrees under the bot's home: their agents work for the bot. */
   handedWorktreeIds?: (bot: Bot) => Promise<ReadonlySet<string>>
+  /** Names this computer's agents as `worktree ps` does (rename, chat or live title). */
+  agentNamer?: () => (row: AgentStatusIpcPayload) => string | null
   /** The agents in workspaces handed to the bot on paired computers, as those computers report them. */
   pairedHandedAgents?: (bot: Bot) => Promise<readonly BotHandedAgentObservation[]>
   /** The bot's Up next; undefined while Look around is off. */
@@ -116,7 +118,7 @@ export function botStatusRowsByPaneKey(
 
 /** The agents in workspaces handed to the bot, here and on paired computers. */
 export async function readBotHandedAgents(
-  host: Pick<BotActivityHost, 'handedWorktreeIds' | 'pairedHandedAgents'>,
+  host: Pick<BotActivityHost, 'handedWorktreeIds' | 'pairedHandedAgents' | 'agentNamer'>,
   bot: Bot,
   rowByPaneKey: ReadonlyMap<string, AgentStatusIpcPayload>,
   /** The workspaces under the bot's home, when the caller has read them already. */
@@ -131,19 +133,27 @@ export async function readBotHandedAgents(
         return new Set<string>()
       }
     ))
+  let name: ((row: AgentStatusIpcPayload) => string | null) | undefined
   // With or without another coordinator's Dispatch: the workspace is the bot's now.
-  const localHanded: BotHandedAgentObservation[] = [...rowByPaneKey.values()].flatMap((row) =>
-    row.worktreeId && handed.has(row.worktreeId)
-      ? [
-          {
-            paneKey: row.paneKey,
-            entry: activityStatus(row)!,
-            worktreeId: row.worktreeId,
-            ...(row.orchestration?.taskTitle ? { taskTitle: row.orchestration.taskTitle } : {})
-          }
-        ]
-      : []
-  )
+  const localHanded: BotHandedAgentObservation[] = [...rowByPaneKey.values()].flatMap((row) => {
+    if (!row.worktreeId || !handed.has(row.worktreeId)) {
+      return []
+    }
+    name ??= host.agentNamer?.() ?? (() => null)
+    const title = name(row)
+    return [
+      {
+        paneKey: row.paneKey,
+        entry: {
+          ...activityStatus(row)!,
+          ...(row.interactivePrompt ? { interactivePrompt: row.interactivePrompt } : {})
+        },
+        worktreeId: row.worktreeId,
+        ...(row.orchestration?.taskTitle ? { taskTitle: row.orchestration.taskTitle } : {}),
+        ...(title ? { title } : {})
+      }
+    ]
+  })
   const pairedHanded = await (host.pairedHandedAgents?.(bot) ?? Promise.resolve([])).catch(
     (error: unknown) => {
       console.error('[bots] failed to read paired handed workspaces for Activity:', error)
@@ -164,7 +174,7 @@ export async function readBotActivity(
   const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
   const links = host.externalConversations(bot.folderWorkspaceId)
   const sessions = (await host.chatTabs(workspaceId)).map((tab) => ({
-    paneKey: structuredAgentSessionStatusPaneKey(tab.sessionId),
+    paneKey: chatPaneKey(tab.sessionId),
     sessionId: tab.sessionId,
     label: tab.title
   }))
@@ -199,7 +209,7 @@ export async function readBotActivity(
     orcaSessionIds: [...new Set(chatSessionIds)],
     paneKeys: [
       ...new Set([
-        ...chatSessionIds.map(structuredAgentSessionStatusPaneKey),
+        ...chatSessionIds.map(chatPaneKey),
         ...runs.flatMap((run) => (run.terminalPaneKey ? [run.terminalPaneKey] : []))
       ])
     ]
@@ -219,8 +229,7 @@ export async function readBotActivity(
     recordedWorkers,
     automations,
     runs,
-    sessionStatus: (sessionId) =>
-      activityStatus(rowByPaneKey.get(structuredAgentSessionStatusPaneKey(sessionId)))
+    sessionStatus: (sessionId) => activityStatus(rowByPaneKey.get(chatPaneKey(sessionId)))
   })
   const upNext = host.upNext?.(bot)
   return { ...activity, readAt, ...(upNext ? { upNext } : {}) }
@@ -236,6 +245,17 @@ export function runtimeBotActivityHost(runtime: OrcaRuntimeService): BotActivity
     statusRows: () => runtime.getAgentStatusSnapshotFn?.() ?? [],
     orchestrationByPaneKey: () => runtime.agentOrchestrationByPaneKey(),
     pairedHandedAgents: (bot) => readPairedHandedAgents(runtime, bot),
+    agentNamer: () => {
+      const name = runtime.orchestrationSenderNames.agentRowNamer()
+      return (row) =>
+        name({
+          paneKey: row.paneKey,
+          tabId: row.tabId ?? parsePaneKey(row.paneKey)?.tabId,
+          worktreeId: row.worktreeId,
+          agentType: row.agentType ?? null,
+          providerSessionId: row.providerSession?.id
+        })
+    },
     handedWorktreeIds: async (bot) => {
       const home = folderWorkspaceKey(bot.folderWorkspaceId)
       return (
@@ -257,6 +277,8 @@ export function runtimeBotActivityHost(runtime: OrcaRuntimeService): BotActivity
         .getOrchestrationDb()
         .listDispatchesCreatedByAny(creators, BOT_ACTIVITY_COMPLETED_LIMIT)
       const creatorById = new Map(created.map((dispatch) => [dispatch.id, dispatch]))
+      const { readDispatchWorkers } =
+        await import('../runtime/rpc/methods/orchestration/worker/session-workers-method')
       const workers = await readDispatchWorkers(
         runtime,
         created.map((dispatch) => dispatch.id),

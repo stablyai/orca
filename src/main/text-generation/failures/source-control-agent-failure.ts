@@ -13,7 +13,6 @@ import type {
   TextGenerationOperation
 } from '../source-control-text-generation-types'
 import { parseOpenCodeGenerationOutput } from '../../../shared/text-generation/output/opencode-generation-output'
-import { parseAntigravityGenerationOutput } from '../../../shared/text-generation/output/antigravity-generation-stream'
 import {
   findKimiGenerationFailure,
   parseKimiGenerationOutput
@@ -154,11 +153,9 @@ export function finalizeFromAgentOutput(args: {
   const parsed =
     args.outputFormat === 'opencode-json'
       ? parseOpenCodeGenerationOutput(stdout)
-      : args.outputFormat === 'antigravity-stream-json'
-        ? parseAntigravityGenerationOutput(stdout)
-        : args.outputFormat === 'kimi-stream-json' && code === 0
-          ? parseKimiGenerationOutput(stdout)
-          : null
+      : args.outputFormat === 'kimi-stream-json' && code === 0
+        ? parseKimiGenerationOutput(stdout)
+        : null
   if (code !== 0) {
     console.error('[commit-message] Generator failed:', {
       label,

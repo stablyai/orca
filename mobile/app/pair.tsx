@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { colors, radii, spacing, typography, pressedStyle } from '../src/theme/mobile-theme'
-import { themedStyleSheet } from '../src/theme/themed-styles'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { radii, spacing, typography, pressedStyle } from '../src/theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../src/theme/themed-styles'
+import { useMobileColors } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { extractPairingCodeFromUrl } from '../src/pairing/pairing'
 
 export default function PairRedirectScreen() {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const params = useLocalSearchParams<{ code?: string }>()
@@ -65,7 +66,7 @@ export default function PairRedirectScreen() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     alignItems: 'center',

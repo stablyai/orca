@@ -1,13 +1,5 @@
 import React from 'react'
-import {
-  LoaderCircle,
-  MessageSquare,
-  Plus,
-  SendHorizontal,
-  SlidersHorizontal,
-  Sparkles,
-  X
-} from 'lucide-react'
+import { MessageSquare, Plus, SlidersHorizontal, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -20,11 +12,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
 import {
+  SendNotesButton,
+  SendNotesSlot
+} from '@/components/editor/review-note-delivery/SendNotesButton'
+import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
 } from '@/lib/source-control/review/comments/pr-comment-audience-labels'
 import { useTranslate } from '@/i18n/use-translate'
 import { ResolvedCommentGroupsSection } from './comment-group'
+import { CommentsAudienceLoading, CommentsListLoading } from './comments-list-loading'
 import {
   getPRCommentsListDisplayModeLabel,
   PR_COMMENT_LIST_DISPLAY_MODES,
@@ -33,12 +30,20 @@ import {
   useCommentsListState
 } from './use-comments-list-state'
 
-export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
+export function PRCommentsList(
+  props: PRCommentsListProps & {
+    loadingSkeleton: boolean
+    /** False until a read settles: an unread list must not claim there are no comments. */
+    commentsRead?: boolean
+  }
+): React.JSX.Element {
   const t = useTranslate()
   const {
     comments,
     commentsError,
     commentsLoading,
+    loadingSkeleton,
+    commentsRead = true,
     reviewKind = 'PR',
     commentsDisabled,
     commentsDisabledReason,
@@ -78,6 +83,8 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
     renderAddCommentComposer,
     now
   } = useCommentsListState(props)
+  const showLoading = loadingSkeleton && !isAddingComment
+  const emptyReadError = comments.length === 0 ? commentsError : null
   return (
     <div className="border-t border-border">
       <div
@@ -95,6 +102,23 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
           {comments.length > 0 && (
             <span className={presentation.sectionCount}>{comments.length}</span>
           )}
+          {canShowResolveWithAI && isSelectingForAI ? (
+            <SendNotesSlot>
+              {selectedCommentQueueCount > 0 ? (
+                <SendNotesButton
+                  count={selectedCommentQueueCount}
+                  noun="comments"
+                  chevron={false}
+                  flush
+                  disabled={commentsLoading || resolveCommentsWithAIDisabled}
+                  title={
+                    resolveCommentsWithAIDisabled ? resolveCommentsWithAIDisabledReason : undefined
+                  }
+                  onClick={() => onResolveSelectedCommentsWithAI?.(selectedGroups)}
+                />
+              ) : null}
+            </SendNotesSlot>
+          ) : null}
           <div className="-mr-1 ml-auto flex items-center gap-0.5">
             {canShowResolveWithAI && (
               <>
@@ -132,77 +156,29 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                   </TooltipContent>
                 </Tooltip>
                 {isSelectingForAI && (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="default"
-                          size="icon-xs"
-                          className="relative"
-                          aria-label={t(
-                            'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi',
-                            'Send {{count}} queued comments to AI',
-                            {
-                              count: selectedCommentQueueCount,
-                              defaultValue_one: 'Send {{count}} queued comment to AI'
-                            }
-                          )}
-                          disabled={
-                            selectedCommentQueueCount === 0 ||
-                            commentsLoading ||
-                            resolveCommentsWithAIDisabled
-                          }
-                          title={
-                            resolveCommentsWithAIDisabled
-                              ? resolveCommentsWithAIDisabledReason
-                              : undefined
-                          }
-                          onClick={() => onResolveSelectedCommentsWithAI?.(selectedGroups)}
-                        >
-                          <SendHorizontal className="size-3" />
-                          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-border bg-background px-0.5 text-[9px] leading-none text-foreground tabular-nums">
-                            {selectedCommentQueueCount}
-                          </span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" sideOffset={4}>
-                        {resolveCommentsWithAIDisabled && resolveCommentsWithAIDisabledReason
-                          ? resolveCommentsWithAIDisabledReason
-                          : t(
-                              'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi',
-                              'Send {{count}} queued comments to AI',
-                              {
-                                count: selectedCommentQueueCount,
-                                defaultValue_one: 'Send {{count}} queued comment to AI'
-                              }
-                            )}
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="text-muted-foreground hover:text-foreground"
-                          aria-label={t(
-                            'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
-                            'Clear queued comments'
-                          )}
-                          onClick={clearSelection}
-                        >
-                          <X className="size-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" sideOffset={4}>
-                        {t(
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={t(
                           'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
                           'Clear queued comments'
                         )}
-                      </TooltipContent>
-                    </Tooltip>
-                  </>
+                        onClick={clearSelection}
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={4}>
+                      {t(
+                        'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
+                        'Clear queued comments'
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
               </>
             )}
@@ -304,6 +280,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
             })}
           </div>
         )}
+        {showLoading && <CommentsAudienceLoading presentation={presentation} />}
         {comments.length >= 100 && (
           <div className="mt-1.5 text-[10px] text-muted-foreground">
             {t(
@@ -314,17 +291,18 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
         )}
       </div>
 
-      {commentsLoading && comments.length === 0 ? (
-        <div className="flex items-center justify-center py-6">
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-        </div>
-      ) : comments.length === 0 && commentsError ? (
+      {emptyReadError && (
         <div role="alert" className="px-3 py-5 text-[11px] break-words text-destructive">
-          {commentsError}
+          {emptyReadError}
         </div>
-      ) : comments.length === 0 && isAddingComment && onAddComment ? (
+      )}
+      {comments.length === 0 && isAddingComment && onAddComment ? (
         renderAddCommentComposer(true)
+      ) : showLoading ? (
+        <CommentsListLoading presentation={presentation} />
       ) : comments.length === 0 ? (
+        !emptyReadError &&
+        commentsRead &&
         !onAddComment && (
           <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
             {t('auto.components.right.sidebar.checks.panel.content.755be805f6', 'No comments')}

@@ -26,13 +26,37 @@ function chatClient(props: unknown): ChatClient {
 
 const utcDayNumber = (now: number): number => Math.floor(now / 86_400_000)
 
+// Unread or distribution-only events: a tenth keeps every split readable.
+const TENTH_SAMPLED_EVENTS: ReadonlySet<string> = new Set<EventName>([
+  'profile_state_authority_selected',
+  'wsl_usage_snapshot',
+  'add_repo_nested_scan_result',
+  'daemon_adopted',
+  // Control group for the denied twin's rate; a tenth keeps rare folder classes readable.
+  'daemon_pty_cwd_readable'
+])
+
+// Diagnostic repeats add nothing after the first per reason in a session.
+const unattributedHookReasonsSeen = new Set<string>()
+
+function stringProp(props: unknown, key: 'fallback_reason' | 'reason'): string | undefined {
+  if (props === null || typeof props !== 'object') {
+    return undefined
+  }
+  const value =
+    key === 'fallback_reason'
+      ? 'fallback_reason' in props && props.fallback_reason
+      : 'reason' in props && props.reason
+  return typeof value === 'string' ? value : undefined
+}
+
 /** `savedChatDay` seeds the day cursor once per client per launch so restarts stay sampled. */
 export function telemetryEventSampleRate(
   name: EventName,
   props: unknown,
   now: number,
   savedChatDay: (client: ChatClient) => number | undefined
-): 0.1 | 0.01 | 0.001 | 1 {
+): 0.1 | 0.01 | 0.001 | 0 | 1 {
   if (name === 'native_chat_message_sent') {
     const client = chatClient(props)
     let day = chatMessageSentDay.get(client)
@@ -48,6 +72,16 @@ export function telemetryEventSampleRate(
   if (name === 'daemon_audit_eligibility') {
     return 0.001
   }
+  if (TENTH_SAMPLED_EVENTS.has(name)) {
+    return 0.1
+  }
+  if (name === 'codex_trust_grant') {
+    // A retry deferred to an earlier cached result or a pending backfill; real errors keep their own reasons.
+    return stringProp(props, 'fallback_reason') === 'retry-cached' ? 0.01 : 1
+  }
+  if (name === 'agent_hook_unattributed') {
+    return unattributedHookReasonsSeen.has(stringProp(props, 'reason') ?? '') ? 0 : 1
+  }
   return 1
 }
 
@@ -58,6 +92,10 @@ export function noteTelemetryEventQueued(
   now: number,
   store: Store
 ): void {
+  if (name === 'agent_hook_unattributed') {
+    unattributedHookReasonsSeen.add(stringProp(props, 'reason') ?? '')
+    return
+  }
   if (name !== 'native_chat_message_sent') {
     return
   }
@@ -85,4 +123,5 @@ export function noteTelemetryEventQueued(
 
 export function resetEventSamplingForSession(): void {
   chatMessageSentDay.clear()
+  unattributedHookReasonsSeen.clear()
 }

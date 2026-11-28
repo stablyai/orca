@@ -34,8 +34,6 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['qwen', '--resume', id] : null
     case 'qoder':
       return providerSession.key === 'session_id' ? ['qodercli', '--resume', id] : null
-    case 'gemini':
-      return providerSession.key === 'session_id' ? ['gemini', '--resume', id] : null
     case 'antigravity':
       return providerSession.key === 'conversation_id' ? ['agy', '--conversation', id] : null
     case 'opencode':

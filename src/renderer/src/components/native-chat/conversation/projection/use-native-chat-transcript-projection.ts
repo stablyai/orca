@@ -9,6 +9,10 @@ import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-sess
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { createNativeChatConversationProjection } from './native-chat-conversation-projection'
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
+import {
+  noteStreamedTextDerivation,
+  rowsBesideStreamedText
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 /** Separate conversation/subagent rows, using journal turn placement when available. */
 export function useNativeChatTranscriptProjection(
@@ -26,16 +30,22 @@ export function useNativeChatTranscriptProjection(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session.agent, session.sessionId]
   )
-  const projection = useMemo(
-    () =>
-      projectMessages(
-        session.messages,
-        journalItems
-          ? { items: journalItems, submissions: journalSubmissions ?? [], latestTurn }
-          : null
-      ),
-    [journalItems, journalSubmissions, latestTurn, projectMessages, session.messages]
-  )
+  const projection = useMemo(() => {
+    const projected = projectMessages(
+      session.messages,
+      journalItems
+        ? { items: journalItems, submissions: journalSubmissions ?? [], latestTurn }
+        : null
+    )
+    // Each stage keeps the link across a reply's text-only revisions, so turn structure holds.
+    const structure = [
+      journalItems && rowsBesideStreamedText(journalItems),
+      journalSubmissions,
+      latestTurn
+    ]
+    noteStreamedTextDerivation(projectMessages, session.messages, structure, projected.conversation)
+    return projected
+  }, [journalItems, journalSubmissions, latestTurn, projectMessages, session.messages])
   const projectConversation = useMemo(
     () => createNativeChatConversationProjection(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -43,7 +53,13 @@ export function useNativeChatTranscriptProjection(
   )
   const hideGoals = journalItems !== undefined
   const messages = useMemo(
-    () => projectConversation(projection.conversation, hideGoals),
+    () =>
+      noteStreamedTextDerivation(
+        projectConversation,
+        projection.conversation,
+        [hideGoals],
+        projectConversation(projection.conversation, hideGoals)
+      ),
     [hideGoals, projectConversation, projection.conversation]
   )
   return { messages, subagentRows: projection.subagentRows }

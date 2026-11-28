@@ -6,6 +6,7 @@ import {
   type BotItemActor,
   type BotItemCommentImage
 } from '../../shared/bots/bot-items'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { BotItemError } from './bot-item-error'
 import { BotItemsEdits } from './bot-items-edits'
 import { assertBotItemAttach } from './bot-items-tables'
@@ -61,6 +62,8 @@ export class BotItemsWrites extends BotItemsEdits {
     to: 'done' | 'canceled',
     note: string | undefined,
     actor: BotItemBotActor,
+    /** Whom the closing chat acts for, kept on the close. */
+    actsFor?: readonly BotRequestAsker[],
     now = Date.now()
   ): BotItemWriteOutcome {
     assertBotItemText('note', note)
@@ -71,7 +74,12 @@ export class BotItemsWrites extends BotItemsEdits {
       const item = this.requireItem(uid)
       this.requireOwnerWrite(item, actor)
       this.writeStatus(uid, to, null, actor, now, note ?? null)
-      const data = { from: item.status, to, ...(note ? { note } : {}) }
+      const data = {
+        from: item.status,
+        to,
+        ...(note ? { note } : {}),
+        ...(actsFor ? { actsFor } : {})
+      }
       const mail = mailsItemChat(item, actor)
       return { uid, eventId: this.appendEvent(uid, 'status', actor, data, mail, now) }
     })
@@ -112,7 +120,7 @@ export class BotItemsWrites extends BotItemsEdits {
   }
 
   /** A worker started for an item (`worker-start --item`): linked once, and when the item's own agent
-   *  started it, Planned, Waiting or Needs you moves to In progress; anyone else's never moves it. A
+   *  started it, Planned, Waiting or Needs you with no open question moves to In progress; anyone else's never moves it. A
    *  closed item takes no link (a retry keeps its first start's item). `starter`: the starting agent and chat, whose write it is, as
    *  `item link` would be; Orca's own catch-up when that chat is unknown. */
   linkStartedWorker(
@@ -137,9 +145,12 @@ export class BotItemsWrites extends BotItemsEdits {
       const links = { links: [`dispatch:${dispatchId}`] }
       let eventId = this.appendEvent(uid, 'linked', actor, links, mail, now)
       this.insertLinks(uid, [{ kind: 'dispatch', ref: dispatchId }], eventId)
+      // A question still open keeps the item on its owner: the answer moves it on.
       if (
         botId === item.ownerBotId &&
-        (item.status === 'planned' || item.status === 'waiting' || item.status === 'needs_you')
+        (item.status === 'planned' ||
+          item.status === 'waiting' ||
+          (item.status === 'needs_you' && this.waitingAsk(item) === null))
       ) {
         eventId = this.moveToWorking(item, actor, mail, now)
       }
@@ -187,5 +198,23 @@ export class BotItemsWrites extends BotItemsEdits {
     this.writeStatus(item.uid, 'working', null, actor, now)
     const moved = { from: item.status, to: 'working' }
     return this.appendEvent(item.uid, 'status', actor, moved, mail, now)
+  }
+
+  /** Orca's own line on an item, such as why a worker started for it had to start in a terminal.
+   *  It mails no chat: the starter already read the same reason in its receipt. */
+  orcaComment(uid: string, text: string, why: string, now = Date.now()): BotItemWriteOutcome {
+    assertBotItemText('text', text)
+    return this.transaction(() => {
+      this.requireItem(uid)
+      const eventId = this.appendEvent(
+        uid,
+        'commented',
+        { kind: 'orca', why },
+        { text },
+        false,
+        now
+      )
+      return { uid, eventId }
+    })
   }
 }

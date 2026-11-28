@@ -14,16 +14,25 @@ export function usageChipShowsPercentage(
 }
 
 export function UsageUnitLabel({
-  display
+  display,
+  compact = false
 }: {
   display: UsagePercentageDisplay
+  /** Compact bar: dimmer label with a hairline separating it from the numbers. */
+  compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const label =
+    display === 'used'
+      ? t('auto.components.status.bar.usageUnitLabel.used', 'Used')
+      : t('auto.components.status.bar.usageUnitLabel.remaining', 'Remaining')
+  if (!compact) {
+    return <span className="text-muted-foreground">{label}</span>
+  }
   return (
-    <span className="text-muted-foreground">
-      {display === 'used'
-        ? t('auto.components.status.bar.usageUnitLabel.used', 'Used')
-        : t('auto.components.status.bar.usageUnitLabel.remaining', 'Remaining')}
+    <span className="inline-flex items-center gap-3.5 text-muted-foreground">
+      {label}
+      <span aria-hidden="true" className="h-3 w-px bg-muted-foreground/60" />
     </span>
   )
 }

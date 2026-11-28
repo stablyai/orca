@@ -141,7 +141,7 @@ function KnownBotRequestCard({
   return (
     <NativeChatEventRow
       icon={REQUEST_ICON}
-      badge={!view.sent ? 'failed' : view.dot === 'working' ? 'running' : null}
+      badge={view.badge}
       label={[`${view.heading} ${bot.name}`, subject].filter(Boolean).join(' · ')}
       timestamp={timestamp}
       disclosureKey={cardId ? `bot-request:${cardId}` : undefined}

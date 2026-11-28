@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { AgentJournalUrlApprovalSubject } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
@@ -19,13 +20,15 @@ import type { ClientCapabilities } from '../generated/acp-protocol.generated'
 // Longer than any sign-in link; a URL the card cannot show whole is refused.
 const MAX_URL_LENGTH = 8 * 1024
 
-const urlSchema = z.object({
-  mode: z.literal('url'),
-  message: z.string(),
-  elicitationId: z.string().min(1),
-  url: z.string().max(MAX_URL_LENGTH)
-})
-const completeSchema = z.object({ elicitationId: z.string().min(1) })
+const urlSchema = lazyZodSchema(() =>
+  z.object({
+    mode: z.literal('url'),
+    message: z.string(),
+    elicitationId: z.string().min(1),
+    url: z.string().max(MAX_URL_LENGTH)
+  })
+)
+const completeSchema = lazyZodSchema(() => z.object({ elicitationId: z.string().min(1) }))
 
 export function isAcpUrlElicitation(params: unknown): boolean {
   return z.object({ mode: z.literal('url') }).safeParse(params).success

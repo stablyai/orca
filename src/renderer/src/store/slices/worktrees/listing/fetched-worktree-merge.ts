@@ -39,21 +39,30 @@ import {
 } from './authoritative-worktree-removal-memory'
 import type { FencedWorktreeMergeArgs } from './worktree-slice-types'
 
+function indexHostWorktreesById(
+  worktrees: readonly Worktree[],
+  matchesRefreshHost: (worktree: Worktree) => boolean
+): Map<string, Worktree> {
+  const byId = new Map<string, Worktree>()
+  for (const worktree of worktrees) {
+    if (matchesRefreshHost(worktree)) {
+      byId.set(worktree.id, worktree)
+    }
+  }
+  return byId
+}
+
 export function preserveConcurrentManualOrder<T extends Worktree>(
   incoming: readonly T[],
   requestStarted: readonly Worktree[] | undefined,
   current: readonly Worktree[] | undefined,
   matchesRefreshHost: (worktree: Worktree) => boolean
 ): T[] {
-  if (!requestStarted || !current) {
+  if (!requestStarted || !current || requestStarted === current) {
     return [...incoming]
   }
-  const startedById = new Map(
-    requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  const currentById = new Map(
-    current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
+  const startedById = indexHostWorktreesById(requestStarted, matchesRefreshHost)
+  const currentById = indexHostWorktreesById(current, matchesRefreshHost)
   return incoming.map((worktree) => {
     const started = startedById.get(worktree.id)
     const latest = currentById.get(worktree.id)
@@ -74,12 +83,9 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
   if (!requestStarted || !current) {
     return [...incoming]
   }
-  const startedById = new Map(
-    requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  const currentById = new Map(
-    current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
+  const startedById = indexHostWorktreesById(requestStarted, matchesRefreshHost)
+  const currentById =
+    requestStarted === current ? startedById : indexHostWorktreesById(current, matchesRefreshHost)
   return incoming.map((worktree) => {
     const started = startedById.get(worktree.id)
     const latest = currentById.get(worktree.id)

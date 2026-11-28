@@ -1,6 +1,6 @@
 // New bot › From a link on the phone: paste a link, read its review, then make your copy. Nothing is
 // created until Create. The desktop's BotShareReceiveFlow, review and New bot from a link.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import type { BotAgent } from '../../../../src/shared/bot-types'
 import { reviewFlagSpots } from '../../../../src/shared/bots/bot-share-review-files'
@@ -9,12 +9,13 @@ import { useBottomDrawerModalHostBackClaim } from '../../components/bottom-drawe
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ListedBot, PhoneBot } from '../host-bots-operations'
 import { mobileBotAvatarSource } from '../host-bot-row-facts'
@@ -23,8 +24,8 @@ import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botShareDate, botShareErrorMessage } from './bot-share-copy'
 import { MobileBotSharePasteLink } from './MobileBotSharePasteLink'
 import {
-  EMPTY_SHARE_CREATE_DRAFT,
   MobileBotShareCreate,
+  newShareCreateDraft,
   type ShareCreateDraft
 } from './MobileBotShareCreate'
 import { reviewPhoneBotShare, type PhoneShareReview } from './bot-share-receive-operations'
@@ -51,8 +52,9 @@ export function MobileBotShareReceiveSheet(props: {
   /** The bots on that computer: a link one was made from offers it first, and names stay free. */
   bots: readonly ListedBot[]
   agent: BotAgent
-  /** Runs on and Agent, as New bot shows them. */
-  runsOn: ReactNode
+  /** Runs on and Agent, as New bot's rows, and the note under them. */
+  pickerRows: readonly ReactElement[]
+  pickerNote: ReactNode
   /** The computer is reachable and has said which agents it has. */
   ready: boolean
   onBack: () => void
@@ -61,8 +63,10 @@ export function MobileBotShareReceiveSheet(props: {
   onCreated: (bot: PhoneBot) => void
   onOpenBot: (bot: ListedBot) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { client } = props
   const [step, setStep] = useState<Step>({ kind: 'paste' })
   const [nav, setNav] = useState<ReviewPage[]>([])
@@ -70,7 +74,7 @@ export function MobileBotShareReceiveSheet(props: {
   const [toolIds, setToolIds] = useState<string[]>([])
   // The review the ticks were made on.
   const shownReview = useRef<PhoneShareReview | null>(null)
-  const [draft, setDraft] = useState<ShareCreateDraft>(EMPTY_SHARE_CREATE_DRAFT)
+  const [draft, setDraft] = useState<ShareCreateDraft>(newShareCreateDraft)
   const [link, setLink] = useState('')
   const [error, setError] = useState<string | null>(null)
   // Read when a link loads, so a new list of bots doesn't send the review again.
@@ -100,7 +104,7 @@ export function MobileBotShareReceiveSheet(props: {
           shownReview.current = review
           setToolIds((ticked) => (step.again && review ? keptToolTicks(shown, review, ticked) : []))
           if (!step.again) {
-            setDraft(EMPTY_SHARE_CREATE_DRAFT)
+            setDraft(newShareCreateDraft())
           }
           setNav([])
           setStep(review ? { kind: 'review', review, updated: false } : { kind: 'stopped' })
@@ -204,7 +208,7 @@ export function MobileBotShareReceiveSheet(props: {
               {t('bots.share.receive.haveDetail', '{{name}} · made {{date}}', {
                 name: step.bot.name,
                 date: step.bot.createdAt
-                  ? botShareDate(new Date(step.bot.createdAt).toISOString())
+                  ? botShareDate(new Date(step.bot.createdAt).toISOString(), intlLocale)
                   : ''
               })}
             </Text>
@@ -254,7 +258,8 @@ export function MobileBotShareReceiveSheet(props: {
           client={client}
           bots={props.bots}
           agent={props.agent}
-          runsOn={props.runsOn}
+          pickerRows={props.pickerRows}
+          pickerNote={props.pickerNote}
           ready={props.ready}
           onStep={setStep}
           onReviewAgain={reviewAgain}
@@ -288,7 +293,8 @@ function ReviewSteps(props: {
   client: RpcClient | null
   bots: readonly ListedBot[]
   agent: BotAgent
-  runsOn: ReactNode
+  pickerRows: readonly ReactElement[]
+  pickerNote: ReactNode
   ready: boolean
   onStep: (step: Step) => void
   onReviewAgain: (shareId: string) => void
@@ -302,8 +308,7 @@ function ReviewSteps(props: {
     review,
     spots,
     open: (page: ReviewPage) => props.setNav((current) => [...current, page]),
-    toolIds: props.toolIds,
-    setToolIds: props.setToolIds
+    consent: { toolIds: props.toolIds, setToolIds: props.setToolIds }
   }
   if (step.kind === 'create') {
     return (
@@ -318,7 +323,8 @@ function ReviewSteps(props: {
         client={props.client}
         bots={props.bots}
         agent={props.agent}
-        runsOn={props.runsOn}
+        pickerRows={props.pickerRows}
+        pickerNote={props.pickerNote}
         ready={props.ready}
         onBack={() => props.onStep({ kind: 'review', review, updated: false })}
         onMoved={(why) =>
@@ -363,15 +369,17 @@ function ReviewSteps(props: {
       />
       <MobileBotShareReviewOverview
         ctx={ctx}
-        updated={step.updated}
-        onCreate={() => props.onStep({ kind: 'create', review })}
-        onReviewAgain={() => props.onReviewAgain(review.shareId)}
+        choosing={{
+          updated: step.updated,
+          onCreate: () => props.onStep({ kind: 'create', review }),
+          onReviewAgain: () => props.onReviewAgain(review.shareId)
+        }}
       />
     </>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   loading: { paddingVertical: spacing.xl, alignItems: 'center' },
   hero: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md },
   detail: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },

@@ -8,9 +8,8 @@ import {
   MoreHorizontal,
   Send
 } from 'lucide-react-native'
-import { colors } from '../../../../theme/mobile-theme'
 import { queuedMessageCardSteers } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
 import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
@@ -20,11 +19,12 @@ import { MobileAgentMessageSenders } from '../../transcript/agent-messages/Mobil
 import { MobileQueuedTypedByLine } from '../../transcript/messages/MobileNativeChatUserMessageMarks'
 import {
   QUEUED_ROW_NARROW_WIDTH,
-  queuedMessageStyles as styles
+  queuedMessageStylesSheet
 } from './mobile-native-chat-queued-message-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import type { MobileQueuedCardControl } from './mobile-queued-card-actions'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 const subscribeNever = () => () => undefined
 // The 32pt pill reaches 44pt inside the row's own height; Android drops touches outside the parent.
@@ -63,7 +63,7 @@ export function MobileQueuedMessageCardRow({
   onEditorLayout,
   ...actions
 }: QueuedMessageCardRowProps): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(queuedMessageStylesSheet)
   if (editor) {
     return (
       <View
@@ -98,7 +98,8 @@ function QueuedMessageCardContents({
   onRowHeight,
   dragHandle
 }: Omit<QueuedMessageCardRowProps, 'editor' | 'onEditorLayout'>): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(queuedMessageStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const narrow = useWindowDimensions().width < QUEUED_ROW_NARROW_WIDTH
   const returned = card.state === 'returned'

@@ -15,13 +15,12 @@ import {
   DrillRow,
   SwitchRow
 } from '../host-screen/workspace-options/workspace-option-rows'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { lookedWhen } from './bot-up-next-copy'
 import type { SheetBot } from './bot-sheet-operations'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { MobileBotTextButton } from './MobileBotTextButton'
 
 export type TidyUpPage = 'every' | 'summary'
 type Run = NonNullable<BotTidyUpView['last']>
@@ -41,16 +40,13 @@ export function MobileTidyUpSection(props: {
   onTidyNow: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const setting = botTidyUp(props.bot)
   const last = props.view?.last ?? null
   return (
     <SettingsSection
       first
-      footer={t(
-        'bots.tidyUp.footer',
-        'Changes memory files only. Uses your agent plan, like a short chat. Orca must be running on your computer.'
-      )}
+      footer={t('bots.tidyUp.footerShort', 'Changes memory files only. Uses your agent plan.')}
     >
       <SwitchRow
         label={t('bots.tidyUp.on', 'Tidy memory overnight')}
@@ -75,7 +71,7 @@ export function MobileTidyUpSection(props: {
             <ListRow
               key="last"
               title={t('bots.tidyUp.lastTidied', 'Last tidied')}
-              value={last ? lookedWhen(last.at) : t('bots.tidyUp.never', 'Not yet')}
+              value={last ? lookedWhen(last.at, t, intlLocale) : t('bots.tidyUp.never', 'Not yet')}
               navigates={last !== null}
               onPress={last ? () => props.onOpen('summary') : undefined}
             />,
@@ -86,6 +82,7 @@ export function MobileTidyUpSection(props: {
                   ? t('bots.tidyUp.tidying', 'Tidying…')
                   : t('bots.tidyUp.now', 'Tidy now')
               }
+              accent
               disabled={props.disabled || props.view?.running === true || props.bot.paused}
               onPress={props.onTidyNow}
               accessibilityRole="button"
@@ -111,6 +108,7 @@ function SummaryGroup(props: { title: string; lines: string[] }) {
 
 function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => void }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { run } = props
   const minutes = Math.max(1, Math.round(run.tookMs / 60_000))
   const tidied = [
@@ -129,7 +127,7 @@ function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => vo
     <>
       <SettingsNote>
         {[
-          lookedWhen(run.at),
+          lookedWhen(run.at, t, intlLocale),
           t('bots.tidyUp.readChats', 'read {{count}} chats', { count: run.chats }),
           t('bots.tidyUp.took', 'took {{value}} min', { value: minutes })
         ].join(' · ')}
@@ -138,8 +136,8 @@ function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => vo
       <SummaryGroup title={t('bots.tidyUp.tidied', 'Tidied')} lines={tidied} />
       <SettingsSection
         footer={t(
-          'bots.tidyUp.undoNote',
-          'Undo puts MEMORY.md back as it was before this tidy-up, all at once. Full history and memory editing are on your computer, in Settings → Memory.'
+          'bots.tidyUp.undoNoteShort',
+          'Puts MEMORY.md back as it was before this tidy-up.'
         )}
       >
         <ListRow
@@ -148,16 +146,10 @@ function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => vo
               ? t('bots.tidyUp.undone', 'Undone')
               : t('bots.tidyUp.undoAll', 'Undo this tidy-up')
           }
-          disabled={run.undone || run.rowId === null || props.busy}
-          accessory={
-            run.undone ? undefined : (
-              <MobileBotTextButton
-                label={t('bots.tidyUp.undo', 'Undo')}
-                disabled={run.rowId === null || props.busy}
-                onPress={() => run.rowId && props.onUndo(run.rowId)}
-              />
-            )
-          }
+          accent={!run.undone}
+          disabled={!run.undone && (run.rowId === null || props.busy)}
+          onPress={run.undone ? undefined : () => run.rowId && props.onUndo(run.rowId)}
+          accessibilityRole="button"
         />
       </SettingsSection>
     </>
@@ -178,7 +170,6 @@ export function MobileTidyUpPage(props: {
   banner: ReactNode
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   useBackClaim(() => {
     props.onBack()
     return true

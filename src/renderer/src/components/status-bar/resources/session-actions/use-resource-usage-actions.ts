@@ -1,6 +1,8 @@
 import { selectWorktreesByRepo } from '../../../../store/workspaces/catalog/workspace-record-fields'
 import {
   useCallback,
+  useEffect,
+  useRef,
   useState,
   type Dispatch,
   type MutableRefObject,
@@ -26,14 +28,14 @@ import {
   type ResourceSessionBindingInputs,
   selectUnboundDaemonSessions
 } from '../workspace-attribution/resource-session-bindings'
-import { navigateResourceSessionToTab } from './resource-session-navigation'
+import { navigateResourceSessionToTab, openResourceChat } from './resource-session-navigation'
+import { settleChatOpenFocus } from './resource-chat-open-focus'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 
 export function useResourceUsageActions({
   setCollapsedRepos,
   setCollapsedWorktrees,
-  tabsByWorktree,
   setOpen,
   setActiveView,
   openModal,
@@ -44,6 +46,7 @@ export function useResourceUsageActions({
   sessions,
   resourceSessionBindings,
   workspaceSessionReady,
+  sessionsRereading,
   killConfirm,
   setKillConfirm,
   setKilling,
@@ -54,7 +57,6 @@ export function useResourceUsageActions({
 }: {
   setCollapsedRepos: Dispatch<SetStateAction<Set<string>>>
   setCollapsedWorktrees: Dispatch<SetStateAction<Set<string>>>
-  tabsByWorktree: AppState['tabsByWorktree']
   setOpen: Dispatch<SetStateAction<boolean>>
   setActiveView: AppState['setActiveView']
   openModal: AppState['openModal']
@@ -65,6 +67,8 @@ export function useResourceUsageActions({
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
   workspaceSessionReady: boolean
+  /** The terminal list is being read again because it was outdated; its ownership evidence can't skip a confirm. */
+  sessionsRereading: boolean
   killConfirm: UnifiedSessionRow | null
   setKillConfirm: Dispatch<SetStateAction<UnifiedSessionRow | null>>
   setKilling: Dispatch<SetStateAction<boolean>>
@@ -127,14 +131,37 @@ export function useResourceUsageActions({
   const navigateToTab = useCallback(
     (tabId: string, paneKey: string | null) => {
       navigateResourceSessionToTab(tabId, paneKey, {
-        tabsByWorktree,
+        // Read at click time, so a tab title change doesn't replace this callback and redraw every row.
+        tabsByWorktree: useAppStore.getState().tabsByWorktree,
+        terminalLayoutsByTabId: useAppStore.getState().terminalLayoutsByTabId,
         setActiveView,
         activateAndRevealWorktree: navigateToWorktree,
         activateTabAndFocusPane
       })
     },
-    [tabsByWorktree, setActiveView, navigateToWorktree]
+    [setActiveView, navigateToWorktree]
   )
+
+  // Set while a chat row closes the panel, so the close leaves focus with the chat instead of the trigger.
+  const chatOpenedRef = useRef(false)
+  // The opener activates whatever it opens (a group member opens its room), so nothing is activated first.
+  const openChat = useCallback(
+    (worktreeId: string, agentSessionId: string, runtimeHostId?: string): void => {
+      // Close first: an open panel keeps focus, so the chat's composer couldn't take it.
+      chatOpenedRef.current = true
+      setOpen(false)
+      void openResourceChat(worktreeId, agentSessionId, runtimeHostId).then(() =>
+        settleChatOpenFocus(worktreeId, agentSessionId)
+      )
+    },
+    [setOpen]
+  )
+  /** True once after a chat row closed the panel. */
+  const takeChatOpenedClose = useCallback((): boolean => {
+    const opened = chatOpenedRef.current
+    chatOpenedRef.current = false
+    return opened
+  }, [])
 
   const deleteWorktree = useCallback(
     (worktreeId: string): void => {
@@ -156,9 +183,18 @@ export function useResourceUsageActions({
     queueMicrotask(() => openModal('workspace-cleanup'))
   }, [openModal, setOpen])
 
+  // Read when an end is asked for, so a reread starting or ending keeps these callbacks and their rows unchanged.
+  const sessionsRereadingRef = useRef(sessionsRereading)
+  useEffect(() => {
+    sessionsRereadingRef.current = sessionsRereading
+  }, [sessionsRereading])
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
       if (session.readOnly) {
+        return
+      }
+      // A list being read again can't name which terminal holds this id, so it ends nothing.
+      if (sessionsRereadingRef.current) {
         return
       }
       if (!requiresKillConfirmation(session)) {
@@ -186,7 +222,7 @@ export function useResourceUsageActions({
   )
 
   const handleKillOrphans = useCallback(async () => {
-    if (!workspaceSessionReady) {
+    if (!workspaceSessionReady || sessionsRereadingRef.current) {
       return
     }
     // Use the badge’s exact orphan selector so bulk cleanup cannot destroy sessions excluded from its count.
@@ -225,20 +261,19 @@ export function useResourceUsageActions({
           'The terminal could not be ended. Last-observed sessions are retained.'
         )
       )
-    } finally {
-      if (mountedRef.current) {
-        setKilling(false)
-        setKillConfirm(null)
-        // Why: killed row unmounts and focus would drop to <body>; park it on the popover body so keyboard users stay in the list.
-        cancelPopoverBodyFocusFrame()
-        if (popoverBodyRef.current) {
-          popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
-            popoverBodyFocusFrameRef.current = null
-            popoverBodyRef.current?.focus()
-          })
-        }
-        void refreshSessions()
+    }
+    if (mountedRef.current) {
+      setKilling(false)
+      setKillConfirm(null)
+      // Why: killed row unmounts and focus would drop to <body>; park it on the popover body so keyboard users stay in the list.
+      cancelPopoverBodyFocusFrame()
+      if (popoverBodyRef.current) {
+        popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
+          popoverBodyFocusFrameRef.current = null
+          popoverBodyRef.current?.focus()
+        })
       }
+      void refreshSessions()
     }
   }, [
     cancelPopoverBodyFocusFrame,
@@ -263,6 +298,8 @@ export function useResourceUsageActions({
     toggleWorktree,
     navigateToWorktree,
     navigateToTab,
+    openChat,
+    takeChatOpenedClose,
     deleteWorktree,
     handleOpenWorkspaceCleanup,
     handleKillSession,

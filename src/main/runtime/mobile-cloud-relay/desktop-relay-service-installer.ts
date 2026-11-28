@@ -12,7 +12,7 @@ export type DesktopRelayServiceInstallerOptions = {
   // Quit/relaunch fencing: a fenced host never installs a new service.
   isFenced: () => boolean
   // Returns null when this build has no cloud auth; throws on a failed construction.
-  create: () => DesktopRelayService | null
+  create: () => Promise<DesktopRelayService | null> | DesktopRelayService | null
   onInstalled: (service: DesktopRelayService) => void
 }
 
@@ -46,9 +46,12 @@ export function createDesktopRelayServiceInstaller(
       return installed !== null
     }
     try {
-      const service = options.create()
+      const service = await options.create()
       if (!service) {
         return false
+      }
+      if (installed || suspended || options.isFenced()) {
+        return installed !== null
       }
       installed = service
       options.onInstalled(service)

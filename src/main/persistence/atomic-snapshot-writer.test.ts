@@ -1,8 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AtomicSnapshotWriter } from './atomic-snapshot-writer'
+
+// windows-retry-file-operations imports the named rename binding, so it must be mocked at the module.
+const renameMock = vi.hoisted(() => ({ fn: vi.fn<typeof NodeFsPromises.rename>() }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  renameMock.fn.mockImplementation(actual.rename)
+  return { ...actual, rename: renameMock.fn }
+})
+
+const eperm = (): Error =>
+  Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' })
 
 describe('AtomicSnapshotWriter', () => {
   let dir: string
@@ -31,7 +43,36 @@ describe('AtomicSnapshotWriter', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
+    renameMock.fn.mockClear()
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('publishes an async write through a transient Windows rename EPERM', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    renameMock.fn.mockRejectedValueOnce(eperm())
+    const writer = new AtomicSnapshotWriter(() => file)
+
+    await writer.write(() => 'async content')
+
+    expect(readFileSync(file, 'utf8')).toBe('async content')
+    expect(renameMock.fn).toHaveBeenCalledTimes(2)
+    expect(tmpFiles()).toEqual([])
+  })
+
+  it('does not retry an async rename after close lands during the Windows backoff', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const writer = new AtomicSnapshotWriter(() => file)
+    renameMock.fn.mockImplementationOnce(() => {
+      writer.close()
+      return Promise.reject(eperm())
+    })
+
+    await writer.write(() => 'async content')
+
+    expect(renameMock.fn).toHaveBeenCalledTimes(1)
+    expect(existsSync(file)).toBe(false)
+    expect(tmpFiles()).toEqual([])
   })
 
   it('keeps the newest writeSync content when an older async write finishes later', async () => {

@@ -69,3 +69,24 @@ export function planDelegatedMobileDevices(
   })
   return { nextDevices, entries }
 }
+
+/** The children a sync from `parentDeviceId` revokes: unwanted ones of the syncing installation under
+ *  any row (a re-paired desktop must still cut phones its old row minted), plus unwanted unclaimed
+ *  ones under this row. Another installation's phones on a shared row are never touched. */
+export function droppedDelegatedPhones(
+  devices: readonly DeviceEntry[],
+  parentDeviceId: string,
+  phones: readonly DelegatedPhone[],
+  originClientInstanceId: string | undefined
+): DeviceEntry[] {
+  const wanted = new Set(phones.map((phone) => phone.phoneKey))
+  return devices.filter((child) => {
+    if (child.parentDeviceId === undefined || (child.phoneKey && wanted.has(child.phoneKey))) {
+      return false
+    }
+    const origin = child.originClientInstanceId
+    return origin === undefined
+      ? child.parentDeviceId === parentDeviceId
+      : origin === originClientInstanceId
+  })
+}

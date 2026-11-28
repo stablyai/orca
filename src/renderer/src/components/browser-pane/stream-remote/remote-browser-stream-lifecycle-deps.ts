@@ -23,6 +23,6 @@ export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps
     setStatus: (status: RemoteBrowserStreamStatus) => void
     clearFrame: () => void
     handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
-    /** What the stream reports beyond frames: the page's own cursor and an agent's pointer. */
-    viewerEvents: Pick<RemoteBrowserScreencastEvents, 'onPointer' | 'onAgentCursor'>
+    /** What the stream reports beyond frames: the page's cursor, an agent's pointer and its driver. */
+    viewerEvents: Pick<RemoteBrowserScreencastEvents, 'onPointer' | 'onAgentCursor' | 'onDriver'>
   }

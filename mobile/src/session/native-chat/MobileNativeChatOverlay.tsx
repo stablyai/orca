@@ -14,7 +14,10 @@ import { useMobileNativeChatComposerTray } from './composer/menus/use-mobile-nat
 import { useMobileNativeChatVisualRenderer } from './visual/MobileNativeChatVisual'
 import { MobileNativeChatVisualContext } from './visual/mobile-native-chat-visual-context'
 import { MobileNativeChatRootItemSourceContext } from './transcript/projection/mobile-native-chat-item-read'
-import { useMobileNativeChatMessageDetail } from './transcript/projection/use-mobile-native-chat-message-detail'
+import {
+  useMobileNativeChatDetailSource,
+  useMobileNativeChatMessageDetail
+} from './transcript/projection/use-mobile-native-chat-message-detail'
 import {
   MobileNativeChatReplyRevealsContext,
   useMobileNativeChatReplyReveals
@@ -142,9 +145,11 @@ function MobileNativeChatOverlayContent({
   const composerTray = useMobileNativeChatComposerTray({
     queued: {
       cards: queued.cards,
+      steerOrder: queued.steerOrder,
       onSend: queued.send,
       onDelete: queued.delete,
       onClearAll: queued.clear,
+      clearIds: queued.clearIds,
       onEdit: queued.edit,
       editor: queued.editor,
       onMove: queued.move,
@@ -153,40 +158,19 @@ function MobileNativeChatOverlayContent({
       sessionKey: queued.sessionKey,
       // Hold steering while Stop ends the turn; use the session’s single display-status decision.
       steerHeld: controller.nativeChatTurnIndicator?.stopping === true,
-      agentWorking: controller.nativeChatTurnActive
+      agentWorking: controller.nativeChatTurnActive,
+      agentMail: queued.agentMail,
+      agentMailEditable: queued.agentMailEditable
     },
     taskList,
-    backgroundTasks: controller.nativeChatBackgroundTasks
+    backgroundTasks: controller.nativeChatBackgroundTasks,
+    workerDock: controller.nativeChatWorkerDock,
+    workerApprovals: controller.nativeChatWorkerApprovals.open
   })
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
   const replyReveals = useMobileNativeChatReplyReveals(folded, streaming !== null, sendSurfaceId)
   const itemSource = controller.nativeChatItemSource
-  const committedDetail = useMemo(
-    () => ({ current: fullContent.detail }),
-    [itemSource?.client, itemSource?.sessionId]
-  )
-  useLayoutEffect(() => {
-    committedDetail.current = fullContent.detail
-  }, [committedDetail, fullContent.detail])
-  const load = useCallback(
-    async (id: string) => {
-      if (!committedDetail.current) {
-        throw new Error('Message unavailable')
-      }
-      await committedDetail.current.load(id)
-    },
-    [committedDetail]
-  )
-  const detailSource = useMemo(
-    () =>
-      itemSource
-        ? {
-            ...itemSource,
-            messageDetail: fullContent.detail ? { ...fullContent.detail, load } : null
-          }
-        : null,
-    [itemSource, fullContent.detail, load]
-  )
+  const detailSource = useMobileNativeChatDetailSource(itemSource, fullContent.detail)
   const { mentionFiles, markdownLinks, openFile } = useMobileNativeChatFiles({
     controller,
     worktreePath,
@@ -342,6 +326,7 @@ function MobileNativeChatOverlayContent({
                       onLoadEarlier={session.loadEarlier}
                       onSend={images.sendNativeChat}
                       sendSurfaceId={sendSurfaceId}
+                      sessionId={sessionId}
                       getSendCompletionGeneration={getSendCompletionGeneration}
                       getComposerEditGeneration={controller.getChatComposerEditGeneration}
                       pending={controller.chatPending}

@@ -7,16 +7,10 @@ import {
   shouldShowSkillsButton
 } from '@/components/sidebar/chrome/SidebarNav'
 import { navigateFromRail } from './app-rail-navigation'
+import { shouldShowPluginsRailPage } from './plugins-rail-page-visibility'
+import { APP_RAIL_DESTINATION_IDS, type AppRailDestinationId } from './app-rail-layout'
 
-/** Pages that live on the rail below Workspaces, in this order. With the rail on, their list rows are not rendered. */
-export const APP_RAIL_DESTINATION_IDS = [
-  'tasks',
-  'automations',
-  'artifacts',
-  'skills',
-  'mobile'
-] as const
-export type AppRailDestinationId = (typeof APP_RAIL_DESTINATION_IDS)[number]
+export { APP_RAIL_DESTINATION_IDS, type AppRailDestinationId } from './app-rail-layout'
 
 // The same visibility preferences the list rows read.
 const DESTINATION_VISIBLE: Record<
@@ -27,7 +21,31 @@ const DESTINATION_VISIBLE: Record<
   automations: shouldShowAutomationsButton,
   artifacts: shouldShowArtifactsButton,
   skills: shouldShowSkillsButton,
+  plugins: shouldShowPluginsRailPage,
   mobile: shouldShowMobileButton
+}
+
+// The settings Settings' "Show … button" switches write, so Customize persists through the same path.
+const DESTINATION_SETTING: Record<
+  AppRailDestinationId,
+  | 'showTasksButton'
+  | 'showAutomationsButton'
+  | 'showArtifactsButton'
+  | 'showSkillsButton'
+  | 'showPluginsButton'
+  | 'showMobileButton'
+> = {
+  tasks: 'showTasksButton',
+  automations: 'showAutomationsButton',
+  artifacts: 'showArtifactsButton',
+  skills: 'showSkillsButton',
+  plugins: 'showPluginsButton',
+  mobile: 'showMobileButton'
+}
+
+/** Show or hide a rail page. Like Settings' switch, hiding the current page leaves it open; only the button goes. */
+export function setRailDestinationShown(id: AppRailDestinationId, shown: boolean): void {
+  void useAppStore.getState().updateSettings({ [DESTINATION_SETTING[id]]: shown })
 }
 
 const DESTINATION_OPEN: Record<AppRailDestinationId, (state: AppState) => void> = {
@@ -35,6 +53,7 @@ const DESTINATION_OPEN: Record<AppRailDestinationId, (state: AppState) => void> 
   automations: (state) => state.openAutomationsPage(),
   artifacts: (state) => state.openArtifactsPage(),
   skills: (state) => state.openSkillsPage(),
+  plugins: (state) => state.openPluginsPage(),
   mobile: (state) => state.openMobilePage()
 }
 
@@ -43,7 +62,7 @@ function isRailDestinationId(value: string): value is AppRailDestinationId {
 }
 
 /** Shown destinations in rail order, joined into one string so the subscription compares a primitive. */
-export const selectShownRailDestinationsKey = (s: AppState): string =>
+export const selectShownRailDestinationsKey = (s: Pick<AppState, 'settings'>): string =>
   APP_RAIL_DESTINATION_IDS.filter((id) => DESTINATION_VISIBLE[id](s.settings)).join(',')
 
 export function shownRailDestinationsFromKey(key: string): AppRailDestinationId[] {

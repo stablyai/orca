@@ -9,6 +9,7 @@ import {
 import type { AgentSessionWriteFailure } from '../../failures/agent-session-write-failure'
 import type { StructuredAgentSessionState } from '../../view/live-read/structured-agent-session-reducer'
 import type { AgentJournalMessageItem } from '../../journal/agent-session-journal-types'
+import { rowsBesideStreamedText } from '../../view/structured-agent-session-streamed-text-rows'
 import { nativeChatRewindOffered } from '../../../native-chat/transcript/turns/native-chat-rewind-eligibility'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 
@@ -109,6 +110,12 @@ function returnTargetToComposer(input: AgentSessionRewindInput, itemId: string):
   return true
 }
 
+/** Where a rewind's in-flight guards live; a client that releases hidden views keeps them outside the view. */
+export type AgentSessionRewindGuards = {
+  useGuardRef: <T>(name: string, initial: T) => { current: T }
+  useGuardState: <T>(name: string, initial: T) => [T, (action: React.SetStateAction<T>) => void]
+}
+
 /** One rewind flow for every client; React and the client's wording come in so mobile and desktop share the rules. */
 export function createAgentSessionRewindHook(
   {
@@ -122,8 +129,13 @@ export function createAgentSessionRewindHook(
     typeof React,
     'useCallback' | 'useEffect' | 'useLayoutEffect' | 'useMemo' | 'useRef' | 'useState'
   >,
-  say: (notice: AgentSessionRewindNotice) => string
+  say: (notice: AgentSessionRewindNotice) => string,
+  guards?: AgentSessionRewindGuards
 ) {
+  const { useGuardRef, useGuardState }: AgentSessionRewindGuards = guards ?? {
+    useGuardRef: (_name, initial) => useRef(initial),
+    useGuardState: (_name, initial) => useState(initial)
+  }
   const blockedReason = (input: AgentSessionRewindInput): string | null => {
     const notice = blockedNotice(input)
     return notice ? say(notice) : null
@@ -140,24 +152,34 @@ export function createAgentSessionRewindHook(
     }, [input])
     // Reserve single-flight at the first click; only confirmed sending blocks other actions.
     // Both name their session: one phone view moves between chats, and another chat's rewind holds nothing here.
-    const inFlight = useRef<string | null>(null)
-    const [sending, setSending] = useState<string | null>(null)
-    const [awaiting, setAwaiting] = useState<{
+    const inFlight = useGuardRef<string | null>('in-flight', null)
+    const [sending, setSending] = useGuardState<string | null>('sending', null)
+    const [awaiting, setAwaiting] = useGuardState<{
       sessionId: string
       epoch: string
       sequence?: number
       isCurrent: () => boolean
-    } | null>(null)
+    } | null>('awaiting', null)
+    // A view that remounted before history arrived knows no epoch yet: it holds until the reset is readable.
     const awaitingReset =
       awaiting?.sessionId === input.sessionId &&
-      awaiting.epoch === input.state.epoch &&
-      (awaiting.sequence === undefined || (input.state.cursor?.sequence ?? 0) < awaiting.sequence)
+      (input.state.epoch === null ||
+        (awaiting.epoch === input.state.epoch &&
+          (awaiting.sequence === undefined ||
+            (input.state.cursor?.sequence ?? 0) < awaiting.sequence)))
+    // A known epoch that shows the reset ends the wait, so a later unknown epoch never brings it back.
+    const resetSeen =
+      awaiting?.sessionId === input.sessionId && input.state.epoch !== null && !awaitingReset
+    useEffect(() => {
+      if (resetSeen) {
+        setAwaiting(null)
+      }
+    }, [resetSeen, setAwaiting])
     // Hidden views stop reading; missing reset evidence while hidden is not a failure.
     const hiddenWhileAwaiting = useRef(false)
-    const visible = input.isVisible !== false
     useLayoutEffect(() => {
-      hiddenWhileAwaiting.current ||= !visible
-    }, [visible])
+      hiddenWhileAwaiting.current ||= input.isVisible === false
+    }, [input.isVisible])
     useEffect(() => {
       if (!awaitingReset) {
         return
@@ -173,7 +195,7 @@ export function createAgentSessionRewindHook(
     }, [awaiting, awaitingReset])
     const pending = sending === input.sessionId || awaitingReset
     const disabledReason = pending ? say('pending') : blockedReason(input)
-    const blockedRef = useRef(false)
+    const blockedRef = useGuardRef('blocked', false)
     useLayoutEffect(() => {
       blockedRef.current = pending
     }, [pending])
@@ -227,14 +249,10 @@ export function createAgentSessionRewindHook(
         const returned =
           (outcome.kind === 'done' || reason === 'outcome-unknown') &&
           returnTargetToComposer(captured, itemId)
-        if (!active.current || !isCurrent() || latest.current.sessionId !== captured.sessionId) {
-          return
-        }
-        if (returned) {
-          latest.current.onMessageReturned?.()
-        }
         const reset = latest.current.state.epoch !== expectedEpoch
-        if (outcome.kind === 'done') {
+        // Awaiting the reset is the conversation's, set even if this view was released meanwhile, so its successor
+        // still refuses sends into the conversation being replaced.
+        if (outcome.kind === 'done' && latest.current.sessionId === captured.sessionId) {
           const caughtUp =
             reset ||
             (outcome.value.sequence !== undefined &&
@@ -252,6 +270,14 @@ export function createAgentSessionRewindHook(
                     : {})
                 }
           )
+        }
+        if (!active.current || !isCurrent() || latest.current.sessionId !== captured.sessionId) {
+          return
+        }
+        if (returned) {
+          latest.current.onMessageReturned?.()
+        }
+        if (outcome.kind === 'done') {
           return
         }
         if (outcome.kind === 'dropped') {
@@ -283,8 +309,14 @@ export function createAgentSessionRewindHook(
       return !blockedRef.current
     }, [])
     const offered = nativeChatRewindOffered(input.support)
-    const floor = agentSessionRewindContextFloor(input.state, input.contextFloor)
-    const { items, submissions } = input.state
+    // Targets and the floor read no reply text, so they hold while a reply streams.
+    const items = rowsBesideStreamedText(input.state.items)
+    const { submissions, epoch } = input.state
+    const { contextFloor } = input
+    const floor = useMemo(
+      () => agentSessionRewindContextFloor({ items, epoch }, contextFloor),
+      [items, epoch, contextFloor]
+    )
     // Streaming rebuilds items per chunk; keep the set while its ids hold so row actions don't redraw.
     const heldTargets = useRef<ReadonlySet<string>>(new Set())
     const eligibleItemIds = useMemo(() => {

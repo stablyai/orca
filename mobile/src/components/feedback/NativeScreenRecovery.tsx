@@ -4,12 +4,11 @@ import { useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router'
 import { discardInitialLaunchIntent } from '../../navigation/initial-launch-intent'
 import { recordNativeRenderError } from '../../diagnostics/native-render-log'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 
 export function NativeScreenRecovery({ error, retry }: ErrorBoundaryProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const route = useRef(useSegments().join('/'))
@@ -46,7 +45,7 @@ export function NativeScreenRecovery({ error, retry }: ErrorBoundaryProps) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     justifyContent: 'center',

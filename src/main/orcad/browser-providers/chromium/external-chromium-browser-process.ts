@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { RuntimeBrowserCommandHost } from '../../../runtime/browser/commands/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../../../runtime/browser/commands/browser-commands'
 import { BrowserError } from '../../../browser/browser-error'
@@ -20,21 +21,22 @@ import {
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
 import { withExternalChromiumPageCdp } from './external-chromium-page-cdp'
-import { deleteCookieByName } from '../../../browser/cookies/browser-cookie-delete-by-name'
 import { runExternalChromiumPageInput, type PageInputSession } from './external-chromium-page-input'
 import { agentBrowserSnapshotArgs } from '../../../browser/agent-browser/protocol/agent-browser-snapshot-arguments'
 import { Snapshot } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import { ExpectedPageUrlGuard } from '../../../browser/cdp/input/browser-expected-page-url'
 
-const AgentBrowserCurrentUrl = z.object({ url: z.string() })
+const AgentBrowserCurrentUrl = lazyZodSchema(() => z.object({ url: z.string() }))
 
-const AgentBrowserSnapshot = z.object({
-  refs: z
-    .record(z.string(), z.object({ name: z.string().optional(), role: z.string().optional() }))
-    .optional(),
-  // An object for --delta/--full: agent-browser's full, unchanged or delta answer.
-  snapshot: z.union([z.string(), z.looseObject({ kind: z.string() })]).optional()
-})
+const AgentBrowserSnapshot = lazyZodSchema(() =>
+  z.object({
+    refs: z
+      .record(z.string(), z.object({ name: z.string().optional(), role: z.string().optional() }))
+      .optional(),
+    // An object for --delta/--full: agent-browser's full, unchanged or delta answer.
+    snapshot: z.union([z.string(), z.looseObject({ kind: z.string() })]).optional()
+  })
+)
 
 export class ExternalChromiumBrowserProcess {
   private readonly session: ExternalChromiumBrowserSession
@@ -238,12 +240,19 @@ export class ExternalChromiumBrowserProcess {
     }
     if (method === 'browserCookieDelete') {
       // agent-browser's `cookies clear` ignores filters and wipes the whole jar, as on the desktop.
-      return withExternalChromiumPageCdp(session, this.session, page.agentPageId, (send, tab) =>
-        deleteCookieByName(send, String(params.name ?? ''), {
-          domain: typeof params.domain === 'string' ? params.domain : undefined,
-          url: typeof params.url === 'string' ? params.url : undefined,
-          pageUrl: tab.url
-        })
+      return withExternalChromiumPageCdp(
+        session,
+        this.session,
+        page.agentPageId,
+        async (send, tab) => {
+          const { deleteCookieByName } =
+            await import('../../../browser/cookies/browser-cookie-delete-by-name')
+          return deleteCookieByName(send, String(params.name ?? ''), {
+            domain: typeof params.domain === 'string' ? params.domain : undefined,
+            url: typeof params.url === 'string' ? params.url : undefined,
+            pageUrl: tab.url
+          })
+        }
       )
     }
     if (method === 'browserBack' || method === 'browserForward' || method === 'browserReload') {

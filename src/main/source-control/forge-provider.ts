@@ -5,34 +5,10 @@ import type {
   HostedReviewInfo,
   HostedReviewProvider
 } from '../../shared/source-control/hosted-review/hosted-review-contracts'
-import {
-  getAzureDevOpsPullRequest,
-  getAzureDevOpsPullRequestForBranchOrThrow,
-  getAzureDevOpsRepoSlug
-} from '../azure-devops/client'
-import { createAzureDevOpsPullRequest } from '../azure-devops/pull-request-creation'
-import {
-  getBitbucketPullRequest,
-  getBitbucketPullRequestForBranchOrThrow,
-  getBitbucketRepoSlug
-} from '../bitbucket/client'
-import { createBitbucketPullRequest } from '../bitbucket/pull-request-creation'
-import {
-  getGiteaPullRequest,
-  getGiteaPullRequestForBranchOrThrow,
-  getGiteaRepoSlug
-} from '../gitea/client'
-import { createGiteaPullRequest } from '../gitea/pull-request-creation'
 import { createGitHubPullRequest } from '../github/client/create/create-github-pull-request'
 import { getGitHubPRLookupRateLimitBlock } from '../github/client/lookup/pr-lookup-rate-limit'
 import { getPRForBranchOutcome } from '../github/client/lookup/pr-for-branch-outcome'
 import { getRepoSlug } from '../github/client/fetch/repo-slug-upstream'
-import {
-  getMergeRequest,
-  getMergeRequestForBranchOrThrow,
-  getProjectSlug
-} from '../gitlab/merge-requests/merge-request-lookup'
-import { createGitLabMergeRequest } from '../gitlab/merge-requests/merge-request-creation'
 import {
   mapAzureDevOpsReview,
   mapBitbucketReview,
@@ -98,14 +74,18 @@ function hostedReviewExecutionArgs(
 const gitLabForgeProvider = {
   id: 'gitlab',
   supportsReviewCreation: true,
-  resolveRepository: (context) =>
-    getProjectSlug(
+  resolveRepository: async (context) => {
+    const { getProjectSlug } = await import('../gitlab/merge-requests/merge-request-lookup')
+    return getProjectSlug(
       context.repoPath,
       forgeConnectionId(context),
       ...hostedReviewExecutionArgs(context)
-    ),
+    )
+  },
   async getReviewForBranch(input) {
     // Preserve lookup failure as unavailable so callers retain last-known review state.
+    const { getMergeRequestForBranchOrThrow } =
+      await import('../gitlab/merge-requests/merge-request-lookup')
     const mr = await getMergeRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
@@ -116,6 +96,7 @@ const gitLabForgeProvider = {
     return mr ? mapGitLabReview(mr) : null
   },
   async getReviewByNumber(input) {
+    const { getMergeRequest } = await import('../gitlab/merge-requests/merge-request-lookup')
     const mr = await getMergeRequest(
       input.repoPath,
       input.number,
@@ -124,7 +105,10 @@ const gitLabForgeProvider = {
     )
     return mr ? mapGitLabReview(mr) : null
   },
-  createReview: createGitLabMergeRequest
+  createReview: async (...args) =>
+    (await import('../gitlab/merge-requests/merge-request-creation')).createGitLabMergeRequest(
+      ...args
+    )
 } satisfies ForgeProvider
 
 // Upstream errors must not poison caches with authoritative no-review answers.
@@ -207,14 +191,15 @@ const gitHubForgeProvider = {
 const bitbucketForgeProvider = {
   id: 'bitbucket',
   supportsReviewCreation: true,
-  resolveRepository: (context) =>
-    getBitbucketRepoSlug(
+  resolveRepository: async (context) =>
+    (await import('../bitbucket/client')).getBitbucketRepoSlug(
       context.repoPath,
       forgeConnectionId(context),
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
     // Lookup failure is unavailable, never proof no review exists.
+    const { getBitbucketPullRequestForBranchOrThrow } = await import('../bitbucket/client')
     const pr = await getBitbucketPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
@@ -225,6 +210,7 @@ const bitbucketForgeProvider = {
     return pr ? mapBitbucketReview(pr) : null
   },
   async getReviewByNumber(input) {
+    const { getBitbucketPullRequest } = await import('../bitbucket/client')
     const pr = await getBitbucketPullRequest(
       input.repoPath,
       input.number,
@@ -233,30 +219,33 @@ const bitbucketForgeProvider = {
     )
     return pr ? mapBitbucketReview(pr) : null
   },
-  createReview: createBitbucketPullRequest
+  createReview: async (...args) =>
+    (await import('../bitbucket/pull-request-creation')).createBitbucketPullRequest(...args)
 } satisfies ForgeProvider
 
 const azureDevOpsForgeProvider = {
   id: 'azure-devops',
   supportsReviewCreation: true,
-  resolveRepository: (context) =>
-    getAzureDevOpsRepoSlug(
+  resolveRepository: async (context) =>
+    (await import('../azure-devops/client')).getAzureDevOpsRepoSlug(
       context.repoPath,
       forgeConnectionId(context),
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
     // Lookup failure is unavailable, never proof no review exists.
+    const { getAzureDevOpsPullRequestForBranchOrThrow } = await import('../azure-devops/client')
     const pr = await getAzureDevOpsPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
       forgeConnectionId(input),
-      ...hostedReviewExecutionArgs(input)
+      input
     )
     return pr ? mapAzureDevOpsReview(pr) : null
   },
   async getReviewByNumber(input) {
+    const { getAzureDevOpsPullRequest } = await import('../azure-devops/client')
     const pr = await getAzureDevOpsPullRequest(
       input.repoPath,
       input.number,
@@ -265,20 +254,26 @@ const azureDevOpsForgeProvider = {
     )
     return pr ? mapAzureDevOpsReview(pr) : null
   },
-  createReview: createAzureDevOpsPullRequest
+  createReview: async (repoPath, input, executionHostId) =>
+    (await import('../azure-devops/pull-request-creation')).createAzureDevOpsPullRequest(
+      repoPath,
+      input,
+      executionHostId
+    )
 } satisfies ForgeProvider
 
 const giteaForgeProvider = {
   id: 'gitea',
   supportsReviewCreation: true,
-  resolveRepository: (context) =>
-    getGiteaRepoSlug(
+  resolveRepository: async (context) =>
+    (await import('../gitea/client')).getGiteaRepoSlug(
       context.repoPath,
       forgeConnectionId(context),
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
     // Lookup failure is unavailable, never proof no review exists.
+    const { getGiteaPullRequestForBranchOrThrow } = await import('../gitea/client')
     const pr = await getGiteaPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
@@ -289,6 +284,7 @@ const giteaForgeProvider = {
     return pr ? mapGiteaReview(pr) : null
   },
   async getReviewByNumber(input) {
+    const { getGiteaPullRequest } = await import('../gitea/client')
     const pr = await getGiteaPullRequest(
       input.repoPath,
       input.number,
@@ -297,7 +293,12 @@ const giteaForgeProvider = {
     )
     return pr ? mapGiteaReview(pr) : null
   },
-  createReview: createGiteaPullRequest
+  createReview: async (repoPath, input, executionHostId) =>
+    (await import('../gitea/pull-request-creation')).createGiteaPullRequest(
+      repoPath,
+      input,
+      executionHostId
+    )
 } satisfies ForgeProvider
 
 // Preserve precedence when multiple providers can interpret a remote.

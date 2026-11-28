@@ -19,6 +19,7 @@ import { useCsvPendingCell } from './useCsvPendingCell'
 import { CsvPreviewError } from '../csv-preview-error'
 import { formatCsvPreviewError } from '../csv-preview-error-message'
 import { useTranslate } from '../../../../i18n/use-translate'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useCsvTableEditor({
   document,
@@ -80,10 +81,11 @@ export function useCsvTableEditor({
       return null
     }
     const draft = editingRef.current
+    if (draft && draft.source !== document.source) {
+      fail(new CsvPreviewError('edit-conflict'))
+      return null
+    }
     try {
-      if (draft && draft.source !== document.source) {
-        throw new CsvPreviewError('edit-conflict')
-      }
       const cellMutation: CsvTableMutation = {
         kind: 'cells',
         edits: draft
@@ -171,17 +173,22 @@ export function useCsvTableEditor({
       return
     }
     setSaving(true)
-    try {
-      if (!(await onSave(source))) {
-        throw new CsvPreviewError('save-failed')
+    await runWithFinally(
+      async () => {
+        try {
+          if (!(await onSave(source))) {
+            fail(new CsvPreviewError('save-failed'))
+          }
+        } catch (reason) {
+          fail(reason)
+        }
+      },
+      () => {
+        if (mounted.current) {
+          setSaving(false)
+        }
       }
-    } catch (reason) {
-      fail(reason)
-    } finally {
-      if (mounted.current) {
-        setSaving(false)
-      }
-    }
+    )
   }
   const clear = (): void => pasteText('')
   const interaction: CsvGridInteraction | undefined = onContentChange

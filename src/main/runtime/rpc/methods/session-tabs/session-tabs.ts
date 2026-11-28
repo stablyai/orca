@@ -4,6 +4,7 @@ import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runti
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { WorktreeTabSelector } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
+import { SessionTabsSubscribeAllParams } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-params'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,
@@ -44,7 +45,8 @@ export const SESSION_TAB_METHODS = [
             includeAgentSenders: clientKind !== 'mobile'
           }),
           clientKind,
-          clientCapabilities
+          clientCapabilities,
+          runtime
         ),
         clientKind
       )
@@ -142,7 +144,7 @@ export const SESSION_TAB_METHODS = [
       ) =>
         projectSessionTabUnreadForClient(
           runtime,
-          projectSessionTabsForClient(snapshot, clientKind, capabilities),
+          projectSessionTabsForClient(snapshot, clientKind, capabilities, runtime),
           clientKind
         )
       let sentUnreadMarks = ''
@@ -279,8 +281,8 @@ export const SESSION_TAB_METHODS = [
   defineStreamingMethod({
     name: 'session.tabs.subscribeAll',
     permission: 'workspace',
-    params: null,
-    handler: (_params, context, emit) => subscribeSessionTabsInventory(context, emit)
+    params: SessionTabsSubscribeAllParams,
+    handler: (params, context, emit) => subscribeSessionTabsInventory(context, emit, params?.scope)
   }),
   SESSION_TABS_UNSUBSCRIBE_ALL_METHOD,
   ...SESSION_TAB_MARKDOWN_METHODS

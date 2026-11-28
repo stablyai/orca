@@ -3,10 +3,10 @@
 // Sweep idle ~275MB bundles across worktrees: dev runner prunes only its own tree when it has multiple bundles. pnpm dev rebuilds these outputs on demand.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import {
-  DEV_BUNDLE_MARKER_FILENAME,
+  collectDevBundles,
   getDevBundleProcessTable,
   selectStaleDevBundleDirs
 } from '../development/electron-bundle-cache/dev-electron-bundle-cache.mjs'
@@ -61,24 +61,6 @@ function measure(targetPath) {
   return total
 }
 
-export function collectDevBundles(worktree) {
-  const root = path.join(worktree, 'out', 'electron-dev')
-  try {
-    return readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => {
-        const dir = path.join(root, entry.name)
-        return {
-          dir,
-          hasMarker: existsSync(path.join(dir, DEV_BUNDLE_MARKER_FILENAME)),
-          mtimeMs: statSync(dir, { throwIfNoEntry: false })?.mtimeMs ?? 0
-        }
-      })
-  } catch {
-    return []
-  }
-}
-
 function main() {
   if (!Number.isFinite(minAgeDays) || minAgeDays < 0) {
     throw new Error('--min-age-days requires a non-negative number')
@@ -100,7 +82,7 @@ function main() {
   const bundles = listWorktrees(repoRoot)
     .filter((worktree) => canonicalWorktreePath(worktree) !== excludeWorktree)
     .flatMap((worktree) => collectDevBundles(worktree))
-  // No launch follows this sweep: currentDir is null so only live process/in-flight build protects a bundle.
+  // No launch follows this sweep: currentDir is null so only a live process or a recent build/launch protects a bundle.
   const stale = selectStaleDevBundleDirs({
     bundles,
     currentDir: null,
@@ -158,7 +140,4 @@ function main() {
   )
 }
 
-// Guarded so importing this module for tests does not sweep the whole repository.
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
-  main()
-}
+main()

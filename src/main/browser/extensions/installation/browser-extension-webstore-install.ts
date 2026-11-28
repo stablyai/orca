@@ -28,6 +28,10 @@ import {
 } from '../web-store/browser-extension-held-updates'
 import { notifyBrowserExtensionListChanged } from './browser-extension-list-changes'
 import { withExtensionEnabled } from '../profile-sessions/browser-extension-profile-enablement'
+import {
+  browserExtensionSourceProfileId,
+  loadBrowserExtensionWhereProfileRuns
+} from '../profile-sessions/browser-extension-route-profiles'
 import { reloadBrowserExtensionWhereEnabled } from '../profile-sessions/browser-extension-profile-reload'
 import {
   loadBrowserExtensionIntoProfile,
@@ -70,7 +74,7 @@ function parseManifest(data: Uint8Array): Record<string, unknown> {
 
 /** Unpacks a verified CRX into a staging folder and reads what the prompt needs. */
 export async function stageWebStoreExtension(crx: VerifiedCrx): Promise<StagedWebStoreExtension> {
-  const entries = readBrowserExtensionArchive(crx.archive)
+  const entries = await readBrowserExtensionArchive(crx.archive)
   const manifestEntry = entries.find((entry) => entry.path === 'manifest.json')
   if (!manifestEntry) {
     throw new Error('Extension package has no manifest')
@@ -163,14 +167,24 @@ export async function commitStagedWebStoreExtension(
       await reloadBrowserExtensionWhereEnabled(record)
     }
     if (enableInProfileId) {
+      // An install from an SSH or This-device page turns it on in that page's local profile.
+      const sourceProfileId = browserExtensionSourceProfileId(enableInProfileId)
       await startBrowserExtensionsForSettings(enableInProfileId)
       await loadBrowserExtensionIntoProfile(enableInProfileId, record)
+      if (sourceProfileId !== enableInProfileId) {
+        // Why start it: its attach settles an earlier removal, which would otherwise undo this enable.
+        await startBrowserExtensionsForSettings(sourceProfileId)
+        await loadBrowserExtensionIntoProfile(sourceProfileId, record)
+      }
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-        withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
+        withExtensionEnabled(byProfile, sourceProfileId, extensionId, true)
       )
+      await loadBrowserExtensionWhereProfileRuns(sourceProfileId, record)
     }
   } catch (error) {
     if (replaced) {
+      // Why everywhere: a page that loaded the new copy before the failure may not have it on.
+      await unloadBrowserExtensionEverywhere(extensionId)
       store.save(replaced)
       await reloadBrowserExtensionWhereEnabled(replaced).catch(() => {})
       forgetPreparedBrowserExtensionDirectory(target)

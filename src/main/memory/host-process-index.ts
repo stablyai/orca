@@ -17,13 +17,17 @@ const PS_MAX_BUFFER = 10 * 1024 * 1024
 
 /** One whole-host sweep with per-process memory; spawns ps or PowerShell, so callers bound the rate. */
 export async function enumerateHostProcesses(
-  options: { trackCpu?: boolean; withNames?: boolean } = {}
+  options: { trackCpu?: boolean; withNames?: boolean; withStartTimes?: boolean } = {}
 ): Promise<ProcIndex> {
   const platform = os.platform()
   const withNames = options.withNames ?? false
   const [rows, footprints] = await Promise.all([
     platform === 'win32'
-      ? enumerateWindowsProcessResources({ trackCpu: options.trackCpu ?? true, withNames })
+      ? enumerateWindowsProcessResources({
+          trackCpu: options.trackCpu ?? true,
+          withNames,
+          withStartTimes: options.withStartTimes ?? false
+        })
       : enumerateUnix(withNames ? PS_NAME_COLUMN[platform] : undefined),
     platform === 'darwin' ? readDarwinProcessFootprints() : Promise.resolve(null)
   ])

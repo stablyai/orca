@@ -1,9 +1,7 @@
-import type { WebContents } from 'electron'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
 } from '../../../../shared/browser/screencast/browser-screencast-protocol'
-import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import type {
   BrowserScreencastOptions,
   PendingScreencastFrame
@@ -12,7 +10,8 @@ import type {
 const BACKPRESSURE_RETRY_MS = 50
 
 type BrowserScreencastFramePacerDeps = {
-  dbg: WebContents['debugger']
+  /** Sends on the lane's CDP session: acks pace only the screencast they belong to. */
+  sendCommand: (method: string, params: Record<string, unknown>) => Promise<unknown>
   options: BrowserScreencastOptions
   isClosed: () => boolean
   isStopping: () => boolean
@@ -29,7 +28,7 @@ export type BrowserScreencastFramePacer = {
 export function createBrowserScreencastFramePacer(
   deps: BrowserScreencastFramePacerDeps
 ): BrowserScreencastFramePacer {
-  const { dbg, options, isClosed, isStopping, readZoomFactor } = deps
+  const { sendCommand, options, isClosed, isStopping, readZoomFactor } = deps
   let seq = 0
   let lastFrameSentAt = 0
   let pendingFrame: PendingScreencastFrame | null = null
@@ -40,7 +39,7 @@ export function createBrowserScreencastFramePacer(
       return
     }
     // Delay ACKs for throttled frames to limit Chromium encoding work.
-    void sendDebuggerCommand(dbg, 'Page.screencastFrameAck', { sessionId }).catch(() => {})
+    void sendCommand('Page.screencastFrameAck', { sessionId }).catch(() => {})
   }
 
   const clearPendingFrameTimer = (ackPending = false): void => {

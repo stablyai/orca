@@ -17,11 +17,12 @@ import {
   isUsableSidePanel,
   setSidePanelOptions
 } from './browser-extension-side-panel-options'
+import { browserExtensionSidePanelWorkspaceForPage } from './browser-extension-side-panel-workspace'
 
-/** The browser workspace a main-window tab sits in; popouts and unregistered pages have none. */
+/** The browser workspace a main-window tab shows panels in; popouts and unregistered pages have none. */
 export function resolveSidePanelWorkspace(tabId: number): string | null {
   const browserPageId = browserManager.getTabIdForWebContentsId(tabId)
-  return browserPageId ? browserManager.getWorkspaceIdForPage(browserPageId) : null
+  return browserPageId ? browserExtensionSidePanelWorkspaceForPage(browserPageId) : null
 }
 
 /**

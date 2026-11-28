@@ -19,6 +19,7 @@ import {
   type BotItemWriteOutcome
 } from './bot-items-input'
 import { eventRecordOf } from './bot-items-rows'
+import { skippedQuestionsOf } from './bot-item-waiting-ask-keep'
 import type { BotItemEventRecord, BotItemMail, BotItemRecord } from './bot-items-schema'
 
 const OWED_MAIL_PAGE = 50
@@ -56,7 +57,9 @@ export class BotItemsOwner extends BotItemsWrites {
     questionEventId?: number,
     /** A comment of its own: it answers no question, so a Needs you item keeps waiting on it. */
     plain = false,
-    skills: readonly BotItemCommentSkill[] = []
+    skills: readonly BotItemCommentSkill[] = [],
+    /** The answered ask's lines, by index, this answer skips: they close unanswered. */
+    skipped: readonly number[] = []
   ): BotItemWriteOutcome {
     assertBotItemText('text', commentText)
     if (!commentText.trim() && images.length === 0) {
@@ -72,15 +75,32 @@ export class BotItemsOwner extends BotItemsWrites {
         item.status === 'needs_you' && item.questionEvent !== null
           ? this.botQuestion(item.questionEvent)
           : null
-      if (question && questionEventId !== undefined && question.id !== questionEventId) {
+      // The latest ask waits even when a later Needs you comment asks nothing, or an answer moved the
+      // item on with a line still open: replies go to it.
+      const waitingAsk = isOpenBotItemStatus(item.status) ? this.waitingAsk(item) : null
+      const asking = question !== null || waitingAsk !== null
+      if (
+        asking &&
+        questionEventId !== undefined &&
+        question?.id !== questionEventId &&
+        waitingAsk !== questionEventId
+      ) {
         throw new BotItemError(
           'item_changed',
           `Item ${item.number} has a new question. Read it, then reply.`
         )
       }
-      // While the bot asks, a comment not sent as plain is the answer: it names the question, and the
-      // move it makes says so. A plain one leaves the item waiting on its question.
-      const answering = question && !plain ? question : null
+      // While the bot asks, a comment not sent as plain is the answer: it names the question (a quick
+      // reply's own, else the ask waiting), and the move it makes says so. A plain one leaves the item
+      // waiting on its question.
+      const answeringId =
+        asking && !plain ? (questionEventId ?? waitingAsk ?? question?.id ?? null) : null
+      const answering =
+        answeringId === null
+          ? null
+          : answeringId === question?.id
+            ? question
+            : this.botQuestion(answeringId)
       const answers = answering ? botItemEventId(answering.id) : undefined
       // A question a conversation's turn asked is answered there too (bots-items-mail.ts reads it).
       const askedIn = answering?.data.askedInConversation
@@ -94,7 +114,14 @@ export class BotItemsOwner extends BotItemsWrites {
         answers,
         plain,
         skills,
-        typeof askedIn === 'string' ? askedIn : undefined
+        typeof askedIn === 'string' ? askedIn : undefined,
+        // Only an answer naming its ask skips: a delayed one never closes a newer ask.
+        answering && answers && questionEventId !== undefined && skipped.length > 0
+          ? skippedQuestionsOf(this.db, uid, answering.id, skipped, {
+              text: commentText,
+              answers
+            })
+          : []
       )
       this.endSnooze(uid, actor, now)
       // A reply hands the item back to the bot.
@@ -114,7 +141,7 @@ export class BotItemsOwner extends BotItemsWrites {
     return event?.actor.kind === 'bot' ? event : null
   }
 
-  private ownerCommentByRequest(uid: string, requestId: string): number | null {
+  ownerCommentByRequest(uid: string, requestId: string): number | null {
     const row: unknown = this.db
       .prepare(
         `SELECT id FROM item_events WHERE item_uid = ? AND kind = 'commented'
@@ -136,7 +163,8 @@ export class BotItemsOwner extends BotItemsWrites {
     answers?: string,
     plain = false,
     skills: readonly BotItemCommentSkill[] = [],
-    askedInConversation?: string
+    askedInConversation?: string,
+    skipped: readonly string[] = []
   ): number {
     const data = {
       text: commentText,
@@ -145,7 +173,8 @@ export class BotItemsOwner extends BotItemsWrites {
       ...(answers === undefined ? {} : { answers }),
       ...(plain ? { plain: true } : {}),
       ...(skills.length > 0 ? { skills } : {}),
-      ...(askedInConversation === undefined ? {} : { askedInConversation })
+      ...(askedInConversation === undefined ? {} : { askedInConversation }),
+      ...(skipped.length > 0 ? { skipped } : {})
     }
     return this.appendEvent(item.uid, 'commented', actor, data, true, now)
   }
@@ -158,9 +187,6 @@ export class BotItemsOwner extends BotItemsWrites {
   ): { items: BotItemOwnerOutcome[] } {
     assertBotItemText('note', input.reason)
     assertBotItemText('text', input.comment)
-    if (input.to === 'canceled' && !input.reason?.trim()) {
-      throw new BotItemError('invalid_argument', 'Canceling needs a reason.')
-    }
     const wait =
       input.to === 'waiting'
         ? botItemWaitText(input.note, {

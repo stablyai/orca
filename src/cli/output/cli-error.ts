@@ -25,7 +25,7 @@ function staleHandleServerHint(): string {
 function contextRecovery(error: unknown, context: CliErrorContext): ContextRecovery | undefined {
   const code = cliErrorCode(error)
   if (code === 'selector_not_found' && context.worktreeSelector) {
-    return worktreeSelectorRecovery(context.worktreeSelector)
+    return worktreeSelectorRecovery(context.worktreeSelector, errorData(error))
   }
   // No selector can name one of two folders sharing an id; only the error's repair step applies.
   if (code === 'selector_ambiguous' && !isDuplicateFolderIdData(errorData(error))) {
@@ -140,7 +140,8 @@ function formatRuntimeUnavailableError(message: string, error: RuntimeClientErro
   if (error instanceof RuntimeRpcFailureError) {
     return `${message}\nOrca is running but not ready for this yet. Wait a few seconds and retry; do not run '${command} open'. If it keeps failing and '${command} status --json' shows app.desktopWindowStatus "openable", Orca's window is closed: ask the user to reopen it.`
   }
-  return `${message}\nOrca is not running. Run '${command} open' first.`
+  // Agents read this; a quit is not a crash, and the CLI works again once Orca is back.
+  return `${message}\nOrca isn't running right now. Your terminal session is still running. Check '${command} status --json' and retry this command later. Run '${command} open' only if the user asks.`
 }
 
 // Streaming commands print one JSON object per line with --json, so their failure is one line too.

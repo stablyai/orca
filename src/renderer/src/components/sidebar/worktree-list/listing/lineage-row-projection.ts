@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { useMemo } from 'react'
+import { createStringListFingerprinter } from '../../../../../../shared/text/string-fingerprint'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRenderRowKey, type RenderRow } from './render-row'
 import {
@@ -11,8 +12,8 @@ import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getFolderWorkspaceRowGeometry,
-  getWorktreeCardContentIndent,
-  getWorktreeCardSurfaceInset,
+  getWorktreeCardContentIndentDirect,
+  getWorktreeCardSurfaceInsetDirect,
   FLUSH_CARD_CONTENT_PULLBACK,
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   FLUSH_CARD_MIN_CONTENT_INSET,
@@ -62,17 +63,20 @@ export function buildLineageRowProjection(
   statusLane = newCardStyle
 ) {
   const rowIndexByKey = new Map<string, number>()
-  const rowKeys: string[] = []
+  const restoreFingerprinter = createStringListFingerprinter()
   const frames: LineageRowFrame[] = []
-  const occurrencesByIdentity = new Map<string, number[]>()
   const stack: number[] = []
+  const isGrouped = groupBy !== 'none'
+  let hasNestedLineage = false
+  let hasCollapsedLineage = false
   const close = (next: number) => {
     const index = stack.pop()!
     frames[index].end = next - 1
   }
-  rows.forEach((row, index) => {
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
     const key = getRenderRowKey(row)
-    rowKeys.push(key)
+    restoreFingerprinter.push(key)
     rowIndexByKey.set(key, index)
     const isWorkspace = row.type === 'item' || row.type === 'folder-workspace'
     while (stack.length > 0) {
@@ -100,35 +104,29 @@ export function buildLineageRowProjection(
       guides: null
     }
     if (isWorkspace) {
-      const geometry =
-        row.type === 'folder-workspace'
-          ? getFolderWorkspaceRowGeometry({
-              experimentalNewWorktreeCardStyle: newCardStyle,
-              isFolderBackedWorkspaceChild:
-                groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
-              isGrouped: groupBy !== 'none',
-              groupDepth: row.groupDepth,
-              lineageDepth: row.depth
-            })
-          : {
-              surfaceInset: getWorktreeCardSurfaceInset({
-                isGrouped: groupBy !== 'none',
-                groupDepth: row.groupDepth
-              }),
-              cardContentIndent:
-                getWorktreeCardContentIndent({
-                  isGrouped: groupBy !== 'none',
-                  groupDepth: row.groupDepth,
-                  lineageDepth: row.depth
-                }) -
-                getWorktreeCardSurfaceInset({
-                  isGrouped: groupBy !== 'none',
-                  groupDepth: row.groupDepth
-                })
-            }
-      frame.left = geometry.surfaceInset
-      frame.contentIndent = Math.max(0, geometry.cardContentIndent)
+      if (row.type === 'folder-workspace') {
+        const geometry = getFolderWorkspaceRowGeometry({
+          experimentalNewWorktreeCardStyle: newCardStyle,
+          isFolderBackedWorkspaceChild:
+            groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
+          isGrouped,
+          groupDepth: row.groupDepth,
+          lineageDepth: row.depth
+        })
+        frame.left = geometry.surfaceInset
+        frame.contentIndent = Math.max(0, geometry.cardContentIndent)
+      } else {
+        const surfaceInset = getWorktreeCardSurfaceInsetDirect(isGrouped, row.groupDepth)
+        const contentIndent =
+          getWorktreeCardContentIndentDirect(isGrouped, row.groupDepth, row.depth) - surfaceInset
+        frame.left = surfaceInset
+        frame.contentIndent = Math.max(0, contentIndent)
+      }
+      if (row.lineageCollapsed === true) {
+        hasCollapsedLineage = true
+      }
       if (parent !== null) {
+        hasNestedLineage = true
         const ancestor = frames[parent]
         const padding = Math.max(
           FLUSH_CARD_MIN_CONTENT_INSET,
@@ -146,78 +144,154 @@ export function buildLineageRowProjection(
         frame.contentIndent = 0
         frame.before = parent === index - 1 ? (newCardStyle ? 6 : 12) : 4
       }
-      const identity =
-        row.type === 'item'
-          ? getWorktreeHostIdentity(row.worktree)
-          : getFolderWorkspaceHostIdentity(row.folderWorkspace)
-      const occurrences = occurrencesByIdentity.get(identity)
-      if (occurrences) {
-        occurrences.push(index)
-      } else {
-        occurrencesByIdentity.set(identity, [index])
-      }
     }
     frames.push(frame)
     if (isWorkspace) {
       stack.push(index)
     }
-  })
+  }
   while (stack.length > 0) {
     close(rows.length)
   }
-  frames.forEach((frame, index) => {
-    if (frame.end > index) {
-      frames[frame.end].closing += 7
-    }
-    const next = frames[index + 1]
-    frame.after = next?.root === frame.root ? 0 : 6
-  })
-  const guideOffset = statusLane ? NEW_STYLE_GUIDE_OFFSET : LEGACY_GUIDE_OFFSET
-  const guideX = (index: number) => frames[index].left - guideOffset
-  frames.forEach((frame, index) => {
-    const hasChildren = frame.end > index && frames[index + 1]?.parent === index
-    if (frame.parent === null && !hasChildren) {
-      return
-    }
-    let rails: LineageRail | null = null
-    let branch: LineageRowGuides['branch'] = null
-    const parent = frame.parent
-    if (parent !== null) {
-      branch = {
-        x: guideX(index),
-        to: frame.left + BRANCH_END_INSET,
-        last: frame.end === frames[parent].end
+  if (hasNestedLineage) {
+    for (let index = 0; index < frames.length; index += 1) {
+      const frame = frames[index]
+      if (frame.end > index) {
+        frames[frame.end].closing += 7
       }
-      // Why: this runs for every row before virtualization, so extend the parent's shared rail list
-      // in O(1) instead of walking or copying ancestors; only visible rows walk it to paint.
-      const parentRails = frames[parent].guides!.rails
-      const grandparent = frames[parent].parent
-      rails =
-        grandparent !== null && frames[parent].end < frames[grandparent].end
-          ? { x: guideX(parent), next: parentRails }
-          : parentRails
+      const next = frames[index + 1]
+      frame.after = next?.root === frame.root ? 0 : 6
     }
-    frame.guides = {
-      rails,
-      branch,
-      stem: hasChildren ? guideX(index + 1) : null
+    const guideOffset = statusLane ? NEW_STYLE_GUIDE_OFFSET : LEGACY_GUIDE_OFFSET
+    const guideX = (index: number) => frames[index].left - guideOffset
+    for (let index = 0; index < frames.length; index += 1) {
+      const frame = frames[index]
+      const hasChildren = frame.end > index && frames[index + 1]?.parent === index
+      if (frame.parent === null && !hasChildren) {
+        continue
+      }
+      let rails: LineageRail | null = null
+      let branch: LineageRowGuides['branch'] = null
+      const parent = frame.parent
+      if (parent !== null) {
+        branch = {
+          x: guideX(index),
+          to: frame.left + BRANCH_END_INSET,
+          last: frame.end === frames[parent].end
+        }
+        // Why: this runs for every row before virtualization, so extend the parent's shared rail list
+        // in O(1) instead of walking or copying ancestors; only visible rows walk it to paint.
+        const parentRails = frames[parent].guides!.rails
+        const grandparent = frames[parent].parent
+        rails =
+          grandparent !== null && frames[parent].end < frames[grandparent].end
+            ? { x: guideX(parent), next: parentRails }
+            : parentRails
+      }
+      frame.guides = {
+        rails,
+        branch,
+        stem: hasChildren ? guideX(index + 1) : null
+      }
     }
-  })
-  return { frames, occurrencesByIdentity, rowIndexByKey, restoreSignal: JSON.stringify(rowKeys) }
+  }
+  let cachedOccurrencesByIdentity: Map<string, number[]> | null = null
+  const hasAnyLineageFamily = hasNestedLineage || hasCollapsedLineage
+  return {
+    frames,
+    hasAnyLineageFamily,
+    get occurrencesByIdentity(): Map<string, number[]> {
+      if (!cachedOccurrencesByIdentity) {
+        cachedOccurrencesByIdentity = buildOccurrencesByIdentity(rows)
+      }
+      return cachedOccurrencesByIdentity
+    },
+    rowIndexByKey,
+    restoreSignal: restoreFingerprinter.digest()
+  }
 }
+
+function buildOccurrencesByIdentity(rows: readonly RenderRow[]): Map<string, number[]> {
+  const occurrencesByIdentity = new Map<string, number[]>()
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (row.type !== 'item' && row.type !== 'folder-workspace') {
+      continue
+    }
+    const identity =
+      row.type === 'item'
+        ? getWorktreeHostIdentity(row.worktree)
+        : getFolderWorkspaceHostIdentity(row.folderWorkspace)
+    const occurrences = occurrencesByIdentity.get(identity)
+    if (occurrences) {
+      occurrences.push(index)
+    } else {
+      occurrencesByIdentity.set(identity, [index])
+    }
+  }
+  return occurrencesByIdentity
+}
+
+const EMPTY_SUBTREE_RANGES: readonly { start: number; end: number }[] = []
+const EMPTY_ACTIVE_FAMILY_ROOTS: ReadonlySet<number> = new Set()
 
 export function useDraggedSubtreeRanges(
   projection: LineageRowProjection,
   identity: string | null
 ): readonly { start: number; end: number }[] {
-  return useMemo(
-    () =>
-      (identity ? (projection.occurrencesByIdentity.get(identity) ?? []) : []).map((start) => ({
-        start,
-        end: projection.frames[start].end
-      })),
-    [projection, identity]
-  )
+  return useMemo(() => {
+    if (!identity) {
+      return EMPTY_SUBTREE_RANGES
+    }
+    const occurrences = projection.occurrencesByIdentity.get(identity)
+    if (!occurrences || occurrences.length === 0) {
+      return EMPTY_SUBTREE_RANGES
+    }
+    return occurrences.map((start) => ({
+      start,
+      end: projection.frames[start].end
+    }))
+  }, [projection, identity])
+}
+
+function hasHiddenLineageChildren(row: RenderRow): boolean {
+  return (row.type === 'item' || row.type === 'folder-workspace') && row.lineageCollapsed === true
+}
+
+export function getActiveFamilyRoots(
+  rows: readonly RenderRow[],
+  projection: LineageRowProjection,
+  activeWorktreeId: string | null,
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+): ReadonlySet<number> {
+  if (!activeWorktreeId || !projection.hasAnyLineageFamily) {
+    return EMPTY_ACTIVE_FAMILY_ROOTS
+  }
+  const roots = new Set<number>()
+  const addRoots = (occurrences: readonly number[]) => {
+    for (const index of occurrences) {
+      const root = projection.frames[index].root
+      // A collapsed family paints its root too: the band keeps the card's own background from
+      // handing back and forth when the children are shown or hidden.
+      if (projection.frames[root].end > root || hasHiddenLineageChildren(rows[root])) {
+        roots.add(root)
+      }
+    }
+  }
+  if (activeWorkspaceExecutionHostId) {
+    addRoots(
+      projection.occurrencesByIdentity.get(
+        composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
+      ) ?? []
+    )
+  } else {
+    for (const [identity, occurrences] of projection.occurrencesByIdentity) {
+      if (getWorktreeIdFromHostIdentity(identity) === activeWorktreeId) {
+        addRoots(occurrences)
+      }
+    }
+  }
+  return roots
 }
 
 export function useLineageRowProjection(args: {
@@ -237,32 +311,9 @@ export function useLineageRowProjection(args: {
     () => rows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [rows]
   )
-  const activeFamilyRoots = useMemo(() => {
-    const roots = new Set<number>()
-    if (activeWorktreeId) {
-      const addRoots = (occurrences: readonly number[]) => {
-        for (const index of occurrences) {
-          const root = projection.frames[index].root
-          if (projection.frames[root].end > root) {
-            roots.add(root)
-          }
-        }
-      }
-      if (activeWorkspaceExecutionHostId) {
-        addRoots(
-          projection.occurrencesByIdentity.get(
-            composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
-          ) ?? []
-        )
-      } else {
-        for (const [identity, occurrences] of projection.occurrencesByIdentity) {
-          if (getWorktreeIdFromHostIdentity(identity) === activeWorktreeId) {
-            addRoots(occurrences)
-          }
-        }
-      }
-    }
-    return roots
-  }, [activeWorktreeId, activeWorkspaceExecutionHostId, projection])
+  const activeFamilyRoots = useMemo(
+    () => getActiveFamilyRoots(rows, projection, activeWorktreeId, activeWorkspaceExecutionHostId),
+    [activeWorktreeId, activeWorkspaceExecutionHostId, projection, rows]
+  )
   return { projection, activeFamilyRoots, firstHeaderIndex }
 }

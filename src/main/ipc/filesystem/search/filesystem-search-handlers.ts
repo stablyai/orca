@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import {
   isFileNameFilterQueryTooLarge,
@@ -6,13 +7,14 @@ import {
   splitFileNameFilterTokens
 } from '../../../../shared/file-listing/file-name-filter-tokens'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
-import { registerFilesystemContentSearchHandler } from './filesystem-content-search-handler'
 
-export function registerFilesystemSearchHandlers(context: FilesystemHandlerContext): void {
-  registerFilesystemContentSearchHandler(context)
+export function registerFilesystemSearchHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
   const { listFilesCancellations } = context
-  ipcMain.handle(
+  ipc.handle(
     'fs:listFiles',
     async (
       event,
@@ -59,7 +61,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
     }
   )
 
-  ipcMain.handle('fs:cancelListFiles', (event, args: { requestToken: string }): void => {
+  ipc.handle('fs:cancelListFiles', (event, args: { requestToken: string }): void => {
     listFilesCancellations.cancel(event, args.requestToken)
   })
 }

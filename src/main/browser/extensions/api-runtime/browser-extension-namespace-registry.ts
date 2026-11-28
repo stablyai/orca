@@ -7,7 +7,7 @@ import type { ZodType, output } from 'zod'
 export type BrowserExtensionCaller = {
   extension: Electron.Extension
   session: Electron.Session
-  /** Local browser profile whose session loaded the extension. */
+  /** Extension profile whose session loaded the extension: a local profile, or an SSH or This-device page's. */
   browserProfileId: string
   /** Set for extension pages (tabs, popouts, popups). */
   webContents?: Electron.WebContents
@@ -58,6 +58,30 @@ export function defineBrowserExtensionMethod<Params extends ZodType<unknown[]>>(
 }
 
 const namespaces = new Map<string, BrowserExtensionNamespace>()
+let namespaceLoader: (() => Promise<void>) | null = null
+let namespaceLoadPromise: Promise<void> | null = null
+let namespacesLoaded = false
+
+/** Registers the lazy loader invoked on the first extension API call when namespaces are not loaded yet. */
+export function setBrowserExtensionNamespaceLoader(loader: () => Promise<void>): void {
+  namespaceLoader = loader
+}
+
+export async function ensureBrowserExtensionNamespacesRegistered(): Promise<void> {
+  if (namespacesLoaded || !namespaceLoader) {
+    return
+  }
+  namespaceLoadPromise ??= namespaceLoader().then(
+    () => {
+      namespacesLoaded = true
+    },
+    (error: unknown) => {
+      namespaceLoadPromise = null
+      throw error
+    }
+  )
+  await namespaceLoadPromise
+}
 
 /** Wave 2+ adds an API by registering here and listing it in the preload's API surface. */
 export function registerBrowserExtensionNamespace(

@@ -45,7 +45,7 @@ export function stopBotGroup(
           }
         : { members })
     })
-    groups.changed()
+    groups.changed(group.id)
     const host = await requireStructuredHost(groups.runtime)
     return Promise.all(
       previous.members.filter(stopping).map(({ sessionId }) =>

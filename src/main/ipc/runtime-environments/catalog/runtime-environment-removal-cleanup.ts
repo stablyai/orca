@@ -1,10 +1,10 @@
 import { desktopChatCreationHistory } from '../../../runtime/client/navigation/desktop-chat-creation-history'
-import '../../../media/media-preview-protocol'
 import { revokeRemoteFilePreviewGrants } from '../../../media/preview-grant-registry'
 import { clearBrowserRoutePartitionStorageForEnvironment } from '../../../browser/routing/partitions/browser-route-partition-storage-runtime'
 import { retireBrowserRoutePartitionStorageForEnvironment } from '../../../browser/routing/partitions/browser-route-partition-storage-retirement'
 import { clearRuntimeEnvironmentCapabilityEvidence } from '../connections/runtime-environment-capability-evidence'
 import { clearRuntimeEnvironmentManualDisconnect } from '../connectivity/runtime-environment-manual-disconnect'
+import { forgetPairedPortForwards } from '../../../ports/paired-forwards/paired-port-forwards'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
@@ -32,6 +32,8 @@ export function retireRemovedRuntimeEnvironment(
   }
   clearRuntimeEnvironmentCapabilityEvidence(environmentId)
   revokeRemoteFilePreviewGrants(environmentId)
+  // Its forwards stop listening here before its pairing credential goes away, and never come back.
+  void forgetPairedPortForwards(environmentId)
   // Retained session partitions make listings advertise the removed server as a known host.
   store.removeWorkspaceSessionHost(toRuntimeExecutionHostId(environmentId))
   forgetRemoteLayoutSnapshot(store, environmentId)

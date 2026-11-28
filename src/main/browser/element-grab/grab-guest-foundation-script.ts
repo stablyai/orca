@@ -1,16 +1,7 @@
 export const GRAB_GUEST_FOUNDATION_SCRIPT = `(function() {
   'use strict';
 
-  // Replace page-supplied grab state so extraction uses the newly installed implementation.
-  if (window.__orcaGrab) {
-    try {
-      if (typeof window.__orcaGrab.cleanup === 'function') {
-        window.__orcaGrab.cleanup();
-      }
-    } catch(e) {}
-    delete window.__orcaGrab;
-  }
-
+  // Picker state lives only in this closure; the private preload holds the returned control.
   var BUDGET = {
     textSnippetMaxLength: 200,
     nearbyTextEntryMaxLength: 200,

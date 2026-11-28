@@ -37,7 +37,9 @@ export type AgentForegroundProcessResolution = {
   processName: string | null
   /** Windows liveness anchor for an unambiguous recognized name; omitted for fallbacks and POSIX. */
   processId?: number
-  /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
+  /** Windows: the anchor's creation time, when the scan read it. */
+  processCreationTimeMs?: number
+  /** Windows: the scan proved the caller's `anchorProcessId` no longer holds the cached agent. */
   anchorPidForeign?: boolean
 }
 
@@ -155,7 +157,12 @@ export async function resolveAgentForegroundProcessWithAvailability(
           : fallbackProcess),
       // The anchor only travels with the name it proved, never with a fallback.
       ...(resolution.processName !== null && resolution.processId !== undefined
-        ? { processId: resolution.processId }
+        ? {
+            processId: resolution.processId,
+            ...(resolution.processCreationTimeMs !== undefined
+              ? { processCreationTimeMs: resolution.processCreationTimeMs }
+              : {})
+          }
         : {}),
       ...(resolution.anchorPidForeign ? { anchorPidForeign: true } : {})
     }

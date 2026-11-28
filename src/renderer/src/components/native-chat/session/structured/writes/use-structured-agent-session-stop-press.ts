@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useCallback, useRef, useState } from 'react'
 
 /** Show Stopping immediately until this request settles; afterward use host stopping state. Keep the press local to presentation. */
@@ -12,14 +13,12 @@ export function useStructuredAgentSessionStopPress(sessionId: string): {
       const token = Symbol('stop-press')
       latest.current = token
       setPress({ sessionId, token })
-      try {
-        return await stop()
-      } finally {
+      return await runWithFinally(stop, () => {
         if (latest.current === token) {
           latest.current = null
           setPress(null)
         }
-      }
+      })
     },
     [sessionId]
   )

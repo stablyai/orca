@@ -1,9 +1,11 @@
 /** An opted-in desktop serves a managed SSH host’s CLI browser requests. Both peers must advertise desktopBridge.v1; unsupported peers refuse with unavailable instead of hanging. */
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES,
   BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
 } from './browser-client-automation-protocol'
+import { DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY } from './desktop-browser-bridge-file-transfer-protocol'
 
 export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.v1'
 /** Send cancel only when negotiated: older desktops drop the whole attachment on unknown event types. */
@@ -15,6 +17,9 @@ export const DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY =
   'browser.desktopBridge.tab-annotations.v1'
 /** Same reason: pdf, network log, device/media/offline/geolocation emulation and page storage need this. */
 export const DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY = 'browser.desktopBridge.page-tools.v1'
+/** Older desktops drop tab create's activate, so `tab create --focus` needs this. */
+export const DESKTOP_BROWSER_BRIDGE_TAB_CREATE_FOCUS_CAPABILITY =
+  'browser.desktopBridge.tab-create-focus.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
@@ -49,12 +54,14 @@ const PAGE_TOOLS_METHODS = [
 /** Methods an older desktop refuses, mapped to the capability a desktop declares when it serves them. */
 export const DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES: ReadonlyMap<string, string> = new Map([
   ['browser.tabAnnotations', DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY],
+  ['browser.upload', DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY],
+  ['browser.download', DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY],
   ...PAGE_TOOLS_METHODS.map(
     (method) => [method, DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY] as const
   )
 ])
 
-/** Unlike the pre-1.4.225 arbitrary CLI relay, allow browser commands only: no desktop files, clipboard, cookies/headers, raw agent-browser, profile/identity changes or certificate bypass. */
+/** Unlike the pre-1.4.225 arbitrary CLI relay, allow browser commands only: no desktop files, clipboard, cookies/headers, raw agent-browser, profile/identity changes or certificate bypass. Upload and download move the host's own files, never the desktop's. */
 export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.tabList',
   'browser.tabCurrent',
@@ -100,6 +107,8 @@ export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.viewport',
   'browser.dialogAccept',
   'browser.dialogDismiss',
+  'browser.upload',
+  'browser.download',
   ...PAGE_TOOLS_METHODS
 ])
 
@@ -118,87 +127,99 @@ export function isDesktopBrowserBridgeMethod(method: string): boolean {
   return DESKTOP_BROWSER_BRIDGE_METHODS.has(method)
 }
 
-const Identity = z.string().min(1).max(256)
+const Identity = lazyZodSchema(() => z.string().min(1).max(256))
 const MAX_FORWARDED_PARAMS_BYTES = 1024 * 1024
 const MAX_WORKSPACE_ID_LENGTH = 16 * 1024
 
-export const DesktopBrowserBridgeAttachParams = z.object({
-  bridgeClientId: Identity
-})
-
-export const DesktopBrowserBridgeRequest = z.object({
-  type: z.literal('request'),
-  requestId: Identity,
-  method: z.string().refine(isDesktopBrowserBridgeMethod, 'method is not forwarded'),
-  /** How long orcad waits for this answer; the desktop never starts the command after it. */
-  timeoutMs: z
-    .number()
-    .int()
-    .positive()
-    .max(60 * 60_000)
-    .optional(),
-  /** The workspace orcad resolved the caller's selector to; absent when it named none. */
-  // Why longer than an identity: a worktree id embeds the repository's absolute path.
-  workspaceId: z.string().min(1).max(MAX_WORKSPACE_ID_LENGTH).optional(),
-  /** orcad accepts desktopBrowserBridge.resultChunk; older ones omit it and older desktops ignore it. */
-  stagedResults: z.literal(true).optional(),
-  params: z
-    .record(z.string(), z.unknown())
-    .refine(
-      (value) => JSON.stringify(value).length <= MAX_FORWARDED_PARAMS_BYTES,
-      'params exceed the forwarded size budget'
-    )
-})
-export type DesktopBrowserBridgeRequest = z.infer<typeof DesktopBrowserBridgeRequest>
-
-export const DesktopBrowserBridgeEvent = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('ready'), attachmentId: Identity }),
-  DesktopBrowserBridgeRequest,
-  /** orcad stopped waiting for this request; the desktop must not start or continue it. */
-  z.object({ type: z.literal('cancel'), requestId: Identity })
-])
-export type DesktopBrowserBridgeEvent = z.infer<typeof DesktopBrowserBridgeEvent>
-
-const BridgeError = z.object({
-  code: z.string().min(1).max(128),
-  message: z.string().max(4096),
-  data: z.unknown().optional()
-})
-
-export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [
+export const DesktopBrowserBridgeAttachParams = lazyZodSchema(() =>
   z.object({
-    attachmentId: Identity,
+    bridgeClientId: Identity
+  })
+)
+
+export const DesktopBrowserBridgeRequest = lazyZodSchema(() =>
+  z.object({
+    type: z.literal('request'),
     requestId: Identity,
-    ok: z.literal(true),
-    result: z.unknown(),
-    /** The value went ahead in resultChunk calls; result is null. */
-    stagedResultBytes: z
+    method: z.string().refine(isDesktopBrowserBridgeMethod, 'method is not forwarded'),
+    /** How long orcad waits for this answer; the desktop never starts the command after it. */
+    timeoutMs: z
       .number()
       .int()
       .positive()
-      .max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES)
-      .optional()
-  }),
-  z.object({
-    attachmentId: Identity,
-    requestId: Identity,
-    ok: z.literal(false),
-    error: BridgeError
+      .max(60 * 60_000)
+      .optional(),
+    /** The workspace orcad resolved the caller's selector to; absent when it named none. */
+    // Why longer than an identity: a worktree id embeds the repository's absolute path.
+    workspaceId: z.string().min(1).max(MAX_WORKSPACE_ID_LENGTH).optional(),
+    /** orcad accepts desktopBrowserBridge.resultChunk; older ones omit it and older desktops ignore it. */
+    stagedResults: z.literal(true).optional(),
+    params: z
+      .record(z.string(), z.unknown())
+      .refine(
+        (value) => JSON.stringify(value).length <= MAX_FORWARDED_PARAMS_BYTES,
+        'params exceed the forwarded size budget'
+      )
   })
-])
+)
+export type DesktopBrowserBridgeRequest = z.infer<typeof DesktopBrowserBridgeRequest>
+
+export const DesktopBrowserBridgeEvent = lazyZodSchema(() =>
+  z.discriminatedUnion('type', [
+    z.object({ type: z.literal('ready'), attachmentId: Identity }),
+    DesktopBrowserBridgeRequest,
+    /** orcad stopped waiting for this request; the desktop must not start or continue it. */
+    z.object({ type: z.literal('cancel'), requestId: Identity })
+  ])
+)
+export type DesktopBrowserBridgeEvent = z.infer<typeof DesktopBrowserBridgeEvent>
+
+const BridgeError = lazyZodSchema(() =>
+  z.object({
+    code: z.string().min(1).max(128),
+    message: z.string().max(4096),
+    data: z.unknown().optional()
+  })
+)
+
+export const DesktopBrowserBridgeResultParams = lazyZodSchema(() =>
+  z.discriminatedUnion('ok', [
+    z.object({
+      attachmentId: Identity,
+      requestId: Identity,
+      ok: z.literal(true),
+      result: z.unknown(),
+      /** The value went ahead in resultChunk calls; result is null. */
+      stagedResultBytes: z
+        .number()
+        .int()
+        .positive()
+        .max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES)
+        .optional()
+    }),
+    z.object({
+      attachmentId: Identity,
+      requestId: Identity,
+      ok: z.literal(false),
+      error: BridgeError
+    })
+  ])
+)
 export type DesktopBrowserBridgeResultParams = z.infer<typeof DesktopBrowserBridgeResultParams>
 
 /** One piece of a result too large for a single frame, sent in order before the result. */
-export const DesktopBrowserBridgeResultChunkParams = z.object({
-  attachmentId: Identity,
-  requestId: Identity,
-  offset: z.number().int().nonnegative().max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES),
-  contentBase64: z
-    .string()
-    .min(1)
-    .max(Math.ceil(BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES / 3) * 4)
-    .regex(/^[A-Za-z0-9+/]*={0,2}$/)
-})
+export const DesktopBrowserBridgeResultChunkParams = lazyZodSchema(() =>
+  z.object({
+    attachmentId: Identity,
+    requestId: Identity,
+    offset: z.number().int().nonnegative().max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES),
+    contentBase64: z
+      .string()
+      .min(1)
+      .max(Math.ceil(BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES / 3) * 4)
+      .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+  })
+)
 export type DesktopBrowserBridgeResultChunkParams = z.infer<
   typeof DesktopBrowserBridgeResultChunkParams
 >

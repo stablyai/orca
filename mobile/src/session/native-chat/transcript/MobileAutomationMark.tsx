@@ -4,8 +4,7 @@ import {
   MobileConnectorSourceIcon,
   MobileGoogleMark
 } from '../../../bots/MobileConnectorSourceIcon'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 // Connectors draw their own logo; the rest a plain mark.
 const PLAIN: Record<AutomationRowMark, LucideIcon | null> = {
@@ -26,7 +25,7 @@ export function MobileAutomationMark({
 }: {
   mark: AutomationRowMark
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const Icon = PLAIN[mark]
   return Icon ? (
     <Icon size={14} color={colors.textMuted} strokeWidth={2} />

@@ -4,16 +4,19 @@ import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { toCodeClipboardText } from '@/lib/clipboard/clipboard-line-endings'
 
 /** Use Electron clipboard IPC for reliable copying in renderer contexts; show inline success without a toast. */
 export function NativeChatCopyButton({
   text,
   label: copyLabel,
+  platformLineEndings = false,
   className
 }: {
   text: string
   /** What this button copies, when it is not the whole message. */
   label?: string
+  platformLineEndings?: boolean
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
@@ -32,7 +35,7 @@ export function NativeChatCopyButton({
 
   const handleCopy = useCallback(async () => {
     try {
-      await window.api.ui.writeClipboardText(text)
+      await window.api.ui.writeClipboardText(platformLineEndings ? toCodeClipboardText(text) : text)
       setCopied(true)
       if (resetTimerRef.current !== null) {
         window.clearTimeout(resetTimerRef.current)
@@ -44,7 +47,7 @@ export function NativeChatCopyButton({
     } catch {
       /* best-effort: clipboard can reject when unfocused */
     }
-  }, [text])
+  }, [platformLineEndings, text])
 
   const label = copied
     ? t('components.native-chat.copyMessage.copied', 'Copied')

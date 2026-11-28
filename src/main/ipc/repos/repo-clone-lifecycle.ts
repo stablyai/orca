@@ -1,7 +1,6 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir } from 'node:fs/promises'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
@@ -20,6 +19,7 @@ import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
+  ensureCloneDestination,
   getClonePathComparisonKey,
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
@@ -100,9 +100,10 @@ function settleCloneAbortCleanup(metadata: ActiveCloneMetadata): void {
 export function registerRepoCloneHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata'],
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
 ): void {
-  ipcMain.handle('repos:cloneAbort', async () => {
+  ipc.handle('repos:cloneAbort', async () => {
     for (const controller of pendingLocalCloneControllers) {
       controller.abort()
     }
@@ -126,11 +127,11 @@ export function registerRepoCloneHandlers(
           getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
       )
 
-  ipcMain.handle('repos:checkCloneTarget', (_event, args: CloneTargetArgs) =>
+  ipc.handle('repos:checkCloneTarget', (_event, args: CloneTargetArgs) =>
     checkCloneTarget(args, findLocalSaved, LOCAL_EXECUTION_HOST_ID)
   )
 
-  ipcMain.handle('repos:clone', async (_event, args: CloneTargetArgs): Promise<Repo> => {
+  ipc.handle('repos:clone', async (_event, args: CloneTargetArgs): Promise<Repo> => {
     const clonePath = deriveValidatedClonePath(args)
     const clonePathKey = getClonePathComparisonKey(clonePath)
     let savedPathKeys: string[] = []
@@ -156,8 +157,7 @@ export function registerRepoCloneHandlers(
           emitRepoAdded('clone_url', true, true)
           return reused
         }
-        // Fresh installs may lack the destination used as the clone process cwd.
-        await mkdir(args.destination, { recursive: true })
+        await ensureCloneDestination(args.destination)
         claimedTarget = await claimCloneTarget(clonePath)
         // Stream progress to avoid execFile buffer limits; --progress also works without a TTY.
         try {

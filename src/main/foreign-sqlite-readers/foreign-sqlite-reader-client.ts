@@ -31,11 +31,11 @@ const READ_TIMEOUT_MS: Record<ForeignSqliteReaderKind, number> = {
   openCodeBinderSessions: 60_000,
   openCodePromptFailure: 2_000
 }
-// Keep workers alive across poll intervals to avoid spawning on every round.
+// Keep workers alive across nearby reads without pinning an idle isolate permanently.
 const DEFAULT_IDLE_TEARDOWN_MS: Record<ForeignSqliteReaderKind, number> = {
   cursorProfile: 30_000,
-  // The binder polls once per minute.
-  openCodeBinderSessions: 120_000,
+  // Unchanged binder polls skip the worker via file stats, so 30s covers active bursts.
+  openCodeBinderSessions: 30_000,
   openCodePromptFailure: 30_000
 }
 const MAX_CONSECUTIVE_DEATHS = 2
@@ -54,7 +54,7 @@ export class ForeignSqliteReaderLane<T> {
     ForeignSqliteReaderRequest,
     ForeignSqliteReaderResponse
   >
-  private readonly inFlight = new Map<string, Promise<T>>()
+  private readonly inFlight = new Map<string, Promise<{ ok: boolean; value: T }>>()
 
   constructor(
     private readonly kind: ForeignSqliteReaderKind,
@@ -84,6 +84,13 @@ export class ForeignSqliteReaderLane<T> {
 
   /** Concurrent reads share a key, so it must encode every input that can change the result. */
   read(key: string, buildRequest: (id: number) => ForeignSqliteReaderRequest): Promise<T> {
+    return this.readWithStatus(key, buildRequest).then((result) => result.value)
+  }
+
+  readWithStatus(
+    key: string,
+    buildRequest: (id: number) => ForeignSqliteReaderRequest
+  ): Promise<{ ok: boolean; value: T }> {
     const pending = this.inFlight.get(key)
     if (pending) {
       return pending
@@ -100,7 +107,9 @@ export class ForeignSqliteReaderLane<T> {
     this.inFlight.clear()
   }
 
-  private async dispatch(buildRequest: (id: number) => ForeignSqliteReaderRequest): Promise<T> {
+  private async dispatch(
+    buildRequest: (id: number) => ForeignSqliteReaderRequest
+  ): Promise<{ ok: boolean; value: T }> {
     const { kind, settings } = this
     const deadline = settings.deadlineIncludesQueue ? new AbortController() : undefined
     const timer = deadline ? setTimeout(() => deadline.abort(), settings.timeoutMs) : undefined
@@ -109,18 +118,18 @@ export class ForeignSqliteReaderLane<T> {
       const response = await this.queue.dispatch(buildRequest, settings.timeoutMs, deadline?.signal)
       if (!response.ok) {
         settings.log(`Foreign SQLite reader ${kind} failed: ${response.error}`)
-        return this.failure()
+        return { ok: false, value: this.failure() }
       }
       const value = this.parse(response.value)
       if (value === null) {
         settings.log(`Foreign SQLite reader ${kind} returned a malformed result.`)
-        return this.failure()
+        return { ok: false, value: this.failure() }
       }
-      return value
+      return { ok: true, value }
     } catch (err) {
       // A failed worker read must never fall back to blocking the main thread.
       settings.log(`Foreign SQLite reader ${kind} did not answer: ${errorText(err)}`)
-      return this.failure()
+      return { ok: false, value: this.failure() }
     } finally {
       clearTimeout(timer)
     }
@@ -173,9 +182,16 @@ export class ForeignSqliteReaderClient {
     dbPath: string,
     cursor: OpenCodeSessionCursor
   ): Promise<BinderSessionRow[]> {
+    return this.readOpenCodeBinderSessionsWithStatus(dbPath, cursor).then((result) => result.value)
+  }
+
+  readOpenCodeBinderSessionsWithStatus(
+    dbPath: string,
+    cursor: OpenCodeSessionCursor
+  ): Promise<{ ok: boolean; value: BinderSessionRow[] }> {
     // A restarted poll must not deduplicate against an older cursor still in flight.
     const key = JSON.stringify([dbPath, cursor.ms, cursor.id])
-    return this.openCodeBinderSessions.read(key, (id) => ({
+    return this.openCodeBinderSessions.readWithStatus(key, (id) => ({
       id,
       kind: 'openCodeBinderSessions',
       dbPath,

@@ -20,9 +20,16 @@ export type BrowserSessionCookieApi = {
   sessionClearGoogleCookies: (
     target: GoogleCookieClearLocalTarget
   ) => Promise<GoogleCookieClearResult>
-  sessionClearDefaultCookies: () => Promise<boolean>
+  /** One profile's jar on this computer. */
+  sessionClearCookies: (args: { profileId: string }) => Promise<boolean>
   /** Null when the environment's pages are not client-hosted on this desktop. */
-  sessionClearDefaultCookiesForClientHost: (args: {
+  sessionClearCookiesForClientHost: (args: {
     environmentId: string
+    profileId: string
   }) => Promise<boolean | null>
+  /** The jar this SSH host's pages of one profile use on this computer. */
+  sessionClearCookiesForSshHost: (args: {
+    sshTargetId: string
+    profileId: string
+  }) => Promise<boolean>
 }

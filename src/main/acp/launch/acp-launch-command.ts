@@ -74,7 +74,8 @@ export function acpLaunchSpecForAccount(
   spec: AcpLaunchSpec,
   home: AgentSessionAccountHome
 ): AcpLaunchSpec {
-  return spec.hostBackend?.pins(home) ? spec.hostBackend.spec : spec
+  const backend = spec.hostBackend
+  return backend?.pins(home) ? (backend.specFor?.(home) ?? backend.spec) : spec
 }
 
 // Model catalogs reuse the answer as long as the host check itself does (RECHECK_MS).
@@ -163,7 +164,16 @@ export async function acpHostBackendInput(
   const allowed = backend.spec.managedCopyAllowed?.(settings) !== false
   const own = found !== null && !isManagedAgentCopyPath(spec.agent, found) ? found : null
   const program = own ?? (allowed ? managedCopy : null) ?? command
-  return { command: program, env, envToDelete, homePath, stateDirectory, settings, startsProgram }
+  return {
+    command: program,
+    env,
+    envToDelete,
+    homePath,
+    stateDirectory,
+    shellEnv,
+    settings,
+    startsProgram
+  }
 }
 
 /** The account home pinning a new chat to the compatible host program `env` finds, or null. */

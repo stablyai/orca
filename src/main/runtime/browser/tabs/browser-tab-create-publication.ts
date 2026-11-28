@@ -1,6 +1,7 @@
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
 import {
+  navigationTargetsClients,
   navigationTargetsHost,
   resolveRuntimeNavigationTarget,
   type RuntimeNavigationTarget
@@ -34,8 +35,14 @@ export type BrowserSessionTabSelectionOptions = {
   targetGroupId?: string
   /** Required to force each caller to decide whether shared host selection moves. */
   focusesHost: boolean
-  /** Paired origin and navigation audience travel together; absent for local creates. */
-  caller?: { clientNavigationId: string; navigation: RuntimeNavigationTarget; follows?: boolean }
+  /** Navigation audience, with the paired origin when a client asked; a local caller has no id. */
+  caller?: {
+    clientNavigationId?: string
+    navigation: RuntimeNavigationTarget
+    follows?: boolean
+    /** Of the audience, only screens now showing this top-level tab move. */
+    showingTabId?: string
+  }
 }
 
 export type BrowserTabCreatePublication = {
@@ -46,6 +53,8 @@ export type BrowserTabCreatePublication = {
   clientNavigationId?: string
   /** A link a page opened, not a create anyone asked for: its client has no pending focus, and no one picked it otherwise. */
   opensPageLink?: boolean
+  /** Only screens showing this terminal tab follow; the rest just list the new tab. */
+  followsFromTabId?: string
   targetGroupId?: string
 }
 
@@ -170,13 +179,11 @@ export async function publishSwitchedBrowserSessionTab(
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
   if (rules.marksSessionTabFocus && browserTabSwitchTakesFocus(publication.focus)) {
-    // Switch has no navigation audience yet; preserve its existing host-facing semantics.
+    // Only the CLI asks a switch for focus, and it has no screen: every screen shows the tab.
     await host.markHeadlessBrowserSessionTabActive?.(
       publication.worktreeId,
       publication.browserPageId,
-      {
-        focusesHost: true
-      }
+      { focusesHost: true, caller: { navigation: 'all' } }
     )
   }
 }
@@ -226,7 +233,17 @@ export async function publishCreatedBrowserSessionTab(
                 ...(publication.opensPageLink ? { follows: true } : {})
               }
             }
-          : {})
+          : navigationTargetsClients(publication.focus.navigation)
+            ? // A windowless host's own CLI has no screen; its clients are where the tab is seen.
+              {
+                caller: {
+                  navigation: publication.focus.navigation,
+                  ...(publication.followsFromTabId
+                    ? { showingTabId: publication.followsFromTabId }
+                    : {})
+                }
+              }
+            : {})
       }
     )
   }

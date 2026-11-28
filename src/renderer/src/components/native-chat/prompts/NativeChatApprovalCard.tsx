@@ -23,12 +23,14 @@ import {
   useNativeChatPromptCardFocus
 } from './use-native-chat-prompt-card-focus'
 import { useNativeChatApprovalQuietDetail } from './use-native-chat-approval-quiet-detail'
-import { approvalCardFrameClasses } from './native-chat-approval-card-frame'
+import { useApprovalCardFrameClasses } from './native-chat-approval-card-frame'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
 export type NativeChatApprovalCardProps = {
   approval: ChatApproval
+  /** Names this prompt within its chat tab, so a released chat returns with its detail as the reader left it. */
+  memoryKey?: string
   /** Deliver the option's transport-specific response token. */
   onChoose: (option: string) => void
   /** Cancel the active provider turn while this card owns the composer region. */
@@ -53,11 +55,13 @@ export type NativeChatApprovalCardProps = {
   parsedFromTerminal?: boolean
   /** Shown as the title, with mention pills; `approval.title` stays its name for assistive tech. */
   titleContent?: React.ReactNode
+  wrapOptions?: boolean
 }
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
 export function NativeChatApprovalCard({
   approval,
+  memoryKey,
   onChoose,
   onCancel,
   onCollapse,
@@ -69,7 +73,8 @@ export function NativeChatApprovalCard({
   countdown,
   placement = 'composer',
   parsedFromTerminal = false,
-  titleContent
+  titleContent,
+  wrapOptions = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -105,11 +110,7 @@ export function NativeChatApprovalCard({
     open: quietDetailOpen,
     setOpen: setQuietDetailOpen,
     showsToggle: showsQuietDetailToggle
-  } = useNativeChatApprovalQuietDetail(
-    quiet ? (approval.detail ?? null) : null,
-    approval.toolName,
-    approval.description
-  )
+  } = useNativeChatApprovalQuietDetail(approval, quiet, memoryKey)
   const hasContext = Boolean(
     countdown ||
     approval.description ||
@@ -129,7 +130,7 @@ export function NativeChatApprovalCard({
     approval.detail
   ])
   const escape = onCancel ?? (isSubmitting ? undefined : onCollapse)
-  const frame = approvalCardFrameClasses({ stacked, joined, quiet })
+  const frame = useApprovalCardFrameClasses({ stacked, joined, quiet })
 
   return (
     <SecuritySurface>
@@ -358,7 +359,11 @@ export function NativeChatApprovalCard({
               <div
                 data-native-chat-approval-actions="true"
                 data-native-chat-dock-pinned={stacked ? undefined : ''}
-                className={cn('flex shrink-0 flex-wrap', quiet ? 'gap-1.5 pl-5' : 'gap-2')}
+                className={cn(
+                  'flex shrink-0 flex-wrap',
+                  quiet ? 'gap-1.5 pl-5' : 'gap-2',
+                  wrapOptions && '[&>button]:h-auto [&>button]:min-h-6 [&>button]:py-1'
+                )}
               >
                 {approval.options.map((opt, i) => {
                   const opensUrl = url !== null && opt.send === URL_APPROVAL_OPEN_OPTION_ID

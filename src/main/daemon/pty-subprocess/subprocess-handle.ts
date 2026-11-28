@@ -166,6 +166,9 @@ export function createDaemonPtySubprocessHandle(args: {
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
+    // Windows proves the agent pid on a full read; POSIX reads carry it in their evidence instead.
+    foregroundAgent: () => (process.platform === 'win32' ? foreground.cachedAgent() : null),
+    pendingForegroundRefresh: foreground.pendingForegroundRefresh,
     write: (data) => {
       if (dead || ioFailed || masterRetired) {
         return

@@ -10,10 +10,6 @@ import {
   type RelayRecoveryLog
 } from '../../diagnostics/connection/mobile-relay-recovery-log'
 import { createRelayDeferralLog } from '../../diagnostics/connection/mobile-relay-deferral-log'
-import {
-  mobileRelayCredentialNeedsRotation,
-  rotateMobileRelayCredential
-} from '../relay/mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import { MobileRelayDirectGraceTimer } from '../relay/mobile-relay-direct-grace-timer'
@@ -24,14 +20,16 @@ import type { ForegroundNudgeReason } from './connection-state'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { MobileRelayBackgroundGrace } from '../relay/mobile-relay-background-grace'
 import * as relayDiagnosticLog from '../../diagnostics/connection/mobile-relay-diagnostic-log'
+import { MobileEndpointCredentialRotator } from './mobile-endpoint-credential-rotator'
 
 export class MobileEndpointSupervisor {
   private bundle: MobileRelayCredentialBundle | null = null
   private stopped = false
   private operationInFlight = false
   private pendingReplace = false
+  // A forced race queued behind a relay operation; that operation's finally replays it.
+  private replaceQueuedBehindRecovery = false
   private readonly nudgeRouter: MobileEndpointNudgeRouter
-  private credentialRotationInFlight = false
   private relayRotationPending = false
   private unsubscribeState: (() => void) | null = null
   private readonly hysteresis: MobileEndpointHysteresis
@@ -44,6 +42,7 @@ export class MobileEndpointSupervisor {
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly backgroundGrace: MobileRelayBackgroundGrace
   private readonly sessionEstablisher: MobileRelaySessionEstablisher
+  private readonly credentialRotator: MobileEndpointCredentialRotator
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
@@ -102,6 +101,20 @@ export class MobileEndpointSupervisor {
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
       onDialFailure: (error) => relayDiagnosticLog.logRelayDialFailure(this.logRelay, error)
     })
+    this.credentialRotator = new MobileEndpointCredentialRotator({
+      logical,
+      dependencies,
+      isStopped: () => this.stopped,
+      bundle: () => this.bundle,
+      adoptBundle: (bundle) => (this.bundle = bundle),
+      adoptRelay: (resolved) => this.sessionEstablisher.adoptRelay(resolved),
+      completeCredentialRefresh: () => this.relayReconnect.completeCredentialRefresh(),
+      recoverIfNeeded: () => {
+        if (this.isActive() && this.relayReconnect.needsRecovery(this.logical.getState())) {
+          void this.recoverRelay()
+        }
+      }
+    })
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
       canSchedule: () =>
@@ -114,7 +127,7 @@ export class MobileEndpointSupervisor {
       onDirectMigrated: async () => {
         this.leaseRotation.clear()
         this.relayRotationPending = false
-        await this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
+        await this.credentialRotator.rotateIfNeeded(this.relayReconnect.resetForDirectConnection())
       },
       afterProbe: () => {
         this.operationInFlight = false
@@ -152,7 +165,7 @@ export class MobileEndpointSupervisor {
         if (this.logical.getActivePath() !== 'relay') {
           // A direct win answers any race intent deferred by cooldown; replaying it would replace a healthy LAN.
           this.pendingReplace = false
-          void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
+          void this.credentialRotator.rotateIfNeeded(this.relayReconnect.resetForDirectConnection())
         }
         this.directProbe.schedule()
       } else if (!this.backgroundGrace.isForeground()) {
@@ -181,6 +194,9 @@ export class MobileEndpointSupervisor {
   }
 
   setForeground(foreground: boolean): void {
+    if (!foreground) {
+      this.replaceQueuedBehindRecovery = false
+    }
     this.backgroundGrace.setForeground(foreground)
     if (foreground && this.relayRotationPending) {
       void this.recoverRelay(true)
@@ -191,6 +207,7 @@ export class MobileEndpointSupervisor {
 
   stop(): void {
     this.stopped = true
+    this.replaceQueuedBehindRecovery = false
     this.directProbe.stop()
     this.unsubscribeState?.()
     this.unsubscribeState = null
@@ -208,15 +225,14 @@ export class MobileEndpointSupervisor {
       return
     }
     if (this.operationInFlight) {
-      // Queue handoff intent while a direct probe holds the mutex; afterProbe replays it.
+      // Queue handoff intent while a direct probe or relay operation holds the mutex; afterProbe or finally replays it.
       this.pendingReplace ||= forceReplacement && ownsRecovery
+      this.replaceQueuedBehindRecovery ||= forceReplacement && ownsRecovery
       return
     }
-    if (this.pendingReplace) {
-      this.pendingReplace = false
-      forceReplacement = true
-      ownsRecovery = true
-    }
+    forceReplacement ||= this.pendingReplace
+    ownsRecovery ||= this.pendingReplace
+    this.pendingReplace = false
     // Give connecting/handshaking direct its grace period before unforced relay recovery.
     if (!forceReplacement && !this.relayReconnect.needsRecovery(this.logical.getState())) {
       return
@@ -224,15 +240,16 @@ export class MobileEndpointSupervisor {
     // Share cooldown across overlapping resume, revival and lease failures to prevent reconnect churn.
     const deferral = this.relayReconnect.deferral()
     if (deferral) {
-      if (ownsRecovery) {
-        // Without a dial, no session was disproven; keep intent queued for forced recovery after cooldown.
-        this.pendingReplace = true
-      }
+      // Without a dial, no session was disproven; keep intent queued for forced recovery after cooldown.
+      this.pendingReplace ||= ownsRecovery
       this.logDeferral(deferral)
       return
     }
     this.operationInFlight = true
+    this.replaceQueuedBehindRecovery = false
     let retryAfterOperation = false
+    // Only an operation that withdrew without dialing replays a queued race; a failed dial books its own retry.
+    let withdrewWithoutDial = false
     try {
       const selection = await selectDialableRelayCredentials({
         bundle: this.bundle,
@@ -255,6 +272,7 @@ export class MobileEndpointSupervisor {
       const recoveryNeeded =
         forceReplacement || this.relayReconnect.needsRecovery(this.logical.getState())
       if (!this.isActive() || !recoveryNeeded) {
+        withdrewWithoutDial = true
         return
       }
       this.logical.setRecoveryPath('relay', this.relayReconnect.getFailureCount())
@@ -266,6 +284,7 @@ export class MobileEndpointSupervisor {
         return
       }
       if (dialed.outcome === 'aborted') {
+        withdrewWithoutDial = true
         this.logical.setRecoveryPath(null)
         // Withdrawal is not failure; booking cooldown would delay genuine later recovery.
         return
@@ -282,49 +301,16 @@ export class MobileEndpointSupervisor {
       if (forceReplacement && this.relayRotationPending && this.isActive()) {
         this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(5000))
       }
+      // Why: an unforced operation that skipped its dial (direct redialing) or was aborted
+      // schedules no retry, so a direct-grace race queued behind it would wait for the next state change.
+      const replayQueuedReplace =
+        withdrewWithoutDial && this.replaceQueuedBehindRecovery && this.pendingReplace
+      this.replaceQueuedBehindRecovery = false
       // Why: the active relay can drop while migration follow-up still owns the mutex.
-      if (retryAfterOperation && this.isActive()) {
-        void this.recoverRelay()
-      }
-    }
-  }
-
-  private async rotateCredentialIfNeeded(force = false): Promise<void> {
-    if (
-      this.stopped ||
-      this.credentialRotationInFlight ||
-      !this.bundle ||
-      this.logical.getActivePath() === 'relay' ||
-      (!force && !mobileRelayCredentialNeedsRotation(this.bundle, this.dependencies.now()))
-    ) {
-      return
-    }
-    this.credentialRotationInFlight = true
-    let credentialRefreshed = false
-    try {
-      const result = await rotateMobileRelayCredential({
-        client: this.logical,
-        bundle: this.bundle,
-        writeBundle: this.dependencies.writeBundle,
-        randomBytes: this.dependencies.randomBytes
-      })
-      this.bundle = result.bundle
-      // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
-      credentialRefreshed = true
-      await this.sessionEstablisher.adoptRelay(result.relay)
-    } catch {
-      // Retain pending material for direct reconciliation before generating another install key.
-    } finally {
-      if (credentialRefreshed) {
-        this.relayReconnect.completeCredentialRefresh()
-      }
-      this.credentialRotationInFlight = false
-      if (
-        credentialRefreshed &&
-        this.isActive() &&
-        this.relayReconnect.needsRecovery(this.logical.getState())
-      ) {
-        void this.recoverRelay()
+      if ((retryAfterOperation || replayQueuedReplace) && this.isActive()) {
+        this.recoverRelay().catch((error: unknown) =>
+          this.logRelay('relay recovery replay failed', String(error).slice(0, 80))
+        )
       }
     }
   }

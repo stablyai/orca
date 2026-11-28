@@ -96,6 +96,7 @@ const COPY: Record<
       : null
   },
   botsOff: () => translate('automations.runFailures.botsOff', EN.botsOff),
+  botsOffByTeam: () => translate('automations.runFailures.botsOffByTeam', EN.botsOffByTeam),
   botMissing: () => translate('automations.runFailures.botMissing', EN.botMissing),
   botFolderMissing: () =>
     translate('automations.runFailures.botFolderMissing', EN.botFolderMissing),

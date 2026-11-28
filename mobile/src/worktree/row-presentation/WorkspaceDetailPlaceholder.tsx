@@ -1,13 +1,14 @@
 import { View, Text } from 'react-native'
 import { SquareTerminal } from 'lucide-react-native'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 // Wide tablet/foldable detail stays empty beside list until workspace opens.
 export function WorkspaceDetailPlaceholder() {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.container}>
@@ -27,7 +28,7 @@ export function WorkspaceDetailPlaceholder() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     alignItems: 'center',

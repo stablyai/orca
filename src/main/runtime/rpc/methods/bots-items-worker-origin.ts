@@ -3,6 +3,8 @@
 // `bot-item:<uid>`, and the items host links it from orchestration's own record.
 import { isOpenBotItemStatus } from '../../../../shared/bots/bot-items'
 import { BotItemError } from '../../../bots/bot-item-error'
+import { assertBotItemLinkRoom } from '../../../bots/bot-items-input'
+import { lineageAncestors } from '../../../bots/bot-item-dispatch-facts'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
 import { itemsWriter } from './bots-items-caller'
@@ -16,8 +18,10 @@ export type LinkedBotItem = { number: number; title: string; chatTitle: string |
 /** The checked origin to record, `bot-item:<uid>`, and the item it links; refused for anything else. */
 export async function checkedWorkerOrigin(
   origin: string,
-  context: Pick<RpcContext, 'runtime' | 'orchestrationCaller'>
-): Promise<{ origin: string; linkedItem: LinkedBotItem }> {
+  context: Pick<RpcContext, 'runtime' | 'orchestrationCaller'>,
+  /** A follow-up's Dispatch: a chain the item links already adds no link. */
+  followUpOf?: string
+): Promise<{ origin: string; itemUid: string; linkedItem: LinkedBotItem }> {
   if (!origin.startsWith(BOT_ITEM_ORIGIN_PREFIX)) {
     throw new BotItemError('invalid_argument', 'A worker origin is set by `worker-start --item`.')
   }
@@ -25,10 +29,8 @@ export async function checkedWorkerOrigin(
   const sessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId ?? undefined
   // The caller's session comes from its credentials, not its say-so.
   const writer = itemsWriter(sessionId, { runtime: context.runtime, pairedDeviceId: undefined })
-  const item = await resolveItem(
-    context.runtime.botItems.store(),
-    origin.slice(BOT_ITEM_ORIGIN_PREFIX.length)
-  )
+  const store = context.runtime.botItems.store()
+  const item = await resolveItem(store, origin.slice(BOT_ITEM_ORIGIN_PREFIX.length))
   if (!isOpenBotItemStatus(item.status)) {
     const closed = item.status === 'done' ? 'done' : 'canceled'
     throw new BotItemError(
@@ -38,8 +40,17 @@ export async function checkedWorkerOrigin(
         : `Item ${item.number} is ${closed}. Ask its bot.`
     )
   }
+  // Refused before the worker starts: a full item would leave it running unlinked.
+  const links = await store.links(item.uid)
+  const continues = followUpOf
+    ? lineageAncestors(context.runtime.getOrchestrationDb(), followUpOf)
+    : []
+  if (!links.some((link) => link.kind === 'dispatch' && continues.includes(link.ref))) {
+    assertBotItemLinkRoom(links.length)
+  }
   return {
     origin: `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`,
+    itemUid: item.uid,
     linkedItem: {
       number: item.number,
       title: item.title,

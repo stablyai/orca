@@ -7,6 +7,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { ArtifactPublishedLinkPanel } from './ArtifactPublishedLinkPanel'
 import { getPublishedArtifactLink } from './artifact-published-link-client'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
@@ -59,7 +61,8 @@ export function ArtifactPublishButton({
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
   const signedIn = authStatus?.state === 'connected'
-  const sharingEnabled = settings?.artifactSharingEnabled === true
+  const teamBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.artifactSharing)
+  const sharingEnabled = !teamBlocked && settings?.artifactSharingEnabled === true
   const accountKey =
     authStatus?.state === 'connected'
       ? JSON.stringify([
@@ -261,17 +264,24 @@ export function ArtifactPublishButton({
             <div className={cn('space-y-2', !signedIn && 'border-t border-border/60 pt-3')}>
               <div className="space-y-0.5">
                 <p className="text-xs font-medium">
-                  {t(
-                    'auto.components.artifacts.ArtifactPublishButton.publishingOffTitle',
-                    'Artifact sharing is off'
-                  )}
+                  {teamBlocked
+                    ? t(
+                        'settings.artifacts.teamDisabled',
+                        'Artifact sharing is turned off by your team.'
+                      )
+                    : t(
+                        'auto.components.artifacts.ArtifactPublishButton.publishingOffTitle',
+                        'Artifact sharing is off'
+                      )}
                 </p>
-                <p className="text-[11px] leading-4 text-muted-foreground">
-                  {t(
-                    'auto.components.artifacts.ArtifactPublishButton.publishingOffDescription',
-                    'Learn about public links and enable sharing in Settings.'
-                  )}
-                </p>
+                {!teamBlocked && (
+                  <p className="text-[11px] leading-4 text-muted-foreground">
+                    {t(
+                      'auto.components.artifacts.ArtifactPublishButton.publishingOffDescription',
+                      'Learn about public links and enable sharing in Settings.'
+                    )}
+                  </p>
+                )}
               </div>
               <Button
                 type="button"

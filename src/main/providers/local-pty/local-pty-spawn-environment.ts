@@ -3,6 +3,7 @@ import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-laun
 import { ORCA_IMAGE_PROTOCOL_ENV } from '../../../shared/terminal/images/terminal-image-protocol'
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
+import { removeChromiumCrashpadPipeName } from '../../pty/shell-startup/chromium-crashpad-pipe-env'
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
 import { removeInheritedNoColor } from '../../pty/shell-startup/terminal-color-env'
@@ -57,6 +58,7 @@ export function buildInheritedLocalPtyEnvironment(
 ): Record<string, string> {
   const inheritedEnv = stripInheritedBuildModeEnv(process.env)
   restoreManagedDataAccountEnvironment(inheritedEnv)
+  removeChromiumCrashpadPipeName(inheritedEnv)
   const spawnEnv: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(inheritedEnv, explicitEnv),
     TERM: 'xterm-256color',

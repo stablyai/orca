@@ -1,4 +1,6 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useNativeChatViewGuard } from '../../pane/ownership/native-chat-view-memory'
 import { useHostStructuredAgent } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import {
@@ -104,14 +106,18 @@ export function useNativeChatFork(input: {
   })
   // Reserved at the click, before any await, so a second click never starts a second fork.
   const inFlight = useRef(false)
-  const [pendingItemId, setPendingItemId] = useState<string | null>(null)
+  // Kept with the chat tab and its conversation: a view released mid-fork returns still waiting on it.
+  const [pendingItemId, setPendingItemId, readPending] = useNativeChatViewGuard<string | null>(
+    'fork-pending',
+    null
+  )
   const request = useCallback(
     (
       throughItemId: string,
       side?: NativeChatSideChatRequest
     ): Promise<NativeChatForkOutcome | undefined> => {
       const { agent, sessionId, tabId, target, worktreeId } = latest.current
-      if (inFlight.current || !worktreeId || !isTuiAgent(agent)) {
+      if (inFlight.current || readPending() !== null || !worktreeId || !isTuiAgent(agent)) {
         return Promise.resolve(undefined)
       }
       inFlight.current = true
@@ -146,16 +152,22 @@ export function useNativeChatFork(input: {
           setPendingItemId(null)
         })
     },
-    []
+    [readPending, setPendingItemId]
+  )
+  // The floor and inventory read no reply text, so they hold while a reply streams.
+  const structure = rowsBesideStreamedText(input.items)
+  const clearedThrough = useMemo(
+    () => latestAgentSessionContextClearSequence(structure),
+    [structure]
   )
   const contextFloorSequence = Math.max(
-    latestAgentSessionContextClearSequence(input.items),
+    clearedThrough,
     agentSessionContextFloorSequence(input.contextFloor, input.epoch)
   )
   // Streaming replaces the items array on every commit; keep the set while its members hold, so the
   // context and every offered row's `fork` stay the same objects.
   const forkableRef = useRef<ReadonlySet<string>>(new Set())
-  const inventory = useMemo(() => nativeChatForkInventory(input.items), [input.items])
+  const inventory = useMemo(() => nativeChatForkInventory(structure), [structure])
   const { inheritedThroughSequence } = inventory
   const forkableItemIds = useMemo(() => {
     const next = inventory.forkableItemIds
@@ -168,7 +180,7 @@ export function useNativeChatFork(input: {
     forkableRef.current = forkableItemIds
   }, [forkableItemIds])
   const forkLatest = useCallback((): NativeChatForkLatestOutcome => {
-    if (inFlight.current) {
+    if (inFlight.current || readPending() !== null) {
       return 'pending'
     }
     const { items, contextFloor, epoch } = latest.current
@@ -184,7 +196,7 @@ export function useNativeChatFork(input: {
     }
     request(throughItemId)
     return 'started'
-  }, [request])
+  }, [readPending, request])
   const supportKind = support.kind
   const fork = support.kind === 'known' ? support.fork : undefined
   const inheritedOriginal = support.kind === 'known' && support.inheritedOriginal === true

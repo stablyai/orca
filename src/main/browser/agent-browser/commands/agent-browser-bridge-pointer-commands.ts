@@ -22,6 +22,7 @@ import { isEmbeddedGuest } from '../../cdp/input/guest-direct-key-input'
 import { enablePageFocusEmulation } from '../../cdp/input/agent-input-focus-guard'
 import { waitForGuestFirstPaint } from '../../cdp/debugger/guest-first-paint'
 import { noteInjectedRightPress } from '../../guest-lifecycle/input/browser-guest-context-menu-target'
+import { activeRpcBrowserPagePicker } from '../session-routing/person-pick-hold'
 
 type CdpPointerEventParams = {
   type: 'mouseMoved' | 'mousePressed' | 'mouseReleased' | 'mouseWheel'
@@ -54,7 +55,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
         `Browser page ${target.browserPageId} is no longer available`
       )
     }
-    const state = cdpPointerStateFor(wc)
+    const state = cdpPointerStateFor(wc, activeRpcBrowserPagePicker())
     // Restore tracked state if dispatch fails, or later events report phantom held buttons.
     const preDispatch = { ...state }
     let releaseDebugger = (): void => {}

@@ -1,4 +1,5 @@
 import { recordBrowserExtensionUsed } from '../../../telemetry/browser-extensions-banner'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
 import { webContents } from 'electron'
 import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import type { BrowserExtensionActionResult } from '../../../../shared/browser/extensions/browser-extension-types'
@@ -64,7 +65,7 @@ function liveContents(id: number | null): Electron.WebContents | null {
   return contents && !contents.isDestroyed() ? contents : null
 }
 
-/** A browser page whose session runs extensions (a local browser profile), else null. */
+/** A browser page whose session runs extensions, else null. */
 function resolveToolbarPage(browserPageId: string): ToolbarPage | null {
   const contents = liveContents(browserManager.getGuestWebContentsId(browserPageId))
   const profileId = contents ? getBrowserExtensionProfileIdForSession(contents.session) : null
@@ -113,7 +114,11 @@ export async function getBrowserExtensionToolbarState(
   const rank = (action: BrowserExtensionToolbarAction): number =>
     action.pinned ? pinOrder.indexOf(action.extensionId) : Number.MAX_SAFE_INTEGER
   actions.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
-  return { profileId: page.profileId, actions }
+  return {
+    profileId: page.profileId,
+    browserProfileId: browserExtensionSourceProfileId(page.profileId),
+    actions
+  }
 }
 
 function openPopupForPage(

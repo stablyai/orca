@@ -35,7 +35,7 @@ export function BotItemSelectionPill({
   snoozing: BotItemSnoozing
   /** Each item's bot, whose host says whether it has Waiting. */
   botOf: (item: BotItem) => BotRef
-  /** Canceled asks for a reason first, Waiting for what it waits on. */
+  /** Waiting asks what it waits on first; every other move is at once. */
   onMove: (to: BotItemStatus) => void
   onClear: () => void
 }): React.JSX.Element {

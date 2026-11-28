@@ -33,7 +33,12 @@ export const CLIENT_EVENT_METHODS = [
         const unsubscribe = runtime.onClientEvent(
           (event) => {
             // Only a desktop keeps an agent CLI update list; a phone would search its query cache for nothing.
-            if (event.type === 'agentCliUpdateFinished' && clientKind === 'mobile') {
+            // Phones keep no desktop sidebar lineage either, so a Dispatch write is noise there.
+            if (
+              (event.type === 'agentCliUpdateFinished' ||
+                event.type === 'agentOrchestrationChanged') &&
+              clientKind === 'mobile'
+            ) {
               return
             }
             emit(event)
