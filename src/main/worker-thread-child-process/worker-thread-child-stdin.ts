@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { WorkerThreadChildOutput } from './worker-thread-child-output'
 import type {
   WorkerThreadChildErrorPayload,
   WorkerThreadChildEvent,
@@ -51,12 +52,13 @@ export class WorkerThreadChildProcess extends EventEmitter {
   ownedGroupTerminated = false
   ownedGroupStopUnverified = false
   closed = false
-  pid: number | undefined = undefined
   exitCode: number | null = null
   signalCode: NodeJS.Signals | null = null
   readonly stdin: WorkerThreadChildStdin
-  readonly stdout = new EventEmitter()
-  readonly stderr = new EventEmitter()
+  readonly stdout = new WorkerThreadChildOutput()
+  readonly stderr = new WorkerThreadChildOutput()
+  // Not an own property until spawn: an own undefined pid means a failed Node spawn, but this child learns its pid late and is killed by id.
+  declare pid: number | undefined
 
   constructor(
     readonly id: number,
@@ -116,8 +118,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
       case 'stdout':
       case 'stderr':
         try {
-          this[event.type].emit(
-            'data',
+          this[event.type].push(
             Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
           )
         } finally {
@@ -125,6 +126,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
         }
         return
       case 'error':
+        // Node reports a child it could not create (ENOENT) as an error before any spawn; mark it as Node does.
+        if (this.pid === undefined && event.error.syscall?.startsWith('spawn')) {
+          this.pid = undefined
+        }
         if (isWorkerChildStdinWriteError(event.error) && this.stdin.listenerCount('error') > 0) {
           this.stdin.emit('error', toWorkerChildError(event.error))
           return
@@ -132,6 +137,8 @@ export class WorkerThreadChildProcess extends EventEmitter {
         this.emitErrorIfObserved(event.error)
         return
       case 'spawn-error':
+        // An own undefined pid marks a failed spawn, as on a Node child, before callers see the error.
+        this.pid = undefined
         this.emit('group-terminated')
         this.emitErrorIfObserved(event.error)
         this.receive({ type: 'exit', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
@@ -144,6 +151,8 @@ export class WorkerThreadChildProcess extends EventEmitter {
         return
       case 'close':
         this.closed = true
+        this.stdout.flush()
+        this.stderr.flush()
         this.emit('close', event.code, event.signal)
     }
   }

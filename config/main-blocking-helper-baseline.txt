@@ -1104,7 +1104,7 @@
 1 src/main/rate-limits/service/service-target-usage-read.ts # the same sync Codex state-db read the poller already does, reached only when the WSL HTTP read fails; bounded by the renderer TTL and Retry-After
 2 src/main/remote-policies/release-asset-policy-live-update.ts
 4 src/main/ripgrep/bundled-ripgrep-path.ts
-1 src/main/ripgrep/bundled-ripgrep-spawn.ts
+2 src/main/ripgrep/bundled-ripgrep-spawn.ts # resolveCommand is the WSL routing check wslAwareSpawn already ran for this launch
 1 src/main/ripgrep/bundled-ripgrep-text-search.ts
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts

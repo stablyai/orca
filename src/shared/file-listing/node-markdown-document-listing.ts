@@ -70,16 +70,15 @@ export function collectMarkdownDocuments(
       signal?.removeEventListener('abort', onAbort)
       carry = ''
       if (error) {
-        if (child.pid !== undefined) {
-          try {
-            if (options.stopProcess) {
-              options.stopProcess()
-            } else {
-              child.kill('SIGKILL')
-            }
-          } catch {
-            // The process may have exited before the timeout or stream error arrived.
+        try {
+          // A caller's stopProcess guards failed spawns itself and can stop a child whose pid arrives late.
+          if (options.stopProcess) {
+            options.stopProcess()
+          } else if (child.pid !== undefined) {
+            child.kill('SIGKILL')
           }
+        } catch {
+          // The process may have exited before the timeout or stream error arrived.
         }
         documents.length = 0
         child.stdout?.resume()
