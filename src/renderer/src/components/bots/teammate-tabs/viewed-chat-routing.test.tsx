@@ -26,7 +26,7 @@ import type * as FolderRecords from '../../../store/folder-workspaces/folder-wor
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { BOTS_TAB_LIST_VIEWS_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { SESSION_TABS_PERSON_LIST_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { useTabListPeople } from './tab-list-people'
 
 // The host and the window's own tabs: what a click must leave alone for another person's chat.
@@ -324,7 +324,7 @@ function matesCopyOn(capabilities: string[]): Bot {
 }
 
 it('shows no one else’s tabs on a host too old to name whose list it answers with', () => {
-  const newer = matesCopyOn([BOTS_TAB_LIST_VIEWS_CAPABILITY])
+  const newer = matesCopyOn([SESSION_TABS_PERSON_LIST_RUNTIME_CAPABILITY])
   expect(renderHook(() => useTabListPeople(newer)).result.current?.others).toHaveLength(1)
   const older = matesCopyOn([])
   host.bots = [older]

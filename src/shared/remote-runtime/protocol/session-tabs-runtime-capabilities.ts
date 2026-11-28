@@ -52,6 +52,11 @@ export const SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY =
 // sleeping panes; older hosts lack the method, so the item stays hidden there.
 export const TERMINAL_AGENT_ID_RUNTIME_CAPABILITY = 'terminal.agent-id.v1' as const
 
+// Why: a host with this serves another person's tab list (session.tabs reads and closes naming
+// `person`) and refuses a person it holds no list for. An older host strips `person` and answers
+// with the caller's own list, so a client shows no one else's tabs there.
+export const SESSION_TABS_PERSON_LIST_RUNTIME_CAPABILITY = 'session-tabs.person-list.v1' as const
+
 export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
@@ -65,5 +70,6 @@ export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY,
   SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY,
   SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY,
-  TERMINAL_AGENT_ID_RUNTIME_CAPABILITY
+  TERMINAL_AGENT_ID_RUNTIME_CAPABILITY,
+  SESSION_TABS_PERSON_LIST_RUNTIME_CAPABILITY
 ] as const

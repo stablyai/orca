@@ -2,7 +2,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import { useBotHostHas } from '@/lib/bot-host-status'
-import { BOTS_TAB_LIST_VIEWS_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { SESSION_TABS_PERSON_LIST_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botPeoplePicker, type BotChatPersonPick } from '../../../../../shared/bots/bot-chat-people'
@@ -38,7 +38,10 @@ export function viewedListOfPick(
 /** Whether the agent's host can show another person's list; an older one would answer with this
  *  viewer's own, so no one else's tabs show there. */
 export function useTabListViews(bot: Pick<Bot, 'hostId'> | null): boolean {
-  const has = useBotHostHas(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID, BOTS_TAB_LIST_VIEWS_CAPABILITY)
+  const has = useBotHostHas(
+    bot?.hostId ?? LOCAL_EXECUTION_HOST_ID,
+    SESSION_TABS_PERSON_LIST_RUNTIME_CAPABILITY
+  )
   return bot !== null && has
 }
 

@@ -106,11 +106,6 @@ export const BOTS_SHARE_WORKSPACES_CAPABILITY = 'bots.share-workspaces.v1' as co
 // steering its running turn. An older host only takes them typed.
 export const BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY = 'bots.offer-answer.v1' as const
 
-// Host serves another person's tab list in a shared agent's Home (session.tabs reads and closes
-// naming `person`), and refuses a person it holds no list for. An older host strips `person` and
-// answers with the caller's own list, so a desktop shows no one else's tabs there.
-export const BOTS_TAB_LIST_VIEWS_CAPABILITY = 'bots.tab-list-views.v1' as const
-
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -139,6 +134,5 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY,
   BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY,
   BOTS_SHARE_WORKSPACES_CAPABILITY,
-  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY,
-  BOTS_TAB_LIST_VIEWS_CAPABILITY
+  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY
 ] as const
