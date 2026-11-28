@@ -6,6 +6,9 @@ import { createRecentlyClosedTabPositionIndex } from '../../tabs/recently-closed
 import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
 import { MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
+import { flushClosingEditorBuffers } from '@/components/editor/save/flush/editor-pending-flush'
+import { editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
+import { openWorkspaceEditorItem } from './workspace-editor-item'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 import {
   editorContentIsReferenced,
@@ -95,7 +98,40 @@ export function editorTabsRetirement(
 }
 
 export function editorTabRetirement(set: EditorSet, get: EditorGet, before: AppState, tab: Tab) {
-  return editorTabsRetirement(set, get, before, [tab])
+  const retire = editorTabsRetirement(set, get, before, [tab])
+  const fileId = tab.entityId
+  const fileBefore = isEditorTabContentType(tab.contentType)
+    ? openFileIndex(before.openFiles).get(fileId)
+    : undefined
+  if (fileBefore?.mode !== 'edit' || fileBefore.isDirty || fileBefore.readOnly) {
+    return retire
+  }
+
+  return () => {
+    const state = get()
+    if (
+      openFileIndex(state.openFiles).get(fileId)?.isDirty &&
+      !editorBufferSiblingViewIds(state, fileId).some((id) => editorContentIsReferenced(state, id))
+    ) {
+      // The close was approved while clean; keep text typed before the owner's frame arrived.
+      flushClosingEditorBuffers(state, [fileId])
+      const latest = get()
+      if (openFileIndex(latest.openFiles).get(fileId)?.isDirty) {
+        openWorkspaceEditorItem(
+          latest,
+          fileId,
+          tab.worktreeId,
+          fileBefore.relativePath,
+          'editor',
+          false,
+          tab.groupId,
+          'none'
+        )
+        return
+      }
+    }
+    retire()
+  }
 }
 
 export function releaseUnreferencedEditorContent(
