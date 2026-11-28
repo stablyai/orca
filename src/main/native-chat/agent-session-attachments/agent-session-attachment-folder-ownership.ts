@@ -1,6 +1,6 @@
 // Only the attempt that made an upload folder undoes it, and never recursively.
 
-import { access, mkdir, rm, rmdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, open, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-references'
@@ -17,16 +17,21 @@ export async function writeContent(uploadDir: string, path: string, bytes: Buffe
   }
   const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
   let created: string | undefined
-  let writing = false
+  let opened = false
   try {
     created = await mkdir(uploadDir, { recursive: true })
-    // Writes to one folder are serialized, so a part file begun here is this write's, even partial.
-    writing = true
-    await writeFile(partPath, bytes)
+    // Once this write has the part file open it is this write's, even if only partly written.
+    const part = await open(partPath, 'w')
+    opened = true
+    try {
+      await part.writeFile(bytes)
+    } finally {
+      await part.close()
+    }
     await renameFileWithWindowsRetryAsync(partPath, path)
   } catch (error) {
     // Undo only what this write made: a reused folder's other files stay for the sweep.
-    if (writing) {
+    if (opened) {
       await rm(partPath, { force: true }).catch(() => {})
     }
     if (created !== undefined) {

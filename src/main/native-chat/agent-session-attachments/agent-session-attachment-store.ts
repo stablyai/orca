@@ -60,12 +60,8 @@ export class AgentSessionAttachmentStore {
     ttlMs: UPLOAD_IDLE_TTL_MS,
     tooManyMessage: 'Too many attachment uploads are in progress',
     notFoundMessage: NOT_FOUND,
-    onExpire: (upload) => {
-      // Active I/O finishes first; anything it leaves is the sweep's.
-      if (!upload.writing) {
-        void removeOwnedUpload(upload)
-      }
-    }
+    onExpire: (upload) => void removeOwnedUpload(upload),
+    isBusy: (upload) => upload.writing
   })
 
   // Latest content write per folder, and pending writes by file so a re-send queues nothing.
@@ -116,10 +112,6 @@ export class AgentSessionAttachmentStore {
       const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
       await writeFile(partPath, '', { flag: 'wx' })
       upload.writing = false
-      // Expired while admitting: nothing can append to it now.
-      if (!this.uploads.has(uploadId)) {
-        throw new Error(NOT_FOUND)
-      }
     } catch (error) {
       this.uploads.delete(uploadId)
       await removeOwnedUpload(upload)

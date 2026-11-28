@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -27,19 +27,24 @@ vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof FsPromises>()
   return {
     ...fs,
-    readdir: (...args: Parameters<typeof fs.readdir>) => {
+    readdir: async (...args: Parameters<typeof fs.readdir>) => {
       if (String(args[0]) === fault.path) {
         throw Object.assign(new Error('listing failed'), { code: 'EIO' })
       }
       return fs.readdir(...args)
     },
-    // Writes some bytes, then fails as a full disk would.
-    writeFile: async (...args: Parameters<typeof fs.writeFile>) => {
+    // The opened file takes some bytes, then fails as a full disk would.
+    open: async (...args: Parameters<typeof fs.open>) => {
+      const handle = await fs.open(...args)
       if (String(args[0]) === fault.partial) {
-        await fs.writeFile(args[0], 'partial')
-        throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+        Object.defineProperty(handle, 'writeFile', {
+          value: async () => {
+            await handle.write('partial')
+            throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+          }
+        })
       }
-      return fs.writeFile(...args)
+      return handle
     },
     // Slow I/O the test releases, so expiry can land in the middle of it.
     mkdir: async (...args: Parameters<typeof fs.mkdir>) => {
@@ -93,8 +98,10 @@ const exists = (path: string) =>
   )
 
 async function storeIn() {
-  const root = await mkdtemp(join(tmpdir(), 'orca-attachment-store-'))
-  roots.push(root)
+  const parent = await mkdtemp(join(tmpdir(), 'orca-attachment-store-'))
+  roots.push(parent)
+  // Not created yet: the first upload or write makes it.
+  const root = join(parent, 'attachments')
   const store = new AgentSessionAttachmentStore(root, { hasSession: () => true })
   const stage = (name: string) => store.stageUpload({ callerKey: 'phone', name, byteLength: 4 })
   return { root, store, stage }
@@ -171,7 +178,7 @@ it('removes the partial file a failed content write left in a folder it made', a
   expect(await exists(dirname(path))).toBe(false)
 })
 
-it('expires an upload only between its writes', async () => {
+it('never expires an upload while it is writing', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   const { root, store, stage } = await storeIn()
   const hold = (path: string) => {
@@ -185,10 +192,7 @@ it('expires an upload only between its writes', async () => {
   const admitting = stage('a.png')
   await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
   releaseAdmission()
-  await expect(admitting).rejects.toThrow('Attachment upload was not found')
-  expect(await exists(join(root, TAKEN))).toBe(false)
-
-  const { uploadId } = await stage('b.png')
+  const { uploadId } = await admitting
   const releaseAppend = hold(join(root, uploadId))
   const appending = store.appendChunk({
     callerKey: 'phone',
@@ -199,6 +203,24 @@ it('expires an upload only between its writes', async () => {
   await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
   releaseAppend()
   await appending
-  const part = join(root, uploadId, AGENT_SESSION_ATTACHMENT_PART_FILE)
-  expect(await readFile(part, 'utf8')).toBe('mine')
+  const committed = await store.commitUpload({ callerKey: 'phone', uploadId })
+  expect(await readFile(committed.path, 'utf8')).toBe('mine')
 })
+
+// A read-only part file can't be opened by a non-root writer, so it stays someone else's.
+it.skipIf(process.getuid?.() === 0)(
+  'keeps a part file a failed content write could not open',
+  async () => {
+    const { store } = await storeIn()
+    const bytes = Buffer.from('locked part bytes')
+    const path = store.storeContent(bytes, '.png')
+    await store.whenWritten(path)
+    await rm(path)
+    const part = join(dirname(path), AGENT_SESSION_ATTACHMENT_PART_FILE)
+    await writeFile(part, 'earlier')
+    await chmod(part, 0o400)
+    await store.whenWritten(store.storeContent(bytes, '.png'))
+    expect(await readFile(part, 'utf8')).toBe('earlier')
+    await chmod(part, 0o600)
+  }
+)
