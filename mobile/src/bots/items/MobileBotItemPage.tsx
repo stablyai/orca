@@ -31,6 +31,8 @@ import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileNativeChatFloatingControls } from '../../session/native-chat/lower-region/MobileNativeChatFloatingControls'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-bot-item-question-steps'
+import { mobileBotAvatarSource } from '../host-bot-row-facts'
+import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotItemActivity } from './MobileBotItemActivity'
 import { MobileBotItemCommentBox } from './MobileBotItemCommentBox'
 import { botItemOpenAsk, useMobileBotItemAskSlot } from './MobileBotItemAskCard'
@@ -76,7 +78,10 @@ export function MobileBotItemPage({
   hostKey: string
   /** That host's id, which the bot folder's file and skill reads go through. */
   hostId: string
-  bot: { id: string; name: string; folderWorkspaceId: string; agent: string }
+  bot: Pick<
+    PhoneBot,
+    'id' | 'name' | 'folderWorkspaceId' | 'agent' | 'avatar' | 'avatarColor' | 'avatarOutfit'
+  >
   uid: string
   /** Up and down through the list the item opened from; null when it opened from elsewhere. */
   stepper: PhoneBotItemStepper | null
@@ -311,6 +316,7 @@ export function MobileBotItemPage({
                 item={item}
                 events={view.events}
                 attachments={{ client, onOpenFile }}
+                botAvatar={mobileBotAvatarSource(bot)}
                 pending={pending}
                 onReveal={jump.center}
                 sent={sent}

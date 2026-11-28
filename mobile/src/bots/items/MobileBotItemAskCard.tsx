@@ -25,6 +25,9 @@ import {
 
 type OpenAsk = { askId: string; shape: BotItemQuestionShape; open: number[] }
 
+// The answer box opens two lines tall under the question, not chat's three, and grows to the usual seven.
+const ANSWER_LINES = { min: 2, max: 7 }
+
 /** The waiting ask's lines no comment answered yet; the item's own copy of its question stands in until
  *  its event is read. */
 export function botItemOpenAsk(item: BotItem, events: readonly BotItemEvent[]): OpenAsk | null {
@@ -194,6 +197,7 @@ export function useMobileBotItemAskSlot({
         }}
         cancelLabel={t('bots.items.ask.notNow', 'Not now')}
         onCollapse={fold}
+        answerLines={ANSWER_LINES}
       />
     )
   }

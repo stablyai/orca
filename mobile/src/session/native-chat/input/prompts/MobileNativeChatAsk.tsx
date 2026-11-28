@@ -35,7 +35,6 @@ import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { MobileNativeChatOptionPreviewSheet } from '../session-options/MobileNativeChatOptionPreviewSheet'
 import { mobileNativeChatAskStylesSheet as stylesSheet } from './MobileNativeChatAsk.styles'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
-import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
 import { useThemedStyles } from '../../../../theme/themed-styles'
 
 type Props = {
@@ -58,6 +57,8 @@ type Props = {
   questionKeys?: readonly string[]
   /** Unsent picks and typed words kept by question key, so a card that closes opens with them. */
   drafts?: MobileNativeChatAskDrafts
+  /** How many lines the answer box opens at and grows to; 3 and 7 by default. */
+  answerLines?: { min: number; max: number }
 }
 
 // Sentinel index for the free-text "Other…" row (never a real option index).
@@ -75,10 +76,10 @@ export function MobileNativeChatAsk({
   freeTextInputs,
   notice,
   questionKeys,
-  drafts
+  drafts,
+  answerLines
 }: Props): React.JSX.Element | null {
   const styles = useThemedStyles(stylesSheet)
-  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
@@ -363,7 +364,7 @@ export function MobileNativeChatAsk({
           <MessageBox
             inputRef={inputRef}
             onFocus={revealReply}
-            style={[composerInputStyles.filledFill, styles.other]}
+            style={styles.other}
             value={otherText[index] ?? ''}
             onChangeText={(v) => setOther(index, v)}
             placeholder={
@@ -371,6 +372,7 @@ export function MobileNativeChatAsk({
             }
             // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
             multiline={freeTextInput ? freeTextInput.multiline === true : true}
+            lines={answerLines}
             onSubmitEditing={confirm}
             autoFocus
           />

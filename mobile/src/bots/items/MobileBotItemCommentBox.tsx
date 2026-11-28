@@ -3,8 +3,8 @@
 // panel keeps each item's draft, photos too, for the session. Offline, Comment waits. While the agent's
 // question waits, "Replying to" names it, as on the desktop; its × sends the comment as one of its own.
 // The chat's field and mic: the session's dictation lands here while the box is its target. Photos
-// attach with the chat's + and thumbnails, each named [Image #N] in the words. Idle it is one line between
-// + and Send; in use the field takes the box's width above them (MobileBotItemCommentBoxRow).
+// attach with the chat's + and thumbnails, each named [Image #N] in the words. Idle it is a 44 pt pill, one
+// line between + and Send; in use, a card whose field takes its width above them (MobileBotItemCommentBoxRow).
 import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from 'react'
 import { Pressable, Text, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { WifiOff, X } from 'lucide-react-native'
@@ -25,7 +25,10 @@ import { useRouteCapability } from '../../worktree/execution-hosts/use-route-cap
 import { ComposerSendButton } from '../../components/composer-input/ComposerSendButton'
 import { MobileNativeChatComposerAttachButton } from '../../session/native-chat/composer/attachments/MobileNativeChatComposerAttachButton'
 import { MobileNativeChatComposerAttachments } from '../../session/native-chat/composer/attachments/MobileNativeChatComposerAttachments'
-import { MESSAGE_MAX_HEIGHT } from '../../components/composer-input/composer-input-styles'
+import {
+  MESSAGE_MAX_HEIGHT,
+  MESSAGE_MIN_HEIGHT
+} from '../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerField } from '../../session/native-chat/composer/field/MobileNativeChatComposerField'
 import { MobileNativeChatComposerMic } from '../../session/native-chat/composer/dictation/MobileNativeChatComposerMic'
@@ -52,6 +55,9 @@ import {
   writeBotItemCommentDraft,
   shownBotItemCommentDrafts as shownDrafts
 } from './bot-item-comment-drafts'
+
+// The idle box: one touch target tall.
+const PILL_HEIGHT = 44
 
 // Skills picked into each item's draft, by the file the comment's mail names.
 const pickedSkills = new Map<string, readonly BotItemCommentSkill[]>()
@@ -258,8 +264,10 @@ export function MobileBotItemCommentBox({
         { host: hostName }
       )
     : null
+  // Only the bare line is a pill: anything above or below it makes the box a card.
+  const pill = !open && !quote && !error && !notice
   return (
-    <View ref={boxRef} style={styles.box}>
+    <View ref={boxRef} style={[styles.box, pill ? styles.pill : styles.card]}>
       <MobileNativeChatComposerSuggestions anchorRef={boxRef} rows={menu.rows} onPick={menu.pick} />
       <MobileNativeChatComposerAttachments
         images={photos.images}
@@ -385,16 +393,27 @@ export function MobileBotItemCommentBox({
   )
 }
 
+// The pill's + and Send sit an even inset from its edge all round, its 1 pt edge counted; in the card the
+// words start a little further in than its controls, as chat's composer sets them.
+const PILL_INSET = (PILL_HEIGHT - MESSAGE_MIN_HEIGHT) / 2 - 1
+
 const stylesSheet = themedStyleSheet((colors) => ({
   box: {
     marginTop: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderRadius: radii.surface,
+    paddingHorizontal: spacing.sm,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.sheetGroup
+  },
+  pill: {
+    minHeight: PILL_HEIGHT,
+    paddingVertical: PILL_INSET,
+    borderRadius: radii.pill
+  },
+  card: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderRadius: radii.surface
   },
   quote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   quoteText: { flex: 1, minWidth: 0 },

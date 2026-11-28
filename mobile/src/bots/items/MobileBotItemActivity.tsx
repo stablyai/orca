@@ -1,5 +1,5 @@
-// An item's Activity on the phone, in the desktop's order and words: comments as chat-style rows (an
-// agent's question with its question lines), and one muted line per other event; comments
+// An item's Activity on the phone, in the desktop's order and words: comments on their own cards (an
+// agent's question with its question lines), and one muted line per other event between them; comments
 // sent from the box that the host's read doesn't show yet come last, as sent. A reply's quote shows its
 // question: scrolled to the middle and briefly lit, as the desktop's comment box does (a tap has no focus ring).
 import { useCallback, useRef, useState } from 'react'
@@ -48,6 +48,7 @@ import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
@@ -247,6 +248,7 @@ export function MobileBotItemActivity({
   item,
   events,
   attachments,
+  botAvatar,
   pending,
   onReveal,
   sent,
@@ -257,6 +259,8 @@ export function MobileBotItemActivity({
   /** Comments sent from the box that the item's read doesn't show yet: last, as sent. */
   pending: Pick<BotItemPendingComments, 'shown' | 'retry' | 'discard'>
   attachments: MobileBotItemAttachmentSource
+  /** The item's bot's picture, beside its comments. */
+  botAvatar: MobileBotAvatarSource
   /** Scrolls the page to a span measured in the window. */
   onReveal: (y: number, height: number, animated: boolean) => void
   /** Answers just posted as one comment. */
@@ -307,6 +311,7 @@ export function MobileBotItemActivity({
                   : entry
               }
               attachments={attachments}
+              botAvatar={botAvatar}
               ref={(node) => {
                 if (node) {
                   cards.current.set(entry.key, node)
@@ -356,6 +361,7 @@ export function MobileBotItemActivity({
             item={item}
             entry={beside === null ? { event, waiting: false } : { event, waiting: false, beside }}
             attachments={attachments}
+            botAvatar={botAvatar}
             failed={
               failed
                 ? {

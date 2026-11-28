@@ -1,14 +1,18 @@
-// One comment in an item's Activity, as a chat-style row: who and when, the reply it quotes, its words at
-// chat's prose size with its images and files, a question's lines, and for a comment sent from the box that
-// didn't reach the host, Not sent · Retry · Discard.
+// One comment in an item's Activity, on its own card: a face, who and when on one line, the reply it
+// quotes, its words at chat's prose size with its images and files, a question's lines, and for a comment
+// sent from the box that didn't reach the host, Not sent · Retry · Discard.
 import { useEffect, useRef, type Ref } from 'react'
 import { Animated, Pressable, Text, View, type HostInstance } from 'react-native'
-import { CircleAlert } from 'lucide-react-native'
+import { CircleAlert, UserRound } from 'lucide-react-native'
 import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
-import type { BotItem } from '../../../../src/shared/bots/bot-items'
+import type { BotItem, BotItemEvent } from '../../../../src/shared/bots/bot-items'
+import { botInitial } from '../../../../src/shared/bots/bot-avatar-fallback'
 import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
+import { PrCommentAvatar } from '../../source-control/review/pull-request/comments/PrCommentAvatar'
+import { MobileBotAvatar } from '../MobileBotAvatar'
+import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
@@ -27,11 +31,44 @@ import { useMobileMessageTime } from '../../session/native-chat/transcript/messa
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 const ICON = 13
+const FACE = 24
+// Two cards sit this far apart: half of it each side.
+const CARD_GAP = spacing.md
+
+/** Who wrote it, as the desktop's comment draws them: the item's bot its picture, you your mark, anyone
+ *  else their initial. */
+function CommentFace({
+  event,
+  item,
+  name,
+  botAvatar
+}: {
+  event: BotItemEvent
+  item: BotItem
+  name: string
+  botAvatar: MobileBotAvatarSource
+}) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const { actor } = event
+  if (actor.kind === 'bot' && actor.botId === item.owner.botId) {
+    return <MobileBotAvatar avatar={botAvatar} size={FACE} circular />
+  }
+  if (actor.kind === 'owner') {
+    return (
+      <View style={styles.ownFace}>
+        <UserRound size={14} color={colors.textSecondary} strokeWidth={2.2} />
+      </View>
+    )
+  }
+  return <PrCommentAvatar login={name} label={botInitial(name)} size={FACE} />
+}
 
 export function MobileBotItemCommentCard({
   item,
   entry,
   attachments,
+  botAvatar,
   failed,
   ref,
   onShowQuestion,
@@ -49,6 +86,8 @@ export function MobileBotItemCommentCard({
       >
     >
   attachments: MobileBotItemAttachmentSource
+  /** The item's bot's picture, beside its own comments. */
+  botAvatar: MobileBotAvatarSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
   failed?: { retry: (() => void) | null; discard: () => void }
   ref?: Ref<HostInstance>
@@ -71,17 +110,32 @@ export function MobileBotItemCommentCard({
   const proseScale = useBotItemProseScale()
   const shape = botItemQuestionShape(event.data)
   const text = mobileBotItemCommentWords({ ...event.data, text: entry.beside ?? shape.body })
+  const name = botItemActorName(event, item, t)
   return (
-    <View ref={ref} style={styles.row}>
+    <View ref={ref} style={styles.card}>
       {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}
       <View style={styles.body}>
         <View style={styles.head}>
-          <Text style={styles.author} numberOfLines={1}>
-            {botItemActorName(event, item, t)}
-          </Text>
-          <Text style={styles.meta} accessibilityLabel={time.full(event.at)}>
-            {time.label(event.at)}
-          </Text>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            pointerEvents="none"
+          >
+            <CommentFace event={event} item={item} name={name} botAvatar={botAvatar} />
+          </View>
+          {/* The time right after the name, on its baseline; a long name gives way first. */}
+          <View style={styles.byline}>
+            <Text style={styles.author} numberOfLines={1}>
+              {name}
+            </Text>
+            {/* Its own text, spaced by the row's gap: a space inside would land on the wrong side in RTL. */}
+            <Text style={styles.meta} accessibilityElementsHidden importantForAccessibility="no">
+              ·
+            </Text>
+            <Text style={styles.meta} accessibilityLabel={time.full(event.at)}>
+              {time.label(event.at)}
+            </Text>
+          </View>
         </View>
         {replyTo ? (
           <MobileBotItemReplyQuote text={replyTo.text} onShowQuestion={onShowQuestion ?? null} />
@@ -159,7 +213,8 @@ function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
   return <Animated.View pointerEvents="none" style={[styles.flash, { opacity }]} />
 }
 
-// Rows sit on the list rows' inset, under the Activity header; event lines keep their glyph column.
+// A card as wide as the Status and Chat group, on its fill and curve; its words on the rows' inset, so they
+// line up with the row titles and the Activity header. Event lines sit outside cards.
 const stylesSheet = themedStyleSheet((colors) => ({
   flash: {
     position: 'absolute',
@@ -167,15 +222,33 @@ const stylesSheet = themedStyleSheet((colors) => ({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: radii.control,
+    borderRadius: radii.surface,
     backgroundColor: colors.translucentFill
   },
-  row: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: LIST_ROW_PADDING
+  card: {
+    marginVertical: CARD_GAP / 2,
+    paddingVertical: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
+    borderRadius: radii.surface,
+    backgroundColor: colors.sheetGroup
   },
-  body: { flex: 1, minWidth: 0, gap: spacing.xs },
+  body: { flex: 1, minWidth: 0, gap: spacing.sm },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  byline: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.xs
+  },
+  ownFace: {
+    width: FACE,
+    height: FACE,
+    borderRadius: radii.pill,
+    backgroundColor: colors.translucentFill,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   author: {
     flexShrink: 1,
     fontSize: 15,
@@ -192,5 +265,10 @@ const stylesSheet = themedStyleSheet((colors) => ({
   notSent: { color: colors.statusRed },
   retry: { fontWeight: '600', color: colors.textPrimary },
   line: { fontSize: 13, lineHeight: 18, color: colors.textMuted },
-  meta: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] }
+  meta: {
+    flexShrink: 0,
+    fontSize: typography.bodySize,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
+  }
 }))
