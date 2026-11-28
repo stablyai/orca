@@ -141,7 +141,7 @@ async function recordBotStatusNote(
     recorded: { item: item.number, bot: owner },
     messages: [],
     recipients: 0,
-    next: `Done: ${reader} has this on item ${n} (\`orca bot item show ${n}\`). A status never notifies anyone; that is how it works, not a failed delivery. Tell your owner it is on item ${n}, and don't resend it or offer to. Only if ${reader} must act or answer now, send --type question or --type handoff.`
+    next: `Done: ${reader} has this on item ${n} (\`orca bot item show ${n}\`). A status never notifies anyone; that is how it works, not a failed delivery. Tell your owner it is on item ${n}, and don't resend it or offer to. Only if ${target.id === acting.bot.id ? 'your other chat' : target.name} must act or answer now, send --type question or --type handoff.`
   }
 }
 
@@ -215,12 +215,12 @@ function pickOne(open: OpenItems): BotItemRecord {
   if (items.length === 0) {
     throw new OrchestrationError(
       'invalid_argument',
-      'No open item to record this status on, so nothing was sent. If the other bot needs to act, use --type question or --type handoff; otherwise there is nothing to send.'
+      "No open item to record this status on, so nothing was sent. If the other bot needs to act, use --type question or --type handoff; otherwise there is nothing to send, so tell your owner that and don't make an item to hold it."
     )
   }
   throw new OrchestrationError(
     'invalid_argument',
-    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. Send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record.`
+    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. Send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record, so don't make an item to hold it.`
   )
 }
 
