@@ -29,16 +29,21 @@ export function holdTabStripPointerGestureUntilRelease(
   pointerId: number
 ): void {
   const releaseGesture = beginTabStripPointerGesture()
+  const cleanup = (): void => {
+    targetWindow.removeEventListener('pointerup', finish)
+    targetWindow.removeEventListener('pointercancel', finish)
+    targetWindow.removeEventListener('blur', cleanup)
+    releaseGesture()
+  }
   const finish = (releasedEvent: PointerEvent): void => {
     if (releasedEvent.pointerId !== pointerId) {
       return
     }
-    targetWindow.removeEventListener('pointerup', finish)
-    targetWindow.removeEventListener('pointercancel', finish)
-    releaseGesture()
+    cleanup()
   }
   targetWindow.addEventListener('pointerup', finish)
   targetWindow.addEventListener('pointercancel', finish)
+  targetWindow.addEventListener('blur', cleanup)
 }
 
 export function isTabStripPointerGestureActive(): boolean {
