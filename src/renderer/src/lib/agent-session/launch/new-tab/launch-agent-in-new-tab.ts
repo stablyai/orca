@@ -33,6 +33,8 @@ import '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { launchOnceHostAnswered, routeNewTabLaunch } from './launch-agent-in-new-tab-host-agents'
 import type { AgentTabLaunchOutcome } from './launch-agent-in-new-tab-host-agents'
+import { isAgentCliUpdateAgent } from '../../../../../../shared/agent-launch/installation/agent-cli-update'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -179,6 +181,15 @@ function openAgentInNewTab(
     })
   args.focusIntent?.cancel()
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
+  if (isAgentCliUpdateAgent(agent)) {
+    // A terminal agent start is when its host's own CLI matters; the deferred, rate-limited check never holds up the launch.
+    const target: RuntimeClientTarget = runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
+    void Promise.resolve()
+      .then(() => useAppStore.getState().checkAgentCliUpdates(target))
+      .catch(() => {})
+  }
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
       return null
