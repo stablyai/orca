@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, session } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -108,6 +108,11 @@ export function registerSettingsHandlers(
     const { listSystemFontFamilies } = await import('../../window/desktop-integration/system-fonts')
     return listSystemFontFamilies()
   })
+
+  // Why main: only the session knows which Hunspell dictionaries Electron actually ships on this platform.
+  ipcMain.handle('settings:listSpellcheckLanguages', () =>
+    [...session.defaultSession.availableSpellCheckerLanguages].sort((a, b) => a.localeCompare(b))
+  )
 
   ipcMain.handle('cache:getGitHub', () => {
     return store.getGitHubCache()

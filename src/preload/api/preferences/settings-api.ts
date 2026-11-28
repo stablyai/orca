@@ -19,6 +19,8 @@ export type SettingsApi = {
   }) => Promise<GlobalSettings>
   updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) => Promise<GlobalSettings>
   listFonts: () => Promise<string[]>
+  /** Spellchecker dictionaries this OS build ships, for the language picker. */
+  listSpellcheckLanguages: () => Promise<string[]>
   previewGhosttyImport: (
     source?: TerminalConfigImportSource
   ) => Promise<TerminalConfigImportPreview>

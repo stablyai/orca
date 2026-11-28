@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { normalizeSpellcheckLanguages } from '../../spellcheck/spellcheck-languages'
 import {
   NEW_TAB_MENU_LAYOUT_SETTING,
   normalizeNewTabMenuLayout
@@ -37,6 +38,11 @@ export function sanitizeRendererSettingsUpdate(
     if (key in sanitizedArgs) {
       sanitizedArgs[key] = normalizeNewTabMenuLayout(sanitizedArgs[key])
     }
+  }
+  if ('spellcheckLanguages' in sanitizedArgs) {
+    sanitizedArgs.spellcheckLanguages = normalizeSpellcheckLanguages(
+      sanitizedArgs.spellcheckLanguages
+    )
   }
   return sanitizedArgs
 }
