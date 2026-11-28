@@ -44,7 +44,9 @@ describe('OperationRow', () => {
 
   it('stacks the verb over the branch, each on its own truncating line in the sans family', () => {
     const { container } = renderRow()
-    const lines = Array.from(visibleLabel(container).children) as HTMLElement[]
+    const lines = Array.from(visibleLabel(container).children).filter(
+      (line): line is HTMLElement => line instanceof HTMLElement
+    )
     expect(lines.map((line) => line.textContent)).toEqual(['Rebasing', BRANCH])
     for (const line of lines) {
       expect(line.className).toContain('truncate')
