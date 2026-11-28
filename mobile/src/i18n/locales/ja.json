@@ -18,7 +18,10 @@
       "title": "アカウント",
       "useReset": "リセット枠を使用",
       "pairingInvalidMessage": "アカウントを表示するには、このスマートフォンをデスクトップと再ペアリングしてください。",
-      "weeklyWindow": "7日"
+      "weeklyWindow": "7日",
+      "signedOut": "サインアウト済み",
+      "addAccount": "アカウントを追加",
+      "signIn": "サインイン"
     },
     "claude": {
       "usageSignInLabel": "もう一度サインイン",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "残り {{value}}%"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "このサインインを開始したデバイスが応答しなくなりました。",
+        "superseded": "このホスト上でアカウントが変更されたため、サインインが中止されました。やり直してください。",
+        "noPrompt": "サーバーのログインコマンドが1分以内にサインインリンクを表示しませんでした。サーバーのOrcaを更新してから、もう一度お試しください。",
+        "failed": "サインインに失敗しました。もう一度お試しください。"
+      },
+      "starting": "{{host}} にサインインを開始しています…",
+      "copied": "コピーしました",
+      "copyLink": "リンクをコピー",
+      "continue": "続行",
+      "copyCode": "コードをコピーする",
+      "signingIn": "サインイン中…",
+      "tryAgain": "再試行",
+      "titleClaude": "Claude にサインイン",
+      "titleCodex": "Codex にサインイン",
+      "savedOn": "{{host}} に保存",
+      "newCode": "新しいコードを取得",
+      "openPage": "サインインページを開く",
+      "pasteStep": "コードを貼り付け",
+      "codePlaceholder": "ページに表示されたコード",
+      "enterCodeStep": "このコードを入力",
+      "waitingForPage": "ページでの操作が終わるのを待っています",
+      "signedInAs": "{{email}} としてサインインしました"
     }
   },
   "agentHistory": {
@@ -433,7 +461,10 @@
       "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。",
       "signIn": "サインイン",
       "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
-      "forkedFrom": "分岐元"
+      "forkedFrom": "分岐元",
+      "notSignedIn": "{{agent}} にサインインしていません。",
+      "signInAccountHint": "このチャットを実行しているコンピューターでこのアカウントに再度サインインします",
+      "signedInSendAgain": "サインインしました。もう一度送信してください。"
     },
     "ciResultLine": {
       "failingLead": "CI 失敗:",

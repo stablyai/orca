@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
-import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
+import { View, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { ChevronLeft, RefreshCw, User } from 'lucide-react-native'
+import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { loadHosts, peekHosts } from '../host-catalog/host-store'
 import { useForceReconnect, useHostClient } from '../transport/connection/host-client-hooks'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
@@ -51,6 +51,7 @@ import {
   getCodexAccountDisplayLabel
 } from '../../../src/shared/agent-accounts/codex-account-display-label'
 import { useThemedStyles } from '../theme/themed-styles'
+import { ManageOnDesktopHint, useAccountsScreenSignIn } from './sign-in/use-accounts-screen-sign-in'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -101,6 +102,15 @@ export function MobileAccountsScreen() {
     forceReconnect: hostId && forceReconnect ? () => void forceReconnect(hostId) : null,
     hasData: showsAccounts,
     asOf: accounts.readAt
+  })
+  // Accounts are added and signed in again on the computer, whose login the phone relays.
+  const signIn = useAccountsScreenSignIn({
+    client,
+    connected: connState === 'connected',
+    hostName,
+    bottomInset: insets.bottom,
+    live,
+    onSignedIn: () => void refresh()
   })
   // Stored accounts wait on the stream's first answer for their usage.
   const showRefreshLine = useRefreshHint(showsAccounts && !live && offlineBanner === null)
@@ -246,41 +256,50 @@ export function MobileAccountsScreen() {
             // Codex logins can share an email across workspaces; desktop tells them apart the same way.
             const detail =
               provider === 'codex' ? getCodexAccountDisplayDetail(account, state.accounts) : null
+            const signedOutRow = signIn.rowFor(provider, account, activeAccountId, snapshot)
+            const { signedOut, offerSignIn } = signedOutRow
             return (
               <ListRow
                 key={account.id}
                 title={title}
                 subtitle={
-                  [title === account.email ? null : account.email, detail]
+                  [title === account.email ? null : account.email, detail, signedOutRow.note]
                     .filter(Boolean)
                     .join(' · ') || undefined
                 }
-                accessibilityLabel={
+                {...signedOutRow.props}
+                accessibilityLabel={signedOutRow.label(
                   provider === 'codex'
                     ? getCodexAccountDisplayLabel(account, state.accounts)
                     : getManagedAccountInlineLabel(account)
-                }
+                )}
+                // A signed-out account has no usage to show until it signs in again.
                 detail={
-                  <>
-                    <ProviderUsageWindows
-                      limits={usage}
-                      now={now}
-                      isFetching={isFetching}
-                      showEmptyWindows
-                    />
-                    {usage ? <UsageStatusNote limits={usage} /> : null}
-                  </>
+                  signedOut ? undefined : (
+                    <>
+                      <ProviderUsageWindows
+                        limits={usage}
+                        now={now}
+                        isFetching={isFetching}
+                        showEmptyWindows
+                      />
+                      {usage ? <UsageStatusNote limits={usage} /> : null}
+                    </>
+                  )
                 }
                 accessory={busyAccountId === account.id ? spinner : undefined}
                 selected={isActive}
                 onPress={
-                  switchBlocked || isActive
-                    ? undefined
-                    : () => void selectAccount(provider, account.id)
+                  offerSignIn
+                    ? () => signIn.start({ provider, accountId: account.id })
+                    : switchBlocked || isActive || signedOut
+                      ? undefined
+                      : () => void selectAccount(provider, account.id)
                 }
               />
             )
           })}
+          {signIn.addRow(provider, state.accounts)}
           {resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
             <CodexResetCreditAction
               key="codex-reset"
@@ -363,18 +382,11 @@ export function MobileAccountsScreen() {
               onSwitched={refresh}
               onNotice={setNotice}
             />
-            <View style={styles.footerHint}>
-              <User size={14} color={colors.textMuted} />
-              <Text style={styles.footerHintText}>
-                {t(
-                  'accounts.screen.manageAccountsHint',
-                  'Add or re-authenticate accounts from desktop Settings → Accounts.'
-                )}
-              </Text>
-            </View>
+            {signIn.supported ? null : <ManageOnDesktopHint />}
           </>
         )}
       </ScrollView>
+      {signIn.overlay}
       <ConfirmModal
         visible={codexResetConfirmation !== null}
         title={codexResetConfirmation?.title ?? ''}

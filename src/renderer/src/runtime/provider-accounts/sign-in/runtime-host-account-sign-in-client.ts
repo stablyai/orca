@@ -2,13 +2,16 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
-import {
-  HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES,
-  type HostAccountSignInProvider,
-  type HostAccountSignInStatus
+import type {
+  HostAccountSignInProvider,
+  HostAccountSignInStatus
 } from '../../../../../shared/agent-accounts/host-account-sign-in-types'
-import { hostAccountSignInFailureText, noPromptOutcome } from './host-account-sign-in-failure-text'
-import { isLostHostAnswer, retryLostAnswers } from './host-sign-in-lost-answers'
+import {
+  HostAccountSignInRun,
+  type HostAccountSignInTransport
+} from '../../../../../shared/agent-accounts/host-account-sign-in-run'
+import { hostAccountSignInFailureText } from './host-account-sign-in-failure-text'
+import { isLostHostAnswer } from './host-sign-in-lost-answers'
 import {
   HOST_ACCOUNT_REAUTH_RUNTIME_CAPABILITY,
   HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
@@ -22,28 +25,21 @@ import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-
 type EnvironmentTarget = Extract<RuntimeClientTarget, { kind: 'environment' }>
 
 const CALL_TIMEOUT_MS = 20_000
-// Why above the host's 20s long poll: an unchanged flow answers at its own deadline, not ours.
-const WAIT_TIMEOUT_MS = 35_000
-// Why above the host's own 60s: a current host names its failure first; this ends hosts that predate it.
-const PROMPT_DEADLINE_MS = 90_000
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
 const CANCELLED_MESSAGE: Record<HostAccountSignInProvider, string> = {
   claude: 'Claude sign-in was cancelled.',
   codex: CODEX_LOGIN_CANCELLED_MESSAGE
 }
 
-/** Per-provider host sign-in: checking → starting → following → settled. Register before await so Cancel persists until host names/acknowledges its flow, retrying after answers. Pin original pairing so another machine never receives the code. */
+/** Per-provider host sign-in: checking → running. Register before await so Cancel persists until host names/acknowledges its flow. Pin original pairing so another machine never receives the code. */
 type Attempt = {
   owner: EnvironmentTarget
   provider: HostAccountSignInProvider
   /** The saved account to re-authenticate; undefined adds a new one. */
   accountId: string | undefined
-  pairingRevision: number | undefined
-  stage: 'checking' | 'starting' | 'following'
+  /** Set once the capability check passes; Cancel before then ends the attempt here. */
+  run: HostAccountSignInRun | null
   cancelRequested: boolean
-  /** The host acknowledged the cancel (its flow is stopping or settled). */
-  cancelDelivered: boolean
-  status: HostAccountSignInStatus | null
   /** The run a second Add joins; set right after the attempt is registered. */
   done: Promise<HostAccountSignInStatus> | null
 }
@@ -60,40 +56,37 @@ function notify(): void {
   }
 }
 
-function call(
-  attempt: Attempt,
-  method: string,
-  params: unknown,
-  timeoutMs = CALL_TIMEOUT_MS,
-  expectedEnvironmentRuntimeId?: string
-): Promise<HostAccountSignInStatus> {
-  return callRuntimeRpc<HostAccountSignInStatus>(attempt.owner, method, params, {
-    timeoutMs,
-    expectedEnvironmentPairingRevision: attempt.pairingRevision,
-    expectedEnvironmentRuntimeId
-  })
-}
-
-/** Records a newer status of the attempt's own flow; a slow answer never rolls it back. */
-function advance(attempt: Attempt, status: HostAccountSignInStatus): void {
-  const current = attempt.status
-  if (current && (status.flowId !== current.flowId || status.revision <= current.revision)) {
-    return
+function transportFor(
+  owner: EnvironmentTarget,
+  provider: HostAccountSignInProvider,
+  pairingRevision: number | undefined,
+  pinnedRuntimeId: string | undefined
+): HostAccountSignInTransport {
+  const call = (
+    method: string,
+    params: unknown,
+    timeoutMs = CALL_TIMEOUT_MS,
+    expectedEnvironmentRuntimeId?: string
+  ): Promise<HostAccountSignInStatus> =>
+    callRuntimeRpc<HostAccountSignInStatus>(owner, method, params, {
+      timeoutMs,
+      expectedEnvironmentPairingRevision: pairingRevision,
+      expectedEnvironmentRuntimeId
+    })
+  return {
+    // Why pinned: a replacement runtime may predate re-auth and would add a second account.
+    start: (params) => call('accounts.hostSignInStart', params, CALL_TIMEOUT_MS, pinnedRuntimeId),
+    wait: (params, timeoutMs) => call('accounts.hostSignInWait', params, timeoutMs),
+    submitCode: (params) => call('accounts.hostSignInSubmitCode', params),
+    cancel: (params) => call('accounts.hostSignInCancel', params),
+    isLostAnswer: isLostHostAnswer,
+    failureText: hostAccountSignInFailureText,
+    cancelledText: CANCELLED_MESSAGE[provider]
   }
-  attempt.status = status
-  notify()
-}
-
-async function deliverCancel(attempt: Attempt): Promise<void> {
-  const flowId = attempt.status?.flowId
-  if (!flowId || attempt.cancelDelivered) {
-    return
-  }
-  advance(attempt, await call(attempt, 'accounts.hostSignInCancel', { flowId }))
-  attempt.cancelDelivered = true
 }
 
 async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
+  const pairingRevision = captureRuntimeEnvironmentRequestRevision(attempt.owner.environmentId)
   const proof = await runtimeEnvironmentCapabilityProof(
     attempt.owner.environmentId,
     attempt.accountId
@@ -110,77 +103,19 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
   if (attempt.cancelRequested) {
     throw new Error(CANCELLED_MESSAGE[attempt.provider])
   }
-  attempt.stage = 'starting'
-  // Why retrying is safe: the host answers a repeated start with this owner's running flow.
-  advance(
-    attempt,
-    await retryLostAnswers(() =>
-      call(
-        attempt,
-        'accounts.hostSignInStart',
-        {
-          provider: attempt.provider,
-          ...(attempt.accountId ? { accountId: attempt.accountId } : {})
-        },
-        CALL_TIMEOUT_MS,
-        // Why pinned: a replacement runtime may predate re-auth and would add a second account.
-        attempt.accountId ? proof.runtimeId : undefined
-      )
-    )
+  const run = new HostAccountSignInRun(
+    attempt.provider,
+    attempt.accountId,
+    transportFor(
+      attempt.owner,
+      attempt.provider,
+      pairingRevision,
+      attempt.accountId ? proof.runtimeId : undefined
+    ),
+    notify
   )
-  attempt.stage = 'following'
-  const promptDeadline = Date.now() + PROMPT_DEADLINE_MS
-  for (;;) {
-    const status = attempt.status
-    if (!status || HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES.has(status.phase)) {
-      return settle(attempt)
-    }
-    if (status.phase === 'starting' && !attempt.cancelRequested && Date.now() >= promptDeadline) {
-      await deliverCancel(attempt).catch(() => {})
-      return noPromptOutcome(attempt.status, status)
-    }
-    if (attempt.cancelRequested && !attempt.cancelDelivered) {
-      // Why not fatal: an undelivered cancel is asked again after the next answer.
-      await deliverCancel(attempt).catch(() => {})
-      if (attempt.cancelDelivered) {
-        continue
-      }
-    }
-    // A link wait never outlives the deadline: each try gets only the time left, and once it passes a lost
-    // answer ends here as no link. A cancelled attempt waits normally for the host to settle it.
-    const bounded = status.phase === 'starting' && !attempt.cancelRequested
-    const untilDeadline = bounded ? Math.max(0, promptDeadline - Date.now()) : undefined
-    const wait = () =>
-      call(
-        attempt,
-        'accounts.hostSignInWait',
-        { flowId: status.flowId, afterRevision: status.revision },
-        bounded
-          ? Math.max(1, Math.min(WAIT_TIMEOUT_MS, promptDeadline - Date.now()))
-          : WAIT_TIMEOUT_MS
-      )
-    advance(
-      attempt,
-      await retryLostAnswers(wait, untilDeadline).catch((error: unknown) => {
-        if (untilDeadline === undefined || !isLostHostAnswer(error)) {
-          throw error
-        }
-        return status
-      })
-    )
-  }
-}
-
-function settle(attempt: Attempt): HostAccountSignInStatus {
-  const status = attempt.status
-  // Why signedIn wins over a cancel: the host already saved the account, so say so.
-  if (status?.phase === 'signedIn') {
-    return status
-  }
-  if (attempt.cancelRequested || status?.phase === 'cancelled' || !status) {
-    throw new Error(CANCELLED_MESSAGE[attempt.provider])
-  }
-  throw new Error(hostAccountSignInFailureText(status))
+  attempt.run = run
+  return run.run()
 }
 
 /** Starts a sign-in on `owner`, or joins the same one this client already runs there. */
@@ -211,18 +146,15 @@ function runHostAccountSignIn(
     owner,
     provider,
     accountId,
-    pairingRevision: captureRuntimeEnvironmentRequestRevision(owner.environmentId),
-    stage: 'checking',
+    run: null,
     cancelRequested: false,
-    cancelDelivered: false,
-    status: null,
     done: null
   }
   attempts.set(key, attempt)
   const done = follow(attempt)
     .catch((error: unknown) => {
-      // Why: after a Cancel, whatever ended the run is what the person asked for.
-      if (attempt.cancelRequested && attempt.status?.phase !== 'signedIn') {
+      // Why: after a Cancel, whatever ended the attempt is what the person asked for.
+      if (attempt.cancelRequested && attempt.run?.status?.phase !== 'signedIn') {
         throw new Error(CANCELLED_MESSAGE[provider])
       }
       throw error
@@ -265,7 +197,7 @@ export function readHostAccountSignIn(
   provider: HostAccountSignInProvider
 ): HostAccountSignInStatus | null {
   return owner.kind === 'environment'
-    ? (attempts.get(keyOf(owner, provider))?.status ?? null)
+    ? (attempts.get(keyOf(owner, provider))?.run?.status ?? null)
     : null
 }
 
@@ -299,13 +231,10 @@ export async function submitHostAccountSignInCode(
   code: string
 ): Promise<void> {
   const attempt = owner.kind === 'environment' ? attempts.get(keyOf(owner, provider)) : undefined
-  if (!attempt?.status || attempt.cancelRequested) {
+  if (!attempt?.run || attempt.cancelRequested) {
     throw new Error(NOT_ACTIVE)
   }
-  advance(
-    attempt,
-    await call(attempt, 'accounts.hostSignInSubmitCode', { flowId: attempt.status.flowId, code })
-  )
+  await attempt.run.submitCode(code)
 }
 
 /**
@@ -322,8 +251,6 @@ export async function cancelHostAccountSignIn(
   }
   attempt.cancelRequested = true
   notify()
-  if (attempt.stage === 'following') {
-    await deliverCancel(attempt)
-  }
+  await attempt.run?.cancel()
   return true
 }

@@ -45,6 +45,11 @@ export const PAIRED_DESKTOP_METHODS = [
   'ui.set',
   // The desktop's accounts pane and project pickers target its active runtime, not a workspace's host.
   'accounts.consumeCodexResetCredit',
+  // Adds or re-authenticates a Claude/Codex account on the Mac whose accounts.list the phone shows.
+  'accounts.hostSignInCancel',
+  'accounts.hostSignInStart',
+  'accounts.hostSignInSubmitCode',
+  'accounts.hostSignInWait',
   'accounts.list',
   'accounts.renameClaude',
   'accounts.renameCodex',

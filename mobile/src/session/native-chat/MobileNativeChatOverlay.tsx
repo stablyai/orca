@@ -1,3 +1,4 @@
+import type { ChatAccountSignIn } from '../../accounts/sign-in/use-chat-account-sign-in'
 import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
 import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
 import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
@@ -63,6 +64,8 @@ type Props = {
   hostName: string | null
   /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
   onOpenAccounts?: () => void
+  /** Signs the chat's managed account in again on its host; absent where the phone can't. */
+  accountSignIn?: ChatAccountSignIn
   /** Opens tapped links in Orca's browser; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
   linkOpenMode: MobileLinkOpenMode
@@ -119,7 +122,8 @@ function MobileNativeChatOverlayContent({
   linkOpenMode,
   onRunInTerminal,
   hostOutage = null,
-  onOpenAccounts
+  onOpenAccounts,
+  accountSignIn
 }: Props): React.JSX.Element {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
@@ -230,6 +234,7 @@ function MobileNativeChatOverlayContent({
       usageLimit: controller.nativeChatUsageLimit,
       unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
       ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
+      ...(accountSignIn ? { accountSignIn } : {}),
       ...(continuation
         ? {
             continuation: {
@@ -251,7 +256,8 @@ function MobileNativeChatOverlayContent({
       runInTerminal,
       controller.nativeChatUsageLimit,
       controller.nativeChatUnresolvedFailureRows,
-      onOpenAccounts
+      onOpenAccounts,
+      accountSignIn
     ]
   )
   const continueFailed = sendErrorMessage === null && continuation?.failed === true

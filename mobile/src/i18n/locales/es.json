@@ -18,7 +18,10 @@
       "title": "Cuentas",
       "useReset": "Usar un restablecimiento",
       "pairingInvalidMessage": "Vuelve a emparejar este teléfono con tu escritorio para ver sus cuentas.",
-      "weeklyWindow": "7d"
+      "weeklyWindow": "7d",
+      "signedOut": "Sesión cerrada",
+      "addAccount": "Agregar cuenta",
+      "signIn": "Iniciar sesión"
     },
     "claude": {
       "usageSignInLabel": "Iniciar sesión de nuevo",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}} % restante"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "El dispositivo desde el que se intentó iniciar sesión dejó de responder.",
+        "superseded": "Un cambio de cuenta en este host detuvo el inicio de sesión. Vuelve a iniciarlo.",
+        "noPrompt": "El comando de inicio de sesión del servidor no mostró un enlace de inicio de sesión en un minuto. Actualiza Orca en el servidor y vuelve a intentarlo.",
+        "failed": "No se pudo iniciar sesión. Vuelve a intentarlo."
+      },
+      "starting": "Iniciando sesión en {{host}}...",
+      "copied": "Copiado",
+      "copyLink": "Copiar enlace",
+      "continue": "Continuar",
+      "copyCode": "Copiar código",
+      "signingIn": "Iniciando sesión…",
+      "tryAgain": "Reintentar",
+      "titleClaude": "Iniciar sesión en Claude",
+      "titleCodex": "Iniciar sesión en Codex",
+      "savedOn": "Se guarda en {{host}}",
+      "newCode": "Obtener un código nuevo",
+      "openPage": "Abrir la página de inicio de sesión",
+      "pasteStep": "Pegar el código",
+      "codePlaceholder": "Código de la página",
+      "enterCodeStep": "Introducir este código",
+      "waitingForPage": "Esperando a que termines en la página",
+      "signedInAs": "Sesión iniciada como {{email}}"
     }
   },
   "agentHistory": {
@@ -440,7 +468,10 @@
       "signIn": "Iniciar sesión",
       "signInHint": "Abre una terminal en el ordenador que ejecuta este chat",
       "forkedFrom": "Rama creada desde",
-      "autoReviewDenied": "La revisión automática de {{agent}} denegó: {{action}}"
+      "autoReviewDenied": "La revisión automática de {{agent}} denegó: {{action}}",
+      "notSignedIn": "{{agent}} no ha iniciado sesión.",
+      "signInAccountHint": "Vuelve a iniciar sesión en esta cuenta en el ordenador que ejecuta este chat",
+      "signedInSendAgain": "Sesión iniciada. Vuelve a enviarlo."
     },
     "ciResultLine": {
       "failingLead": "CI fallando en",

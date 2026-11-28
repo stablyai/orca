@@ -18,7 +18,10 @@
       "title": "Comptes",
       "useReset": "Utiliser une réinitialisation",
       "pairingInvalidMessage": "Appairez de nouveau ce téléphone avec votre ordinateur pour voir ses comptes.",
-      "weeklyWindow": "7 j"
+      "weeklyWindow": "7 j",
+      "signedOut": "Déconnecté",
+      "addAccount": "Ajouter un compte",
+      "signIn": "Se connecter"
     },
     "claude": {
       "usageSignInLabel": "Se reconnecter",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}} % restant"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "L’appareil à l’origine de cette connexion ne répond plus.",
+        "superseded": "Un changement de compte sur cet hôte a interrompu la connexion. Relancez-la.",
+        "noPrompt": "La commande de connexion du serveur n’a affiché aucun lien de connexion en une minute. Mettez à jour Orca sur le serveur, puis réessayez.",
+        "failed": "Échec de la connexion. Réessayez."
+      },
+      "starting": "Démarrage de la connexion sur {{host}}…",
+      "copied": "Copié",
+      "copyLink": "Copier le lien",
+      "continue": "Continuer",
+      "copyCode": "Copier le code",
+      "signingIn": "Connexion…",
+      "tryAgain": "Réessayer",
+      "titleClaude": "Se connecter à Claude",
+      "titleCodex": "Se connecter à Codex",
+      "savedOn": "Enregistré sur {{host}}",
+      "newCode": "Obtenir un nouveau code",
+      "openPage": "Ouvrir la page de connexion",
+      "pasteStep": "Coller le code",
+      "codePlaceholder": "Code de la page",
+      "enterCodeStep": "Saisir ce code",
+      "waitingForPage": "En attente de la fin sur la page",
+      "signedInAs": "Connecté en tant que {{email}}"
     }
   },
   "agentHistory": {
@@ -440,7 +468,10 @@
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
       "signIn": "Se connecter",
       "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat",
-      "forkedFrom": "Branche créée à partir de"
+      "forkedFrom": "Branche créée à partir de",
+      "notSignedIn": "{{agent}} n’est pas connecté.",
+      "signInAccountHint": "Reconnecte ce compte sur l’ordinateur qui exécute ce chat",
+      "signedInSendAgain": "Connecté. Renvoyez votre message."
     },
     "ciResultLine": {
       "failingLead": "CI en échec sur",

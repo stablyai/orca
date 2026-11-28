@@ -18,7 +18,10 @@
       "title": "Hesaplar",
       "useReset": "Sıfırlama hakkını kullan",
       "weeklyWindow": "7g",
-      "pairingInvalidMessage": "Bilgisayardaki hesapları görmek için bu telefonu bilgisayarla yeniden eşleştirin."
+      "pairingInvalidMessage": "Bilgisayardaki hesapları görmek için bu telefonu bilgisayarla yeniden eşleştirin.",
+      "signedOut": "Oturum kapalı",
+      "addAccount": "Hesap ekle",
+      "signIn": "Oturum aç"
     },
     "claude": {
       "usageSignInLabel": "Yeniden oturum aç",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "%{{value}} kaldı"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "Bu oturum açma işlemini başlatan cihaz yanıt vermeyi bıraktı.",
+        "superseded": "Bu sunucudaki bir hesap değişikliği oturum açma işlemini durdurdu. Yeniden başlatın.",
+        "noPrompt": "Sunucudaki oturum açma komutu bir dakika içinde oturum açma bağlantısı göstermedi. Sunucudaki Orca'yı güncelleyin, ardından tekrar deneyin.",
+        "failed": "Oturum açılamadı. Yeniden deneyin."
+      },
+      "starting": "{{host}} üzerinde oturum açma başlatılıyor…",
+      "copied": "Kopyalandı",
+      "copyLink": "Bağlantıyı kopyala",
+      "continue": "Devam et",
+      "copyCode": "Kodu kopyala",
+      "signingIn": "Oturum açılıyor…",
+      "tryAgain": "Tekrar dene",
+      "titleClaude": "Claude’da oturum aç",
+      "titleCodex": "Codex’te oturum aç",
+      "savedOn": "{{host}} üzerine kaydedilir",
+      "newCode": "Yeni kod al",
+      "openPage": "Oturum açma sayfasını aç",
+      "pasteStep": "Kodu yapıştır",
+      "codePlaceholder": "Sayfadaki kod",
+      "enterCodeStep": "Bu kodu gir",
+      "waitingForPage": "Sayfada bitirmen bekleniyor",
+      "signedInAs": "{{email}} olarak oturum açıldı"
     }
   },
   "agentHistory": {
@@ -478,7 +506,10 @@
       "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar",
       "forkedFrom": "Çatallandığı kaynak",
       "botCreated": "Bot oluşturuldu",
-      "autoReviewDenied": "{{agent}} ajanının otomatik incelemesi işlemi reddetti: {{action}}"
+      "autoReviewDenied": "{{agent}} ajanının otomatik incelemesi işlemi reddetti: {{action}}",
+      "notSignedIn": "{{agent}} oturumu açık değil.",
+      "signInAccountHint": "Bu sohbeti çalıştıran bilgisayarda bu hesapta yeniden oturum açar",
+      "signedInSendAgain": "Oturum açıldı. Yeniden gönderin."
     },
     "ciResultLine": {
       "failingLead": "CI başarısız:",

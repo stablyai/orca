@@ -18,7 +18,10 @@
       "title": "Konten",
       "useReset": "Jetzt zurücksetzen",
       "pairingInvalidMessage": "Dieses Smartphone erneut mit dem Desktop koppeln, um dessen Konten anzuzeigen.",
-      "weeklyWindow": "7 Tage"
+      "weeklyWindow": "7 Tage",
+      "signedOut": "Abgemeldet",
+      "addAccount": "Konto hinzufügen",
+      "signIn": "Anmelden"
     },
     "claude": {
       "usageSignInLabel": "Erneut anmelden",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}} % übrig"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "Das Gerät, auf dem diese Anmeldung gestartet wurde, antwortet nicht mehr.",
+        "superseded": "Eine Kontoänderung auf diesem Host hat die Anmeldung abgebrochen. Die Anmeldung erneut starten.",
+        "noPrompt": "Der Anmeldebefehl auf dem Server hat innerhalb einer Minute keinen Anmeldelink angezeigt. Aktualisiere Orca auf dem Server und versuche es dann erneut.",
+        "failed": "Anmeldung fehlgeschlagen. Erneut versuchen."
+      },
+      "starting": "Anmeldung auf {{host}} wird gestartet…",
+      "copied": "Kopiert",
+      "copyLink": "Link kopieren",
+      "continue": "Fortfahren",
+      "copyCode": "Code kopieren",
+      "signingIn": "Anmeldung läuft…",
+      "tryAgain": "Erneut versuchen",
+      "titleClaude": "Bei Claude anmelden",
+      "titleCodex": "Bei Codex anmelden",
+      "savedOn": "Gespeichert auf {{host}}",
+      "newCode": "Neuen Code anfordern",
+      "openPage": "Anmeldeseite öffnen",
+      "pasteStep": "Code einfügen",
+      "codePlaceholder": "Code von der Seite",
+      "enterCodeStep": "Diesen Code eingeben",
+      "waitingForPage": "Warten, bis du auf der Seite fertig bist",
+      "signedInAs": "Angemeldet als {{email}}"
     }
   },
   "agentHistory": {
@@ -433,7 +461,10 @@
       "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
       "signIn": "Anmelden",
       "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft",
-      "forkedFrom": "Abgezweigt von"
+      "forkedFrom": "Abgezweigt von",
+      "notSignedIn": "{{agent}} ist nicht angemeldet.",
+      "signInAccountHint": "Meldet dieses Konto auf dem Computer, auf dem dieser Chat läuft, erneut an",
+      "signedInSendAgain": "Angemeldet. Erneut senden."
     },
     "ciResultLine": {
       "failingLead": "CI fehlgeschlagen bei",
