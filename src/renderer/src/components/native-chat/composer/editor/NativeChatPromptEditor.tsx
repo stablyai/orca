@@ -48,6 +48,7 @@ import {
   withSideChatPillsAsText
 } from './native-chat-side-chat-node'
 import { nativeChatPromptExtensions } from './native-chat-prompt-extensions'
+import { syncClaudeKeywords } from './native-chat-claude-keywords'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
@@ -74,6 +75,7 @@ function NativePromptEditor({
   disabled,
   placeholder,
   sideChat = false,
+  claudeKeywords = false,
   onChange,
   onSelect,
   className,
@@ -237,6 +239,7 @@ function NativePromptEditor({
 
   useLayoutEffect(() => editor?.setEditable(!disabled, false), [disabled, editor])
   useLayoutEffect(() => syncSideChatPill(editor, sideChat), [editor, sideChat])
+  useLayoutEffect(() => syncClaudeKeywords(editor, claudeKeywords), [editor, claudeKeywords])
 
   const input = useMemo<NativeChatComposerInput | null>(
     () =>

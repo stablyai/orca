@@ -260,6 +260,7 @@ export function NativeChatComposerField({
               initialValue={draft}
               disabled={disabled}
               sideChat={sideChat}
+              claudeKeywords={agent === 'claude'}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onBlur={editorBlur}
