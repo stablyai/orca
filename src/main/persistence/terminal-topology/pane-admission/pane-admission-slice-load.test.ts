@@ -19,13 +19,15 @@ import {
   type TerminalPaneAdmission
 } from './terminal-pane-admission'
 
-const mode = vi.hoisted(() => ({
-  main: true,
-  slice: true,
-  sliced: 0,
-  minted: 0,
-  lastSlice: undefined as WorkspaceSessionState | undefined
-}))
+const mode = vi.hoisted(
+  (): {
+    main: boolean
+    slice: boolean
+    sliced: number
+    minted: number
+    lastSlice?: WorkspaceSessionState
+  } => ({ main: true, slice: true, sliced: 0, minted: 0 })
+)
 
 // Both runs must mint the same ids for a new group to compare.
 vi.mock('node:crypto', async (importOriginal) => ({
