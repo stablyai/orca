@@ -48,6 +48,11 @@ on:
         required: false
         type: boolean
         default: false
+      playwright_config:
+        description: Playwright config for test_files; empty uses tests/playwright.config.ts
+        required: false
+        type: string
+        default: ''
   schedule:
     # One complete daily reference run; targeted PR coverage remains unchanged.
     - cron: '0 17 * * *'
