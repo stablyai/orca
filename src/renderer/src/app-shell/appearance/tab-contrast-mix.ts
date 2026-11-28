@@ -14,6 +14,7 @@ const UNFOCUSED_TAB_LABEL_DARKEN = 10
 const BLACK: Rgba = [0, 0, 0, 1]
 const WHITE: Rgba = [255, 255, 255, 1]
 const UNFOCUSED_TAB_LABEL_TOKEN = '--tab-unfocused-inactive-label'
+const UNFOCUSED_ACTIVE_TAB_TOKEN = '--tab-unfocused-active-foreground'
 
 /** The tab the mix paints: light recesses the inactive tabs, dark lifts the active one. */
 const MIXED_TAB = { light: '--tab-inactive', dark: '--tab-active' } as const
@@ -69,6 +70,19 @@ function unfocusedLabel(ink: Rgba, fill: Rgba, page: Rgba): Rgba {
     inkContrast(darker, fill) >= inkContrast(ink, fill)
     ? darker
     : ink
+}
+
+function unfocusedActiveLabel(ink: Rgba, fill: Rgba, page: Rgba): string {
+  for (let percent = 50; percent <= 100; percent += 5) {
+    const color = painted(mix(fill, ink, percent))
+    if (
+      inkContrast(color, fill) >= MIN_TEXT_CONTRAST &&
+      inkContrast(color, fill, page) >= MIN_TEXT_CONTRAST
+    ) {
+      return `color-mix(in srgb, var(--tab-active) ${100 - percent}%, var(--tab-active-foreground) ${percent}%)`
+    }
+  }
+  return 'var(--tab-active-foreground)'
 }
 
 function mixedFill(foreground: Rgba, bar: Rgba, percent: number): Rgba {
@@ -176,6 +190,13 @@ export function tabContrastTokens(
     [UNFOCUSED_TAB_LABEL_TOKEN]: darken
       ? `color-mix(in srgb, black ${UNFOCUSED_TAB_LABEL_DARKEN}%, var(--muted-foreground))`
       : 'var(--muted-foreground)'
+  }
+  if (!tokens[UNFOCUSED_ACTIVE_TAB_TOKEN] && strip && fill) {
+    overrides[UNFOCUSED_ACTIVE_TAB_TOKEN] = unfocusedActiveLabel(
+      effective('--tab-active-foreground') ?? strip.foreground,
+      fill,
+      strip.page
+    )
   }
   for (const [status, source] of Object.entries(STATUS_COLORS)) {
     const ink = effective(`--git-decoration-${status}`)

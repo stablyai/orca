@@ -178,6 +178,10 @@
   /* Public tokens a theme may omit; resolved per element so unthemed tabs paint exactly as before. */
   --color-tab-bar: var(--tab-bar, var(--card));
   --color-tab-active-foreground: var(--tab-active-foreground, var(--foreground));
+  --color-tab-unfocused-active-foreground: var(
+    --tab-unfocused-active-foreground,
+    var(--tab-active-foreground, var(--foreground))
+  );
   --color-tab-active-indicator: var(
     --tab-active-indicator,
     var(--tab-active-foreground, var(--foreground))

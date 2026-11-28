@@ -14,11 +14,11 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
 // Keep the foreground marker above selection/unread layers; zero horizontal inset avoids scrollWidth jitter at the strip’s end.
 // Every selected tab keeps its usual underline; an unfocused group mutes its token upstream.
 export const ACTIVE_TAB_INDICATOR_CLASSES =
-  'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-tab-active-indicator z-20 group-data-[single-tab]/tab-strip:hidden [[data-split-group]_[data-single-tab]_&]:block [[data-unfocused-split-group]_&]:grayscale'
+  'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-tab-active-indicator z-20 group-data-[single-tab]/tab-strip:hidden [[data-split-group]_[data-single-tab]_&]:block'
 
 export function getTabRootStateClasses(isActive: boolean): string {
   return isActive
-    ? 'bg-tab-active text-tab-active-foreground [[data-unfocused-split-group]_&]:grayscale'
+    ? 'bg-tab-active text-tab-active-foreground'
     : 'bg-tab-inactive text-tab-inactive-foreground hover:text-tab-active-foreground'
 }
 
