@@ -295,7 +295,7 @@ export function botAnswerView(
   return { from: record.toBotName, answers: `your ${record.purpose}`, next }
 }
 
-/** Why a bot request ended without an answer: its turn ended or failed, or it was never read. */
+/** Why a bot request has no answer: its turn ended, failed or waits on a person, or it was never read. */
 export const BOT_REQUEST_DROP_REASONS = [
   'paused',
   'deleted',
@@ -306,6 +306,7 @@ export const BOT_REQUEST_DROP_REASONS = [
 ] as const
 export type BotRequestNoticeWhy =
   | 'ended'
+  | 'asking'
   | 'failed'
   | 'failed-continues'
   | (typeof BOT_REQUEST_DROP_REASONS)[number]
@@ -322,6 +323,10 @@ export function botRequestUnansweredText(
   // Orca continues the turn itself after the reset: redoing it now would do the work twice.
   if (why === 'failed-continues') {
     return `${failedTurn} Your ${record.purpose} hasn't been handled yet; ${bot} continues on its own when the limit resets, so don't redo it.`
+  }
+  if (why === 'asking') {
+    const askers = record.fromWorker ? record.fromBotName : askersOf(record)
+    return `${bot} is waiting on a person's reply before it can answer your ${record.purpose}. Its answer may still come once they reply, but you won't hear from Orca again, so wait for it or tell ${askers} that ${bot} is waiting on a person.`
   }
   // A handoff it read is its job now: no reply yet isn't a refusal.
   if (why === 'ended' && record.purpose === 'handoff' && (record.group || answeredOnCard(record))) {
