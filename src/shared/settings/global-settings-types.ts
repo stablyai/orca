@@ -353,6 +353,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   defaultTaskSource: TaskProvider
   /** Persisted visible task providers; hides unused providers from Tasks chrome and sidebar shortcuts. */
   visibleTaskProviders: TaskProvider[]
+  /** Why: an unmounted Tasks page rebuilds its list on every open; keeping it mounted while hidden shows the last list instantly. */
+  preloadTaskPage: boolean
   /** Why: one-shot guard to make Jira visible for existing profiles once, without re-adding after a later opt-out. */
   visibleTaskProvidersDefaultedForJira: boolean
   /** Repo selection: null includes all present/future repos; arrays freeze a subset, dropping ineligible ids on load and treating empty as null. */

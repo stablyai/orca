@@ -19,6 +19,20 @@ export const getTasksPaneSearchKeywords = createLocalizedCatalog(() => [
   ...translateSearchKeyword('auto.components.settings.tasks.search.connect', 'connect')
 ])
 
+export const getTaskPagePreloadSearchEntry = createLocalizedCatalog(() => ({
+  title: translate('auto.components.settings.tasks.search.preloadTitle', 'Preload Tasks'),
+  description: translate(
+    'auto.components.settings.tasks.search.preloadDescription',
+    'Load Tasks in the background after startup and keep it loaded when you switch away, so reopening shows your last list instantly instead of reloading. Uses more memory.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('auto.components.settings.tasks.search.2ec54bee51', 'tasks'),
+    ...translateSearchKeyword('auto.components.settings.tasks.search.preload', 'preload'),
+    ...translateSearchKeyword('auto.components.settings.tasks.search.background', 'background'),
+    ...translateSearchKeyword('auto.components.settings.tasks.search.reload', 'reload')
+  ]
+}))
+
 export const getTasksPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.tasks.search.12d2fdff3c', 'Task providers'),
@@ -27,5 +41,6 @@ export const getTasksPaneSearchEntries = createLocalizedCatalog(() => [
       'Connect task providers, install the Linear agent skill, and choose what appears in Tasks.'
     ),
     keywords: getTasksPaneSearchKeywords()
-  }
+  },
+  getTaskPagePreloadSearchEntry()
 ])

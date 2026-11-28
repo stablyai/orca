@@ -10844,7 +10844,8 @@
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
           "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
-          "30255b39dc": "Task providers"
+          "30255b39dc": "Task providers",
+          "pageTitle": "Tasks page"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -12634,7 +12635,12 @@
             "apiKey": "api key",
             "skill": "skill",
             "connect": "connect",
-            "12d2fdff3c": "Task providers"
+            "12d2fdff3c": "Task providers",
+            "preloadTitle": "Preload Tasks",
+            "preloadDescription": "Load Tasks in the background after startup and keep it loaded when you switch away, so reopening shows your last list instantly instead of reloading. Uses more memory.",
+            "preload": "preload",
+            "background": "background",
+            "reload": "reload"
           }
         },
         "terminal": {
