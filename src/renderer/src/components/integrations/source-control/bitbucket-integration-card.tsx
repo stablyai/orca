@@ -10,39 +10,49 @@ import {
   IntegrationCardShell
 } from '../presentation/integration-card-shell'
 import { useIntegrationSubordinateRowClass } from '../presentation/integration-card-presentation'
-import { usePreflightCardStatuses } from './source-control-preflight-card-status'
+import {
+  usePreflightCardStatuses,
+  type PreflightCardStatuses
+} from './source-control-preflight-card-status'
 import { tokenProviderStatusLabel } from './token-source-control-status'
 import { BitbucketCredentialsDialog } from './bitbucket-credentials-dialog'
 import { BitbucketCardNote } from './bitbucket-card-note'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
-import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   bitbucketCredentialStatus,
   bitbucketDisconnect,
   BitbucketCredentialsHostOutdatedError
 } from '@/runtime/source-control/bitbucket/runtime-bitbucket-credentials-client'
-import { useProviderAccountScope } from '../../provider-accounts/use-provider-host-scope'
+import { useBitbucketHostScope } from './bitbucket-host-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 
 const API_TOKEN_DOCS_URL = 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/'
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 
 export function BitbucketIntegrationCard(): React.JSX.Element {
-  const target = defaultScopeHost(useAppStore((s) => s.settings))
-  const hostKey = target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
+  const card = usePreflightCardStatuses('bitbucket')
+  const target = card.host?.target ?? null
+  const hostKey = !target
+    ? 'pending'
+    : target.kind === 'environment'
+      ? `environment:${target.environmentId}`
+      : 'local'
   // Why keyed: switching hosts drops the other host's status and any half-typed secret.
-  return <BitbucketHostIntegrationCard key={hostKey} target={target} />
+  return <BitbucketHostIntegrationCard key={hostKey} card={card} />
 }
 
-function BitbucketHostIntegrationCard(props: { target: RuntimeClientTarget }): React.JSX.Element {
+function BitbucketHostIntegrationCard({
+  card
+}: {
+  card: PreflightCardStatuses
+}): React.JSX.Element {
   const t = useTranslate()
-  // Why frozen: the key pins the host; a fresh target object each render must not refetch.
-  const [target] = useState(props.target)
-  const remoteHost = target.kind === 'environment'
-  const accountScope = useProviderAccountScope(target)
-  const { statuses, unavailable, refresh } = usePreflightCardStatuses('bitbucket')
+  // Why the preflight host: the badge comes from it, so saves and status reads must go there too.
+  const [host] = useState(card.host)
+  const target = host?.target ?? null
+  const remoteHost = target?.kind === 'environment'
+  const accountScope = useBitbucketHostScope(host)
+  const { statuses, unavailable, refresh } = card
   const status = unavailable ? 'unavailable' : statuses.bitbucketStatus
   const connected = status === 'connected'
   const mountedRef = useMountedRef()
@@ -59,6 +69,9 @@ function BitbucketHostIntegrationCard(props: { target: RuntimeClientTarget }): R
   // Read metadata only; mounting must not decrypt secrets or trigger keychain prompts.
   const loadConnection = useCallback(async () => {
     const generation = ++connectionLoadGenerationRef.current
+    if (!target) {
+      return
+    }
     try {
       const next = await bitbucketCredentialStatus(target)
       if (mountedRef.current && generation === connectionLoadGenerationRef.current) {
@@ -107,6 +120,9 @@ function BitbucketHostIntegrationCard(props: { target: RuntimeClientTarget }): R
   }
 
   const handleDisconnect = async (): Promise<void> => {
+    if (!target) {
+      return
+    }
     setDisconnecting(true)
     setDisconnectError(null)
     try {
@@ -182,14 +198,16 @@ function BitbucketHostIntegrationCard(props: { target: RuntimeClientTarget }): R
               'Your Bitbucket credential'
             )}
           />
-          <ProviderHostScopeControl
-            labelPrefix={t(
-              'auto.components.settings.bitbucket.integration.card.account_scope_prefix',
-              'Account scope'
-            )}
-            scope={accountScope}
-            className={accountScopeRowClass}
-          />
+          {target ? (
+            <ProviderHostScopeControl
+              labelPrefix={t(
+                'auto.components.settings.bitbucket.integration.card.account_scope_prefix',
+                'Account scope'
+              )}
+              scope={accountScope}
+              className={accountScopeRowClass}
+            />
+          ) : null}
           {connected ? (
             <div className={subordinateRowClass}>
               <div className="min-w-0 flex-1">
@@ -261,16 +279,18 @@ function BitbucketHostIntegrationCard(props: { target: RuntimeClientTarget }): R
         </IntegrationCardDetails>
       ) : null}
 
-      <BitbucketCredentialsDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        initialAuthMode={currentConnection?.authMode}
-        initialEmail={currentConnection?.email}
-        initialBaseUrl={currentConnection?.baseUrl}
-        environmentManaged={envManaged}
-        target={target}
-        onConnected={reloadCardState}
-      />
+      {target ? (
+        <BitbucketCredentialsDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          initialAuthMode={currentConnection?.authMode}
+          initialEmail={currentConnection?.email}
+          initialBaseUrl={currentConnection?.baseUrl}
+          environmentManaged={envManaged}
+          target={target}
+          onConnected={reloadCardState}
+        />
+      ) : null}
     </IntegrationCardShell>
   )
 }

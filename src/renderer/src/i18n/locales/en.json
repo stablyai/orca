@@ -14138,7 +14138,8 @@
               "replaceCredentials": "Manage credentials",
               "credentialName": "Your Bitbucket credential",
               "storedCredentialRemote": "Saved in Orca on the selected server. ORCA_BITBUCKET_* environment variables there take precedence when set.",
-              "account_scope_prefix": "Account scope"
+              "account_scope_prefix": "Account scope",
+              "scopeFollowsWorkspace": "Checked on the host that runs the open workspace. Credentials saved here are stored on that host."
             }
           }
         },

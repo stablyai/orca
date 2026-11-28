@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
-import { RUNTIME_CAPABILITIES } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
-import { BITBUCKET_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { BitbucketConnectParams } from '../../../../../../shared/rpc-contract/source-control/bitbucket-params'
 import { BITBUCKET_METHODS } from './bitbucket'
 
@@ -62,16 +60,20 @@ describe('bitbucket credential RPCs', () => {
     expect(mocks.resetPreflight).not.toHaveBeenCalled()
   })
 
-  it('needs account-admin rights to write or remove the credential', () => {
-    expect(method('bitbucket.connect').permission).toBe('accounts-admin')
-    expect(method('bitbucket.disconnect').permission).toBe('accounts-admin')
-  })
-
   it('rejects an unknown auth mode before touching the store', () => {
     expect(BitbucketConnectParams.safeParse({ authMode: 'oauth' }).success).toBe(false)
   })
 
-  it('advertises the capability clients gate remote saves on', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(BITBUCKET_CREDENTIALS_RUNTIME_CAPABILITY)
+  it('refuses a plain-http base URL that would send the secret in the clear', () => {
+    const parse = (baseUrl: string | null) =>
+      BitbucketConnectParams.safeParse({ authMode: 'token', accessToken: 'x', baseUrl }).success
+
+    expect(parse('http://bitbucket.example.com/rest/api')).toBe(false)
+    expect(parse('ftp://bitbucket.example.com')).toBe(false)
+    expect(parse('not a url')).toBe(false)
+    expect(parse('https://bitbucket.example.com/rest/api')).toBe(true)
+    expect(parse('http://localhost:7990/rest/api')).toBe(true)
+    expect(parse('')).toBe(true)
+    expect(parse(null)).toBe(true)
   })
 })

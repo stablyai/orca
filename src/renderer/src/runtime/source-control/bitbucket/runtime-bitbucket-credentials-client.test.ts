@@ -68,6 +68,15 @@ describe('Bitbucket credential routing', () => {
     expect(localApi.connect).not.toHaveBeenCalled()
   })
 
+  it('reports an offline server as unreachable, not as outdated', async () => {
+    const offline = new Error('Remote runtime connection closed.')
+    mocks.supports.mockRejectedValue(offline)
+
+    await expect(bitbucketConnect(remote, args)).rejects.toBe(offline)
+    expect(mocks.rpc).not.toHaveBeenCalled()
+    expect(localApi.connect).not.toHaveBeenCalled()
+  })
+
   it('treats a missing method as an older server', async () => {
     mocks.rpc.mockRejectedValue(
       new RuntimeRpcCallError({
