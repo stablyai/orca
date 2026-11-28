@@ -31,8 +31,9 @@ type JournalDomainQueueSelection = {
   /** Manual sends pass edit holds; automatic delivery waits behind them. */
   automatic: boolean
   mail?: JournalMailCustody
-  /** Only other agents' mail may join a turn that has not taken in earlier mail yet. */
-  mailOnly?: boolean
+  /** The turn has not taken in earlier sends yet. A person's steer passes them only where the
+   *  provider takes input mid-turn; other agents' mail always may. */
+  behindOwed?: boolean
   /** False keeps mail out of a running turn, as for a person's card queued without steering. */
   mailJoinsTurn?: boolean
 }
@@ -110,8 +111,8 @@ export function nextJournalDomainQueueCard(
       if (steer && (card.body.command || !joins)) {
         continue
       }
-      if (selection.mailOnly && !mail) {
-        // A person's card that could go now holds every later card until earlier mail is taken in.
+      if (selection.behindOwed && !mail && selection.mailJoinsTurn === false) {
+        // A person's card that could go now holds every later card until earlier sends are taken in.
         return { kind: 'selected', card: null }
       }
       if (pastUnavailableMail && mail) {
