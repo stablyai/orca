@@ -22,7 +22,7 @@ it('reopens the bytes of each submitted report by message after the worker folde
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === 'term_worker' ? pane : harness.coordinatorPaneKey
     )
-    const submit = async (spec: string, bytes?: Buffer) => {
+    const submit = async (spec: string, bytes?: Buffer, omitDispatch = false) => {
       const task = db.createTask({ spec })
       const dispatch = createRootDispatch(
         db,
@@ -35,9 +35,11 @@ it('reopens the bytes of each submitted report by message after the worker folde
       const flags = new Map([
         ['type', 'worker_done'],
         ['task-id', task.id],
-        ['dispatch-id', dispatch.id],
         ['outcome', 'succeeded']
       ])
+      if (!omitDispatch) {
+        flags.set('dispatch-id', dispatch.id)
+      }
       if (bytes) {
         flags.set('report-path', 'report.bin')
         await writeFile(join(folder, 'report.bin'), bytes)
@@ -55,12 +57,26 @@ it('reopens the bytes of each submitted report by message after the worker folde
           payload: await getOptionalStructuredMessagePayload(flags, folder)
         }
       }
+      if (omitDispatch) {
+        const wrongFlags = new Map(flags).set('dispatch-id', 'ctx_previous')
+        const wrong = await dispatcher.dispatch({
+          ...request,
+          orchestrationRequestId: 'request_wrong_dispatch',
+          params: {
+            ...request.params,
+            run: dispatch.run_id,
+            payload: await getOptionalStructuredMessagePayload(wrongFlags, folder)
+          }
+        })
+        expect(wrong).toMatchObject({ ok: false, error: { code: 'dispatch_inactive' } })
+        expect(db.getTask(task.id)?.status).toBe('dispatched')
+      }
       const sent = await dispatcher.dispatch(request)
       expect(sent).toMatchObject({ ok: true, result: { lifecycle: { action: 'completed' } } })
       const result = JSON.parse(db.getTask(task.id)!.result!)
       return { request, messageId: result.messageId, dispatchId: dispatch.id }
     }
-    const a = await submit('first', Buffer.from([0, 255, 65]))
+    const a = await submit('first', Buffer.from([0, 255, 65]), true)
     const b = await submit('second', Buffer.from('B\r\n'))
     const body = await submit('plain')
     await rm(folder, { recursive: true })
