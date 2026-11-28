@@ -28,11 +28,15 @@ import {
 } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { createSessionWorkerLivenessReader } from '../lifecycle/session-worker-liveness'
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
-import { reportChatWorkerProviderDeath } from './chat-worker-provider-death'
+import {
+  reportChatWorkerClosedByUser,
+  reportChatWorkerProviderDeath
+} from './chat-worker-provider-death'
 import { observeChatWorkerWorking } from './chat-worker-turn-stops'
 
 const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
 const HANDLE = mintStructuredWorkerHandle()
+const RUNTIME = 'runtime-under-test'
 let db: OrchestrationDb | undefined
 let rig: QueuedMessageTestRig | undefined
 let lane: AcpStructuredLane | undefined
@@ -96,7 +100,8 @@ async function startWorker({
           : failure
         reports.push(escalateChatWorkerError(request, deps))
       },
-      onIdleProviderDeath: (death) => reportChatWorkerProviderDeath(death, deps)
+      onIdleProviderDeath: (death) => reportChatWorkerProviderDeath(death, deps),
+      onUserClosedProvider: (closed) => reportChatWorkerClosedByUser(closed, RUNTIME, deps)
     }
   })
   rig = current
@@ -344,4 +349,48 @@ it('escalates a usage limit once while Orca keeps continuing the worker, and aga
   expect(reports).toHaveLength(2)
   expect(reports[1]).toMatchObject({ failureKind: 'usageLimitReached', resetsAt })
   expect(reports[1]).not.toHaveProperty('orcaContinues')
+})
+
+it('fails the Dispatch and tells the coordinator once when a person closes a running chat worker', async () => {
+  const worker = await startWorker()
+  await worker.current.host.close(SESSION, 'user-close')
+  await worker.current.host.close(SESSION, 'user-close')
+
+  expect(await worker.readReports()).toMatchObject([
+    { dispatchId: worker.dispatch.id, handle: HANDLE, stopReason: 'lost' }
+  ])
+  expect(worker.database.getDispatchContextById(worker.dispatch.id)?.status).toBe('failed')
+  expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('failed')
+})
+
+it.each([
+  [
+    'worker-stop',
+    async (worker: Awaited<ReturnType<typeof startWorker>>) => {
+      worker.database.beginWorkerStop(worker.dispatch.id, RUNTIME)
+      await worker.current.host.close(SESSION, 'evict')
+    }
+  ],
+  [
+    'an Orca eviction',
+    (worker: Awaited<ReturnType<typeof startWorker>>) => worker.current.host.close(SESSION, 'evict')
+  ],
+  [
+    'quitting Orca',
+    (worker: Awaited<ReturnType<typeof startWorker>>) =>
+      worker.current.host.flushAllStreamedEvents({ trigger: 'quit' })
+  ]
+])('sends nothing when %s ends a running chat worker', async (_, end) => {
+  const worker = await startWorker()
+  await end(worker)
+  expect(await worker.readReports()).toEqual([])
+  expect(worker.database.getDispatchContextById(worker.dispatch.id)?.status).toBe('dispatched')
+})
+
+it('sends nothing when a person closes a chat worker that already reported worker_done', async () => {
+  const worker = await startWorker()
+  worker.database.completeDispatch(worker.dispatch.id)
+  await worker.current.host.close(SESSION, 'user-close')
+  expect(await worker.readReports()).toEqual([])
+  expect(worker.database.getDispatchContextById(worker.dispatch.id)?.status).toBe('completed')
 })
