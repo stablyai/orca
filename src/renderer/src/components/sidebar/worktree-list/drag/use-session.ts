@@ -55,33 +55,43 @@ export function useWorktreeDragSession(args: {
 
   const worktreeDragGroups = useMemo(() => getWorktreeDragGroups(rows), [rows])
   const worktreeDragUnitGroups = geometry.units
-  const naturalDragWorktreeKeys = useMemo(() => getNaturalWorktreeKeys(rows), [rows])
-  const worktreeLineageDragRows = useMemo(
-    () =>
-      rows
-        .filter((row): row is WorktreeItemRow => row.type === 'item')
-        .filter(
-          (row) =>
-            row.sectionKey !== PINNED_GROUP_KEY ||
-            !naturalDragWorktreeKeys.has(getWorktreeHostIdentity(row.worktree))
-        )
-        .map((row) => ({
-          worktreeId: row.worktree.id,
-          hostId: row.worktree.hostId,
-          depth: row.depth
-        })),
-    [naturalDragWorktreeKeys, rows]
-  )
+  const getWorktreeLineageDragRows = useCallback(() => {
+    let naturalDragWorktreeKeys: Set<string> | undefined
+    const lineageRows: {
+      worktreeId: string
+      hostId: WorktreeItemRow['worktree']['hostId']
+      depth: number
+    }[] = []
+    for (const row of rows) {
+      if (row.type !== 'item') {
+        continue
+      }
+      if (row.sectionKey === PINNED_GROUP_KEY) {
+        if (!naturalDragWorktreeKeys) {
+          naturalDragWorktreeKeys = getNaturalWorktreeKeys(rows)
+        }
+        if (naturalDragWorktreeKeys.has(getWorktreeHostIdentity(row.worktree))) {
+          continue
+        }
+      }
+      lineageRows.push({
+        worktreeId: row.worktree.id,
+        hostId: row.worktree.hostId,
+        depth: row.depth
+      })
+    }
+    return lineageRows
+  }, [rows])
   const getReorderDraggedIds = useCallback(
     (draggedIds: readonly string[]) =>
-      expandDraggedWorktreeIdsForVisibleLineage(worktreeLineageDragRows, draggedIds),
-    [worktreeLineageDragRows]
+      expandDraggedWorktreeIdsForVisibleLineage(getWorktreeLineageDragRows(), draggedIds),
+    [getWorktreeLineageDragRows]
   )
   // Why by identity: by id, a dragged twin would also pull in its other-host copy's children.
   const getReorderDraggedCopies = useCallback(
     (copies: DraggedWorktreeCopies): DraggedWorktreeCopies =>
       expandDraggedWorktreeIdsForVisibleLineage(
-        worktreeLineageDragRows.map((row) => ({
+        getWorktreeLineageDragRows().map((row) => ({
           worktreeId: composeWorktreeHostIdentity(row.hostId, row.worktreeId),
           depth: row.depth
         })),
@@ -90,7 +100,7 @@ export function useWorktreeDragSession(args: {
         id: getWorktreeIdFromHostIdentity(identity),
         hostId: getExecutionHostIdFromWorktreeHostIdentity(identity)
       })),
-    [worktreeLineageDragRows]
+    [getWorktreeLineageDragRows]
   )
   const getReorderUnitDraggedKeys = useCallback(
     (sourceGroupKey: string, reorderDraggedKeys: readonly string[]) => {
