@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/skills/deletion/skill-delete-contract'
 import {
   normalizedSkillPath,
+  skillPathInside,
   type SkillPathSemantics
 } from '../../../shared/skills/paths/skill-path-containment'
 import {
@@ -79,12 +80,15 @@ export type ResolvedSkillDeletePlan = {
 export async function buildSkillDeletePlan(
   input: SkillDeletePlanInput
 ): Promise<ResolvedSkillDeletePlan> {
-  const { roots, semantics, toFilesystemPath } = await buildSkillDeleteRootSet({
-    target: input.target,
-    repos: input.repos,
-    ...(input.providerRootOverrides ? { providerRootOverrides: input.providerRootOverrides } : {}),
-    ...(input.homeDir ? { homeDir: input.homeDir } : {})
-  })
+  const { roots, semantics, toFilesystemPath, unverifiedPackageRoots, packageProtectionFailed } =
+    await buildSkillDeleteRootSet({
+      target: input.target,
+      repos: input.repos,
+      ...(input.providerRootOverrides
+        ? { providerRootOverrides: input.providerRootOverrides }
+        : {}),
+      ...(input.homeDir ? { homeDir: input.homeDir } : {})
+    })
   const rootPaths = roots.map((root) => root.path)
   // Authorize all discovery roots before inspection; WSL install-provider roots are narrower. This independent containment check does not replace the shared path guard.
   input.filesystem.authorizeRoots?.(rootPaths.map(toFilesystemPath))
@@ -140,6 +144,13 @@ export async function buildSkillDeletePlan(
     }
     if (!isSkillDeleteFresh(skill.updatedAt, inspection.mtimeMs)) {
       return blockedEntry(skill, canonicalPath, 'stale')
+    }
+    // Fail closed: an unreadable Pi package config must not turn a package skill into a deletable one.
+    if (
+      packageProtectionFailed ||
+      unverifiedPackageRoots?.some((root) => skillPathInside(root, canonicalPath, semantics))
+    ) {
+      return blockedEntry(skill, canonicalPath, 'plugin')
     }
     const blocked = blockedCanonicalReason(api.dirname(canonicalPath), canonicalContext)
     if (blocked) {

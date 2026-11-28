@@ -20,16 +20,14 @@ import {
 } from './skill-discovery-classification'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
 import {
-  isOnStoppedWslDistro,
   splitStoppedWslDistroRoots,
-  stoppedPluginRoot,
   stoppedRootReader,
   unavailableSkillSource,
   type StoppedWslRootsReadScope
 } from './skill-discovery-stopped-wsl-roots'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
-import { discoverPluginSkillSources } from './plugin-skill-sources'
+import { discoverPluginSkillSources } from './skill-plugin-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { skillRootExists } from './skill-root-unreadable'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
@@ -106,7 +104,11 @@ async function scanRoot(
   rejectUnreadableRoot: boolean
 ): Promise<ScannedSkill[]> {
   const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
-  const skillFiles = await findSkillFiles(root.path, maxDepth, signal, { rejectUnreadableRoot })
+  const skillFiles = await findSkillFiles(root.path, maxDepth, signal, {
+    rejectUnreadableRoot,
+    // Pi treats a SKILL.md folder as a leaf, so nested skills excluded by package filters stay hidden.
+    stopAtSkillDirectories: root.id.startsWith('pi-package-')
+  })
   // Bound per-package metadata fan-out so one large root cannot occupy every core.
   const skills = await runSkillCandidateTasks(
     skillFiles.map((skillFilePath) => async (): Promise<ScannedSkill | null> => {
@@ -144,7 +146,8 @@ async function scanRoot(
 
 // A path can belong to home and repo roots with different depth; key by sourceKind too.
 function rootScanKey(root: SkillScanRoot): string {
-  return `${root.sourceKind}\0${root.path}`
+  const traversal = root.id.startsWith('pi-package-') ? 'pi-package' : 'default'
+  return `${root.sourceKind}\0${[...root.providers].sort().join(',')}\0${traversal}\0${root.path}`
 }
 
 async function scanRootShared(
@@ -241,20 +244,18 @@ export async function discoverSkills(args: {
       : undefined
   const gateStopped = args.readStoppedWslRootsFor !== 'all'
   const mayReadStopped = stoppedRootReader(args.readStoppedWslRootsFor)
-  const pluginCwdStopped =
-    gateStopped &&
-    pluginCwd !== undefined &&
-    !mayReadStopped(pluginCwd) &&
-    wslDistroForPath(pluginCwd) !== null &&
-    (await isOnStoppedWslDistro(pluginCwd))
+  const includePlugins = !args.sourceKinds?.length || args.sourceKinds.includes('plugin')
+  const pluginDiscovery = await discoverPluginSkillSources({
+    homeDir,
+    pluginCwd,
+    gateStopped,
+    mayReadStopped,
+    includePlugins,
+    signal: args.signal
+  })
   const candidateRoots = [
     ...buildSkillDiscoverySources({ ...args, homeDir }),
-    ...(pluginCwd && !pluginCwdStopped
-      ? await waitForPromiseWithSignal(
-          discoverPluginSkillSources({ homeDir, cwd: pluginCwd, signal: args.signal }),
-          args.signal
-        )
-      : [])
+    ...pluginDiscovery.roots
   ]
   // Host-only root sets never await the WSL gate.
   const { readable, unavailable } =
@@ -284,7 +285,7 @@ export async function discoverSkills(args: {
     ...(!args.sourceKinds?.length || args.sourceKinds.includes('repo')
       ? buildRemoteRepoSkillSources(args.repos ?? [])
       : []),
-    ...[...unavailable, ...(pluginCwd && pluginCwdStopped ? [stoppedPluginRoot(pluginCwd)] : [])]
+    ...[...unavailable, ...pluginDiscovery.unavailable]
       .filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
       .map(unavailableSkillSource)
   ]

@@ -39,7 +39,27 @@ function entersDirectory(name: string, options: SkillFileWalkOptions): boolean {
 }
 
 function holdsSkillFile(entries: readonly Dirent[]): boolean {
-  return entries.some((entry) => entry.name === SKILL_FILE_NAME && !entry.isDirectory())
+  return entries.some((entry) => entry.name === SKILL_FILE_NAME && entry.isFile())
+}
+
+async function holdsResolvedSkillFile(
+  dirPath: string,
+  entries: readonly Dirent[]
+): Promise<boolean> {
+  const skillEntry = entries.find((entry) => entry.name === SKILL_FILE_NAME)
+  if (!skillEntry) {
+    return false
+  }
+  if (skillEntry.isFile()) {
+    return true
+  }
+  if (!skillEntry.isSymbolicLink()) {
+    return false
+  }
+  return stat(join(dirPath, SKILL_FILE_NAME)).then(
+    (info) => info.isFile(),
+    () => false
+  )
 }
 
 /** Entry indexes of the plain child directories a walk enters. */
@@ -94,8 +114,11 @@ export async function findSkillFiles(
     if (!entries) {
       return
     }
-    const childIndexes = new Set(enteredChildIndexes(rootPath, maxDepth, dirPath, entries, options))
-    const leaf = options.stopAtSkillDirectories === true && holdsSkillFile(entries)
+    const leaf =
+      options.stopAtSkillDirectories === true && (await holdsResolvedSkillFile(dirPath, entries))
+    const childIndexes = new Set(
+      leaf ? [] : enteredChildIndexes(rootPath, maxDepth, dirPath, entries, options)
+    )
     for (const [index, entry] of entries.entries()) {
       signal?.throwIfAborted()
       // Hide transaction siblings so in-flight skills cannot appear twice or be deleted again.

@@ -1,0 +1,54 @@
+import { open, stat } from 'node:fs/promises'
+
+const MAX_SKILL_METADATA_BYTES = 4 * 1024 * 1024
+
+export async function readSkillMetadataFile(
+  pathValue: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  try {
+    signal?.throwIfAborted()
+    const fileStat = await stat(pathValue)
+    signal?.throwIfAborted()
+    if (!fileStat.isFile() || fileStat.size > MAX_SKILL_METADATA_BYTES) {
+      return null
+    }
+    const file = await open(pathValue, 'r')
+    try {
+      signal?.throwIfAborted()
+      // Size the read from the opened handle; the path may have been replaced since stat.
+      const openedStat = await file.stat()
+      if (!openedStat.isFile() || openedStat.size > MAX_SKILL_METADATA_BYTES) {
+        return null
+      }
+      const buffer = Buffer.alloc(openedStat.size)
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
+      signal?.throwIfAborted()
+      return buffer.toString('utf8', 0, bytesRead)
+    } finally {
+      await file.close()
+    }
+  } catch {
+    signal?.throwIfAborted()
+    return null
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function parseSkillMetadataJsonObject(
+  content: string | null
+): Record<string, unknown> | null {
+  if (!content) {
+    return null
+  }
+  try {
+    const cleaned = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+    const parsed: unknown = JSON.parse(cleaned)
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
