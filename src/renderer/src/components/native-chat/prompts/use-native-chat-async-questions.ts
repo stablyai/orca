@@ -68,7 +68,10 @@ export function useNativeChatAsyncQuestions({
   /** The host's saved Skip, on a host that keeps one for every device. */
   skip?: StructuredAgentSessionAsyncQuestionSkip
 }) {
-  const scopeKey = `${paneKey}:async:${sourceKey}`
+  const viewTab = useContext(NativeChatViewTabContext)
+  const scopeKey = viewTab
+    ? JSON.stringify([viewTab.tabId, paneKey, sourceKey])
+    : `${paneKey}:async:${sourceKey}`
   const owner = useMemo(() => ({ scopeKey, viewKey }), [scopeKey, viewKey])
   const active = useRef<object | null>(null)
   useLayoutEffect(() => {
@@ -77,7 +80,6 @@ export function useNativeChatAsyncQuestions({
       active.current = null
     }
   }, [owner])
-  const viewTab = useContext(NativeChatViewTabContext)
   // A released view of an open tab keeps its skips, a tab moved to another workspace included; closing the tab sweeps them with the tab's other dismissals.
   useNativeChatPaneLifetimeEffect(
     useCallback(

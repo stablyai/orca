@@ -38,6 +38,9 @@ export function captureProjectionState(
   for (const [key, value] of data.handleByKey) {
     captured.handleByKey.set(key, value)
   }
+  for (const [key, value] of data.acceptedTabByKey) {
+    captured.acceptedTabByKey.set(key, value)
+  }
   for (const [key, value] of data.countedRows) {
     captured.countedRows.set(key, value)
   }

@@ -1,17 +1,50 @@
+// @vitest-environment happy-dom
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { showFramePatch } from '@/store/slices/tabs/moved-tab-selection'
+import {
+  chatPaneAddressTabId,
+  chatPaneKey
+} from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  openNativeChatSubagent,
+  retireNativeChatSubagentViews,
+  useNativeChatOpenSubagent
+} from '../../subagents/native-chat-open-subagent'
 import {
   readNativeChatViewMemory,
   releaseNativeChatViewTabs,
   writeNativeChatViewMemory
 } from '../ownership/native-chat-view-memory'
 import { forgetChatLayer, reportChatLayerTabs } from './native-chat-closed-tab-release'
-import { retireRemovedNativeChatTabs } from '../../session/native-chat-removed-tab-retirement'
 
 const TAB = { tabId: 'tab-1', worktreeId: 'wt-1' }
+const SESSION = 'session-cross-workspace'
+const SHEET_PANE = chatPaneKey(SESSION)
 
-afterEach(() => releaseNativeChatViewTabs([TAB.tabId, 'tab-r', 'tab-m']))
+afterEach(() => {
+  cleanup()
+  retireNativeChatSubagentViews(chatPaneAddressTabId(SESSION))
+  releaseNativeChatViewTabs([TAB.tabId, 'tab-r', 'tab-m', 'tab-c'])
+})
+
+function chatTab(id: string, worktreeId: string, entityId = id): Tab {
+  return {
+    id,
+    worktreeId,
+    entityId,
+    contentType: 'agent-session',
+    agentSessionAgent: 'codex',
+    groupId: `group-${worktreeId}`,
+    label: id,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}
 
 it('releases a tab closed in a shown workspace and keeps the open ones', () => {
   const two = { tabId: 'tab-2', worktreeId: TAB.worktreeId }
@@ -74,24 +107,44 @@ it('a renamed workspace or a tab moved to another keeps its open chats, and rele
   expect(readNativeChatViewMemory(moved, 'kept')).toBeUndefined()
 })
 
-it('a closed chat tab is released by the close itself, and a tab the close moved elsewhere is kept', async () => {
-  const tab = (id: string, worktreeId: string): Tab =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: retirement reads a tab's id, kind, session and host.
-    ({ id, worktreeId, contentType: 'agent-session', entityId: id }) as Tab
+it('releases a closed chat and preserves a moved chat’s sheet and view memory', async () => {
   const closed = { tabId: 'tab-c', worktreeId: 'wt-c' }
   const moved = { tabId: 'tab-m', worktreeId: 'wt-c' }
   useAppStore.setState({
-    unifiedTabsByWorktree: { 'wt-c': [tab('tab-c', 'wt-c'), tab('tab-m', 'wt-c')] }
+    unifiedTabsByWorktree: { 'wt-c': [chatTab('tab-c', 'wt-c'), chatTab('tab-m', 'wt-c', SESSION)] }
   })
   writeNativeChatViewMemory(closed, 'kept', 1)
   writeNativeChatViewMemory(moved, 'kept', 1)
-  // As the store's close runs it: retirement inside the update, the store committed after.
-  retireRemovedNativeChatTabs([tab('tab-c', 'wt-c'), tab('tab-m', 'wt-c')], [])
-  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-c': [], 'wt-x': [tab('tab-m', 'wt-x')] } })
+  openNativeChatSubagent(SHEET_PANE, 'agent-1')
+  const { result } = renderHook(() => useNativeChatOpenSubagent(SHEET_PANE))
+  act(() => {
+    showFramePatch(
+      useAppStore,
+      { unifiedTabsByWorktree: { 'wt-c': [], 'wt-x': [chatTab('tab-m', 'wt-x', SESSION)] } },
+      ['wt-c', 'wt-x']
+    )
+  })
   await Promise.resolve()
   expect(readNativeChatViewMemory(closed, 'kept')).toBeUndefined()
   expect(readNativeChatViewMemory(moved, 'kept')).toBe(1)
-  releaseNativeChatViewTabs(['tab-c'])
+  expect(result.current?.agentId).toBe('agent-1')
+})
+
+it('keeps the sheet until the last workspace view is removed', () => {
+  const otherView = [chatTab('tab-b', 'wt-b', SESSION)]
+  useAppStore.setState({
+    unifiedTabsByWorktree: { 'wt-a': [chatTab('tab-a', 'wt-a', SESSION)], 'wt-b': otherView }
+  })
+  openNativeChatSubagent(SHEET_PANE, 'agent-2')
+  const { result } = renderHook(() => useNativeChatOpenSubagent(SHEET_PANE))
+  act(() => {
+    showFramePatch(useAppStore, { unifiedTabsByWorktree: { 'wt-b': otherView } }, ['wt-a'])
+  })
+  expect(result.current?.agentId).toBe('agent-2')
+  act(() => {
+    showFramePatch(useAppStore, { unifiedTabsByWorktree: {} }, ['wt-b'])
+  })
+  expect(result.current).toBeNull()
 })
 
 it('an unmount checks a bounded number of workspaces however many layers are shown', () => {

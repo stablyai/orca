@@ -6,6 +6,7 @@ import {
 } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
+import { chatPaneKeySessionId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // Local completed orphans stay hidden; remote rows await host retraction, not tab hydration.
 export function liveEntryWorktreeId(
@@ -14,7 +15,8 @@ export function liveEntryWorktreeId(
   tabIdToWorktreeId: Pick<ReadonlyMap<string, string>, 'get'>,
   representedTabs?: Pick<ReadonlyMap<string, Tab>, 'get'>
 ): string | undefined {
-  const parsed = parseAgentStatusPaneIdentity(paneKey, representedTabs?.get(paneKey))
+  const representedTab = representedTabs?.get(paneKey)
+  const parsed = parseAgentStatusPaneIdentity(paneKey, representedTab)
   if (!parsed) {
     return undefined
   }
@@ -23,7 +25,16 @@ export function liveEntryWorktreeId(
   if (remote) {
     return resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId) ?? undefined
   }
-  return tabWorktreeId ?? (entry.state === 'done' && !remote ? undefined : entry.worktreeId)
+  if (chatPaneKeySessionId(paneKey) !== null) {
+    if (!representedTab && entry.state === 'done') {
+      return undefined
+    }
+    // The key's tab part may be an unrelated tab id.
+    if (entry.worktreeId) {
+      return entry.worktreeId
+    }
+  }
+  return tabWorktreeId ?? (entry.state === 'done' ? undefined : entry.worktreeId)
 }
 
 /** Delivery sequence is consumed from the store by attention, never displayed in agent rows. */
