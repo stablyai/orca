@@ -18,6 +18,7 @@ export function getDefaultRightSidebarActivityItems({
   sourceControlShortcut,
   checksShortcut,
   portsShortcut,
+  agentsShortcut = '',
   isBot = false,
   showsHomeTab = isBot,
   needsYou = 0,
@@ -28,6 +29,7 @@ export function getDefaultRightSidebarActivityItems({
   sourceControlShortcut: string
   checksShortcut: string
   portsShortcut: string
+  agentsShortcut?: string
   isBot?: boolean
   showsHomeTab?: boolean
   needsYou?: number
@@ -90,7 +92,7 @@ export function getDefaultRightSidebarActivityItems({
       id: 'vault',
       icon: AgentSessionHistoryIcon,
       title: t('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
-      shortcut: ''
+      shortcut: agentsShortcut === 'Unassigned' ? '' : agentsShortcut
     },
     {
       id: 'workspaces',
