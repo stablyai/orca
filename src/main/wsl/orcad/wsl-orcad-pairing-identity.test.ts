@@ -4,6 +4,7 @@ import {
   type PairingOffer
 } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../../server/serve-readiness'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'
@@ -62,6 +63,22 @@ describe("a pinned WSL host's foreign answer after its key file changed", () => 
     )
     // Without the key fact it may be a restart: unsealed, so liveness still backs off.
     expect(await refusal(launch)).toMatchObject({ sealed: false })
+    // A server whose own startup offer names the paired key was not reset, whatever the file says.
+    const servesPaired = {
+      ...readiness,
+      pairing: {
+        available: true as const,
+        url: encodePairingOffer(paired),
+        endpoint: paired.endpoint,
+        deviceId: 'device',
+        webClientUrl: null,
+        scope: 'runtime' as const,
+        qr: null
+      }
+    }
+    expect(
+      await refusal({ ...launch, pairedKeyChanged: true, readiness: servesPaired })
+    ).toMatchObject({ sealed: false })
   })
 
   it('reaches liveness recovery as failed, with no backoff retry', async () => {

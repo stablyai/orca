@@ -104,7 +104,7 @@ describe('removing a WSL host whose server Orca cannot reach', () => {
   })
 
   // Its refusal tells the user to remove and re-add; a second Remove must not be needed for that.
-  it('removes it on the first Remove when the paired server is proven gone', async () => {
+  it("removes it on the first Remove once its account's server holds another key", async () => {
     const connector = unreachableConnector()
     connector.stopServer = async () => {
       throw OrcadManagedIdentityError.wslHostKeyChanged(record.distro, 'socket closed (1006)')
@@ -114,8 +114,23 @@ describe('removing a WSL host whose server Orca cannot reach', () => {
       linuxUser: 'qauser'
     })
     expect(removal.removed).toBe(true)
-    expect(removal.serverStop).toMatchObject({ stopped: false, forgotten: true })
+    // Removed: the toast must not repeat "remove the WSL host and add it again".
+    expect(removal.serverStop).toMatchObject({
+      stopped: false,
+      forgotten: true,
+      reasonCode: 'serverIdentityReset'
+    })
     expect(store).toEqual({ removed: [record.environmentId], pending: [] })
+  })
+
+  it('keeps an older sealed port refusal pending, as any unproven stop', async () => {
+    const connector = unreachableConnector()
+    connector.stopServer = async () => {
+      throw OrcadManagedIdentityError.foreignPort(6800, 'socket closed (4003)', true)
+    }
+    const removal = await removeWslHostServer(userDataPath, connector, record)
+    expect(removal.removed).toBe(false)
+    expect(store.pending).toEqual([record.environmentId])
   })
 
   it('forgets it without contacting the distro', async () => {

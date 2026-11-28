@@ -80,11 +80,7 @@ function withPlatform(platform: RemoteHostPlatform | null): { platform?: RemoteH
   return platform ? { platform } : {}
 }
 
-/**
- * Before any deploy (#49180): an unpinned host's default account must hold the paired key, or Orca
- * would start a stranger. True when a pinned account's readable key differs from the paired one: a
- * hint only, since the running server may still prove the paired key; a later refusal seals on it.
- */
+/** Refuses an unpinned host's unpaired account (#49180); true is only a hint the pinned account's key changed. */
 export function refuseUnpairedHostAccount(
   distro: string,
   facts: WslAccountFacts,

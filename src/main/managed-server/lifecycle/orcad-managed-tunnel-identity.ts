@@ -41,8 +41,8 @@ export class OrcadManagedIdentityError extends Error {
     detail: string,
     /** A sealed refusal, not a catch-all `foreign` answer a restart can produce. */
     readonly sealed = false,
-    /** Already names the WSL host's causes and fixes, so WSL wording never wraps it twice. */
-    private readonly wslWorded = false
+    /** A pinned WSL host's server now holds another key; already WSL-worded, never wrapped twice. */
+    readonly wslHostKeyChanged = false
   ) {
     super(`${ORCAD_IDENTITY_MISMATCH_CODE}: ${explanation}: ${detail}`)
     this.name = 'OrcadManagedIdentityError'
@@ -87,7 +87,7 @@ export class OrcadManagedIdentityError extends Error {
     distro: string,
     refused: OrcadManagedIdentityError
   ): OrcadManagedIdentityError {
-    if (refused.wslWorded) {
+    if (refused.wslHostKeyChanged) {
       return refused
     }
     const detail = refused.message.replace(`${ORCAD_IDENTITY_MISMATCH_CODE}: `, '')
@@ -119,11 +119,9 @@ function wslHostServerExplanation(distro: string): string {
   )
 }
 
-/** A refusal the pinned key proved, or a replaced server: no retry or reconnect can clear it. */
-export function isProvenOrcadIdentityRefusal(error: unknown): error is OrcadManagedIdentityError {
-  return (
-    error instanceof OrcadManagedIdentityError && (error.sealed || error.kind === 'replaced-server')
-  )
+/** The refusal `wslHostKeyChanged` builds: this host's paired server no longer exists. */
+export function isWslHostKeyChangedRefusal(error: unknown): error is OrcadManagedIdentityError {
+  return error instanceof OrcadManagedIdentityError && error.wslHostKeyChanged
 }
 
 /** Status code of a refusal automatic retries can't clear (the pairing must change); null otherwise. */
