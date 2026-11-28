@@ -23,10 +23,29 @@ if (!parentPort) {
   throw new Error('Profile state writer requires a worker thread')
 }
 const port = parentPort
+// Drop the writer's cached parts trees after write bursts settle so large profiles don't pin ~10+ MiB forever.
+const COMMITTED_TREE_IDLE_EVICT_MS = 15_000
 let authority: ProfileStateSqliteAuthority | undefined
 let busy = false
 let stopping = false
 let previousId = 0
+let idleEvictTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearIdleEvictTimer(): void {
+  if (idleEvictTimer !== undefined) {
+    clearTimeout(idleEvictTimer)
+    idleEvictTimer = undefined
+  }
+}
+
+function scheduleIdleEvictTimer(): void {
+  clearIdleEvictTimer()
+  idleEvictTimer = setTimeout(() => {
+    idleEvictTimer = undefined
+    forgetCommittedProfileStateDomains()
+  }, COMMITTED_TREE_IDLE_EVICT_MS)
+  idleEvictTimer.unref()
+}
 
 function reply(response: ProfileStateWriterResponse): void {
   port.postMessage(response)
@@ -34,6 +53,8 @@ function reply(response: ProfileStateWriterResponse): void {
 
 function close(): void {
   stopping = true
+  clearIdleEvictTimer()
+  forgetCommittedProfileStateDomains()
   try {
     authority?.close()
   } finally {
@@ -121,6 +142,7 @@ async function accept(value: unknown): Promise<void> {
     return
   }
   busy = true
+  clearIdleEvictTimer()
   previousId = value.id
   try {
     reply(await execute(value))
@@ -133,6 +155,8 @@ async function accept(value: unknown): Promise<void> {
     busy = false
     if (stopping) {
       close()
+    } else {
+      scheduleIdleEvictTimer()
     }
   }
 }
