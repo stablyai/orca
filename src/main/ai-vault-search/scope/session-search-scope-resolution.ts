@@ -53,11 +53,10 @@ function registeredWorktreeId(
   if (catalog.worktreeMeta[worktreeId]) {
     return worktreeId
   }
-  const registered = Object.keys(catalog.worktreeMeta).find((key) =>
-    worktreeIdsEqual(key, worktreeId)
-  )
-  if (registered) {
-    return registered
+  for (const key in catalog.worktreeMeta) {
+    if (Object.hasOwn(catalog.worktreeMeta, key) && worktreeIdsEqual(key, worktreeId)) {
+      return key
+    }
   }
   // Checkouts and folder workspaces can use the registered repo path without a workspace row.
   const named = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
@@ -85,7 +84,11 @@ function resolveProjectScope(projectKey: string, catalog: SessionSearchScopeCata
   if (projectKey.startsWith('repo:')) {
     repoIds.add(projectKey.slice('repo:'.length))
   }
-  for (const [worktreeId, meta] of Object.entries(catalog.worktreeMeta)) {
+  for (const worktreeId in catalog.worktreeMeta) {
+    if (!Object.hasOwn(catalog.worktreeMeta, worktreeId)) {
+      continue
+    }
+    const meta = catalog.worktreeMeta[worktreeId]
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     if (toAiVaultProjectKey(meta.projectId ?? null, repoId) === projectKey) {
       repoIds.add(repoId)
@@ -109,8 +112,11 @@ function addRepoScopePaths(
   for (const directory of managedWorktreeDirectories(repo, catalog.settings)) {
     paths.add(directory)
   }
-  for (const worktreeId of Object.keys(catalog.worktreeMeta)) {
-    if (getRepoIdFromWorktreeId(worktreeId) !== repo.id) {
+  for (const worktreeId in catalog.worktreeMeta) {
+    if (
+      !Object.hasOwn(catalog.worktreeMeta, worktreeId) ||
+      getRepoIdFromWorktreeId(worktreeId) !== repo.id
+    ) {
       continue
     }
     paths.add(splitWorktreeIdForFilesystem(worktreeId)?.worktreePath)
