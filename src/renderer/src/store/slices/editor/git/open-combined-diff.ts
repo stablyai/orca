@@ -9,6 +9,35 @@ import type { OpenFile } from '../types/open-file'
 import { editorOpenOwner, qualifyEditorContentId } from './editor-open-owner'
 import { toBranchCompareSnapshot, toCommitCompareSnapshot } from './git-status-reconciliation'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
+
+function hasCombinableBranchCompare(
+  summary: GitBranchCompareSummary | null | undefined
+): summary is GitBranchCompareSummary {
+  return Boolean(
+    summary?.status === 'ready' && summary.baseOid && summary.headOid && summary.mergeBase
+  )
+}
+
+/** The Changes tab id openAllDiffs uses for this worktree's copy. */
+export function combinedUncommittedDiffId(
+  worktreeId: string,
+  contentOwner: ReturnType<typeof editorOpenOwner>,
+  areaFilter?: string,
+  uncommittedOnly = false
+): string {
+  // Own id so an Uncommitted tab never turns an open All Changes tab uncommitted-only.
+  const baseId = areaFilter
+    ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
+    : uncommittedOnly
+      ? `${worktreeId}::all-diffs::uncommitted-only`
+      : `${worktreeId}::all-diffs::uncommitted`
+  return qualifyEditorContentId(
+    baseId,
+    contentOwner.runtimeEnvironmentId,
+    contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+  )
+}
 
 export function createOpenCombinedDiff(
   set: EditorSet,
@@ -16,31 +45,34 @@ export function createOpenCombinedDiff(
 ): Pick<EditorSlice, 'openAllDiffs' | 'openBranchAllDiffs' | 'openCommitAllDiffs'> {
   return {
     openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot, options) => {
+      if (
+        options?.wholeScope &&
+        get().gitBranchCompareSummaryByWorktree[worktreeId]?.status === 'loading'
+      ) {
+        return
+      }
       const contentOwner = editorOpenOwner(get(), worktreeId, options)
-      const baseId = areaFilter
-        ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
-        : `${worktreeId}::all-diffs::uncommitted`
-      const id = qualifyEditorContentId(
-        baseId,
-        contentOwner.runtimeEnvironmentId,
-        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
-      )
+      // Decided from the same synchronous state the tab is built from, so a whole-scope open
+      // never titles an uncommitted-only tab "All Changes".
+      const uncommittedOnly =
+        options?.uncommittedOnly === true ||
+        (options?.wholeScope === true &&
+          !hasCombinableBranchCompare(get().gitBranchCompareSummaryByWorktree[worktreeId]))
+      const id = combinedUncommittedDiffId(worktreeId, contentOwner, areaFilter, uncommittedOnly)
       const label = areaFilter
         ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
             areaFilter
           ] ?? 'All Changes')
-        : 'All Changes'
+        : uncommittedOnly
+          ? 'Uncommitted Changes'
+          : 'All Changes'
       const placementId = options?.placementWorkspaceId ?? worktreeId
       const intent = editorPlacementIntent(get, placementId)
       const groupId = resolveEditorOpenTargetGroupId(get(), placementId, options?.targetGroupId)
       set((s) => {
         const branchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
         const branchCompare =
-          !areaFilter &&
-          branchSummary?.status === 'ready' &&
-          branchSummary.baseOid &&
-          branchSummary.headOid &&
-          branchSummary.mergeBase
+          !areaFilter && !uncommittedOnly && hasCombinableBranchCompare(branchSummary)
             ? toBranchCompareSnapshot(branchSummary)
             : undefined
         const branchEntriesSnapshot = branchCompare

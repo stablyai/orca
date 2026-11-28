@@ -1,6 +1,6 @@
 import type { SlackExecutionLaunch } from '../../../native-chat/agent-session-wire/operations/slack-execution-authority'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
-import type { BotLaunchTools } from '../../../bots/bot-launch-tools'
+import type { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
@@ -23,6 +23,10 @@ import type { LinkedSkills } from '../../../native-chat/native-chat-skill-roots'
 export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
+  owedItemAttachmentUploads?: (
+    stateDirectory: string,
+    root: string
+  ) => Promise<ReadonlySet<string> | null>
   legacySessionTabIds?: readonly string[]
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
    *  probe and not ours to spawn for. */
@@ -72,7 +76,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveSessionInstructions?: (
     record: AgentSessionRecord,
     launchDirectory: string,
-    linkedSkills: string | null
+    linkedSkills: string | null,
+    eachStart: boolean
   ) => Promise<string | null>
   /** See `StructuredAgentLaunchSources.readOnlySession`. */
   readOnlySession?: (sessionId: string) => ReadOnlySessionMode | null
@@ -82,7 +87,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveSessionToolServers?: (
     record: AgentSessionRecord,
     launchDirectory: string
-  ) => Promise<BotLaunchTools>
+  ) => Promise<SessionMcpTools>
   /** See `StructuredAgentLaunchSources.resolveLinkedSkills`. */
   resolveSessionLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
   /** The chat's bot folder brought up to date, as a launch would load it, with no launch
@@ -142,4 +147,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
     record: AgentSessionRecord,
     launchDirectory: string
   ) => Promise<AgentSessionAccountHome | null>
-} & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'onIdleProviderDeath' | 'statusSink'>
+} & Pick<
+    StructuredAgentSessionHostDeps,
+    'onRequestFailure' | 'onIdleProviderDeath' | 'onUserClosedProvider' | 'statusSink'
+  >

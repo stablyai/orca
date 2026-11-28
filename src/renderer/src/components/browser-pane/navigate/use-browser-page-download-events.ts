@@ -11,7 +11,7 @@ export function useBrowserPageDownloadEvents({
   setResourceNotice
 }: {
   browserTabId: string
-  setResourceNotice: Dispatch<SetStateAction<string | null>>
+  setResourceNotice: (notice: string | null) => void
 }): {
   downloadStates: BrowserDownloadState[]
   setDownloadStates: Dispatch<SetStateAction<BrowserDownloadState[]>>
@@ -34,6 +34,7 @@ export function useBrowserPageDownloadEvents({
           receivedBytes: 0,
           status: 'downloading',
           savePath: event.savePath,
+          ...(event.claimLabel ? { claimLabel: event.claimLabel } : {}),
           error: null,
           progressState: null,
           completedAt: null
@@ -81,7 +82,9 @@ export function useBrowserPageDownloadEvents({
             ? {
                 ...download,
                 status: event.status,
-                savePath: event.savePath,
+                // A claimed download's file is the feature's own and gone once read.
+                savePath: event.claimLabel ? null : event.savePath,
+                ...(event.claimLabel ? { claimLabel: event.claimLabel } : {}),
                 error: event.error,
                 completedAt: Date.now()
               }

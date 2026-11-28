@@ -1,9 +1,9 @@
-import type { Dir } from 'node:fs'
 import { isSafeOwnedDirectory } from '../../shared/secure-storage/owned-private-directory'
 
-import { lstat, mkdir, opendir } from 'node:fs/promises'
+import { lstat, mkdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
+import { openDirectory, type DirectoryHandle } from '../../shared/open-directory'
 
 const SWEEP_CONCURRENCY = 8
 
@@ -46,9 +46,9 @@ export async function sweepExpiredOwnedDirectories(
   }
 ): Promise<OwnedDirectorySweepResult> {
   const entryLimit = options.entryLimit ?? Number.POSITIVE_INFINITY
-  let rootDir: Dir
+  let rootDir: DirectoryHandle
   try {
-    rootDir = await opendir(root)
+    rootDir = await openDirectory(root)
   } catch {
     return { complete: false, hasFailures: false, hasFreshDirectories: false }
   }

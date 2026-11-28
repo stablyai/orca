@@ -41,11 +41,31 @@ export function sidebarWorkspaceRowFilters(state: SidebarFilterState): Workspace
   }
 }
 
-/** The store fields behind the sidebar filters, for a shallow-compared subscription. */
+let cachedSidebarFilterState: Pick<AppState, keyof SidebarFilterState> | undefined
+
+/** The store fields behind the sidebar filters, referentially stable while unchanged. */
 export function selectSidebarFilterState(
   state: AppState
 ): Pick<AppState, keyof SidebarFilterState> {
-  return {
+  if (
+    cachedSidebarFilterState &&
+    cachedSidebarFilterState.showSleepingWorkspaces === state.showSleepingWorkspaces &&
+    cachedSidebarFilterState.filterRepoIds === state.filterRepoIds &&
+    cachedSidebarFilterState.hideDefaultBranchWorkspace === state.hideDefaultBranchWorkspace &&
+    cachedSidebarFilterState.hideAutomationGeneratedWorkspaces ===
+      state.hideAutomationGeneratedWorkspaces &&
+    cachedSidebarFilterState.hideCliCreatedWorkspaces === state.hideCliCreatedWorkspaces &&
+    cachedSidebarFilterState.hideDetachedHeadWorkspaces === state.hideDetachedHeadWorkspaces &&
+    cachedSidebarFilterState.hideWorkspacesFromOtherDevices ===
+      state.hideWorkspacesFromOtherDevices &&
+    cachedSidebarFilterState.alwaysShowDefaultBranchWorkspace ===
+      state.alwaysShowDefaultBranchWorkspace &&
+    cachedSidebarFilterState.visibleWorkspaceHostIds === state.visibleWorkspaceHostIds &&
+    cachedSidebarFilterState.workspaceHostScope === state.workspaceHostScope
+  ) {
+    return cachedSidebarFilterState
+  }
+  cachedSidebarFilterState = {
     showSleepingWorkspaces: state.showSleepingWorkspaces,
     filterRepoIds: state.filterRepoIds,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
@@ -57,6 +77,7 @@ export function selectSidebarFilterState(
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
     workspaceHostScope: state.workspaceHostScope
   }
+  return cachedSidebarFilterState
 }
 
 export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {

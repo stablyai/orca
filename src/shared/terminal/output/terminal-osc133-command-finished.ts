@@ -4,23 +4,28 @@ import { ownRetainedString } from '../../text/own-retained-string'
 
 type OscTerminator = {
   index: number
+  /** 0 when an ESC other than ST cancels the sequence, as a VT parser does. */
   length: number
 }
 
 const OSC_133_PREFIX = '\x1b]133;'
 const MAX_OSC_CARRY_LENGTH = 4096
 
+/** One forward pass to the first BEL or ESC: a burst of markers is scanned once, whatever ends them. */
 function findOscTerminator(data: string, startIndex: number): OscTerminator | null {
-  const bel = data.indexOf('\x07', startIndex)
-  const st = data.indexOf('\x1b\\', startIndex)
-
-  if (bel === -1 && st === -1) {
-    return null
+  for (let index = startIndex; index < data.length; index += 1) {
+    const code = data.charCodeAt(index)
+    if (code === 0x07) {
+      return { index, length: 1 }
+    }
+    if (code === 0x1b) {
+      if (index + 1 === data.length) {
+        return null
+      }
+      return { index, length: data[index + 1] === '\\' ? 2 : 0 }
+    }
   }
-  if (bel !== -1 && (st === -1 || bel < st)) {
-    return { index: bel, length: 1 }
-  }
-  return { index: st, length: 2 }
+  return null
 }
 
 function parseBestEffortExitCode(value: string | undefined): number | null {
@@ -90,21 +95,23 @@ export function createOsc133CommandFinishedScanner(
 
   const scan = (data: string): number => {
     lastFinishEnd = -1
-    let combined = carry + data
+    const combined = carry + data
     // `combined` starts at this index in `data`; negative while it still holds the carry.
-    let combinedStartInChunk = -carry.length
+    const combinedStartInChunk = -carry.length
     carry = ''
+    let offset = 0
 
-    while (combined.length > 0) {
-      const start = combined.indexOf(OSC_133_PREFIX)
+    while (offset < combined.length) {
+      const start = combined.indexOf(OSC_133_PREFIX, offset)
       if (start === -1) {
-        carry = findPrefixCarry(combined)
-        if (carry.length < combined.length) {
+        const rest = combined.slice(offset)
+        carry = findPrefixCarry(rest)
+        if (carry.length < rest.length) {
           noteOutput()
         }
         break
       }
-      if (start > 0) {
+      if (start > offset) {
         noteOutput()
       }
 
@@ -119,13 +126,18 @@ export function createOsc133CommandFinishedScanner(
         break
       }
 
+      if (terminator.length === 0) {
+        // A cancelled sequence is no marker, and breaks marker adjacency; its ESC may start the next one.
+        noteOutput()
+        offset = terminator.index
+        continue
+      }
       const sequenceEnd = terminator.index + terminator.length
       handleOsc133(
         combined.slice(payloadStart, terminator.index),
         combinedStartInChunk + sequenceEnd
       )
-      combined = combined.slice(sequenceEnd)
-      combinedStartInChunk += sequenceEnd
+      offset = sequenceEnd
     }
     return lastFinishEnd
   }

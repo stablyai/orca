@@ -1,5 +1,6 @@
 // A bot chat's row glyphs, the same in the Activity panel and the sidebar; never the bot's picture.
-import { CalendarClock, Gauge, House, MessageSquare } from 'lucide-react'
+import { CalendarClock, House, MessageSquare } from 'lucide-react'
+import { GaugeMaxIcon } from '@/components/icons/GaugeMaxIcon'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -101,7 +102,7 @@ export function BotChatStatusSlot({
           {state ? (
             <span className="absolute -right-[3px] -bottom-[3px] flex size-[7px]">
               {stopped ? (
-                <Gauge className="size-[8px] stroke-[3] text-status-warning" />
+                <GaugeMaxIcon className="size-[8px] text-status-warning" strokeWidth={3} />
               ) : chat.live === 'replying' ? (
                 <AgentWorkingSpinner className="size-[7px]" />
               ) : (

@@ -25,15 +25,22 @@ export function openWorkspaceEditorItem(
   /** Where in its group a reopened tab goes back to. */
   index?: number
 ): string {
+  // A worktree shows one graph; another workspace (a folder's repo cards) shows one per worktree.
+  const crossWorkspace =
+    contentType === 'git-graph' &&
+    state.openFiles.some((file) => file.id === fileId && file.worktreeId !== worktreeId)
   const graphTab =
     contentType === 'git-graph'
-      ? state.unifiedTabsByWorktree?.[worktreeId]?.find((tab) => tab.contentType === 'git-graph')
+      ? state.unifiedTabsByWorktree?.[worktreeId]?.find(
+          (tab) => tab.contentType === 'git-graph' && (!crossWorkspace || tab.entityId === fileId)
+        )
       : undefined
   if (graphTab) {
     state.activateTab?.(graphTab.id, { worktreeId })
     return graphTab.id
   }
-  const fixedTabId = contentType === 'git-graph' ? `${worktreeId}::git-graph` : undefined
+  const fixedTabId =
+    contentType === 'git-graph' && !crossWorkspace ? `${worktreeId}::git-graph` : undefined
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(

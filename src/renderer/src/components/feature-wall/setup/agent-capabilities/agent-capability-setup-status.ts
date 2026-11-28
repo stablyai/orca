@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type {
   OnboardingFeatureSetupId,
   OnboardingFeatureSetupSelection
@@ -16,6 +16,7 @@ import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { isAgentCapabilitiesDone } from '../feature-wall-setup-progress'
+import { useComputerUsePermissionStatus } from './use-computer-use-permission-status'
 
 export type AgentCapabilityInstallStatusTone =
   | 'ready'
@@ -31,8 +32,10 @@ export type AgentCapabilityInstallStatus = {
 }
 
 export type AgentCapabilityReadiness = {
+  browserUseBlocked?: boolean
   browserUseSkillInstalled: boolean
   browserUseSkillLoading: boolean
+  computerUseBlocked?: boolean
   computerUseSkillInstalled: boolean
   computerUseSkillLoading: boolean
   computerUseReady: boolean
@@ -47,7 +50,10 @@ export type AgentCapabilitySetupStatus = {
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }
 
-export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
+export function useAgentCapabilitySetupStatus(
+  computerUseBlocked: boolean,
+  browserUseBlocked = false
+): AgentCapabilitySetupStatus {
   const activeSkillRuntime = useOnboardingSkillRuntime()
   const skillOptions = {
     enabled: activeSkillRuntime.enabled,
@@ -56,14 +62,24 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
     agent: activeSkillRuntime.agent,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   }
-  const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, skillOptions)
-  const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, skillOptions)
+  const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    ...skillOptions,
+    enabled: skillOptions.enabled && !browserUseBlocked
+  })
+  const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    ...skillOptions,
+    enabled: skillOptions.enabled && !computerUseBlocked
+  })
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, skillOptions)
-  const computerUsePermissionStatus = useComputerUsePermissionStatus(computerUseSkill.installed)
+  const computerUsePermissionStatus = useComputerUsePermissionStatus(
+    !computerUseBlocked && computerUseSkill.installed
+  )
   const readiness: AgentCapabilityReadiness = useMemo(
     () => ({
+      browserUseBlocked,
       browserUseSkillInstalled: browserUseSkill.installed,
       browserUseSkillLoading: browserUseSkill.loading,
+      computerUseBlocked,
       computerUseSkillInstalled: computerUseSkill.installed,
       computerUseSkillLoading: computerUseSkill.loading,
       computerUseReady: computerUsePermissionStatus.ready,
@@ -73,8 +89,10 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
       orchestrationSkillLoading: orchestrationSkill.loading
     }),
     [
+      browserUseBlocked,
       browserUseSkill.installed,
       browserUseSkill.loading,
+      computerUseBlocked,
       computerUsePermissionStatus.checking,
       computerUsePermissionStatus.ready,
       computerUsePermissionStatus.unavailableReason,
@@ -103,11 +121,12 @@ export function getDefaultAgentCapabilitySetupSelection(
   readiness: AgentCapabilityReadiness
 ): OnboardingFeatureSetupSelection {
   return {
-    browserUse: !readiness.browserUseSkillInstalled,
+    browserUse: !readiness.browserUseBlocked && !readiness.browserUseSkillInstalled,
     // Keep Computer Use selected when OS permission still needs action, even if its skill is installed.
     computerUse:
-      !readiness.computerUseSkillInstalled ||
-      (!readiness.computerUseReady && !readiness.computerUseUnavailable),
+      !readiness.computerUseBlocked &&
+      (!readiness.computerUseSkillInstalled ||
+        (!readiness.computerUseReady && !readiness.computerUseUnavailable)),
     orchestration: !readiness.orchestrationSkillInstalled,
     linearTickets: false
   }
@@ -115,9 +134,10 @@ export function getDefaultAgentCapabilitySetupSelection(
 
 export function isAgentCapabilityReadinessChecking(readiness: AgentCapabilityReadiness): boolean {
   return (
-    readiness.browserUseSkillLoading ||
-    readiness.computerUseSkillLoading ||
-    (readiness.computerUseSkillInstalled && readiness.computerUseChecking) ||
+    (!readiness.browserUseBlocked && readiness.browserUseSkillLoading) ||
+    (!readiness.computerUseBlocked &&
+      (readiness.computerUseSkillLoading ||
+        (readiness.computerUseSkillInstalled && readiness.computerUseChecking))) ||
     readiness.orchestrationSkillLoading
   )
 }
@@ -248,61 +268,4 @@ function getComputerUseInstallStatus(
     tone: 'ready',
     installed: true
   }
-}
-
-function useComputerUsePermissionStatus(enabled: boolean): {
-  ready: boolean
-  checking: boolean
-  unavailableReason: string | null
-} {
-  const [status, setStatus] = useState<{
-    ready: boolean
-    checking: boolean
-    unavailableReason: string | null
-  }>({
-    ready: false,
-    checking: enabled,
-    unavailableReason: null
-  })
-
-  useEffect(() => {
-    if (!enabled) {
-      setStatus({ ready: false, checking: false, unavailableReason: null })
-      return
-    }
-
-    let stale = false
-    const refresh = (): void => {
-      setStatus((current) => ({ ...current, checking: true }))
-      window.api.computerUsePermissions
-        .getStatus()
-        .then((next) => {
-          if (stale) {
-            return
-          }
-          setStatus({
-            ready:
-              next.helperUnavailableReason === null &&
-              next.permissions.every((permission) => permission.status !== 'not-granted'),
-            checking: false,
-            unavailableReason: next.helperUnavailableReason
-          })
-        })
-        .catch(() => {
-          if (stale) {
-            return
-          }
-          setStatus({ ready: false, checking: false, unavailableReason: null })
-        })
-    }
-
-    refresh()
-    window.addEventListener('focus', refresh)
-    return () => {
-      stale = true
-      window.removeEventListener('focus', refresh)
-    }
-  }, [enabled])
-
-  return status
 }

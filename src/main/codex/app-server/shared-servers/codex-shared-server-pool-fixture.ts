@@ -8,6 +8,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex-app-server-connection-types'
 import { CodexSharedServerPool } from './codex-shared-server-pool'
+import type { CodexSharedServerWindowsJob } from './codex-shared-server-windows-job'
 import { codexOpenedThreadId } from './codex-shared-server-frames'
 
 /** A scripted Codex app-server and chat handlers for the shared-server tests. */
@@ -35,7 +36,12 @@ export function fakeCodex(
   closeTree: 'exited' | 'unverifiable' = 'exited',
   /** Whether thread/backgroundTerminals/terminate actually stops the command. */
   terminateWorks = true,
-  codex: { listUnsupported?: boolean; unsubscribeFails?: boolean; interruptRefused?: boolean } = {}
+  codex: {
+    listUnsupported?: boolean
+    unsubscribeFails?: boolean
+    interruptRefused?: boolean
+    windowsJob?: () => CodexSharedServerWindowsJob
+  } = {}
 ) {
   const servers: FakeServer[] = []
   let nextThread = 1
@@ -183,7 +189,13 @@ export function fakeCodex(
   return {
     servers,
     sweep,
-    pool: withKnownVersion(new CodexSharedServerPool(connect, async () => !sweep.leftovers))
+    pool: withKnownVersion(
+      new CodexSharedServerPool(
+        connect,
+        async () => !sweep.leftovers,
+        codex.windowsJob ?? (() => undefined)
+      )
+    )
   }
 }
 

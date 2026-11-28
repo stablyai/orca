@@ -17,10 +17,6 @@ import {
   type ExternalConversationLinkStore
 } from './external-conversation-links'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   getStructuredAgentSessionHost,
@@ -29,6 +25,8 @@ import {
 import type { StructuredAgentTurnHost } from '../runtime/orchestration/turn-delivery/send-agent-turn'
 import { refusalOf } from './external-conversation-chain'
 import { refused, type Delivery } from './external-conversation-types'
+/** The pane key a chat's status row is published under: its conversation's. */
+export { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 /** What the seam reads of the native-chat host. */
 export type ConversationChat = StructuredAgentTurnHost &
@@ -84,11 +82,11 @@ export type ChatNews =
       kind: 'turn-ended'
       sessionId: string
       outcome: AgentJournalTurnOutcome
-      mergedTurnCount?: number
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
-      /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
-      readAttribution?: () => Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>>
+      /** Only whom the turn acts for (its opener, the deliveries it answered and who typed what it
+       *  took), read by index. */
+      readAttribution?: () => Promise<Pick<EndedChatTurn, 'opener' | 'stamps' | 'typedByAnother'>>
       at: number
     }
 
@@ -96,12 +94,15 @@ export type ChatNews =
 export function watchChatNews(
   chats: ConversationChatHost,
   listener: (news: ChatNews) => void,
-  id = 'external-conversations'
+  id = 'external-conversations',
+  // A turn's words go out with that turn, even when its workers hold its end.
+  includeHeld = true
 ): () => void {
   const subscribe = (chat: ConversationChat | null): (() => void) =>
     chat?.subscribeTurnCompletions({
       id,
       includePrompts: true,
+      includeHeld,
       onClosed: (sessionId) => listener({ kind: 'closed', sessionId }),
       emit: (event) => {
         if (event.type === 'prompt') {
@@ -112,9 +113,6 @@ export function watchChatNews(
             kind: 'turn-ended',
             sessionId,
             outcome,
-            ...(event.completion.mergedTurnCount !== undefined
-              ? { mergedTurnCount: event.completion.mergedTurnCount }
-              : {}),
             readTurn: () =>
               endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
             readAttribution: () =>
@@ -169,11 +167,6 @@ export function chatTurnFacts(
     delivered: (sessionId: string) => pending(sessionId) || claimed(sessionId),
     reported: (sessionId: string) => runningTurnOpenedByConversationReport(chats, sessionId)
   }
-}
-
-/** The pane key the chat's status row is published under. */
-export function chatPaneKey(sessionId: string): string {
-  return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
 }
 
 export function callerFor(link: Pick<ExternalConversationLink, 'sessionId'>): {

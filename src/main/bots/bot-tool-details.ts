@@ -8,7 +8,11 @@ import {
   type BotToolServer
 } from '../../shared/bot-tools'
 import { readBotToolsSnapshot } from './bot-tools-file'
-import { botToolCredentialHeaderNames } from './bot-tool-credentials'
+import {
+  botToolCredentialHeaderNames,
+  readBotToolCredential,
+  readBotToolOAuth
+} from './bot-tool-credentials'
 
 export async function readBotToolDetails(folder: string, name: string): Promise<BotToolDetails> {
   const { servers, version } = await readBotToolsSnapshot(folder)
@@ -16,6 +20,15 @@ export async function readBotToolDetails(folder: string, name: string): Promise<
   if (!server) {
     throw new BotFailureError('toolGone')
   }
+  return botToolDetailsOf(folder, server, version)
+}
+
+/** `server` for the editor, its saved values masked; `folder` holds its credential. */
+export function botToolDetailsOf(
+  folder: string,
+  server: BotToolServer,
+  version: string
+): BotToolDetails {
   const masked = (values: Record<string, string> | undefined) =>
     Object.keys(values ?? {}).map((key) => ({ key, configured: true }))
   return {
@@ -96,4 +109,25 @@ export function resolveBotToolInput(
         ...(signIn ? { credential: signIn } : {})
       }
     : { name: draft.name, command: draft.command, args: draft.args, env: secrets }
+}
+
+/**
+ * A stored tool as an edit starts from: its saved values and the address they're bound to, and a
+ * credential id only for Orca's own sign-in, which the edit keeps.
+ */
+export function withSavedBotToolHeaders(folder: string, server: BotToolServer): BotToolServer {
+  if (!('url' in server) || !server.credential) {
+    return server
+  }
+  if (readBotToolOAuth(folder, server.credential)) {
+    // Its tokens are Orca's own sign-in; a generic edit keeps the id and changes no values.
+    return server
+  }
+  const { credential, ...rest } = server
+  const saved = readBotToolCredential(folder, credential)
+  if (saved?.source) {
+    // Its headers come from a source Orca fills per call; a generic edit would drop them.
+    throw new BotFailureError('toolSourceManaged')
+  }
+  return saved ? { ...rest, url: saved.url, headers: saved.headers } : rest
 }

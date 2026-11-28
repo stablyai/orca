@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
 import type { Bot } from '../../../../shared/bot-types'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
-import { isBotsEnabled } from '../../../../shared/bots-switch'
+import { areHostBotsEnabled } from '../../../bots/bot-team-policy'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 type BotHomeStore = {
@@ -19,7 +19,7 @@ export function botHomeSessionId(
   store: BotHomeStore | null | undefined,
   workspaceId: string
 ): string | null {
-  return isBotsEnabled(store?.getSettings?.())
+  return areHostBotsEnabled(store?.getSettings?.())
     ? (botOfHomeWorkspace(store?.getBots?.() ?? [], workspaceId)?.chatSessionId ?? null)
     : null
 }

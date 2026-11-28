@@ -36,6 +36,7 @@ const TIMEOUT_MS = 15_000
 import {
   COMPOSIO_RETRY_WAIT_MAX_MS,
   ComposioKeyRejectedError,
+  ComposioKeyScopeError,
   ComposioLimitError,
   ComposioNeedsOwnSignInError,
   ComposioNotFoundError,
@@ -49,6 +50,7 @@ import {
 
 export {
   ComposioKeyRejectedError,
+  ComposioKeyScopeError,
   ComposioLimitError,
   ComposioNeedsOwnSignInError,
   ComposioUnavailableError
@@ -92,6 +94,9 @@ export class ComposioApi {
     }
     if (!response.ok) {
       const error = composioErrorOf(json)
+      if (response.status === 403 && error?.slug === 'APIKey_InsufficientPermissions') {
+        throw new ComposioKeyScopeError(error.message)
+      }
       if (error?.slug === 'ToolRouterV2_NoManagedAuth') {
         throw new ComposioNeedsOwnSignInError(path)
       }

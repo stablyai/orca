@@ -14,6 +14,7 @@ import {
 import { isClineSessionMetadataPath } from '../scanners/cline/session-scanner-cline-parser'
 import { cursorChatMetaPath } from '../scanners/cursor/session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from '../scanners/devin/session-scanner-devin-db'
+import { droidSettingsPathForTranscript } from '../scanners/droid/session-scanner-droid-settings'
 import { resolveKimiSessionsDir } from '../scanners/kimi/session-scanner-kimi-paths'
 import { resolveMuseSessionsDir } from '../../../shared/agent-hook-listener/providers/muse/muse-session-log'
 import { isKiroSessionMetadataPath } from '../scanners/kiro/session-scanner-kiro-parser'
@@ -36,7 +37,6 @@ import {
 } from './agent-session-directories'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
-const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
   resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
   'session-state'
@@ -135,14 +135,6 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     filePredicate: (filePath) =>
       !filePath.toLowerCase().endsWith('.zst') ||
       /^rollout-.+\.jsonl\.zst$/.test(basename(filePath))
-  },
-  gemini: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.geminiSessionsDir ?? GEMINI_SESSIONS_DIR, wslHomeDirs, [
-        '.gemini',
-        'tmp'
-      ]),
-    extensions: ['.json', '.jsonl']
   },
   copilot: {
     rootDirs: (options, wslHomeDirs) =>
@@ -263,7 +255,9 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'projects'
       ])
     ],
-    extensions: ['.jsonl']
+    extensions: ['.jsonl'],
+    // Settings-only model/token updates must refresh sessions without reparsing the transcript.
+    contentDependencyPath: droidSettingsPathForTranscript
   },
   cline: {
     rootDirs: (options, wslHomeDirs) =>

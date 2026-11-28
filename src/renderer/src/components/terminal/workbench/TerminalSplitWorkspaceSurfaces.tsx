@@ -1,6 +1,7 @@
 import { useAnyBrowserGuestNeedsPaint } from '../../browser-pane/host-guest/retention/browser-guest-paint-retention'
 import { WorktreeSplitSurface } from './TerminalWorktreeSplitSurface'
 import { selectParkedEquivalentMountTabIds } from '../workspace-mounting/startup-terminal-tab-hold'
+import { hasPendingBackgroundMounts } from '../workspace-mounting/activation-deferred-tab-admission'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalSplitWorkspaceSurfaces({
@@ -75,6 +76,9 @@ export function TerminalSplitWorkspaceSurfaces({
               backgroundMountTabIds={
                 backgroundMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
               }
+              hasPendingBackgroundMounts={hasPendingBackgroundMounts(
+                backgroundMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+              )}
               activationDeferredMountTabIds={selectParkedEquivalentMountTabIds(
                 activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id),
                 startupTerminalTabHold,

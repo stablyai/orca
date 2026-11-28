@@ -17,8 +17,8 @@ import { sessionCrewChanges } from '../../crew/crew-changes'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
+  structuredAgentSessionTabId,
+  chatPaneKey
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   isTerminalLeafId,
@@ -56,7 +56,7 @@ export function mintStructuredWorkerHandle(): string {
 }
 
 /** Mint and persist a random leaf: paired/PTY-style check callers can supply pane keys and match by leaf suffix.
- * Never derive it like structuredAgentSessionPaneKey; session ids are public in tab ids. Same-host session-id authority remains separate. */
+ * Never derive it like chatPaneKey; session ids are public in tab ids. Same-host session-id authority remains separate. */
 export function mintStructuredWorkerPaneKey(sessionId: string): string {
   return makePaneKey(structuredAgentSessionTabId(sessionId), randomUUID())
 }
@@ -84,7 +84,7 @@ function persistedStructuredWorkerPaneKeyIsValid(
   const parsed = paneKey ? parsePaneKey(paneKey) : null
   return Boolean(
     paneKey &&
-    paneKey !== structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId) &&
+    paneKey !== chatPaneKey(sessionId) &&
     parsed &&
     parsed.tabId === structuredAgentSessionTabId(sessionId) &&
     isTerminalLeafId(parsed.leafId)

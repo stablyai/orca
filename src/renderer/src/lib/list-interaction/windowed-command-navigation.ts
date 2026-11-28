@@ -1,10 +1,13 @@
 import { useEffect, type RefObject } from 'react'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { isCommandInputCaretKey } from '@/lib/keyboard/command-input-caret-keys'
 
 type CommandNavigationKeyEvent = {
   key: string
   ctrlKey: boolean
   metaKey: boolean
+  altKey: boolean
+  shiftKey: boolean
   defaultPrevented: boolean
   keyCode?: number
   nativeEvent?: { isComposing?: boolean; keyCode?: number }
@@ -17,7 +20,7 @@ export function getWindowedCommandNavigation(
   itemIds: readonly string[],
   activeItemId: string | null | undefined
 ): { targetId: string | null } | null {
-  if (event.defaultPrevented || isImeOwnedKeyboardEvent(event)) {
+  if (event.defaultPrevented || isImeOwnedKeyboardEvent(event) || isCommandInputCaretKey(event)) {
     return null
   }
   const last = itemIds.length - 1

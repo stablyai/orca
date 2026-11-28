@@ -9,6 +9,7 @@ import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending
 import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import Sidebar from '../components/sidebar/index'
 import { AppRail } from '../components/app-rail/AppRail'
+import { APP_RAIL_WIDTH } from '../components/app-rail/app-rail-layout'
 import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
@@ -16,6 +17,7 @@ import { TerminalWorkbenchContainer } from '../components/terminal/workbench/Ter
 import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
 import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
+import { useRailPageFocusRecovery } from './chrome/use-rail-page-focus-recovery'
 import { RightSidebarToggle } from './chrome/RightSidebarToggle'
 import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
@@ -39,6 +41,7 @@ const SkillsPage = lazy(() => import('../components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
+const PluginsPage = lazy(() => import('../components/plugins/PluginsPage'))
 const HandToBotFlow = lazy(() =>
   import('../components/bots/hand-to-bot/HandToBotFlow').then((module) => ({
     default: module.HandToBotFlow
@@ -147,6 +150,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'activity' ? <ActivityPrototypePage /> : null}
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}
+      {activeView === 'plugins' ? <PluginsPage /> : null}
       <BotShareReceiveMount />
       <BotTemplatesMount />
       <HandToBotMount />
@@ -173,6 +177,8 @@ export function AppWorkspaceShell(props: {
   const t = useTranslate()
   const { layout, floatingWorkspace } = props
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
+  const pageColumnRef = useRef<HTMLDivElement | null>(null)
+  useRailPageFocusRecovery(pageColumnRef)
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
   // Keep scroll memory above sidebar view remounts to preserve list position.
   const scrollOffsetRef = useRef(0)
@@ -198,13 +204,31 @@ export function AppWorkspaceShell(props: {
         'The app is still running. Retry the shell or use the menu to report the crash details.'
       )}
     >
-      <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+      <div
+        className="flex flex-row flex-1 min-h-0 overflow-hidden"
+        data-rail-page-active={layout.listHiddenByRailPage ? '' : undefined}
+      >
         {/* Keep the non-workspace titlebar from spanning the right sidebar. */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Workspace tab groups reach the top; other pages retain the titlebar. */}
           {!layout.leftTitlebarChromeLayout.shouldMount ? (
             <div className="titlebar">
-              <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
+              <div
+                className="flex items-center shrink-0 mr-2"
+                // Why: a rail page lays the left segment out as Workspaces does for the saved state, so Back/Forward
+                // keep their x across the switch; untinted, because the list itself is not on screen.
+                style={
+                  layout.listHiddenByRailPage && layout.savedSidebarOpen
+                    ? {
+                        width: APP_RAIL_WIDTH + layout.sidebarWidth,
+                        alignSelf: 'stretch',
+                        marginRight: 0
+                      }
+                    : undefined
+                }
+              >
+                {titlebarLeftControls}
+              </div>
               {titlebarMainStrip}
             </div>
           ) : null}
@@ -220,7 +244,10 @@ export function AppWorkspaceShell(props: {
               }
               list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
             />
-            <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+            <div
+              className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden"
+              data-workspace-shell-content=""
+            >
               {/* Every page sits under the top bar; window controls and board sheets rely on it. */}
               {layout.stackedSidebarOpen ? (
                 <div className="titlebar">{titlebarMainStrip}</div>
@@ -241,7 +268,11 @@ export function AppWorkspaceShell(props: {
                     <RightSidebarToggle />
                   </div>
                 )}
-                <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                <div
+                  ref={pageColumnRef}
+                  data-app-page-column=""
+                  className="flex flex-1 min-w-0 min-h-0 flex-col"
+                >
                   {layout.shouldMountTerminalWorkbench ? (
                     <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
                       <Suspense fallback={null}>

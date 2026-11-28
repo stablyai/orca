@@ -203,6 +203,17 @@ export class RuntimeFileReads {
     return readLocalFileRange(filePath, offset, length)
   }
 
+  /** A file an agent on this host named by absolute path, read where that agent runs. */
+  async readHostFileChunk(
+    worktreeSelector: string,
+    filePath: string,
+    offset: number,
+    length: number
+  ): Promise<RuntimeFileReadChunkResult> {
+    requireLocalRuntimeFileRoute(await this.host.resolveRuntimeFileTarget(worktreeSelector))
+    return readLocalFileRange(filePath, offset, length)
+  }
+
   /** A host image a chat names, under desktop's chat-image rule; the path must be on this machine. */
   async readChatImagePreview(
     worktreeSelector: string,

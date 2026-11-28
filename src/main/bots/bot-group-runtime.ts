@@ -1,5 +1,11 @@
 import type { z } from 'zod'
-import type { BotGroupCreate, BotGroupSend, BotGroupUpdate } from '../../shared/bots/bot-group'
+import type {
+  BotGroup,
+  BotGroupCreate,
+  BotGroupRenameThread,
+  BotGroupSend,
+  BotGroupUpdate
+} from '../../shared/bots/bot-group'
 import type {
   StructuredMailboxPointerHost,
   StructuredMailOwner
@@ -25,6 +31,7 @@ import {
   type SendBotGroupMessageOptions
 } from './bot-group-delivery'
 import { stopBotGroup } from './bot-group-stop'
+import { renameBotGroupThread } from './bot-group-thread-rename'
 import { pausedBotChatHoldsMail } from './bot-paused-mail'
 import {
   assertGroupPeerScope,
@@ -39,6 +46,7 @@ import type { MessageRow } from '../runtime/orchestration/db/orchestration-recor
 import { groupAnswerTurn, saveGroupPeerAnswer } from './bot-group-peer-answer'
 import { noteGroupTurnMailed } from './bot-group-mention-handoffs'
 import { botGroupRoomChat } from './bot-group-automation-run'
+import { nameBotGroupMemberChats } from './bot-group-member-chat-names'
 import type { BotChatLookup } from '../runtime/integrations/automations/runtime-automation-target'
 
 const runtimes = new WeakMap<OrcaRuntimeService, BotGroupRuntime>()
@@ -110,6 +118,30 @@ export function assertBotGroupQueuedMessageAllowed(
   }
 }
 
+export function isBotGroupHomeFolderWorkspace(
+  runtime: Partial<Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'>>,
+  folderWorkspaceId: string
+): boolean {
+  const orchestration = runtime.getExistingOrchestrationDb?.()
+  if (!orchestration) {
+    return false
+  }
+  return new BotGroupStore(orchestration.db)
+    .list()
+    .some((group) => group.folderWorkspaceId === folderWorkspaceId)
+}
+
+export function assertNotBotGroupHomeFolderWorkspace(
+  runtime: Partial<Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'>>,
+  folderWorkspaceId: string
+): void {
+  if (isBotGroupHomeFolderWorkspace(runtime, folderWorkspaceId)) {
+    throw new Error(
+      'Cannot delete a bot group home folder workspace directly. Delete the bot group instead.'
+    )
+  }
+}
+
 export function startBotGroupsSoon(runtime: OrcaRuntimeService, isCurrent: () => boolean): void {
   setTimeout(() => {
     // A database closed before this ran (shutdown, tests) has nothing left to start.
@@ -121,6 +153,9 @@ export function startBotGroupsSoon(runtime: OrcaRuntimeService, isCurrent: () =>
         void migrateBotGroupHomes(groups)
           .catch(warn)
           .then(() => groups.resumePending())
+          .catch(warn)
+          // Chats made before member chats were named after their room.
+          .then(() => nameBotGroupMemberChats(groups, undefined, { kept: true }))
           .catch(warn)
       }
     } catch (error) {
@@ -146,17 +181,29 @@ export class BotGroupRuntime {
     this.store = new BotGroupStore(runtime.getOrchestrationDb().db)
   }
 
-  changed(): void {
-    this.runtime.notifyBotGroupsChanged()
+  /** Readers re-read; open rooms of `groupId` only, when it is given (a change inside one room). */
+  changed(groupId?: string): void {
+    this.runtime.notifyBotGroupsChanged(groupId === undefined ? undefined : [groupId])
   }
 
-  create = (input: z.infer<typeof BotGroupCreate>) => createBotGroup(this, input)
-  update = (input: z.infer<typeof BotGroupUpdate>) => updateBotGroup(this, input)
+  /** Names the members' chats after their rooms, once `group` is saved with new members or names. */
+  readonly named = (group: BotGroup): BotGroup => {
+    void nameBotGroupMemberChats(this, [group]).catch((error: unknown) =>
+      console.warn('[bot-groups] naming member chats failed', error)
+    )
+    return group
+  }
+
+  create = (input: z.infer<typeof BotGroupCreate>) => createBotGroup(this, input).then(this.named)
+  update = (input: z.infer<typeof BotGroupUpdate>) => updateBotGroup(this, input).then(this.named)
   delete = (groupId: string) => deleteBotGroup(this, groupId)
   removeBot = (botId: string) => removeBotFromGroups(this, botId)
   send = (input: z.infer<typeof BotGroupSend>, options?: SendBotGroupMessageOptions) =>
     sendBotGroupMessage(this, input, options)
-  newThread = (groupId: string) => createBotGroupThread(this, groupId)
+  newThread = (groupId: string) =>
+    createBotGroupThread(this, groupId).then((made) => ({ ...made, group: this.named(made.group) }))
+  renameThread = (input: z.infer<typeof BotGroupRenameThread>) =>
+    renameBotGroupThread(this, input).then(this.named)
   read = (groupId: string, beforeSequence?: number, threadId?: string) =>
     readBotGroup(this, groupId, beforeSequence, threadId)
   stop = (groupId: string, botId?: string, threadId?: string) =>

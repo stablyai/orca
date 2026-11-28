@@ -14,38 +14,24 @@ import {
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
-import '../terminal-pane/layout/terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
-import {
-  folderWorkspaceKey,
-  parseWorkspaceKey
-} from '../../../../shared/workspace/identity/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import type { Worktree } from '../../../../shared/worktree/types'
 import { wslHostMovableDistroOfPath } from '../../../../shared/file-access/wsl-paths'
 import type {
   WslMoveBlocker,
-  WslMoveRowRef
+  WslMoveRowRef,
+  WslMoveScopeCounts
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
 
 export type WslMoveCatalog = {
   repos: readonly Repo[]
   folders: readonly FolderWorkspace[]
-  repoWorktrees: Record<string, readonly Worktree[]>
   unifiedTabsByWorktree: Record<string, readonly Pick<Tab, 'id' | 'entityId' | 'contentType'>[]>
-  /** Panes, not tabs, are what the terminal blockers count; absent: one pane per tab. */
-  terminalLayoutsByTabId?: Record<string, Pick<TerminalLayoutSnapshot, 'root'> | undefined>
 }
 
 export type WslMoveProjectRow = WslMoveRowRef & { name: string }
 
-export type WslMoveCounts = {
-  projects: number
-  workspaces: number
-  terminals: number
-  chats: number
-}
+export type WslMoveCounts = WslMoveScopeCounts & { projects: number }
 
 /** The distro a local folder lives in when it could move to that distro's host; else null. */
 export const wslMoveDistroOfPath = wslHostMovableDistroOfPath
@@ -90,42 +76,6 @@ export function wslMoveProjectRows(
       name: catalog.folders.find((folder) => folder.id === id)?.name ?? id
     }))
   ]
-}
-
-function localWorkspaceKeys(catalog: WslMoveCatalog, ref: WslMoveRowRef): string[] {
-  if (ref.kind === 'folder') {
-    return [folderWorkspaceKey(ref.id)]
-  }
-  return (catalog.repoWorktrees[ref.id] ?? [])
-    .filter((worktree) => (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID)
-    .map((worktree) => worktree.id)
-}
-
-/** Counts of what the selected projects hold here, for the preview's summary line. */
-export function wslMoveCounts(
-  catalog: WslMoveCatalog,
-  selected: readonly WslMoveRowRef[]
-): WslMoveCounts {
-  const counts: WslMoveCounts = { projects: selected.length, workspaces: 0, terminals: 0, chats: 0 }
-  for (const ref of selected) {
-    for (const key of localWorkspaceKeys(catalog, ref)) {
-      counts.workspaces += 1
-      for (const tab of catalog.unifiedTabsByWorktree[key] ?? []) {
-        if (tab.contentType === 'terminal') {
-          counts.terminals += terminalPaneCount(catalog, tab)
-        } else if (tab.contentType === 'agent-session') {
-          counts.chats += 1
-        }
-      }
-    }
-  }
-  return counts
-}
-
-function terminalPaneCount(catalog: WslMoveCatalog, tab: Pick<Tab, 'id' | 'entityId'>): number {
-  const layout =
-    catalog.terminalLayoutsByTabId?.[tab.entityId] ?? catalog.terminalLayoutsByTabId?.[tab.id]
-  return Math.max(1, collectLayoutLeafIdsInOrder(layout?.root).length)
 }
 
 function projectOfWorkspaceKey(key: string): WslMoveRowRef {

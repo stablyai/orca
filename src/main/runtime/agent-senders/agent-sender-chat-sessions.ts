@@ -3,14 +3,11 @@ import '../../../shared/orchestration/workers/structured-worker-handle'
 import '../../../shared/workspace-layout/stable-pane-id'
 import '../../../shared/orchestration/workers/worker-terminal-host-scope'
 import 'zod'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { createCanonicalSessionResolver } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { AgentSenderAssociation } from '../../../shared/orchestration/mailbox/agent-sender-associations'
+import { chatPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** Chats with an open tab. Without a recorded tab table the store still knows the workspace's
  *  saved chat tabs, so closed history never counts as open; a reader that can't say counts all. */
@@ -68,10 +65,7 @@ export function readAgentSenderSessions(
       : [
           {
             identity: `orca_session_id:${sessionId}`,
-            paneKey: structuredAgentSessionPaneKey(
-              structuredAgentSessionTabId(destinationId),
-              destinationId
-            ),
+            paneKey: chatPaneKey(destinationId),
             worktreeId: destination.location.workspaceId,
             sessionId: destinationId
           }

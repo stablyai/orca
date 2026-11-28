@@ -1,11 +1,12 @@
 import { claudeBotSessionOptions } from './claude-bot-session-options'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { prepareClaudeLaunchAccount, withClaudeLaunchAccountPin } from './claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { keptClaudeAgentAccountHome } from '../../relay/claude-kept-agent-account'
 import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
 import {
   claudeStructuredPermissionOptions,
@@ -28,6 +29,12 @@ import { withClaudeArtifactDefault } from './claude-artifact-env'
 import { CLAUDE_DEFAULT_SETTING_SOURCES, claudeDiscoveryOptions } from './claude-discovery-options'
 import { claudeInChromeDefaultArgs } from '../../configuration/claude-in-chrome-default'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
+import { claudeOwnServerNames } from '../../../bots/bot-tools-claude'
+import {
+  deliverHostMcpServers,
+  noteSessionIgnoresHostMcp
+} from '../../../mcp-servers/session-host-mcp-delivery'
+import { noteClaudeMcpConfigRefused } from '../../../mcp-servers/mcp-agent-problems'
 import type {
   ClaudeCliFlagCheck,
   ClaudeCliFlagSupport
@@ -79,6 +86,8 @@ export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
   prefixArgs?: readonly string[]
+  /** The launch carries grants this run issued; it keeps today's launch and is never relayed. */
+  appBoundGrants?: true
   account?: ClaudeStructuredInvocation['account']
   options: ClaudeStructuredSdkOptions
   cwd: string
@@ -154,7 +163,8 @@ export function claudeStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<ClaudeStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
+    const accountHome =
+      keptClaudeAgentAccountHome(record) ?? requireLegacyAgentSessionAccountHome(record.accountHome)
     const router = getClaudeProfileRouter()
     const active = activeProviderContext(record)
     const head = active.head?.handle ?? null
@@ -200,6 +210,9 @@ export function claudeStructuredLaunchPart(
     )
     const launchArgs = await deps.resolveLaunchArgs()
     const { thinkingDisplayArgs, visuals, promptSuggestions, refused } = await launchFlags
+    noteClaudeMcpConfigRefused(refused.mcpConfig)
+    // Refused, Orca's servers go nowhere this launch, so no list edit is this chat's.
+    noteSessionIgnoresHostMcp(basis.record.sessionId, refused.mcpConfig)
     const linked = await basis.linkedSkills()
     const discovery = claudeDiscoveryOptions({
       configuredArgs: launchArgs,
@@ -232,7 +245,7 @@ export function claudeStructuredLaunchPart(
       envDeps,
       (base) =>
         withNativeChatVisualsEnv(
-          withBotLaunchToolsEnv(
+          withSessionMcpToolsEnv(
             {
               ...withClaudeArtifactDefault(base),
               // The turn translator relies on Claude's authoritative idle frame when no result arrives.
@@ -265,6 +278,11 @@ export function claudeStructuredLaunchPart(
         hasTranscript: deps.hasTranscript
       })
     }
+    // The host list's servers the launch account's own Claude config doesn't already name.
+    const launchEnv = { ...env, ...claudeConfigDirEnvPatch(launchHome, { env }) }
+    const delivered = await deliverHostMcpServers(record.sessionId, 'Claude Code', tools, () =>
+      claudeOwnServerNames(launchEnv.CLAUDE_CONFIG_DIR?.trim() || null, cwd)
+    )
     return {
       launch: {
         pathToClaudeCodeExecutable: command,
@@ -275,7 +293,7 @@ export function claudeStructuredLaunchPart(
           ...CLAUDE_STRUCTURED_BASE_OPTIONS,
           ...permission,
           ...discovery,
-          ...(await claudeBotSessionOptions(basis, linked.projects, tools, refused)),
+          ...(await claudeBotSessionOptions(basis, linked.projects, delivered, refused)),
           ...(promptSuggestions ? { promptSuggestions } : {}),
           extraArgs: {
             ...discovery.extraArgs,
@@ -296,6 +314,8 @@ export function claudeStructuredLaunchPart(
         cliFlag: async (flag, ...budget) =>
           deps.cliFlags ? deps.cliFlags.check(flag, probeLaunch, ...budget) : 'unknown',
         continuesChain,
+        // A token this app's tool relay issued for this run ends with it, so the agent does too.
+        ...(tools.appBound ? { appBoundGrants: true as const } : {}),
         ...(sources.configuredProgram ? { configuredProgram: sources.configuredProgram } : {}),
         ...(fork && head && !continuesChain
           ? { forkedFromKey: agentSessionProviderHandleKey(head) }

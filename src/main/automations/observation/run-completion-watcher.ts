@@ -5,6 +5,7 @@ import {
   type AutomationRunOutputSnapshot
 } from '../../../shared/automations/history/automation-run'
 import type { AutomationRunFailureCodeFields } from '../../../shared/automations/history/automation-run-failure-copy'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
 
 export type AutomationRunCompletionObservation = {
@@ -43,6 +44,7 @@ export class AutomationRunCompletionWatcher {
   private readonly readRun: (automationId: string, runId: string) => AutomationRun | null
   private readonly markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
   private readonly watching = new Map<string, AbortController>()
+  private readonly isHostQuitting: () => boolean
   private readonly reconciler: RetainedRunReconciler
   private disposed = false
 
@@ -50,10 +52,13 @@ export class AutomationRunCompletionWatcher {
     observer: AutomationRunTerminalObserver
     readRun: (automationId: string, runId: string) => AutomationRun | null
     markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
+    /** True once a quit or update restart is under way, before will-quit disposes us. */
+    isHostQuitting?: () => boolean
   }) {
     this.observer = opts.observer
     this.readRun = opts.readRun
     this.markDispatchResult = opts.markDispatchResult
+    this.isHostQuitting = opts.isHostQuitting ?? (() => false)
     this.reconciler = new RetainedRunReconciler({
       attach: (run) => this.attachRetainedRun(run),
       stillRetained: (run) => {
@@ -121,7 +126,9 @@ export class AutomationRunCompletionWatcher {
         run
       })
     } catch (error) {
-      if (controller.signal.aborted) {
+      // Electron emits the last window's 'closed', then window-all-closed -> before-quit in the same task; yield so that quit lands, then leave the run to startup.
+      await yieldToEventLoop()
+      if (controller.signal.aborted || this.isHostQuitting()) {
         return
       }
       observation = { status: 'dispatch_failed', error: describeObservationError(error) }
@@ -146,12 +153,7 @@ export class AutomationRunCompletionWatcher {
       }
     }
     this.reconciler.reconcile(
-      runs.filter(
-        (run) =>
-          // A bot run's session, not a terminal, says when it ends.
-          (run.status === 'dispatched' && run.sessionKind !== 'chat') ||
-          run.status === 'dispatching'
-      )
+      runs.filter((run) => run.status === 'dispatched' || run.status === 'dispatching')
     )
   }
 

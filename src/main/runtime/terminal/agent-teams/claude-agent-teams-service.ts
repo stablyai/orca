@@ -3,8 +3,9 @@ import {
   CLAUDE_AGENT_TEAMS_TMUX_DIR,
   splitTmuxCommand
 } from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
-import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
+import type { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
+import { teammateMcpRelayEnv } from '../../../mcp-servers/terminal/agent-teams-teammate-mcp-env'
 import type {
   AgentTeam,
   AgentTeamsLaunchEnv,
@@ -16,7 +17,19 @@ import type {
 
 export class ClaudeAgentTeamsService {
   private readonly teams = new Map<string, AgentTeam>()
-  private readonly dispatcher = new ClaudeAgentTeamsTmuxDispatcher()
+  private dispatcherPromise: Promise<ClaudeAgentTeamsTmuxDispatcher> | null = null
+
+  private getDispatcher(): Promise<ClaudeAgentTeamsTmuxDispatcher> {
+    if (!this.dispatcherPromise) {
+      this.dispatcherPromise = import('./claude-agent-teams-tmux-dispatcher')
+        .then(({ ClaudeAgentTeamsTmuxDispatcher }) => new ClaudeAgentTeamsTmuxDispatcher())
+        .catch((error: unknown) => {
+          this.dispatcherPromise = null
+          throw error
+        })
+    }
+    return this.dispatcherPromise
+  }
 
   createLaunchEnv(args: {
     leaderHandle: string
@@ -55,6 +68,7 @@ export class ClaudeAgentTeamsService {
     if (args.baseEnv.ORCA_ENVIRONMENT) {
       env.ORCA_ENVIRONMENT = args.baseEnv.ORCA_ENVIRONMENT
     }
+    Object.assign(env, teammateMcpRelayEnv(args.baseEnv))
 
     const leader: TeamPane = { fakePaneId: leaderPane, handle: args.leaderHandle, index: 0 }
     this.teams.set(teamId, {
@@ -74,6 +88,15 @@ export class ClaudeAgentTeamsService {
       previouslyFocusedPane: null
     })
     return { teamId, token, leaderPane, env }
+  }
+
+  /** A lead's spawn gave its terminal the host's MCP servers after its team was made (a plain
+   *  `claude --teammate-mode auto`): its teammates get the relay env they need from it too. */
+  shareLeadMcpRelayEnv(leadEnv: Readonly<Record<string, string | undefined>>): void {
+    const team = this.teams.get(leadEnv.ORCA_AGENT_TEAMS_TEAM_ID ?? '')
+    if (team && team.token === leadEnv.ORCA_AGENT_TEAMS_TOKEN) {
+      Object.assign(team.baseEnv, teammateMcpRelayEnv(leadEnv))
+    }
   }
 
   releaseTeam(teamId: string): void {
@@ -113,7 +136,8 @@ export class ClaudeAgentTeamsService {
     try {
       const team = this.resolveTeam(request)
       const { command, args } = splitTmuxCommand(request.argv)
-      const stdout = await this.dispatcher.dispatch(team, command, args, request.envPane, api)
+      const dispatcher = await this.getDispatcher()
+      const stdout = await dispatcher.dispatch(team, command, args, request.envPane, api)
       return { ok: true, stdout, stderr: '', exitCode: 0 }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

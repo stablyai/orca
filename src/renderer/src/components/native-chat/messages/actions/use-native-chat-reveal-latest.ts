@@ -1,4 +1,4 @@
-import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
+import { useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { hasAskAnswer } from '../../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
 import { nativeChatScrollsToLatestOnSend } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
@@ -62,21 +62,38 @@ export type NativeChatMessageListHandle = {
   messageCopyText: (messageId: string) => string | null
 }
 
-/** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
+/** This pane's own transcript; an unmounted pane's reveal reaches nothing, a hidden one's waits until shown. */
 export function useNativeChatRevealLatest(): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
   revealLatest: () => void
   captureRevealLatest: () => () => void
 } {
   const messageListRef = useRef<NativeChatMessageListHandle>(null)
+  const pendingRevealRef = useRef<{ readerWasAtEnd?: boolean } | null>(null)
   const reveal = useCallback((readerWasAtEnd?: boolean) => {
+    const messageList = messageListRef.current
+    if (!messageList) {
+      pendingRevealRef.current = { readerWasAtEnd }
+      return
+    }
     try {
-      messageListRef.current?.revealLatest(readerWasAtEnd)
+      messageList.revealLatest(readerWasAtEnd)
     } catch (error) {
       // Navigation never stops the send that asked for it.
       console.error('Could not reveal the submitted chat content', error)
     }
   }, [])
+  // Why: a chat hidden by Activity detaches its transcript, so a send it accepts meanwhile reveals once shown.
+  useLayoutEffect(() => {
+    const pending = pendingRevealRef.current
+    pendingRevealRef.current = null
+    if (pending) {
+      reveal(pending.readerWasAtEnd)
+    }
+    return () => {
+      pendingRevealRef.current = null
+    }
+  }, [reveal])
   const revealLatest = useCallback(() => reveal(), [reveal])
   // A reveal that waits for the host reads the reader at the press, before the send's echo moves the end.
   const captureRevealLatest = useCallback(() => {

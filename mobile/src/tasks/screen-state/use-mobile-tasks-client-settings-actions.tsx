@@ -22,7 +22,6 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     githubProjectFieldVisibilityScope,
     hostId,
     setDefaultGitHubPreset,
-    setGithubCurrentPage,
     setGithubPages,
     setGithubProjectHiddenFieldIdsByView,
     setGithubProjectSettings,
@@ -87,7 +86,6 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
   const resetGitHubItemsState = useCallback(() => {
     setGithubRepoSources({})
     setGithubPages([])
-    setGithubCurrentPage(0)
     setGithubCountedTotalPages(null)
     setGithubSourceErrors([])
     setGithubSourceFallbacks([])
@@ -264,7 +262,8 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setSetupPrompt(null)
     setOrcaYamlTrustPrompt(null)
   }, [])
-  return Object.assign(model, {
+  return {
+    ...model,
     keepSettings,
     resetGitHubItemsState,
     boundClient,
@@ -276,7 +275,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     persistGitHubProjectSettings,
     persistSetupHookTrust,
     resetWorkspaceCreateState
-  })
+  }
 }
 
 export type ClientSettingsActionsModel = ReturnType<typeof useMobileTasksClientSettingsActions>

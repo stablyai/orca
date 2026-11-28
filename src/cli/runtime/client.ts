@@ -13,12 +13,13 @@ import {
 } from '../../shared/orchestration/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './app-launch/open-local-orca'
-import { getDefaultUserDataPath, readMetadata } from './profile/metadata'
+import { getDefaultUserDataPath } from './profile/metadata'
 import { getCliStatus, getOfflineRuntimeAdmission } from './status/status'
 import type { OfflineRuntimeAdmission } from './status/status'
 import { projectRemoteAppStatus } from '../../shared/remote-runtime/session-graph/cli-app-status-projection'
-import { sendRequest } from './connection/transport'
-import { attachMutationRecovery, isRequestUnsent } from './connection/client-error-recovery'
+import { RuntimeRestartWait } from './connection/runtime-restart-wait'
+import { sendLocalRuntimeRequest } from './connection/local-runtime-send'
+import { attachMutationRecovery } from './connection/client-error-recovery'
 import { RuntimeClientError, RuntimeRpcFailureError } from './connection/types'
 import type { RuntimeCallOptions } from './connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
@@ -34,10 +35,8 @@ import {
   type RuntimeSourceFence
 } from './connection/runtime-source-fence'
 import { resolveRemoteConnection } from './pairing/runtime-remote-pairing'
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CONTRACT_VERSION
-} from '../../shared/orchestration/orchestration-runtime-capabilities'
+import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../../shared/orchestration/orchestration-runtime-capabilities'
+import { buildRuntimeRequestEnvelope } from './connection/runtime-request-envelope'
 import { RemoteRuntimeCompatGate } from './connection/remote-runtime-compat-gate'
 import { OrchestrationRequestEvidence } from '../orchestration/identity/orchestration-compatibility-envelope'
 import * as requestTimeout from './connection/runtime-request-timeout'
@@ -68,6 +67,7 @@ export class RuntimeClient {
   private orchestrationContractCheck: Promise<void> | null = null
   private readonly requestEvidence = new OrchestrationRequestEvidence(process.env)
   private readonly runtimeSourceFence: RuntimeSourceFence
+  private readonly restartWait: RuntimeRestartWait
 
   // Browser session cold starts can take 15–30 seconds; allow time for initialization.
   constructor(
@@ -86,6 +86,7 @@ export class RuntimeClient {
       await resolveRemoteConnection(userDataPath, remotePairingCode, environmentSelector)
     this.remoteCompat = new RemoteRuntimeCompatGate(userDataPath, environmentSelector)
     this.runtimeSourceFence = createRuntimeSourceFence(process.env, userDataPath, requestTimeoutMs)
+    this.restartWait = new RuntimeRestartWait(userDataPath)
   }
 
   get isRemote(): boolean {
@@ -140,14 +141,12 @@ export class RuntimeClient {
       mutation: orchestrationMutation,
       requestId: orchestrationRequestId
     })
-    const envelope = {
-      orchestrationCapability: options?.orchestrationCapability,
-      orchestrationContractVersion: method.startsWith('orchestration.')
-        ? ORCHESTRATION_CONTRACT_VERSION
-        : undefined,
+    const envelope = buildRuntimeRequestEnvelope(
+      method,
+      options,
       orchestrationRequestId,
-      ...compatibilityEnvelope
-    }
+      compatibilityEnvelope
+    )
     if (this.remoteSelected) {
       const transport = await loadWebSocketTransport()
       let response
@@ -174,24 +173,18 @@ export class RuntimeClient {
       }
       return response
     }
-    const metadata = readMetadata(this.userDataPath)
-    // Refusal precedes sending, so there is no request to recover.
-    const expectedRuntimeSource = await this.runtimeSourceFence.check(metadata, method)
-    let response
-    try {
-      response = await sendRequest<TResult>(
-        metadata,
-        method,
-        params,
-        effectiveTimeoutMs,
-        envelope,
-        expectedRuntimeSource,
-        options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
-      )
-    } catch (error) {
-      // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.
-      throw isRequestUnsent(error) ? error : recover(error, metadata.runtimeId ?? null)
-    }
+    const { metadata, response } = await sendLocalRuntimeRequest<TResult>({
+      userDataPath: this.userDataPath,
+      fence: this.runtimeSourceFence,
+      restartWait: this.restartWait,
+      method,
+      params,
+      timeoutMs: effectiveTimeoutMs,
+      envelope,
+      requestSelection: options?.requestSelection,
+      pinnedRuntimeId: options?.preflightRuntimeId ?? options?.terminalPromptPreflight?.runtimeId,
+      recover
+    })
     if (response.ok === false) {
       throw recover(new RuntimeRpcFailureError(response), metadata.runtimeId ?? null)
     }

@@ -142,9 +142,12 @@ export function writeSortStamps(
 /** Every workspace whose record holds a tier. */
 export function listTieredWorkspaces(store: SortStampsStore | null): string[] {
   const ids: string[] = []
-  for (const [worktreeId, meta] of Object.entries(store?.getAllWorktreeMeta?.() ?? {})) {
-    if (meta.smartTier !== undefined) {
-      ids.push(worktreeId)
+  const allMeta = store?.getAllWorktreeMeta?.()
+  if (allMeta) {
+    for (const worktreeId in allMeta) {
+      if (Object.hasOwn(allMeta, worktreeId) && allMeta[worktreeId].smartTier !== undefined) {
+        ids.push(worktreeId)
+      }
     }
   }
   for (const folder of store?.getFolderWorkspaces?.() ?? []) {

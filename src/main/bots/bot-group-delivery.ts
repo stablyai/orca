@@ -7,6 +7,7 @@ import {
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { botGroupAudience } from '../../shared/bots/bot-group-mentions'
+import { BOT_GROUP_THREAD_TITLE_MAX_LENGTH } from '../../shared/bots/bot-group-schema'
 import { stripSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { sendAgentTurn } from '../runtime/orchestration/turn-delivery/send-agent-turn'
@@ -23,7 +24,7 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { botGroupTurnBody } from './bot-group-turn-body'
-import { assertRemotePoster, deliverRemoteAsks } from './bot-group-remote'
+import { deliverRemoteAsks } from './bot-group-remote'
 import { collectRemoteAnswers, presentPageAnswers } from './bot-group-remote-answers'
 import { remoteAsksFor } from './bot-group-remote-question'
 
@@ -59,7 +60,6 @@ export async function sendBotGroupMessage(
     if (group.members.length === 0) {
       throw new BotFailureError('groupEmptyBeforeSend')
     }
-    assertRemotePoster(groups, group, options.local === true)
     const bots = requireGroupBots(
       groups,
       group.members.map((member) => member.botId)
@@ -125,26 +125,28 @@ export async function sendBotGroupMessage(
   })
   // Marks its asks in flight before any reader can see the post.
   void deliverRemoteAsks(groups, message, remoteBodies)
-  groups.changed()
+  groups.changed(message.groupId)
   for (const turn of message.turns) {
     void deliverTurn(groups, message, turn)
   }
   return message
 }
 
-/** A thread is named by its first post, cut to one line. */
+/** A thread is named by its first post, cut to one line, unless its owner named it first. */
 function titleThread(groups: BotGroupRuntime, threadId: string, message: BotGroupMessage): void {
   const group = groups.store.get(message.groupId)
   if (group.threads?.find((thread) => thread.id === threadId)?.title) {
     return
   }
-  const title = botGroupMessageSummary(message).slice(0, 80)
-  groups.store.put({
+  const title = botGroupMessageSummary(message).slice(0, BOT_GROUP_THREAD_TITLE_MAX_LENGTH)
+  const titled = {
     ...group,
     threads: group.threads?.map((thread) =>
       thread.id === threadId ? { ...thread, title } : thread
     )
-  })
+  }
+  groups.store.put(titled)
+  groups.named(titled)
 }
 
 export function assertGroupQueuedMessageAllowed(
@@ -166,7 +168,7 @@ export function assertGroupQueuedMessageAllowed(
     assertTurnActive(groups, message, turn)
   } catch (error) {
     recordTurnError(groups, message.id, operationId, error)
-    groups.changed()
+    groups.changed(message.groupId)
     throw error
   }
 }
@@ -273,7 +275,7 @@ export async function deliverTurn(
   } finally {
     groups.store.delivered([turn.operationId])
     groups.deliveries.delete(turn.operationId)
-    groups.changed()
+    groups.changed(message.groupId)
   }
 }
 

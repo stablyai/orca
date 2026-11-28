@@ -25,7 +25,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
-          context.clientCapabilities
+          context.clientCapabilities,
+          context.runtime
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
@@ -59,6 +60,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
               reason: 'user',
               // Only explicit reasons prove confirmation; legacy reasonless closes do not.
               ...(params.force && params.reason !== undefined ? { force: true } : {}),
+              ...(params.terminal ? { expectedTerminalHandle: params.terminal } : {}),
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )
@@ -105,7 +107,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
-          context.clientCapabilities
+          context.clientCapabilities,
+          context.runtime
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(

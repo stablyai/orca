@@ -14,6 +14,7 @@ import {
   beginClientDownload,
   writeClaimedClientDownload
 } from '../../../browser/downloads/client-download-claims'
+import { isClientPageUploadReadGranted } from '../../../browser/client-pages/client-page-upload-reads'
 import { recordClientDownloadCommit } from '../../../browser/downloads/client-download-provenance'
 import { defineMethod, type RpcContext } from '../../core'
 
@@ -80,13 +81,12 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelReadParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
-      const chunk = await context.runtime.readFileExplorerChunk(
-        page.workspaceId,
-        params.workspaceRelativePath,
-        params.offset,
-        params.length
-      )
-      const totalBytes = params.offset + chunk.bytesRead
+      const { workspaceRelativePath: path, offset, length } = params
+      // An agent's upload on this host may name any file it can read, as on this host's own pages.
+      const chunk = isClientPageUploadReadGranted(page.browserPageId, path)
+        ? await context.runtime.readHostFileChunk(page.workspaceId, path, offset, length)
+        : await context.runtime.readFileExplorerChunk(page.workspaceId, path, offset, length)
+      const totalBytes = offset + chunk.bytesRead
       return {
         contentBase64: chunk.contentBase64,
         bytesRead: chunk.bytesRead,
@@ -112,7 +112,8 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
           workspaceId: page.workspaceId,
           pageHostGeneration: params.pageHostGeneration,
           filename: params.filename,
-          documentUrl: params.documentUrl
+          documentUrl: params.documentUrl,
+          agentDownload: params.agentDownload === true
         },
         () => runtime.cleanupSubscription(watch)
       )
@@ -137,7 +138,7 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelWriteParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
-      const claimed = writeClaimedClientDownload(params)
+      const claimed = await writeClaimedClientDownload(params)
       if (claimed) {
         return { accepted: true as const, ...claimed }
       }

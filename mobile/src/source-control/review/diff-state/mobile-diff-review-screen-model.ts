@@ -13,7 +13,7 @@ import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { MobileDiffReviewFileDescriptor } from './mobile-diff-review-state'
 import type { MobileHighlightedDiffLine } from '../../../files/session-documents/mobile-file-syntax'
 import type { MobileReviewTerminalTab } from '../terminal-delivery/review-terminal-reply-schema'
-import { translate } from '../../../i18n/mobile-i18n'
+import type { Translate } from '../../../i18n/mobile-i18n'
 
 export type ReviewScreenState =
   | { kind: 'loading' }
@@ -103,32 +103,35 @@ export function nextReviewIndexAfterMarkReviewed({
 }
 
 /** "3 of 12 · 4 viewed" for files that can be viewed, "1 of 4 uncommitted" for files that are staged instead. */
-export function mobileDiffReviewPositionLabel({
-  scope,
-  position,
-  count,
-  viewedCount
-}: {
-  scope: MobileDiffReviewQueueItem['scope']
-  position: number
-  count: number
-  viewedCount: number
-}): string {
+export function mobileDiffReviewPositionLabel(
+  {
+    scope,
+    position,
+    count,
+    viewedCount
+  }: {
+    scope: MobileDiffReviewQueueItem['scope']
+    position: number
+    count: number
+    viewedCount: number
+  },
+  t: Translate
+): string {
   if (scope === 'unstaged') {
-    return translate(
+    return t(
       'session.diffReviewScreenModel.positionUncommitted',
       '{{position}} of {{count}} uncommitted',
       { position, count }
     )
   }
   if (scope === 'commit') {
-    return translate(
+    return t(
       'session.diffReviewScreenModel.positionInCommit',
       '{{position}} of {{count}} in this commit',
       { position, count }
     )
   }
-  return translate(
+  return t(
     'session.diffReviewScreenModel.positionViewed',
     '{{position}} of {{count}} · {{viewedCount}} viewed',
     { position, count, viewedCount }
@@ -136,46 +139,45 @@ export function mobileDiffReviewPositionLabel({
 }
 
 /** The jump-to-file sheet's subtitle: what is left in this section. */
-export function mobileDiffReviewFilesSubtitle({
-  scope,
-  count,
-  viewedCount
-}: {
-  scope: MobileDiffReviewQueueItem['scope'] | null
-  count: number
-  viewedCount: number
-}): string {
+export function mobileDiffReviewFilesSubtitle(
+  {
+    scope,
+    count,
+    viewedCount
+  }: {
+    scope: MobileDiffReviewQueueItem['scope'] | null
+    count: number
+    viewedCount: number
+  },
+  t: Translate
+): string {
   if (scope === 'commit') {
     return count === 1
-      ? translate('session.diffReviewScreenModel.commitFiles_one', '{{count}} file', { count })
-      : translate('session.diffReviewScreenModel.commitFiles_other', '{{count}} files', { count })
+      ? t('session.diffReviewScreenModel.commitFiles_one', '{{count}} file', { count })
+      : t('session.diffReviewScreenModel.commitFiles_other', '{{count}} files', { count })
   }
   if (scope === 'unstaged') {
     return count === 1
-      ? translate('session.diffReviewScreenModel.uncommittedFiles_one', '{{count}} uncommitted', {
+      ? t('session.diffReviewScreenModel.uncommittedFiles_one', '{{count}} uncommitted', {
           count
         })
-      : translate('session.diffReviewScreenModel.uncommittedFiles_other', '{{count}} uncommitted', {
+      : t('session.diffReviewScreenModel.uncommittedFiles_other', '{{count}} uncommitted', {
           count
         })
   }
-  return translate(
-    'session.diffReviewScreenModel.viewedOfCount',
-    '{{viewedCount}} of {{count}} viewed',
-    {
-      viewedCount,
-      count
-    }
-  )
+  return t('session.diffReviewScreenModel.viewedOfCount', '{{viewedCount}} of {{count}} viewed', {
+    viewedCount,
+    count
+  })
 }
 
-export function mobileReviewScopeLabel(item: MobileDiffReviewQueueItem): string {
+export function mobileReviewScopeLabel(item: MobileDiffReviewQueueItem, t: Translate): string {
   if (item.scope === 'branch') {
-    return translate('session.diffReviewScreenModel.branch', 'Branch')
+    return t('session.diffReviewScreenModel.branch', 'Branch')
   }
   return item.scope === 'staged'
-    ? translate('session.diffReviewScreenModel.staged', 'Staged')
-    : translate('session.diffReviewScreenModel.unstaged', 'Unstaged')
+    ? t('session.diffReviewScreenModel.staged', 'Staged')
+    : t('session.diffReviewScreenModel.unstaged', 'Unstaged')
 }
 
 export function mobileReviewCountLabel(count: number, singular: string, plural: string): string {

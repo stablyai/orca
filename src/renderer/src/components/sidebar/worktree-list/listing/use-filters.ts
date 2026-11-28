@@ -1,12 +1,11 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import {
-  clearSidebarFilters,
   selectSidebarFilterState,
   sidebarHasActiveFilters,
   sidebarWorkspaceRowFilters
 } from '../controls/sidebar-filter-actions'
-import { useShallow } from 'zustand/react/shallow'
+import { clearSidebarFiltersKeepingActiveRow } from '../controls/sleeping-workspaces-visibility'
 import type { AppState } from '@/store/types'
 import {
   readRuntimeStatuses,
@@ -121,7 +120,7 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
 }
 
 export function useSidebarWorktreeFilters() {
-  const filterState = useAppStore(useShallow(selectSidebarFilterState))
+  const filterState = useAppStore(selectSidebarFilterState)
 
   const revealWorkspaceFilters = useCallback((worktree: Worktree) => {
     const state = useAppStore.getState()
@@ -138,15 +137,10 @@ export function useSidebarWorktreeFilters() {
     }
   }, [])
 
-  const clearFilters = useCallback(
-    () => clearSidebarFilters(filterState, useAppStore.getState()),
-    [filterState]
-  )
-
   return {
     filterState,
     hasFilters: sidebarHasActiveFilters(filterState),
-    clearFilters,
+    clearFilters: clearSidebarFiltersKeepingActiveRow,
     revealWorkspaceFilters
   }
 }

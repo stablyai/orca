@@ -1,4 +1,4 @@
-import { isQuittingForUpdate } from '../../updater/updater-service'
+import { isQuittingForUpdate } from '../../updater/updater-service-slot'
 import { quitFromUserCommand } from '../main-window/main-window-actions'
 import { quitProcess } from '../quit/process-quit-request'
 import { installServeNativeQuitGuard } from './serve-native-quit-guard'

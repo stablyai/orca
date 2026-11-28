@@ -15,3 +15,7 @@ export function isWorkerStoppable(worker: { state: string; stage: string }): boo
     worker.state === 'ready' || worker.state === 'start_unknown' || isWorkerAwaitingAgent(worker)
   )
 }
+
+/** A structured worker whose agent was still starting at its caller's budget. The host holds its brief
+ *  and hands it over when the agent attaches; durably start_unknown, so that turn makes it ready. */
+export const WORKER_AGENT_STARTING_STAGE = 'agent_starting'

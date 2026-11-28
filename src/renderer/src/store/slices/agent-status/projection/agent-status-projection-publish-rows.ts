@@ -1,5 +1,4 @@
 import type { AppState } from '../../../types'
-import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { compareWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-order'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
@@ -44,6 +43,7 @@ export function publishProjectionRows(
           const b = data.worktrees.get(oldOwner)!
           b.keys.delete(rowKey)
           b.revision = ++data.nextRowRevision
+          data.touchedWorktrees.add(oldOwner)
           arrange.add(oldOwner)
           data.notices.add(`row\0${rowKey}`)
           data.notices.add(`list\0${oldOwner}`)
@@ -77,6 +77,7 @@ export function publishProjectionRows(
       ) {
         data.rows.set(row.paneKey, prior?.lineage ? { ...row, lineage: prior.lineage } : row)
         b.revision = ++data.nextRowRevision
+        data.touchedWorktrees.add(next.worktreeId)
         data.notices.add(`row\0${row.paneKey}`)
         data.notices.add(`list\0${next.worktreeId}`)
       }
@@ -160,18 +161,22 @@ export function publishProjectionRows(
       data.orphanOwners.set(key, entry.worktreeId)
     }
     const priorIcon = data.icons.get(key)
-    const oldTab = parseAgentStatusPaneIdentity(key, data.represented.get(key))?.tabId
-    if ((!entry || moved.has(key)) && oldTab) {
+    const oldTab = data.acceptedTabByKey.get(key)
+    const nextTab = entry ? next.tabId : undefined
+    if (oldTab && oldTab !== nextTab) {
       const keys = data.acceptedByTab.get(oldTab)
       keys?.delete(key)
       if (!keys?.size) {
         data.acceptedByTab.delete(oldTab)
       }
     }
-    if (entry && next.tabId) {
-      const keys = data.acceptedByTab.get(next.tabId) ?? new Set()
+    if (nextTab) {
+      const keys = data.acceptedByTab.get(nextTab) ?? new Set()
       keys.add(key)
-      data.acceptedByTab.set(next.tabId, keys)
+      data.acceptedByTab.set(nextTab, keys)
+      data.acceptedTabByKey.set(key, nextTab)
+    } else {
+      data.acceptedTabByKey.delete(key)
     }
     if (moved.has(key)) {
       data.ranks.delete(key)

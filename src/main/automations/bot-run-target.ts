@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../shared/settings/global-settings-types
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { botAutomationSetup, botOnSetup } from '../../shared/bots/bot-agent-setup'
+import { botsBlockedByTeam } from '../bots/bot-team-policy'
 import {
   AUTOMATION_RUN_FAILURE_COPY,
   automationRunFailure,
@@ -32,6 +33,9 @@ export function resolveBotAutomationRunTarget(
   store: BotTargetStore,
   target: AutomationBotTarget
 ): AutomationBotRunTarget | ({ ok: false } & AutomationRunFailure) {
+  if (botsBlockedByTeam()) {
+    return { ok: false, ...automationRunFailure('botsOffByTeam') }
+  }
   if (store.getSettings().botsEnabled === false) {
     return { ok: false, ...automationRunFailure('botsOff') }
   }

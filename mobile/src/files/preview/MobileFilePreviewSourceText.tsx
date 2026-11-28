@@ -5,9 +5,9 @@ import './mobile-file-preview-request'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { filePreviewStylesSheet } from './mobile-file-preview-styles'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export function MobileFilePreviewSourceText({
   relativePath,
@@ -22,7 +22,7 @@ export function MobileFilePreviewSourceText({
   byteLength?: number
   initialLine?: number
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(filePreviewStylesSheet)
   const t = useMobileTranslation()
   const scrollRef = useRef<ScrollViewInstance>(null)
   const revealedRef = useRef(false)
@@ -68,12 +68,13 @@ export function MobileFilePreviewSourceText({
 }
 
 export function MobileFilePreviewTruncatedNote({ byteLength }: { byteLength: number }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(filePreviewStylesSheet)
   const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
   return (
     <Text style={styles.truncatedNote}>
       {t('files.filePreviewSourceText.truncatedNote', 'Preview truncated. File size: {{size}}.', {
-        size: formatPreviewByteLength(byteLength)
+        size: formatPreviewByteLength(byteLength, t, locale)
       })}
     </Text>
   )

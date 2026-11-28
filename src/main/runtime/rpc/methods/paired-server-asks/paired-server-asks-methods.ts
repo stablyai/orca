@@ -140,9 +140,20 @@ export const PAIRED_SERVER_ASKS_METHODS = [
     name: 'pairedServerAsks.allowances',
     permission: 'workspace',
     params: PairedServerAllowancesParams,
-    handler: (params, ctx) => ({
-      servers: listServerAllowances(ctx.runtime.getOrchestrationDb(), params.botId)
-    })
+    handler: async (params, ctx) => {
+      const servers = listServerAllowances(ctx.runtime.getOrchestrationDb(), params.botId)
+      // Named for a phone, which can't look a server up by this computer's environment id.
+      const names = await serverNames(
+        ctx,
+        servers.map((server) => server.environmentId)
+      )
+      return {
+        servers: servers.map((server) => ({
+          ...server,
+          serverName: names.get(server.environmentId) ?? null
+        }))
+      }
+    }
   }),
   defineMethod({
     name: 'pairedServerAsks.allow',

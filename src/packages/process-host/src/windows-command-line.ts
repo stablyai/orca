@@ -1,4 +1,4 @@
-// cmd counts quotes naively and expands %VAR%; quoting must also survive CommandLineToArgvW.
+// cmd counts quotes naively and expands %VAR%; quoting must also survive MSVC 2008+ argv parsing.
 
 // Doubled quotes decode literally while preserving cmd quote parity; backslashes still need doubling.
 function quoteWindows(value: string, escapePercent: boolean): string {
@@ -30,17 +30,50 @@ function quoteWindows(value: string, escapePercent: boolean): string {
   return `${quoted}${'\\'.repeat(backslashes * 2)}"`
 }
 
-/** Uses CommandLineToArgvW quoting. */
+/** Uses MSVC 2008+ argv quoting; CommandLineToArgvW misreads its doubled quotes. */
 export function quoteWindowsArgument(value: string): string {
   return quoteWindows(value, false)
 }
 
+// Mirrors libuv quote_cmd_arg (Node's own spawn quoting).
+export function quoteWindowsArgumentLikeLibuv(value: string): string {
+  if (value === '') {
+    return '""'
+  }
+  if (!/[ \t"]/.test(value)) {
+    return value
+  }
+  if (!/["\\]/.test(value)) {
+    return `"${value}"`
+  }
+  let quoted = '"'
+  let backslashes = 0
+  for (const char of value) {
+    if (char === '\\') {
+      backslashes += 1
+      continue
+    }
+    quoted +=
+      char === '"' ? `${'\\'.repeat(backslashes * 2 + 1)}"` : `${'\\'.repeat(backslashes)}${char}`
+    backslashes = 0
+  }
+  return `${quoted}${'\\'.repeat(backslashes * 2)}"`
+}
+
+// \" leaves runs cmd reads unquoted, so only printable ASCII without cmd-active characters qualifies.
+const CMD_ACTIVE_OR_NON_ASCII = /[^!-~]|[&|<>^%!(),;=]/
+
 // A separate function prevents Array.map indices from accidentally enabling percent escaping.
 export function quoteWindowsCmdArgument(value: string): string {
+  // Bun <= 1.3 (CommandLineToArgvW) ends a quoted run at "", so JSON swallowed the next flag.
+  const quotes = value.split('"').length - 1
+  if (quotes > 0 && quotes % 2 === 0 && !CMD_ACTIVE_OR_NON_ASCII.test(value)) {
+    return quoteWindowsArgumentLikeLibuv(value)
+  }
   return quoteWindows(value, true)
 }
 
-/** Parses CommandLineToArgvW rules, including doubled quotes inside quoted runs. */
+/** Parses MSVC 2008+ argv rules, where doubled quotes stay inside quoted runs. */
 export function parseWindowsCommandLine(line: string): string[] {
   const argv: string[] = []
   let current = ''

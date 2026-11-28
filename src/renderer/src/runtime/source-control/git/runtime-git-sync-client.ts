@@ -2,7 +2,11 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
 } from '../../../../../shared/git/remotes/git-fork-sync'
-import type { GitUpstreamStatus } from '../../../../../shared/git/status/git-status-types'
+import type {
+  GitAbortOperationRequest,
+  GitUpstreamStatus,
+  RebaseFromBaseResult
+} from '../../../../../shared/git/status/git-status-types'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../../../shared/git/remotes/git-rebase-source'
 import type { GitPushTarget } from '../../../../../shared/worktree/types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
@@ -11,43 +15,59 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
-export async function abortRuntimeGitMerge(context: RuntimeGitContext): Promise<void> {
+function expectedRunIdentityParams(request: GitAbortOperationRequest) {
+  return request.expectedRunIdentity ? { expectedRunIdentity: request.expectedRunIdentity } : {}
+}
+
+export async function abortRuntimeGitMerge(
+  context: RuntimeGitContext,
+  request: GitAbortOperationRequest = {}
+): Promise<void> {
   const target = context.target
+  const expected = expectedRunIdentityParams(request)
   if (target.kind === 'local' || !context.worktreeId) {
     await window.api.git.abortMerge({
       worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...expected
     })
     return
   }
+  // Older servers drop the unknown field and abort as before.
   await callRuntimeRpc(
     target,
     'git.abortMerge',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...expected },
     { timeoutMs: 30_000 }
   )
 }
 
-export async function abortRuntimeGitRebase(context: RuntimeGitContext): Promise<void> {
+export async function abortRuntimeGitRebase(
+  context: RuntimeGitContext,
+  request: GitAbortOperationRequest = {}
+): Promise<void> {
   const target = context.target
+  const expected = expectedRunIdentityParams(request)
   if (target.kind === 'local' || !context.worktreeId) {
     await window.api.git.abortRebase({
       worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...expected
     })
     return
   }
   await callRuntimeRpc(
     target,
     'git.abortRebase',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...expected },
     { timeoutMs: 30_000 }
   )
 }
 
 export async function getRuntimeGitUpstreamStatus(
   context: RuntimeGitContext,
-  pushTarget?: GitPushTarget
+  pushTarget?: GitPushTarget,
+  options?: { background?: boolean }
 ): Promise<GitUpstreamStatus> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
@@ -64,7 +84,7 @@ export async function getRuntimeGitUpstreamStatus(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...(pushTarget ? { pushTarget } : {})
     },
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, background: options?.background }
   )
 }
 
@@ -166,17 +186,17 @@ export async function fastForwardRuntimeGit(
 export async function rebaseRuntimeGitFromBase(
   context: RuntimeGitContext,
   baseRef: string
-): Promise<void> {
+): Promise<RebaseFromBaseResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
-    await window.api.git.rebaseFromBase({
+    return window.api.git.rebaseFromBase({
       worktreePath: resolveLocalWorktreePath(context),
       baseRef,
       connectionId: context.connectionId
     })
-    return
   }
-  await callRuntimeRpc(
+  // Older hosts answer { ok: true } only, which reads as no autostash conflict.
+  return callRuntimeRpc<RebaseFromBaseResult>(
     target,
     'git.rebaseFromBase',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), baseRef },

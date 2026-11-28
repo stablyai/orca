@@ -1,6 +1,7 @@
 import { readBrowserExtensionProfileGrants } from '../permissions/browser-extension-session-permissions'
 import { hasBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
@@ -30,10 +31,12 @@ import { observeBrowserExtensionWebRequests } from '../requests/browser-extensio
 
 const pendingRequests = new Set<string>()
 
-const permissionsSchema = z
-  .object({ permissions: z.array(z.string()), origins: z.array(z.string()) })
-  .partial()
-  .loose()
+const permissionsSchema = lazyZodSchema(() =>
+  z
+    .object({ permissions: z.array(z.string()), origins: z.array(z.string()) })
+    .partial()
+    .loose()
+)
 
 function gestureKey(profileId: string, extensionId: string): string {
   return `${profileId}\n${extensionId}`

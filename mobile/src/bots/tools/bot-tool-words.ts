@@ -1,5 +1,5 @@
 // A tool's words on the phone: its name, and its sign-in face as the desktop's botToolSignInWords
-// line and button.
+// line, Needs you line and button.
 import type { AgentType } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import { BOT_MCP_APPS } from '../../../../src/shared/bots/bot-mcp-apps'
 import { botToolTitle } from '../../../../src/shared/bots/bot-tool-labels'

@@ -1,5 +1,6 @@
 import type { BrowserPageAnnotation } from '../element-grab/browser-grab-types'
 import type { BrowserAgentPointerPoint } from '../automation/browser-agent-activity-contract'
+import type { RuntimeFileReadChunkResult } from '../../file-content/runtime-file-read'
 import type {
   BrowserCertificateFailure,
   BrowserCookieImportResult,
@@ -11,8 +12,15 @@ import type {
   BrowserPagePromptRequest,
   BrowserStreamedPagePromptKind
 } from '../prompts/browser-page-prompt'
-import type { BrowserContextMenuTarget } from '../guest-lifecycle/browser-guest-events'
-import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../remote-runtime/session-graph/runtime-session-contracts'
+import type {
+  BrowserContextMenuTarget,
+  BrowserDownloadFinishedEvent,
+  BrowserDownloadRequestedEvent
+} from '../guest-lifecycle/browser-guest-events'
+import type {
+  BROWSER_UNAVAILABLE_ERROR_CODE,
+  RuntimeTerminalDriverState
+} from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
@@ -143,6 +151,23 @@ export type BrowserScreencastFileChooserResult = {
 export type BrowserScreencastAgentCursorResult = {
   type: 'agentCursor'
 } & BrowserAgentPointerPoint
+/** Sent only to viewers that asked with `driverEvents: 1`, after `ready` and on each change; a phone driving it locks other viewers' input. */
+export type BrowserScreencastDriverResult = {
+  type: 'driver'
+  browserPageId: string
+  driver: RuntimeTerminalDriverState
+}
+/** Sent only to viewers that asked with `downloads: 1`: a page's download starting and ending, as a local window hears them. */
+export type BrowserScreencastDownloadResult =
+  | { type: 'downloadRequested'; download: BrowserDownloadRequestedEvent }
+  | {
+      type: 'downloadFinished'
+      download: BrowserDownloadFinishedEvent
+      // Only for a viewer that asked with `downloadCopyStreams: 1`: browser.downloadCopyStream sends the saved file once.
+      copyId?: string
+    }
+/** Sent only to a viewer that asked with `prints: 1`, when its own input made the page call print(); it reads the PDF printed then with browser.readPrintPdf. */
+export type BrowserScreencastPrintResult = { type: 'print'; printId: string; title: string }
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
 export type BrowserScreencastResult =
@@ -156,6 +181,9 @@ export type BrowserScreencastResult =
   | BrowserScreencastPagePromptClosedResult
   | BrowserScreencastFileChooserResult
   | BrowserScreencastAgentCursorResult
+  | BrowserScreencastDriverResult
+  | BrowserScreencastDownloadResult
+  | BrowserScreencastPrintResult
   | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = { result: string; origin: string }
@@ -240,6 +268,8 @@ export type BrowserClearResult = { cleared: string }
 export type BrowserSelectAllResult = { selected: string }
 export type BrowserKeypressResult = { pressed: string }
 export type BrowserPdfResult = { data: string }
+/** One slice of a print handed to the viewer; the last slice releases it on the host. */
+export type BrowserReadPrintPdfResult = RuntimeFileReadChunkResult
 
 export type BrowserCookie = {
   name: string

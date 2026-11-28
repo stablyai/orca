@@ -18,9 +18,9 @@ export type NativeChatRoomMention = {
   /** Stable identity for "recently mentioned", so a rename keeps its place. */
   recentKey?: string
   icon: React.ReactNode
-  /** A second line, such as what a bot is for; `@` matches it too. */
+  /** What a bot is for: `@` matches it and the hover title shows it, but the row does not. */
   detail?: string
-  /** A second line shown as written, in place of "For: …" (the chat's own bot: "Your other chats"). */
+  /** A line shown after the name, as written (the chat's own bot: "Your other chats"). */
   note?: string
   /** Shown before the note, such as an agent's status. */
   noteIcon?: React.ReactNode
@@ -48,7 +48,6 @@ export type NativeChatComposerRoom = {
 
 export type NativeChatComposerProps = {
   room?: NativeChatComposerRoom
-  dock?: React.ReactNode
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
   /** Input-only edit session: every submit saves, Escape cancels, and send-only actions are absent. */

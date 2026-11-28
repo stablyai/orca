@@ -21,28 +21,61 @@ async function streamUntilClosed(
   if (signal?.aborted) {
     return
   }
-  await runtime.openAgentSessionRecordStore()
+  // Register before awaits so an unsubscribe arriving during setup cancels before `start()` runs.
+  const key = `${kind}:${connectionId ?? 'local'}:${++sequence}`
+  let released = false
+  let stop: (() => void) | null = null
+  let finish: (() => void) | null = null
+  let endOnRelease = true
+  const release = () => runtime.cleanupSubscription(key)
+  runtime.registerSubscriptionCleanup(
+    key,
+    () => {
+      if (released) {
+        return
+      }
+      released = true
+      stop?.()
+      stop = null
+      signal?.removeEventListener('abort', release)
+      if (endOnRelease) {
+        emitEnd()
+      }
+      finish?.()
+    },
+    connectionId,
+    // Lets a client on a shared socket end this one stream by its request id.
+    requestId
+  )
+  signal?.addEventListener('abort', release, { once: true })
   if (signal?.aborted) {
+    release()
+    return
+  }
+  try {
+    await runtime.openAgentSessionRecordStore()
+  } catch (error) {
+    if (released) {
+      return
+    }
+    endOnRelease = false
+    release()
+    throw error
+  }
+  if (released || signal?.aborted) {
+    release()
     return
   }
   await new Promise<void>((resolve) => {
-    const key = `${kind}:${connectionId ?? 'local'}:${++sequence}`
-    const release = () => runtime.cleanupSubscription(key)
-    const stop = start()
-    runtime.registerSubscriptionCleanup(
-      key,
-      () => {
-        stop()
-        signal?.removeEventListener('abort', release)
-        emitEnd()
-        resolve()
-      },
-      connectionId,
-      // Lets a client on a shared socket end this one stream by its request id.
-      requestId
-    )
-    signal?.addEventListener('abort', release, { once: true })
-    if (signal?.aborted) {
+    finish = resolve
+    try {
+      stop = start()
+    } catch (error) {
+      endOnRelease = false
+      release()
+      throw error
+    }
+    if (released || signal?.aborted) {
       release()
     }
   })

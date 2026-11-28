@@ -144,7 +144,9 @@ function candidateFromPreview(
   if (preview.blockedByKillList) {
     throw new PluginCliError(
       PLUGIN_BLOCKED_CODE,
-      `${preview.pluginKey} is blocked by Orca's safety list: ${preview.blockedByKillList.reason}`,
+      preview.blockedByKillList.team
+        ? preview.blockedByKillList.reason
+        : `${preview.pluginKey} is blocked by Orca's safety list: ${preview.blockedByKillList.reason}`,
       {
         pluginKey: preview.pluginKey,
         nextSteps: ['Do not try to install this plugin another way.']

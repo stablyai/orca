@@ -172,7 +172,7 @@ export function TaskPageGitHubIssueDialog({
                 <SelectContent>
                   {selectedRepos.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
-                      <RepoBadgeLabel name={r.displayName} color={r.badgeColor} />
+                      <RepoBadgeLabel name={r.displayName} color={r.badgeColor} repo={r} />
                     </SelectItem>
                   ))}
                 </SelectContent>

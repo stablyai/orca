@@ -21,6 +21,7 @@ export default function RunTargetField({
   committed,
   isRecipe,
   hostId,
+  icon,
   label,
   detail,
   listId,
@@ -39,6 +40,8 @@ export default function RunTargetField({
   committed: boolean
   isRecipe: boolean
   hostId: ExecutionHostId | null
+  /** The picked row's own icon, e.g. a WSL distro's penguin; else the host's. */
+  icon?: React.ReactNode
   label: string
   detail: string
   listId: string
@@ -51,6 +54,10 @@ export default function RunTargetField({
 }): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  // Opening the list ends a tooltip, so closing it (Escape) doesn't bring the tooltip back unasked.
+  if (open && tooltipOpen) {
+    setTooltipOpen(false)
+  }
   // The visible name is drawn over the search input and hidden from assistive tech, so the committed
   // target is its description: it holds whatever is typed or highlighted, until a row is picked.
   const committedId = useId()
@@ -73,6 +80,8 @@ export default function RunTargetField({
               {committed ? (
                 isRecipe ? (
                   <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : icon ? (
+                  icon
                 ) : hostId ? (
                   <HostRowIcon hostId={hostId} />
                 ) : null

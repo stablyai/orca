@@ -1,4 +1,8 @@
 import type { RuntimeMobileTerminalTheme } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   resolveMobileTerminalTheme,
   type MobileTerminalThemeSettings
@@ -50,4 +54,31 @@ export function hostMobileTerminalTheme(
     }
   })
   return read
+}
+
+/** True when at least one terminal row in the snapshot falls back to the host's own palette. */
+export function snapshotUsesHostMobileTerminalTheme(
+  snapshot: RuntimeMobileSessionTabsSnapshot
+): boolean {
+  return snapshot.tabs.some((tab) => tab.type === 'terminal' && !tab.terminalTheme)
+}
+
+/** Re-send only workspaces with an unthemed terminal row, skipping listeners-empty hosts and workspace activity rescans. */
+export function notifyHostMobileTerminalThemeSnapshots(
+  hasListeners: boolean,
+  snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>,
+  createDelivery: () => (result: RuntimeMobileSessionTabsResult, sequence: number) => void,
+  project: (snapshot: RuntimeMobileSessionTabsSnapshot) => RuntimeMobileSessionTabsResult,
+  nextSequence: () => number
+): void {
+  if (!hasListeners) {
+    return
+  }
+  let deliver: ((result: RuntimeMobileSessionTabsResult, sequence: number) => void) | null = null
+  for (const snapshot of snapshots) {
+    if (snapshotUsesHostMobileTerminalTheme(snapshot)) {
+      deliver ??= createDelivery()
+      deliver(project(snapshot), nextSequence())
+    }
+  }
 }

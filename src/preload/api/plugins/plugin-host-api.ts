@@ -1,3 +1,4 @@
+import type { PluginBlockNotice } from '../../../shared/plugins/catalog/plugin-kill-list'
 import type { PluginHostImages } from '../../../shared/plugins/images/plugin-image-url'
 import type { EditorSaveHookDecision } from '../../../shared/plugins/events/plugin-editor-save-hook'
 import type { PluginUpdateAccessGrowth } from '../../../shared/plugins/approval/plugin-update-access-growth'
@@ -80,11 +81,15 @@ export type PluginMarketplaceHostSourceState = {
   } | null
   stale: boolean
   official: boolean
+  managed?: boolean
+  managedByTeams?: string[]
   error?: string
 }
 
 export type PluginMarketplaceHostListing = {
   marketplaceSourceId: string
+  /** The Git URL Orca reads the catalog from, never the catalog's own claim. */
+  marketplaceUrl?: string
   marketplaceName: string
   marketplaceOwner: string
   marketplaceCommit: string
@@ -93,8 +98,9 @@ export type PluginMarketplaceHostListing = {
   description?: string
   categories: string[]
   official: boolean
+  managedByTeams?: string[]
   bundled: boolean
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
    *  official plugins and undated releases. */
   addedAt?: string
@@ -133,8 +139,9 @@ export type PluginMarketplaceHostInstallPreview = {
   consentFingerprint: string
   manifest: PluginManifest
   official: boolean
+  managedByTeams?: string[]
   bundled: boolean
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   /** The manifest's images, verified at preview. */
   images?: PluginHostImages
   /** For an update: what it asks for beyond the installed version. */
@@ -252,6 +259,7 @@ export type PluginsApi = {
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  takeRequiredPluginFailures?: () => Promise<{ pluginKeys: readonly string[]; notify: boolean }>
   /** `orca plugin open` / `shot`: main asks this window to show a plugin view. Desktop only. */
   onViewRequest?: (callback: (request: PluginViewRequest) => void) => () => void
   answerViewRequest?: (reply: PluginViewReply) => void

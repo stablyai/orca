@@ -26,7 +26,10 @@ export type MobileBrowserTab = Pick<
   | 'isActive'
 > &
   Partial<
-    Pick<RuntimeMobileSessionBrowserTab, 'faviconUrl' | 'certificateFailure' | 'browserProfileId'>
+    Pick<
+      RuntimeMobileSessionBrowserTab,
+      'faviconUrl' | 'certificateFailure' | 'browserProfileId' | 'clientHost'
+    >
   >
 
 export type MobileSessionTabType = NonNullable<RuntimeMobileSessionTabsResult['activeTabType']>
@@ -55,6 +58,8 @@ export type MobileSessionTab =
           | 'launchDraftCreatedAt'
           | 'terminalTheme'
           | 'unread'
+          | 'unreadAt'
+          | 'isPinned'
         >
       > & {
         status?: RuntimeMobileSessionTerminalClientTab['status']
@@ -62,7 +67,16 @@ export type MobileSessionTab =
       } & MobileTerminalTabPhoneFields)
   | (Pick<
       RuntimeMobileSessionAgentTab,
-      'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive' | 'forked' | 'unread'
+      | 'type'
+      | 'id'
+      | 'title'
+      | 'sessionId'
+      | 'agent'
+      | 'isActive'
+      | 'forked'
+      | 'unread'
+      | 'unreadAt'
+      | 'isPinned'
     > & {
       chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
     })

@@ -4,6 +4,20 @@ import { useLayoutEffect, useRef } from 'react'
 import { nativeChatSlotIndexOf } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
+/** The transcript window's own slot row; an expanded tool run nests rows with the same `data-index`. */
+export function nativeChatTranscriptSlotRow(
+  scrollRoot: HTMLElement | null,
+  index: number
+): HTMLElement | null {
+  const transcriptWindow = scrollRoot?.querySelector('[data-native-chat-window]')
+  for (const child of transcriptWindow?.children ?? []) {
+    if (child instanceof HTMLElement && child.dataset.index === String(index)) {
+      return child
+    }
+  }
+  return null
+}
+
 export function useNativeChatRailJumpLanding({
   railJump,
   slots,
@@ -13,10 +27,10 @@ export function useNativeChatRailJumpLanding({
   onScroll,
   release
 }: {
-  railJump: { messageId: string; requestId: number } | null
+  railJump: { messageId: string; requestId: number; offset?: number } | null
   slots: readonly NativeChatTranscriptSlot[]
   scrollRef: React.RefObject<HTMLDivElement | null>
-  scrollMessageToTop: (element: HTMLElement) => void
+  scrollMessageToTop: (element: HTMLElement, edge?: 'start', inset?: number) => void
   onActivate: (id: string) => void
   onScroll?: () => void
   release: (request: null) => void
@@ -28,10 +42,15 @@ export function useNativeChatRailJumpLanding({
     }
     servicedRef.current = railJump.requestId
     const index = nativeChatSlotIndexOf(slots, railJump.messageId)
-    const row = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
+    // The message left the transcript: nothing to scroll to or light.
+    if (index < 0) {
+      release(null)
+      return
+    }
+    const row = nativeChatTranscriptSlotRow(scrollRef.current, index)
     if (row) {
       onScroll?.()
-      scrollMessageToTop(row)
+      scrollMessageToTop(row, 'start', railJump.offset)
     }
     onActivate(railJump.messageId)
     release(null)

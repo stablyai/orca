@@ -176,7 +176,7 @@ export function UsageRow({
   const sections = usedSections(p, t)
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
-  const plan = formatPlanLabel(p.planType)
+  const plan = formatPlanLabel(p.planType, p.provider)
   // Why: Detailed lists every window below, so a top-right summary would repeat one of them.
   const showDetails = hasUsage && mode === 'verbose'
   const soonestReset = showDetails ? soonestResetLabel(sections, now, intlLocale, t) : null
@@ -199,7 +199,8 @@ export function UsageRow({
         </span>
         {!hasUsage ? (
           <>
-            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+            {/* Why wrap: the chip shows only an alert, so this row is where the message is read. */}
+            <span className="min-w-0 text-[11px] break-words text-muted-foreground">
               {state.statusLabel}
             </span>
             {showSignInAction ? (
@@ -219,12 +220,14 @@ export function UsageRow({
         )}
       </div>
       {state.detail ? (
-        <span className="pl-[30px] text-[11px] text-muted-foreground">{state.detail}</span>
+        <span className="pl-[30px] text-[11px] break-words text-muted-foreground">
+          {state.detail}
+        </span>
       ) : null}
       {showDetails ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((section) => {
-            const label = shortUsageLabel(p, section, false, t)
+            const label = shortUsageLabel(p, section, false)
             return (
               <DetailMetric
                 key={section.label}
@@ -255,7 +258,6 @@ export function UsageRosterPanel({
   onManageAccounts,
   onUsageDetails,
   actionsAvailable = true,
-  unavailableReason,
   renderRow
 }: {
   providers: ProviderRateLimits[]
@@ -269,7 +271,6 @@ export function UsageRosterPanel({
   canSignIn: (provider: ProviderId) => boolean
   onManageAccounts: () => void
   actionsAvailable?: boolean
-  unavailableReason?: string
   onUsageDetails: () => void
   // Return null to use the default row instead of a host-supplied detail/account wrapper.
   renderRow?: (p: ProviderRateLimits, row: React.ReactNode) => React.ReactNode
@@ -341,9 +342,6 @@ export function UsageRosterPanel({
           ]}
         />
       </div>
-      {unavailableReason ? (
-        <div className="px-3.5 pb-2 text-2xs text-muted-foreground">{unavailableReason}</div>
-      ) : null}
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
         const state = getUsageRosterRowState(p, usedSections(p, t).length > 0, t)

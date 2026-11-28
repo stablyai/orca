@@ -66,6 +66,8 @@ export type GitHistoryOptions = {
   baseRef?: string | null
   /** List only commits on HEAD that baseRef lacks, with statistics and pushed state. */
   branchOnly?: boolean
+  /** With branchOnly: list the commits only; `branch` names the base without range counts. */
+  branchListOnly?: boolean
   skip?: number
 }
 
@@ -78,6 +80,9 @@ export type GitHistoryBranchRange = {
   /** Commits among `ahead` that the upstream lacks; all of them when there is no upstream. */
   unpushed: number
 }
+
+/** A branchListOnly page's range: the base it cut at, without the counts it skipped. */
+export type GitHistoryBranchBase = Pick<GitHistoryBranchRange, 'baseRef'>
 
 export type GitHistoryResult = {
   refs?: GitHistoryRefs
@@ -94,7 +99,7 @@ export type GitHistoryResult = {
   hasMore: boolean
   limit: number
   /** Present only when the page honoured branchOnly; older hosts omit it. */
-  branch?: GitHistoryBranchRange
+  branch?: GitHistoryBranchRange | GitHistoryBranchBase
   /** Echoes a requested skip so clients can tell paging hosts from older ones. */
   skip?: number
 }

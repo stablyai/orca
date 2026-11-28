@@ -1,8 +1,13 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { BrowserError } from '../../browser-error'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import {
+  AGENT_DOWNLOAD_REPLY_DEADLINE_MS,
+  AGENT_DOWNLOAD_START_TIMEOUT_MS
+} from '../../../../shared/browser/downloads/agent-download-timing'
 import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'
 import type {
   BrowserBackResult,
@@ -217,13 +222,17 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
 
   async back(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
     return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['back'])) as BrowserBackResult
+      return redactBrowserMetadata(
+        (await this.execAgentBrowser(sessionName, ['back'])) as BrowserBackResult
+      )
     })
   }
 
   async forward(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
     return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
+      return redactBrowserMetadata(
+        (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
+      )
     })
   }
 
@@ -238,7 +247,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
       throw new BrowserError('browser_no_tab', 'Tab is no longer available')
     }
     wc.stop()
-    return { url: wc.getURL(), title: wc.getTitle() }
+    return redactBrowserMetadata({ url: wc.getURL(), title: wc.getTitle() })
   }
 
   async reload(
@@ -299,12 +308,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
           `Reload failed: ${loadError.description} (${loadError.code})`
         )
       }
-      return { url: wc.getURL(), title: wc.getTitle() }
+      return redactBrowserMetadata({ url: wc.getURL(), title: wc.getTitle() })
     })
   }
 }
-
-export const AGENT_DOWNLOAD_START_TIMEOUT_MS = 10_000
-
-// Counted from the request, so the reply beats the CLI's 60s timeout; the download keeps going after.
-export const AGENT_DOWNLOAD_REPLY_DEADLINE_MS = 50_000

@@ -183,8 +183,7 @@ const RELAY_DIAL_ADVICE: Record<
     nextStep: 'Check this phone’s network connection; Relay recovery retries automatically.'
   },
   connecting: {
-    likelyCause: (code) =>
-      `Relay closed the dial with code ${code}; recovery re-resolves and retries.`,
+    likelyCause: (code) => `Relay closed the dial with code ${code}; recovery will retry.`,
     nextStep: 'Keep Orca open while Relay recovery retries.'
   }
 }
@@ -202,7 +201,11 @@ function relayDialFailure(failure: ConnectionLogEntry | undefined): ConnectionDi
       reportability: 'none'
     }
   }
-  const advice = RELAY_DIAL_ADVICE[relayHostReachabilityForCloseCode(code)]
+  const reachability = relayHostReachabilityForCloseCode(
+    code,
+    failure.relayCredentialRejected === true
+  )
+  const advice = RELAY_DIAL_ADVICE[reachability]
   return { likelyCause: advice.likelyCause(code), nextStep: advice.nextStep, reportability: 'none' }
 }
 

@@ -57,9 +57,9 @@ export async function adminWake(
   origin: string,
   hosts: string[],
   auth: { key: string; issuer: string },
-  tamper: { tokenBody?: string; op?: string; purpose?: string; audience?: string } = {}
+  tamper: { tokenBody?: string; op?: string; purpose?: string; audience?: string; kind?: string } = {}
 ): Promise<{ status: number; json: unknown }> {
-  const body = JSON.stringify({ hosts })
+  const body = JSON.stringify(tamper.kind === undefined ? { hosts } : { hosts, kind: tamper.kind })
   const bodySha256 = createHash('sha256').update(tamper.tokenBody ?? body).digest('base64url')
   const token = await new SignJWT({ purpose: tamper.purpose ?? CONNECTOR_WAKE_ADMIN_PURPOSE, op: tamper.op ?? CONNECTOR_WAKE_ADMIN_OP, bodySha256 })
     .setProtectedHeader({ alg: 'HS256' })

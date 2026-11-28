@@ -7,6 +7,7 @@ import type { NativeChatSettledTurns } from '../../../../../../shared/native-cha
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentHostClock } from '../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../../../../shared/agent-session/view/structured-agent-session-turn-timing'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
@@ -27,9 +28,11 @@ export function useStructuredAgentTurnTiming(
   },
   turnId: string | null
 ): { settledTurns: NativeChatSettledTurns; workingStartedAt: number | null } {
+  // Turn timing never reads reply text, so a streaming reply keeps the memo.
+  const rows = rowsBesideStreamedText(items)
   const { settledTurns, runningTiming } = useMemo(
-    () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
-    [items, submissions, turnId, latestTurn]
+    () => selectStructuredAgentTurnBars(rows, submissions, turnId, latestTurn),
+    [rows, submissions, turnId, latestTurn]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   // Derive during render so the first paint of each turn already uses its correct start.

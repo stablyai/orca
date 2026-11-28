@@ -10,10 +10,9 @@ import { startHostBotRefresh } from '../../../../bots/host-bot-refresh'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
-import { colors } from '../../../../theme/mobile-theme'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { MobileBotCardActions } from './MobileBotCardFrame'
-import { webhookKeyReveal } from './mobile-bot-card-operations'
+import { copyPhoneWebhookUrl } from '../../../../bots/webhooks/mobile-webhook-url-copy'
 import {
   composioEventsByHand,
   composioEventsStatusRead,
@@ -32,6 +31,7 @@ import {
   MobileGoogleSetupNotes,
   MobileGoogleSetupReceipt
 } from './MobileGoogleSetupCardParts'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 type EventsView =
   | { status: 'loading' }
@@ -59,13 +59,10 @@ function ByHandSteps({
   // The address carries the hook's key, fetched on the owner's tap and never shown.
   const copyUrl = () => {
     setCopy('busy')
-    void webhookKeyReveal
-      .request(client, { hookId })
-      .then((response) => clipboard.writeText(webhookKeyReveal.interpret(response).url))
-      .then(
-        () => setCopy('copied'),
-        () => setCopy('failed')
-      )
+    void copyPhoneWebhookUrl(client, hookId, clipboard).then(
+      (copied) => setCopy(copied.kind === 'copied' ? 'copied' : 'failed'),
+      () => setCopy('failed')
+    )
   }
   return (
     <>
@@ -121,6 +118,7 @@ export function MobileComposioEventsCard({
 }: {
   scope: MobileComposioScope
 }): React.JSX.Element | null {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client, card, botName, fontScale } = scope
   const { busy, error, setError, run } = useComposioCall()

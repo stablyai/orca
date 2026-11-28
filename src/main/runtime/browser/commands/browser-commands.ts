@@ -114,6 +114,7 @@ export class RuntimeBrowserCommands {
   readonly browserGrabSetMode: RuntimeBrowserGrab['browserGrabSetMode']
   readonly browserGrabAwait: RuntimeBrowserGrab['browserGrabAwait']
   readonly browserGrabCancel: RuntimeBrowserGrab['browserGrabCancel']
+  readonly browserGrabPickedPresent: RuntimeBrowserGrab['browserGrabPickedPresent']
   readonly browserGrabCaptureSelection: RuntimeBrowserGrab['browserGrabCaptureSelection']
   readonly browserGrabExtractHover: RuntimeBrowserGrab['browserGrabExtractHover']
   readonly browserGrabViewportBridge: RuntimeBrowserGrab['browserGrabViewportBridge']
@@ -123,6 +124,7 @@ export class RuntimeBrowserCommands {
   readonly browserProfileImportFromBrowser: RuntimeBrowserProfiles['browserProfileImportFromBrowser']
   readonly browserProfileClearGoogleCookies: RuntimeBrowserProfiles['browserProfileClearGoogleCookies']
   readonly browserProfileClearDefaultCookies: RuntimeBrowserProfiles['browserProfileClearDefaultCookies']
+  readonly browserProfileClearCookies: RuntimeBrowserProfiles['browserProfileClearCookies']
 
   constructor(host: RuntimeBrowserCommandHost) {
     const targets = new RuntimeBrowserCommandTargets(host)
@@ -153,6 +155,7 @@ export class RuntimeBrowserCommands {
     this.browserProfileClearGoogleCookies = profiles.browserProfileClearGoogleCookies.bind(profiles)
     this.browserProfileClearDefaultCookies =
       profiles.browserProfileClearDefaultCookies.bind(profiles)
+    this.browserProfileClearCookies = profiles.browserProfileClearCookies.bind(profiles)
 
     this.browserSnapshot = targets.browserSnapshot.bind(targets)
     this.browserClick = navigation.browserClick.bind(navigation)
@@ -251,10 +254,15 @@ export class RuntimeBrowserCommands {
     this.browserGrabSetMode = grab.browserGrabSetMode.bind(grab)
     this.browserGrabAwait = grab.browserGrabAwait.bind(grab)
     this.browserGrabCancel = grab.browserGrabCancel.bind(grab)
+    this.browserGrabPickedPresent = grab.browserGrabPickedPresent.bind(grab)
     this.browserGrabCaptureSelection = grab.browserGrabCaptureSelection.bind(grab)
     this.browserGrabExtractHover = grab.browserGrabExtractHover.bind(grab)
     this.browserGrabViewportBridge = grab.browserGrabViewportBridge.bind(grab)
     this.browserGrabWatch = grab.browserGrabWatch.bind(grab)
     admitBrowserPageCommands(this, { host, targets, queries })
+    // Outside page admission, so a cancel sent while the enable waits for its page still lands.
+    const admittedGrabSetMode = this.browserGrabSetMode
+    this.browserGrabSetMode = (params, signal) =>
+      grab.admitGrabSetMode(params, () => admittedGrabSetMode(params, signal))
   }
 }

@@ -1,4 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import { reconcileRetainedUpdateTarget } from './retained-update-target'
 import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   normalizeBrowserPageZoomLevel
@@ -12,15 +13,21 @@ import {
 export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     updateStatus: { state: 'idle' },
+    retainedUpdateTarget: null,
     setUpdateStatus: (status) => {
-      const { updateStatus: previousStatus, updateUserInitiatedCycle } = get()
+      const { updateStatus: previousStatus, retainedUpdateTarget, updateUserInitiatedCycle } = get()
       const update: Partial<
         Pick<
           UISlice,
-          'updateStatus' | 'updateChangelog' | 'updateCardCollapsed' | 'updateUserInitiatedCycle'
+          | 'updateStatus'
+          | 'retainedUpdateTarget'
+          | 'updateChangelog'
+          | 'updateCardCollapsed'
+          | 'updateUserInitiatedCycle'
         >
       > = {
-        updateStatus: status
+        updateStatus: status,
+        retainedUpdateTarget: reconcileRetainedUpdateTarget(retainedUpdateTarget, status)
       }
       if (status.state === 'checking') {
         update.updateUserInitiatedCycle = status.userInitiated === true

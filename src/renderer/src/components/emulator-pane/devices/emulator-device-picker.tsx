@@ -18,10 +18,18 @@ type Props = {
   devices: SimulatorDeviceRow[]
   selectedUdid: string | null
   disabled?: boolean
+  /** The paired server that runs these devices; null for this computer. */
+  serverLabel?: string | null
   onSelectDevice: (id: string) => void
 }
 
-export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelectDevice }: Props) {
+export function EmulatorDevicePicker({
+  devices,
+  selectedUdid,
+  disabled,
+  serverLabel,
+  onSelectDevice
+}: Props) {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -126,8 +134,12 @@ export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelect
                     selection="palette"
                   >
                     <ChevronRight className={otherOpen ? 'rotate-90' : ''} />
-                    {t('emulator.picker.other', 'Other devices on this computer')} (
-                    {groups.other.length})
+                    {serverLabel
+                      ? t('emulator.picker.otherOnServer', 'Other devices on {{host}}', {
+                          host: serverLabel
+                        })
+                      : t('emulator.picker.other', 'Other devices on this computer')}{' '}
+                    ({groups.other.length})
                   </CommandItem>
                 )}
                 {(search || otherOpen) && groups.other.map(renderDevice)}

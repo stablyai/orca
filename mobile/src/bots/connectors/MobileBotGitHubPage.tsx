@@ -4,7 +4,15 @@
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useRef, useState, type ReactNode } from 'react'
-import { ArrowUpRight, BookMarked, Ellipsis, Plus, Unlink } from 'lucide-react-native'
+import {
+  ArrowUpRight,
+  BookMarked,
+  Ellipsis,
+  LogIn,
+  Plus,
+  RefreshCw,
+  Unlink
+} from 'lucide-react-native'
 import {
   botMemberSource,
   botMembersFrom,
@@ -13,6 +21,7 @@ import {
 } from '../../../../src/shared/bot-types'
 import {
   GITHUB_BOT_MENTION,
+  ghSignedOut,
   gitHubLinkedAccounts,
   type ConnectorGitHubInstallation
 } from '../../../../src/shared/connector-bot-github-contract'
@@ -26,7 +35,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { openConnectorLink, GITHUB_LINK_HOSTS } from './connector-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
@@ -39,6 +47,8 @@ import {
 } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
 import type { PhoneGitHubView } from './use-phone-connector-account'
+import { MobileGhSignedOutLine } from './MobileGhSignedOutLine'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileBotGitHubPage(props: {
   client: RpcClient | null
@@ -56,8 +66,10 @@ export function MobileBotGitHubPage(props: {
   save: (updates: BotUpdateParams['updates']) => Promise<boolean>
   removeMember: (member: BotMember) => void
   onBack: () => void
-  onSetUp: () => void
+  /** `signIn`: the setup opens on GitHub's sign-in with the account picker. */
+  onSetUp: (signIn?: boolean) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, installation, github, hostName } = props
   const [menuOpen, setMenuOpen] = useState(false)
@@ -200,8 +212,28 @@ export function MobileBotGitHubPage(props: {
         ]
       : installation.repositories.map((repository) => repository.fullName)
     : []
+  /** `reconnect`: a wrong user is fixed by signing in again as the right one, as the desktop's Reconnect. */
+  const unlink = (userId: string, reconnect: boolean) => {
+    const client = props.client
+    if (!client) {
+      return
+    }
+    void slackCall(
+      () => gitHubUnlink.request(client, { userId }, { failWhenDisconnected: true }),
+      gitHubUnlink.interpret
+    ).then((result) => {
+      // The sign-in opens before the refresh, which may drop this org's page.
+      if (result.ok && reconnect) {
+        props.onSetUp(true)
+      }
+      return report(result)
+    })
+  }
+  // A cloud that links several logins lists them, and signs in again to add or refresh them.
+  const signsIn = ready && state?.accounts !== undefined
   const menu = [
-    ...(state && ready
+    // The org's page has its own Add row.
+    ...(state && ready && !installation
       ? [
           {
             label: t('bots.connectors.addGitHubAccess', 'Add repositories or organizations'),
@@ -211,30 +243,39 @@ export function MobileBotGitHubPage(props: {
           }
         ]
       : []),
-    ...(account
+    ...(signsIn
       ? [
           {
-            label: t('bots.github.account.unlink', 'Unlink GitHub account'),
-            icon: Unlink,
+            label: t('bots.github.connection.addAnotherAccount', 'Add another account'),
+            icon: Plus,
             disabled: !props.online,
-            onPress: () => {
-              const client = props.client
-              if (client) {
-                void slackCall(
-                  () =>
-                    gitHubUnlink.request(
-                      client,
-                      { userId: account.userId },
-                      { failWhenDisconnected: true }
-                    ),
-                  gitHubUnlink.interpret
-                ).then(report)
-              }
-            }
+            onPress: () => props.onSetUp(true)
+          },
+          {
+            label: t('bots.github.connection.refresh', 'Refresh'),
+            icon: RefreshCw,
+            disabled: !props.online,
+            onPress: () => props.onSetUp(true)
           }
         ]
       : [])
   ]
+  const accountMenu = account
+    ? [
+        {
+          label: t('bots.github.account.reconnect', 'Reconnect'),
+          icon: LogIn,
+          disabled: !props.online,
+          onPress: () => unlink(account.userId, true)
+        },
+        {
+          label: t('bots.github.account.unlink', 'Unlink GitHub account'),
+          icon: Unlink,
+          disabled: !props.online,
+          onPress: () => unlink(account.userId, false)
+        }
+      ]
+    : []
   return (
     <>
       <SheetHeader
@@ -242,7 +283,7 @@ export function MobileBotGitHubPage(props: {
         subtitle={installation?.accountLogin}
         onBack={{ label: t('bots.connectors.back', 'Back to Connectors'), onPress: props.onBack }}
         trailingButtons={
-          menu.length > 0 ? (
+          menu.length + accountMenu.length > 0 ? (
             <NavBarButton
               ref={menuAnchor}
               icon={Ellipsis}
@@ -262,6 +303,7 @@ export function MobileBotGitHubPage(props: {
           { mention: GITHUB_BOT_MENTION, handle: bot.folder }
         )}
       </SettingsNote>
+      {ghSignedOut(state) ? <MobileGhSignedOutLine host={hostName} /> : null}
       {github.view.status === 'failed' ? (
         <SettingsNote error>
           {connectorAccountErrorMessage('github', github.view.error, hostName, t)}
@@ -307,7 +349,8 @@ export function MobileBotGitHubPage(props: {
             />
           ))}
           <ListRow
-            leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
+            leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+            accent
             title={t('bots.github.addMore', 'Add repositories or an organization')}
             accessibilityRole="link"
             disabled={!props.online}
@@ -336,7 +379,7 @@ export function MobileBotGitHubPage(props: {
         visible={menuOpen}
         anchorRef={menuAnchor}
         onClose={() => setMenuOpen(false)}
-        groups={[menu]}
+        groups={[[...menu, ...accountMenu]]}
       />
     </>
   )

@@ -55,6 +55,7 @@ export function publishProjectionArrangement(
     data.tabProjection = { ...data.tabProjection, revision: data.tabProjection.revision + 1 }
   }
   for (const owner of arrange) {
+    data.touchedWorktrees.add(owner)
     const b = data.worktrees.get(owner)!
     const rows = applyAgentRowLineage(
       [...b.keys].map((key) => data.rows.get(key)!).sort(compareWorktreeAgentRows)
@@ -95,6 +96,7 @@ export function publishProjectionArrangement(
     const b = data.worktrees.get(owner)
     if (b && !b.keys.size && !b.counts.size) {
       data.worktrees.delete(owner)
+      data.touchedWorktrees.add(owner)
       data.fullRows.delete(owner)
     }
   }

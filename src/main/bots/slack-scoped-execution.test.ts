@@ -26,9 +26,11 @@ import {
 
 it('keeps Slack-scoped sessions out of the experimental shared Codex server', () => {
   const deps = { sharedServers: () => true }
-  expect(opensSharedCodexServer(codexConnectionOpener(deps, 'ordinary', {}, 'linux'))).toBe(true)
+  expect(opensSharedCodexServer(codexConnectionOpener(deps, 'ordinary', {}, {}, 'linux'))).toBe(
+    true
+  )
   expect(
-    opensSharedCodexServer(codexConnectionOpener(deps, createSlackExecutionId(), {}, 'linux'))
+    opensSharedCodexServer(codexConnectionOpener(deps, createSlackExecutionId(), {}, {}, 'linux'))
   ).toBe(false)
 })
 

@@ -7,6 +7,7 @@ import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
 import { freshActivityLiveAgentState, isHistoricalActivityState } from './activity-event-state'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 
 type ActivityUnreadCountSource = Pick<
   AppState,
@@ -24,7 +25,7 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
   // Workspace unread flags have no Activity row to clear and must not light this badge.
   const countEntry = (entry: AgentStatusEntry, ackAt: number, live = false): void => {
     // Treat Clear completed’s per-pane cutoff as an acknowledgement floor so hidden events cannot keep the badge lit.
-    const clearedAt = source.activityClearedAtByPaneKey?.[entry.paneKey] ?? 0
+    const clearedAt = readWebChatMark(source, 'activityClearedAtByPaneKey', entry.paneKey) ?? 0
     const mutedAt = Math.max(ackAt, clearedAt)
     // Mirror the feed’s historical done/blocked/waiting event count.
     for (const history of entry.stateHistory) {
@@ -44,7 +45,7 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
   }
 
   const { projection } = source.agentStatusByPaneKey
-  for (const [paneKey, entry] of Array.from(source.agentStatusByPaneKey.entries())) {
+  for (const [paneKey, entry] of source.agentStatusByPaneKey.entries()) {
     seenPaneKeys.add(paneKey)
     // Panes with no workspace row have no Activity row to clear.
     if (!projection.rowWorktree(paneKey)) {

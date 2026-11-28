@@ -4,7 +4,9 @@ import {
   hostClockField,
   replacePage,
   mergeItems,
-  liveItemsWithinWindow
+  mergeLiveItems,
+  liveItemsWithinWindow,
+  hasOlderAfterMerge
 } from '../structured-agent-session-history-state'
 import {
   currentRequestsAfterEvent,
@@ -43,7 +45,7 @@ import {
 } from '../structured-agent-session-item-retention'
 import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from '../../conversation-context/agent-session-context-clear'
-import { queuePublicationField } from '../../requests/structured-agent-session-queue-publication-field'
+import { queuePublicationRetainingMail } from './retain-queued-mail-blocks'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
   hostWorkingAfterStructuredAgentSessionBatch,
@@ -170,7 +172,7 @@ export function reduceStructuredAgentSession(
       promptSuggestion: state.promptSuggestion,
       commands: state.commands,
       // Live subscription state stays authoritative over a possibly stale history answer.
-      ...queuePublicationField(state, action.page),
+      ...queuePublicationRetainingMail(state.queuedMessages, state, action.page),
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -214,7 +216,7 @@ export function reduceStructuredAgentSession(
       commands: event.commands,
       promptSuggestion: state.promptSuggestion,
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
-      ...queuePublicationField(event, event.page, state),
+      ...queuePublicationRetainingMail(state.queuedMessages, event, event.page, state),
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -268,11 +270,10 @@ export function reduceStructuredAgentSession(
   ) {
     return state
   }
-  const merged = journalUnchanged
-    ? state.items
-    : mergeItems(state.items, liveItems, event.batch.removedItemIds)
-  // Retained items already fit the limits, which only grow, so an unchanged journal skips the scan.
-  const items = journalUnchanged
+  const { items: merged, rescan } = journalUnchanged
+    ? { items: state.items, rescan: false }
+    : mergeLiveItems(state.items, liveItems, event.batch.removedItemIds)
+  const items = !rescan
     ? merged
     : trimRetainedItems(
         merged,
@@ -294,8 +295,7 @@ export function reduceStructuredAgentSession(
     fence: event.fence ?? state.fence,
     items,
     subagentRoster,
-    // A trim leaves older items behind the cursor, so paging must stay offered.
-    hasOlder: agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
+    hasOlder: hasOlderAfterMerge(state.items, items, items.length < merged.length, state.hasOlder),
     submissions:
       event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
         ? state.submissions
@@ -310,7 +310,7 @@ export function reduceStructuredAgentSession(
       event
     ),
     working: hostWorkingAfterStructuredAgentSessionBatch(state.working, event),
-    ...queuePublicationField(event, state),
+    ...queuePublicationRetainingMail(state.queuedMessages, event, state),
     backgroundTasks,
     ...(activity !== undefined ? { activity } : {}),
     ...(promptSuggestion !== undefined ? { promptSuggestion } : {}),
