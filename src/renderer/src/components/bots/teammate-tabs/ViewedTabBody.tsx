@@ -56,26 +56,23 @@ function ViewedTerminal({
   )
 }
 
-/** One of their chats that isn't open in their tabs, picked from Chats: shown to read, with no
- *  composer, since replying belongs in a tab of theirs. */
-export function ViewedChatNotInTabs({
+/** A chat shown to read with no composer, under `note`: one of theirs not open in their tabs, or one
+ *  whose person this window can't tell. Replying belongs in a tab of whoever's it is. */
+export function ViewedReadOnlyChat({
   bot,
   homeKey,
   sessionId,
-  holderName
+  note
 }: {
   bot: Bot
   homeKey: string
   sessionId: string
-  holderName: string
+  note: string
 }): React.JSX.Element {
-  const t = useTranslate()
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <p className="flex-none border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
-        {t('bots.teammateTabs.chatNotInTabs', 'Not open in {{name}}’s tabs. Read only.', {
-          name: holderName
-        })}
+        {note}
       </p>
       <div className="min-h-0 flex-1">
         <NativeChatView

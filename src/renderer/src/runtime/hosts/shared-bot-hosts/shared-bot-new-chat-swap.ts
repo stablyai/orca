@@ -1,6 +1,7 @@
 // A new chat a teammate started while the owner's computer was away opens as a placeholder tab. Once
 // that computer is reachable, its host starts (or finds, if a held message already did) the chat for
 // the placeholder's id, and the tab moves to it.
+import { claimChatMadeHere } from '@/lib/agent-session/open/shared-agent-chat-admission'
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
@@ -25,7 +26,7 @@ export async function swapSharedBotNewChat(
     { botId: host.botId, newChatId: tab.entityId }
   )
   const opened = await activateAiVaultStructuredSession({
-    structuredSession: { workspaceId, sessionId }
+    structuredSession: { workspaceId, sessionId: claimChatMadeHere(sessionId) }
   })
   if (opened) {
     useAppStore.getState().closeUnifiedTab(tab.id)

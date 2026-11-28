@@ -31047,7 +31047,8 @@
       "diffBinary": "Binary file changed",
       "untitled": "This document isn’t saved yet.",
       "home": "{{name}}’s Home",
-      "chatNotInTabs": "Not open in {{name}}’s tabs. Read only."
+      "chatNotInTabs": "Not open in {{name}}’s tabs. Read only.",
+      "chatOfUnknownPerson": "Can’t tell whose chat this is. Read only."
     }
   },
   "plugins": {

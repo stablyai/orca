@@ -185,7 +185,8 @@ export async function readBotChatTreeParts(
   const page =
     params.chatId !== undefined
       ? {
-          chatId: params.chatId,
+          // A /clear successor names its chat by the session it runs now.
+          chatId: rootOf(params.chatId),
           ...(params.finishedAfter ? { after: params.finishedAfter } : {})
         }
       : undefined

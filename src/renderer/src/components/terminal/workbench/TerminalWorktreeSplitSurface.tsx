@@ -50,7 +50,6 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
-  // Another person's tabs drawn over this window's own: its own panes act as hidden underneath.
   // Another person's tabs drawn over this window's own: its own panes stay mounted but none is the
   // active one, so no focus, shortcut or find goes to them.
   const viewed = useViewedTabList(worktreeId)

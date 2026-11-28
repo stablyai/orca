@@ -20,6 +20,7 @@ import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktre
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { sharedBotHostFor } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { admitToOwnTabs } from './shared-agent-chat-admission'
 
 export const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -30,6 +31,8 @@ export type StructuredSessionRevealOutcome =
   | 'gone'
   | 'host-cannot-open'
   | 'unreachable'
+  /** Not this viewer's own chat on a shared agent: shown in a view, not placed in its tabs. */
+  | 'shown-in-view'
 
 export function callStructuredSessionParty(
   owner: RuntimeClientTarget,
@@ -55,6 +58,9 @@ export async function revealStructuredSession(target: {
   admissionSignal?: AbortSignal
   beforeSend?: () => void
 }): Promise<StructuredSessionRevealOutcome> {
+  if (!(await admitToOwnTabs(target))) {
+    return 'shown-in-view'
+  }
   const host =
     target.target ??
     runtimeTargetForOwnerEnvironment(

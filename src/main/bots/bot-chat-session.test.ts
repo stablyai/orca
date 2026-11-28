@@ -47,6 +47,7 @@ const ALICE = { accountId: 'acct-alice' }
 const BO = { accountId: 'acct-bo' }
 const ALICE_HOME = '00000000-0000-4000-8000-00000000a11c'
 const BO_HOME = 'bo-home'
+const ALICE_HOME_CLEARED = '00000000-0000-4000-8000-00000000a11d'
 
 function share(accountId: string, name: string, homeSessionId: string): BotAccountShare {
   return {
@@ -237,7 +238,11 @@ describe('a Home Chat for each person', () => {
       directory = ''
     }
   })
-  const hostOf = (bot: () => Bot): BotChatTreeHost => {
+  const hostOf = (
+    bot: () => Bot,
+    records: () => ReturnType<typeof conversationRecordReader> = () =>
+      conversationRecordReader(rig!.store)
+  ): BotChatTreeHost => {
     if (treeHost) {
       return treeHost
     }
@@ -246,7 +251,7 @@ describe('a Home Chat for each person', () => {
     db = opened
     const reads = {
       bots: () => [bot()],
-      sessionRecords: async () => conversationRecordReader(rig!.store),
+      sessionRecords: async () => records(),
       db: () => opened,
       backgroundRuns: { botOfLook: () => null, botOfTidyUp: () => null },
       externalConversations: () => [],
@@ -261,7 +266,7 @@ describe('a Home Chat for each person', () => {
       ...reads,
       index: createBotChatTreeIndex({
         bots: reads.bots,
-        records: () => conversationRecordReader(rig!.store),
+        records,
         db: reads.db,
         backgroundRuns: reads.backgroundRuns,
         inputs: (entry) => readBotChatInputs(reads, entry),
@@ -433,6 +438,39 @@ describe('a Home Chat for each person', () => {
     }
     isTheirHomeTab(await chats.withChat('bot-1', ALICE, (sessionId) => sessionId))
     isTheirHomeTab(await chats.reset('bot-1', ALICE))
+  })
+
+  it('reads one chat by the session a /clear continued it into', async () => {
+    const { bot } = await setup()
+    const store = conversationRecordReader(rig!.store)
+    const home = store.getRecord(ALICE_HOME)!
+    // Alice's Home /cleared once: the host's records name its continuation.
+    const continued = { ...home, sessionId: ALICE_HOME_CLEARED }
+    const records = [
+      {
+        ...home,
+        conversationCommand: {
+          command: 'clear' as const,
+          state: 'completed' as const,
+          phase: 'committed' as const,
+          operationId: 'clear-1',
+          callerKey: 'alice',
+          replacementSessionId: ALICE_HOME_CLEARED
+        }
+      },
+      continued
+    ]
+    const reader = () => ({
+      ...store,
+      getRecord: (id: string) => records.find((record) => record.sessionId === id) ?? null,
+      listRecords: () => records,
+      lineageRevision: undefined
+    })
+    const parts = await readBotChatTreeParts(hostOf(bot, reader), {
+      botId: 'bot-1',
+      chatId: ALICE_HOME_CLEARED
+    })
+    expect(parts.tree.chats.map((chat) => chat.chatId)).toEqual([ALICE_HOME])
   })
 
   it('makes no chat for a removed teammate', async () => {

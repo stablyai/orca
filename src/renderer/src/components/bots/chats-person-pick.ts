@@ -15,13 +15,13 @@ export function useChatsPersonPick(
   entries: readonly { pick: BotChatPersonPick }[] | null
 ): { pick: BotChatPersonPick; isOwnPick: boolean; setPick: (next: BotChatPersonPick) => void } {
   const homeKey = folderWorkspaceKey(bot.folderWorkspaceId)
-  const viewed = useViewedTabList(homeKey)
+  const viewedPerson = useViewedTabList(homeKey)?.person ?? null
   const [ownPicked, setOwnPicked] = useState(false)
   const viewedPick =
-    viewed && entries
+    viewedPerson && entries
       ? (entries.find((entry) => {
           const person = tabListPersonOf(entry.pick)
-          return person !== null && sameTabListPerson(person, viewed.person)
+          return person !== null && sameTabListPerson(person, viewedPerson)
         })?.pick ?? null)
       : null
   const own = entries?.[0]?.pick ?? null

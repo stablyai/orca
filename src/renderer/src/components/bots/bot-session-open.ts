@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type { Bot } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { viewTabList } from './teammate-tabs/viewed-tab-list'
 
 function activate(bot: Bot, sessionId: string): Promise<boolean> {
   return activateAiVaultStructuredSession({
@@ -36,6 +37,8 @@ function shownChatTab(bot: Bot, sessionId: string): { id: string } | null {
 /** Opens one of the bot's chats as a focused tab; a thread's or a run's gets its tab here. The chat
  *  already on screen goes to its newest output, its composer focused with the usual glow. */
 export function openBotSession(bot: Bot, sessionId: string): void {
+  // Opening one of this window's own chats shows its own tabs again.
+  viewTabList(folderWorkspaceKey(bot.folderWorkspaceId), null)
   const shown = shownChatTab(bot, sessionId)
   if (shown) {
     cancelPendingBotThreadOpen()

@@ -244,8 +244,10 @@ async function executeDesktopStructuredSession(
         return structuredSessionOpenFailure(error)
       }
     }
+  // A chat that is not this viewer's own was shown in a view: the open ends there, quietly.
+  let shownInView = false
   return openStructuredAgentSession(source, {
-    current: deps.current,
+    current: () => !shownInView && (deps.current?.() ?? true),
     locate: locate ?? deps.locate ?? party('orchestration.partyLocation'),
     ...(locate ? {} : { open: party('orchestration.partyOpen') }),
     tabs: (target) => deps.tabs(target, owner),
@@ -257,6 +259,10 @@ async function executeDesktopStructuredSession(
     refresh: (target) => deps.refresh(target, owner),
     reveal: async (target) => {
       const outcome = await deps.reveal({ ...target, target: owner })
+      if (outcome === 'shown-in-view') {
+        shownInView = true
+        return { reason: 'unknown', beforeEffects: true }
+      }
       return typeof outcome === 'object'
         ? outcome
         : {

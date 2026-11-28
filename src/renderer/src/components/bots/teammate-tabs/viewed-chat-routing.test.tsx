@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 // A shared agent's chats open in the list they are in: another person's in the view of their tabs,
 // never copied into this window's own strip or marked seen for them.
-import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotChatTreeChat } from '../../../../../shared/bots/bot-chat-tree'
+import { botChatOffersDelete, type BotChatTreeChat } from '../../../../../shared/bots/bot-chat-tree'
 import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { viewedChatTabId } from '@/components/native-chat/pane/ownership/native-chat-tab-owner'
@@ -13,7 +13,12 @@ import { useBotChatOwner } from '../use-bot-chat-identity'
 import { useChatsPersonPick } from '../chats-person-pick'
 import { ViewedTabListOverlay } from './ViewedTabListOverlay'
 import { ViewedTabListSurface } from './ViewedTabListSurface'
-import { useViewedTabList, viewTabList, type ViewedTabList } from './viewed-tab-list'
+import {
+  useViewedTabList,
+  viewTabList,
+  type PersonTabListView,
+  type ViewedTabList
+} from './viewed-tab-list'
 import type { PersonTabListRead } from './use-person-tab-list'
 import type * as BotHosts from '@/lib/bot-hosts'
 import type * as BotCatalog from '@/lib/bot-catalog'
@@ -158,7 +163,7 @@ const terminal: RuntimeMobileSessionClientTab = {
   terminal: 'term-mate'
 }
 
-function surface(view: ViewedTabList): void {
+function surface(view: PersonTabListView): void {
   render(
     <ViewedTabListSurface
       bot={ownersCopy}
@@ -243,5 +248,41 @@ it('opens a chat named only by its session (an item’s link, Needs you) in the 
   expect(viewed()).toBeNull()
   expect(host.activate).toHaveBeenCalledWith({
     structuredSession: { sessionId: 'just-made', workspaceId: HOME }
+  })
+})
+
+it('never offers to delete another person’s live Home', () => {
+  const matesHome = chat({ chatId: 'mate-home', homeOf: 'Mate Park', person: MATE })
+  expect(botChatOffersDelete(matesHome)).toBe(false)
+  expect(botChatOffersDelete({ ...matesHome, closed: true })).toBe(true)
+  expect(botChatOffersDelete(chat({ chatId: 'mate-side', person: MATE }))).toBe(true)
+})
+
+it('shows their active tab next when the chat picked from Chats is closed in their list', () => {
+  const matesChat: RuntimeMobileSessionClientTab = {
+    id: 'mate-chat-tab',
+    type: 'agent-session',
+    title: 'Side chat',
+    sessionId: 'mate-side',
+    agent: 'claude',
+    isActive: false
+  }
+  theirList = {
+    state: 'ready',
+    list: { tabs: [terminal, matesChat], theirActiveTabId: 'mate-term' }
+  }
+  viewTabList(HOME, { accountId: MATE.accountId }, { sessionId: 'mate-side' })
+  const view = viewed()
+  if (view?.person == null) {
+    throw new Error('Mate’s tabs are not shown')
+  }
+  surface(view)
+  fireEvent.click(screen.getByRole('button', { name: 'Close Side chat' }))
+  expect(viewed()).toEqual({ person: { accountId: MATE.accountId }, picked: null })
+  expect(host.rpc).toHaveBeenCalledWith(ownersCopy, 'session.tabs.close', {
+    worktree: `id:${HOME}`,
+    tabId: 'mate-chat-tab',
+    reason: 'user',
+    person: { accountId: MATE.accountId }
   })
 })

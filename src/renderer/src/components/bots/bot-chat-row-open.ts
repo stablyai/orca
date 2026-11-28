@@ -13,6 +13,7 @@ import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/ag
 import { openBotAutomation } from './bot-automation-open'
 import { openBotSession } from './bot-session-open'
 import { readBotChatRow } from './use-bot-chat-tree'
+import { botPeoplePicker } from '../../../../shared/bots/bot-chat-people'
 import { viewerTabListPerson } from './teammate-tabs/tab-list-people'
 import { chatTabListPerson, sameTabListPerson, viewTabList } from './teammate-tabs/viewed-tab-list'
 
@@ -50,31 +51,28 @@ export function openBotChatRow(
     }
     return
   }
-  openOwnChat(bot, chat.chatId, chat.origin === 'home')
-}
-
-/** The viewer's own chat, in this window's own tabs: any view of another person's leaves first. */
-function openOwnChat(bot: Bot, sessionId: string, home: boolean): void {
-  viewTabList(folderWorkspaceKey(bot.folderWorkspaceId), null)
-  if (home) {
+  if (chat.origin === 'home') {
     void openBotHomeTab(bot)
   } else {
-    openBotSession(bot, sessionId)
+    openBotSession(bot, chat.chatId)
   }
 }
 
-/** A chat named only by its session opens where its row would, by whose the host says it is. One the
- *  host lists as no one's yet (just made) is the viewer's own; `home`: a Home Chat's session from
- *  before a /clear, which this viewer's Home stands for. */
+/** A chat named only by its session opens where its row would, by whose the host says it is. With
+ *  no row, the open's own door decides (`admitToOwnTabs`): on a shared agent, only a chat known to be
+ *  this viewer's own enters its tabs. `home`: a Home Chat's session from before a /clear, which an
+ *  agent shared with no one reads as its Home. */
 export async function openBotChatById(
   bot: Bot,
   sessionId: string,
   { home = false }: { home?: boolean } = {}
 ): Promise<void> {
-  const row = await readBotChatRow(bot, sessionId)
-  if (row) {
-    openBotChatRow(bot, row)
+  const found = await readBotChatRow(bot, sessionId)
+  if (found.kind === 'row') {
+    openBotChatRow(bot, found.row)
+  } else if (sessionId === bot.chatSessionId || (home && botPeoplePicker(bot, null) === null)) {
+    void openBotHomeTab(bot)
   } else {
-    openOwnChat(bot, sessionId, home || sessionId === bot.chatSessionId)
+    openBotSession(bot, sessionId)
   }
 }

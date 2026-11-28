@@ -9,11 +9,15 @@ export type TabListPerson = z.infer<typeof SessionTabListPerson>
 /** A tab picked here from their list: by its id (their strip), or a chat by its session (Chats). */
 export type ViewedTabPick = { tabId: string } | { sessionId: string }
 
-export type ViewedTabList = {
+export type PersonTabListView = {
   person: TabListPerson
   /** The tab this window shows from their list; null, the one their list has active. */
   picked: ViewedTabPick | null
 }
+
+/** Another person's tabs, or (`person` null) a chat whose person this window can't tell: shown to
+ *  read alone, never placed in this window's own tabs. */
+export type ViewedTabList = PersonTabListView | { person: null; picked: { sessionId: string } }
 
 const views = new Map<string, ViewedTabList>()
 const listeners = new Set<() => void>()
@@ -41,17 +45,23 @@ export function viewTabList(
     }
     return
   }
-  if (current && sameTabListPerson(current.person, person) && picked === null) {
+  if (current?.person && sameTabListPerson(current.person, person) && picked === null) {
     return
   }
   views.set(homeKey, { person, picked })
   changed()
 }
 
-/** Shows one of their tabs here; their own pick stays theirs. */
-export function pickViewedTab(homeKey: string, picked: ViewedTabPick): void {
+/** Shows a chat to read whose person this window can't tell, over its own tabs. */
+export function viewChatOfUnknownPerson(homeKey: string, sessionId: string): void {
+  views.set(homeKey, { person: null, picked: { sessionId } })
+  changed()
+}
+
+/** Shows one of their tabs here (null: the one their list has active); their own pick stays theirs. */
+export function pickViewedTab(homeKey: string, picked: ViewedTabPick | null): void {
   const current = views.get(homeKey)
-  if (current) {
+  if (current?.person) {
     views.set(homeKey, { ...current, picked })
     changed()
   }

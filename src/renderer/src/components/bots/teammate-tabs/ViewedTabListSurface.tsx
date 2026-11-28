@@ -15,6 +15,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { cn } from '@/lib/class-names'
@@ -23,8 +24,8 @@ import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote
 import { TabListPersonControl } from './TabListPersonControl'
 import type { TabListPeople } from './tab-list-people'
 import { usePersonTabList } from './use-person-tab-list'
-import { ViewedChatNotInTabs, ViewedTabBody } from './ViewedTabBody'
-import { pickViewedTab, type ViewedTabList } from './viewed-tab-list'
+import { ViewedReadOnlyChat, ViewedTabBody } from './ViewedTabBody'
+import { pickViewedTab, viewTabList, type PersonTabListView } from './viewed-tab-list'
 
 /** Each kind's icon as their own strip draws it: the agent's picture on its chats, a terminal's agent
  *  and live state, a page's globe, a file's mode. */
@@ -145,7 +146,7 @@ export function ViewedTabListSurface({
 }: {
   bot: Bot
   homeKey: string
-  view: ViewedTabList
+  view: PersonTabListView
   people: TabListPeople
   /** Whose list it is, as the person control names them. */
   holderName: string
@@ -174,6 +175,10 @@ export function ViewedTabListSurface({
       tabs[0] ??
       null)
   const close = (tab: RuntimeMobileSessionClientTab): void => {
+    // The closed tab was the one picked here: their active tab shows next, as in their own strip.
+    if (tab.id === pickedTab?.id) {
+      pickViewedTab(homeKey, null)
+    }
     void callBotRpc(bot, 'session.tabs.close', {
       worktree: `id:${homeKey}`,
       tabId: tab.id,
@@ -212,12 +217,14 @@ export function ViewedTabListSurface({
         </div>
       </div>
       {unlistedChat ? (
-        <ViewedChatNotInTabs
+        <ViewedReadOnlyChat
           key={unlistedChat}
           bot={bot}
           homeKey={homeKey}
           sessionId={unlistedChat}
-          holderName={holderName}
+          note={t('bots.teammateTabs.chatNotInTabs', 'Not open in {{name}}’s tabs. Read only.', {
+            name: holderName
+          })}
         />
       ) : shown ? (
         <ViewedTabBody key={shown.id} bot={bot} tab={shown} holderName={holderName} />
@@ -232,6 +239,49 @@ export function ViewedTabListSurface({
                 })}
         </div>
       )}
+      <div className="pointer-events-none absolute inset-0 z-40 ring-1 ring-foreground/15 ring-inset" />
+    </div>
+  )
+}
+
+/** A chat whose person this window can't tell (the host didn't say, or couldn't be read): shown to
+ *  read over this window's own tabs, never placed in them, until × goes back to them. */
+export function UnknownPersonChatSurface({
+  bot,
+  homeKey,
+  sessionId
+}: {
+  bot: Bot
+  homeKey: string
+  sessionId: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div
+      className="absolute inset-0 z-30 flex flex-col bg-background"
+      data-viewed-tab-list="unknown"
+    >
+      <div className="relative flex h-8 flex-none items-center border-b border-foreground/20 bg-card px-1.5">
+        <div className="pointer-events-none absolute inset-0 bg-foreground/5" />
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="relative"
+          aria-label={t('bots.teammateTabs.back', 'Back to your tabs')}
+          onClick={() => viewTabList(homeKey, null)}
+        >
+          <X />
+        </Button>
+      </div>
+      <ViewedReadOnlyChat
+        bot={bot}
+        homeKey={homeKey}
+        sessionId={sessionId}
+        note={t(
+          'bots.teammateTabs.chatOfUnknownPerson',
+          'Can’t tell whose chat this is. Read only.'
+        )}
+      />
       <div className="pointer-events-none absolute inset-0 z-40 ring-1 ring-foreground/15 ring-inset" />
     </div>
   )

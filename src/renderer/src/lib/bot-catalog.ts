@@ -1,4 +1,6 @@
 // Every listed host's bots, read from its runtime; the catalog-change bridge refreshes the host that changed.
+import { claimChatMadeHere } from './agent-session/open/shared-agent-chat-admission'
+import { viewTabList } from '@/components/bots/teammate-tabs/viewed-tab-list'
 import { useContext, useMemo, useSyncExternalStore } from 'react'
 import type { Bot } from '../../../shared/bot-types'
 import type { BotMemoryHistoryView } from '../../../shared/bots/bot-memory-history'
@@ -268,7 +270,7 @@ export async function openBotChat(bot: BotRef): Promise<string> {
     botId: bot.id
   })
   await refreshBotHost(bot.hostId)
-  return sessionId
+  return claimChatMadeHere(sessionId)
 }
 
 /** A new Home Chat; the old one stops, leaves the tab bar and stays in history. */
@@ -277,7 +279,7 @@ export async function newBotHomeChat(bot: BotRef): Promise<string> {
     botId: bot.id
   })
   await refreshBotHost(bot.hostId)
-  return sessionId
+  return claimChatMadeHere(sessionId)
 }
 
 /** A new conversation with the bot beside its Chat, on its agent or `agent`, with its preamble. */
@@ -289,7 +291,7 @@ export async function startBotSession(
     ...params,
     botId: bot.id
   })
-  return sessionId
+  return claimChatMadeHere(sessionId)
 }
 
 /** Tells the bot of a workspace the owner handed it, already under its home; the chat it was told in. */
@@ -301,7 +303,7 @@ export async function takeOverWorkspace(
     ...params,
     botId: bot.id
   })
-  return sessionId
+  return claimChatMadeHere(sessionId)
 }
 
 export { readBotAvatarPng, readBotGenerationRevision, uploadBotAvatar } from './bot-avatar-rpc'
@@ -332,6 +334,8 @@ export function openBotHome(bot: Bot): boolean {
  */
 export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Promise<boolean> {
   cancelPendingBotThreadOpen()
+  // This window's own Home shows its own tabs again.
+  viewTabList(folderWorkspaceKey(bot.folderWorkspaceId), null)
   // Home exists before the page opens, so the page lands on it rather than on a new terminal. The
   // host decides whose: a shared agent's opens this account's own Home there.
   const chatSessionId = await openBotChat(bot).catch((error: unknown) => {

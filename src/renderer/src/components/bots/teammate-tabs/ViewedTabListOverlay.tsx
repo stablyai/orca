@@ -6,7 +6,7 @@ import { findBotByWorkspace } from '../bot-workspace'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { useTabListPeople } from './tab-list-people'
 import { sameTabListPerson, useViewedTabList, viewTabList } from './viewed-tab-list'
-import { ViewedTabListSurface } from './ViewedTabListSurface'
+import { UnknownPersonChatSurface, ViewedTabListSurface } from './ViewedTabListSurface'
 
 export function ViewedTabListOverlay({
   worktreeId
@@ -22,16 +22,22 @@ export function ViewedTabListOverlay({
   const people = useTabListPeople(bot)
   // Someone no longer shared with, or an agent no longer shared with this account, has no list
   // here: the window goes back to its own tabs, so sharing again starts there.
-  const holder = view
-    ? (people?.others.find((entry) => sameTabListPerson(entry.person, view.person)) ?? null)
+  const person = view?.person ?? null
+  const holder = person
+    ? (people?.others.find((entry) => sameTabListPerson(entry.person, person)) ?? null)
     : null
-  const gone = view !== null && holder === null
+  const gone = view !== null && (view.person === null ? bot === null : holder === null)
   useEffect(() => {
     if (gone) {
       viewTabList(worktreeId, null)
     }
   }, [gone, worktreeId])
-  if (!view || !bot || !people || !holder) {
+  if (view?.person === null && bot) {
+    return (
+      <UnknownPersonChatSurface bot={bot} homeKey={worktreeId} sessionId={view.picked.sessionId} />
+    )
+  }
+  if (!view?.person || !bot || !people || !holder) {
     return null
   }
   return (

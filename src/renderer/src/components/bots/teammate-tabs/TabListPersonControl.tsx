@@ -58,8 +58,9 @@ export function TabListPersonControl({
   const t = useTranslate()
   const viewed = useViewedTabList(homeKey)
   const [query, setQuery] = useState('')
-  const viewedEntry = viewed
-    ? (people.others.find((entry) => sameTabListPerson(entry.person, viewed.person)) ?? null)
+  const viewedPerson = viewed?.person ?? null
+  const viewedEntry = viewedPerson
+    ? (people.others.find((entry) => sameTabListPerson(entry.person, viewedPerson)) ?? null)
     : null
   const show = (person: TabListPerson | null): void => {
     setQuery('')
@@ -108,8 +109,7 @@ export function TabListPersonControl({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                // The menu's typeahead would take the letters otherwise.
-                // Typing stays in the field; Escape still closes the menu.
+                // The menu's typeahead would take the letters otherwise; Escape still closes it.
                 onKeyDown={(event) => event.key !== 'Escape' && event.stopPropagation()}
                 placeholder={t('bots.teammateTabs.search', 'Search people')}
                 density="compact"

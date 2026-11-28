@@ -293,23 +293,29 @@ export function useBotOwnChatTree(bot: Bot | null): BotChatTree {
   return own.chats === tree.chats ? tree : { ...tree, ...own }
 }
 
+/** A chat's row by its session, from the host. `missing`: the host lists no such chat (or not yet);
+ *  `failed`: the host couldn't be read. Neither says whose it is. */
+export type BotChatRowRead =
+  | { kind: 'row'; row: BotChatTreeChat }
+  | { kind: 'missing' }
+  | { kind: 'failed' }
+
 /** A chat's row by its session (its id, or the live session a /clear moved it to): whose it is, as
- *  the host stamps it. The kept read first, else the host's read of that one chat; null when the
- *  host lists no such chat. */
-export async function readBotChatRow(
-  bot: BotRef,
-  sessionId: string
-): Promise<BotChatTreeChat | null> {
+ *  the host stamps it. The kept read first, else the host's read of that one chat. */
+export async function readBotChatRow(bot: BotRef, sessionId: string): Promise<BotChatRowRead> {
   const rowIn = (read: BotChatTreeRead | null): BotChatTreeChat | null =>
     read?.chats.find((chat) => chat.chatId === sessionId || chat.liveSessionId === sessionId) ??
     null
   const kept = rowIn(chatTreeRead.snapshot(botRefKey(bot)))
   if (kept) {
-    return kept
+    return { kind: 'row', row: kept }
   }
-  const read = await callBotRpc<BotChatTreeRead>(bot, 'bots.chatTree', {
-    botId: bot.id,
-    chatId: sessionId
-  }).catch(() => null)
-  return rowIn(read)
+  try {
+    const row = rowIn(
+      await callBotRpc<BotChatTreeRead>(bot, 'bots.chatTree', { botId: bot.id, chatId: sessionId })
+    )
+    return row ? { kind: 'row', row } : { kind: 'missing' }
+  } catch {
+    return { kind: 'failed' }
+  }
 }

@@ -48,7 +48,6 @@ export function findBotByWorkspace(
   return homeIndex(bots).get(hostId ? `${hostId}\0${workspaceId}` : workspaceId) ?? null
 }
 
-/** With bots off a home is a plain folder. */
 /** The bot whose home a workspace is, read outside React; null with bots off. */
 export function readBotForWorkspace(workspaceId: string): Bot | null {
   return readBotsEnabled() ? findBotByWorkspace(readBots(), workspaceId) : null
