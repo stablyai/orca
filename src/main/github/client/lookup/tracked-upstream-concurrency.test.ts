@@ -40,6 +40,7 @@ import { setLocalGitRuntimeRouter } from '../../../git/command-runner/host-routi
 import { getReviewBranchSource, getTrackedUpstreamBranch } from './tracked-upstream-branch'
 import {
   TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS,
+  currentTrackedUpstreamSnapshotPublishSeq,
   getTrackedUpstreamRoute,
   publishTrackedUpstreamSnapshot,
   trackedUpstreamSnapshotCache,
@@ -138,6 +139,13 @@ async function publishUpstreamOnly(upstream = 'refs/remotes/origin/feature'): Pr
   const lookup = getTrackedUpstreamBranch(REPO, 'feature')
   await answerRefs(upstream)
   await lookup
+}
+
+async function publishReviewSource(cwd = REPO) {
+  const review = getReviewBranchSource(cwd, 'feature')
+  await answerRefs('refs/remotes/origin/feature', cwd)
+  await answerResolver(undefined, cwd)
+  return review
 }
 
 const originalPlatform = process.platform
@@ -479,6 +487,158 @@ describe('tracked upstream snapshot concurrency', () => {
       branchName: 'feature'
     })
     expect(h.pending).toEqual([])
+  })
+
+  it('serves a valid review snapshot through a forced raw read and a failed resolver refresh', async () => {
+    const reviewSource = await publishReviewSource()
+    const previous = entryFor()
+    const deadline = previous?.expiresAt
+    const sequence = currentTrackedUpstreamSnapshotPublishSeq()
+    const forced = getTrackedUpstreamBranch(REPO, 'feature', null, {}, true)
+    const refs = await take('for-each-ref')
+    await expect(getReviewBranchSource(REPO, 'feature')).resolves.toEqual(reviewSource)
+    refs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/current\n', stderr: '' })
+    await expect(forced).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+
+    const background = getReviewBranchSource(REPO, 'feature')
+    await flush()
+    const unexpectedRefs = h.pending.shift()
+    if (unexpectedRefs) {
+      unexpectedRefs.resolve({
+        stdout: 'refs/heads/feature\0refs/remotes/fork/current\n',
+        stderr: ''
+      })
+      ;(await take('config')).reject(new Error('resolver config unreadable'))
+    }
+    await expect(background).resolves.toEqual(reviewSource)
+    await expect(getTrackedUpstreamBranch(REPO, 'feature')).resolves.toEqual({
+      remoteName: 'origin',
+      branchName: 'feature'
+    })
+
+    const refresh = expect(getReviewBranchSource(REPO, 'feature', null, {}, true)).rejects.toThrow(
+      'Cannot establish the branch review source'
+    )
+    await answerRefs('refs/remotes/fork/current')
+    const config = await take('config')
+    await expect(getReviewBranchSource(REPO, 'feature')).resolves.toEqual(reviewSource)
+    config.reject(new Error('resolver config unreadable'))
+    await refresh
+    await expect(getReviewBranchSource(REPO, 'feature')).resolves.toEqual(reviewSource)
+    expect(entryFor()).toBe(previous)
+    expect(entryFor()).toMatchObject({ expiresAt: deadline, publishedSeq: sequence })
+    expect(currentTrackedUpstreamSnapshotPublishSeq()).toBe(sequence)
+    expect(h.pending).toEqual([])
+  })
+
+  it('keeps the original unsigned review deadline across repeated raw refreshes', async () => {
+    const now = 1_000_000
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const repo = '\\\\server\\share\\app'
+    await publishReviewSource(repo)
+    const previous = entryFor(repo)
+    const deadline = now + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
+    const sequence = currentTrackedUpstreamSnapshotPublishSeq()
+
+    for (const elapsed of [1, TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS - 1]) {
+      clock.mockReturnValue(now + elapsed)
+      const forced = getTrackedUpstreamBranch(repo, 'feature', null, {}, true)
+      await answerRefs('refs/remotes/fork/current', repo)
+      await expect(forced).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+      expect(entryFor(repo)).toBe(previous)
+      expect(entryFor(repo)).toMatchObject({ expiresAt: deadline, publishedSeq: sequence })
+    }
+
+    clock.mockReturnValue(deadline)
+    const lookup = getTrackedUpstreamBranch(repo, 'feature')
+    await answerRefs('refs/remotes/fork/after-expiry', repo)
+    await expect(lookup).resolves.toEqual({ remoteName: 'fork', branchName: 'after-expiry' })
+    expect(entryFor(repo)?.reviewSourceResolver).toBeUndefined()
+    expect(currentTrackedUpstreamSnapshotPublishSeq()).toBe(sequence + 1)
+  })
+
+  it.each([
+    { case: 'different', stored: 'S0', current: 'S1' },
+    { case: 'cached missing', stored: undefined, current: 'S1' },
+    { case: 'current missing', stored: 'S0', current: undefined },
+    { case: 'both missing', stored: undefined, current: undefined }
+  ])('publishes a fresh raw result for $case signed config', async ({ stored, current }) => {
+    h.signature = stored
+    await publishReviewSource()
+    expect(entryFor()?.reviewSourceResolver).toBeDefined()
+
+    h.signature = current
+    const forced = getTrackedUpstreamBranch(REPO, 'feature', null, {}, true)
+    await answerRefs('refs/remotes/fork/current')
+    await expect(forced).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+    expect(entryFor()?.reviewSourceResolver).toBeUndefined()
+    expect(entryFor()?.rawUpstreamsByBranchName?.get('feature')).toBe('refs/remotes/fork/current')
+
+    const review = getReviewBranchSource(REPO, 'feature')
+    await answerRefs('refs/remotes/fork/current')
+    await answerResolver('fork')
+    await expect(review).resolves.toMatchObject({ remoteName: 'fork' })
+    expect(entryFor()?.reviewSourceResolver).toBeDefined()
+  })
+
+  it('publishes the fresh raw result when the review expires during the ending signature read', async () => {
+    const now = 1_000_000
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    await publishReviewSource()
+    const deadline = now + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
+    expect(entryFor()?.expiresAt).toBe(deadline)
+
+    clock.mockReturnValue(deadline - 1)
+    h.holdSignatures = true
+    const forced = getTrackedUpstreamBranch(REPO, 'feature', null, {}, true)
+    await releaseSignature(0, 'S0')
+    await answerRefs('refs/remotes/fork/current')
+    await flush()
+    expect(h.signatureGates).toHaveLength(2)
+    clock.mockReturnValue(deadline)
+    await releaseSignature(1, 'S0')
+
+    await expect(forced).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+    expect(entryFor()?.reviewSourceResolver).toBeUndefined()
+    expect(entryFor()?.expiresAt).toBe(deadline + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS)
+  })
+
+  it('retains a host review snapshot when a forced raw read retries on a different route', async () => {
+    const flipRoute = prepareDriveRouteFlip()
+    await publishReviewSource(DRIVE_REPO)
+    const hostKey = getTrackedUpstreamRoute(DRIVE_REPO).cacheKey
+    const previous = entryFor(DRIVE_REPO)
+
+    const forced = getTrackedUpstreamBranch(DRIVE_REPO, 'feature', null, {}, true)
+    const hostRefs = await take('for-each-ref', DRIVE_REPO)
+    flipRoute()
+    hostRefs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/origin/old-route\n', stderr: '' })
+    await answerRefs('refs/remotes/fork/current', DRIVE_REPO)
+
+    await expect(forced).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+    expect(trackedUpstreamSnapshotCache.get(hostKey)).toBe(previous)
+    expect(entryFor(DRIVE_REPO)?.rawUpstreamsByBranchName?.get('feature')).toBe(
+      'refs/remotes/fork/current'
+    )
+  })
+
+  it('returns each forced result when reverse completion retains the older review publication', async () => {
+    await publishReviewSource()
+    const previous = entryFor()
+    const sequence = currentTrackedUpstreamSnapshotPublishSeq()
+    const older = getTrackedUpstreamBranch(REPO, 'feature', null, {}, true)
+    const olderRefs = await take('for-each-ref')
+    const newer = getTrackedUpstreamBranch(REPO, 'feature', null, {}, true)
+    await answerRefs('refs/remotes/fork/newer')
+    await expect(newer).resolves.toEqual({ remoteName: 'fork', branchName: 'newer' })
+
+    olderRefs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/older\n', stderr: '' })
+    await expect(older).resolves.toEqual({ remoteName: 'fork', branchName: 'older' })
+    expect(entryFor()).toBe(previous)
+    expect(currentTrackedUpstreamSnapshotPublishSeq()).toBe(sequence)
+    expect(trackedUpstreamSnapshotGenerations.size).toBe(0)
+    expect(trackedUpstreamSnapshotInFlight.size).toBe(0)
   })
 
   it('rejects an older serving publication when a non-force superseded probe completes first', async () => {

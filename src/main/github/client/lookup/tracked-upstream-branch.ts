@@ -203,7 +203,19 @@ async function lookupTrackedUpstreamSnapshot(
       return failTrackedUpstreamSnapshot(result)
     }
     superseded = trackedUpstreamSnapshotGenerations.get(cacheKey) !== generation
-    if (result.cacheable && !superseded && result.expiresAt > Date.now()) {
+    const now = Date.now()
+    if (result.cacheable && !superseded && result.expiresAt > now) {
+      const previous =
+        force && !includeReviewSources ? trackedUpstreamSnapshotCache.get(cacheKey) : undefined
+      if (
+        previous?.reviewSourceResolver &&
+        previous.expiresAt > now &&
+        (!route.signed ||
+          (result.gitConfigSignature && previous.gitConfigSignature === result.gitConfigSignature))
+      ) {
+        // Return fresh refs to the forced caller without displacing a valid review snapshot.
+        return result
+      }
       publishTrackedUpstreamSnapshot(cacheKey, {
         ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),

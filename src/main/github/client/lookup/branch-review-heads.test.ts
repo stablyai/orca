@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
+import type { lookupPRByBranchName } from './pr-branch-lookup'
 import {
   createLinkedWorktreeFixture,
   fixtureGit,
@@ -22,7 +23,8 @@ const identity = vi.hoisted(() => {
   }
   const byRemote: Record<string, string> = {
     origin: 'https://example.invalid/acme/app.git',
-    fork: 'https://example.invalid/fork/app.git'
+    fork: 'https://example.invalid/fork/app.git',
+    personal: 'https://example.invalid/personal/app.git'
   }
   return {
     forUrl: vi.fn(async (_repoPath: string, url: string) => byUrl[url] ?? null),
@@ -36,7 +38,7 @@ vi.mock('../../repositories/github-api-repository-remote-probe', () => ({
   getGitHubApiRepositoryForRemote: identity.forRemote
 }))
 const prLookup = vi.hoisted(() => ({
-  byBranch: vi.fn(async (_request: { headRepo: { owner: string } | null }) => ({
+  byBranch: vi.fn<typeof lookupPRByBranchName>(async () => ({
     data: null,
     dataRepo: null
   }))
@@ -64,7 +66,19 @@ const savedEnv = {
 }
 const acme = { owner: 'acme', repo: 'app', host: 'github.com' }
 const fork = { owner: 'fork', repo: 'app', host: 'github.com' }
+const personal = { owner: 'personal', repo: 'app', host: 'github.com' }
 let fixture: LinkedWorktreeFixture
+
+function lookupWorktreePR(worktreePath: string, userRefresh: boolean) {
+  return resolvePRForBranchOutcome({
+    repoPath: worktreePath,
+    branchName: 'feature',
+    options: { userRefresh },
+    localGitOptions: {},
+    ghOptions: {},
+    executionScope: 'fixture'
+  })
+}
 
 beforeEach(async () => {
   trackedUpstreamSnapshotCache.clear()
@@ -118,23 +132,65 @@ describe('GitHub branch review heads in linked worktrees', () => {
     })
   })
 
+  it('uses the updated tracked head on manual refresh while ordinary reads stay warm', async () => {
+    const { worktreePath, globalConfigPath } = fixture
+    fixtureGit(
+      worktreePath,
+      'remote',
+      'add',
+      'personal',
+      'https://example.invalid/personal/app.git'
+    )
+    fixtureGit(worktreePath, 'config', '--local', '--unset', 'branch.feature.remote')
+    fixtureGit(worktreePath, 'config', '--worktree', '--unset', 'branch.feature.remote')
+    fixtureGit(worktreePath, 'update-ref', 'refs/remotes/fork/feature', 'HEAD')
+    fixtureGit(worktreePath, 'update-ref', 'refs/remotes/personal/feature', 'HEAD')
+    await writeFile(globalConfigPath, '[branch "feature"]\n\tremote = fork\n')
+
+    await prLookup.byBranch.withImplementation(
+      async ({ headRepo, branchName }) => {
+        if (branchName !== 'feature' || !headRepo || headRepo.owner === 'acme') {
+          return { data: null, dataRepo: null }
+        }
+        const number = headRepo.owner === 'personal' ? 42 : 41
+        return {
+          data: {
+            number,
+            title: 'Fixture PR',
+            state: 'OPEN',
+            url: `https://github.com/acme/app/pull/${number}`,
+            updatedAt: '2026-01-01T00:00:00Z',
+            mergeable: 'MERGEABLE',
+            statusCheckRollup: [],
+            headRefName: branchName
+          },
+          dataRepo: acme
+        }
+      },
+      async () => {
+        const cached = { kind: 'found', pr: { number: 41, headRepo: fork } }
+        await expect(lookupWorktreePR(worktreePath, false)).resolves.toMatchObject(cached)
+        await writeFile(globalConfigPath, '[branch "feature"]\n\tremote = personal\n')
+        await expect(lookupWorktreePR(worktreePath, false)).resolves.toMatchObject(cached)
+        identity.forRemote.mockClear()
+        await expect(lookupWorktreePR(worktreePath, true)).resolves.toMatchObject({
+          kind: 'found',
+          pr: { number: 42, headRepo: personal }
+        })
+        expect(identity.forRemote.mock.calls).toEqual([[worktreePath, 'personal', undefined, {}]])
+        expect(identity.forUrl).not.toHaveBeenCalled()
+      }
+    )
+  })
+
   it('re-reads branch config on manual refresh without bypassing owner/repo identity', async () => {
     const { worktreePath, globalConfigPath } = fixture
     const personalUrl = 'https://example.invalid/personal/app.git'
     fixtureGit(worktreePath, 'remote', 'add', 'personal', personalUrl)
-    const lookup = (userRefresh: boolean) =>
-      resolvePRForBranchOutcome({
-        repoPath: worktreePath,
-        branchName: 'feature',
-        options: { userRefresh },
-        localGitOptions: {},
-        ghOptions: {},
-        executionScope: 'fixture'
-      })
-    await expect(lookup(false)).resolves.toMatchObject({ kind: 'no-pr' })
+    await expect(lookupWorktreePR(worktreePath, false)).resolves.toMatchObject({ kind: 'no-pr' })
     await writeFile(globalConfigPath, '[branch "feature"]\n\tpushRemote = personal\n')
     prLookup.byBranch.mockClear()
-    await expect(lookup(false)).resolves.toMatchObject({ kind: 'no-pr' })
+    await expect(lookupWorktreePR(worktreePath, false)).resolves.toMatchObject({ kind: 'no-pr' })
     expect(prLookup.byBranch.mock.calls.map(([request]) => request.headRepo?.owner)).toEqual([
       'acme',
       'fork'
@@ -143,7 +199,7 @@ describe('GitHub branch review heads in linked worktrees', () => {
     identity.forUrl.mockClear()
     identity.forRemote.mockClear()
 
-    await expect(lookup(true)).resolves.toMatchObject({ kind: 'no-pr' })
+    await expect(lookupWorktreePR(worktreePath, true)).resolves.toMatchObject({ kind: 'no-pr' })
     expect(prLookup.byBranch.mock.calls.map(([request]) => request.headRepo?.owner)).toEqual([
       'acme',
       'fork',
