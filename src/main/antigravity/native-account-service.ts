@@ -6,6 +6,10 @@ import {
 } from './native-credential-codec'
 import { fetchGoogleIdentity } from './google-userinfo-identity'
 import { AntigravityRewrittenLoginIdentity } from './native-account-rewritten-login'
+import {
+  displacedAntigravityLoginMatches,
+  rememberDisplacedAntigravityLogin
+} from './native-account-displaced-login'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -133,6 +137,9 @@ export class AntigravityAccountService {
       ) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
+      if (switching && current && this.launchRestore) {
+        rememberDisplacedAntigravityLogin(latest, current)
+      }
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
       await this.store.write(latest)
@@ -152,6 +159,14 @@ export class AntigravityAccountService {
       }
       if (current && this.matches(account, current)) {
         throw new Error('Switch agy to another account before removing the one it is signed in to.')
+      }
+      const parseCredential = this.backend.parse ?? parseAntigravityNativeCredential
+      if (this.launchRestore) {
+        rememberDisplacedAntigravityLogin(
+          vault,
+          parseCredential(account.credentials),
+          account.subject
+        )
       }
       vault.accounts = vault.accounts.filter((entry) => entry.id !== id)
       // Only Orca's snapshot goes; agy keeps its own login, so a removed selection must stop gating launches.
@@ -185,11 +200,16 @@ export class AntigravityAccountService {
       if (!vault.selectedAccountId || (selected && current && this.matches(selected, current))) {
         return
       }
-      // Each running agy writes its own login back to the one native slot on every token refresh.
-      // Exactly one saved account holding it (reconcile just saved it) restores the selection, as
-      // best effort as selecting: the native store has no compare-and-swap.
+      // A running agy can write its old login back to the shared native slot on token refresh.
+      // Restore recognized logins only; unknown changes still require explicit selection.
       const holders = current ? vault.accounts.filter((entry) => this.matches(entry, current)) : []
-      if (!selected || holders.length !== 1 || !this.launchRestore) {
+      const displaced =
+        current &&
+        holders.length === 0 &&
+        (vault.displacedLogins ?? []).some((entry) =>
+          displacedAntigravityLoginMatches(entry, current)
+        )
+      if (!selected || (holders.length !== 1 && !displaced) || !this.launchRestore) {
         throw new Error(
           'The native Antigravity account changed. Select the account again in Accounts before launching agy.'
         )
