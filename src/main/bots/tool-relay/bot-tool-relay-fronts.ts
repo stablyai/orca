@@ -290,7 +290,12 @@ export class ToolRelayFronts {
     try {
       // The daemon re-announces held connections while it answers the serve request. Unserved,
       // its kept agents' tokens aren't known: the connection stays held and gets the 503.
-      if (!(await watched.served.then(() => true, () => false))) {
+      if (
+        !(await watched.served.then(
+          () => true,
+          () => false
+        ))
+      ) {
         return
       }
       // One retry: the daemon announces a held connection once per serving connection.
