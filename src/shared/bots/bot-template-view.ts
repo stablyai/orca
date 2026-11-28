@@ -29,7 +29,9 @@ export const BOT_TEMPLATE_SKILL_LINES: Record<BotTemplateSkill, string> = {
   'spec-format': 'A one-page spec: problem, decision, scope, open questions.',
   'incident-timeline': 'Keep a timestamped timeline, then draft a blameless write-up.',
   'workspace-hygiene':
-    'When a workspace is done or abandoned, and what to check before removing it.'
+    'When a workspace is done or abandoned, and what to check before removing it.',
+  'local-maintenance':
+    'Check local Orca, agent tools and machine health; back up configs and ask before disruptive changes.'
 }
 
 /** A template event's name split into its trigger and what it does ("…: review it and post here"). */

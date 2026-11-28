@@ -59,6 +59,35 @@ export const BOT_TEMPLATES_OPS: readonly BotTemplate[] = [
       '12 alerts, 2 incidents. Disk alert on cell-3 fired 5 times.',
       '3 follow-ups still open.'
     ]
+  },
+  {
+    id: 'sysadmin',
+    category: 'ops',
+    name: 'Local sysadmin',
+    line: 'Checks your local Orca setup, agent tools and machine health.',
+    firstChat:
+      'Runs a read-only check of your local Orca runtime, plugins, skills, MCPs, agent CLIs and host services, and reports what needs attention. It backs up config files before edits and asks before disruptive changes.',
+    mascot: 'M1',
+    watches: 'Your local Orca install, agent CLIs and host services',
+    does: 'Runs diagnostics and safe config fixes with backups; delegates repo code work.',
+    reports: 'Here, Mondays at 9 AM',
+    connectors: [],
+    schedules: [
+      {
+        id: 'weekly-checkup',
+        when: 'Mondays at 9 AM',
+        what: 'Local health check-up',
+        rrule: '0 9 * * 1',
+        prompt:
+          'Run a read-only health check of this machine with the local-maintenance skill: Orca runtime, plugins, skills, MCPs, local agent CLIs and IDEs, pending updates, disk space and services. Change nothing; post a short summary here and open an Item in Needs you for anything that needs action.'
+      }
+    ],
+    events: [],
+    skills: ['local-maintenance'],
+    example: [
+      'Check-up: 1 broken plugin (mcp-bridge), 2 outdated agent CLIs, Docker using 42 GB.',
+      'Backed up ~/.claude.json before fixing the duplicate hook. No restarts needed.'
+    ]
   }
 ]
 
