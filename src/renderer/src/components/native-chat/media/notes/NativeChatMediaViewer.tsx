@@ -186,7 +186,16 @@ function ViewerBody({
     <DialogContent
       aria-describedby={undefined}
       showCloseButton={false}
-      onInteractOutside={onInteractOutside}
+      onInteractOutside={(event) => {
+        onInteractOutside?.(event)
+        if (event.defaultPrevented) {
+          return
+        }
+        // A click outside closes through the same guard as Close: an unadded note asks first, and
+        // notes go to the message box or say why they can't, never dropped without a word.
+        event.preventDefault()
+        void close()
+      }}
       data-native-chat-copy-image-src={copySrc}
       surface="media-canvas"
       // Focus starts on the media, not on the first toolbar button, and returns to the opener.

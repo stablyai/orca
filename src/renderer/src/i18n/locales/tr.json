@@ -23191,7 +23191,14 @@
         "zoomOut": "Uzaklaştır",
         "goalHeld": "Mesaj kutunuz bir hedef belirliyor ve hedef görsel içeremez. Önce bitirin ya da çıkın.",
         "annotateTooLarge": "Bu görsel not çizmek için çok büyük (33 megapikselden fazla).",
-        "imageNotReady": "Görsel henüz hazır değil, bu yüzden notlar üzerine çizilemiyor."
+        "imageNotReady": "Görsel henüz hazır değil.",
+        "closeNoMessageBox": "Not eklenecek mesaj kutusu yok.",
+        "closeEditingQueued": "Önce sıradaki düzenlemeyi bitirin.",
+        "closeGoal": "Hedef görsel kabul etmez.",
+        "closeCommand": "Mesaj kutusunda bir komut var.",
+        "closeFailed": "İşaretli görsel eklenemedi.",
+        "closeTooLarge": "Not çizmek için çok büyük.",
+        "goneNotAdded": "{{name}} için notlar eklenmedi."
       }
     },
     "tab": {

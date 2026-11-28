@@ -22451,7 +22451,14 @@
         "zoomOut": "축소",
         "goalHeld": "메시지 입력란에서 목표를 설정하는 중이며, 목표에는 이미지를 넣을 수 없습니다. 먼저 끝내거나 나가세요.",
         "annotateTooLarge": "이 이미지는 너무 커서 메모를 그릴 수 없습니다(3,300만 화소 초과).",
-        "imageNotReady": "이미지가 아직 준비되지 않아 메모를 그릴 수 없습니다."
+        "imageNotReady": "이미지가 아직 준비되지 않았습니다.",
+        "closeNoMessageBox": "메모를 추가할 메시지 상자가 없습니다.",
+        "closeEditingQueued": "먼저 대기 중인 편집을 마치세요.",
+        "closeGoal": "목표 설정에는 이미지를 넣을 수 없습니다.",
+        "closeCommand": "메시지 상자에 명령이 있습니다.",
+        "closeFailed": "표시한 이미지를 추가하지 못했습니다.",
+        "closeTooLarge": "너무 커서 메모를 그릴 수 없습니다.",
+        "goneNotAdded": "{{name}}의 메모가 추가되지 않았습니다."
       }
     },
     "tab": {

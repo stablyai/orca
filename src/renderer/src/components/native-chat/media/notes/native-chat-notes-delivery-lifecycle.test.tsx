@@ -22,8 +22,10 @@ import { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
 import { useNativeChatNotesDelivery } from './use-native-chat-notes-delivery'
 import {
   resetNativeChatNotesNoticesForTests,
+  showNativeChatNotesNotice,
   useNativeChatNotesNotice
 } from './native-chat-notes-notice'
+import { scopeListeners } from '../../drafts/native-chat-composer-draft-memory'
 import type { NativeChatMediaNote } from './native-chat-media-notes'
 
 vi.mock('./native-chat-media-notes-draw', () => ({
@@ -192,9 +194,7 @@ it('Close while the message box holds a command says why, adds nothing, and offe
   expect(handle.attachGeneratedImage).not.toHaveBeenCalled()
   expect(draft()).toEqual({ text: '', ids: [] })
   const status = view.result.current.editor.status
-  expect(status?.kind === 'error' && status.message).toBe(
-    'Your message box holds a command. Send or clear it first.'
-  )
+  expect(status?.kind === 'error' && status.message).toBe('The box holds a command.')
   act(() => {
     if (status?.kind === 'error') {
       status.discard?.()
@@ -215,4 +215,86 @@ it('a message box that takes no image adds no notes text, keeps the notes here a
   expect(view.result.current.editor.notes).toHaveLength(1)
   const status = view.result.current.editor.status
   expect(status?.kind === 'error' && Boolean(status.discard)).toBe(true)
+})
+
+it('the notes line stops watching the message once it goes, however it goes', async () => {
+  const { opener } = chat()
+  const view = viewer(opener, vi.fn())
+  const watching = (): number => scopeListeners.get(SCOPE)?.size ?? 0
+  const idle = watching()
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  expect(watching()).toBe(idle + 1)
+  // Another line takes its place (as a later hand-off's does).
+  act(() => {
+    showNativeChatNotesNotice(SCOPE, { text: 'another line' })
+  })
+  expect(watching()).toBe(idle)
+})
+
+it('typing while the marked image is prepared keeps the typing, and Undo isn’t offered', async () => {
+  const { opener } = chat({
+    attach: async () => {
+      updateNativeChatComposerDraft(SCOPE, { text: 'typed meanwhile' }, 'immediate')
+      appendToNativeChatComposerDraft(SCOPE, { images: [{ id: 'marked', path: '/m.png' }] })
+      insertImageReferences(SCOPE, null, ['marked'])
+      return 'marked'
+    }
+  })
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  expect(line.result.current?.text).toBe('1 note added to your message')
+  expect(line.result.current?.action).toBeUndefined()
+  expect(draft().text.startsWith('typed meanwhile')).toBe(true)
+})
+
+it('Close hands the notes to the message box as it is now, after it remounted', async () => {
+  const first = chat()
+  const view = viewer(first.opener, vi.fn())
+  // The message box remounts while the viewer is open: a new element and a new handle.
+  const root = first.opener.current?.parentElement
+  root?.querySelector('[data-native-chat-composer-scope]')?.remove()
+  const box = document.createElement('div')
+  box.dataset.nativeChatComposerScope = SCOPE
+  root?.prepend(box)
+  const remounted: Handle = {
+    ...first.handle,
+    submit: vi.fn<() => void>(),
+    attachGeneratedImage: vi.fn(async () => {
+      appendToNativeChatComposerDraft(SCOPE, { images: [{ id: 'marked', path: '/m.png' }] })
+      insertImageReferences(SCOPE, null, ['marked'])
+      return 'marked'
+    })
+  }
+  registerNativeChatComposerDestination(box, { current: remounted }, true, SCOPE)
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  expect(first.handle.attachGeneratedImage).not.toHaveBeenCalled()
+  expect(remounted.attachGeneratedImage).toHaveBeenCalledTimes(1)
+})
+
+it('notes of a viewer whose message row goes away without Close still reach the message box', async () => {
+  const { handle, opener } = chat()
+  const view = viewer(opener, vi.fn())
+  // The row unmounts (scrolled out, or replaced as output arrives) with the viewer open.
+  view.unmount()
+  await vi.waitFor(() => expect(handle.attachGeneratedImage).toHaveBeenCalledTimes(1), {
+    timeout: 10_000
+  })
+  await vi.waitFor(() => expect(draft().text).toContain(NOTES_TEXT), { timeout: 10_000 })
+  expect(draft().ids).toEqual(['marked'])
+})
+
+it('notes of a viewer that goes away while the message box can’t take them say so there', async () => {
+  const { handle, opener } = chat({ blocked: 'command' })
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  view.unmount()
+  await vi.waitFor(() => expect(line.result.current?.text).toBe('Notes on a.png weren’t added.'))
+  expect(handle.attachGeneratedImage).not.toHaveBeenCalled()
 })

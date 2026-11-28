@@ -56,3 +56,20 @@ export function nativeChatNotesBlockedReason(
       )
   }
 }
+
+/** Why Close can't add the notes now: short, as it sits beside Discard on a narrow window too. */
+export function nativeChatNotesCloseBlockedText(
+  t: Translate,
+  blocked: Exclude<NativeChatNotesBlocked, null>
+): string {
+  switch (blocked) {
+    case 'unavailable':
+      return t('components.native-chat.notes.closeNoMessageBox', 'No message box to add notes to.')
+    case 'editing':
+      return t('components.native-chat.notes.closeEditingQueued', 'Finish the queued edit first.')
+    case 'goal':
+      return t('components.native-chat.notes.closeGoal', 'Setting a goal takes no images.')
+    case 'command':
+      return t('components.native-chat.notes.closeCommand', 'The box holds a command.')
+  }
+}

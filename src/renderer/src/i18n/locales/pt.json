@@ -24236,7 +24236,14 @@
         "zoomOut": "Diminuir zoom",
         "goalHeld": "Sua caixa de mensagem está definindo uma meta, que não pode incluir imagens. Conclua ou saia dela primeiro.",
         "annotateTooLarge": "Esta imagem é grande demais para desenhar notas (mais de 33 megapixels).",
-        "imageNotReady": "A imagem ainda não está pronta, então as notas não podem ser desenhadas nela."
+        "imageNotReady": "A imagem ainda não está pronta.",
+        "closeNoMessageBox": "Nenhuma caixa de mensagem para as notas.",
+        "closeEditingQueued": "Termine primeiro a edição na fila.",
+        "closeGoal": "Uma meta não aceita imagens.",
+        "closeCommand": "A caixa de mensagem tem um comando.",
+        "closeFailed": "Não foi possível adicionar a imagem marcada.",
+        "closeTooLarge": "Grande demais para desenhar notas.",
+        "goneNotAdded": "As notas sobre {{name}} não foram adicionadas."
       }
     },
     "tab": {

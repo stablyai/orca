@@ -5,9 +5,10 @@ import type { NativeChatComposerNotice } from '../../composer/controls/native-ch
 // The one line a chat's message box shows about notes just added, with its Undo. In the message
 // box rather than a corner toast, so it sits beside what it talks about.
 
-type NotesNotice = { text: string; undo?: () => void }
+/** `onEnd`: runs once when the line goes, whichever way (dismissed, expired or replaced). */
+type NotesNotice = { text: string; undo?: () => void; onEnd?: () => void }
 
-/** A line with Undo goes after this long, and its Undo with it. */
+/** A notes line goes after this long, and its Undo with it. */
 export const NATIVE_CHAT_NOTES_UNDO_MS = 8000
 
 const notices = new Map<string, NotesNotice>()
@@ -21,12 +22,12 @@ function notify(scopeKey: string): void {
 
 /** Shows `text` in the chat's message box, replacing any earlier notes line; `undo` adds an Undo. */
 export function showNativeChatNotesNotice(scopeKey: string, notice: NotesNotice): () => void {
+  const replaced = notices.get(scopeKey)
   notices.set(scopeKey, notice)
+  replaced?.onEnd?.()
   notify(scopeKey)
   const dismiss = (): void => dismissNativeChatNotesNotice(scopeKey, notice)
-  if (notice.undo) {
-    setTimeout(dismiss, NATIVE_CHAT_NOTES_UNDO_MS)
-  }
+  setTimeout(dismiss, NATIVE_CHAT_NOTES_UNDO_MS)
   return dismiss
 }
 
@@ -35,7 +36,9 @@ export function dismissNativeChatNotesNotice(scopeKey: string, notice?: NotesNot
   if (notice && notices.get(scopeKey) !== notice) {
     return
   }
+  const ending = notices.get(scopeKey)
   if (notices.delete(scopeKey)) {
+    ending?.onEnd?.()
     notify(scopeKey)
   }
 }

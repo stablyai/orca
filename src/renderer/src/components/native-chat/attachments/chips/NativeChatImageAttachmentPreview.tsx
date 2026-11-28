@@ -5,6 +5,8 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
 import { NativeChatMediaViewer } from '../../media/notes/NativeChatMediaViewer'
+import { nativeChatSentNotesNumberMax } from '../../media/notes/native-chat-media-notes'
+import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu
@@ -276,6 +278,12 @@ function NativeChatImageThumbnail({
         opener={thumbnailRef}
         // Notes go into this chat's message box as a marked copy and text; elsewhere it only views.
         annotatable={Boolean(onRemove && notesScopeKey)}
+        // Numbering goes on after the notes already in the message, as it does for a sent message.
+        offset={
+          isOpen && notesScopeKey
+            ? nativeChatSentNotesNumberMax(readNativeChatComposerDraft(notesScopeKey).text)
+            : 0
+        }
         onInteractOutside={keepPreviewOpenForChatMenu}
         copySrc={copySrc}
         fallback={

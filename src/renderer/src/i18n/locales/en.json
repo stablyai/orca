@@ -23210,7 +23210,14 @@
         "zoomOut": "Zoom out",
         "goalHeld": "Your message box is setting a goal, which can’t include images. Finish or leave it first.",
         "annotateTooLarge": "This image is too large to draw notes on (over 33 megapixels).",
-        "imageNotReady": "The image isn’t ready yet, so the notes can’t be drawn on it."
+        "imageNotReady": "The image isn’t ready yet.",
+        "closeNoMessageBox": "No message box to add notes to.",
+        "closeEditingQueued": "Finish the queued edit first.",
+        "closeGoal": "Setting a goal takes no images.",
+        "closeCommand": "The box holds a command.",
+        "closeFailed": "Couldn’t add the marked image.",
+        "closeTooLarge": "Too large to draw notes on.",
+        "goneNotAdded": "Notes on {{name}} weren’t added."
       }
     },
     "tab": {

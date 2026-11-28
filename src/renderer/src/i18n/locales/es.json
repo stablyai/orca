@@ -22336,7 +22336,14 @@
         "zoomOut": "Alejar",
         "goalHeld": "Tu cuadro de mensaje está fijando un objetivo, que no puede incluir imágenes. Termínalo o sal de él primero.",
         "annotateTooLarge": "Esta imagen es demasiado grande para dibujar notas (más de 33 megapíxeles).",
-        "imageNotReady": "La imagen aún no está lista, así que no se pueden dibujar las notas en ella."
+        "imageNotReady": "La imagen aún no está lista.",
+        "closeNoMessageBox": "No hay cuadro de mensaje para las notas.",
+        "closeEditingQueued": "Termina primero la edición en cola.",
+        "closeGoal": "Un objetivo no admite imágenes.",
+        "closeCommand": "El cuadro de mensaje tiene un comando.",
+        "closeFailed": "No se pudo añadir la imagen marcada.",
+        "closeTooLarge": "Demasiado grande para dibujar notas.",
+        "goneNotAdded": "Las notas sobre {{name}} no se añadieron."
       }
     },
     "tab": {

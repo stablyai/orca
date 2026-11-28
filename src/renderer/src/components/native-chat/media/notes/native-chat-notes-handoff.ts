@@ -27,7 +27,10 @@ import {
 } from './native-chat-media-notes'
 
 export { NativeChatNotesTooLargeError }
-export { nativeChatNotesHandOffErrorText } from './native-chat-notes-handoff-errors'
+export {
+  nativeChatNotesCloseErrorText,
+  nativeChatNotesHandOffErrorText
+} from './native-chat-notes-handoff-errors'
 
 /** `element`: the message box's mounted element. Its handle object is replaced as the box
  *  re-renders (attaching the marked image does), so the element is what tells one mounted box from
@@ -198,16 +201,27 @@ const sameDraft = (a: NativeChatComposerDraft, b: NativeChatComposerDraft): bool
   words(a.text) === words(b.text) &&
   a.images.map(({ id }) => id).join('\u0000') === b.images.map(({ id }) => id).join('\u0000')
 
-/** "N notes added to your message" with Undo in the message box. Undo puts the message back as it
- *  was before the hand-off, and is offered only while the draft is still as the hand-off left it:
- *  any change since (typing, sending, removing a chip) ends the line. */
+/** "N notes added to your message" in the message box. Its Undo puts the message back as it was
+ *  before the hand-off. It is offered only when these notes are all the hand-off changed (nothing
+ *  was typed while the image was prepared, so Undo can't take that too), and only while the draft
+ *  is still as the hand-off left it: any change since (typing, sending, removing a chip) ends the
+ *  line. However the line ends, it stops watching the draft. */
 export function announceNativeChatNotesHandOff(
   scopeKey: string,
   before: NativeChatComposerDraft,
+  added: NativeChatNotesAdded,
   count: number
 ): void {
   const after = readNativeChatComposerDraft(scopeKey)
-  let done = false
+  const onlyTheseNotes =
+    nativeChatNotesSendWordsUnchanged(
+      before.text,
+      withoutNotesText(after.text, added.text),
+      added.ids,
+      undefined
+    ) &&
+    after.images.map(({ id }) => id).join('\u0000') ===
+      [...before.images.map(({ id }) => id), ...added.ids].join('\u0000')
   let stop = (): void => {}
   const dismiss = showNativeChatNotesNotice(scopeKey, {
     text: translate(
@@ -215,23 +229,25 @@ export function announceNativeChatNotesHandOff(
       '{{count}} notes added to your message',
       { defaultValue_one: '{{count}} note added to your message', count }
     ),
-    undo: () => {
-      if (done || !sameDraft(readNativeChatComposerDraft(scopeKey), after)) {
-        return
-      }
-      done = true
-      stop()
-      updateNativeChatComposerDraft(
-        scopeKey,
-        { text: before.text, document: before.document, images: before.images },
-        'immediate'
-      )
-    }
+    onEnd: () => stop(),
+    ...(onlyTheseNotes
+      ? {
+          undo: () => {
+            if (!sameDraft(readNativeChatComposerDraft(scopeKey), after)) {
+              return
+            }
+            dismiss()
+            updateNativeChatComposerDraft(
+              scopeKey,
+              { text: before.text, document: before.document, images: before.images },
+              'immediate'
+            )
+          }
+        }
+      : {})
   })
   stop = subscribeToNativeChatComposerDraft(scopeKey, () => {
-    if (!done && !sameDraft(readNativeChatComposerDraft(scopeKey), after)) {
-      done = true
-      stop()
+    if (!sameDraft(readNativeChatComposerDraft(scopeKey), after)) {
       dismiss()
     }
   })

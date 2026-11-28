@@ -22,3 +22,10 @@ export function nativeChatNotesHandOffErrorText(t: Translate, error: unknown): s
     'Couldn’t prepare the marked image. Your notes are still here.'
   )
 }
+
+/** The same, for Close, where it sits beside Discard: short. */
+export function nativeChatNotesCloseErrorText(t: Translate, error: unknown): string {
+  return error instanceof NativeChatNotesTooLargeError
+    ? t('components.native-chat.notes.closeTooLarge', 'Too large to draw notes on.')
+    : t('components.native-chat.notes.closeFailed', 'Couldn’t add the marked image.')
+}
