@@ -39,31 +39,35 @@ export function buildImportedWorktreesCardRow(
   candidate: ImportedWorktreesCardCandidate,
   hostContext?: NoticeHostContext
 ): ImportedWorktreesCardRow {
-  return {
+  const row: ImportedWorktreesCardRow = {
     type: 'imported-worktrees-card',
     key: `imported-worktrees-card:repo-group:${candidate.repo.id}`,
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
-    placement: 'repo-group',
-    ...(hostContext
-      ? { hostContextLabel: hostContext.label, hostContextHostId: hostContext.hostId }
-      : {})
+    placement: 'repo-group'
   }
+  if (hostContext) {
+    row.hostContextLabel = hostContext.label
+    row.hostContextHostId = hostContext.hostId
+  }
+  return row
 }
 
 export function buildNewExternalWorktreesInboxRow(
   candidate: NewExternalWorktreesInboxCandidate,
   hostContext?: NoticeHostContext
 ): NewExternalWorktreesInboxRow {
-  return {
+  const row: NewExternalWorktreesInboxRow = {
     type: 'new-external-worktrees-inbox',
     key: `new-external-worktrees-inbox:${candidate.repo.id}`,
     repo: candidate.repo,
-    inboxWorktrees: candidate.inboxWorktrees,
-    ...(hostContext
-      ? { hostContextLabel: hostContext.label, hostContextHostId: hostContext.hostId }
-      : {})
+    inboxWorktrees: candidate.inboxWorktrees
   }
+  if (hostContext) {
+    row.hostContextLabel = hostContext.label
+    row.hostContextHostId = hostContext.hostId
+  }
+  return row
 }
 
 export function appendWorktreeRows(
@@ -81,6 +85,9 @@ export function appendWorktreeRows(
   }
 ): void {
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
+  if (sectionOccurrences.length === 0) {
+    return
+  }
   let childIdsByParent: Map<string, string[]> | undefined
   for (const occurrence of sectionOccurrences) {
     if (occurrence.parent) {
@@ -100,13 +107,15 @@ export function appendWorktreeRows(
           options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
         )
       : sectionOccurrences
+  const folderPairByIdentity = options.folderPairByIdentity
+  const hostContextLabelByWorktreeIdentity = options.hostContextLabelByWorktreeIdentity
+  const hostContextLabelByRepoId = options.hostContextLabelByRepoId
   const needsHostIdentity =
-    (options.folderPairByIdentity?.size ?? 0) > 0 ||
-    (options.hostContextLabelByWorktreeIdentity?.size ?? 0) > 0
+    (folderPairByIdentity?.size ?? 0) > 0 || (hostContextLabelByWorktreeIdentity?.size ?? 0) > 0
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
     const hostIdentity = needsHostIdentity ? getWorktreeHostIdentity(worktree) : undefined
-    const folderPair = hostIdentity ? options.folderPairByIdentity?.get(hostIdentity) : undefined
+    const folderPair = hostIdentity ? folderPairByIdentity?.get(hostIdentity) : undefined
     const hasChildren = occurrence.childCount > 0
     if (folderPair) {
       result.push(
@@ -115,38 +124,53 @@ export function appendWorktreeRows(
           childWorktreeIds: hasChildren ? childIdsByParent?.get(occurrence.key) : undefined,
           descendantIdentities: hasChildren ? lineageRanges?.get(occurrence.key) : undefined,
           hostContextLabel: hostIdentity
-            ? options.hostContextLabelByWorktreeIdentity?.get(hostIdentity)
+            ? hostContextLabelByWorktreeIdentity?.get(hostIdentity)
             : undefined
         })
       )
       continue
     }
+    const hostContextLabel =
+      (hostIdentity ? hostContextLabelByWorktreeIdentity?.get(hostIdentity) : undefined) ??
+      hostContextLabelByRepoId?.get(worktree.repoId)
     const lineageGroupKey = hasChildren ? getWorktreeLineageGroupKey(worktree) : undefined
-    result.push({
-      type: 'item',
-      occurrence,
-      rowKey: occurrence.key,
-      sectionKey: occurrence.sectionKey,
-      worktree,
-      repo: repoOf(worktree),
-      depth: occurrence.depth,
-      groupDepth: options.groupDepth,
-      isLastLineageChild: occurrence.isLastChild,
-      lineageChildCount: occurrence.childCount,
-      lineageChildWorktreeIds: hasChildren ? childIdsByParent?.get(occurrence.key) : undefined,
-      lineageDescendantIdentities: hasChildren ? lineageRanges?.get(occurrence.key) : undefined,
-      showProjectName: occurrence.showProjectName,
-      hostContextLabel:
-        (hostIdentity
-          ? options.hostContextLabelByWorktreeIdentity?.get(hostIdentity)
-          : undefined) ?? options.hostContextLabelByRepoId?.get(worktree.repoId),
-      ...(lineageGroupKey
-        ? {
-            lineageGroupKey,
-            lineageCollapsed: options.collapsedGroups.has(lineageGroupKey)
-          }
-        : {})
-    })
+    if (lineageGroupKey) {
+      result.push({
+        type: 'item',
+        occurrence,
+        rowKey: occurrence.key,
+        sectionKey: occurrence.sectionKey,
+        worktree,
+        repo: repoOf(worktree),
+        depth: occurrence.depth,
+        groupDepth: options.groupDepth,
+        isLastLineageChild: occurrence.isLastChild,
+        lineageChildCount: occurrence.childCount,
+        lineageChildWorktreeIds: childIdsByParent?.get(occurrence.key),
+        lineageDescendantIdentities: lineageRanges?.get(occurrence.key),
+        showProjectName: occurrence.showProjectName,
+        hostContextLabel,
+        lineageGroupKey,
+        lineageCollapsed: options.collapsedGroups.has(lineageGroupKey)
+      })
+    } else {
+      result.push({
+        type: 'item',
+        occurrence,
+        rowKey: occurrence.key,
+        sectionKey: occurrence.sectionKey,
+        worktree,
+        repo: repoOf(worktree),
+        depth: occurrence.depth,
+        groupDepth: options.groupDepth,
+        isLastLineageChild: occurrence.isLastChild,
+        lineageChildCount: occurrence.childCount,
+        lineageChildWorktreeIds: undefined,
+        lineageDescendantIdentities: undefined,
+        showProjectName: occurrence.showProjectName,
+        hostContextLabel
+      })
+    }
   }
 }
 
@@ -162,24 +186,26 @@ export function buildFolderWorkspaceRow(
     hostContextLabel?: string
   }
 ): FolderWorkspaceRow {
-  const lineageGroupKey =
-    occurrence && occurrence.childCount > 0 ? getWorktreeLineageGroupKey(occurrence.row) : undefined
-  return {
+  const row: FolderWorkspaceRow = {
     type: 'folder-workspace',
     lineageDescendantIdentities: options?.descendantIdentities,
     key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: occurrence?.depth ?? 0,
-    groupDepth,
-    ...(options?.hostContextLabel ? { hostContextLabel: options.hostContextLabel } : {}),
-    ...(occurrence && occurrence.childCount > 0 && lineageGroupKey
-      ? {
-          lineageChildCount: occurrence.childCount,
-          lineageChildWorktreeIds: options?.childWorktreeIds,
-          lineageGroupKey,
-          lineageCollapsed: options?.collapsedGroups.has(lineageGroupKey) === true
-        }
-      : {})
+    groupDepth
   }
+  if (options?.hostContextLabel) {
+    row.hostContextLabel = options.hostContextLabel
+  }
+  if (occurrence && occurrence.childCount > 0) {
+    const lineageGroupKey = getWorktreeLineageGroupKey(occurrence.row)
+    if (lineageGroupKey) {
+      row.lineageChildCount = occurrence.childCount
+      row.lineageChildWorktreeIds = options?.childWorktreeIds
+      row.lineageGroupKey = lineageGroupKey
+      row.lineageCollapsed = options?.collapsedGroups.has(lineageGroupKey) === true
+    }
+  }
+  return row
 }
