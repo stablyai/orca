@@ -27,7 +27,7 @@ export async function startGitCommonNarrowWatch(
   // Overflow proves lost events and must bypass the transient watcher-error cooldown.
   onOverflow?: () => void,
   getRepos: () => ReadonlyMap<string, unknown> = () => target.repos
-): Promise<WorktreeBaseSubscription> {
+): Promise<WorktreeBaseSubscription & { syncRepos: () => void }> {
   const worktreesDir = join(target.path, 'worktrees')
   const watcherOptions = platform === 'win32' ? { backend: 'windows' as const } : {}
   let disposed = false

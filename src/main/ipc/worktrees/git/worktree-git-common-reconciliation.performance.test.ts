@@ -284,10 +284,10 @@ it('re-checks on agent turns and shell commands in this repo, never above the ol
   const { unsubscribe: stop } = await startReconciliation()
   await vi.advanceTimersByTimeAsync(30_000)
   const added = addWorktreeEntry('agent-add')
-  notifyWorktreeActivity('other-repo')
+  notifyWorktreeActivity('other-repo::/w')
   await vi.advanceTimersByTimeAsync(0)
   expect(events).toEqual([])
-  notifyWorktreeActivity('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(0)
   expect(events).toContainEqual({ type: 'create', path: added })
 
@@ -295,7 +295,7 @@ it('re-checks on agent turns and shell commands in this repo, never above the ol
   fs.stats = 0
   for (let second = 0; second < 600; second += 1) {
     for (let agent = 0; agent < 100; agent += 1) {
-      notifyWorktreeActivity('repo')
+      notifyWorktreeActivity('repo::/w')
     }
     await vi.advanceTimersByTimeAsync(1_000)
   }
@@ -321,11 +321,11 @@ it('forces the reveal sweep when a short hide spans where the old 30 s tick woul
 it('checks again once the throttle opens when activity lands inside it', async () => {
   const { unsubscribe: stop } = await startReconciliation()
   await vi.advanceTimersByTimeAsync(30_000)
-  notifyWorktreeActivity('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(5_000)
   const added = addWorktreeEntry('second-command')
-  notifyWorktreeActivity('repo')
-  notifyWorktreeActivity('repo')
+  notifyWorktreeActivity('repo::/w')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(0)
   expect(events).not.toContainEqual({ type: 'create', path: added })
   await vi.advanceTimersByTimeAsync(25_000)
@@ -340,9 +340,9 @@ it('holds activity during a stalled scan without spinning timers', async () => {
   fs.stall = new Promise((resolve) => {
     release = resolve
   })
-  notifyWorktreeActivity('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(0)
-  notifyWorktreeActivity('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(60_000)
   // Only the five-minute sweep timer; a hung mount must not drive a retry loop.
   expect(vi.getTimerCount()).toBeLessThanOrEqual(1)
@@ -392,10 +392,10 @@ it('keeps the 30 s network-volume cadence at its old cost under constant activit
 it('reports activity within 30 s even when a full sweep follows soon after the retry', async () => {
   const { unsubscribe: stop } = await startReconciliation()
   await vi.advanceTimersByTimeAsync(240_000)
-  notifyWorktreeActivity('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(1_000)
   const added = addWorktreeEntry('before-sweep')
-  notifyWorktreeActivity('repo')
+  notifyWorktreeActivity('repo::/w')
   // The retry opens at 270 s; the timed sweep at 300 s would be 59 s after the activity.
   await vi.advanceTimersByTimeAsync(30_000)
   expect(events).toContainEqual({ type: 'create', path: added })
