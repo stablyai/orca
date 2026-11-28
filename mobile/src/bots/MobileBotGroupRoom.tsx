@@ -35,9 +35,11 @@ import { MobileBotGroupMembers } from './MobileBotGroupMembers'
 import { MobileBotGroupPost } from './MobileBotGroupPost'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ModelPill } from '../session/native-chat/input/session-options/MobileNativeChatSessionOptionRows'
+import { MobileNativeChatDivider } from '../session/native-chat/transcript/MobileNativeChatDivider'
 import { MobileNativeChatComposer } from '../session/native-chat/composer/MobileNativeChatComposer'
 import { MobileNativeChatComposerMenuHost } from '../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
 import { structuredAgentSessionHostSupport } from '../session/native-chat/agent-session/mobile-structured-agent-session-host-support'
+import { useMobileBotGroupProviderPicker } from './use-mobile-bot-group-provider-picker'
 import type { MobileBotGroupSession } from './MobileBotGroupTurns'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileNativeChatSendErrorBanner } from '../session/native-chat/status/MobileNativeChatSendErrorBanner'
@@ -108,7 +110,6 @@ export function MobileBotGroupRoom({
       }),
     []
   )
-  const onError = useCallback((message: string) => setError(message), [])
   const {
     data,
     group: anyRoomGroup,
@@ -138,7 +139,16 @@ export function MobileBotGroupRoom({
     title: anyRoomGroup?.name ?? '',
     draft: composerDraft
   })
-  const selectedMember = group?.members.find((member) => member.botId === recipientId)
+  const provider = useMobileBotGroupProviderPicker({
+    client,
+    hostId,
+    group,
+    bots,
+    sessions,
+    readers,
+    recipientId,
+    selectProvider: support.selectProvider === true
+  })
   const stop = async (botId?: string) => {
     try {
       const result = groupStop.interpret(
@@ -161,14 +171,16 @@ export function MobileBotGroupRoom({
     }
     setStartingThread(true)
     try {
-      const result = groupNewThread.interpret(await groupNewThread.request(client, { groupId }))
-      setThreadId(result.threadId)
+      setThreadId(
+        groupNewThread.interpret(await groupNewThread.request(client, { groupId })).threadId
+      )
     } catch (error) {
       setError(botFailureMessage(error) ?? String(error))
     } finally {
       setStartingThread(false)
     }
   }
+  const repliesLabel = t('bots.groups.repliesValue', 'Replies: {{value0}}', { value0: audience })
   const workingCount =
     group?.members.filter((member) => sessions.get(member.sessionId)?.isWorking).length ?? 0
   return (
@@ -185,7 +197,7 @@ export function MobileBotGroupRoom({
           client={client}
           support={support}
           report={report}
-          onError={onError}
+          onError={setError}
           visible={visible}
           connected={connected}
         />
@@ -266,20 +278,17 @@ export function MobileBotGroupRoom({
           hostOutage={outage}
         />
         <MobileNativeChatSendErrorBanner message={error} onDismiss={() => setError(null)} />
+        {provider.pending ? <MobileNativeChatDivider handoff label={provider.pending} /> : null}
         <MobileBotGroupDictationScope dictation={dictation} client={client}>
           <MobileNativeChatComposer
             {...dictation.mic}
+            {...provider.composerProps}
             value={draft}
             onChangeText={setDraft}
             draftScopeKey={composerDraft.key}
             sendSurfaceId={`group:${roomId}`}
             getSendCompletionGeneration={() => 0}
             getComposerEditGeneration={composerDraft.getEditGeneration}
-            agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
-            placeholder={t(
-              'bots.groups.composerPlaceholder',
-              'Message the group, @ to mention a bot'
-            )}
             disabled={!connected}
             onAttachImage={attachPhotos}
             attachments={[...photos.images]}
@@ -290,14 +299,10 @@ export function MobileBotGroupRoom({
               // The row's free width, so a long name truncates on the +'s line instead of wrapping.
               <View style={styles.repliesSlot}>
                 <ModelPill
-                  primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
-                    value0: audience
-                  })}
+                  primary={repliesLabel}
                   secondary={null}
                   warning={false}
-                  accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
-                    value0: audience
-                  })}
+                  accessibleName={repliesLabel}
                   disabled={!group || !connected}
                   onPress={() => setMenu('replies')}
                 />

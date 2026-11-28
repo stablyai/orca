@@ -2,12 +2,15 @@ import { chatSwitchPermissionCopy } from '../../../../../../shared/agent-session
 import { useMemo, useRef, useState } from 'react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { chatAgentPickerEntry } from '@/components/agent/chat-agent-picker-entry'
+import type { AgentMenuRowsTarget } from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { useTranslate } from '@/i18n/use-translate'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { isNativeChatAgent } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { tuiAgentDisplayName } from '../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -55,8 +58,28 @@ export function NativeChatProviderPicker({
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
   const selecting = useRef(false)
   const agent = selected?.agent ?? active
-  const detection = useAgentDetectionTargetForWorktree(workspaceId)
-  const { model } = useAgentMenuObservation(workspaceId, open, detection)
+  const worktreeDetection = useAgentDetectionTargetForWorktree(workspaceId)
+  const detection = useMemo<AgentDetectionTarget | undefined>(
+    () =>
+      target.kind === 'environment'
+        ? { kind: 'runtime', environmentId: target.environmentId, worktreeId: workspaceId }
+        : worktreeDetection,
+    [target, workspaceId, worktreeDetection]
+  )
+  const menuTarget = useMemo<string | AgentMenuRowsTarget>(
+    () =>
+      target.kind === 'environment' && parseWorkspaceKey(workspaceId)?.type === 'folder'
+        ? {
+            workspace: {
+              kind: 'folder',
+              worktreeId: workspaceId,
+              executionHostId: `runtime:${target.environmentId}`
+            }
+          }
+        : workspaceId,
+    [target, workspaceId]
+  )
+  const { model } = useAgentMenuObservation(menuTarget, open, detection)
   const inventory = useAgentLaunchPickerInventory(
     workspaceId,
     model,

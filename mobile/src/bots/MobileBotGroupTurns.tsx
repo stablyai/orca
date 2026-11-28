@@ -1,7 +1,8 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { folderWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
+import { mobileStructuredSessionStatusFeed } from '../session/native-chat/agent-session/mobile-structured-session-status-feed'
 import { useMobileNativeChatVisualRenderer } from '../session/native-chat/visual/MobileNativeChatVisual'
 import { MobileNativeChatVisualContext } from '../session/native-chat/visual/mobile-native-chat-visual-context'
 import { MobileNativeChatItemSourceContext } from '../session/native-chat/transcript/projection/mobile-native-chat-item-read'
@@ -38,6 +39,7 @@ import { projectStructuredAgentStartItem } from '../../../src/shared/native-chat
 import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 
 export type MobileBotGroupSession = StructuredMobileSession & {
+  activeAgent: string
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
 }
 const transcript = createStructuredQuestionProjection(projectStructuredAgentStartItem)
@@ -59,11 +61,19 @@ export const MobileBotGroupReader = memo(function Reader({
   report: (id: string, session: MobileBotGroupSession | null) => void
   onError: (message: string) => void
 }) {
+  const statusFeed = useMemo(() => mobileStructuredSessionStatusFeed(client), [client])
+  const activeAgent =
+    useSyncExternalStore(
+      statusFeed.subscribe,
+      () => statusFeed.getSnapshot().get(turn.sessionId)?.agent,
+      () => undefined
+    ) ?? turn.agent
   const session = useMobileStructuredAgentSession({
     client,
     pairedHostClient: client,
     sessionId: turn.sessionId,
     agent: turn.agent,
+    activeProvider: activeAgent,
     enabled: visible,
     connected,
     hostSupport: support,
@@ -100,7 +110,10 @@ export const MobileBotGroupReader = memo(function Reader({
     groupTurnItems,
     session.journal
   ])
-  const view = useMemo(() => ({ ...session, groupTurnItems }), [session, groupTurnItems])
+  const view = useMemo(
+    () => ({ ...session, activeAgent, groupTurnItems }),
+    [session, activeAgent, groupTurnItems]
+  )
   useEffect(() => {
     report(turn.sessionId, view)
   }, [turn.sessionId, view, report])

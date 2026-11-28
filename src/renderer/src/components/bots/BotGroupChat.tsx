@@ -1,12 +1,9 @@
-import { botTarget, callBotRpc, ownBotHost } from '@/lib/bot-hosts'
+import { botTarget, callBotRpc } from '@/lib/bot-hosts'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import {
-  NativeChatProviderPickerContext,
-  useNativeChatProviderPickerScope
-} from '../native-chat/composer/controls/native-chat-provider-picker-context'
+import { NativeChatProviderPickerContext } from '../native-chat/composer/controls/native-chat-provider-picker-context'
 import { NativeChatPendingHandoff } from '../native-chat/NativeChatDividerRow'
 import { botGroupReplyDraft } from '../../../../shared/bots/bot-group-mentions'
+import { useBotGroupProviderPicker } from './use-bot-group-provider-picker'
 import { BotGroupTranscriptOwner, useBotGroupFileContexts } from './BotGroupTranscriptOwner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -143,24 +140,15 @@ export function BotGroupChat({
     bots,
     (group) => apply({ kind: 'group', group: botGroupRoom(group, threadId) })
   )
-  const chosenId = group?.members.find((member) => member.botId === recipientId)?.sessionId
-  const chosen = chosenId ? sessions.get(chosenId) : undefined
-  const recipientBot =
-    recipientId && group
-      ? bots.find((bot) => bot.id === recipientId && bot.hostId === group.hostId)
-      : undefined
-  const chosenAgent =
-    chosen?.agent ?? readers.find((reader) => reader.sessionId === chosenId)?.agent ?? 'claude'
-  const pickerScope = useNativeChatProviderPickerScope(
-    {
-      sessionId: chosenId ?? '',
-      target: botTarget(group ?? ownBotHost()),
-      isVisible: Boolean(isVisible && group && chosenId && recipientBot)
-    },
-    recipientBot ? folderWorkspaceKey(recipientBot.folderWorkspaceId) : null,
-    Boolean(chosen && chosenId && recipientBot),
-    setError
-  )
+  const { chosen, chosenAgent, pickerScope } = useBotGroupProviderPicker({
+    group,
+    bots,
+    sessions,
+    readers,
+    recipientId,
+    isVisible,
+    onError: setError
+  })
   const composerRef = useRef<NativeChatComposerHandle>(null)
   const working =
     group?.members.some((member) => sessions.get(member.sessionId)?.isWorking) ?? false

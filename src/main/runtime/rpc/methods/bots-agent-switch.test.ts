@@ -5,6 +5,10 @@ import type { NewChatPermissionSettings } from '../../../../shared/agent-launch/
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { applyBotUpdates, BotUpdate } from '../../../../shared/rpc-contract/bots-params'
 import { selectBotProviderFromComposer } from '../../../bots/bot-composer-provider-switch'
+import {
+  captureBotGroupPreConsentOperations,
+  runtimeBotGroups
+} from '../../../bots/bot-group-runtime'
 import { InvalidArgumentError, type RpcContext } from '../core'
 import { BOT_AGENT_SWITCH_PREVIEW_METHOD, updateBotWithAgentSwitch } from './bots-agent-switch'
 
@@ -356,4 +360,44 @@ it('propagates a group composer switch across all bot instances and clamps inher
     fromPermission: 'ask'
   })
   expect(testRig.read().agent).toBe('codex')
+})
+
+it('switches a paired remote member through its owning-host Home session with consent and pre-consent room capture', async () => {
+  const testRig = multiInstanceRig()
+  const captureMock = vi.mocked(captureBotGroupPreConsentOperations)
+  captureMock.mockClear()
+  const denied = await selectBotProviderFromComposer(
+    testRig.runtime,
+    testRig.host,
+    testRig.read(),
+    {
+      sessionId: 'home-session',
+      agent: 'pi',
+      consent: { from: 'claude', fromPermission: 'full-access', permission: 'full-access' }
+    }
+  )
+  expect(denied).toEqual({ status: 'consent-required', from: 'claude', fromPermission: 'ask' })
+  expect(captureMock).not.toHaveBeenCalled()
+  expect(testRig.read().agent).toBe('claude')
+
+  const accepted = await selectBotProviderFromComposer(
+    testRig.runtime,
+    testRig.host,
+    testRig.read(),
+    {
+      sessionId: 'home-session',
+      agent: 'pi',
+      consent: { from: 'claude', fromPermission: 'ask', permission: 'full-access' }
+    }
+  )
+  expect(accepted).toEqual({ status: 'selected' })
+  expect(captureMock).toHaveBeenCalledWith(testRig.runtime, 'bot-1')
+  expect(testRig.read().agent).toBe('pi')
+  expect(testRig.selectedCalls.map((call) => call.sessionId).sort()).toEqual([
+    'bot-group-member-active-room',
+    'bot-group-member-active-thread',
+    'home-session',
+    'slack-thread-session'
+  ])
+  expect(runtimeBotGroups(testRig.runtime).store.memberOf('bot-group-member-retired')).toBeNull()
 })
