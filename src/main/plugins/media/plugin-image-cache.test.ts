@@ -16,6 +16,8 @@ function fakePng(width: number, height: number, fillByte: number, totalBytes = 6
   return buf
 }
 
+const FIXED_NOW = 1_700_000_000_000
+
 describe('PluginImageCache', () => {
   const dirs: string[] = []
 
@@ -33,15 +35,16 @@ describe('PluginImageCache', () => {
     const freshPreviewSha = await cache.put(fakePng(64, 64, 3, 100))
     expect(retainedSha && staleSha && freshPreviewSha).toBeTruthy()
 
-    const now = Date.now()
-    const oldTime = new Date(now - 120_000)
+    const oldTime = new Date(FIXED_NOW - 120_000)
+    const freshTime = new Date(FIXED_NOW)
     await utimes(join(dir, retainedSha!), oldTime, oldTime)
     await utimes(join(dir, staleSha!), oldTime, oldTime)
+    await utimes(join(dir, freshPreviewSha!), freshTime, freshTime)
     const staleTmp = join(dir, `${staleSha!}.orphan.tmp`)
     await writeFile(staleTmp, Buffer.from('partial'))
     await utimes(staleTmp, oldTime, oldTime)
 
-    const removed = await cache.prune(new Set([retainedSha!]), { now })
+    const removed = await cache.prune(new Set([retainedSha!]), { now: FIXED_NOW })
     expect(removed).toBe(1)
     expect(await cache.get(retainedSha!)).not.toBeNull()
     expect(await cache.get(freshPreviewSha!)).not.toBeNull()
@@ -56,14 +59,13 @@ describe('PluginImageCache', () => {
     const shaA = await cache.put(fakePng(64, 64, 10, 100))
     const shaB = await cache.put(fakePng(64, 64, 11, 100))
     const shaC = await cache.put(fakePng(64, 64, 12, 100))
-    const now = Date.now()
-    await utimes(join(dir, shaA!), new Date(now - 30_000), new Date(now - 30_000))
-    await utimes(join(dir, shaB!), new Date(now - 20_000), new Date(now - 20_000))
-    await utimes(join(dir, shaC!), new Date(now - 10_000), new Date(now - 10_000))
+    await utimes(join(dir, shaA!), new Date(FIXED_NOW - 30_000), new Date(FIXED_NOW - 30_000))
+    await utimes(join(dir, shaB!), new Date(FIXED_NOW - 20_000), new Date(FIXED_NOW - 20_000))
+    await utimes(join(dir, shaC!), new Date(FIXED_NOW - 10_000), new Date(FIXED_NOW - 10_000))
 
     // All are younger than minAgeMs, but total (300B) > maxBytes (250B).
     // shaA is retained, so oldest unretained (shaB) must be evicted first.
-    const removed = await cache.prune(new Set([shaA!]), { now, maxBytes: 250 })
+    const removed = await cache.prune(new Set([shaA!]), { now: FIXED_NOW, maxBytes: 250 })
     expect(removed).toBe(1)
     expect(await cache.get(shaA!)).not.toBeNull()
     expect(await cache.get(shaB!)).toBeNull()

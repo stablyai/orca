@@ -153,8 +153,9 @@ export class PluginImageCache {
     if (!entries) {
       return 0
     }
+    const now = Date.now()
     let totalBytes = 0
-    const files: { path: string; size: number; mtimeMs: number }[] = []
+    const evictable: { path: string; size: number; mtimeMs: number }[] = []
     for (const entry of entries) {
       if (!SHA256_HEX_PATTERN.test(entry.name)) {
         continue
@@ -165,14 +166,17 @@ export class PluginImageCache {
         continue
       }
       totalBytes += info.size
-      files.push({ path: fullPath, size: info.size, mtimeMs: info.mtimeMs })
+      // Keep recently written images (active previews and in-flight refreshes) within the grace window.
+      if (now - info.mtimeMs >= this.minAgeMs) {
+        evictable.push({ path: fullPath, size: info.size, mtimeMs: info.mtimeMs })
+      }
     }
     if (totalBytes <= maxBytes) {
       return 0
     }
-    files.sort((a, b) => a.mtimeMs - b.mtimeMs)
+    evictable.sort((a, b) => a.mtimeMs - b.mtimeMs)
     let removed = 0
-    for (const candidate of files) {
+    for (const candidate of evictable) {
       if (totalBytes <= maxBytes) {
         break
       }
