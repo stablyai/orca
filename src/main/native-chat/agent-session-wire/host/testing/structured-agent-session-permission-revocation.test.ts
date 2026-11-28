@@ -79,9 +79,13 @@ it('a woken chat starts its next child with nothing revoked', async () => {
   expect(revoked).toHaveBeenCalledWith(SESSION, slept, 'generation-1')
   const cuts = revoked.mock.calls.length
 
-  await rig.workingSend()
-  const woken = rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.fence
-  expect(woken).toBeGreaterThan(slept!)
+  const { result } = rig.send('wake', undefined, {
+    fence: rig.store.getRecord(SESSION)!.currentFence
+  })
+  await result
+  const child = () => rig.host.collaboratorsForTests().sessions.get(SESSION)?.child
+  await eventually(() => expect(child()?.fence).toBeGreaterThan(slept!))
+  const woken = child()?.fence
   expect(revoked.mock.calls).toHaveLength(cuts)
   expect(revoked.mock.calls.map(([, fence]) => fence)).not.toContain(woken)
 })

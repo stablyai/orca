@@ -71,9 +71,9 @@ it('keeps an applied Plan after a timeout until the user approves an exit', asyn
   finishPermissionCatchUp(session)
 
   const plan = applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
-  frame('init', 'acceptEdits')
-  // Sent on the SDK's queued call, a tick after the request.
+  // Sent on the SDK's queued call, a tick after the request; Claude's init lands meanwhile.
   await setImmediate()
+  frame('init', 'acceptEdits')
   expect(writes).toEqual(['plan'])
 
   planAcknowledged.reject(new ClaudeControlRequestTimeoutError('set_permission_mode'))
@@ -112,9 +112,9 @@ it('waits for the Build Ask acknowledgement after Plan is rejected', async () =>
   finishPermissionCatchUp(session)
 
   const plan = applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
-  frame('init', 'default')
-  // Sent on the SDK's queued call, a tick after the request.
+  // Sent on the SDK's queued call, a tick after the request; Claude's init lands meanwhile.
   await setImmediate()
+  frame('init', 'default')
   expect(writes).toEqual(['plan'])
   expect(rows).toEqual([])
 
