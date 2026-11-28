@@ -42,9 +42,9 @@ afterEach(() => {
 // Incident replay: a keychain read that timed out under load is no answer about the login.
 it('reports a timed-out macOS keychain read as "can\'t check right now", not signed out', async () => {
   platform('darwin')
-  vi.mocked(readKeychainPassword).mockRejectedValue(
-    Object.assign(new Error('security timed out after 3000ms'), { code: 'ETIMEDOUT' })
-  )
+  vi.mocked(readKeychainPassword).mockImplementation(async () => {
+    throw Object.assign(new Error('security timed out after 3000ms'), { code: 'ETIMEDOUT' })
+  })
   const status = await getCursorAccountStatus()
   expect(status.signedIn).toBe(false)
   expect(status.checkUnavailable).toBe(true)

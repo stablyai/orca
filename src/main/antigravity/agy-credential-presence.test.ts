@@ -16,10 +16,13 @@ beforeEach(() => vi.mocked(stat).mockReset())
 afterEach(() => vi.restoreAllMocks())
 
 it('reads the login as absent only when its files definitively do not exist', async () => {
-  vi.mocked(stat).mockRejectedValue(fsError('ENOENT'))
-  expect(await agyCredentialPresence(tmpdir())).toBe('absent')
-  vi.mocked(stat).mockRejectedValue(fsError('ENOTDIR'))
-  expect(await agyCredentialPresence(tmpdir())).toBe('absent')
+  for (const code of ['ENOENT', 'ENOTDIR']) {
+    // Rejected per call: a promise made up front would be unhandled until stat is called.
+    vi.mocked(stat).mockImplementation(async () => {
+      throw fsError(code)
+    })
+    expect(await agyCredentialPresence(tmpdir())).toBe('absent')
+  }
 })
 
 // A token file Orca can't stat (permissions, a busy or failing disk) may well hold the login.
