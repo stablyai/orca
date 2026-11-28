@@ -10,14 +10,16 @@ import {
 import { decodeClaudeTranscriptLine } from '../../../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import {
   boundWorkerTranscriptMessages,
-  boundWorkerTranscriptNewest,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
+import { boundWorkerTranscriptNewest } from './worker-transcript-newest-bound'
 import {
   readForwardLocalWorkerTranscriptPage,
-  readInitialLocalWorkerTranscriptPage
+  type WorkerTranscriptOlderBoundary
 } from './worker-transcript-local-read'
+import { readTailLocalWorkerTranscriptPage } from './worker-transcript-local-tail-read'
 import { readInitialWorkerTranscriptReusing } from './worker-transcript-initial-read-cache'
+import { AGENT_READ_MAX_LIMIT } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
 import {
   nativeChatTurnEvidenceObserverForAgent,
   type NativeChatTurnEvidence
@@ -42,6 +44,10 @@ export type WorkerTranscriptReadSuccess = {
   /** A first page's newest turn marker, decoded from the same bytes as its messages; cursor
    *  pages carry none. */
   turn?: NativeChatTurnEvidence
+  /** Newest-first pages only: where the next older page ends; null once the file start is read. */
+  older?: WorkerTranscriptOlderBoundary | null
+  /** Newest-first pages only: indexes of `messages` whose shown blocks or text were cut. */
+  shortened?: number[]
 }
 
 export type WorkerTranscriptReadResult = WorkerTranscriptReadFailure | WorkerTranscriptReadSuccess
@@ -63,6 +69,9 @@ export async function readWorkerTranscript(args: {
   expectedSourceFingerprint?: string
   /** Hash of the bounded content immediately before a cursor offset. */
   expectedBoundaryCheckpoint?: string
+  /** Page backward (`orca agent read`): scan one bounded window, report the `older` boundary,
+   *  and with `endingAt` read the newest messages before a prior page's boundary. */
+  backward?: { endingAt?: WorkerTranscriptOlderBoundary }
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
@@ -88,12 +97,22 @@ export async function readWorkerTranscript(args: {
   if (!filePath) {
     return { ok: false, reason: 'transcript_missing', warnings: [] }
   }
-  const limit = clampWorkerTranscriptLimit(args.limit)
+  // `agent read` pages up to its own advertised limit; the byte bound still caps the response.
+  const limit = clampWorkerTranscriptLimit(
+    args.limit,
+    args.backward ? AGENT_READ_MAX_LIMIT : undefined
+  )
   const resolvedPath = filePath
   const read = () => readResolvedWorkerTranscript(resolvedPath, decode, limit, args)
   // A first read of an unchanged file serves its settled page; any other read scans.
-  return args.offset === undefined && args.expectedSourceFingerprint === undefined
-    ? readInitialWorkerTranscriptReusing(resolvedPath, [limit, decode], read)
+  return args.offset === undefined &&
+    args.backward?.endingAt === undefined &&
+    args.expectedSourceFingerprint === undefined
+    ? readInitialWorkerTranscriptReusing(
+        resolvedPath,
+        [limit, decode, ...(args.backward ? ['backward'] : [])],
+        read
+      )
     : read()
 }
 
@@ -103,20 +122,25 @@ async function readResolvedWorkerTranscript(
   limit: number,
   args: Pick<
     Parameters<typeof readWorkerTranscript>[0],
-    'agent' | 'offset' | 'expectedSourceFingerprint' | 'expectedBoundaryCheckpoint'
+    'agent' | 'offset' | 'expectedSourceFingerprint' | 'expectedBoundaryCheckpoint' | 'backward'
   >
 ): Promise<WorkerTranscriptReadResult> {
   try {
-    // The bound that decided where a forward page stops is the page's own: computed once.
+    // The bound that decided where a page stops is the page's own: computed once.
     let forwardBound: ReturnType<typeof boundWorkerTranscriptMessages> | undefined
+    let newestBound: ReturnType<typeof boundWorkerTranscriptNewest> | undefined
     const page =
       args.offset === undefined
-        ? await readInitialLocalWorkerTranscriptPage(
-            filePath,
+        ? await readTailLocalWorkerTranscriptPage(filePath, {
             limit,
             decode,
-            nativeChatTurnEvidenceObserverForAgent(args.agent)
-          )
+            turnObserver: args.backward?.endingAt
+              ? null
+              : nativeChatTurnEvidenceObserverForAgent(args.agent),
+            keep: (messages) =>
+              (newestBound = boundWorkerTranscriptNewest(messages, filePath)).messages.length,
+            ...(args.backward ? { backward: args.backward } : {})
+          })
         : await readForwardLocalWorkerTranscriptPage(
             filePath,
             args.offset,
@@ -135,10 +159,11 @@ async function readResolvedWorkerTranscript(
     ) {
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
-    const bounded =
+    const newest =
       args.offset === undefined
-        ? boundWorkerTranscriptNewest(page.messages, filePath)
-        : (forwardBound ?? boundWorkerTranscriptMessages(page.messages, filePath))
+        ? (newestBound ?? boundWorkerTranscriptNewest(page.messages, filePath))
+        : undefined
+    const bounded = newest ?? forwardBound ?? boundWorkerTranscriptMessages(page.messages, filePath)
     // A newest-first bound drops the page's oldest messages, which shifts the reply's index.
     const dropped = page.messages.length - bounded.messages.length
     const replyIndex = (page.turn?.replyIndex ?? -1) - dropped
@@ -161,7 +186,9 @@ async function readResolvedWorkerTranscript(
         ...(bounded.limited ? ['transcript_payload'] : [])
       ],
       warnings: [...page.warnings, ...bounded.warnings],
-      ...(turn ? { turn } : {})
+      ...(turn ? { turn } : {}),
+      ...(page.older !== undefined ? { older: page.older } : {}),
+      ...(newest ? { shortened: newest.shortened } : {})
     }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code

@@ -14,45 +14,130 @@ import {
   HISTORY_PAGE_CONTENT_BUDGET_BYTES,
   oversizedHistoryItem
 } from './agent-session-history-page-bounds'
+import type { JournalAgentReadExtent } from '../../../agent-session-journal/journal-domain-agent-read'
+import {
+  decodeChatAgentReadCursor,
+  encodeChatAgentReadCursor,
+  staleAgentReadCursor
+} from '../../../../runtime/agent-conversations/agent-read-cursor'
 
 export type AgentReadJournalPage = {
   entries: AgentReadEntry[]
   limited: boolean
+  /** Reads the next older page; null at the start of the running session's journal. */
+  nextCursor: string | null
+  /** The page ended at a `/clear`: the next older page is the earlier conversation, or with no
+   *  cursor an earlier conversation exists that can't be read here. */
+  clearedBefore?: true
   state?: AgentStatusState
 }
 
-/** One bounded root-only history window, from one snapshot. Stop at its latest `/clear`
- *  divider; sparse non-entry rows spend the window too, so they cannot cause an unbounded walk. */
-export async function readAgentJournalPage(
-  journal: SqlAgentSessionJournal,
-  request: { sessionId: string; limit: number },
-  waiting: (itemId: string) => boolean
-): Promise<AgentReadJournalPage> {
-  const frame = await readAgentSessionHistoryFrame(
-    journal,
-    {
-      sessionId: request.sessionId,
-      direction: 'tail',
-      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-    },
-    { scope: 'own-agent', acceptedUnopened: true }
-  )
-  const { page } = frame.result
-  const shown = pageEntries(page.items, page.hasOlder, request.limit, waiting)
-  const state = journalTurnState(
-    page.latestTurn,
-    frame.acceptedUnopened === true,
-    shown,
-    page.items.some(
-      (item) =>
-        (item.body.kind === 'approval' || item.body.kind === 'question') &&
-        item.body.resolution.state === 'pending'
-    )
-  )
-  return { entries: shown.entries, limited: shown.limited, ...(state ? { state } : {}) }
+export type AgentReadPageRequest = {
+  orcaSessionId: string
+  limit: number
+  cursor?: string
+  /** A legacy `/clear` replaced an earlier session with this one; its journal isn't read. */
+  clearedFromEarlierSession?: boolean
 }
 
-type ShownEntries = { entries: AgentReadEntry[]; limited: boolean; newest?: AgentJournalRenderItem }
+/** One bounded root-only window from one snapshot; sparse non-entry rows spend it too, so a
+ *  window of them is an empty page with a cursor, never an unbounded walk. */
+export async function readAgentJournalPage(
+  journal: SqlAgentSessionJournal,
+  request: AgentReadPageRequest & { sessionId: string },
+  waiting: (itemId: string) => boolean
+): Promise<AgentReadJournalPage> {
+  const { orcaSessionId, sessionId } = request
+  const position =
+    request.cursor === undefined ? null : decodeChatAgentReadCursor(request.cursor, orcaSessionId)
+  if (position && position.sessionId !== sessionId) {
+    throw staleAgentReadCursor(orcaSessionId)
+  }
+  const frame = await readAgentSessionHistoryFrame(
+    journal,
+    position
+      ? {
+          sessionId,
+          direction: 'before',
+          cursor: { epoch: position.epoch, sequence: position.anchor.sequence },
+          limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+        }
+      : { sessionId, direction: 'tail', limit: AGENT_SESSION_HISTORY_MAX_LIMIT },
+    position
+      ? {
+          scope: 'own-agent',
+          agentRead: {
+            olderThan: position.anchor,
+            since: { headSequence: position.headSequence, maxOrdinal: position.maxOrdinal }
+          }
+        }
+      : { scope: 'own-agent', acceptedUnopened: true, agentRead: {} }
+  )
+  // A reset means the public epoch moved (`/compact`, a non-local rewind) under the cursor.
+  if (!frame.result.ok || !frame.agentRead || frame.agentRead.changedSince) {
+    throw staleAgentReadCursor(orcaSessionId)
+  }
+  const { page } = frame.result
+  const extent = frame.agentRead
+  const shown = pageEntries(page.items, page.hasOlder, request.limit, waiting)
+  // Past the oldest item consumed lies more journal unless the frame and journal both ended.
+  const olderInJournal =
+    page.hasOlder || (shown.consumed !== undefined && shown.consumed !== page.items[0])
+  const anchor = olderInJournal ? shown.consumed : undefined
+  const clearedBefore = anchor
+    ? shown.stop === 'divider'
+    : request.clearedFromEarlierSession === true
+  const nextCursor = anchor
+    ? encodeChatAgentReadCursor(orcaSessionId, {
+        sessionId,
+        epoch: page.epoch,
+        headSequence: extent.headSequence,
+        maxOrdinal: extent.maxOrdinal,
+        anchor: {
+          sequence: anchor.sequence,
+          sequenceIndex: anchor.sequenceIndex ?? 0,
+          ordinal: ordinalOf(extent, anchor.itemId)
+        }
+      })
+    : null
+  const state = position
+    ? undefined
+    : journalTurnState(
+        page.latestTurn,
+        frame.acceptedUnopened === true,
+        shown,
+        page.items.some(
+          (item) =>
+            (item.body.kind === 'approval' || item.body.kind === 'question') &&
+            item.body.resolution.state === 'pending'
+        )
+      )
+  return {
+    entries: shown.entries,
+    limited: shown.limited,
+    nextCursor,
+    ...(clearedBefore ? { clearedBefore: true } : {}),
+    ...(state ? { state } : {})
+  }
+}
+
+function ordinalOf(extent: JournalAgentReadExtent, itemId: string): number {
+  const ordinal = extent.ordinals[itemId]
+  if (ordinal === undefined) {
+    throw new Error('agent read page item has no journal ordinal')
+  }
+  return ordinal
+}
+
+type ShownEntries = {
+  entries: AgentReadEntry[]
+  limited: boolean
+  newest?: AgentJournalRenderItem
+  /** The oldest item walked past, shown or holding no entry. */
+  consumed?: AgentJournalRenderItem
+  /** What ended the walk: the limit or budget, a `/clear` divider, or the frame's end. */
+  stop: 'full' | 'divider' | 'end'
+}
 
 function pageEntries(
   items: readonly AgentJournalRenderItem[],
@@ -63,27 +148,31 @@ function pageEntries(
   const page = new PageBudget(limit)
   const newestFirst: AgentReadEntry[] = []
   let newest: AgentJournalRenderItem | undefined
+  let consumed: AgentJournalRenderItem | undefined
   let omitted = false
-  const shown = (limited: boolean): ShownEntries => ({
+  const shown = (limited: boolean, stop: ShownEntries['stop']): ShownEntries => ({
     entries: newestFirst.toReversed(),
     limited,
-    ...(newest ? { newest } : {})
+    ...(newest ? { newest } : {}),
+    ...(consumed ? { consumed } : {}),
+    stop
   })
   for (const item of items.toReversed()) {
     const entry = entryOf(item, waiting)
     if (entry) {
       if (!page.admit(entry)) {
-        return shown(true)
+        return shown(true, 'full')
       }
       newestFirst.push(entry)
       newest ??= item
       omitted ||= entry.shortened === true
     }
+    consumed = item
     if (isAgentSessionContextClear(item.body)) {
-      return shown(omitted)
+      return shown(omitted, 'divider')
     }
   }
-  return shown(omitted || hasOlder)
+  return shown(omitted || hasOlder, 'end')
 }
 
 /** The latest turn as this snapshot records it. `done` only for an explicitly successful turn

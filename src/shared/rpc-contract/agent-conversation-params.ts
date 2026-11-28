@@ -21,6 +21,8 @@ export const AgentShowParams = lazyZodSchema(() =>
 export const AgentReadParams = lazyZodSchema(() =>
   z.object({
     id: requiredString('Missing agent ID'),
-    limit: z.number().int().positive().max(AGENT_READ_MAX_LIMIT).optional()
+    limit: z.number().int().positive().max(AGENT_READ_MAX_LIMIT).optional(),
+    // No length limit here: the cursor decoder refuses an overlong one as an invalid cursor.
+    cursor: z.string().optional()
   })
 )

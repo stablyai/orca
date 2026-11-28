@@ -25,11 +25,14 @@ export async function readTranscriptByteAt(
   return bytesRead === 1 ? byte[0] : null
 }
 
+/** The end of the last complete line before `end`, searching no lower than `floor`; `floor`
+ *  when none ends above it. */
 export async function findLastCompleteLineEnd(
   handle: TranscriptFileHandle,
   filePath: string,
   end: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  floor = 0
 ): Promise<number> {
   signal?.throwIfAborted()
   const lastByte = await readTranscriptByteAt(handle, filePath, end - 1, signal)
@@ -40,9 +43,9 @@ export async function findLastCompleteLineEnd(
     return end
   }
   let cursor = end
-  while (cursor > 0) {
+  while (cursor > floor) {
     signal?.throwIfAborted()
-    const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
+    const start = Math.max(floor, cursor - TAIL_CHUNK_BYTES)
     const buffer = Buffer.allocUnsafe(cursor - start)
     const { bytesRead } = await readTranscriptFile(
       handle,
@@ -65,5 +68,5 @@ export async function findLastCompleteLineEnd(
     }
     cursor = start
   }
-  return 0
+  return floor
 }

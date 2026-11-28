@@ -1,12 +1,9 @@
-import { readOpenCodeNativeChatTranscriptTail } from './transcript-history/opencode/transcript-opencode'
-import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
-import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
 import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
@@ -14,7 +11,6 @@ import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-d
 import { transcriptFallbackId } from './transcript-streaming/transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-streaming/transcript-file-order'
 import { extendTranscriptBoundary } from './transcript-watching/transcript-file-version'
-import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-decoding/transcript-turn-lifecycle'
 import {
   findLastCompleteLineEnd,
   readTranscriptByteAt,
@@ -26,7 +22,6 @@ import {
   readTranscriptFile,
   transcriptFileStat
 } from './transcript-filesystem/wsl-transcript-fs-access'
-import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
@@ -64,17 +59,23 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     fallbackId: string,
     offset: number,
     message: NativeChatMessage | null
-  ) => void
+  ) => void,
+  /** Scan at most this many bytes back from the end, line-end search included. */
+  scanWindowBytes?: number
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: L
-  messageOffsets?: number[]
+  /** Each returned message's record start, in the same order. */
+  messageOffsets: number[]
   consumedTo: number
   hasMore: boolean
   beforeOffset: number
   latestTimestamp?: number
   malformedRecordCount?: number
   oversizedRecordCount?: number
+  /** A windowed scan's extent: its lowest offset, and the oldest line start it reached (0 at the
+   *  file start; null when no line starts inside the window). */
+  scan?: { end: number; floor: number; oldestLineStart: number | null }
 }> {
   signal?.throwIfAborted()
   const end = Math.min(
@@ -82,8 +83,18 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     endOffset ?? Number.MAX_SAFE_INTEGER
   )
   signal?.throwIfAborted()
+  const floor = scanWindowBytes === undefined ? 0 : Math.max(0, end - scanWindowBytes)
+  const scanned = (oldestLineStart: number | null) =>
+    scanWindowBytes === undefined ? {} : { scan: { end, floor, oldestLineStart } }
+  const nothing = {
+    messages: [],
+    messageOffsets: [],
+    consumedTo: 0,
+    hasMore: false,
+    beforeOffset: 0
+  }
   if (end === 0) {
-    return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+    return { ...nothing, ...scanned(0) }
   }
   const handle = await openTranscriptFile(filePath, 'exact', signal)
   const lineParts: Buffer[] = []
@@ -97,14 +108,14 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     signal?.throwIfAborted()
     const consumedTo = includeTrailingLine
       ? end
-      : await findLastCompleteLineEnd(handle, filePath, end, signal)
+      : await findLastCompleteLineEnd(handle, filePath, end, signal, floor)
     if (consumedTo === 0) {
-      return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+      return { ...nothing, ...scanned(0) }
     }
     const newestFirst: { message: NativeChatMessage; offset: number }[] = []
     const finalByte = await readTranscriptByteAt(handle, filePath, consumedTo - 1, signal)
     if (finalByte === null) {
-      return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+      return { ...nothing, ...scanned(null) }
     }
     ignoreNextMalformedRecord = finalByte !== 0x0a
     let cursor = consumedTo - (finalByte === 0x0a ? 1 : 0)
@@ -113,9 +124,10 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     if (cursor === 0) {
       onConsumedBoundary?.(finalBoundaryByte)
     }
-    while (cursor > 0 && newestFirst.length <= limit) {
+    let oldestLineStart: number | null = null
+    while (cursor > floor && newestFirst.length <= limit) {
       signal?.throwIfAborted()
-      const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
+      const start = Math.max(floor, cursor - TAIL_CHUNK_BYTES)
       const buffer = Buffer.allocUnsafe(cursor - start)
       const { bytesRead } = await readTranscriptFile(
         handle,
@@ -146,6 +158,7 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
           decodeLine(start + index + 1, newestFirst)
         }
         resetLine()
+        oldestLineStart = start + index + 1
         segmentEnd = index
       }
       if (segmentEnd > 0) {
@@ -155,6 +168,10 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     }
     if (cursor === 0 && lineParts.length > 0 && newestFirst.length <= limit) {
       decodeLine(0, newestFirst)
+    }
+    // A line crossing the floor stays whole for a scan that starts lower.
+    if (cursor === 0) {
+      oldestLineStart = 0
     }
     let latest = Number.NEGATIVE_INFINITY
     const chronological = newestFirst.toReversed().map((entry) => {
@@ -170,14 +187,15 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
     return {
       messages: selected.map((entry) => entry.message),
-      ...(onDecodedLine ? { messageOffsets: selected.map((entry) => entry.offset) } : {}),
+      messageOffsets: selected.map((entry) => entry.offset),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,
       beforeOffset: selected[0]?.offset ?? end,
       ...(Number.isFinite(latest) ? { latestTimestamp: latest } : {}),
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),
-      ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {})
+      ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {}),
+      ...scanned(oldestLineStart)
     }
   } finally {
     await closeTranscriptHandle(handle, filePath)
@@ -235,80 +253,5 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     if (message) {
       messages.push({ message, offset: lineOffset })
     }
-  }
-}
-
-export async function readNativeChatTranscriptTail(
-  args: ResolveSessionFileOptions & {
-    agent: AgentType
-    sessionId: string
-    transcriptPath?: string
-    filePath?: string
-    limit: number
-    beforeOffset?: number
-    sourceOrder?: boolean
-  },
-  signal?: AbortSignal
-): Promise<
-  | {
-      messages: NativeChatMessage[]
-      lifecycle?: NativeChatTurnLifecycle
-      hasMore: boolean
-      beforeOffset: number
-    }
-  | { error: string; notFound?: true }
-> {
-  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
-    return readOpenCodeNativeChatTranscriptTail(
-      { ...args, agent: args.agent === 'zcode' ? 'zcode' : undefined },
-      {},
-      signal
-    )
-  }
-  const decode = nativeChatLineDecoderForAgent(args.agent)
-  const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
-  if (!decode) {
-    return { error: 'Transcript unavailable' }
-  }
-  let filePath: string | null
-  try {
-    filePath =
-      args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
-  } catch (error) {
-    signal?.throwIfAborted()
-    // Gate refusal is unavailable, never proof of a missing transcript.
-    return { error: wslTranscriptFsRefusal(error).message }
-  }
-  signal?.throwIfAborted()
-  // Session IDs can arrive before the first flush; missing paths stay retryable.
-  if (!filePath) {
-    return { error: 'Transcript unavailable', notFound: true }
-  }
-  try {
-    const result = await readNativeChatTranscriptTailFile(
-      filePath,
-      args.limit,
-      decode,
-      true,
-      args.beforeOffset,
-      decodeLifecycle,
-      signal,
-      undefined,
-      args.sourceOrder
-    )
-    signal?.throwIfAborted()
-    return {
-      messages: result.messages,
-      // Historical pages cannot rewind live lifecycle; only the current tail describes present turn state.
-      ...(args.beforeOffset === undefined && result.lifecycle
-        ? { lifecycle: result.lifecycle }
-        : {}),
-      hasMore: result.hasMore,
-      beforeOffset: result.beforeOffset
-    }
-  } catch (error) {
-    signal?.throwIfAborted()
-    const message = error instanceof Error ? error.message : String(error)
-    return isENOENT(error) ? { error: message, notFound: true } : { error: message }
   }
 }

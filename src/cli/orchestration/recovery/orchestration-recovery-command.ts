@@ -6,7 +6,8 @@ export function resolveOrchestrationCliExecutable(
   if (configured) {
     return configured
   }
-  if (env.ORCA_DEV_REPO_ROOT) {
+  // A dev terminal names its checkout; a direct `orca-dev` launch marks its own invocation.
+  if (env.ORCA_DEV_REPO_ROOT || env.ORCA_DEV_CLI_INVOCATION === '1') {
     return 'orca-dev'
   }
   return platform === 'linux' ? 'orca-ide' : 'orca'

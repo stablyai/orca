@@ -10,6 +10,10 @@ import { heldQueuedImageHistoryPolicy } from './agent-session-queued-image-reade
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import type { JournalDomainHistoryWork } from '../../../agent-session-journal/journal-domain-history-page'
 import type { JournalSqlWorkResult } from '../../../agent-session-journal/journal-work-read'
+import type {
+  JournalAgentReadAsk,
+  JournalAgentReadExtent
+} from '../../../agent-session-journal/journal-domain-agent-read'
 
 export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
 
@@ -27,12 +31,14 @@ type HistoryReadOptions = {
   reader?: HistoryReader
   rowReplay?: boolean
   acceptedUnopened?: true
+  agentRead?: JournalAgentReadAsk
 }
 
 export type AgentSessionHistoryFrame<T> = {
   result: T
   work?: JournalSqlWorkResult
   acceptedUnopened?: boolean
+  agentRead?: JournalAgentReadExtent
 }
 
 /** The page and any requested work share one reader snapshot. `inLane`: the caller already holds
@@ -44,7 +50,8 @@ export async function readAgentSessionHistoryFrame(
     scope = 'every-agent',
     reader = CLIENT_HISTORY_READER,
     rowReplay = false,
-    acceptedUnopened
+    acceptedUnopened,
+    agentRead
   }: HistoryReadOptions,
   work?: JournalDomainHistoryWork,
   inLane = false
@@ -56,6 +63,7 @@ export async function readAgentSessionHistoryFrame(
         scope,
         rowReplay,
         ...(acceptedUnopened ? { acceptedUnopened } : {}),
+        ...(agentRead ? { agentRead } : {}),
         reader: {
           form: reader.wireForm ?? 'client',
           budgetBytes: reader.budgetBytes,

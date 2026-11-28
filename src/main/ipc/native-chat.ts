@@ -7,7 +7,7 @@ import type {
 } from '../../shared/native-chat/native-chat-types'
 
 import { subscribeNativeChatTranscript } from '../native-chat/transcript-watch'
-import { readNativeChatTranscriptTail } from '../native-chat/transcript-tail-reader'
+import { readNativeChatTranscriptTail } from '../native-chat/transcript-session-tail-read'
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs

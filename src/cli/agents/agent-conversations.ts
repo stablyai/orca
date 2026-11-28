@@ -2,10 +2,13 @@ import type { CommandHandler } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { agentReadClosingLine, agentReadConnectionArgs } from './agent-read-continuation'
+import { escapeTerminalControlCharacters } from '../../shared/terminal/output/terminal-control-character-escape'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalWorktreeSelector } from '../workspace-selection/workspace-selector'
 import {
@@ -70,11 +73,26 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
         `--limit can be at most ${AGENT_READ_MAX_LIMIT}.`
       )
     }
+    // An empty value (an unset variable) must not silently read the newest page instead.
+    const cursor = getPresentStringFlag(flags, 'cursor')
+    // Resolved before the read, so a store failure can't discard a page already read; --json
+    // prints no continuation command, so it never needs the saved servers.
+    const connection = json ? [] : await agentReadConnectionArgs(flags).catch(() => null)
     const result = await callAgentMethod<AgentReadResult>(client, 'agent.read', {
       id: getRequiredStringFlag(flags, 'id'),
-      ...(limit !== undefined ? { limit } : {})
+      ...(limit !== undefined ? { limit } : {}),
+      ...(cursor !== undefined ? { cursor } : {})
     })
-    printResult(result, json, formatAgentRead)
+    // An older host ignores the cursor and would answer with the newest page.
+    if (cursor !== undefined && result.result.nextCursor === undefined) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'Update Orca on that host to page agent reads.'
+      )
+    }
+    printResult(result, json, (read) =>
+      formatAgentRead(read, { limit, connection, cursorRead: cursor !== undefined })
+    )
   }
 }
 
@@ -153,18 +171,41 @@ function formatTool(tool: AgentReadTool): string {
   return `[tool ${tool.name}${tool.state ? `: ${tool.state}` : ''}]`
 }
 
-function formatAgentRead(result: AgentReadResult): string {
+function formatAgentRead(
+  result: AgentReadResult,
+  call: { limit: number | undefined; connection: readonly string[] | null; cursorRead: boolean }
+): string {
+  // Every line break (Unicode ones too) indents and controls are escaped, so a line starting with
+  // `Older:` is only ever Orca's own, on screen and to line-splitting readers.
   const lines = result.entries.map((entry) =>
-    entry.shortened
-      ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
-      : formatEntry(entry)
+    escapeTerminalControlCharacters(
+      (entry.shortened
+        ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
+        : formatEntry(entry)
+      ).replace(/\r\n|[\r\u2028\u2029\u0085]/g, '\n')
+    ).replaceAll('\n', '\n  ')
   )
-  if (result.limited) {
-    lines.push('[Some conversation content was omitted or shortened; open it in Orca to see more.]')
-  } else if (lines.length === 0) {
-    lines.push('Nothing new.')
+  const { nextCursor } = result
+  if (nextCursor === undefined) {
+    // A host that can't page: its `limited` is the only sign that older entries exist.
+    if (result.limited) {
+      lines.push(
+        '[Some conversation content was omitted or shortened; open it in Orca to see more.]'
+      )
+    } else if (lines.length === 0) {
+      lines.push('Nothing new.')
+    }
+  } else {
+    if (lines.length === 0) {
+      lines.push(call.cursorRead || nextCursor ? 'No entries in this part.' : 'Nothing new.')
+    }
+    const closing = agentReadClosingLine(result, call)
+    if (closing) {
+      lines.push(closing)
+    }
   }
-  if (result.state) {
+  // Only a known state is printed: a host's text never reaches a line of its own.
+  if (AGENT_STATUS_STATES.some((known) => known === result.state)) {
     lines.unshift(`state: ${result.state}`)
   }
   return lines.join('\n')

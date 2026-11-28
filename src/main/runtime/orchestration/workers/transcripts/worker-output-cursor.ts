@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto'
 import { OrchestrationError } from '../../orchestration-error'
+import {
+  decodeVersionedJsonCursor,
+  encodeVersionedJsonCursor
+} from '../../../opaque-cursors/versioned-json-cursor'
 
 const WORKER_OUTPUT_CURSOR_PREFIX = 'owr1_'
 const WORKER_OUTPUT_CURSOR_MAX_LENGTH = 2_048
@@ -47,7 +51,7 @@ export function encodeWorkerOutputCursor(
     p: position,
     ...(source === 'transcript' && boundaryCheckpoint ? { c: boundaryCheckpoint } : {})
   }
-  return `${WORKER_OUTPUT_CURSOR_PREFIX}${Buffer.from(JSON.stringify(payload)).toString('base64url')}`
+  return encodeVersionedJsonCursor(WORKER_OUTPUT_CURSOR_PREFIX, payload)
 }
 
 export function decodeWorkerOutputCursor(
@@ -63,20 +67,11 @@ export function decodeWorkerOutputCursor(
   if (/^\d+$/.test(cursor)) {
     return decodeLegacyTerminalCursor(Number.parseInt(cursor, 10))
   }
-  if (
-    cursor.length > WORKER_OUTPUT_CURSOR_MAX_LENGTH ||
-    !cursor.startsWith(WORKER_OUTPUT_CURSOR_PREFIX)
-  ) {
-    throw invalidCursor()
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(
-      Buffer.from(cursor.slice(WORKER_OUTPUT_CURSOR_PREFIX.length), 'base64url').toString('utf8')
-    )
-  } catch {
-    throw invalidCursor()
-  }
+  const parsed = decodeVersionedJsonCursor(
+    cursor,
+    WORKER_OUTPUT_CURSOR_PREFIX,
+    WORKER_OUTPUT_CURSOR_MAX_LENGTH
+  )
   if (!isWorkerOutputCursorPayload(parsed)) {
     throw invalidCursor()
   }
