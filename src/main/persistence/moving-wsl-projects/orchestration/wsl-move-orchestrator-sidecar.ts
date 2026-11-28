@@ -3,10 +3,11 @@ import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveOrchestratorRecord } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMoveOrchestratorPorts } from './wsl-move-orchestrator-ports'
-import { applyWslMoveReleasedByUser } from './wsl-move-orchestrator-external-transitions'
+import { readWslMoveFinishedMove } from './wsl-move-orchestrator-step'
 import {
   newWslMoveOrchestratorRecord,
-  sameWslMoveOrchestratorRecord
+  sameWslMoveOrchestratorRecord,
+  withWslMoveOrchestratorState
 } from './wsl-move-orchestrator-transitions'
 
 /** Waits before re-trying a save a sharing violation refused (another process held the file). */
@@ -36,7 +37,14 @@ export class WslMoveOrchestratorSidecar {
   constructor(
     private readonly ports: Pick<
       WslMoveOrchestratorPorts,
-      'load' | 'save' | 'schedule' | 'listKnownDistros' | 'now' | 'appVersion'
+      | 'load'
+      | 'save'
+      | 'schedule'
+      | 'listKnownDistros'
+      | 'isDistroInUse'
+      | 'finishedMove'
+      | 'now'
+      | 'appVersion'
     >
   ) {}
 
@@ -96,31 +104,63 @@ export class WslMoveOrchestratorSidecar {
     return this.awaitingList
   }
 
-  /** Parks each installed distro without a record (Move releases it); later ones move normally. */
+  /** Holds each installed distro with Orca projects and no record; later ones move normally. */
   holdListedDistros(records: Records, alive: () => boolean): Promise<boolean> | null {
     if (!this.awaitingList || this.listing) {
       return null
     }
     this.listing = true
-    return this.ports
-      .listKnownDistros()
-      .catch(() => null)
-      .then((distros) => {
-        this.listing = false
-        if (!distros || !alive() || !this.awaitingList) {
-          return false
-        }
-        const now = this.ports.now()
-        for (const distro of distros) {
-          const key = wslMoveJournalKey(distro)
-          if (!records.has(key) && !this.releasedByUser.has(key)) {
-            const fresh = newWslMoveOrchestratorRecord(distro, this.ports.appVersion, now)
-            records.set(key, applyWslMoveReleasedByUser(fresh, now, 'state-lost'))
-          }
-        }
-        this.awaitingList = false
-        return true
-      })
+    return this.holdListed(records, alive).finally(() => {
+      this.listing = false
+    })
+  }
+
+  private async holdListed(records: Records, alive: () => boolean): Promise<boolean> {
+    const distros = await this.ports.listKnownDistros().catch(() => null)
+    if (!distros) {
+      return false
+    }
+    for (const distro of distros) {
+      const key = wslMoveJournalKey(distro)
+      const held = await this.heldRecordFor(distro)
+      if (!alive() || !this.awaitingList) {
+        return false
+      }
+      if (held && !records.has(key) && !this.releasedByUser.has(key)) {
+        records.set(key, held)
+      }
+    }
+    this.awaitingList = false
+    return true
+  }
+
+  /** A finished move comes back as `done`; any other distro with Orca projects waits for the user. */
+  private async heldRecordFor(distro: string): Promise<WslMoveOrchestratorRecord | null> {
+    // A failed check holds: wrongly holding costs a click, wrongly moving undoes a decline.
+    const inUse = await Promise.resolve()
+      .then(() => this.ports.isDistroInUse(distro))
+      .catch(() => true)
+    if (!inUse) {
+      return null
+    }
+    const now = this.ports.now()
+    const fresh = newWslMoveOrchestratorRecord(distro, this.ports.appVersion, now)
+    const move = readWslMoveFinishedMove(this.ports, distro)
+    if (move !== null && move !== 'unknown') {
+      return withWslMoveOrchestratorState(
+        fresh,
+        { kind: 'done', migrationId: move.migrationId },
+        now
+      )
+    }
+    // `released-here`, which older builds accept as a decline; only the copy reads `stateLost`.
+    const held = {
+      kind: 'parked',
+      reason: 'declined',
+      cause: 'released-here',
+      stateLost: true
+    } as const
+    return withWslMoveOrchestratorState(fresh, held, now)
   }
 
   /** The user acted on the distro, which ends any hold on it. */

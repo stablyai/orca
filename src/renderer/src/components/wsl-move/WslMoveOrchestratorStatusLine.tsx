@@ -99,7 +99,7 @@ export function WslMoveOrchestratorStatusLine({
             </Button>
           ) : null}
           <Button type="button" size="xs" variant="outline" onClick={() => retry(record.distro)}>
-            {record.state.kind === 'parked' && record.state.cause === 'state-lost'
+            {record.state.kind === 'parked' && record.state.stateLost
               ? t('wslMove.orchestrator.move', 'Move')
               : line.kind === 'declined'
                 ? t('wslMove.orchestrator.moveAgain', 'Move again')

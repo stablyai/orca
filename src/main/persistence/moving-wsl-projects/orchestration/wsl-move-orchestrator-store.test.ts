@@ -43,7 +43,10 @@ describe('WSL move orchestrator sidecar', () => {
     ports = fakePorts({
       load: store.load,
       save: store.save,
-      listKnownDistros: async () => installed
+      listKnownDistros: async () => installed,
+      // A runtime's own distro holds no Orca projects; one distro already finished its move.
+      isDistroInUse: vi.fn((distro: string) => distro !== 'runtime-distro'),
+      finishedMove: (distro) => (distro === 'Ubuntu-Moved' ? { migrationId: 'm0' } : null)
     })
     orchestrator = new WslMoveOrchestrator(ports)
     return orchestrator
@@ -92,7 +95,7 @@ describe('WSL move orchestrator sidecar', () => {
     const truncated = whole.slice(0, -2)
     writeFileSync(path, truncated)
 
-    const orchestrator = start(['Ubuntu-B'])
+    const orchestrator = start(['Ubuntu-B', 'runtime-distro', 'Ubuntu-Moved'])
     await orchestrator.whenIdle()
     await orchestrator.trigger('Ubuntu-B', 'connect')
     await orchestrator.trigger('Ubuntu-New', 'connect')
@@ -100,10 +103,14 @@ describe('WSL move orchestrator sidecar', () => {
 
     expect(readFileSync(`${path}.corrupt-42`, 'utf8')).toBe(truncated)
     expect(vi.mocked(ports.start).mock.calls.map(([distro]) => distro)).toEqual(['Ubuntu-New'])
-    expect(stateOf(orchestrator, 'Ubuntu-B')).toMatchObject({
+    expect(stateOf(orchestrator, 'Ubuntu-B')).toEqual({
+      kind: 'parked',
       reason: 'declined',
-      cause: 'state-lost'
+      cause: 'released-here',
+      stateLost: true
     })
+    expect(stateOf(orchestrator, 'runtime-distro')).toBeUndefined()
+    expect(stateOf(orchestrator, 'Ubuntu-Moved')).toEqual({ kind: 'done', migrationId: 'm0' })
 
     orchestrator.dispose()
     const restarted = start(['Ubuntu-B', 'Ubuntu-New'])

@@ -46,12 +46,12 @@ export function wslMoveOrchestratorLine(
       if (state.cause === 'removed') {
         return null
       }
-      return state.cause === 'state-lost'
+      return state.stateLost
         ? {
             kind: 'declined',
             text: t(
               'wslMove.orchestrator.stateLost',
-              "Moving to the {{distro}} host waits for you: Orca couldn't read its record of your earlier choices.",
+              "Orca lost your earlier choice for {{distro}}, so it won't move these projects on its own.",
               { distro: record.distro }
             )
           }

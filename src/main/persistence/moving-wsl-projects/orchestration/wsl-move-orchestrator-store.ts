@@ -69,7 +69,8 @@ const stateSchema = lazyZodSchema(() =>
         'finish-pending'
       ]),
       until: z.number().optional(),
-      cause: z.enum(['released-here', 'removed', 'state-lost']).optional()
+      cause: z.enum(['released-here', 'removed']).optional(),
+      stateLost: z.literal(true).optional()
     }),
     z.object({
       kind: z.literal('done'),
