@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { botTarget } from '@/lib/bot-hosts'
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import type { Bot } from '../../../../../shared/bot-types'
-import { createSessionTabsTabDeltaDecoder } from '../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TabListPerson } from './viewed-tab-list'
@@ -54,7 +53,6 @@ export function usePersonTabList(
   useEffect(() => {
     let live = true
     let unsubscribe: (() => void) | null = null
-    const delta = createSessionTabsTabDeltaDecoder()
     const settle = (next: PersonTabListRead): void => {
       if (live) {
         setRead({ key, read: next })
@@ -68,14 +66,9 @@ export function usePersonTabList(
         person: personKey === 'owner' ? 'owner' : { accountId: personKey }
       },
       {
+        // Full frames: a paired host's deltas are decoded in main, and this app's own sends none.
         onEvent: (result) => {
-          const decoded = delta.decode(result)
-          if (!decoded.ok) {
-            // A delta with no frame before it: this read can't follow the list any more.
-            settle({ state: 'failed' })
-            return
-          }
-          const list = frameOf(decoded.result)
+          const list = frameOf(result)
           if (list) {
             settle({ state: 'ready', list })
           }

@@ -335,7 +335,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 </NativeChatContextClearFade>
               </NativeChatDockTranscript>
               <NativeChatDock
-                shown={!readFailure?.final}
+                shown={!readFailure?.final && !props.readOnly}
                 keepFloatingTerminalTriggerClear={props.isVisible}
               >
                 {subagents.dock}

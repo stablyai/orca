@@ -18,14 +18,18 @@ export function tabListPersonOf(pick: BotChatPersonPick): TabListPerson | null {
       : null
 }
 
+/** The list this window's own tabs are: the owner's on the owner's copy, else this teammate's. */
+export function viewerTabListPerson(bot: Pick<Bot, 'shareViewer'>): TabListPerson {
+  return bot.shareViewer ? { accountId: bot.shareViewer.accountId } : 'owner'
+}
+
 /** The list a pick shows in the Home: null for everyone or the viewer's own (their own tabs). */
 export function viewedListOfPick(
   bot: Pick<Bot, 'shareViewer'>,
   pick: BotChatPersonPick
 ): TabListPerson | null {
   const person = tabListPersonOf(pick)
-  const own: TabListPerson = bot.shareViewer ? { accountId: bot.shareViewer.accountId } : 'owner'
-  return person && !sameTabListPerson(person, own) ? person : null
+  return person && !sameTabListPerson(person, viewerTabListPerson(bot)) ? person : null
 }
 
 /** Null for an agent shared with no one: there is no one else's list to show. */

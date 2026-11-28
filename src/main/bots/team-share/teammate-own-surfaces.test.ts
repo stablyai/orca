@@ -535,7 +535,6 @@ it('saves a teammate’s file edit only over the text it started from', async ()
   await writeFile(path, 'first')
   await r.reveal('owner-desk', O)
   const fileTab = await openFile(r, 'mate-desk', 'plan.md')
-  await ownersSide(r)
   const owners = await ownersSide(r)
   // Read when Mate started editing, then someone else saved over it.
   const startedFrom = z.object({ content: z.string() }).parse(

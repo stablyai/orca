@@ -3,7 +3,6 @@ import { Fragment, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { useTranslate } from '@/i18n/use-translate'
-import { openBotHomeTab } from '@/lib/bot-catalog'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
@@ -25,45 +24,11 @@ import {
   chatsTabWorkers
 } from '../../../../shared/bots/bot-chat-tree-view'
 import { CONNECTOR_SOURCE_NAMES } from '../../../../shared/connectors/external-conversation-link'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/agent-session-history-modal'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, FOLD_TOGGLE_CLASS, MENU_TAKES_PLACE } from './BotChatRowControls'
-import { openBotAutomation } from './bot-automation-open'
-import { revealWorkerPane } from '@/lib/open-orchestration-worker'
-import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
+import { openBotChatRow } from './bot-chat-row-open'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
-import { openBotSession } from './bot-session-open'
-import { showChatInViewedTabList } from './teammate-tabs/viewed-tab-list'
-
-function openChat(bot: Bot, chat: BotChatTreeChat): void {
-  const { run } = chat
-  if (run) {
-    // A terminal run has no chat: its terminal is what opens, else its run record.
-    const host = parseExecutionHostId(bot.hostId)
-    if (run.worktreeId && run.paneKey) {
-      revealWorkerPane(run.worktreeId, run.paneKey, host?.kind === 'runtime' ? host.id : undefined)
-    } else {
-      openBotAutomation(bot.hostId, run.automationId, run.runId)
-    }
-  } else if (chat.closed) {
-    // A closed chat reads in Session History.
-    openAgentSessionHistoryModal({
-      workspace: { worktreeId: folderWorkspaceKey(bot.folderWorkspaceId) },
-      chatTabId: structuredAgentSessionTabId(chat.chatId),
-      initialQuery: '',
-      alongside: true
-    })
-  } else if (showChatInViewedTabList(folderWorkspaceKey(bot.folderWorkspaceId), chat)) {
-    // Shown in the strip of the person whose tabs this window shows.
-  } else if (chat.origin === 'home') {
-    void openBotHomeTab(bot)
-  } else {
-    openBotSession(bot, chat.chatId)
-  }
-}
 
 /** A chat row's second line, as the Chats tab shows it (the `@` list's chat rows too). With
  *  `liveAtEnd`, the chat's live state is left to the line's end (`ChatRowLive`), so the preview stays. */
@@ -279,12 +244,12 @@ export function BotChatTreeGroup({
   // A press only opens the chat, the open one too; the chevron alone folds. A double-click opens once.
   const pressRow = (event: { detail: number }): void => {
     if (event.detail <= 1) {
-      openChat(bot, chat)
+      openBotChatRow(bot, chat)
     }
   }
   return (
     <div className="flex flex-col">
-      <BotChatContextMenu bot={bot} chat={chat} onOpen={() => openChat(bot, chat)}>
+      <BotChatContextMenu bot={bot} chat={chat} onOpen={() => openBotChatRow(bot, chat)}>
         <div className="group/bot-chat relative flex w-full min-w-0 items-start gap-1 rounded-md py-1.5 pr-2 pl-2 hover:bg-accent">
           <button
             type="button"
@@ -367,7 +332,7 @@ export function BotChatTreeGroup({
                 <BotChatMoreButton
                   bot={bot}
                   chat={chat}
-                  onOpen={() => openChat(bot, chat)}
+                  onOpen={() => openBotChatRow(bot, chat)}
                   className="absolute top-1/2 right-0 -translate-y-1/2"
                 />
               </span>

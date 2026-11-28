@@ -51,7 +51,10 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   // Another person's tabs drawn over this window's own: its own panes act as hidden underneath.
-  const showsOwnTabs = useViewedTabList(worktreeId) === null
+  // Another person's tabs drawn over this window's own: its own panes stay mounted but none is the
+  // active one, so no focus, shortcut or find goes to them.
+  const viewed = useViewedTabList(worktreeId)
+  const ownTabsActive = isVisible && viewed === null
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   // Allowlist: only views drawn outside the layout (terminals restore from parking snapshots, chats stay mounted).
   // Keyed on membership, not the tab array: title updates replace the array but never a tab's content type.
@@ -92,13 +95,13 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
           layout={layout}
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
-          isWorktreeActive={isVisible && showsOwnTabs}
+          isWorktreeActive={ownTabsActive}
         />
       )}
       <WorkspacePaneOverlayLayers
         worktreeId={worktreeId}
         worktreePath={worktreePath}
-        isVisible={isVisible}
+        isVisible={ownTabsActive}
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
         hiddenTerminalPrewarm={prewarmStage === 'mount' ? null : prewarmStage}
         shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}

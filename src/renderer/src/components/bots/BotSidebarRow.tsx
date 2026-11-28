@@ -227,7 +227,8 @@ export function BotSidebarRow({
           </ActivityThreadHoverCardRoot>
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
+      {/* Grows past its usual width for a longer entry, which never wraps. */}
+      <ContextMenuContent className="min-w-52">
         {menuLead}
         <ContextMenuItem disabled={actionsDisabled} onSelect={() => setRenameRequested(true)}>
           <Pencil className="size-3.5" />

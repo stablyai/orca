@@ -1,9 +1,14 @@
 // Another person's tabs in a shared agent's Home, over this window's own (which stay as they were):
 // their strip, live from the host, on a tinted row, and the tab picked here. Picking one only shows
 // it here; closing one closes it in their list, the one act on it.
-import { Eye, FileText, GitCompareArrows, Globe, SquareTerminal, X } from 'lucide-react'
-import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { Eye, FileText, GitCompareArrows, Globe, X } from 'lucide-react'
+import { TerminalTabLeadingIcon } from '@/components/tab-bar/terminal-tabs/TerminalTabLeadingIcon'
+import {
+  applyAgentPaneActivityFlags,
+  createAgentPaneActivityFlags,
+  rankWorktreeStatus
+} from '../../../../../shared/worktree/row-display/worktree-status-rollup'
+import { BotAvatar } from '../BotAvatar'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -18,45 +23,63 @@ import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote
 import { TabListPersonControl } from './TabListPersonControl'
 import type { TabListPeople } from './tab-list-people'
 import { usePersonTabList } from './use-person-tab-list'
-import { ViewedTabBody } from './ViewedTabBody'
+import { ViewedChatNotInTabs, ViewedTabBody } from './ViewedTabBody'
 import { pickViewedTab, type ViewedTabList } from './viewed-tab-list'
 
-/** Each kind's icon as their own strip draws it: the agent a chat or terminal runs, a file's mode. */
-function TabIcon({ tab }: { tab: RuntimeMobileSessionClientTab }): React.JSX.Element {
-  const className = 'mr-1 size-3 shrink-0 text-muted-foreground'
+/** Each kind's icon as their own strip draws it: the agent's picture on its chats, a terminal's agent
+ *  and live state, a page's globe, a file's mode. */
+function TabIcon({
+  bot,
+  tab,
+  active
+}: {
+  bot: Bot
+  tab: RuntimeMobileSessionClientTab
+  active: boolean
+}): React.JSX.Element {
+  const className = 'mr-1 size-3 shrink-0'
   switch (tab.type) {
     case 'agent-session':
       return (
-        <span className="mr-1 inline-flex shrink-0">
-          <AgentIcon agent={agentTypeToIconAgent(tab.agent)} size={12} />
+        <span className={cn('mr-1 inline-flex shrink-0', !active && 'opacity-70')}>
+          <BotAvatar bot={bot} className="size-3 rounded-[3px] text-3xs" />
         </span>
       )
-    case 'terminal':
-      return tab.launchAgent ? (
-        <span className="mr-1 inline-flex shrink-0">
-          <AgentIcon agent={tab.launchAgent} size={12} />
-        </span>
-      ) : (
-        <SquareTerminal className={className} />
+    case 'terminal': {
+      const flags = createAgentPaneActivityFlags()
+      if (tab.agentStatus) {
+        applyAgentPaneActivityFlags(flags, tab.agentStatus)
+      }
+      return (
+        <TerminalTabLeadingIcon
+          agent={tab.launchAgent ?? null}
+          activityStatus={rankWorktreeStatus('active', flags)}
+          shell={undefined}
+          showUnreadActivity={false}
+          isActive={active}
+        />
       )
+    }
     case 'browser':
-      return <Globe className={className} />
+      return <Globe className={cn(className, 'text-callout-note')} />
     case 'file':
     case 'markdown': {
       const ModeIcon =
         tab.mode === 'diff' ? GitCompareArrows : tab.mode === 'markdown-preview' ? Eye : FileText
-      return <ModeIcon className={className} />
+      return <ModeIcon className={cn(className, 'text-muted-foreground')} />
     }
   }
 }
 
 function ViewedTab({
+  bot,
   tab,
   title,
   active,
   onPick,
   onClose
 }: {
+  bot: Bot
   tab: RuntimeMobileSessionClientTab
   title: string
   active: boolean
@@ -83,7 +106,7 @@ function ViewedTab({
           {active ? (
             <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[2px] bg-tab-active-indicator" />
           ) : null}
-          <TabIcon tab={tab} />
+          <TabIcon bot={bot} tab={tab} active={active} />
           <span className="mr-1 min-w-0 flex-1 truncate">{title}</span>
           {closeable ? (
             <button
@@ -131,17 +154,25 @@ export function ViewedTabListSurface({
   const read = usePersonTabList(bot, homeKey, view.person)
   const tabs = read.state === 'ready' ? read.list.tabs : []
   const picked = view.picked
-  const shown =
-    tabs.find((tab) =>
-      picked === null
-        ? false
-        : 'tabId' in picked
+  const pickedTab = picked
+    ? tabs.find((tab) =>
+        'tabId' in picked
           ? tab.id === picked.tabId
           : tab.type === 'agent-session' && tab.sessionId === picked.sessionId
-    ) ??
-    tabs.find((tab) => read.state === 'ready' && tab.id === read.list.theirActiveTabId) ??
-    tabs[0] ??
-    null
+      )
+    : undefined
+  // A chat of theirs picked from Chats that isn't open in their tabs: it shows here to read, and
+  // no tab of theirs stands in for it.
+  const unlistedChat =
+    read.state === 'ready' && picked && 'sessionId' in picked && !pickedTab
+      ? picked.sessionId
+      : null
+  const shown = unlistedChat
+    ? null
+    : (pickedTab ??
+      tabs.find((tab) => read.state === 'ready' && tab.id === read.list.theirActiveTabId) ??
+      tabs[0] ??
+      null)
   const close = (tab: RuntimeMobileSessionClientTab): void => {
     void callBotRpc(bot, 'session.tabs.close', {
       worktree: `id:${homeKey}`,
@@ -165,6 +196,7 @@ export function ViewedTabListSurface({
           {tabs.map((tab) => (
             <ViewedTab
               key={tab.id}
+              bot={bot}
               tab={tab}
               // Their Home chat, named as whose it is, since this window's own Home is "Home".
               title={
@@ -179,7 +211,15 @@ export function ViewedTabListSurface({
           ))}
         </div>
       </div>
-      {shown ? (
+      {unlistedChat ? (
+        <ViewedChatNotInTabs
+          key={unlistedChat}
+          bot={bot}
+          homeKey={homeKey}
+          sessionId={unlistedChat}
+          holderName={holderName}
+        />
+      ) : shown ? (
         <ViewedTabBody key={shown.id} bot={bot} tab={shown} holderName={holderName} />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">

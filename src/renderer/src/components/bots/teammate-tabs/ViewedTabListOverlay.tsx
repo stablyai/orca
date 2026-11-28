@@ -20,11 +20,12 @@ export function ViewedTabListOverlay({
   )
   const bot = view ? findBotByWorkspace(bots, worktreeId) : null
   const people = useTabListPeople(bot)
-  // Someone no longer shared with has no list here: the window goes back to its own tabs.
+  // Someone no longer shared with, or an agent no longer shared with this account, has no list
+  // here: the window goes back to its own tabs, so sharing again starts there.
   const holder = view
     ? (people?.others.find((entry) => sameTabListPerson(entry.person, view.person)) ?? null)
     : null
-  const gone = view !== null && bot !== null && holder === null
+  const gone = view !== null && holder === null
   useEffect(() => {
     if (gone) {
       viewTabList(worktreeId, null)

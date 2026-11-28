@@ -16,8 +16,12 @@ export function viewedChatTabId(workspaceId: string, tabId: string): string {
   return `${VIEWED_CHAT_TAB_PREFIX}${encodeURIComponent(workspaceId)}:${encodeURIComponent(tabId)}`
 }
 
-function viewedChatTabWorkspaceId(tabId: string): string | null {
+export function isViewedChatTabId(tabId: string): boolean {
   return tabId.startsWith(VIEWED_CHAT_TAB_PREFIX)
+}
+
+function viewedChatTabWorkspaceId(tabId: string): string | null {
+  return isViewedChatTabId(tabId)
     ? decodeURIComponent(tabId.slice(VIEWED_CHAT_TAB_PREFIX.length).split(':')[0] ?? '')
     : null
 }

@@ -28,8 +28,12 @@ export function sameTabListPerson(a: TabListPerson, b: TabListPerson): boolean {
   return a === 'owner' || b === 'owner' ? a === b : a.accountId === b.accountId
 }
 
-/** Shows `person`'s tabs in the Home, or with null this window's own again. */
-export function viewTabList(homeKey: string, person: TabListPerson | null): void {
+/** Shows `person`'s tabs in the Home (and `picked` of them), or with null this window's own again. */
+export function viewTabList(
+  homeKey: string,
+  person: TabListPerson | null,
+  picked: ViewedTabPick | null = null
+): void {
   const current = views.get(homeKey)
   if (person === null) {
     if (current && views.delete(homeKey)) {
@@ -37,10 +41,10 @@ export function viewTabList(homeKey: string, person: TabListPerson | null): void
     }
     return
   }
-  if (current && sameTabListPerson(current.person, person)) {
+  if (current && sameTabListPerson(current.person, person) && picked === null) {
     return
   }
-  views.set(homeKey, { person, picked: null })
+  views.set(homeKey, { person, picked })
   changed()
 }
 
@@ -65,22 +69,4 @@ function subscribe(listener: () => void): () => void {
 
 export function useViewedTabList(homeKey: string | null): ViewedTabList | null {
   return useSyncExternalStore(subscribe, () => (homeKey ? (views.get(homeKey) ?? null) : null))
-}
-
-/** A chat opened from Chats while this window shows someone's tabs: theirs shows in their strip;
- *  anyone else's leaves the view, to open in this window's own tabs as usual. True when shown. */
-export function showChatInViewedTabList(
-  homeKey: string,
-  chat: { chatId: string; person?: { accountId: string } }
-): boolean {
-  const view = views.get(homeKey)
-  if (!view) {
-    return false
-  }
-  if (sameTabListPerson(view.person, chatTabListPerson(chat))) {
-    pickViewedTab(homeKey, { sessionId: chat.chatId })
-    return true
-  }
-  viewTabList(homeKey, null)
-  return false
 }

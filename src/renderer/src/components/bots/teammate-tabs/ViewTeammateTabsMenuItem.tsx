@@ -31,7 +31,7 @@ export function ViewTeammateTabsMenuItem({
   return (
     <>
       <ContextMenuSub>
-        <ContextMenuSubTrigger>
+        <ContextMenuSubTrigger className="whitespace-nowrap">
           <Users className="size-3.5" />
           {t('bots.teammateTabs.rowEntry', 'View teammate’s tabs')}
         </ContextMenuSubTrigger>

@@ -34,6 +34,9 @@ export type NativeChatStructuredViewProps = {
   isVisible: boolean
   /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
   isFocusedGroup: boolean
+  /** The conversation only, with no composer, prompt or queue: another person's chat that isn't
+   *  open in their tabs, viewed from them. */
+  readOnly?: true
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 

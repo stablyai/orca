@@ -6,6 +6,7 @@ import { useBotAvatarLook } from './bot-avatar-image'
 import type { BotOutfitArt } from './bot-mascot-look'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
 import { useNativeChatTabOwnerWorktreeId } from '../native-chat/pane/ownership/use-native-chat-tab-owner'
+import { isViewedChatTabId } from '../native-chat/pane/ownership/native-chat-tab-owner'
 import type { NativeChatStructuredViewProps } from '../native-chat/native-chat-view-types'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
@@ -30,11 +31,14 @@ const NO_BOT_AVATAR: Parameters<typeof useBotAvatarLook>[0] = {
   avatar: null
 }
 
-/** The bot whose chat this is, from the catalog of the host that owns the session. */
+/** The bot whose chat this is, from the catalog of the host that owns the session. A chat `viewed`
+ *  from another person's tabs in its Home is the agent's: its links and Home are theirs, not this
+ *  copy's. */
 export function useBotChatIdentity(
   workspaceId: string | null,
   sessionId: string | null,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  viewed = false
 ) {
   const enabled = useBotsEnabled()
   const scope = parseWorkspaceKey(workspaceId ?? '')
@@ -50,7 +54,8 @@ export function useBotChatIdentity(
       (bot) =>
         bot.hostId === hostId &&
         bot.folderWorkspaceId === workspace?.id &&
-        botOwnsChatSession(bot, sessionId, workspace.externalConversations)
+        ((viewed && sessionId !== null) ||
+          botOwnsChatSession(bot, sessionId, workspace.externalConversations))
     ) ?? null
   )
 }
@@ -59,7 +64,12 @@ export function useBotChatOwner(
   props: Pick<NativeChatStructuredViewProps, 'tabId' | 'sessionId' | 'target'>
 ) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
-  const turnBot = useBotChatIdentity(ownerWorktreeId, props.sessionId, props.target)
+  const turnBot = useBotChatIdentity(
+    ownerWorktreeId,
+    props.sessionId,
+    props.target,
+    isViewedChatTabId(props.tabId)
+  )
   const { src, outfit } = useBotAvatarLook(turnBot ?? NO_BOT_AVATAR)
   // Keyed on what it shows, not the Bot object: a re-read bot is a new object, and a new identity here
   // would re-render every mounted row of the chat.

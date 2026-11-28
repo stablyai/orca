@@ -36,14 +36,11 @@ import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotChatsSkeleton } from './BotChatsSkeleton'
 import { BotChatsPersonFilter } from './BotChatsPersonFilter'
-import { sameTabListPerson, useViewedTabList, viewTabList } from './teammate-tabs/viewed-tab-list'
-import { tabListPersonOf, viewedListOfPick } from './teammate-tabs/tab-list-people'
+import { useChatsPersonPick } from './chats-person-pick'
 import { botPersonPickName, useBotPersonPicks } from './BotPersonPickItems'
-import { sameBotPersonPick, type BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
-const EVERYONE: BotChatPersonPick = { kind: 'everyone' }
 const NOTE = 'px-2 pt-1 text-2xs text-muted-foreground'
 const HEADING = 'px-2 pt-2.5 pb-1 text-xs font-medium text-muted-foreground'
 
@@ -82,21 +79,7 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
   const entries = useBotPersonPicks(bot)
-  const homeKey = folderWorkspaceKey(bot.folderWorkspaceId)
-  // Another person's pick is the Home showing their tabs (one view, either way in), so leaving it
-  // there leaves it here; this panel keeps only everyone or the viewer's own.
-  const viewed = useViewedTabList(homeKey)
-  const [ownPicked, setOwnPicked] = useState(false)
-  const viewedPick =
-    viewed && entries
-      ? (entries.find((entry) => {
-          const person = tabListPersonOf(entry.pick)
-          return person !== null && sameTabListPerson(person, viewed.person)
-        })?.pick ?? null)
-      : null
-  const own = entries?.[0]?.pick ?? null
-  const pick = viewedPick ?? (ownPicked && own ? own : EVERYONE)
-  const isOwnPick = own !== null && sameBotPersonPick(pick, own)
+  const { pick, isOwnPick, setPick } = useChatsPersonPick(bot, entries)
   const pickName = entries ? botPersonPickName(pick, entries) : null
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])
   // Its home's chats and runs, and each listed worker's own workspace.
@@ -187,12 +170,8 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
                 entries={entries}
                 pick={pick}
                 onPick={(next) => {
-                  const list = viewedListOfPick(bot, next)
-                  if (list === null) {
-                    setOwnPicked(next.kind !== 'everyone')
-                  }
+                  setPick(next)
                   setSteps(0)
-                  viewTabList(homeKey, list)
                 }}
               />
             ) : null}

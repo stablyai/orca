@@ -12,6 +12,7 @@ import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remot
 import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { viewedChatTabId } from '@/components/native-chat/pane/ownership/native-chat-tab-owner'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { ViewedFileDiff } from './ViewedFileDiff'
 import { ViewedFileEditor } from './ViewedFileEditor'
 
@@ -51,6 +52,43 @@ function ViewedTerminal({
         className="absolute inset-0"
         claimsGridOnTyping
       />
+    </div>
+  )
+}
+
+/** One of their chats that isn't open in their tabs, picked from Chats: shown to read, with no
+ *  composer, since replying belongs in a tab of theirs. */
+export function ViewedChatNotInTabs({
+  bot,
+  homeKey,
+  sessionId,
+  holderName
+}: {
+  bot: Bot
+  homeKey: string
+  sessionId: string
+  holderName: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <p className="flex-none border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
+        {t('bots.teammateTabs.chatNotInTabs', 'Not open in {{name}}’s tabs. Read only.', {
+          name: holderName
+        })}
+      </p>
+      <div className="min-h-0 flex-1">
+        <NativeChatView
+          mode="structured"
+          tabId={viewedChatTabId(homeKey, structuredAgentSessionTabId(sessionId))}
+          sessionId={sessionId}
+          target={botTarget(bot)}
+          agent={bot.agent}
+          isVisible
+          isFocusedGroup
+          readOnly
+        />
+      </div>
     </div>
   )
 }
