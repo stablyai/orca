@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto'
-import { chmod, mkdir, open, rename, rm, stat } from 'node:fs/promises'
+import { chmod, mkdir, open, rm, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import {
   DEFAULT_HARDENING_CACHE_BOUNDS,
   SecurePathHardeningCache
 } from '../../shared/secure-storage/secure-path-hardening-cache'
 import { fileStatSignature } from '../filesystem/file-stat-signature'
+import { renameFileWithWindowsRetryAsync } from '../../shared/file-write/windows-retry-file-operations'
 import { bestEffortFsyncDirectory } from '../../shared/secure-storage/secure-file-async-write'
 import {
   createWindowsCredentialStage,
@@ -129,7 +130,7 @@ export async function stageCredentialFile(
     ) {
       return false
     }
-    await rename(temp, path)
+    await renameFileWithWindowsRetryAsync(temp, path)
     if (options.durable) {
       await bestEffortFsyncDirectory(dir)
     }

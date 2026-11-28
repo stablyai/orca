@@ -6,11 +6,11 @@ import {
   fsyncSync,
   mkdirSync,
   openSync,
-  renameSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
 import { dirname } from 'node:path'
+import { renameFileWithWindowsRetry } from '../file-write/windows-retry-file-operations'
 import {
   DEFAULT_HARDENING_CACHE_BOUNDS,
   SecurePathHardeningCache,
@@ -156,13 +156,11 @@ export function writeSecureFile(
     if (options.durable) {
       fsyncFileSync(tmpFile)
     }
-    // Recheck after hardening; the check and rename are separate, non-atomic operations.
-    if (options.shouldPublish && !options.shouldPublish()) {
+    // The rename publishes the staged inode with its DACL or mode already set; shouldPublish is rechecked before each attempt.
+    if (!renameFileWithWindowsRetry(tmpFile, targetPath, options.shouldPublish)) {
       rmSync(tmpFile, { force: true })
       return false
     }
-    // The rename publishes the staged inode, so its DACL or mode is already the published file's.
-    renameSync(tmpFile, targetPath)
     options.onPublished?.()
     // Cache only on confirmed success so failures retry; a success also clears the read path's backoff.
     if (restricted) {

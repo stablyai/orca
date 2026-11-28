@@ -926,6 +926,7 @@
 6 src/main/orcad/serve-startup/orcad-cli-launcher.ts
 3 src/main/orcad/serve-startup/orcad-command-startup.ts
 2 src/main/orcad/serve-startup/orcad-ws-port-policy.ts
+1 src/main/persistence/atomic-snapshot-writer.ts # writeSync renames through renameFileWithWindowsRetry so Windows AV locks are retried
 8 src/main/persistence/loading-store/profile-loading/loaded-state-parsing.ts
 2 src/main/persistence/loading-store/profile-loading/prepare-loaded-terminal-settings.ts
 1 src/main/persistence/loading-store/project-catalog/repo-lifecycle-operations.ts
@@ -1571,7 +1572,7 @@
 2 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
 1 src/shared/secure-storage/bounded-secure-json-file.ts
 1 src/shared/secure-storage/secure-file-async-write.ts # Windows only: the ACL addon creates restricted files synchronously, so the async writer falls back to writeSecureFile there
-19 src/shared/secure-storage/secure-file.ts
+20 src/shared/secure-storage/secure-file.ts # writeSecureFile renames through renameFileWithWindowsRetry so Windows AV locks are retried
 6 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts
 3 src/shared/shell/command-resolution/cli-fs-reads.ts # sync runner for CLI lookups; isNativeExecutable moved here from node-cli-command-resolution (16 -> 13) so withCliRuntimeOnPath has an async form
