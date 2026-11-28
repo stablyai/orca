@@ -201,6 +201,34 @@ function settledTurnsOf(
   return settled
 }
 
+/** Time a settled newest turn from the host's copy of its record when only its tail is loaded. */
+function withUnloadedLatestTurn(
+  turns: StructuredAgentJournalTurns,
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  latestTurn: AgentSessionLatestTurn | null | undefined
+): StructuredAgentJournalTurns {
+  if (
+    !latestTurn ||
+    latestTurn.turn.state === 'running' ||
+    turns.byTurnId.has(latestTurn.turn.turnId)
+  ) {
+    return turns
+  }
+  const anchor = structuredAgentTurnAnchors(items, submissions, latestTurn).get(latestTurn.itemId)
+  if (anchor === undefined || turns.byAnchor.has(anchor)) {
+    return turns
+  }
+  const timing = readTiming(
+    { body: { kind: 'turn', ...latestTurn.turn }, observedAt: latestTurn.observedAt },
+    undefined
+  )
+  if (!timing && latestTurn.turn.state !== 'unverifiable') {
+    return turns
+  }
+  return { ...turns, byAnchor: new Map([...turns.byAnchor, [anchor, timing]]) }
+}
+
 /** Scan once for settled/running timings; nativeChatTurnMembership separately chooses the running bar. */
 export function selectStructuredAgentTurnBars(
   items: readonly AgentJournalRenderItem[],
@@ -218,7 +246,10 @@ export function selectStructuredAgentTurnBars(
       ? latestTurn
       : null
   return {
-    settledTurns: settledTurnsOf(turns, submissions),
+    settledTurns: settledTurnsOf(
+      withUnloadedLatestTurn(turns, items, submissions, latestTurn),
+      submissions
+    ),
     runningTiming: unloaded
       ? readTiming({ body: { kind: 'turn', ...unloaded.turn }, observedAt: unloaded.observedAt })
       : turnId === null
