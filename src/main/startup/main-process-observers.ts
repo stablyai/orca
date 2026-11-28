@@ -18,7 +18,6 @@ import {
   startDesktopPresenceReporter
 } from '../notifications/desktop-presence-reporter'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
-import { startWslHostAgentAwake } from '../ipc/wsl/wsl-host-agent-awake-wiring'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
 import { initObservability } from '../observability/index'
@@ -80,11 +79,27 @@ export function initializeMainProcessObservers(store: Store): void {
   // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
   const unsubscribeHookStatus = bindAgentAwakeToHookStatus(agentHookServer, state.agentAwakeService)
-  // WSL-host agents never reach the hook server; their host's own stream reports them.
-  const stopWslHostAgentAwake = startWslHostAgentAwake(state.agentAwakeService)
+  // WSL-host agents never reach the hook server; their host's own stream reports them on Windows.
+  let stopWslHostAgentAwake: (() => void) | null = null
+  let wslAwakeDisposed = false
+  if (process.platform === 'win32') {
+    const awakeService = state.agentAwakeService
+    void import('../ipc/wsl/wsl-host-agent-awake-wiring')
+      .then(({ startWslHostAgentAwake }) => {
+        if (wslAwakeDisposed) {
+          return
+        }
+        stopWslHostAgentAwake = startWslHostAgentAwake(awakeService)
+      })
+      .catch((error: unknown) =>
+        console.warn('[power] Could not load WSL host agent-awake wiring:', error)
+      )
+  }
   state.unsubscribeAgentAwakeStatusChanges = () => {
+    wslAwakeDisposed = true
     unsubscribeHookStatus()
-    stopWslHostAgentAwake()
+    stopWslHostAgentAwake?.()
+    stopWslHostAgentAwake = null
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
   // Load the SDK after first paint (#35752); headless serve and GPU failures never show a window.

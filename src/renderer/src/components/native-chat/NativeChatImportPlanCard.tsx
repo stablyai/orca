@@ -1,6 +1,6 @@
 // The plan a bot shows with `orca bot import plan`: what comes over from the old bot, what changes, and what
 // stays behind, one checkbox per item that comes. The owner's answer goes back as an ordinary message.
-import { useState } from 'react'
+import { useNativeChatViewState } from './pane/ownership/native-chat-view-memory'
 import { Check, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,10 @@ function groupTitle(group: BotImportPlanGroup, app: string): string {
 
 const GROUP_ORDER: BotImportPlanGroup[] = ['comes', 'changed', 'already', 'stays']
 
+const NONE_UNTICKED: ReadonlySet<number> = new Set()
+// Unsent choices are kept for the newest few plans in a chat tab.
+const KEPT_PLAN_CHOICES = 4
+
 export function NativeChatImportPlanCard({
   plan,
   messageId
@@ -41,7 +45,12 @@ export function NativeChatImportPlanCard({
   const t = useTranslate()
   useTranslation()
   const answering = useNativeChatOffer(plan.botId, messageId)
-  const [unticked, setUnticked] = useState<ReadonlySet<number>>(new Set())
+  // Kept with the chat tab, so a released chat returns with the reader's unticked items.
+  const [unticked, setUnticked] = useNativeChatViewState(
+    `import-plan:${plan.botId}:${messageId}`,
+    NONE_UNTICKED,
+    KEPT_PLAN_CHOICES
+  )
   const items = plan.items.map((item, index) => ({ ...item, index }))
   const bringable = items.filter((item) => item.group === 'comes' || item.group === 'changed')
   const sent = answering.sent
@@ -58,7 +67,7 @@ export function NativeChatImportPlanCard({
     } else {
       next.add(index)
     }
-    setUnticked(next)
+    setUnticked(next.size === 0 ? NONE_UNTICKED : next)
   }
   const asked =
     chosen.length === 1

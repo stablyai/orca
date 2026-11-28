@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNativeChatViewRef } from '../../pane/ownership/native-chat-view-memory'
+import { keptMatchIndex, keptMatchOf, type KeptMatch } from './native-chat-find-kept-match'
 import {
   createDomTextSearchHighlights,
   findDomTextSearchRanges,
@@ -59,7 +61,6 @@ function visibleTextScope(reuse: Range[]): DomTextSearchScope {
 }
 
 type MatchAnchor = { node: Node; offset: number }
-
 function anchorOf(range: Range | undefined): MatchAnchor | null {
   return range ? { node: range.startContainer, offset: range.startOffset } : null
 }
@@ -120,13 +121,16 @@ export function useNativeChatFindMatches({
   barRef,
   query,
   isVisible,
-  revealMatch
+  revealMatch,
+  restoredQuery = null
 }: {
   rootRef: React.RefObject<HTMLDivElement | null>
   barRef: React.RefObject<HTMLElement | null>
   query: string
   isVisible: boolean
   revealMatch: (match: Range) => void
+  /** The query a restored bar came back with: already searched, so it reveals nothing on its own. */
+  restoredQuery?: string | null
 }): NativeChatFindMatches {
   const [instance] = useState<DomTextSearchInstance>(() => ({}))
   const [matchCount, setMatchCount] = useState(0)
@@ -134,18 +138,25 @@ export function useNativeChatFindMatches({
   const matchesRef = useRef<readonly Range[]>([])
   const activeIndexRef = useRef(-1)
   const anchorRef = useRef<MatchAnchor | null>(null)
-  const searchedQueryRef = useRef<string | null>(null)
+  const searchedQueryRef = useRef<string | null>(restoredQuery)
   // Text nodes holding a match: React rewrites a growing node whole, which collapses its ranges.
   const matchNodesRef = useRef<ReadonlySet<Node>>(new Set())
+  // Kept with the chat tab, so a chat switched back to resumes Next/Previous from the match it left on.
+  const keptRef = useNativeChatViewRef<KeptMatch | null>('find-active', null)
+  // Until its row draws, a remount shows what's on screen without replacing the kept match; a step or new query ends it.
+  const resumingRef = useRef(true)
 
   const activate = useCallback(
     (matches: readonly Range[], index: number) => {
       activeIndexRef.current = index
       anchorRef.current = anchorOf(matches[index])
+      if (index >= 0 && searchedQueryRef.current && !resumingRef.current) {
+        keptRef.current = keptMatchOf(matches, index, searchedQueryRef.current)
+      }
       chatFindHighlights.setActive(instance, matches[index])
       setActiveIndex(index)
     },
-    [instance]
+    [instance, keptRef]
   )
 
   const search = useCallback(() => {
@@ -165,6 +176,14 @@ export function useNativeChatFindMatches({
     )
     chatFindHighlights.setMatches(instance, matches)
     setMatchCount(matches.length)
+    const kept = keptRef.current
+    resumingRef.current = resumingRef.current && !newQuery && kept?.query === query
+    const keptIndex = resumingRef.current && kept ? keptMatchIndex(matches, kept) : -1
+    if (keptIndex !== -1) {
+      resumingRef.current = false
+      activate(matches, keptIndex)
+      return
+    }
     const anchor = anchorRef.current
     if (!newQuery && matches.length > 0 && anchor?.node.isConnected) {
       activate(matches, survivingMatchIndex(matches, anchor))
@@ -177,7 +196,7 @@ export function useNativeChatFindMatches({
     if (newQuery && first.index !== -1 && !first.inView) {
       revealMatch(matches[first.index])
     }
-  }, [activate, barRef, instance, query, revealMatch, rootRef])
+  }, [activate, barRef, instance, keptRef, query, revealMatch, rootRef])
 
   useEffect(() => {
     const root = rootRef.current
@@ -277,6 +296,7 @@ export function useNativeChatFindMatches({
             ? 0
             : matches.length - 1
           : (current + direction + matches.length) % matches.length
+      resumingRef.current = false
       activate(matches, index)
       revealMatch(matches[index])
     },

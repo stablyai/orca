@@ -28,6 +28,8 @@ export type WslOrcadLaunch =
       pid: number | null
       readiness: ServeReadiness
       holder: 'adopted' | 'spawned' | 'unverifiable'
+      /** The pinned account's readable key differed from the paired one before launch. */
+      pairedKeyChanged?: true
       /** An orcad the record did not name (e.g. left by a failed Remove), now recorded. */
       adoptedInstance?: { version: string; pid: number }
       /** Set when `fullVersion` is the incumbent because the update must wait. */
