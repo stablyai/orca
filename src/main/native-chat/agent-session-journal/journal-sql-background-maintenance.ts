@@ -4,13 +4,12 @@ import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalBackgroundConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalPagedMaintenanceKind, JournalSqlMaintenance } from './journal-sql-maintenance'
-import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
 import { JournalSavedChatConversion } from './journal-saved-chat-conversion'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
-// About 8k saved outputs a minute at the shared 10% duty cycle; none while writes are off.
-const STORED_OUTPUT_PAGES_PER_TICK = JOURNAL_STORED_OUTPUT_WRITES ? 256 : 0
+// Off: rewriting rows saved before compression wrote ~100 KB to disk per row and slowed chat writes.
+const STORED_OUTPUT_PAGES_PER_TICK = 0
 
 /** Idle conversion and periodic pruning share one owner; activity never blocks retired cleanup. */
 export class JournalSqlBackgroundMaintenance {

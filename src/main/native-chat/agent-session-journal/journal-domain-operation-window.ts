@@ -57,6 +57,9 @@ export type JournalOperationWindowAnchors = {
    *  before the reader decodes a row: for readers that weigh who spoke and what ran, never what a
    *  tool printed, which is nearly all of a long chat's bytes. */
   withoutToolOutput?: boolean
+  /** Saved outputs and patches come back whole; otherwise as their preview. For readers that read
+   *  what a tool printed or which files a turn edited, or that copy items out of the journal. */
+  withStoredOutput?: boolean
   /** With `operationIds` alone, for a reader of the anchored operations' own turns: the window ends where the next root turn
    *  opens, and only the anchored operations' sends and those placed inside the window are read, so
    *  its cost never grows with the chat after them. Unanswered sends outside it do not come along. */

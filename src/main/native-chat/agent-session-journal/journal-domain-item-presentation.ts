@@ -9,7 +9,11 @@ import {
 } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import type { HistoryItemForm } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { journalDomainItemWire } from './journal-domain-item-wire'
-import { hydrateJournalStoredItem, readJournalStoredItem } from './journal-stored-output-rows'
+import {
+  hydrateJournalStoredItem,
+  readJournalStoredItem,
+  readJournalStoredItemWithOutput
+} from './journal-stored-output-rows'
 import {
   journalDomainDisplayTurnState,
   readJournalDomainStopStates,
@@ -17,7 +21,15 @@ import {
   type JournalDomainItemTarget
 } from './journal-domain-item-display'
 
-export function journalDomainClientFormColumns(alias = 'item'): string {
+/** `withoutStoredOutput`: a saved output stays its preview, for readers that never use its text. */
+export type JournalDomainClientFormTarget = JournalDomainItemTarget & {
+  withoutStoredOutput?: boolean
+}
+
+export function journalDomainClientFormColumns(
+  alias = 'item',
+  withoutStoredOutput = false
+): string {
   const current = `${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}`
   return `${alias}.item_id,${alias}.wire_version,${boundedStoredJsonSql(
     `CASE WHEN ${current} THEN COALESCE(${alias}.wire_json,${alias}.payload_json)
@@ -31,14 +43,18 @@ export function journalDomainClientFormColumns(alias = 'item'): string {
   )},
     CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
       THEN COALESCE(${alias}.wire_bytes,octet_length(${alias}.payload_json)) END AS client_bytes,
-    CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION} AND ${alias}.wire_json IS NOT NULL
-      THEN NULL ELSE ${alias}.output_blob END AS output_blob`
+    ${
+      withoutStoredOutput
+        ? 'NULL'
+        : `CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION} AND ${alias}.wire_json IS NOT NULL
+      THEN NULL ELSE ${alias}.output_blob END`
+    } AS output_blob`
 }
 
 /** Decode only this selected set; callers retain admitted forms and discard a rejected whole group. */
 export function readJournalDomainClientForms(
   db: Database.Database,
-  target: JournalDomainItemTarget,
+  target: JournalDomainClientFormTarget,
   ids: readonly string[],
   forms = new Map<string, HistoryItemForm>(),
   states?: ReadonlyMap<string, unknown>
@@ -49,7 +65,7 @@ export function readJournalDomainClientForms(
   }
   const wantedJson = JSON.stringify(wanted)
   for (const row of db
-    .prepare(`SELECT ${journalDomainClientFormColumns()} FROM json_each(?) wanted
+    .prepare(`SELECT ${journalDomainClientFormColumns('item', target.withoutStoredOutput)} FROM json_each(?) wanted
     CROSS JOIN journal_items item
     WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0`)
     .iterate(wantedJson, target.sessionId, target.epoch)) {
@@ -63,17 +79,16 @@ export function readJournalDomainClientForms(
 
 export function readJournalDomainClientForm(
   db: Database.Database,
-  target: JournalDomainItemTarget,
+  target: JournalDomainClientFormTarget,
   row: SqliteRow,
   states?: ReadonlyMap<string, unknown>
 ): HistoryItemForm {
+  const prefix = [target.sessionId, target.epoch] as const
+  const json = boundedStoredJson(row, 'client_json')
   // The blob is selected only when the client form is the stored payload, never beside a saved head.
-  const item = readJournalStoredItem(
-    db,
-    [target.sessionId, target.epoch],
-    boundedStoredJson(row, 'client_json'),
-    row.output_blob
-  )
+  const item = target.withoutStoredOutput
+    ? readJournalStoredItem(db, prefix, json)
+    : readJournalStoredItemWithOutput(db, prefix, json, row.output_blob)
   return row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
     ? rememberAgentJournalItemWireForm(item, Number(row.client_bytes))
     : agentJournalItemForWire(
@@ -88,7 +103,7 @@ export function readJournalDomainClientForm(
 
 export function readJournalDomainClientItems(
   db: Database.Database,
-  target: JournalDomainItemTarget,
+  target: JournalDomainClientFormTarget,
   ids: readonly string[],
   forms?: Map<string, HistoryItemForm>,
   states?: ReadonlyMap<string, unknown>

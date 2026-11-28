@@ -2,6 +2,7 @@ import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { hydrateJournalStoredItem } from './journal-stored-output-rows'
+import { hasJournalStoredOutput } from './journal-stored-output'
 
 export type JournalSqlReadWork = { rows: number; decodedBytes: number }
 export type JournalSqlIndexValues = {
@@ -30,13 +31,29 @@ export class JournalSqlScope {
     return row
   }
 
+  /** For readers that use output text: a saved output is read back whole. `blob` is the row's
+   *  `output_blob` when the read selected it, saving a lookup per row. */
+  decodeWithOutput<T>(json: unknown, blob?: unknown): T {
+    if (typeof json !== 'string') {
+      throw new Error('Invalid journal projection value')
+    }
+    this.work.decodedBytes += Buffer.byteLength(json)
+    const value: T = this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
+    return isJournalItemShape(value)
+      ? hydrateJournalStoredItem(this.db, this.prefix, value, blob)
+      : value
+  }
+
+  /** A saved output stays its inline preview, marker kept, so a same-row rewrite keeps its blob. */
   decode<T>(json: unknown): T {
     if (typeof json !== 'string') {
       throw new Error('Invalid journal projection value')
     }
     this.work.decodedBytes += Buffer.byteLength(json)
     const value: T = this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
-    return isJournalItemShape(value) ? hydrateJournalStoredItem(this.db, this.prefix, value) : value
+    return isJournalItemShape(value) && !hasJournalStoredOutput(value)
+      ? hydrateJournalStoredItem(this.db, this.prefix, value)
+      : value
   }
 
   /** A projection row's own payload; never an index value pointer. */

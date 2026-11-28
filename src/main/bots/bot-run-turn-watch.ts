@@ -11,6 +11,7 @@ import { structuredAgentSessionSendTurn } from '../../shared/structured-agent-se
 import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { pendingStructuredAgentSessionPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { CLIENT_HISTORY_READER } from '../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
 import { createKeyedTrailingEdgeCoalescer } from '../runtime/client/events/keyed-trailing-edge-coalescer'
 
 /** Why a run has no result of its own (result_unavailable). */
@@ -60,15 +61,22 @@ const unavailable = (reason: BotRunUnavailable): BotTurnEnd => ({ unavailable: r
 async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurnEnd | null> {
   const { sessionId, clientMessageId } = send
   // Before the journal: a card handed over between the two reads then shows its handoff.
-  const history = await host.history({ sessionId, direction: 'tail' })
+  // Only its queued cards are read, so saved outputs stay compressed.
+  const history = await host.history({ sessionId, direction: 'tail' }, undefined, {
+    ...CLIENT_HISTORY_READER,
+    withoutStoredOutput: true
+  })
   const queued =
     history.ok &&
     history.page.queuedMessages?.some(
       (card) => card.messageId === clientMessageId && card.state === 'waiting'
     ) === true
   // The rows that place this send's turn, not the whole chat: the run re-reads at each change.
+  // Nothing here reads what a tool printed, so outputs stay unread.
   const { items, submissions } = (
-    await (await host.journalReads(sessionId)).operationWindow({ operationIds: [clientMessageId] })
+    await (
+      await host.journalReads(sessionId)
+    ).operationWindow({ operationIds: [clientMessageId], withoutToolOutput: true })
   ).snapshot
   const placed = structuredAgentSessionSendTurn({ items, submissions }, send)
   let sent: { itemId: string; turn: AgentJournalTurnLifecycle }

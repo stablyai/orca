@@ -64,9 +64,15 @@ export function readItemsByKindPage(
   db: Database.Database,
   prefix: readonly [sessionId: string, epoch: string],
   chosen: readonly SqliteRow[],
-  nextOrdinal: number | null
+  nextOrdinal: number | null,
+  withoutStoredOutput = false
 ): { items: AgentJournalRenderItem[]; nextOrdinal: number | null } {
-  const payload = db.prepare(ITEMS_BY_KIND_PAYLOAD_SQL)
+  // Without its blob, a stored row reads as its preview and is sized as its row.
+  const payload = db.prepare(
+    withoutStoredOutput
+      ? ITEMS_BY_KIND_PAYLOAD_SQL.replace(',output_blob FROM', ',NULL AS output_blob FROM')
+      : ITEMS_BY_KIND_PAYLOAD_SQL
+  )
   return budgetItemsByKindPage(
     itemsByKindPayloads(chosen, (itemId) => payload.get(...prefix, itemId)),
     nextOrdinal,

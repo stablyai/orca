@@ -1,5 +1,8 @@
 import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
-import { readJournalStoredItem } from './journal-stored-output-rows'
+import {
+  readJournalStoredItem,
+  readJournalStoredItemWithOutput
+} from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
   readJournalHistoryItems,
@@ -47,6 +50,8 @@ export type JournalSqlItemRead =
       kinds: readonly AgentJournalItemBody['kind'][]
       afterOrdinal: number
       limit: number
+      /** A stored output or patch stays its preview: for inventories of kinds and positions. */
+      withoutStoredOutput?: boolean
     }
   | { kind: 'history-items'; itemIds: readonly string[]; options?: JournalHistoryReadOptions }
   | { kind: 'claude-history-prompts'; sessionId: string; uuids: readonly string[] }
@@ -191,7 +196,10 @@ export function readJournalDomainItems(
         .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
       const chosen = headers.slice(0, operation.limit)
       const next = headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
-      return { kind: 'items-by-kind', ...readItemsByKindPage(db, prefix, chosen, next) }
+      return {
+        kind: 'items-by-kind',
+        ...readItemsByKindPage(db, prefix, chosen, next, operation.withoutStoredOutput)
+      }
     }
     case 'context-floor': {
       const row = db
@@ -251,7 +259,10 @@ export function journalVisibleItem(
     .prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json')} FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(...prefix, itemId)
-  return row ? readJournalStoredItem(db, prefix, boundedStoredJson(row, 'payload_json')) : null
+  // History items are compared with provider transcripts, so saved outputs come back whole.
+  return row
+    ? readJournalStoredItemWithOutput(db, prefix, boundedStoredJson(row, 'payload_json'))
+    : null
 }
 
 /** The input order's newest turn: latest position, then the greatest item ID among ties. */

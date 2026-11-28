@@ -87,9 +87,11 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   acpHistoryItems(itemIds: readonly string[]): Promise<JournalAcpHistoryItems>
   hasProviderTurn(nativeId: string, sinceFence?: number): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
+  /** Saved outputs stay their preview unless `withStoredOutput`. */
   forkMarkerGroup(
     boundary: AgentSessionForkedFrom['childBoundary'],
-    previousSequence?: number
+    previousSequence?: number,
+    withStoredOutput?: boolean
   ): Promise<AgentJournalSnapshot>
   projectedStopNotes(
     afterOrdinal?: number,
@@ -212,8 +214,15 @@ export function journalSqlReads(
         })
       ).present,
     savedItemIds: async (itemIds) => (await read({ kind: 'saved-item-ids', itemIds })).itemIds,
-    forkMarkerGroup: async (boundary, previousSequence) =>
-      (await read({ kind: 'fork-marker-group', boundary, previousSequence })).snapshot,
+    forkMarkerGroup: async (boundary, previousSequence, withStoredOutput) =>
+      (
+        await read({
+          kind: 'fork-marker-group',
+          boundary,
+          previousSequence,
+          ...(withStoredOutput ? { withStoredOutput } : {})
+        })
+      ).snapshot,
     projectedStopNotes: async (afterOrdinal = -1, limit = 128) =>
       read({ kind: 'projected-stop-notes', afterOrdinal, limit }),
     generation: async (input = {}) => (await read({ kind: 'generation', input })).generation,
@@ -290,7 +299,9 @@ export function journalSqlReads(
           kind: 'items-by-kind',
           kinds: filter.kinds,
           afterOrdinal,
-          limit: VISIT_PAGE
+          limit: VISIT_PAGE,
+          // Visits weigh kinds, identities and positions, never what a tool printed.
+          withoutStoredOutput: true
         })
         for (const entry of page.items) {
           visit(entry.itemId, entry.sequence, entry.body, entry, entry)

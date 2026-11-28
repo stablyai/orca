@@ -28,7 +28,7 @@ type HistoryReaderForm = Pick<HistoryReader, 'form' | 'budgetBytes'> & {
 /** Form only positional candidates through the first exact non-fitting sequence group. */
 export function formJournalDomainHistoryGroups(
   db: Database.Database,
-  head: JournalDomainHistoryHead,
+  head: JournalDomainHistoryHead & { withoutStoredOutput?: boolean },
   groups: readonly JournalDomainHistoryHeader[][],
   reader: HistoryReaderForm,
   forms: Map<string, HistoryItemForm>

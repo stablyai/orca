@@ -17,6 +17,7 @@ export type JournalPublicationRead =
       kind: 'fork-marker-group'
       boundary: AgentSessionForkedFrom['childBoundary']
       previousSequence?: number
+      withStoredOutput?: boolean
     }
   | { kind: 'projected-stop-notes'; afterOrdinal: number; limit: number }
 
@@ -75,9 +76,10 @@ export function readJournalDomainPublication(
             sequence: Number(head.last_sequence)
           },
           items: rows.map((row) => {
-            const item = scope.decode<AgentJournalRenderItem>(
-              boundedStoredJson(row, 'payload_json')
-            )
+            const json = boundedStoredJson(row, 'payload_json')
+            const item = operation.withStoredOutput
+              ? scope.decodeWithOutput<AgentJournalRenderItem>(json)
+              : scope.decode<AgentJournalRenderItem>(json)
             return resolveJournalDomainDisplay(
               item,
               row.wire_version,

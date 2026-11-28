@@ -59,6 +59,7 @@ export async function readAgentSessionHistoryFrame(
         reader: {
           form: reader.wireForm ?? 'client',
           budgetBytes: reader.budgetBytes,
+          ...(reader.withoutStoredOutput ? { withoutStoredOutput: true } : {}),
           ...(reader.queueSourceIds
             ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
             : {})
@@ -118,6 +119,7 @@ export async function readAgentSessionHydrationFrame(
         reader: {
           form: reader.wireForm ?? 'client',
           budgetBytes: reader.budgetBytes,
+          ...(reader.withoutStoredOutput ? { withoutStoredOutput: true } : {}),
           ...(reader.queueSourceIds
             ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
             : {})

@@ -79,7 +79,9 @@ export async function readTurnEndedItems(
     turnIds: [turnId],
     anchorsOnly: true,
     withoutTurnAhead: true,
-    withoutToolOutput: true
+    withoutToolOutput: true,
+    // A Diff call's whole patch names every file it edited.
+    withStoredOutput: true
   })
   return {
     ...(await readJournalTurnOpenerRows(reads, snapshot.items)),

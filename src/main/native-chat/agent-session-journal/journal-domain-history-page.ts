@@ -61,6 +61,8 @@ export type JournalDomainHistoryRequest = Omit<AgentSessionHistoryRequest, 'dire
     form: 'client' | 'bounded'
     budgetBytes?: number
     queuedImages?: QueuedImageHistoryPolicy
+    /** Saved outputs stay their preview: for readers of states and queued cards, never tool text. */
+    withoutStoredOutput?: boolean
   }
 }
 
@@ -261,9 +263,10 @@ function historyPage(
   }
   const window = selectJournalDomainHistoryWindow(db, where, prefix, end, limit, sources)
   const forms = new Map<string, HistoryItemForm>()
+  const target = request.reader?.withoutStoredOutput ? { ...head, withoutStoredOutput: true } : head
   const admitted = request.reader?.queuedImages
     ? { groups: [...journalDomainSequenceGroups(window)], oversized: false }
-    : admitJournalDomainHistoryGroups(window, reader.budgetBytes, db, head, forms)
+    : admitJournalDomainHistoryGroups(window, reader.budgetBytes, db, target, forms)
   const { groups, submissions } = admitted.oversized
     ? {
         groups: [
@@ -277,7 +280,7 @@ function historyPage(
           admitted.groups[0]!.map((header) => header.itemId)
         )
       }
-    : formJournalDomainHistoryGroups(db, head, admitted.groups, reader, forms)
+    : formJournalDomainHistoryGroups(db, target, admitted.groups, reader, forms)
   const items = groups.toReversed().flat()
   const oldest = items[0]?.sequence ?? end
   const turn = latestTurnItem(db, head)

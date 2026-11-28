@@ -230,7 +230,9 @@ async function retireMembers(groups: BotGroupRuntime, next: BotGroup): Promise<B
     )
     const { snapshot } = await (
       await host.journalReads(sessionId)
-    ).operationWindow({ operationIds })
+    )
+      // Kept after the member's chat is gone, so saved outputs are copied whole.
+      .operationWindow({ operationIds, withStoredOutput: true })
     frozen.set(sessionId, indexBotGroupJournal(snapshot))
   }
   groups.store.transaction(() => {

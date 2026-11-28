@@ -10,6 +10,7 @@ import type { AgentStatusState } from '../../../../../shared/agent-status/contra
 import { readAgentJournalTurnOutcome } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import { readAgentSessionHistoryFrame } from './agent-session-history-page'
+import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import {
   HISTORY_PAGE_CONTENT_BUDGET_BYTES,
   oversizedHistoryItem
@@ -35,7 +36,12 @@ export async function readAgentJournalPage(
       direction: 'tail',
       limit: AGENT_SESSION_HISTORY_MAX_LIMIT
     },
-    { scope: 'own-agent', acceptedUnopened: true }
+    {
+      scope: 'own-agent',
+      acceptedUnopened: true,
+      // Entries name tools and their states, never what a tool printed.
+      reader: { ...CLIENT_HISTORY_READER, withoutStoredOutput: true }
+    }
   )
   const { page } = frame.result
   const shown = pageEntries(page.items, page.hasOlder, request.limit, waiting)
