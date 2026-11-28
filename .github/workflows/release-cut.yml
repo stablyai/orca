@@ -60,6 +60,13 @@ jobs:
       recovered_tag: ${{ steps.version.outputs.recovered_tag }}
       slot: ${{ steps.slot.outputs.value }}
     steps:
+      # Only main may enter the release environment that pushes tags; fail before drafts or tagging, not at cut.
+      - name: Require main for a real cut
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::A real cut must be dispatched from main (only main may push release tags). Dispatch Cut Release from main and pass this branch or commit as ref."
+          exit 1
+
       # Same ref resolution the cut always used; the draft publisher also reads this checkout's HEAD and tags.
       - name: Checkout ref
         uses: actions/checkout@v6
