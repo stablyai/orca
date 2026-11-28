@@ -20,6 +20,9 @@ export type BundledMobileWebBundle = {
 // An install keeps its layout, so only a miss is probed again (a dev build may produce the bundle later).
 let probedRoot: { appPath: string; root: string } | undefined
 
+// Once a manifest validates for this appPath, getStatus() advertises it with zero fs calls until an async load observes it gone/invalid.
+let validatedRoot: { appPath: string; root: string } | undefined
+
 // Linux package managers replace the install under a running app, so the cache holds only while manifest.json's bytes do.
 let cached: { root: string; raw: Buffer; bundle: BundledMobileWebBundle | null } | undefined
 
@@ -54,7 +57,16 @@ export async function loadBundledMobileWebBundle(): Promise<BundledMobileWebBund
       continue
     }
     probedRoot = { appPath, root }
-    return parseAndCacheBundledMobileWebBundle(root, manifestPath, raw)
+    const bundle = parseAndCacheBundledMobileWebBundle(root, manifestPath, raw)
+    if (bundle) {
+      validatedRoot = { appPath, root }
+    } else if (validatedRoot?.appPath === appPath) {
+      validatedRoot = undefined
+    }
+    return bundle
+  }
+  if (validatedRoot?.appPath === appPath) {
+    validatedRoot = undefined
   }
   return null
 }
@@ -65,6 +77,9 @@ export function hasValidBundledMobileWebBundle(): boolean {
     return false
   }
   const appPath = getAppEnvironment().getAppPath()
+  if (validatedRoot?.appPath === appPath) {
+    return true
+  }
   for (const root of candidateBundleRoots(appPath)) {
     const manifestPath = join(root, MANIFEST_FILENAME)
     let raw: Buffer
@@ -74,7 +89,11 @@ export function hasValidBundledMobileWebBundle(): boolean {
       continue
     }
     probedRoot = { appPath, root }
-    return parseAndCacheBundledMobileWebBundle(root, manifestPath, raw) !== null
+    if (parseAndCacheBundledMobileWebBundle(root, manifestPath, raw) !== null) {
+      validatedRoot = { appPath, root }
+      return true
+    }
+    return false
   }
   return false
 }

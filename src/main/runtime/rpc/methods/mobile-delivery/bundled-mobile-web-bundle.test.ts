@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { hasValidBundledMobileWebBundle } from './bundled-mobile-web-bundle'
+import {
+  hasValidBundledMobileWebBundle,
+  loadBundledMobileWebBundle
+} from './bundled-mobile-web-bundle'
 import {
   installMobileWebBundleAppPath,
   writeSyntheticMobileWebBundle
@@ -42,7 +45,7 @@ describe('hasValidBundledMobileWebBundle', () => {
     expect(hasValidBundledMobileWebBundle()).toBe(false)
   })
 
-  it('returns true when manifest.json parses and validates, and recovers after an invalid write', () => {
+  it('caches a validated manifest to avoid repeated sync reads and clears cache when async load sees it gone', async () => {
     const bundleRoot = join(scratch, 'out', 'mobile-web')
     mkdirSync(bundleRoot, { recursive: true })
     writeFileSync(join(bundleRoot, 'manifest.json'), 'not-json', 'utf8')
@@ -51,7 +54,12 @@ describe('hasValidBundledMobileWebBundle', () => {
     writeSyntheticMobileWebBundle(bundleRoot, 1)
     expect(hasValidBundledMobileWebBundle()).toBe(true)
 
+    // Removing the file does not trigger a repeated sync read while the validated root is cached.
     rmSync(join(bundleRoot, 'manifest.json'))
+    expect(hasValidBundledMobileWebBundle()).toBe(true)
+
+    // An async load observes the missing file and invalidates the cached verdict.
+    expect(await loadBundledMobileWebBundle()).toBeNull()
     expect(hasValidBundledMobileWebBundle()).toBe(false)
   })
 })
