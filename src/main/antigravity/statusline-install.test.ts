@@ -1,4 +1,5 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import { createServer } from 'node:http'
 import {
   chmodSync,
   existsSync,
@@ -187,6 +188,95 @@ describe.skipIf(process.platform === 'win32')('Antigravity status-line installer
     expect((await getAntigravityStatusLineStatus(options())).state).toBe('error')
     expect((await removeAntigravityStatusLine(options())).state).toBe('error')
     expect(existsSync(recordPath)).toBe(true)
+  })
+
+  it('keeps keys the user added to a statusLine Orca created, and drops only its own', async () => {
+    seed(WITHOUT_STATUS_LINE)
+    await installAntigravityStatusLine(options())
+    writeFileSync(
+      settingsPath,
+      read().replace(
+        /"command": "[^"]*"/,
+        (command) => `${command}, "enabled": false, "padding": 2`
+      )
+    )
+    expect((await removeAntigravityStatusLine(options())).state).toBe('not_installed')
+    expect(JSON.parse(read()).statusLine).toEqual({ enabled: false, padding: 2 })
+    expect(JSON.parse(read()).theme).toBe('dark')
+  })
+
+  it('keeps the restore record while a duplicate key makes the slot ambiguous', async () => {
+    seed(WITH_COMMAND)
+    await installAntigravityStatusLine(options())
+    const ambiguous = read().replace('"type": "command",', '"type": "command","command": "other",')
+    writeFileSync(settingsPath, ambiguous)
+    expect((await getAntigravityStatusLineStatus(options())).state).toBe('error')
+    expect((await removeAntigravityStatusLine(options())).state).toBe('error')
+    expect(read()).toBe(ambiguous)
+    expect(existsSync(recordPath)).toBe(true)
+    // Once the extra key is gone, the record still restores the original.
+    writeFileSync(settingsPath, read().replace('"command": "other",', ''))
+    expect((await removeAntigravityStatusLine(options())).state).toBe('not_installed')
+    expect(read()).toBe(WITH_COMMAND)
+  })
+
+  it.skipIf(process.getuid?.() === 0)(
+    'will not replace or roll back an existing script it cannot read',
+    async () => {
+      seed(WITH_COMMAND)
+      await installAntigravityStatusLine(options())
+      await removeAntigravityStatusLine(options())
+      chmodSync(scriptPath, 0o000)
+      try {
+        expect((await installAntigravityStatusLine(options())).state).toBe('error')
+        expect(read()).toBe(WITH_COMMAND)
+        expect(existsSync(scriptPath)).toBe(true)
+      } finally {
+        chmodSync(scriptPath, 0o700)
+      }
+    }
+  )
+
+  it('stops the kept script posting as soon as the feature is turned off, even if settings are broken', async () => {
+    const posts: string[] = []
+    const server = createServer((req, res) => {
+      posts.push(req.url ?? '')
+      req.resume()
+      res.writeHead(204).end()
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    const port = typeof address === 'object' && address !== null ? address.port : 0
+    const callScript = (pane: string): Promise<void> =>
+      new Promise((resolve) => {
+        const child = spawn('sh', [scriptPath], {
+          env: {
+            PATH: process.env.PATH ?? '',
+            TMPDIR: home,
+            ORCA_AGENT_HOOK_PORT: String(port),
+            ORCA_AGENT_HOOK_TOKEN: 't',
+            ORCA_PANE_KEY: pane
+          }
+        })
+        child.on('close', () => resolve())
+        child.stdin.end('{"quota":{"gemini-5h":{"remaining_fraction":0.5}}}')
+      })
+    try {
+      seed(WITH_COMMAND)
+      await installAntigravityStatusLine(options())
+      await callScript('tab:11111111-1111-1111-1111-111111111111')
+      await expect.poll(() => posts.length).toBe(1)
+
+      writeFileSync(settingsPath, '{ "broken": ')
+      expect((await removeAntigravityStatusLine(options())).state).toBe('error')
+      await callScript('tab:22222222-2222-2222-2222-222222222222')
+      // ast-grep-ignore: test-no-real-time-wait -- absence of a background POST can only be shown by waiting past a localhost round trip
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      expect(posts).toHaveLength(1)
+    } finally {
+      server.closeAllConnections()
+      await new Promise((resolve) => server.close(resolve))
+    }
   })
 
   it('names a turned-off status line in the error', async () => {

@@ -109,17 +109,8 @@ export function insertStatusLineMember(text: string, entry: StatusLineEntry): st
   return `${text.slice(0, memberEnd(last))},${lead}"statusLine"${colon}${rendered}${text.slice(memberEnd(last))}`
 }
 
-/** Drops the statusLine member with the comma that joined it to a neighbor. */
-export function removeStatusLineMember(text: string): string | null {
-  const parsed = rootMembers(text)
-  if (!parsed) {
-    return null
-  }
-  const { root, members } = parsed
-  const index = members.findIndex((member) => memberName(member) === 'statusLine')
-  if (index === -1) {
-    return text
-  }
+/** Removes `members[index]` of `container` with the comma that joined it to a neighbor. */
+function spliceMember(text: string, container: Node, members: Node[], index: number): string {
   const member = members[index]
   if (index > 0) {
     return text.slice(0, memberEnd(members[index - 1])) + text.slice(memberEnd(member))
@@ -127,5 +118,38 @@ export function removeStatusLineMember(text: string): string | null {
   if (members.length > 1) {
     return text.slice(0, member.offset) + text.slice(members[1].offset)
   }
-  return text.slice(0, root.offset + 1) + text.slice(memberEnd(root) - 1)
+  return text.slice(0, container.offset + 1) + text.slice(memberEnd(container) - 1)
+}
+
+/** Drops the statusLine member with the comma that joined it to a neighbor. */
+export function removeStatusLineMember(text: string): string | null {
+  const parsed = rootMembers(text)
+  if (!parsed) {
+    return null
+  }
+  const index = parsed.members.findIndex((member) => memberName(member) === 'statusLine')
+  return index === -1 ? text : spliceMember(text, parsed.root, parsed.members, index)
+}
+
+/**
+ * Takes back what an install put into a statusLine that did not exist before: its `type` and
+ * `command`. Keys the user added since stay, and the statusLine goes only once it is empty.
+ */
+export function removeInsertedStatusLineKeys(text: string): string | null {
+  let next = text
+  for (const key of ['command', 'type']) {
+    const statusLine = rootMembers(next)?.members.find(
+      (member) => memberName(member) === 'statusLine'
+    )?.children?.[1]
+    const members = statusLine?.children ?? []
+    const index = members.findIndex((member) => memberName(member) === key)
+    if (!statusLine || statusLine.type !== 'object') {
+      return null
+    }
+    if (index !== -1) {
+      next = spliceMember(next, statusLine, members, index)
+    }
+  }
+  const left = rootMembers(next)?.members.find((member) => memberName(member) === 'statusLine')
+  return (left?.children?.[1]?.children ?? []).length === 0 ? removeStatusLineMember(next) : next
 }

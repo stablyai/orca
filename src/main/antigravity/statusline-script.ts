@@ -26,7 +26,7 @@ const JSON_FIELD_LINES = [
   '  case "$orca_agy_rest" in "$orca_agy_q"*) ;; *) return 1 ;; esac',
   '  orca_agy_rest=${orca_agy_rest#"$orca_agy_q"}',
   '  orca_agy_value=${orca_agy_rest%%"$orca_agy_q"*}',
-  // A backslash means an escape sequence this parser does not decode.
+  // A JSON escape in a field is not decoded: that field is skipped, and the row may fall back to `? for shortcuts`.
   "  case \"$orca_agy_value\" in ''|*'\\'*) return 1 ;; esac",
   '}',
   'orca_agy_json_number() {',

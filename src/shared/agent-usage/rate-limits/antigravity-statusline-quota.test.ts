@@ -86,13 +86,15 @@ describe('readAntigravityStatusLineQuota', () => {
   it('returns null without a quota object', () => {
     expect(readAntigravityStatusLineQuota(payload(undefined), NOW)).toBeNull()
     expect(readAntigravityStatusLineQuota(payload('nope'), NOW)).toBeNull()
+    expect(readAntigravityStatusLineQuota(payload([]), NOW)).toBeNull()
   })
 
   it('reads a quota object with no usable pool as an empty reading, so held values can be cleared', () => {
     for (const quota of [
       {},
       { 'gemini-5h': { reset_time: 'x' } },
-      { 'gemini-5h': { remaining_fraction: 1, disabled: true } }
+      { 'gemini-5h': { remaining_fraction: 1, disabled: true } },
+      { 'gemini-5h': [{ remaining_fraction: 0.5 }] }
     ]) {
       expect(readAntigravityStatusLineQuota(payload(quota), NOW)?.buckets).toEqual([])
     }

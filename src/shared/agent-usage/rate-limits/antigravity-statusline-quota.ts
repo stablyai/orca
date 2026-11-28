@@ -25,7 +25,7 @@ export const ANTIGRAVITY_POOL_LABELS = {
 } as const
 
 function isQuotaPayload(value: unknown): value is QuotaPayload {
-  return typeof value === 'object' && value !== null
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -49,7 +49,7 @@ function parseIsoInstant(value: unknown): number {
 }
 
 function parseWindow(value: unknown, receivedAt: number): ParsedWindow | null {
-  if (typeof value !== 'object' || value === null || !('remaining_fraction' in value)) {
+  if (!isQuotaPayload(value) || !('remaining_fraction' in value)) {
     return null
   }
   if ('disabled' in value && value.disabled === true) {

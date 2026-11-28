@@ -1,4 +1,4 @@
-import { readFile, rm } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import { getAntigravityStatusLineScript } from './statusline-script'
 import type { AntigravityStatusLineStatus } from '../../shared/agent-usage/rate-limits/antigravity-statusline-status'
 import {
@@ -20,7 +20,7 @@ import {
   hasJsonComments,
   insertStatusLineMember,
   inspectStatusLine,
-  removeStatusLineMember,
+  removeInsertedStatusLineKeys,
   replaceStatusLineCommand,
   type StatusLineEntry,
   type StatusLineInspection
@@ -100,6 +100,9 @@ export async function getAntigravityStatusLineStatus(
       ? status(paths, 'error', INVALID)
       : status(paths, 'not_installed')
   }
+  if (slot?.kind === 'unsupported' && record) {
+    return status(paths, 'error', slot.detail)
+  }
   if (slot?.kind !== 'command' || slot.command !== paths.installedCommand) {
     return status(paths, 'not_installed')
   }
@@ -109,10 +112,6 @@ export async function getAntigravityStatusLineStatus(
   return (await fileExists(paths.script))
     ? status(paths, 'installed')
     : status(paths, 'error', 'The managed status-line script is missing')
-}
-
-async function readRawOrNull(path: string): Promise<string | null> {
-  return readFile(path, 'utf8').catch(() => null)
 }
 
 export async function installAntigravityStatusLine(
@@ -127,9 +126,20 @@ export async function installAntigravityStatusLine(
     return status(paths, 'error', resolved.error)
   }
   let text = await readTextOrNull(resolved.target)
-  const before = {
-    record: await readRawOrNull(paths.record),
-    script: await readRawOrNull(paths.script)
+  // Only a missing file counts as absent; one Orca cannot read must not be replaced or rolled back.
+  const before = await Promise.all([
+    readTextOrNull(paths.record),
+    readTextOrNull(paths.script)
+  ]).then(
+    ([record, script]) => ({ record, script }),
+    () => null
+  )
+  if (before === null) {
+    return status(
+      paths,
+      'error',
+      "Could not read Orca's existing status-line files; left unchanged"
+    )
   }
   let wrote = false
   let done = false
@@ -182,7 +192,7 @@ function planRemoval(text: string, record: InstallRecord): RemovalPlan {
   }
   const next =
     record.originalCommandLiteral === undefined
-      ? removeStatusLineMember(text)
+      ? removeInsertedStatusLineKeys(text)
       : (replaceStatusLineCommand(text, record.originalCommandLiteral)?.text ?? null)
   return next === null ? { error: INVALID } : { next }
 }
@@ -191,16 +201,28 @@ export async function removeAntigravityStatusLine(
   options: AntigravityStatusLineOptions = {}
 ): Promise<AntigravityStatusLineStatus> {
   const paths = resolvePaths(options)
+  const record = await readRecord(paths.record)
+  // Turning the feature off ends its consent first: whatever happens to settings, the wrapper
+  // a running agy may still call keeps the user's command and the row but never posts.
+  if (record && (await fileExists(paths.script))) {
+    await writeScript(
+      paths.script,
+      getAntigravityStatusLineScript(record.originalCommand, { forwardQuota: false })
+    )
+  }
   const resolved = await resolveSettingsTarget(paths.settings)
   if ('error' in resolved) {
     return status(paths, 'error', resolved.error)
   }
-  const record = await readRecord(paths.record)
   let text = await readTextOrNull(resolved.target)
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const slot = text === null ? null : inspectStatusLine(text)
     if (slot?.kind === 'invalid') {
       return status(paths, 'error', INVALID)
+    }
+    // With a restore record on hand, a slot Orca cannot read may still hold its command.
+    if (slot?.kind === 'unsupported' && record) {
+      return status(paths, 'error', `${slot.detail}; Orca's restore record is kept`)
     }
     // Ownership is the command alone: agy's own `enabled` switch does not change who owns it.
     if (text !== null && slot?.kind === 'command' && slot.command === paths.installedCommand) {
@@ -216,13 +238,6 @@ export async function removeAntigravityStatusLine(
         text = await readTextOrNull(resolved.target)
         continue
       }
-    }
-    // The script stays for a running agy, but stops posting once the feature is off.
-    if (record && (await fileExists(paths.script))) {
-      await writeScript(
-        paths.script,
-        getAntigravityStatusLineScript(record.originalCommand, { forwardQuota: false })
-      )
     }
     await rm(paths.record, { force: true })
     return status(paths, 'not_installed')
