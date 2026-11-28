@@ -305,6 +305,9 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   ): AgentSessionStartFailure | undefined
   /** The start's owner finished: nothing reads this acquisition's ending any more. */
   retireStartup?(sessionId: string, acquisitionGeneration: string): void
+  /** Synchronous and one-way: this exact child's permission-mode writes lost their owner at an
+   *  admitted close, child-ending Stop, sleep or quit, so none still queued may reach it. */
+  revokePermissionDispatch?(sessionId: string, fence: number, acquisitionGeneration: string): void
   /** Undefined preserves the client catalog when the provider reports none. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands

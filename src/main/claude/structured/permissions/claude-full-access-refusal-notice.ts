@@ -1,14 +1,8 @@
-import { randomUUID } from 'node:crypto'
-import {
-  agentJournalItemKey,
-  parseAgentJournalItemKey
-} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModeCopy } from '../../../../shared/agent-session/options/permissions/structured-agent-session-permission-option'
-import type { JournalSqlReads } from '../../../native-chat/agent-session-journal/journal-sql-reads'
 import { readClaudeReportedPermissionMode } from '../startup/claude-structured-init-proof'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeJournalTranslatorDeps } from '../journal/claude-journal-translator-contract'
@@ -20,7 +14,7 @@ import {
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
 
-type ClaudeNoticeState = Pick<
+export type ClaudeNoticeState = Pick<
   ClaudeSession,
   'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'
 >
@@ -29,13 +23,15 @@ type ClaudeNoticeFacts = Parameters<typeof claudeInPlan>[0] & Pick<ClaudeSession
 
 export type ClaudeFullAccessRefusalNotice = { id: string; body: AgentJournalStatusItem }
 
-const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
-const CLAUDE_REFUSAL_NOTICE_TIMED = 't'
-const EARLIER_PROCESS_WARNING = 'earlier-process'
+export const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
+export const CLAUDE_REFUSAL_NOTICE_TIMED = 't'
+export const EARLIER_PROCESS_WARNING = 'earlier-process'
 export const CLAUDE_AUTO_RESTORED_NOTICE_ID = 'restored:auto'
 export const CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID = 'restored:bypassPermissions'
 const PENDING_FULL_ACCESS_UNCONFIRMED = 'pending-full-access-unconfirmed'
-type ClaudeFullAccessFallback = 'default' | 'unconfirmed'
+/** Both reads of the saved rows failed: in memory only, never a row id or a permission fact. */
+export const CLAUDE_PERMISSION_HISTORY_UNREAD = 'history-unread'
+type ClaudeFullAccessFallback = 'unconfirmed'
 
 /** The chat's permission mode for the fallback Claude accepted. */
 function claudeFallbackChoice(applied: string): string {
@@ -150,60 +146,6 @@ function claimClaudePermissionRestored(
   })
 }
 
-export async function readClaudeEarlierRefusalNotice(
-  session: Pick<ClaudeSession, 'launchIntent' | 'delivery'> & ClaudeNoticeState,
-  reads: Pick<JournalSqlReads, 'newestItemId'> | undefined,
-  assertCurrent: () => void
-): Promise<void> {
-  const intent = session.launchIntent?.permissionMode
-  if (intent !== 'auto' && intent !== 'bypassPermissions') {
-    return
-  }
-  const prefix = agentJournalItemKey({
-    provider: 'orca',
-    clientMessageId: CLAUDE_REFUSAL_NOTICE_PREFIX
-  })
-  const read = () => reads?.newestItemId(prefix, CLAUDE_REFUSAL_NOTICE_TIMED)
-  const result = await read()?.catch(() => {
-    assertCurrent()
-    if (!session.delivery.ready) {
-      return null
-    }
-    return read()?.catch((error: unknown) => {
-      console.warn('[claude] reading the last permission warning failed:', error)
-      return null
-    })
-  })
-  assertCurrent()
-  const notices = (session.fullAccessRefusalNotices ??= { process: randomUUID(), count: 0 })
-  if (!result) {
-    return
-  }
-  const { itemId, greatestTimedId } = result
-  const parts = (key: string | null) => {
-    const identity = key === null ? null : parseAgentJournalItemKey(key)
-    return identity?.provider === 'orca'
-      ? identity.clientMessageId.slice(CLAUDE_REFUSAL_NOTICE_PREFIX.length).split(':')
-      : []
-  }
-  const [timed] = parts(greatestTimedId)
-  const after = Number.parseInt(timed?.slice(1) ?? '', 36)
-  if (Number.isFinite(after)) {
-    notices.after = Math.max(notices.after ?? 0, after)
-  }
-  const newest = parts(itemId)
-  const notice = newest.slice(newest[0]?.startsWith(CLAUDE_REFUSAL_NOTICE_TIMED) ? 3 : 2)
-  const [id] = notice
-  const warning =
-    intent === 'auto'
-      ? id?.startsWith('auto-')
-      : /^(settings|restricted|not-launched|started-outside|running)$/.test(id ?? '')
-  const restored = `restored:${intent}`
-  if (warning || notice.join(':') === restored) {
-    session.fullAccessRefusalNoticeId ??= warning ? EARLIER_PROCESS_WARNING : restored
-  }
-}
-
 export function claimClaudeFullAccessRefusalNotice(
   session: ClaudeSession,
   fallback?: ClaudeFullAccessFallback
@@ -229,7 +171,7 @@ export function claimClaudeFullAccessRefusalNotice(
     }
     return notice && claimClaudePermissionNotice(session, notice)
   }
-  const applied = fallback ?? session.appliedInputOptions.get('buildPermissionMode')
+  const applied = session.appliedInputOptions.get('buildPermissionMode')
   if (
     fallback === 'unconfirmed' ||
     (applied === undefined && session.fullAccessRefusalNoticeId === PENDING_FULL_ACCESS_UNCONFIRMED)
@@ -312,7 +254,7 @@ export function journalClaudeSessionPermissionNotice(
         sink: session.events,
         fullAccessRefusalNotice: () => claimClaudeFullAccessRefusalNotice(session, fallback)
       },
-      turnScope
+      () => turnScope
     )
   }
 }

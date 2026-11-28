@@ -4,10 +4,8 @@ import {
   permissionTestSession,
   savedNotice
 } from './__tests__/claude-permission.test-fixture'
-import {
-  claimClaudeFullAccessRefusalNotice,
-  readClaudeEarlierRefusalNotice
-} from './claude-full-access-refusal-notice'
+import { claimClaudeFullAccessRefusalNotice } from './claude-full-access-refusal-notice'
+import { readClaudeEarlierRefusalNotice } from './claude-permission-notice-history'
 
 it('recovers the earlier warning after one transient journal lookup failure', async () => {
   const { session, frame, rows } = permissionTestSession('bypassPermissions')

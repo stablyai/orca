@@ -31,6 +31,7 @@ import {
   providerRelayHandedOffAtQuit
 } from '../../../provider-relay/app-provider-relays'
 import { quitKeepsStructuredAgent } from './structured-agent-session-quit-keeps-agent'
+import { revokeStructuredAgentSessionPermissionDispatch } from '../host/structured-agent-session-permission-revocation'
 
 import {
   recordStopEvent,
@@ -81,6 +82,11 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     return
   }
   if (!child.close) {
+    // The child's end is decided here (a conditional one once its predicate holds): its queued
+    // permission writes go no further.
+    if (!onlyIf) {
+      revokeStructuredAgentSessionPermissionDispatch(context.deps.adapter, sessionId, child)
+    }
     const endsWork = await stopEndsWork(context, sessionId, session, ending)
     if (
       onlyIf &&
@@ -100,6 +106,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       recorded,
       requestedAt: session.journal.cursor()
     }
+    revokeStructuredAgentSessionPermissionDispatch(context.deps.adapter, sessionId, child)
   } else if (child.close.cause === cause) {
     // Repeated same-cause closes include newer queued work and rebind what shutdown cuts.
     child.close.requestedAt = session.journal.cursor()
@@ -298,6 +305,8 @@ async function detachKeptAgentUnderSerialize(
   if (!handedOff && !(await detachProviderRelayForQuit(sessionId, open))) {
     return false
   }
+  // Handed to the daemon: this app writes no more permission modes to it.
+  revokeStructuredAgentSessionPermissionDispatch(context.deps.adapter, sessionId, session.child)
   // The agent goes on: what the adapter would still write here (its own teardown settling the turn,
   // lines read past the last ack) is dropped, and the unacked lines replay at the next launch.
   const sink = context.runtimeState.currentEventSink(sessionId)

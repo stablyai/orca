@@ -41,6 +41,7 @@ import {
   structuredAgentSessionStopNoteIdentity,
   structuredAgentSessionCommandWasStopped
 } from './structured-agent-session-command-turn'
+import { revokeStructuredAgentSessionPermissionDispatch } from '../host/structured-agent-session-permission-revocation'
 
 type ChatStopOutcome = TurnOutcome<AgentSessionCancelResult>
 
@@ -211,6 +212,15 @@ export function mutateWithChatStop<TValue>(
     for (const abort of operations) {
       abort()
       reached = true
+    }
+    // A Stop that ends the captured child cuts its permission writes at its receipt; an interrupt
+    // or a withdrawal keeps the child, which keeps them.
+    if (
+      (target.reach === 'close' || target.reach === 'starting') &&
+      target.child &&
+      context.sessions.get(sessionId)?.child === target.child
+    ) {
+      revokeStructuredAgentSessionPermissionDispatch(context.deps.adapter, sessionId, target.child)
     }
     // Accepted Stop invalidates claims made even after its early abort.
     if (flight && (target.queued || target.reach === 'withdraw' || target.reach === 'starting')) {

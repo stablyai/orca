@@ -93,11 +93,11 @@ async function applyPick(
       await askKeptBypass(session, timeoutMs)
       return
     }
-    recordClaudeBuildMode(
-      session,
-      holds,
-      await setClaudeAllowedPermissionMode(session, mode, { timeoutMs })
-    )
+    const applied = await setClaudeAllowedPermissionMode(session, mode, { timeoutMs })
+    // Undefined: a newer request or the child's end took the write over; it records nothing.
+    if (applied !== undefined) {
+      recordClaudeBuildMode(session, holds, applied)
+    }
   } catch (error) {
     if (holds() && mode === 'bypassPermissions') {
       // Unknown or refused: the next message asks again (a refusal takes the fallback).
@@ -150,7 +150,7 @@ export async function sendKeptPickMadeLeavingPlan(
     }
     // A newer pick while Claude answered goes out next, not this one again.
     if (current()) {
-      mode = await setClaudeAllowedPermissionMode(session, latest, { timeoutMs })
+      mode = (await setClaudeAllowedPermissionMode(session, latest, { timeoutMs })) ?? null
     }
   }
 }

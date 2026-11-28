@@ -4,6 +4,10 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudeBypassRefusal, ClaudeSession } from '../claude-structured-session-state'
 import {
+  claudePermissionWriteAdmitted,
+  type ClaudePermissionWriteOptions
+} from './claude-permission-dispatch-authority'
+import {
   ClaudeControlRequestTimeoutError,
   isClaudeQueryClosed
 } from '../../sdk-transport/claude-agent-sdk-control-requests'
@@ -18,6 +22,7 @@ import {
 import {
   CLAUDE_AUTO_RESTORED_NOTICE_ID,
   CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID,
+  CLAUDE_PERMISSION_HISTORY_UNREAD,
   journalClaudeSessionPermissionNotice
 } from './claude-full-access-refusal-notice'
 
@@ -159,11 +164,11 @@ export class ClaudePermissionModeUnsettled extends Error {
 /** Asks for the mode Claude allows and resolves to the mode applied, remembering what Claude
  *  accepted or refused for this process. Claude rereads its settings, so bypass or auto it
  *  allowed earlier can be refused later; that refusal is followed by the fallback, and a
- *  refusal with no fallback left is the caller's error. */
+ *  refusal with no fallback left is the caller's error. Undefined: the request lost its owner. */
 export function setClaudeAllowedPermissionMode(
   session: ClaudeSession,
   mode: PermissionMode,
-  options?: { timeoutMs?: number }
+  options?: ClaudePermissionWriteOptions
 ): Promise<PermissionMode | undefined> {
   const request = claimClaudePermissionModeRequest(session)
   return writeClaudePermissionMode(session, mode, options, request)
@@ -172,32 +177,24 @@ export function setClaudeAllowedPermissionMode(
 async function writeClaudePermissionMode(
   session: ClaudeSession,
   mode: PermissionMode,
-  options: { timeoutMs?: number } | undefined,
+  options: ClaudePermissionWriteOptions | undefined,
   request: number,
   refusedBefore?: ReadonlySet<PermissionMode>
 ): Promise<PermissionMode | undefined> {
-  if (mode === 'plan') {
-    await session.connection.setPermissionMode(mode, options)
-    if (session.permissionModeRequests === request) {
-      session.appliedInputOptions.set('interactionMode', mode)
-      return mode
-    }
-    return undefined
+  const admits = claudePermissionWriteAdmitted(session, request, options?.signal)
+  if (!admits()) {
+    return
   }
   const ladder = claudePermissionModeLadder(session, mode)
   const writes = await Promise.allSettled(
     ladder.map(async (step) => {
-      await session.connection.setPermissionMode(step, options)
-      if (
-        step === 'default' &&
-        session.launchIntent?.permissionMode === 'auto' &&
-        session.permissionModeRequests === request
-      ) {
+      await session.connection.setPermissionMode(step, { timeoutMs: options?.timeoutMs, admits })
+      if (step === 'default' && session.launchIntent?.permissionMode === 'auto' && admits()) {
         session.askAcknowledgedAtReport = session.reportedOptions.permissionModeReportSequence ?? 0
       }
     })
   )
-  if (session.permissionModeRequests !== request) {
+  if (!admits()) {
     return
   }
   const now = Date.now()
@@ -267,29 +264,17 @@ async function writeClaudePermissionMode(
   // A mode Claude accepted after a failed write is the one it runs, so only a failure after the
   // last acceptance leaves the outcome unknown.
   if (unexpected && unexpected.index > appliedIndex) {
+    // Ask answered and Auto didn't, with bypass ruled out: Full access is off, but Claude's mode
+    // stays unconfirmed until the next send asks again. Said where a saved row or an unread
+    // history could otherwise leave an older row as the chat's last word.
     if (
       applied === 'default' &&
       ladder.at(-1) === 'auto' &&
       claudeLeftUnanswered(unexpected.error) &&
-      session.fullAccessRefusalNoticeId === CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID
+      (session.fullAccessRefusalNoticeId === CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID ||
+        session.fullAccessRefusalNoticeId === CLAUDE_PERMISSION_HISTORY_UNREAD)
     ) {
-      session.appliedInputOptions.delete('buildPermissionMode')
-      const fallback = await writeClaudePermissionMode(
-        session,
-        'default',
-        options,
-        request,
-        refused
-      ).catch((error: unknown) => (claudeLeftUnanswered(error) ? 'unconfirmed' : undefined))
-      if (session.permissionModeRequests !== request) {
-        return
-      }
-      if (fallback === 'default' || fallback === 'unconfirmed') {
-        journalClaudeSessionPermissionNotice(session, undefined, fallback)
-        if (fallback === 'default') {
-          return fallback
-        }
-      }
+      journalClaudeSessionPermissionNotice(session, undefined, 'unconfirmed')
     }
     throw applied === null
       ? unexpected.error

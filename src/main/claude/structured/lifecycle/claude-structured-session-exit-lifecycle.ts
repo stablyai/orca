@@ -58,6 +58,7 @@ export function observeClaudeSessionExit(
   if (!session || session.connection !== attempt.connection) {
     return
   }
+  session.permissionDispatchRevoked = true
   session.historyCatchUp?.abort()
   const observedAt = lifecycle.deps.now?.() ?? Date.now()
   session.delivery.dispose()

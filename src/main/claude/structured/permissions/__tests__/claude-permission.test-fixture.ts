@@ -3,7 +3,10 @@ import { agentJournalItemKey } from '../../../../../shared/agent-session/journal
 import { ClaudeBackgroundTaskTracker } from '../../../background-tasks/claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from '../../../child-work/claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from '../../../command-catalog/claude-slash-command-catalog'
-import { runClaudeControl } from '../../../sdk-transport/claude-agent-sdk-control-requests'
+import {
+  runClaudeControl,
+  setClaudePermissionMode
+} from '../../../sdk-transport/claude-agent-sdk-control-requests'
 import type { StructuredAgentSessionEventSink } from '../../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeSession } from '../../claude-structured-session-state'
 import { ClaudeJournalBoundDelivery } from '../../journal/claude-journal-bound-delivery'
@@ -19,7 +22,11 @@ import {
   claimClaudeFullAccessRefusalNotice,
   journalClaudeSessionPermissionNotice
 } from '../claude-full-access-refusal-notice'
-import { observeClaudeRootInit, readClaudeRootInit } from '../claude-permission-startup'
+import {
+  observeClaudeRootInit,
+  readClaudeRootInit,
+  startClaudeStartupFallback
+} from '../claude-permission-startup'
 import { ClaudePromptRegistry } from '../claude-prompt-registry'
 
 export function permissionTestSession(
@@ -27,6 +34,11 @@ export function permissionTestSession(
   reply: (mode: PermissionMode) => Promise<void> = async () => {}
 ) {
   const writes: PermissionMode[] = []
+  const sendMode = setClaudePermissionMode({
+    setPermissionMode: async (mode) => {
+      writes.push(mode)
+    }
+  })
   const rows: string[] = []
   const unused = async (): Promise<never> => {
     throw new Error('Unexpected Claude request')
@@ -50,10 +62,8 @@ export function permissionTestSession(
       interrupt: unused,
       cancelAsyncMessage: unused,
       setModel: async () => {},
-      setPermissionMode: (mode) => {
-        writes.push(mode)
-        return reply(mode)
-      },
+      // The real control's dispatch check: a withheld write is never sent, so never answered.
+      setPermissionMode: (mode, options) => sendMode(mode, options).then(() => reply(mode)),
       applyFlagSettings: async () => {},
       stopTask: unused,
       backgroundTask: unused,
@@ -123,7 +133,7 @@ export function permissionTestSession(
     observeClaudeReportedPermissionMode(session.reportedOptions, message)
     const rootInit = readClaudeRootInit(message)
     if (rootInit) {
-      void observeClaudeRootInit(session, rootInit, () => session)
+      observeClaudeRootInit(session, rootInit)
     }
     translator.handle({ type: 'message', sessionId: 'session', message })
   }
@@ -160,9 +170,14 @@ export function openPermissionTestSession(
   })
 }
 
-export function finishPermissionCatchUp(session: ClaudeSession): void {
+/** Open's end: the startup fallback starts only if no mode request came after `modeRequest`. */
+export function finishPermissionCatchUp(
+  session: ClaudeSession,
+  modeRequest = session.permissionModeRequests
+): void {
   session.initialization.startup.open()
   journalClaudeSessionPermissionNotice(session, { kind: 'thread' })
+  startClaudeStartupFallback(session, modeRequest)
 }
 
 export function refuseClaudePermission(

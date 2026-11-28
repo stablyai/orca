@@ -81,7 +81,7 @@ export async function acquireFullAccessPermissionTestSession(
     }),
     readProcessStartTime: async () => 1,
     openConnection: async (_launch, handlers) => {
-      onMessage = handlers.onMessage
+      onMessage = handlers?.onMessage
       return {
         ...connection,
         pid: 1,
@@ -118,6 +118,7 @@ export async function acquireFullAccessPermissionTestSession(
     }
   })
   const session = sessions.get(sessionId)
+  const opening = new AbortController()
   if (!session) {
     throw new Error('Expected a published Claude session')
   }
@@ -136,9 +137,10 @@ export async function acquireFullAccessPermissionTestSession(
       bound = true
       notifyBound()
     },
+    cancel: () => opening.abort(),
     open: () =>
       openClaudeStructuredSession({
-        request: { sessionId, fence, acquisitionGeneration, signal: new AbortController().signal },
+        request: { sessionId, fence, acquisitionGeneration, signal: opening.signal },
         session,
         sessions,
         deps,

@@ -95,9 +95,7 @@ export async function acquireClaudeSession({
     const rootInit = permission.readClaudeRootInit(message)
     if (rootInit) {
       firstRootInit ??= rootInit
-      void permission.observeClaudeRootInit(liveSession, firstRootInit, () =>
-        sessions.get(sessionId)
-      )
+      permission.observeClaudeRootInit(liveSession, firstRootInit)
     }
     const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
     if (init) {
@@ -277,7 +275,7 @@ export async function acquireClaudeSession({
       ...launch.savedOptions,
       sdkOptions: launch.options
     })
-    permission.prepareClaudeRootInit(session, firstRootInit, sessions, sessionId, input.signal)
+    permission.adoptClaudeLaunchRootInit(session, firstRootInit)
     liveSession = session
     acquisitions.deleteIfCurrent(sessionId, attempt)
     await publication.publishClaudeSessionAttempt({

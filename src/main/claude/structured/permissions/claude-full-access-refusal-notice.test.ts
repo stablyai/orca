@@ -1,9 +1,9 @@
 import { setImmediate } from 'node:timers/promises'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { applyClaudeMessageOptions } from '../launch/claude-structured-message-options'
-import { readClaudeEarlierRefusalNotice } from './claude-full-access-refusal-notice'
+import { readClaudeEarlierRefusalNotice } from './claude-permission-notice-history'
 import { adoptClaudeLaunchRootInit } from './claude-permission-startup'
 import { acquireFullAccessPermissionTestSession } from './__tests__/claude-permission-acquisition.test-fixture'
 import {
@@ -94,67 +94,43 @@ it.each(['current', 'previous'])(
   }
 )
 
+const UNCONFIRMED = "Full access is off, and Claude hasn't confirmed which approval mode it uses."
+const unanswered = (mode: string) =>
+  mode === 'auto'
+    ? Promise.reject(new ClaudeControlRequestTimeoutError('set_permission_mode'))
+    : Promise.resolve()
+
 it.each([
   {
-    finalAskAcked: true,
-    warning:
-      "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode) and Approve for me isn't available right now, so Claude uses Ask for approval instead."
+    history: 'a saved Full access recovery',
+    lookup: async () => savedNotice('restored:bypassPermissions'),
+    warned: [UNCONFIRMED]
   },
   {
-    finalAskAcked: false,
-    warning: "Full access is off, and Claude hasn't confirmed which approval mode it uses."
-  }
+    history: 'both lookups failing',
+    lookup: async (): Promise<null> => {
+      throw new Error('Reader exited')
+    },
+    warned: [UNCONFIRMED]
+  },
+  { history: 'no saved row', lookup: async () => null, warned: [] }
 ])(
-  'replaces a saved Full access recovery when final Ask acknowledgement is $finalAskAcked',
-  async ({ finalAskAcked, warning }) => {
-    let askWrites = 0
-    let autoWrites = 0
-    const { session, rows, writes, frame } = permissionTestSession(
-      'bypassPermissions',
-      async (mode) => {
-        if (
-          (mode === 'auto' && ++autoWrites === 1) ||
-          (mode === 'default' && ++askWrites === 2 && !finalAskAcked)
-        ) {
-          throw new ClaudeControlRequestTimeoutError('set_permission_mode')
-        }
-      }
-    )
+  'with $history, Ask acknowledged and Auto unanswered writes nothing more',
+  async ({ lookup, warned }) => {
+    const { session, rows, writes } = permissionTestSession('bypassPermissions', unanswered)
     await openPermissionTestSession(session, 'default', async () => ({
       effective: { permissions: { disableBypassPermissionsMode: 'disable' } }
     }))
     await session.startupSettings
-    const recovery = recoveryText('bypassPermissions')
-    rows.push(recovery)
-    await readClaudeEarlierRefusalNotice(
-      session,
-      { newestItemId: async () => savedNotice('restored:bypassPermissions') },
-      () => {}
-    )
+    await readClaudeEarlierRefusalNotice(session, { newestItemId: lookup }, () => {})
     finishPermissionCatchUp(session)
 
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
-    try {
-      await applyClaudeMessageOptions(session, {}, undefined)
-      expect(rows).toEqual([recovery, warning])
-      expect(writes).toEqual(['default', 'auto', 'default'])
-      const buildMode = finalAskAcked ? 'default' : undefined
-      expect(session.appliedInputOptions.get('buildPermissionMode')).toBe(buildMode)
-      expect(session.acknowledgedBuildPermissionMode).toBe(buildMode)
-      if (!finalAskAcked) {
-        clock.mockReturnValue(11_000)
-        await applyClaudeMessageOptions(session, {}, undefined)
-        expect(writes).toEqual(['default', 'auto', 'default', 'default', 'auto'])
-        frame('status', 'auto')
-        expect(rows).toEqual([
-          recovery,
-          warning,
-          "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses Approve for me instead."
-        ])
-      }
-    } finally {
-      clock.mockRestore()
-    }
+    await applyClaudeMessageOptions(session, {}, undefined)
+    expect(rows).toEqual(warned)
+    expect(writes).toEqual(['default', 'auto'])
+    // Unconfirmed: nothing is cached, so the next send asks again, as before this warning.
+    expect(session.appliedInputOptions.get('buildPermissionMode')).toBeUndefined()
+    expect(session.fullAccessRefusalNoticeId).not.toBe('history-unread')
   }
 )
 
@@ -172,53 +148,42 @@ it('preserves Full access startup decisions when initialize and root disagree', 
   expect(writes).toEqual([])
 })
 
-it.each(['fallback', 'plan'])(
-  'waits for a saved Full access recovery before %s',
-  async (outcome) => {
+it.each([
+  { outcome: 'open', initDuringLookup: false, sent: ['default', 'auto'], warned: [UNCONFIRMED] },
+  { outcome: 'open', initDuringLookup: true, sent: ['default', 'auto'], warned: [UNCONFIRMED] },
+  { outcome: 'plan', initDuringLookup: false, sent: ['plan'], warned: [] },
+  { outcome: 'close', initDuringLookup: false, sent: [], warned: [] }
+])(
+  'leaves a root init seen before open to open: $outcome (init during lookup $initDuringLookup)',
+  async ({ outcome, initDuringLookup, sent, warned }) => {
     const saved = savedNotice('restored:bypassPermissions')
-    const delayed = Promise.withResolvers<typeof saved>()
-    const planReply = Promise.withResolvers<void>()
-    const finalAskReply = Promise.withResolvers<void>()
-    let askWrites = 0
-    const { session, rows, writes, init, bind, open } =
-      await acquireFullAccessPermissionTestSession(
-        () => delayed.promise,
-        (mode) => {
-          if (mode === 'plan') {
-            return planReply.promise
-          }
-          if (mode === 'default' && ++askWrites === 2) {
-            return finalAskReply.promise
-          }
-          return mode === 'auto' ? refuseClaudePermission('internal_error') : Promise.resolve()
-        }
-      )
-    const recovery = recoveryText('bypassPermissions')
-    rows.push(recovery)
-    init()
+    const lookup = Promise.withResolvers<typeof saved>()
+    const { session, rows, writes, init, bind, open, cancel } =
+      await acquireFullAccessPermissionTestSession(() => lookup.promise, unanswered)
+    if (!initDuringLookup) {
+      init()
+    }
     bind()
     const opened = open()
     await setImmediate()
+    if (initDuringLookup) {
+      init()
+    }
+    expect(writes).toEqual([])
     const plan =
       outcome === 'plan'
         ? applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
         : undefined
-    delayed.resolve(saved)
-    await opened
-    finalAskReply.resolve()
+    if (outcome === 'close') {
+      cancel()
+    }
+    lookup.resolve(saved)
+    await opened.catch(() => {})
+    await plan
     await setImmediate()
 
-    if (plan) {
-      expect(writes).toEqual(['plan'])
-      planReply.resolve()
-      await plan
-      return
-    }
-    expect(rows).toEqual([
-      recovery,
-      "Claude didn't start this chat in Full access and Approve for me isn't available right now, so Claude uses Ask for approval instead."
-    ])
-    expect(writes).toEqual(['default', 'auto', 'default'])
+    expect(writes).toEqual(sent)
+    expect(rows).toEqual(warned)
   }
 )
 
