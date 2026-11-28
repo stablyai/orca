@@ -34,6 +34,7 @@ import { replySubject } from '../../../../../../shared/orchestration/mailbox/rep
 import {
   isLegacyAttachmentRefusal,
   legacyAttachmentError,
+  legacyAttachmentRefusal,
   refuseLegacyAttachedRecipient
 } from './legacy-attachment-recipient-refusal'
 
@@ -225,7 +226,8 @@ function refuseNewlyLegacyAttachedSender(
   terminalRecipient: TerminalAgentRecipient
 ): void {
   const from = original.from_handle
-  if (from.startsWith('run:') || from.startsWith('dispatch:')) {
+  // Cheap first: only a sender with a live attachment needs its routing resolved again.
+  if (!legacyAttachmentRefusal(db, from, runtime.getLiveTerminalPaneKey(from))) {
     return
   }
   const current = resolveBareOrchestrationRecipient({

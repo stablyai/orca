@@ -40,8 +40,9 @@ can still have live or unverifiable resources.
   `orchestration.remote-owned-workers.v1` can reuse an eligible open agent,
   reopen a resumable session, start fresh with prior context, or refuse when the
   workspace or restartable agent is missing; the receipt says what occurred.
-- Only legacy paired-server attachments refuse `send` with `dispatch_inactive`;
-  on that refusal, start new work there with `worker-start --on <server>`.
+- Only legacy paired-server attachments refuse `send --to dispatch:<id>` with
+  `dispatch_inactive`; on that refusal, start new work there with
+  `worker-start --on <server>`.
 
 ## Destroyed: the process is proven gone
 
