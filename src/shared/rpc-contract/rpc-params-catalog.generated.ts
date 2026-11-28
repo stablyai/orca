@@ -1946,6 +1946,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'managedRuntime.subscribe': ManagedRuntimeAgentParams,
   'managedServer.cancelStop': ManagedServerSelector,
   'managedServer.forget': ManagedServerSelector,
+  'managedServer.forgetLocal': ManagedServerSelector,
   'managedServer.recover': ManagedServerRecover,
   'managedServer.rollback': ManagedServerSelector,
   'managedServer.status': ManagedServerSelector,

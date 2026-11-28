@@ -33,6 +33,34 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca host list', 'orca host list --json']
   },
   {
+    path: ['host', 'stop'],
+    destructive: true,
+    summary: 'Stop the Orca server on an SSH host (same as Stop… in Settings)',
+    usage: 'orca host stop --environment <server> --yes [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment', 'yes'],
+    notes: [
+      'Stops the managed Orca server on that host, proving the exit before the record is released.',
+      'Desktop runtime only, like `orca environment stop`: a headless `orca serve` answers `managed_server_unavailable`.',
+      'A refusal (live terminals, unreachable daemon) is reported as an error, not a success.',
+      'Takes the server selector `orca environment list` prints (id or name), not `ssh:<id>`.'
+    ],
+    examples: ['orca host stop --environment build-box --yes']
+  },
+  {
+    path: ['host', 'forget'],
+    destructive: true,
+    summary: 'Forget a managed server whose host is gone (same as Forget… in Settings)',
+    usage: 'orca host forget --environment <server> --yes [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment', 'yes'],
+    notes: [
+      'Does not contact the host: it drops the local registration and reports the outcome as unverifiable.',
+      'Headless `orca serve` only, where `orca environment forget` refuses: a desktop runtime answers with a pointer to `orca environment forget`.',
+      'An SSH target this Orca runtime created is removed with the registration; a user-created target the server merely used keeps its place.',
+      'Use `host stop` when the host still answers; forgetting cannot prove the server stopped.'
+    ],
+    examples: ['orca host forget --environment build-box --yes']
+  },
+  {
     path: ['host', 'rm'],
     destructive: true,
     summary: 'Remove one saved SSH target from this Orca host',

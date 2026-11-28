@@ -22,6 +22,7 @@ import { SKILL_METHODS } from './skills/skills'
 import { LINK_PREVIEW_METHODS } from './link-preview/link-preview'
 import { DIAGNOSTICS_METHODS } from './host-management/diagnostics'
 import { MANAGED_SERVER_METHODS } from './host-management/managed-server'
+import { MANAGED_SERVER_LOCAL_METHODS } from './managed-servers-local'
 import { AI_VAULT_METHODS } from './history/ai-vault'
 import { MANAGED_RUNTIME_INSTALL_METHODS } from './host-management/managed-runtime-install'
 import { AGENT_CLI_UPDATE_METHODS } from './host-management/agent-cli-update'
@@ -130,6 +131,7 @@ const SERVICE_RPC_METHODS = [
   ...LINK_PREVIEW_METHODS,
   ...DIAGNOSTICS_METHODS,
   ...MANAGED_SERVER_METHODS,
+  ...MANAGED_SERVER_LOCAL_METHODS,
   ...SSH_METHODS,
   ...PLUGIN_METHODS,
   ...PLUGIN_VIEW_METHODS,

@@ -85,8 +85,11 @@ export const LAZY_INTEGRATION_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] =
     ['diagnostics.'],
     async () => (await import('./host-management/diagnostics')).DIAGNOSTICS_METHODS
   ),
-  prefixRpcMethodGroup(
-    ['managedServer.'],
-    async () => (await import('./host-management/managed-server')).MANAGED_SERVER_METHODS
-  )
+  prefixRpcMethodGroup(['managedServer.'], async () => {
+    const [{ MANAGED_SERVER_METHODS }, { MANAGED_SERVER_LOCAL_METHODS }] = await Promise.all([
+      import('./host-management/managed-server'),
+      import('./managed-servers-local')
+    ])
+    return [...MANAGED_SERVER_METHODS, ...MANAGED_SERVER_LOCAL_METHODS]
+  })
 ]

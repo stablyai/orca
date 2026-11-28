@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../runtime/terminal/adoption/unshown-live-terminal-placement'
 import type { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
@@ -14,6 +15,7 @@ import { prepareCodexRuntimeHomeForLaunch } from '../agent-accounts/codex-launch
 import { prepareCodexSessionResumeForLaunch } from '../agent-accounts/codex-session-resume-launch'
 import { installServeQuitHandling } from '../serve-launch/serve-quit-handling'
 import { registerHeadlessServeSshHandlers } from '../serve-launch/headless-serve-ssh-registration'
+import { wireHeadlessServeForgetLocal } from '../serve-launch/headless-serve-forget-wiring'
 import { registerCliForHeadlessServe } from '../serve-launch/serve-cli-registration'
 import { scheduleAllPendingHistoryTreeRemovals } from '../../pty/history/terminal-history-deletion'
 import { startDesktopPushService } from '../cloud-startup/main-process-push-startup'
@@ -81,6 +83,8 @@ export async function launchServeMode(
   publishHeadlessRuntimeGraph(runtime)
   // Register SSH before binding RPC so the first paired client sees targets.
   await registerHeadlessServeSshHandlers(state.store!, runtime)
+  // Before the RPC bind, so a client arriving during startup never sees managed_server_unavailable.
+  wireHeadlessServeForgetLocal(state.store!, () => app.getPath('userData'))
   await runtimeRpc.start().catch((error) => {
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
