@@ -1,3 +1,4 @@
+import { inactiveFloatingWorkspaceActionIds } from '../../../../../shared/settings/floating-workspace-cohort'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import {
   findKeybindingConflicts,
@@ -102,6 +103,10 @@ export function readWebKeybindingDocument(): WebKeybindingDocument {
   }
 }
 
+// A browser tab cannot host the floating workspace, so its actions are always inert here.
+const WEB_INACTIVE_ACTION_IDS = inactiveFloatingWorkspaceActionIds(false)
+let webSnapshotGeneration = 0
+
 export function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
   const platform = getWebKeybindingPlatform()
   const diagnostics: KeybindingFileDiagnostic[] = []
@@ -117,16 +122,21 @@ export function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
     resolveKeybindingOverrides(
       platform,
       { ...commonOverrides, ...platformOverrides[platform] },
-      getWebDefaultOverrides()
+      getWebDefaultOverrides(),
+      WEB_INACTIVE_ACTION_IDS
     ),
-    diagnostics
+    diagnostics,
+    WEB_INACTIVE_ACTION_IDS
   )
+  webSnapshotGeneration += 1
 
   return {
     path: 'Browser local storage',
     platform,
     exists: window.localStorage.getItem(KEYBINDINGS_STORAGE_KEY) !== null,
     overrides,
+    floatingWorkspaceShortcutsActive: false,
+    generation: webSnapshotGeneration,
     defaultOverrides: getWebDefaultOverrides(),
     commonOverrides,
     platformOverrides,
@@ -167,8 +177,13 @@ export function writeWebKeybindingAction(
   }
   const blockingConflict = findKeybindingConflicts(
     platform,
-    resolveKeybindingOverrides(platform, candidateOverrides, getWebDefaultOverrides()),
-    { includeMainProcessInterception: true }
+    resolveKeybindingOverrides(
+      platform,
+      candidateOverrides,
+      getWebDefaultOverrides(),
+      WEB_INACTIVE_ACTION_IDS
+    ),
+    { includeMainProcessInterception: true, ignoredActionIds: WEB_INACTIVE_ACTION_IDS }
   ).find((conflict) => conflict.actionIds.includes(actionId))
   if (blockingConflict) {
     throw new Error(

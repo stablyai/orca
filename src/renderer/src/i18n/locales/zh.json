@@ -2032,9 +2032,6 @@
             "creation": {
               "f3785eddc2": "新浏览器选项卡"
             }
-          },
-          "availability": {
-            "web": "浮动工作区运行在你自己的计算机上，因此仅在 Orca 桌面应用中可用"
           }
         }
       },
@@ -16507,8 +16504,7 @@
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "显示浮动工作区",
             "4cb418b991": "显示浮动工作区，有新活动",
-            "5785dd9148": "最小化浮动工作区",
-            "bfe7809a70": "{{value0}} 浮动工作区 ({{value1}})"
+            "5785dd9148": "最小化浮动工作区"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "最小化",

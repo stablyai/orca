@@ -58,7 +58,8 @@ export type AppShortcutState = {
   activeWorktreeId: AppStoreState['activeWorktreeId']
   actions: AppShortcutActions
   creationLayoutActive: boolean
-  floatingTerminalEnabled: boolean
+  /** From the keybinding snapshot: false keeps floating chords and maximize inert. */
+  floatingWorkspaceShortcutsActive: boolean
   floatingTerminalOpen: boolean
   floatingVisibleTabCount: number
   keybindings: AppStoreState['keybindings']
@@ -87,7 +88,7 @@ export function createAppCommandHandlers(
     activeWorktreeId,
     actions,
     creationLayoutActive,
-    floatingTerminalEnabled,
+    floatingWorkspaceShortcutsActive,
     floatingTerminalOpen,
     keybindings,
     openFloatingWorkspaceMaximized,
@@ -203,7 +204,7 @@ export function createAppCommandHandlers(
     [
       'floatingWorkspace.maximize',
       () => {
-        if (floatingTerminalOpen || !floatingTerminalEnabled) {
+        if (floatingTerminalOpen || !floatingWorkspaceShortcutsActive) {
           return false
         }
         return claim('floatingWorkspace.maximize', openFloatingWorkspaceMaximized)

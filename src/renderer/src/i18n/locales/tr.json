@@ -2784,9 +2784,6 @@
             "creation": {
               "f3785eddc2": "Yeni Tarayıcı Sekmesi"
             }
-          },
-          "availability": {
-            "web": "Kayan çalışma alanı kendi bilgisayarınızda çalışır ve yalnızca Orca masaüstü uygulamasında kullanılabilir."
           }
         }
       },
@@ -17434,8 +17431,7 @@
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Yüzen çalışma alanını göster",
             "4cb418b991": "Yüzen çalışma alanını göster, yeni etkinlik",
-            "5785dd9148": "Yüzen çalışma alanını küçült",
-            "bfe7809a70": "Yüzen çalışma alanını {{value0}} ({{value1}})"
+            "5785dd9148": "Yüzen çalışma alanını küçült"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "Küçült",

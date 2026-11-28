@@ -130,10 +130,11 @@ export function prepareLoadedTerminalSettings(
       : rawOptionAsAlt
   const floatingTerminalDefaultedForAllUsers =
     parsed.settings?.floatingTerminalDefaultedForAllUsers === true
-  // Flip the old persisted off default once; retain later opt-outs.
+  // Existing profiles flip the old persisted off default once and keep later opt-outs; new ones start off.
+  const floatingTerminalCohortDefault = parsed.settings?.floatingWorkspaceInSettings !== false
   const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
-    ? (parsed.settings?.floatingTerminalEnabled ?? true)
-    : true
+    ? (parsed.settings?.floatingTerminalEnabled ?? floatingTerminalCohortDefault)
+    : floatingTerminalCohortDefault
   // Legacy off values conflate default and opt-out; migrate only unstamped profiles.
   const migratedOsc52Clipboard = normalizeOsc52ClipboardDefaultOn(parsed.settings)
   const osc52ClipboardNoticePending =

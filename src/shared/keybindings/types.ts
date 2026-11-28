@@ -161,6 +161,10 @@ export type KeybindingFileSnapshot = {
   commonOverrides: KeybindingOverrides
   platformOverrides: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
   diagnostics: KeybindingFileDiagnostic[]
+  /** Published with `overrides` so readers never pair this predicate with another map; absent = inactive. */
+  floatingWorkspaceShortcutsActive?: boolean
+  /** Increases with every publish from one source; readers drop a snapshot older than one they applied. */
+  generation?: number
 }
 
 export type PlatformBindings = {

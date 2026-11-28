@@ -30,7 +30,7 @@ function handlers(): Map<string, () => boolean> {
     activeWorktreeId: s.activeWorktreeId,
     actions: { toggleSidebar: () => useAppStore.getState().toggleSidebar() },
     creationLayoutActive: false,
-    floatingTerminalEnabled: false,
+    floatingWorkspaceShortcutsActive: false,
     floatingTerminalOpen: false,
     floatingVisibleTabCount: 0,
     keybindings: s.keybindings,

@@ -1,6 +1,6 @@
 import { runWithFinally } from '@/lib/run-with-finally'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { useFloatingWorkspaceShortcutLabel } from '@/lib/keyboard/with-shortcut-hint'
 import { useAppStore } from '../../../store/index'
 import { selectFloatingWorkspaceHasUnread } from '../../../store/workspaces/floating/floating-workspace-unread-selector'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -23,7 +23,7 @@ import { useTranslate } from '@/i18n/use-translate'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
-  const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
+  const floatingTerminalShortcut = useFloatingWorkspaceShortcutLabel('floatingTerminal.toggle')
   const localRateLimits = useAppStore((s) => s.rateLimits)
   // Why: with a remote account owner the agents run there, so its usage is the one to show.
   const ownerUsage = useOwnerUsageRateLimits(localRateLimits)

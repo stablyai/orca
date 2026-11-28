@@ -25,6 +25,8 @@ import {
   type TextShortcutInput
 } from '../../../shared/keybindings/text-input-shortcut-policy'
 
+import { areFloatingWorkspaceShortcutsActive } from '../../../shared/settings/floating-workspace-cohort'
+
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
   mainWindow: BrowserWindow
@@ -151,6 +153,9 @@ export function installMainWindowShortcutRouting(args: {
       context: 'app',
       terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
+    const floatingWorkspaceShortcutsActive = areFloatingWorkspaceShortcutsActive(
+      nativeSettings?.getSettings()
+    )
 
     if (textInputOwnsComposition(input)) {
       doubleTapDetector.reset()
@@ -176,7 +181,7 @@ export function installMainWindowShortcutRouting(args: {
           { type: 'keyDown', doubleTapModifier: detected.modifier },
           process.platform,
           keybindings,
-          appShortcutContext
+          { ...appShortcutContext, floatingWorkspaceShortcutsActive }
         )
         if (
           doubleTapAction &&
@@ -215,12 +220,10 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     // Allowlist interception so readline control chords reach the PTY.
-    const action = resolveWindowShortcutAction(
-      input,
-      process.platform,
-      keybindings,
-      terminalShortcutContext
-    )
+    const action = resolveWindowShortcutAction(input, process.platform, keybindings, {
+      ...terminalShortcutContext,
+      floatingWorkspaceShortcutsActive
+    })
     if (!action) {
       return
     }

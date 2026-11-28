@@ -17,6 +17,11 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import type { SparsePreset } from '../../../shared/worktree/create-types'
 import type { RetiredNameRegistry } from '../../../shared/worktree/naming/retired-name-registry'
 import '../profile-index-store'
+import {
+  NEW_PROFILE_COHORT_SEEDS,
+  isTelemetryOnlyProfile,
+  newProfileSeededState
+} from '../../persistence/loading-store/profile-loading/new-profile-cohort-seeds'
 import { getOrcaProfileDataFile, getOrcaProfileStateDatabaseFile } from '../profile-storage-paths'
 import {
   importProfileStateJson,
@@ -111,7 +116,7 @@ export function readProfileStateWithRevision(
 
 function parseProfileState(rawJson: string | undefined): PersistedState {
   if (rawJson === undefined) {
-    return structuredClone(getDefaultPersistedState(homedir()))
+    return structuredClone(newProfileSeededState())
   }
   return normalizeProfileProjectState(parseProfileStateRoot(rawJson))
 }
@@ -123,8 +128,12 @@ export function normalizeProfileProjectState(parsed: Partial<PersistedState>): P
     nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
     nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
     artifactSharingEnabled: _artifactSharingEnabled,
+    // Unstamped profiles re-derive floatingTerminalEnabled on load, so the stamp must not be spread in.
+    floatingTerminalDefaultedForAllUsers: _floatingTerminalDefaulted,
     ...settingsDefaults
   } = defaults.settings
+  // Whole-root provenance: only a never-loaded secondary profile is new.
+  const cohortSeeds = isTelemetryOnlyProfile(parsed) ? NEW_PROFILE_COHORT_SEEDS : {}
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
@@ -147,8 +156,8 @@ export function normalizeProfileProjectState(parsed: Partial<PersistedState>): P
     worktreeLineageById: recordOrEmpty(parsed.worktreeLineageById),
     workspaceLineageByChildKey: recordOrEmpty(parsed.workspaceLineageByChildKey),
     settings: isRecord(parsed.settings)
-      ? { ...settingsDefaults, ...parsed.settings }
-      : settingsDefaults,
+      ? { ...settingsDefaults, ...cohortSeeds, ...parsed.settings }
+      : { ...settingsDefaults, ...cohortSeeds },
     ui: isRecord(parsed.ui) ? { ...defaults.ui, ...parsed.ui } : defaults.ui,
     githubCache: isRecord(parsed.githubCache)
       ? {

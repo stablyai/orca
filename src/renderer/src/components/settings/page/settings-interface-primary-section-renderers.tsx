@@ -1,5 +1,6 @@
 import { BrowserPane } from '../browser/BrowserPane'
 import { FloatingWorkspacePane } from '../floating-workspaces/FloatingWorkspacePane'
+import { isFloatingWorkspaceInSettings } from '../../../../../shared/settings/floating-workspace-cohort'
 import { MobileEmulatorSettingsPane } from '../mobile/emulator/MobileEmulatorSettingsPane'
 import { QuickCommandsPane } from '../quick-commands/QuickCommandsPane'
 import { TerminalPane } from '../terminal/TerminalPane'
@@ -124,8 +125,12 @@ export function renderMobileEmulatorSettingsSection(
 export function renderFloatingWorkspaceSettingsSection(
   context: SettingsRenderContext,
   t: Translate = translate
-): React.JSX.Element {
+): React.JSX.Element | null {
   const { model, navigation, view } = context
+  // Same frozen cohort as the nav entry, so the section and its nav row never disagree.
+  if (!isFloatingWorkspaceInSettings(model.settings)) {
+    return null
+  }
   return (
     <SettingsSection
       id="floating-workspace"

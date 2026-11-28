@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
@@ -20,6 +19,11 @@ import { assertProfileStateCanInitialize } from '../recovery/profile-state-recov
 import { classifyProfileStateStorage } from '../database/profile-state-storage-classification'
 import { migrateProfileStateToSqlite } from '../startup/profile-state-migration'
 import { ensureProfileStateAuthorityMarker } from '../database/profile-state-authority-marker'
+import {
+  NEW_PROFILE_COHORT_SEEDS,
+  newProfileSeededState,
+  seedTelemetryOnlyProfileJson
+} from '../../loading-store/profile-loading/new-profile-cohort-seeds'
 
 export type ProfileStateOfflineLocation = {
   dataFile: string
@@ -90,10 +94,17 @@ export function updateAgentHookSettingsInProfileState(
       nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
       agentLaunchChoices: _launchChoices,
       artifactSharingEnabled: _artifactSharingEnabled,
+      floatingTerminalEnabled: _floatingTerminalEnabled,
+      floatingTerminalDefaultedForAllUsers: _floatingTerminalDefaulted,
       ...settingsDefaults
     } = getDefaultPersistedState(homedir()).settings
+    // Every commit bumps the revision, so revision 0 is a never-written profile; the
+    // expectedRevision fence below rejects a racing first save, whose retry then sees it written.
+    const cohortSeeds =
+      domains.revision === 0 && persistedSettings === undefined ? NEW_PROFILE_COHORT_SEEDS : {}
     const settings = {
       ...settingsDefaults,
+      ...cohortSeeds,
       ...(isRecord(persistedSettings) ? persistedSettings : {}),
       agentStatusHooksEnabled: enabled
     }
@@ -126,7 +137,10 @@ export function updateAgentHookSettingsFromProfileState(
     const migrated = migrateProfileStateToSqlite({
       ...location,
       expectedLegacyJson: rawJson,
-      serializedState: rawJson ?? JSON.stringify(newOfflineProfileState())
+      serializedState:
+        rawJson === undefined
+          ? JSON.stringify(newProfileSeededState())
+          : seedTelemetryOnlyProfileJson(rawJson)
     })
     migrated.authority.close()
   }
@@ -201,10 +215,4 @@ function readAgentHookSettingsFromSettingsValue(value: unknown): AgentHookSettin
     agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
     disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents)
   }
-}
-
-/** Seeds what the first load would for a new profile; once saved, a missing key reads as existing. */
-function newOfflineProfileState(): PersistedState {
-  const defaults = getDefaultPersistedState(homedir())
-  return { ...defaults, settings: { ...defaults.settings, nativeChatMarkNewMessages: false } }
 }

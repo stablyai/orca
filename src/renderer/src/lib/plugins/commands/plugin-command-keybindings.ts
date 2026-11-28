@@ -24,6 +24,7 @@ import { matchFloatingWorkspacePanelChord } from '@/components/floating-terminal
 import { translate } from '@/i18n/i18n'
 import { pluginCommandKeybindingActionId } from '../../../../../shared/plugins/contributions/plugin-command-actions'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
+import { isPluginCommandInactiveFloatingWorkspaceAlias } from './plugin-command-floating-workspace'
 
 export function pluginCommandKeybindingDefinition(
   command: ActivePluginCommand
@@ -56,10 +57,14 @@ export function findPluginCommandForKeybinding(
   platform: NodeJS.Platform,
   overrides: KeybindingOverrides | undefined,
   hasActiveWorktree: boolean,
-  options: KeybindingMatchOptions = {}
+  options: KeybindingMatchOptions = {},
+  floatingWorkspaceShortcutsActive = false
 ): ActivePluginCommand | null {
   for (const command of commands) {
     if (isWorkspaceScopedPluginContext(command.context) && !hasActiveWorktree) {
+      continue
+    }
+    if (isPluginCommandInactiveFloatingWorkspaceAlias(command, floatingWorkspaceShortcutsActive)) {
       continue
     }
     const definition = pluginCommandKeybindingDefinition(command)
@@ -82,12 +87,15 @@ export function globalShortcutTargetYields(
   platform: NodeJS.Platform,
   overrides: KeybindingOverrides | undefined,
   options: KeybindingMatchOptions,
-  actionId?: KeybindingActionId
+  actionId?: KeybindingActionId,
+  floatingWorkspaceShortcutsActive = false
 ): boolean {
   return (
     textFieldClaimsActionKey(input, actionId) ||
     isFloatingWorkspaceTerminalInputTarget(input.target) ||
     (isFloatingWorkspacePanelFocused() &&
-      matchFloatingWorkspacePanelChord(input, platform, null, overrides, options) !== null)
+      matchFloatingWorkspacePanelChord(input, platform, null, overrides, options, options, {
+        floatingWorkspaceShortcutsActive
+      }) !== null)
   )
 }

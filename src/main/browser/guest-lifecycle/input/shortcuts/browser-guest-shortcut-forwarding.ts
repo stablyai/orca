@@ -32,6 +32,7 @@ export function setupGuestShortcutForwarding(args: {
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
+  getFloatingWorkspaceShortcutsActive?: () => boolean
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
   /** False for plugin frames (see GuestShortcutForwardContext). */
@@ -45,10 +46,13 @@ export function setupGuestShortcutForwarding(args: {
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
+    getFloatingWorkspaceShortcutsActive,
     resolveWorktreeId,
     resolveWorkspaceId,
     browserPage
   } = args
+  const floatingWorkspaceShortcutsActive = (): boolean =>
+    getFloatingWorkspaceShortcutsActive?.() === true
   let ctrlTabSwitching = false
   const doubleTapDetector = new ModifierDoubleTapDetector()
   const resetDoubleTapDetector = (): void => doubleTapDetector.reset()
@@ -60,6 +64,7 @@ export function setupGuestShortcutForwarding(args: {
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
+    getFloatingWorkspaceShortcutsActive,
     resolveWorktreeId,
     resolveWorkspaceId,
     forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => {
@@ -134,7 +139,8 @@ export function setupGuestShortcutForwarding(args: {
           event,
           doubleTapInput,
           resolveWindowShortcutAction(doubleTapInput, process.platform, keybindings, {
-            context: 'app'
+            context: 'app',
+            floatingWorkspaceShortcutsActive: floatingWorkspaceShortcutsActive()
           })
         )
         return
@@ -145,7 +151,9 @@ export function setupGuestShortcutForwarding(args: {
       return
     }
     // Resolve Alt+Arrow history shortcuts before dispatch applies its chord gate.
-    const action = resolveWindowShortcutAction(input, process.platform, keybindings)
+    const action = resolveWindowShortcutAction(input, process.platform, keybindings, {
+      floatingWorkspaceShortcutsActive: floatingWorkspaceShortcutsActive()
+    })
     forwardGuestShortcutInput(forwardContext, event, input, action)
   }
 

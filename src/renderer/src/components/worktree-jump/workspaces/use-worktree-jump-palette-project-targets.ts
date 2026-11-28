@@ -1,3 +1,5 @@
+import { selectFloatingWorkspaceShortcutsActive } from '@/store/slices/keybindings/floating-workspace-shortcuts-selector'
+import { useAppStore } from '@/store/index'
 import { useMemo } from 'react'
 import { buildImportedWorktreesCardCandidates } from '@/components/sidebar/worktree-list/listing/imported-worktrees-card-candidates'
 import {
@@ -44,6 +46,7 @@ export function useWorktreeJumpPaletteProjectTargets({
   groupHostIdByGroupId,
   defaultHostId
 }: WorktreeJumpPaletteProjectTargetsInput) {
+  const floatingWorkspaceShortcutsActive = useAppStore(selectFloatingWorkspaceShortcutsActive)
   const settingsResults = useMemo(
     () => buildCmdJSettingsResults(settingsSections),
     [settingsSections]
@@ -53,9 +56,9 @@ export function useWorktreeJumpPaletteProjectTargets({
       buildCmdJActionResults([
         ...getCmdJQuickActions(),
         ...buildPluginNewFileQuickActions(pluginNewFiles),
-        ...buildPluginQuickActions(pluginCommands)
+        ...buildPluginQuickActions(pluginCommands, floatingWorkspaceShortcutsActive)
       ]),
-    [pluginCommands, pluginNewFiles]
+    [floatingWorkspaceShortcutsActive, pluginCommands, pluginNewFiles]
   )
   const renderableProjectRepoIds = useMemo(() => {
     const ids = new Set<string>()

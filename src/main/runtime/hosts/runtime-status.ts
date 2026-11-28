@@ -209,7 +209,7 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
       hostPlatform: process.platform,
       machineName: this.readMachineName(),
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
-      floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
+      floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled === true,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
     }

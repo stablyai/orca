@@ -10,7 +10,8 @@ export function installPluginFrameGuestPolicies(
   guest: WebContents,
   frameKey: string,
   host: WebContents,
-  getKeybindings: () => KeybindingOverrides | undefined
+  getKeybindings: () => KeybindingOverrides | undefined,
+  getFloatingWorkspaceShortcutsActive: () => boolean = () => false
 ): void {
   // Proxies cannot carry WebRTC UDP; with the refusing proxy no candidate reaches anything.
   guest.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')
@@ -38,6 +39,7 @@ export function installPluginFrameGuestPolicies(
     guest,
     resolveRenderer: () => (host.isDestroyed() ? null : host),
     getKeybindings,
+    getFloatingWorkspaceShortcutsActive,
     browserPage: false
   })
   guest.once('destroyed', stopShortcuts)

@@ -18,6 +18,8 @@ import type {
   KeybindingOverrides
 } from '../../../../../shared/keybindings/types'
 import { useAppStore } from '../../../store/index'
+import { selectFloatingWorkspaceShortcutsActive } from '../../../store/slices/keybindings/floating-workspace-shortcuts-selector'
+import { inactiveFloatingWorkspaceActionIds } from '../../../../../shared/settings/floating-workspace-cohort'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useEditablePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
@@ -47,6 +49,7 @@ export function useKeybindingActionEditor() {
   const platform = SHORTCUT_EDITOR_PLATFORM
   const keybindings = useAppStore((state) => state.keybindings)
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
+  const floatingWorkspaceShortcutsActive = useAppStore(selectFloatingWorkspaceShortcutsActive)
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? EMPTY_DISABLED_TUI_AGENTS
   )
@@ -70,12 +73,14 @@ export function useKeybindingActionEditor() {
           keybindings,
           platform,
           macCapturedDigitChords,
-          missionControlConflictMessage
+          missionControlConflictMessage,
+          floatingWorkspaceShortcutsActive
         },
         t
       ),
     [
       disabledTuiAgents,
+      floatingWorkspaceShortcutsActive,
       keybindings,
       macCapturedDigitChords,
       missionControlConflictMessage,
@@ -139,7 +144,12 @@ export function useKeybindingActionEditor() {
     const blockingConflict = findKeybindingConflictsForDefinitions(
       definitions,
       platform,
-      resolveKeybindingOverrides(platform, next, keybindingSnapshot?.defaultOverrides ?? {}),
+      resolveKeybindingOverrides(
+        platform,
+        next,
+        keybindingSnapshot?.defaultOverrides ?? {},
+        inactiveFloatingWorkspaceActionIds(floatingWorkspaceShortcutsActive)
+      ),
       {
         ignoredActionIds: ignoredConflictActionIds,
         includeMainProcessInterception: true

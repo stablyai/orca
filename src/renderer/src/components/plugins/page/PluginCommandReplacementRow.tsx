@@ -1,3 +1,5 @@
+import { isFloatingWorkspaceInSettings } from '../../../../../shared/settings/floating-workspace-cohort'
+import { isPluginReplacedActionDisclosed } from '@/lib/plugins/commands/plugin-command-floating-workspace'
 import { Replace } from 'lucide-react'
 import {
   getKeybindingDefinition,
@@ -18,8 +20,11 @@ export function PluginCommandReplacementRow({
   command
 }: {
   command: { title: string; replaces: string; replacedBy?: string }
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
+  const floatingWorkspaceInSettings = useAppStore((state) =>
+    isFloatingWorkspaceInSettings(state.settings)
+  )
   const turnedOff = useAppStore((state) => state.settings?.pluginReplacementsOff)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const action = builtInActionTitle(command.replaces)
@@ -27,6 +32,10 @@ export function PluginCommandReplacementRow({
   const setOn = (next: boolean): void => {
     const others = (turnedOff ?? []).filter((id) => id !== command.replaces)
     void updateSettings({ pluginReplacementsOff: next ? others : [...others, command.replaces] })
+  }
+  // New profiles never see Floating Workspace, so a replacement of its action is not disclosed.
+  if (!isPluginReplacedActionDisclosed(command.replaces, floatingWorkspaceInSettings)) {
+    return null
   }
   return (
     <DetailRow

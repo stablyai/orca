@@ -9,12 +9,15 @@ import { getDefaultBindings } from './effective'
 import { getKeybindingConflictIdentity, keybindingConflictIdentities } from './matching-key'
 import type { KeybindingActionId, KeybindingOverrides } from './types'
 
+/** Ignored actions are inert: their overrides leave the resolved map and their defaults never conflict. */
 export function resolveKeybindingOverrides(
   platform: NodeJS.Platform,
-  explicitOverrides: KeybindingOverrides,
-  defaultOverrides: KeybindingOverrides
+  rawExplicitOverrides: KeybindingOverrides,
+  defaultOverrides: KeybindingOverrides,
+  ignoredActionIds: readonly KeybindingActionId[] = []
 ): KeybindingOverrides {
-  const inherited = { ...defaultOverrides }
+  const explicitOverrides = omitKeybindingActionOverrides(rawExplicitOverrides, ignoredActionIds)
+  const inherited = omitKeybindingActionOverrides({ ...defaultOverrides }, ignoredActionIds)
   for (const actionId of Object.keys(explicitOverrides)) {
     if (isKeybindingActionId(actionId)) {
       delete inherited[actionId]
@@ -24,7 +27,7 @@ export function resolveKeybindingOverrides(
     const conflicts = findKeybindingConflicts(
       platform,
       { ...inherited, ...explicitOverrides },
-      { includeMainProcessInterception: true }
+      { includeMainProcessInterception: true, ignoredActionIds }
     )
     let changed = false
     for (const conflict of conflicts) {
@@ -72,4 +75,18 @@ export function getKeybindingResetBindings(
     Object.hasOwn(getLegacySearchBindings(platform), actionId)
   const definition = getKeybindingDefinition(actionId)
   return migratedAction && definition ? getDefaultBindings(definition, platform) : null
+}
+
+export function omitKeybindingActionOverrides(
+  overrides: KeybindingOverrides,
+  actionIds: readonly KeybindingActionId[]
+): KeybindingOverrides {
+  if (!actionIds.some((actionId) => Object.hasOwn(overrides, actionId))) {
+    return overrides
+  }
+  const next = { ...overrides }
+  for (const actionId of actionIds) {
+    delete next[actionId]
+  }
+  return next
 }

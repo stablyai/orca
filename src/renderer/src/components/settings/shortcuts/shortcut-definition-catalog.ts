@@ -17,6 +17,7 @@ import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugins/commands/
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
+import { inactiveFloatingWorkspaceActionIds } from '../../../../../shared/settings/floating-workspace-cohort'
 
 export type ShortcutDefinitionCatalog = {
   groups: ShortcutGroup[]
@@ -34,14 +35,22 @@ export function buildShortcutDefinitionCatalog(
     platform: NodeJS.Platform
     macCapturedDigitChords?: readonly MacCapturedDigitChord[]
     missionControlConflictMessage: string
+    floatingWorkspaceShortcutsActive: boolean
   },
   t: Translate = translate
 ): ShortcutDefinitionCatalog {
   const pluginDefinitions = buildPluginCommandKeybindingDefinitions(options.pluginCommands)
-  const groups = groupDefinitions(options.disabledTuiAgents, pluginDefinitions)
+  const inactiveActionIds = inactiveFloatingWorkspaceActionIds(
+    options.floatingWorkspaceShortcutsActive
+  )
+  // Rows, conflicts and the live map agree: an inactive action is neither listed nor checked.
+  const groups = groupDefinitions(options.disabledTuiAgents, pluginDefinitions, inactiveActionIds)
   const definitions = groups.flatMap((group) => group.items)
   const definitionsByAction = new Map(definitions.map((definition) => [definition.id, definition]))
-  const ignoredConflictActionIds = disabledAgentTabActionIds(options.disabledTuiAgents)
+  const ignoredConflictActionIds = [
+    ...disabledAgentTabActionIds(options.disabledTuiAgents),
+    ...inactiveActionIds
+  ]
   const conflictByAction = new Map<KeybindingActionId, string[]>()
   const conflicts = findKeybindingConflictsForDefinitions(
     definitions,

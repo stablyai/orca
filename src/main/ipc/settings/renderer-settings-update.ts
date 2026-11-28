@@ -21,6 +21,9 @@ export function sanitizeRendererSettingsUpdate(
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
   delete sanitizedArgs.pluginExternalHostGrants
+  // Main-owned: the frozen Floating Workspace cohort and its one-shot stamp are written only on load.
+  delete sanitizedArgs.floatingWorkspaceInSettings
+  delete sanitizedArgs.floatingTerminalDefaultedForAllUsers
   // Only main's assignment writes this; other telemetry fields keep their existing handling.
   if (sanitizedArgs.telemetry && 'browserExtensionsBanner' in sanitizedArgs.telemetry) {
     const { browserExtensionsBanner: _mainOwned, ...telemetry } = sanitizedArgs.telemetry

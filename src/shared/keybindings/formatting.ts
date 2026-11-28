@@ -85,13 +85,15 @@ export function findKeybindingActionsForBinding(
   binding: string,
   platform: NodeJS.Platform,
   overrides?: KeybindingOverrides,
-  scopes: readonly KeybindingScope[] = ['global', 'tabs']
+  scopes: readonly KeybindingScope[] = ['global', 'tabs'],
+  ignoredActionIds: readonly KeybindingActionId[] = []
 ): KeybindingActionId[] {
   const identity = getKeybindingConflictIdentity(binding, platform)
   const allowedScopes = new Set(scopes)
   return KEYBINDING_DEFINITIONS.filter(
     (definition) =>
       allowedScopes.has(definition.scope) &&
+      !ignoredActionIds.includes(definition.id) &&
       getEffectiveKeybindingsForAction(definition.id, platform, overrides).some((candidate) =>
         keybindingConflictIdentities(definition.id, candidate, platform).includes(identity)
       )

@@ -1,3 +1,4 @@
+import { newProfileSeededState } from '../../persistence/loading-store/profile-loading/new-profile-cohort-seeds'
 import { migrateProfileStateToSqlite } from '../../persistence/profile-state/startup/profile-state-migration'
 import { getOrcaProfileDataFile, getOrcaProfileStateDatabaseFile } from '../profile-storage-paths'
 import type { ReadProfileStateResult } from './profile-project-state-file'
@@ -17,7 +18,8 @@ export function migrateProfileProjectTransferParticipant(
     databaseFile: getOrcaProfileStateDatabaseFile(profileId, userDataPath),
     profileId,
     expectedLegacyJson: snapshot.serialized,
-    serializedState: snapshot.serialized ?? '{}'
+    // A target without state is new; '{}' would load as an existing profile.
+    serializedState: snapshot.serialized ?? JSON.stringify(newProfileSeededState())
   })
   try {
     return readProfileProjectTransferState(profileId, userDataPath)

@@ -27,6 +27,8 @@ import { createKeyedTrailingEdgeCoalescer } from '../../../runtime/client/events
 export type BrowserManagerSettings = {
   keybindings?: KeybindingOverrides
   mobileEmulatorEnabled?: boolean
+  /** Absent = inactive, so guests never claim the floating chords by default. */
+  floatingWorkspaceShortcutsActive?: boolean
 }
 
 /** A link a headless serve page asked to open as an Orca tab beside it. */

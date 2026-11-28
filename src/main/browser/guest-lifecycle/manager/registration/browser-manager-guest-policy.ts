@@ -23,6 +23,10 @@ import { isBrowserClientPageGuest } from '../../../client-pages/lifecycle/browse
 import { installBrowserNavigationStallWatchdog } from '../navigation/browser-navigation-stall-watchdog'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
+  getFloatingWorkspaceShortcutsActive(): boolean {
+    return this.settingsResolver?.().floatingWorkspaceShortcutsActive === true
+  }
+
   attachGuestPolicies(
     guest: Electron.WebContents,
     inheritedOwnerContext: PopupOwnerContext | null = null,
@@ -262,6 +266,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       guest,
       resolveRenderer: resolveHost,
       getKeybindings: () => this.settingsResolver?.().keybindings,
+      getFloatingWorkspaceShortcutsActive: () => this.getFloatingWorkspaceShortcutsActive(),
       browserPage: false
     })
     // Why: a press in the preview never reaches the host DOM, so its split stays inactive and

@@ -12,10 +12,16 @@ import { updateChanges } from './PluginUpdateCandidate'
 export function pluginUpdateAdditions(
   preview: PluginMarketplaceHostInstallPreview,
   installedManifest: PluginManifest | null,
-  t: Translate
+  t: Translate,
+  floatingWorkspaceInSettings = false
 ): { lines: string[]; compared: boolean } {
   // Why main's list: it compares whole grants, so a wider scope of a held kind is new too.
-  const { capabilities, warnings } = updateChanges(preview, t, installedManifest)
+  const { capabilities, warnings } = updateChanges(
+    preview,
+    t,
+    installedManifest,
+    floatingWorkspaceInSettings
+  )
   return {
     lines: [
       // Why no URLs: the version link opens the new repository's history, and "Source" names it.

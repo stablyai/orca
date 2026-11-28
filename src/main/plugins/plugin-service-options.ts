@@ -19,6 +19,7 @@ export type PluginServiceOptions = {
   getPluginConsents: () => Record<string, string>
   getDevPluginPaths: () => string[]
   getKeybindings?: () => KeybindingOverrides
+  getFloatingWorkspaceShortcutsActive?: () => boolean
   getPluginKillListEntry?: (pluginKey: string) => (PluginKillListEntry & PluginBlockNotice) | null
   hostEntryPath?: string
   /** Where this release's bundled plugins live; absent where nothing is shipped. */

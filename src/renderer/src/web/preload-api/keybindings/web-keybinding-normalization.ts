@@ -118,11 +118,12 @@ export function normalizeWebPlatformOverrides(
 export function removeConflictingWebOverrides(
   platform: KeybindingPlatform,
   overrides: KeybindingOverrides,
-  diagnostics: KeybindingFileDiagnostic[]
+  diagnostics: KeybindingFileDiagnostic[],
+  ignoredActionIds: readonly KeybindingActionId[] = []
 ): KeybindingOverrides {
   let next = { ...overrides }
   for (let attempt = 0; attempt < 20; attempt++) {
-    const conflicts = findKeybindingConflicts(platform, next)
+    const conflicts = findKeybindingConflicts(platform, next, { ignoredActionIds })
     const conflictingOverrides = new Set<KeybindingActionId>()
     for (const conflict of conflicts) {
       for (const actionId of conflict.actionIds) {

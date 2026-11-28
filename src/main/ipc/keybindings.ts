@@ -1,19 +1,8 @@
-import { BrowserWindow, ipcMain, shell } from 'electron'
-import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings/types'
+import { ipcMain, shell } from 'electron'
+import type { KeybindingActionId } from '../../shared/keybindings/types'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import { refreshGrabShortcutPolicies } from '../browser/guest-lifecycle/input/shortcuts/browser-guest-grab-shortcuts'
-import { rebuildAppMenu } from '../menu/register-app-menu'
+import { broadcastKeybindingsChanged } from '../keybindings/keybindings-broadcast'
 import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
-
-function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) {
-      window.webContents.send('keybindings:changed', snapshot)
-    }
-  }
-  refreshGrabShortcutPolicies()
-  rebuildAppMenu()
-}
 
 export function registerKeybindingHandlers(
   service: KeybindingService,

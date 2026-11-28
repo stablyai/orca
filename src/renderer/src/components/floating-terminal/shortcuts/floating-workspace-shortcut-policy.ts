@@ -80,13 +80,17 @@ export type FloatingWorkspacePanelShortcutMatch =
   | { readonly kind: 'action'; readonly action: KeybindingActionId }
   | { readonly kind: 'index'; readonly index: number }
 
+/** Absent = inactive: maximize/minimize stay inert unless main published them as live. */
+export type FloatingWorkspaceChromeShortcutGate = { floatingWorkspaceShortcutsActive?: boolean }
+
 /** Share chrome claims across dispatch/preflight/App yield; workspace indexes precede tab indexes, while chrome actions use their own context options. */
 export function matchFloatingWorkspacePanelShortcut(
   event: FloatingWorkspaceShortcutEvent,
   platform: NodeJS.Platform,
   keybindings: KeybindingOverrides | undefined,
   options: KeybindingMatchOptions,
-  chromeOptions: KeybindingMatchOptions = options
+  chromeOptions: KeybindingMatchOptions = options,
+  gate: FloatingWorkspaceChromeShortcutGate = {}
 ): FloatingWorkspacePanelShortcutMatch | null {
   if (keybindingMatchesAction('tab.rename', event, platform, keybindings, chromeOptions)) {
     return { kind: 'action', action: 'tab.rename' }
@@ -96,6 +100,9 @@ export function matchFloatingWorkspacePanelShortcut(
     matchKeybindingDigitIndex('tab.selectByIndex', event, platform, keybindings, options)
   if (index !== null) {
     return { kind: 'index', index }
+  }
+  if (gate.floatingWorkspaceShortcutsActive !== true) {
+    return null
   }
   if (
     keybindingMatchesAction(
@@ -129,7 +136,8 @@ export function matchFloatingWorkspacePanelChord(
   panelRoot: HTMLElement | null,
   keybindings: KeybindingOverrides | undefined,
   options: KeybindingMatchOptions,
-  chromeOptions: KeybindingMatchOptions = options
+  chromeOptions: KeybindingMatchOptions = options,
+  gate: FloatingWorkspaceChromeShortcutGate = {}
 ): FloatingWorkspacePanelShortcutMatch | null {
   const ownedAction = isFloatingWorkspacePanelShortcutTarget(event.target, panelRoot)
     ? matchFloatingWorkspacePanelOwnedAction(event, platform, keybindings, options)
@@ -137,5 +145,12 @@ export function matchFloatingWorkspacePanelChord(
   if (ownedAction) {
     return { kind: 'action', action: ownedAction }
   }
-  return matchFloatingWorkspacePanelShortcut(event, platform, keybindings, options, chromeOptions)
+  return matchFloatingWorkspacePanelShortcut(
+    event,
+    platform,
+    keybindings,
+    options,
+    chromeOptions,
+    gate
+  )
 }

@@ -26,6 +26,7 @@ import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/br
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings/settings'
+import { installFloatingWorkspaceKeybindingSync } from '../../keybindings/floating-workspace-keybinding-sync'
 import {
   registerLazySkillDeleteIpcHandlers,
   registerLazySkillsHandlers
@@ -129,6 +130,12 @@ export async function registerCoreHandlers(
     if (keybindings) {
       registerLazyKeybindingHandlers(keybindings, () => {
         void pluginService?.reconcileActivationState()
+      })
+      // Registration runs once per app, so this listener lives exactly as long as the store.
+      installFloatingWorkspaceKeybindingSync({
+        store,
+        keybindings,
+        onChanged: () => pluginService?.reconcileActivationState()
       })
     }
     if (pluginService) {

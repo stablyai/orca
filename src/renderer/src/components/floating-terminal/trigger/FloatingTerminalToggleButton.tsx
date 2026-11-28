@@ -4,7 +4,10 @@ import { PanelsTopLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
-import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import {
+  useFloatingWorkspaceShortcutLabel,
+  withShortcutHint
+} from '@/lib/keyboard/with-shortcut-hint'
 import { useAppStore } from '@/store/index'
 import { selectFloatingWorkspaceHasUnread } from '@/store/workspaces/floating/floating-workspace-unread-selector'
 import {
@@ -69,7 +72,7 @@ export function FloatingTerminalToggleButton({
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
-  const shortcutLabel = useShortcutLabel('floatingTerminal.toggle')
+  const shortcutLabel = useFloatingWorkspaceShortcutLabel('floatingTerminal.toggle')
   // Read shared unread state so engaging with or closing a tab clears its minimized-panel attention dot.
   const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)
   const showAttentionDot = !open && hasFloatingUnread
@@ -252,10 +255,17 @@ export function FloatingTerminalToggleButton({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>
-          {t(
-            'auto.components.floating.terminal.FloatingTerminalToggleButton.bfe7809a70',
-            '{{value0}} floating workspace ({{value1}})',
-            { value0: open ? 'Minimize' : 'Show', value1: shortcutLabel }
+          {withShortcutHint(
+            open
+              ? t(
+                  'auto.components.floating.terminal.FloatingTerminalToggleButton.5785dd9148',
+                  'Minimize floating workspace'
+                )
+              : t(
+                  'auto.components.floating.terminal.FloatingTerminalToggleButton.3b04b065b5',
+                  'Show floating workspace'
+                ),
+            shortcutLabel
           )}
         </TooltipContent>
       </Tooltip>

@@ -1,3 +1,5 @@
+import { selectFloatingWorkspaceShortcutsActive } from '@/store/slices/keybindings/floating-workspace-shortcuts-selector'
+import { isPluginCommandInactiveFloatingWorkspaceAlias } from '@/lib/plugins/commands/plugin-command-floating-workspace'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PluginDeclarativeIconGlyph } from '@/components/plugins/declarative/plugin-declarative-icons'
@@ -72,11 +74,22 @@ function PluginStatusBarItem({ item }: { item: ActivePluginStatusBarItem }): Rea
 /** Items enabled plugins declare in `contributes.statusBarItems`. */
 export function PluginStatusBarItems(): React.JSX.Element {
   const items = usePluginStatusBarItems()
+  const floatingWorkspaceShortcutsActive = useAppStore(selectFloatingWorkspaceShortcutsActive)
   return (
     <>
-      {items.map((item) => (
-        <PluginStatusBarItem key={item.key} item={item} />
-      ))}
+      {items
+        // An item whose press runs an inactive floating action would do nothing, so it is left out.
+        .filter(
+          (item) =>
+            !item.command ||
+            !isPluginCommandInactiveFloatingWorkspaceAlias(
+              item.command,
+              floatingWorkspaceShortcutsActive
+            )
+        )
+        .map((item) => (
+          <PluginStatusBarItem key={item.key} item={item} />
+        ))}
     </>
   )
 }
