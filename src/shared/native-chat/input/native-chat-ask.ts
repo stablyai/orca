@@ -18,6 +18,10 @@ import {
   quotedByQueuedAnswer,
   withoutPendingQueuedAnswers
 } from './questions/native-chat-ask-answer'
+import {
+  firstAsyncQuestionCallRows,
+  withoutReplayedAsyncQuestions
+} from './questions/native-chat-ask-replay'
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
 
@@ -131,14 +135,6 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
   return scan.blocking ?? aggregateAsyncQuestions(scan.contributors)
 }
 
-/** A structured chat's pending question from its messages: blocking ones arrive as journal
- *  prompts, so only those answered by an ordinary message are left to read here. */
-export function extractPendingMessageReplyAsk(
-  messages: readonly NativeChatMessage[]
-): AskPrompt | null {
-  return aggregateAsyncQuestions(scanPendingAsks(messages).contributors)
-}
-
 export type AsyncQuestionContributor = {
   sourceRowId: string
   /** Parsed async-call slot before dedupe, independent of unrelated blocks and question text. */
@@ -227,10 +223,11 @@ export type PendingAskScan = {
 
 export function scanPendingAsks(messages: readonly NativeChatMessage[]): PendingAskScan {
   const scanner = createPendingAskScanner()
-  for (const message of nativeChatAskScanOrder(messages)) {
+  const ordered = [...nativeChatAskScanOrder(messages)]
+  for (const message of ordered) {
     scanner.append(message)
   }
-  return scanner.current()
+  return withoutReplayedAsyncQuestions(scanner.current(), firstAsyncQuestionCallRows(ordered))
 }
 
 /** One source pass; current borrows the pending array without copying definitions on every append. */
@@ -315,21 +312,4 @@ export function createPendingAskScanner(): {
     interrupt,
     current: () => ({ blocking: pending, contributors, answerPending: answerPending || undefined })
   }
-}
-
-/** Prefers live status and consults transcript history only after its read settles. */
-export function resolveNativeChatAsk(args: {
-  liveAsk: AskPrompt | null
-  messages: readonly NativeChatMessage[]
-  transcriptSettled: boolean
-  transcriptAsk?: AskPrompt | null
-}): AskPrompt | null {
-  return (
-    args.liveAsk ??
-    (args.transcriptSettled
-      ? args.transcriptAsk === undefined
-        ? extractPendingAsk(args.messages)
-        : args.transcriptAsk
-      : null)
-  )
 }

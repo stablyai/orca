@@ -9,6 +9,10 @@ import {
   type AsyncQuestionContributor
 } from '../../native-chat/input/native-chat-ask'
 import { isDeliveredNativeChatUserMessage } from '../../native-chat/input/questions/native-chat-ask-answer'
+import {
+  firstAsyncQuestionTailRows,
+  newestOpenAsyncQuestion
+} from '../../native-chat/input/questions/native-chat-ask-replay'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import type { AgentSessionAwaitedQuestion } from '../agent-session-wire'
@@ -21,10 +25,13 @@ export function isStructuredAgentSessionAsyncQuestionRow(item: AgentJournalRende
 }
 
 /** The newest Codex async question still waiting for the person's next delivered message, read
- *  the way the chat's question card reads it (another agent's message answers none). */
+ *  the way the chat's question card reads it (another agent's message answers none). The scan
+ *  starts at the last delivered message; replayed calls resolve against every loaded row, so a
+ *  copy of an answered call opens nothing here either. */
 export function newestOpenStructuredAgentSessionAsyncQuestion(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  earlier: readonly NativeChatMessage[] = []
 ): AgentSessionAwaitedQuestion | undefined {
   const messages = projectStructuredAgentSessionMessages(
     items.filter(isStructuredAgentSessionAsyncQuestionRow),
@@ -32,7 +39,10 @@ export function newestOpenStructuredAgentSessionAsyncQuestion(
     submissions
   )
   const start = messages.findLastIndex(isDeliveredNativeChatUserMessage)
-  const open = scanPendingAsks(messages.slice(Math.max(start, 0))).contributors.at(-1)
+  const open = newestOpenAsyncQuestion(
+    scanPendingAsks(messages.slice(Math.max(start, 0))),
+    firstAsyncQuestionTailRows(earlier, messages)
+  )
   if (!open) {
     return undefined
   }
