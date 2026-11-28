@@ -78,6 +78,31 @@ describe('pointers for mail an earlier pointer already announced (#41854)', () =
     }
   })
 
+  it('keeps holding while any announced message is still unread', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const writePty = vi.fn(() => WRITE_ACCEPTED)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps delivery reads.
+      const deps = pointerDeps(db, writePty) as never
+      const delivery = new OrchestrationMailboxPointerDelivery<never>(deps)
+      const first = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'A' })
+      db.insertMessage({ from: 'b', to: 'run:run-1', subject: 'B' })
+      await deliverAndSubmit(delivery)
+      delivery.observeAgentWorking('pty-1')
+      expect(pointerTexts(writePty)).toHaveLength(1)
+
+      db.markAsRead([first.id], { kind: 'terminal', handle: 'term-1' })
+      db.insertMessage({ from: 'c', to: 'run:run-1', subject: 'C' })
+      await deliverAndSubmit(delivery)
+
+      expect(pointerTexts(writePty)).toHaveLength(1)
+    } finally {
+      db.close()
+      vi.useRealTimers()
+    }
+  })
+
   it('points held mail once the turn ends without a check', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')

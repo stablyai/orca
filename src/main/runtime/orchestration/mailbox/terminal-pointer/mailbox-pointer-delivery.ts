@@ -97,7 +97,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     const announced = this.state.announcedMessageIds(mailboxHandle, ptyId)
     if (announced) {
       // The agent has not checked since the last pointer, and that check returns newer mail too.
-      if (db.areUnreadMessages(mailboxHandle, [...announced])) {
+      // Any one still unread keeps the hold: that check will return the rest of the mail too.
+      if (announced.some((id) => db.areUnreadMessages(mailboxHandle, [id]))) {
         this.parkRedelivery(mailboxHandle, options.reservedTypes)
         return
       }
