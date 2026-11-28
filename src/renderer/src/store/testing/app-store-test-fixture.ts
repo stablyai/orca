@@ -20,6 +20,7 @@ import { createStatsSlice } from '../slices/process-stats/stats'
 import { createMemorySlice } from '../slices/process-stats/memory'
 import { createWorkspaceSpaceSlice } from '../slices/workspace-cleanup/workspace-space'
 import {
+  createAntigravityUsageSlice,
   createClaudeUsageSlice,
   createCodexUsageSlice,
   createMuseUsageSlice,
@@ -97,6 +98,7 @@ export function createTestStore(
         ...createCodexUsageSlice(...a),
         ...createOpenCodeUsageSlice(...a),
         ...createMuseUsageSlice(...a),
+        ...createAntigravityUsageSlice(...a),
         ...createBrowserSlice(...a),
         ...createRateLimitSlice(...a),
         ...createSshSlice(...a),

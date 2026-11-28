@@ -3728,9 +3728,6 @@
   "auto.components.stats.share.card.utils.7080aeaebb": {
     "ko": "추론"
   },
-  "auto.components.stats.stats.search.26bb901fcd": {
-    "ko": "Orca 통계, Claude/Codex/OpenCode 통합 사용량 분석, 토큰, 캐시, 모델, 세션"
-  },
   "auto.components.stats.usage.overview.sections.1dd166c920": {
     "ko": "적음"
   },

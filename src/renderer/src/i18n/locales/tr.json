@@ -6738,7 +6738,6 @@
           "c760c481c5": "Kullanım Genel Bakışı",
           "55c910f4f1": "- bazı model fiyatları kullanılamıyor",
           "enableMuse": "Muse'u etkinleştir",
-          "noLocalUsageYet": "Henüz yerel Claude, Codex, OpenCode veya Muse kullanımı bulunamadı. Bir sonraki ajan oturumu token günlüklerini yazdığında genel görünüm doldurulacak.",
           "providersEnabledWithData": "{{enabled}} etkin - {{withData}} tanesinde veri var",
           "sessionCount_other": "{{formatted}} oturum",
           "sessionCount_one": "{{formatted}} oturum"
@@ -6772,7 +6771,6 @@
             "0bba8ca244": "istatistikler",
             "0e2a0b6431": "kullanım",
             "372debfac0": "istatistikler",
-            "26bb901fcd": "Orca istatistikleri; Claude, Codex, OpenCode ve Muse token analizleri ile Grok abonelik kullanımı.",
             "cb2430ae6a": "İstatistikler ve Kullanım",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "abonelik",
@@ -6808,7 +6806,6 @@
               "statusScanning": "Taranıyor",
               "statusEnabled": "Etkin",
               "statusOff": "Kapalı",
-              "recentCombinedActivity": "Son Claude, Codex, OpenCode ve Muse token etkinliklerinin toplamı.",
               "sessionsAndActivity": "{{sessions}} - {{activity}}",
               "tokenTotal": "{{tokens}} token",
               "sessionCount_other": "{{formatted}} oturum",

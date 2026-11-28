@@ -6405,7 +6405,6 @@
           "c760c481c5": "Nutzungsübersicht",
           "55c910f4f1": "- einige Modellpreise sind nicht verfügbar",
           "enableMuse": "Muse aktivieren",
-          "noLocalUsageYet": "Bisher wurde keine lokale Nutzung von Claude, Codex, OpenCode oder Muse gefunden. Die Übersicht wird gefüllt, sobald die nächste Agentensitzung Token-Protokolle schreibt.",
           "providersEnabledWithData": "{{enabled}} aktiviert - {{withData}} mit Daten",
           "sessionCount_one": "{{formatted}} Sitzung",
           "sessionCount_other": "{{formatted}} Sitzungen"
@@ -6439,7 +6438,6 @@
             "0bba8ca244": "Statistiken",
             "0e2a0b6431": "Nutzung",
             "372debfac0": "Statistiken",
-            "26bb901fcd": "Orca-Statistiken, Token-Analysen für Claude, Codex, OpenCode und Muse sowie Nutzung des Grok-Abonnements.",
             "cb2430ae6a": "Statistiken & Nutzung",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "Abonnement",
@@ -6475,7 +6473,6 @@
               "statusScanning": "Wird durchsucht",
               "statusEnabled": "Aktiviert",
               "statusOff": "Aus",
-              "recentCombinedActivity": "Jüngste gemeinsame Token-Aktivität von Claude, Codex, OpenCode und Muse.",
               "sessionsAndActivity": "{{sessions}} - {{activity}}",
               "tokenTotal": "{{tokens}} Token",
               "sessionCount_one": "{{formatted}} Sitzung",

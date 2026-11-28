@@ -128,6 +128,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     codexUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'codexUsage'),
     openCodeUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'openCodeUsage'),
     museUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'museUsage'),
+    antigravityUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'antigravityUsage'),
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),

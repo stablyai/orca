@@ -22,6 +22,11 @@ import type {
   MuseUsageScope,
   MuseUsageSnapshot
 } from '../../../../../shared/agent-usage/analytics/muse-usage-types'
+import type {
+  AntigravityUsageRange,
+  AntigravityUsageScope,
+  AntigravityUsageSnapshot
+} from '../../../../../shared/agent-usage/analytics/antigravity-usage-types'
 import type { UsageSnapshot, UsageProviderTypes, UsageFailure } from './usage-provider-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -96,7 +101,18 @@ export type OpenCodeUsageTypes = UsageProviderTypes<
 
 export type MuseUsageTypes = UsageProviderTypes<MuseUsageScope, MuseUsageRange, MuseUsageSnapshot>
 
+export type AntigravityUsageTypes = UsageProviderTypes<
+  AntigravityUsageScope,
+  AntigravityUsageRange,
+  AntigravityUsageSnapshot
+>
+
 export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageTypes>
 export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageTypes>
 export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageTypes>
 export type MuseUsageSlice = ProviderUsageSlice<'muse', 'Muse', MuseUsageTypes>
+export type AntigravityUsageSlice = ProviderUsageSlice<
+  'antigravity',
+  'Antigravity',
+  AntigravityUsageTypes
+>

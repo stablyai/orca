@@ -5657,7 +5657,6 @@
           "c760c481c5": "使用方法の概要",
           "55c910f4f1": "- 一部のモデルの価格は利用できません",
           "enableMuse": "Muse を有効にする",
-          "noLocalUsageYet": "ローカルの Claude、Codex、OpenCode、Muse の使用状況はまだ見つかりません。次の Agent セッションがトークンログを書き込むと、概要に反映されます。",
           "providersEnabledWithData": "{{enabled}} 件が有効 - {{withData}} 件にデータあり",
           "sessionCount_other": "{{formatted}} セッション"
         },
@@ -5690,7 +5689,6 @@
             "0bba8ca244": "統計",
             "0e2a0b6431": "使用量",
             "372debfac0": "統計",
-            "26bb901fcd": "Orca の統計に加え、Claude、Codex、OpenCode、Muse のトークン分析と Grok サブスクリプション使用状況。",
             "cb2430ae6a": "統計と使用状況",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "サブスクリプション",
@@ -5723,7 +5721,6 @@
               "7f270458af": "出力",
               "9365b14a4e": "新規入力",
               "3de9bf87fc": "まだモデルがありません",
-              "recentCombinedActivity": "最近の Claude、Codex、OpenCode、Muse のトークンアクティビティの組み合わせ。",
               "statusScanning": "走査",
               "statusEnabled": "有効",
               "statusOff": "オフ",

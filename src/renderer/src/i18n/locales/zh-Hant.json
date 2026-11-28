@@ -6315,7 +6315,6 @@
           "c760c481c5": "用量概覽",
           "55c910f4f1": "- 部分模型價格不詳",
           "enableMuse": "啟用 Muse",
-          "noLocalUsageYet": "目前尚未找到本機 Claude、Codex、OpenCode 或 Muse 用量。下一次代理程式工作階段寫入 Token 記錄後，這裡就會顯示資料。",
           "providersEnabledWithData": "{{enabled}} 個已啟用 - {{withData}} 個有資料",
           "sessionCount_other": "{{formatted}} 個工作階段"
         },
@@ -6348,7 +6347,6 @@
             "0bba8ca244": "統計資料",
             "0e2a0b6431": "用量",
             "372debfac0": "統計資料",
-            "26bb901fcd": "Orca 統計、Claude／Codex／OpenCode／Muse Token 分析及 Grok 訂閱用量。",
             "cb2430ae6a": "統計和用量",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "訂閱",
@@ -6384,7 +6382,6 @@
               "statusScanning": "掃描",
               "statusEnabled": "啟用",
               "statusOff": "關",
-              "recentCombinedActivity": "近期 Claude、Codex、OpenCode 與 Muse 的 Token 活動。",
               "sessionsAndActivity": "{{sessions}} - {{activity}}",
               "tokenTotal": "{{tokens}} token",
               "sessionCount_other": "{{formatted}} 個工作階段",

@@ -5932,7 +5932,6 @@
           "c760c481c5": "使用概述",
           "55c910f4f1": "- 部分型号价格不详",
           "enableMuse": "启用 Muse",
-          "noLocalUsageYet": "尚未找到本地 Claude、Codex、OpenCode 或 Muse 使用情况，概览将在下一个智能体会话写入token日志后填充",
           "providersEnabledWithData": "{{enabled}} 个已启用 - {{withData}} 个有数据",
           "sessionCount_other": "{{formatted}} 个会话"
         },
@@ -5965,7 +5964,6 @@
             "0bba8ca244": "统计数据",
             "0e2a0b6431": "用量",
             "372debfac0": "统计数据",
-            "26bb901fcd": "Orca 统计，以及 Claude、Codex、OpenCode、Muse Token 分析和 Grok 订阅使用量",
             "cb2430ae6a": "统计和使用情况",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "订阅",
@@ -5998,7 +5996,6 @@
               "7f270458af": "输出",
               "9365b14a4e": "新输入",
               "3de9bf87fc": "还没有型号",
-              "recentCombinedActivity": "近期 Claude、Codex、OpenCode 和 Muse 的综合 Token 活动",
               "statusScanning": "扫描中",
               "statusEnabled": "已启用",
               "statusOff": "关",

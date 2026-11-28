@@ -5995,7 +5995,6 @@
           "c760c481c5": "사용량 개요",
           "55c910f4f1": "- 일부 모델 가격 확인 불가",
           "enableMuse": "Muse 활성화",
-          "noLocalUsageYet": "아직 로컬 Claude, Codex, OpenCode 또는 Muse 사용량을 찾지 못했습니다. 다음 에이전트 세션이 토큰 로그를 기록하면 개요가 채워집니다.",
           "providersEnabledWithData": "{{enabled}}개 활성화 - {{withData}}개에 데이터 있음",
           "sessionCount_one": "세션 {{formatted}}개",
           "sessionCount_other": "세션 {{formatted}}개"
@@ -6029,7 +6028,6 @@
             "0bba8ca244": "통계",
             "0e2a0b6431": "사용량",
             "372debfac0": "통계",
-            "26bb901fcd": "Orca 통계와 Claude, Codex, OpenCode, Muse 토큰 분석 및 Grok 구독 사용량.",
             "cb2430ae6a": "통계 및 사용량",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "구독",
@@ -6062,7 +6060,6 @@
               "7f270458af": "출력",
               "9365b14a4e": "새로운 입력",
               "3de9bf87fc": "아직 모델이 없습니다.",
-              "recentCombinedActivity": "최근 Claude, Codex, OpenCode, Muse의 통합 토큰 활동입니다.",
               "sessionCount_one": "세션 {{formatted}}개",
               "statusScanning": "스캐닝",
               "statusEnabled": "활성화됨",

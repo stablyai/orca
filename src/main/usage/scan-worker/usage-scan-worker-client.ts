@@ -4,6 +4,10 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../../claude
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../../muse-usage/types'
+import type {
+  AntigravityUsageDailyAggregate,
+  AntigravityUsageSession
+} from '../../antigravity-usage/types'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 import type {
   UsageScanWorkerProviderId,
@@ -139,6 +143,23 @@ export async function scanMuseUsageOnWorker(
   const value = await scan({ operation: 'scan', providerId: 'muse', worktrees, sourceCache })
   if (value.operation !== 'scan' || value.providerId !== 'muse') {
     throw wrongProvider('muse', value)
+  }
+  return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
+}
+
+export async function scanAntigravityUsageOnWorker(
+  scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<ProviderScanResult<AntigravityUsageSession, AntigravityUsageDailyAggregate>> {
+  const value = await scan({
+    operation: 'scan',
+    providerId: 'antigravity',
+    worktrees,
+    sourceCache
+  })
+  if (value.operation !== 'scan' || value.providerId !== 'antigravity') {
+    throw wrongProvider('antigravity', value)
   }
   return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }
