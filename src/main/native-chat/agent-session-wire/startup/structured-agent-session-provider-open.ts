@@ -1,4 +1,5 @@
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import { structuredAgentSessionImmediatePermission } from '../options/structured-agent-session-launch-permission'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionProviderChildIdentity } from '../host/structured-agent-session-host-types'
 import {
@@ -99,7 +100,16 @@ async function openAndSettle(
     throw new Error('An unopened provider child has no acquisition generation')
   }
   const result = await waitForPromiseWithSignal(
-    context.deps.adapter.open({ sessionId, fence: child.fence, acquisitionGeneration, signal }),
+    context.deps.adapter.open({
+      sessionId,
+      fence: child.fence,
+      acquisitionGeneration,
+      signal,
+      permissionMode: () => {
+        const record = context.deps.store.getRecord(sessionId)
+        return record ? structuredAgentSessionImmediatePermission(context.deps, record) : null
+      }
+    }),
     signal
   )
   return waitForPromiseWithSignal(

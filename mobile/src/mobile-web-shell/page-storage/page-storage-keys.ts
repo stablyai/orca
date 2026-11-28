@@ -52,8 +52,10 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:terminalSplitLayout',
   /** Whether every Duo chat runs across the status column. */
   'orca:duoChatExpanded',
-  /** Which usage window the composer meter shows. */
+  /** Which usage window the composer meter and the side-rail rings show. */
   'orca:composerUsageWindow',
+  /** Pace color thresholds shared by the side-rail rings and the composer meter. */
+  'orca:usagePaceColorThresholds',
   /** Whether that meter shows percent used or percent left. */
   'orca:composerUsageDisplay',
   /** Terminal font, line spacing and weight. */
@@ -75,6 +77,7 @@ export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:terminalSplitLayout',
   'orca:duoChatExpanded',
   'orca:composerUsageWindow',
+  'orca:usagePaceColorThresholds',
   'orca:composerUsageDisplay',
   'orca:terminalFontStyle',
   'orca:nativeChatText',

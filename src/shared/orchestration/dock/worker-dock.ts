@@ -44,6 +44,8 @@ export const WorkerDockEntry = lazyZodSchema(() =>
     source: z.string(),
     name: z.string(),
     title: z.string(),
+    /** The agent selected when this worker launched; absent on older hosts. */
+    agent: z.string().nullable().optional(),
     model: z.string().nullable(),
     state: WorkerDockState,
     changedAt: z.number().nullable(),

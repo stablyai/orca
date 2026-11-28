@@ -149,7 +149,7 @@ export const PAIRING_METHODS = [
       if (!ctx.delegatedMobileDevices) {
         throw new Error('runtime_device_required')
       }
-      return ctx.delegatedMobileDevices.sync(params.phones)
+      return ctx.delegatedMobileDevices.sync(params.phones, params.clientInstanceId)
     }
   })
 ]

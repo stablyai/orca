@@ -24,7 +24,6 @@ import {
   closeBrowserPasswordSavePromptsForGuest,
   offerBrowserPasswordSave
 } from './browser-password-save-prompts'
-import { confirmBrowserPasswordFill } from './browser-password-reauth'
 import {
   browserPasswordSettings,
   browserPasswordVaultForGuest as vaultForGuest,
@@ -275,8 +274,11 @@ export async function fillBrowserPassword(input: {
   const entry = matches?.ok
     ? [...matches.value.exact, ...matches.value.sameSite].find((item) => item.id === input.entryId)
     : undefined
-  if (entry && !(await confirmBrowserPasswordFill())) {
-    return { ok: false, reason: 'unavailable' }
+  if (entry) {
+    const { confirmBrowserPasswordFill } = await import('./browser-password-reauth')
+    if (!(await confirmBrowserPasswordFill())) {
+      return { ok: false, reason: 'unavailable' }
+    }
   }
   // Why again after Touch ID: the page can navigate while the prompt is up, and the password must
   // reach only the frame and origin it was matched for, never whatever document replaced it.

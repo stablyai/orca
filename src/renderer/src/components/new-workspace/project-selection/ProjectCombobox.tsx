@@ -1,7 +1,7 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { isWithinAddProjectMenu } from '@/components/sidebar/project-admission/menu/AddProjectHostSubmenu'
+import { isWithinAddProjectMenu } from '@/components/sidebar/project-admission/menu/add-project-menu-dom'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'

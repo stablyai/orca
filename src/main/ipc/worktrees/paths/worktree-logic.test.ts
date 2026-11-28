@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
-import { sanitizeWorktreeName } from './worktree-logic'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  getWorktreeNameGitPlatform,
+  sanitizeWorktreeBranchName,
+  sanitizeWorktreeName
+} from './worktree-logic'
 import { sanitizeWorktreeDisplayName } from '../creation/worktree-display-name'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 
@@ -24,6 +28,35 @@ describe('sanitizeWorktreeName', () => {
 
   it('turns an overlong mark run into a dash instead of composing it', () => {
     expect(sanitizeWorktreeName(`a${'\u0301'.repeat(100)}b`)).toBe('a-b')
+  })
+
+  it('prefixes Windows device names, which Git for Windows cannot create a folder or ref for', () => {
+    expect(sanitizeWorktreeName('con', 'win32')).toBe('_con')
+    expect(sanitizeWorktreeName('AUX', 'win32')).toBe('_AUX')
+    expect(sanitizeWorktreeName('nul.txt', 'win32')).toBe('_nul.txt')
+    expect(sanitizeWorktreeName('com0', 'win32')).toBe('com0')
+    expect(sanitizeWorktreeName('console', 'win32')).toBe('console')
+    expect(sanitizeWorktreeName('COM10', 'win32')).toBe('COM10')
+    expect(sanitizeWorktreeBranchName('con', 'win32')).toBe('_con')
+    expect(sanitizeWorktreeBranchName('aux/nul.txt', 'win32')).toBe('_aux/_nul.txt')
+    expect(sanitizeWorktreeBranchName('fix/console', 'win32')).toBe('fix/console')
+  })
+
+  it('keeps Windows device names off Windows', () => {
+    expect(sanitizeWorktreeName('con', 'linux')).toBe('con')
+    expect(sanitizeWorktreeBranchName('aux/nul.txt', 'linux')).toBe('aux/nul.txt')
+  })
+
+  it('keeps Windows device names for WSL-backed repos on Windows', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect(getWorktreeNameGitPlatform('C:\\repo', {})).toBe('win32')
+      expect(getWorktreeNameGitPlatform('C:\\repo', { wslDistro: 'Ubuntu' })).toBe('linux')
+      expect(getWorktreeNameGitPlatform('\\\\wsl$\\Ubuntu\\home\\me\\repo', {})).toBe('linux')
+      expect(getWorktreeNameGitPlatform('//wsl.localhost/Ubuntu/home/me/repo', {})).toBe('linux')
+    } finally {
+      platform.mockRestore()
+    }
   })
 
   it('turns invisible marks into dashes as other separators', () => {

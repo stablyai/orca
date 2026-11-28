@@ -27,6 +27,10 @@ type UsageState = Record<string, ProviderRateLimits | null>
 const seriesKey = (provider: string, account: string, windowId: string): string =>
   JSON.stringify([provider, account, windowId])
 
+function isEnoent(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
 async function readSavedHistory(filePath: string): Promise<PersistedUsageHistory> {
   try {
     const text = await readFile(filePath, 'utf8')
@@ -36,7 +40,7 @@ async function readSavedHistory(filePath: string): Promise<PersistedUsageHistory
     }
     return parseUsageHistoryFile(JSON.parse(text))
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+    if (!isEnoent(error)) {
       console.warn('[rate-limits] Unreadable usage history; starting fresh', error)
     }
     return { activeAccounts: {}, series: [] }

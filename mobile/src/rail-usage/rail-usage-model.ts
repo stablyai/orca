@@ -1,7 +1,9 @@
 import type { AccountsSnapshot } from '../accounts/accounts-snapshot'
 import {
   listProviderUsages,
+  pickComposerUsageWindow,
   type AgentUsage,
+  type ComposerUsageWindowChoice,
   type UsageWindowEntry
 } from '../composer-usage/agent-usage-provider'
 
@@ -10,19 +12,12 @@ export function listRailUsage(snapshot: AccountsSnapshot | null): AgentUsage[] {
   return listProviderUsages(snapshot, 'claude')
 }
 
-/** Weekly when the plan has one, else the window closest to its limit. */
-export function pickRailUsageWindow(windows: readonly UsageWindowEntry[]): UsageWindowEntry | null {
-  const weekly = windows.find((entry) => entry.kind === 'weekly')
-  if (weekly) {
-    return weekly
-  }
-  let tightest: UsageWindowEntry | null = null
-  for (const entry of windows) {
-    if (!tightest || entry.window.usedPercent > tightest.window.usedPercent) {
-      tightest = entry
-    }
-  }
-  return tightest
+/** The chosen 5-hour or weekly window when the provider reports it, matching the composer meter. */
+export function pickRailUsageWindow(
+  windows: readonly UsageWindowEntry[],
+  choice: ComposerUsageWindowChoice = 'session'
+): UsageWindowEntry | null {
+  return pickComposerUsageWindow(windows, choice)
 }
 
 /** The ring opens at the bottom, wide enough on the status glyph's 37pt ring for a three-digit percent. */

@@ -1,23 +1,30 @@
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
+import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
 
-/** Hands the chat's saved mode to its running agent; one that cannot switch takes it with the next send. */
+/** Hands the chat's saved mode to its running agent; one that cannot switch takes it with the next
+ *  send. `unless`: the mode the agent already runs (a child just ready gets only a newer pick). */
 export function applyStructuredAgentSessionPermissionPick(
-  context: Pick<
-    StructuredAgentSessionMutationContext,
-    'deps' | 'sessions' | 'trackProviderOperation'
-  >,
-  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'publish' | 'logger'>
+  context: Pick<StructuredAgentSessionMutationContext, 'deps' | 'sessions'> &
+    Partial<Pick<StructuredAgentSessionMutationContext, 'trackProviderOperation'>>,
+  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'publish' | 'logger'>,
+  unless?: AgentChatPermissionChoice
 ): void {
   const { sessionId, fence } = ctx
   const { adapter, store } = context.deps
   const child = context.sessions.get(sessionId)?.child
   const record = store.getRecord(sessionId)
   const mode = record ? structuredAgentSessionImmediatePermission(context.deps, record) : null
+  // No child yet (an acquisition the host hasn't published) counts as starting too.
+  if (mode && (!child || (child.phase === 'starting' && child.fence === fence && !child.close))) {
+    adapter.permissionPickedWhileStarting?.({ sessionId, mode })
+    return
+  }
   if (
     !adapter.applyPermissionMode ||
     !mode ||
+    mode === unless ||
     child?.phase !== 'ready' ||
     child.close ||
     child.fence !== fence

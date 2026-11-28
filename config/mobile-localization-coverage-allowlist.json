@@ -784,5 +784,29 @@
     "text": "files.readDir refused",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "mobile/src/composer-usage/ComposerUsageMeter.tsx",
+    "kind": "object-property:label",
+    "text": "full",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Layout-mode discriminant for the composer meter fit (full, compact, or hidden). Not copy."
+  },
+  {
+    "filePath": "mobile/src/composer-usage/composer-usage-wide-meter.ts",
+    "kind": "object-property:label",
+    "text": "full",
+    "dynamic": false,
+    "count": 2,
+    "reason": "Layout-mode discriminant for the wide composer meter (full reset label vs largest unit). Not copy."
+  },
+  {
+    "filePath": "mobile/src/composer-usage/composer-usage-wide-meter.ts",
+    "kind": "object-property:label",
+    "text": "compact",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Layout-mode discriminant for the wide composer meter (full reset label vs largest unit). Not copy."
   }
 ]

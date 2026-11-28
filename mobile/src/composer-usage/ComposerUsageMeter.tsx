@@ -5,7 +5,7 @@ import { composerInputStylesSheet } from '../components/composer-input/composer-
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { AccountsSnapshot } from '../accounts/accounts-snapshot'
 import { useAccountsSnapshot } from './accounts-snapshot-store'
 import {
@@ -64,6 +64,7 @@ type Reading = {
 }
 
 function useComposerUsageReading(agent: string | null | undefined): Reading | null {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const client = useContext(ComposerUsageClientContext)
   // Before a hook status names the agent, the host's own identification of the tab still does.
@@ -89,7 +90,7 @@ function useComposerUsageReading(agent: string | null | undefined): Reading | nu
     usage,
     snapshot,
     readout,
-    color: usagePaceColor(computeUsagePace(entry.window, now), readout.used),
+    color: usagePaceColor(computeUsagePace(entry.window, now), readout.used, colors),
     length,
     resetsIn: usageResetLabel(entry.window, now),
     resetsInCompact: usageResetLabel(entry.window, now, 'compact'),
@@ -151,8 +152,6 @@ export function ComposerUsageMeter({
 }): React.JSX.Element | null {
   const styles = useThemedStyles(stylesSheet)
   const composerInputStyles = useThemedStyles(composerInputStylesSheet)
-
-  useMobileColorScheme()
   const reading = useComposerUsageReading(agent)
   const [open, setOpen] = useState(false)
   // Latched on first open: the lazy pop-up mounts once, then stays mounted while the meter lives.

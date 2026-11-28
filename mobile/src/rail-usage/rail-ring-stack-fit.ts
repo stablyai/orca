@@ -1,5 +1,7 @@
 /** How a column of usage rings fits a band of the rail. */
 export type RailRingStackFit = {
+  /** Top padding above the first ring. Tightens with the gaps when `tightenTop` is set. */
+  paddingTop: number
   /** Layout gap between ring boxes: the label's overhang plus the clear gap below it. */
   gap: number
   /** Layout padding after the last ring box, its label's overhang included. */
@@ -31,29 +33,56 @@ export function railRingStackFit(args: {
   paddingBottom: number
   /** A faded strip below the cut where the next ring's top edge shows there is more. */
   peek: number
+  /** Tighten top padding alongside inter-ring gaps (below a rail Back button, not under the status glyph). */
+  tightenTop?: boolean
 }): RailRingStackFit {
-  const { count, room, ring, overhang, gap, minGap, paddingTop, paddingBottom, peek } = args
+  const {
+    count,
+    room,
+    ring,
+    overhang,
+    gap,
+    minGap,
+    paddingTop,
+    paddingBottom,
+    peek,
+    tightenTop = false
+  } = args
   const item = ring + overhang
-  const layout = (clear: number, endClear: number, height: number | null): RailRingStackFit => ({
+  const layout = (
+    top: number,
+    clear: number,
+    endClear: number,
+    height: number | null
+  ): RailRingStackFit => ({
+    paddingTop: top,
     gap: clear + overhang,
     paddingBottom: endClear + overhang,
     height,
     pitch: item + clear
   })
   if (room === null || count <= 1) {
-    return layout(gap, paddingBottom, null)
+    return layout(paddingTop, gap, paddingBottom, null)
   }
   const items = count * item
-  if (paddingTop + items + (count - 1) * gap + paddingBottom <= room) {
-    return layout(gap, paddingBottom, null)
+  const gapCount = count - 1
+  if (paddingTop + items + gapCount * gap + paddingBottom <= room) {
+    return layout(paddingTop, gap, paddingBottom, null)
   }
   const tightBottom = Math.min(paddingBottom, 2)
-  const tightGap = Math.floor((room - paddingTop - items - tightBottom) / (count - 1))
+  const tightGap = tightenTop
+    ? Math.floor((room - items - tightBottom) / (gapCount + 1))
+    : Math.floor((room - paddingTop - items - tightBottom) / gapCount)
   if (tightGap >= minGap) {
-    return layout(Math.min(gap, tightGap), tightBottom, null)
+    const clear = Math.min(gap, tightGap)
+    return layout(tightenTop ? Math.min(paddingTop, clear) : paddingTop, clear, tightBottom, null)
   }
+  const effectiveTop = tightenTop ? Math.min(paddingTop, minGap) : paddingTop
   const pitch = item + minGap
-  const shown = Math.max(1, Math.floor((room - peek - paddingTop - item) / pitch) + 1)
+  const shown = Math.max(
+    1,
+    Math.floor((room - peek - effectiveTop - item - (tightenTop ? 1 : 0)) / pitch) + 1
+  )
   // The fade covers `peek` at the bottom; the last label has to finish above it once the stack is scrolled to the end.
-  return layout(minGap, peek, paddingTop + (shown - 1) * pitch + item + 1 + peek)
+  return layout(effectiveTop, minGap, peek, effectiveTop + (shown - 1) * pitch + item + 1 + peek)
 }

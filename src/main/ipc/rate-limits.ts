@@ -8,34 +8,36 @@ import type { CodexAccountService } from '../codex-accounts/service'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/selection/runtime-selection'
 import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/account-management/runtime-selection'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 
 export function registerRateLimitHandlers(
   rateLimits: RateLimitService,
   codexAccounts: CodexAccountService,
-  getSettings: () => GlobalSettings
+  getSettings: () => GlobalSettings,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
-  ipcMain.handle('rateLimits:get', () => rateLimits.getState())
-  ipcMain.handle('rateLimits:refresh', () => rateLimits.refresh())
-  ipcMain.handle('rateLimits:refreshOnOwnerReturn', () => rateLimits.refreshOnOwnerReturn())
-  ipcMain.handle('rateLimits:refreshCodexForTarget', (_event, target: RateLimitRuntimeTarget) =>
+  ipc.handle('rateLimits:get', () => rateLimits.getState())
+  ipc.handle('rateLimits:refresh', () => rateLimits.refresh())
+  ipc.handle('rateLimits:refreshOnOwnerReturn', () => rateLimits.refreshOnOwnerReturn())
+  ipc.handle('rateLimits:refreshCodexForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshCodexForTarget(target)
   )
   // Why: managed desktop resets must share the mobile mutation queue and durable ledger.
-  ipcMain.handle('rateLimits:consumeCodexResetCredit', () =>
+  ipc.handle('rateLimits:consumeCodexResetCredit', () =>
     codexAccounts.consumeCurrentRateLimitResetCredit()
   )
-  ipcMain.handle('rateLimits:refreshClaudeForTarget', (_event, target: RateLimitRuntimeTarget) =>
+  ipc.handle('rateLimits:refreshClaudeForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshClaudeForTarget(target)
   )
-  ipcMain.handle('rateLimits:fetchInactiveClaudeAccounts', () =>
+  ipc.handle('rateLimits:fetchInactiveClaudeAccounts', () =>
     rateLimits.fetchInactiveClaudeAccountsOnOpen()
   )
-  ipcMain.handle('rateLimits:fetchInactiveCodexAccounts', () =>
+  ipc.handle('rateLimits:fetchInactiveCodexAccounts', () =>
     rateLimits.fetchInactiveCodexAccountsOnOpen()
   )
-  ipcMain.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
+  ipc.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
   // Why: a focused WSL host's distro usage is read without switching the desktop's own target.
-  ipcMain.handle(
+  ipc.handle(
     'rateLimits:readUsageForRuntimeTarget',
     (_event, target: RateLimitRuntimeTarget, providers: RuntimeTargetUsageProvider[]) =>
       rateLimits.readUsageForRuntimeTarget(target, providers, () => {

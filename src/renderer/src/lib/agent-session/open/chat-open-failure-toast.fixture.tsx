@@ -10,17 +10,26 @@ import { showChatOpenUnavailable } from './chat-open-failure-toast'
 const LIVE_TOAST = '[data-sonner-toast]:not([data-removed="true"])'
 const AGENT = 'Test agent'
 const DETAIL = 'unreachable · structured_session_restore_timeout'
+// A server bot's Home that didn't load: one plain reason line, no raw output to disclose.
+const HOME_DID_NOT_LOAD = "Bot's Home didn't load."
 
-function ToastStage({ starting }: { starting: boolean }): React.JSX.Element {
+type ToastKind = 'starting' | 'failed' | 'home'
+
+function toastContext(kind: ToastKind): Parameters<typeof showChatOpenUnavailable>[0] {
+  return kind === 'starting'
+    ? { starting: true }
+    : kind === 'home'
+      ? { message: HOME_DID_NOT_LOAD, retry: () => undefined }
+      : { detail: DETAIL, retry: () => undefined }
+}
+
+function ToastStage({ kind }: { kind: ToastKind }): React.JSX.Element {
   useEffect(() => {
-    showChatOpenUnavailable(
-      starting ? { starting: true } : { detail: DETAIL, retry: () => undefined },
-      AGENT
-    )
+    showChatOpenUnavailable(toastContext(kind), kind === 'home' ? undefined : AGENT)
     return () => {
       toast.dismiss()
     }
-  }, [starting])
+  }, [kind])
   // A transform makes this frame the toaster's fixed-position containing block, like a 600px window.
   return (
     <div className="relative h-[260px] w-[600px] [transform:translateZ(0)]">
@@ -44,7 +53,10 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
 
 /** The title must stay on one line at the toaster's width, in every locale. */
 function assertOneLineTitle(): void {
-  const title = document.querySelector<HTMLElement>(`${LIVE_TOAST} [data-title]`)
+  // Why innermost: Sonner wraps a custom card in its own [data-title], which holds the whole card.
+  const title = document.querySelector<HTMLElement>(
+    `${LIVE_TOAST} [data-title]:not(:has([data-title]))`
+  )
   if (!title) {
     throw new Error('The toast title is missing')
   }
@@ -56,13 +68,10 @@ function assertOneLineTitle(): void {
   }
 }
 
-async function raise(language: UiLanguage, starting: boolean): Promise<void> {
+async function raise(language: UiLanguage, kind: ToastKind): Promise<void> {
   await i18n.changeLanguage(await loadRendererUiLanguage(language))
   // The toast reads its words when shown, so raise it in the loaded language.
-  showChatOpenUnavailable(
-    starting ? { starting: true } : { detail: DETAIL, retry: () => undefined },
-    AGENT
-  )
+  showChatOpenUnavailable(toastContext(kind), kind === 'home' ? undefined : AGENT)
   await waitFor(
     () => document.querySelector(LIVE_TOAST)?.getAttribute('data-mounted') === 'true',
     'the toast'
@@ -70,7 +79,23 @@ async function raise(language: UiLanguage, starting: boolean): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 400))
 }
 
-function chatOpenToast(language: UiLanguage, starting: boolean, expanded = false) {
+/** The reason shows as one line under the title, with no details disclosure to open. */
+function assertPlainReason(): void {
+  const reason = document.querySelector<HTMLElement>(`${LIVE_TOAST} [data-message]`)
+  if (reason?.textContent !== HOME_DID_NOT_LOAD) {
+    throw new Error(`The toast reason is missing: ${reason?.textContent}`)
+  }
+  if (document.querySelector(`${LIVE_TOAST} button[aria-expanded]`)) {
+    throw new Error('A plain reason must not come with a details disclosure')
+  }
+  const range = document.createRange()
+  range.selectNodeContents(reason)
+  if (new Set([...range.getClientRects()].map((rect) => Math.round(rect.bottom))).size > 1) {
+    throw new Error('The toast reason wraps')
+  }
+}
+
+function chatOpenToast(language: UiLanguage, kind: ToastKind, expanded = false) {
   return defineFixture({
     // Orca's narrowest window; the toaster is min(26rem, 100vw - 2rem) wide.
     width: 600,
@@ -79,10 +104,13 @@ function chatOpenToast(language: UiLanguage, starting: boolean, expanded = false
         settings: state.settings && { ...state.settings, uiLanguage: language }
       }))
     },
-    render: () => <ToastStage starting={starting} />,
+    render: () => <ToastStage kind={kind} />,
     interact: async () => {
-      await raise(language, starting)
+      await raise(language, kind)
       assertOneLineTitle()
+      if (kind === 'home') {
+        assertPlainReason()
+      }
       if (expanded) {
         const toggle = document.querySelector<HTMLButtonElement>(
           `${LIVE_TOAST} button[aria-expanded]`
@@ -111,22 +139,23 @@ const LANGUAGES: UiLanguage[] = [
 /** Both titles fit one line in every built-in locale; shows the last one checked. */
 export const everyLocaleOneLine = defineFixture({
   width: 600,
-  render: () => <ToastStage starting={false} />,
+  render: () => <ToastStage kind="failed" />,
   interact: async () => {
     for (const language of LANGUAGES) {
-      for (const starting of [true, false]) {
-        await raise(language, starting)
+      for (const kind of ['starting', 'failed'] as const) {
+        await raise(language, kind)
         assertOneLineTitle()
       }
     }
   }
 })
 
-export const stillStartingEn = chatOpenToast('en', true)
-export const stillStartingDe = chatOpenToast('de', true)
-export const stillStartingRu = chatOpenToast('ru', true)
-export const openFailedEn = chatOpenToast('en', false)
-export const openFailedDe = chatOpenToast('de', false)
-export const openFailedRu = chatOpenToast('ru', false)
-export const openFailedDetailsDe = chatOpenToast('de', false, true)
-export const openFailedDetailsRu = chatOpenToast('ru', false, true)
+export const stillStartingEn = chatOpenToast('en', 'starting')
+export const stillStartingDe = chatOpenToast('de', 'starting')
+export const stillStartingRu = chatOpenToast('ru', 'starting')
+export const openFailedEn = chatOpenToast('en', 'failed')
+export const openFailedDe = chatOpenToast('de', 'failed')
+export const openFailedRu = chatOpenToast('ru', 'failed')
+export const openFailedDetailsDe = chatOpenToast('de', 'failed', true)
+export const openFailedDetailsRu = chatOpenToast('ru', 'failed', true)
+export const botHomeDidNotLoadEn = chatOpenToast('en', 'home')

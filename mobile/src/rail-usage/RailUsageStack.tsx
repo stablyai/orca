@@ -21,7 +21,8 @@ import { railRingStackFit } from './rail-ring-stack-fit'
 
 /** The percent label below a ring hangs this far past its bottom edge (4.25pt, rounded up). */
 const RING_LABEL_OVERHANG = 5
-const MIN_RING_GAP = spacing.sm
+// Tighter than the resting gap so five rings still fit above one jump arrow in the Duo column.
+const MIN_RING_GAP = 6
 const CUT_FADE = spacing.md
 /**
  * How far the reported status column runs below the Wi-Fi ring's page dots (iOS 27.1 simulator).
@@ -91,8 +92,9 @@ export function RailUsageStack({
   const center = useRailRingCenter(strip)
   // The band the rail gives the stack; a chat's composer can leave less than the whole column.
   const [room, setRoom] = useState<number | null>(null)
+  const atStripTop = useContext(RailBandAtStripTopContext)
   // A tablet's own rail has the room it needs; only the Duo's column rises and fits.
-  const lift = useStatusColumnLift(useContext(RailBandAtStripTopContext) && !standalone)
+  const lift = useStatusColumnLift(atStripTop && !standalone)
   const fit = railRingStackFit({
     count: standalone ? 0 : usages.length,
     room,
@@ -102,7 +104,9 @@ export function RailUsageStack({
     minGap: MIN_RING_GAP,
     paddingTop: COLUMN_PADDING_TOP,
     paddingBottom: COLUMN_PADDING_BOTTOM,
-    peek: CUT_FADE
+    peek: CUT_FADE,
+    // Under the status glyph the top gap stays put. Below Back it tightens with the rings.
+    tightenTop: !standalone && !atStripTop
   })
   if (usages.length === 0 || (strip === null && !standalone)) {
     return null
@@ -126,6 +130,7 @@ export function RailUsageStack({
               ? styles.centered
               : {
                   paddingLeft: center - DUO_STATUS_RING_DIAMETER / 2,
+                  paddingTop: fit.paddingTop,
                   gap: fit.gap,
                   paddingBottom: fit.paddingBottom
                 }

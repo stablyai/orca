@@ -865,7 +865,7 @@
         "waitingForSignIn": "正在等待登录…",
         "tools_one": "{{count}} 个工具",
         "tools_other": "{{count}} 个工具",
-        "off": "已关闭",
+        "disabled": "已禁用",
         "notStarted": "尚未启动"
       },
       "title": "MCP 服务器",
@@ -1801,7 +1801,9 @@
         "permissionAcceptEditsDescription": "批准文件编辑和文件命令，其余操作会询问",
         "permissionAutoDescription": "代你审核批准请求",
         "permissionFullAccessCodexDescription": "从不询问，可以编辑任何文件并使用网络",
-        "permissionFullAccessDescription": "编辑或运行命令前从不询问"
+        "permissionFullAccessDescription": "编辑或运行命令前从不询问",
+        "permissionAgentSettings": "{{agent}} 设置",
+        "permissionFromAgentSettings": "{{mode}}，来自 {{agent}} 设置"
       },
       "goal": {
         "sentAsGoal": "作为目标发送"
@@ -2247,13 +2249,13 @@
       "showFor": "选择要显示自动化的桌面",
       "toggleFailed": "无法更新 {{name}}",
       "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化",
-      "pairComputer": "请先配对桌面，才能查看和运行自动化。"
+      "pairComputer": "请先配对一台电脑，才能查看和运行自动化"
     },
     "listFooter": {
       "openTasksOn": "选择打开任务的主机"
     },
     "listHeader": {
-      "computersHeading": "台式机"
+      "computersHeading": "电脑"
     },
     "screen": {
       "pairingCheckFailed": "无法检查配对状态",
@@ -2261,7 +2263,7 @@
       "removeComputerFailed": "无法移除主机",
       "removeComputerTitle": "移除主机",
       "removeComputerMessage": "要移除“{{name}}”吗？之后可重新配对",
-      "sameNetworkOnly": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对"
+      "sameNetworkOnly": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在电脑上登录 Orca 并重新配对"
     },
     "bottomBar": {
       "newWorkspace": "新建工作区"
@@ -2284,7 +2286,7 @@
       "usage": "使用情况",
       "agents": "智能体",
       "bots": "Bots",
-      "chooseComputer": "{{desktop}}，选择其他桌面"
+      "chooseComputer": "{{desktop}}，选择其他电脑"
     },
     "usage": {
       "active": "使用中",
@@ -2294,9 +2296,9 @@
       "showUsageFor": "选择要显示使用情况的桌面",
       "updatedAgo": "{{time}}前更新",
       "updatedJustNow": "刚刚更新",
-      "pairComputer": "请先配对桌面，才能查看智能体账户使用情况。",
-      "addAccountsOnComputer": "请在桌面的“设置 → 账户”中添加账户。",
-      "openComputerAccountsHint": "打开此桌面的账户"
+      "pairComputer": "请先配对一台电脑，才能查看智能体账户使用情况",
+      "addAccountsOnComputer": "请在电脑上 Orca 的“设置 → 账户”中添加账户",
+      "openComputerAccountsHint": "打开此电脑的账户"
     },
     "activeAgents": {
       "heading": "活跃",
@@ -2322,10 +2324,10 @@
         "items_one": "事项",
         "items_other": "{{count}} 个事项"
       },
-      "pairComputer": "配对一台桌面端，即可在这里查看它的 bots"
+      "pairComputer": "配对一台电脑，即可在这里查看它的 bots"
     },
     "computers": {
-      "pairComputer": "配对桌面"
+      "pairComputer": "配对电脑"
     }
   },
   "hooks": {
@@ -3255,7 +3257,7 @@
       "collapse": "收起"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "在新 CLI 中恢复"
+      "continueInTerminal": "在终端中继续"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "滚动到最新消息"
@@ -3847,6 +3849,18 @@
       "needsYou": "需要你处理",
       "files": "文件",
       "otherWorkspaces": "其他工作区"
+    },
+    "terminalChatContinuation": {
+      "busy": "另一个聊天或终端正在打开。请稍候再试。",
+      "continueInChat": "在聊天中继续",
+      "failed": "无法在聊天中继续。{{detail}}",
+      "failedAfterClose": "无法在聊天中继续。{{detail}} 对话在智能体历史记录中。",
+      "otherJob": "此终端中正在运行 {{process}}。请先退出它，然后在聊天中继续。",
+      "terminalChanged": "Orca 检查时此终端已更改。请重试。",
+      "tryAgain": "请重试。",
+      "unavailable": "此电脑上无法使用 {{agent}} 聊天。",
+      "uncheckable": "Orca 无法检查此终端中正在运行的内容。请重试。",
+      "unconfirmed": "Orca 无法确认聊天已打开。重试前请检查你的标签页。"
     }
   },
   "settings": {
@@ -4006,9 +4020,6 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
-    },
-    "agents": {
-      "permissionOwnAll": "各智能体自己的设置"
     },
     "voiceTranscribeOn": {
       "heading": "转写位置",
@@ -4441,6 +4452,9 @@
       "agentCouldNotStart": "无法启动 {{label}}。请在设置中检查智能体命令后重试",
       "agentFailedToStart": "{{label}} 启动失败。请在设置中检查智能体命令后重试",
       "agentReportedError": "{{label}} 报告了错误",
+      "antigravityInvalidEvents": "Antigravity 返回了无效的 JSON 事件",
+      "antigravityInvalidResult": "Antigravity 返回了无效的结果",
+      "antigravityNoFinalResult": "Antigravity 未返回最终结果",
       "chatNameAgentUnsupported": "请在设置 -> 聊天 -> 聊天名称中为此操作选择支持的聊天命名智能体。支持的智能体：{{agents}}，或选择“自定义命令”",
       "chatNameCustomCommandEmpty": "自定义命令为空。请在设置 -> 聊天 -> 聊天名称中添加",
       "cliFailed": "{{label}} CLI 命令执行失败，退出码为 {{exitCode}}",
@@ -6646,7 +6660,7 @@
       },
       "wait": {
         "placeholder": "等待",
-        "offlineSave": "{{host}} 已离线。你输入的内容会保留，恢复连接后即可保存。",
+        "offlineSave": "{{host}} 已离线。你输入的内容会保留，恢复连接后即可保存",
         "count": "{{count}} 项"
       },
       "group": {
@@ -8211,9 +8225,9 @@
       "unread": "未读",
       "hideWorkers": "隐藏 {{workers}}",
       "showWorkers": "显示 {{workers}}",
-      "pairComputer": "配对桌面后，即可在这里查看它的智能体",
-      "noComputerTitle": "未连接桌面",
-      "noComputerBody": "连接桌面后，智能体会显示在这里"
+      "pairComputer": "配对电脑后，即可在这里查看它的智能体",
+      "noComputerTitle": "未连接电脑",
+      "noComputerBody": "连接电脑后，智能体会显示在这里"
     },
     "actions": {
       "offlineHint": "它所在的桌面已离线",
@@ -8231,7 +8245,7 @@
       "workspace": "工作区",
       "project": "项目",
       "agent": "智能体",
-      "computer": "桌面"
+      "computer": "电脑"
     },
     "options": {
       "groupBy": "分组依据",
@@ -8270,7 +8284,7 @@
       "reset": "重置",
       "done": "完成",
       "computer": "电脑",
-      "allComputers": "所有桌面",
+      "allComputers": "所有电脑",
       "show": "显示",
       "workers": "工作者"
     }
