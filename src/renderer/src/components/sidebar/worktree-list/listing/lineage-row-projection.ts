@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { useMemo } from 'react'
-import { fingerprintStringList } from '../../../../../../shared/text/string-fingerprint'
+import { createStringListFingerprinter } from '../../../../../../shared/text/string-fingerprint'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRenderRowKey, type RenderRow } from './render-row'
 import {
@@ -63,7 +63,7 @@ export function buildLineageRowProjection(
   statusLane = newCardStyle
 ) {
   const rowIndexByKey = new Map<string, number>()
-  const rowKeys: string[] = []
+  const restoreFingerprinter = createStringListFingerprinter()
   const frames: LineageRowFrame[] = []
   const stack: number[] = []
   const isGrouped = groupBy !== 'none'
@@ -76,7 +76,7 @@ export function buildLineageRowProjection(
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
     const key = getRenderRowKey(row)
-    rowKeys.push(key)
+    restoreFingerprinter.push(key)
     rowIndexByKey.set(key, index)
     const isWorkspace = row.type === 'item' || row.type === 'folder-workspace'
     while (stack.length > 0) {
@@ -207,7 +207,7 @@ export function buildLineageRowProjection(
       return cachedOccurrencesByIdentity
     },
     rowIndexByKey,
-    restoreSignal: fingerprintStringList(rowKeys)
+    restoreSignal: restoreFingerprinter.digest()
   }
 }
 
@@ -232,18 +232,26 @@ function buildOccurrencesByIdentity(rows: readonly RenderRow[]): Map<string, num
   return occurrencesByIdentity
 }
 
+const EMPTY_SUBTREE_RANGES: readonly { start: number; end: number }[] = []
+const EMPTY_ACTIVE_FAMILY_ROOTS: ReadonlySet<number> = new Set()
+
 export function useDraggedSubtreeRanges(
   projection: LineageRowProjection,
   identity: string | null
 ): readonly { start: number; end: number }[] {
-  return useMemo(
-    () =>
-      (identity ? (projection.occurrencesByIdentity.get(identity) ?? []) : []).map((start) => ({
-        start,
-        end: projection.frames[start].end
-      })),
-    [projection, identity]
-  )
+  return useMemo(() => {
+    if (!identity) {
+      return EMPTY_SUBTREE_RANGES
+    }
+    const occurrences = projection.occurrencesByIdentity.get(identity)
+    if (!occurrences || occurrences.length === 0) {
+      return EMPTY_SUBTREE_RANGES
+    }
+    return occurrences.map((start) => ({
+      start,
+      end: projection.frames[start].end
+    }))
+  }, [projection, identity])
 }
 
 function hasHiddenLineageChildren(row: RenderRow): boolean {
@@ -255,11 +263,11 @@ export function getActiveFamilyRoots(
   projection: LineageRowProjection,
   activeWorktreeId: string | null,
   activeWorkspaceExecutionHostId: ExecutionHostId | null
-): Set<number> {
-  const roots = new Set<number>()
+): ReadonlySet<number> {
   if (!activeWorktreeId || !projection.hasAnyLineageFamily) {
-    return roots
+    return EMPTY_ACTIVE_FAMILY_ROOTS
   }
+  const roots = new Set<number>()
   const addRoots = (occurrences: readonly number[]) => {
     for (const index of occurrences) {
       const root = projection.frames[index].root

@@ -40,7 +40,9 @@ export class OrcadManagedIdentityError extends Error {
     explanation: string,
     detail: string,
     /** A sealed refusal, not a catch-all `foreign` answer a restart can produce. */
-    readonly sealed = false
+    readonly sealed = false,
+    /** A pinned WSL host's server now holds another key; already WSL-worded, never wrapped twice. */
+    readonly wslHostKeyChanged = false
   ) {
     super(`${ORCAD_IDENTITY_MISMATCH_CODE}: ${explanation}: ${detail}`)
     this.name = 'OrcadManagedIdentityError'
@@ -85,16 +87,41 @@ export class OrcadManagedIdentityError extends Error {
     distro: string,
     refused: OrcadManagedIdentityError
   ): OrcadManagedIdentityError {
+    if (refused.wslHostKeyChanged) {
+      return refused
+    }
     const detail = refused.message.replace(`${ORCAD_IDENTITY_MISMATCH_CODE}: `, '')
     return new OrcadManagedIdentityError(
       refused.kind,
-      `the Orca server in ${distro} is not the one this desktop paired with (it was ` +
-        'reinstalled or its identity was reset), so reconnecting won’t restore access. Remove ' +
-        'the WSL host and add it again',
+      wslHostServerExplanation(distro),
       detail,
       refused.sealed
     )
   }
+
+  /** A pinned WSL host refused by a server whose account holds another key: sealed, it ends retries. */
+  static wslHostKeyChanged(distro: string, detail: string): OrcadManagedIdentityError {
+    return new OrcadManagedIdentityError(
+      'foreign-port',
+      wslHostServerExplanation(distro),
+      detail,
+      true,
+      true
+    )
+  }
+}
+
+function wslHostServerExplanation(distro: string): string {
+  return (
+    `the Orca server in ${distro} is not the one this desktop paired with (it was ` +
+    'reinstalled or its identity was reset), so reconnecting won’t restore access. Remove ' +
+    'the WSL host and add it again'
+  )
+}
+
+/** The refusal `wslHostKeyChanged` builds: this host's paired server no longer exists. */
+export function isWslHostKeyChangedRefusal(error: unknown): error is OrcadManagedIdentityError {
+  return error instanceof OrcadManagedIdentityError && error.wslHostKeyChanged
 }
 
 /** Status code of a refusal automatic retries can't clear (the pairing must change); null otherwise. */

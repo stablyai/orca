@@ -5726,7 +5726,6 @@
       "suggestThree": "{{a}}, {{b}} & {{c}}",
       "suggestMore": "{{a}}, {{b}} & {{count}} more",
       "pickOne": "Pick a bot",
-      "needsTwoBots": "Needs 2 bots on {{host}}",
       "items": {
         "emptyTitle": "No items from this group yet",
         "needsYouCount_one": "{{count}} needs you",

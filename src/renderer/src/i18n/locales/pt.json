@@ -25084,6 +25084,9 @@
           "never": "Nunca"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "Configurações de compatibilidade de baixo nível para solução de problemas. Estas configurações ficam salvas neste computador, não em {{host}}."
+      },
       "repositoryHooks": {
         "availableEnvVars": "Variáveis de ambiente disponíveis"
       },
