@@ -26,13 +26,17 @@ import { recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 
 // Lets a test make every directory listing cost time, as on a slow or network disk.
-const listings = vi.hoisted(() => ({ onRead: null as null | ((path: unknown) => void) }))
+const listings = vi.hoisted((): { onRead: ((path: unknown) => void) | null } => ({
+  onRead: null
+}))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
-  const readdirSync = ((...args: Parameters<typeof actual.readdirSync>) => {
-    listings.onRead?.(args[0])
-    return actual.readdirSync(...args)
-  }) as typeof actual.readdirSync
+  const readdirSync = new Proxy(actual.readdirSync, {
+    apply(target, self, args: unknown[]) {
+      listings.onRead?.(args[0])
+      return Reflect.apply(target, self, args)
+    }
+  })
   return { ...actual, readdirSync, default: { ...actual, readdirSync } }
 })
 
