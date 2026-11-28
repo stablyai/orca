@@ -38,7 +38,9 @@ async function linkEntry(source: string, target: string): Promise<void> {
     await symlink(source, target, 'junction')
     return
   }
-  await link(source, target).catch(() => copyPath(source, target, { force: false, errorOnExist: true }))
+  await link(source, target).catch(() =>
+    copyPath(source, target, { force: false, errorOnExist: true })
+  )
 }
 
 // Followed: a dotfiles setup often links the whole config folder.

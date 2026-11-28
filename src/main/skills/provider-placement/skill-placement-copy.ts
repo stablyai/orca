@@ -70,13 +70,13 @@ export async function createSkillPlacementCopyAtMissingDestination(
   stagingPath?: string
 ): Promise<void> {
   await mkdir(dirname(destinationPath), { recursive: true })
-  const copyPath = stagingPath ?? destinationPath
-  await mkdir(copyPath, { mode: 0o700 })
+  const copyRoot = stagingPath ?? destinationPath
+  await mkdir(copyRoot, { mode: 0o700 })
   let complete = false
   let placed = false
   try {
     for (const entry of await readdir(canonicalPath)) {
-      await copyPath(join(canonicalPath, entry), join(copyPath, entry), {
+      await copyPath(join(canonicalPath, entry), join(copyRoot, entry), {
         recursive: true,
         verbatimSymlinks: true,
         force: false,
@@ -85,7 +85,7 @@ export async function createSkillPlacementCopyAtMissingDestination(
     }
     const [source, copied] = await Promise.all([
       filesystem.observeSkill(canonicalPath, fileModes),
-      filesystem.observeSkill(copyPath, fileModes)
+      filesystem.observeSkill(copyRoot, fileModes)
     ])
     if (source.observedDigest !== copied.observedDigest) {
       throw new Error('skill-placement-copy-digest-mismatch')
@@ -98,7 +98,7 @@ export async function createSkillPlacementCopyAtMissingDestination(
     complete = true
   } finally {
     if (!complete) {
-      await filesystem.remove(copyPath)
+      await filesystem.remove(copyRoot)
       if (placed) {
         await filesystem.remove(destinationPath)
       }

@@ -86,7 +86,8 @@ function assertDirectoryCopyAllowed(
       destination
     )
   }
-  if (destinationStat && options.errorOnExist && !options.force) {
+  // fs.cp defaults force to true.
+  if (destinationStat && options.errorOnExist && options.force === false) {
     throw copyError('ERR_FS_CP_EEXIST', `${destination} already exists`, destination)
   }
 }

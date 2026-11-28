@@ -49,7 +49,11 @@ describe('copyPath on Windows', () => {
     )
 
     await expect(
-      copyPath(source, path.join(root, 'actual'), { recursive: true, errorOnExist: true })
+      copyPath(source, path.join(root, 'actual'), {
+        recursive: true,
+        errorOnExist: true,
+        force: false
+      })
     ).rejects.toMatchObject({ code: 'ERR_FS_CP_EEXIST' })
     await expect(
       copyPath(source, path.join(source, 'nested', 'inside'), { recursive: true })
