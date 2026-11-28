@@ -13,6 +13,18 @@ import {
 import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as Fs from 'node:fs'
+
+// Pass-through spy: counts synchronous content reads the hash cache makes on main.
+const syncReads = vi.hoisted(() => ({ paths: [] as string[] }))
+vi.mock('node:fs', async (original) => {
+  const fs = await original<typeof Fs>()
+  const readFileSync = (...args: Parameters<typeof fs.readFileSync>) => {
+    syncReads.paths.push(String(args[0]))
+    return fs.readFileSync(...args)
+  }
+  return { ...fs, default: { ...fs, readFileSync }, readFileSync }
+})
 
 import { setAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 
@@ -126,6 +138,16 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(
       readdirSync(dirname(dirname(cold!.execPath))).filter((n) => n.startsWith('build-'))
     ).toHaveLength(1)
+  })
+
+  it('leaves the sync lookup no source code to reread after a cold copy', async () => {
+    expect(await materializeRelocatedDaemonHost()).not.toBeNull()
+    syncReads.paths.length = 0
+    expect(getRelocatedDaemonHost()).not.toBeNull()
+    const sourceCodeReads = syncReads.paths.filter(
+      (path) => path.startsWith(installDir) && path.endsWith('.js')
+    )
+    expect(sourceCodeReads).toEqual([])
   })
 
   it('rematerializes a host whose copied addon went missing', async () => {

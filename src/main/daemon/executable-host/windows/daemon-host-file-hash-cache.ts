@@ -20,6 +20,11 @@ function recordHash(path: string, before: string, after: string, sha256: string)
   return sha256
 }
 
+/** Record a hash whose signature the caller proved stable across its read (a verified copy). */
+export function seedDaemonHostFileHash(path: string, signature: string, sha256: string): void {
+  cachedHashes.set(path, { signature, sha256 })
+}
+
 // Missing files must invalidate the inventory rather than reuse a cached hash.
 export function hashDaemonHostFile(path: string): string {
   const before = statSignature(path)

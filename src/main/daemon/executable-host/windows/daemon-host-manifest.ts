@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { access, copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { fileStatSignature } from '../../../filesystem/file-stat-signature'
+import { seedDaemonHostFileHash } from './daemon-host-file-hash-cache'
 import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
 import {
   DAEMON_HOST_FS_CONCURRENCY,
@@ -276,7 +277,7 @@ export async function executeManifest(
     await mkdir(dir, { recursive: true })
   }
   const hashes = new Map<string, string>()
-  const signatures = new Map<string, string>()
+  const signatures = new Map<string, { signature: string; sha256: string }>()
   // Settles in-flight copies before failing, so staging cleanup cannot race a copy still writing.
   await mapWithConcurrencyUntilFailure(files, DAEMON_HOST_FS_CONCURRENCY, async (file) => {
     const dest = destPath(stagingRoot, file.destRel)
@@ -290,7 +291,7 @@ export async function executeManifest(
     }
     const copied = await copyHashedFile(file.sourcePath, dest, expected)
     hashes.set(file.destRel, copied.sha256)
-    signatures.set(file.sourcePath, copied.signature)
+    signatures.set(file.sourcePath, { signature: copied.signature, sha256: copied.sha256 })
   })
   await assertCodeDirsUnchanged(
     dirs.filter((dir) => code.isCode(dir.destRel)),
@@ -315,10 +316,14 @@ export async function executeManifest(
     [...signatures],
     DAEMON_HOST_FS_CONCURRENCY,
     async ([path, before]) => {
-      if ((await sourceSignature(path)) !== before) {
+      if ((await sourceSignature(path)) !== before.signature) {
         throw new Error('daemon-host relocation: code changed while copying')
       }
     }
   )
+  // Sources proved unchanged across their read; seed the cache so a later sync lookup doesn't reread them on main.
+  for (const [path, { signature, sha256 }] of signatures) {
+    seedDaemonHostFileHash(path, signature, sha256)
+  }
   return hashes
 }
