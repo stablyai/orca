@@ -83,6 +83,11 @@ export class CodexSharedServerUnrouted {
     this.count = 0
   }
 
+  /** Frames were dropped here that a later claim may have missed. */
+  get anyLost(): boolean {
+    return this.lost.size > 0 || this.lostUnknown || this.keptLossEpoch > 0
+  }
+
   /** Whether frames held for this thread were dropped before anyone claimed it. */
   takeLost(threadId: string): boolean {
     return this.lost.delete(threadId) || this.lostUnknown

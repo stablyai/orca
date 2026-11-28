@@ -240,8 +240,12 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.output.restartAt()
   }
 
-  /** The agent keeps running under the daemon; this app stops seeing it. */
-  async detach(policy: ProviderRelayDetachPolicy, waitMs?: number): Promise<void> {
+  /** The agent keeps running under the daemon; this app stops seeing it. A policy given as a
+   *  function is read once nothing more is read, so its open work covers every line handled. */
+  async detach(
+    policy: ProviderRelayDetachPolicy | (() => ProviderRelayDetachPolicy),
+    waitMs?: number
+  ): Promise<void> {
     if (this.state === 'exited' || this.handedOff) {
       return
     }
@@ -252,7 +256,10 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.state = 'detached'
     this.output.stop()
     this.emit(RELAYED_CHILD_HANDED_OFF)
-    await this.options.channel.detach(this.relayId, policy)
+    await this.options.channel.detach(
+      this.relayId,
+      typeof policy === 'function' ? policy() : policy
+    )
   }
 
   private input(chunks: unknown[], callback: (error?: Error | null) => void): void {

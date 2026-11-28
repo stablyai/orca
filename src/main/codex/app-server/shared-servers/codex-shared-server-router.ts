@@ -65,6 +65,16 @@ export class CodexSharedServerRouter {
     )
   }
 
+  /** Loss a hand-back must carry to the next attach. */
+  get unknownLoss(): boolean {
+    return this.unrouted.anyLost
+  }
+
+  /** A hand-back saw loss: each restored chat is told of it once. */
+  noteUnknownLoss(): void {
+    this.unrouted.keptLossEpoch += 1
+  }
+
   openSettled(): void {
     this.unrouted.openSettled()
   }

@@ -53,6 +53,7 @@ import {
 export {
   beginProviderRelayQuit,
   detachProviderRelayForQuit,
+  detachProviderRelayToDaemon,
   hasAttachedProviderRelay,
   providerRelayDetachesSettled,
   providerRelayHandedOffAtQuit,

@@ -192,18 +192,23 @@ export class CodexSharedServerPool {
       return
     }
     server.keep.settleQuit()
-    // Quit decides it; and a kept chat's threads keep it running until claimed or let go.
-    if (providerRelayQuitting() || server.leases.size > 0 || !server.recovery.empty) {
+    if (providerRelayQuitting() || server.leases.size > 0) {
       return
     }
-    if (server.draining) {
+    if (server.draining && server.recovery.empty) {
       this.stop(server)
       return
     }
     if (!this.idleTimers.has(server)) {
       const timer = setTimeout(() => {
         this.idleTimers.delete(server)
-        if (server.leases.size === 0) {
+        if (server.leases.size > 0 || providerRelayQuitting()) {
+          return
+        }
+        // Threads held for chats not open here go back to the daemon with the server, never ended.
+        if (!server.recovery.empty && server.relay) {
+          this.handBack(server)
+        } else {
           this.stop(server)
         }
       }, IDLE_SERVER_STOP_MS)
@@ -218,6 +223,18 @@ export class CodexSharedServerPool {
       clearTimeout(timer)
       this.idleTimers.delete(server)
     }
+  }
+
+  /** Its daemon idle-stops it once nothing runs; a later open of one of its chats reattaches it. */
+  private handBack(server: CodexSharedServer): void {
+    this.remove(server)
+    void this.kept.handBack(server).then((handed) => {
+      if (handed) {
+        server.exitedWith(new Error('codex app-server handed back to its daemon'))
+      } else if (!server.exited) {
+        this.stop(server)
+      }
+    })
   }
 
   private stop(server: CodexSharedServer): void {

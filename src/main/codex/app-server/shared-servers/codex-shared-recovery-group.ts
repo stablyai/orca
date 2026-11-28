@@ -29,3 +29,35 @@ export class RecoveryGroup {
 
 export const recoveryFrameBytes = (frame: CodexSharedServerFrame): number =>
   Buffer.byteLength(JSON.stringify(codexSharedFrameParams(frame) ?? null), 'utf8')
+
+/** What a chat takes over, or what an unwanted group lets go. */
+export type CodexRecoveredGroup = {
+  chat: CodexRecoveredChat | null
+  /** [thread, parent], parents first. */
+  threads: [string, string | null][]
+  frames: CodexSharedServerFrame[]
+  cut: boolean
+}
+
+/** What a server handed back to its daemon keeps of its recovery, for the next attach. */
+export type CodexRecoveryKept = {
+  groups: { chat: CodexRecoveredChat | null; threads: [string, string | null][]; cut: boolean }[]
+  cutEverything: boolean
+}
+
+/** The group `size` ranks largest (above zero), or null. */
+export function largestRecoveryGroup(
+  among: Iterable<RecoveryGroup>,
+  size: (group: RecoveryGroup) => number
+): RecoveryGroup | null {
+  let best: RecoveryGroup | null = null
+  let bestSize = 0
+  for (const group of among) {
+    const value = size(group)
+    if (value > bestSize) {
+      best = group
+      bestSize = value
+    }
+  }
+  return best
+}

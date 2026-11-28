@@ -143,20 +143,45 @@ export async function detachProviderRelayForQuit(
     handedOffAtQuit.add(chatKey)
     return pooled.detachForQuit(open)
   }
+  const handed = detachAttached(chatKey, open)
+  if (handed) {
+    handedOffAtQuit.add(chatKey)
+  }
+  return (await handed) ?? false
+}
+
+/** A shared agent no chat here uses goes back to its daemon while the app runs: the daemon
+ *  idle-stops it by `open` (null: never), and a later open reattaches it. */
+export async function detachProviderRelayToDaemon(
+  chatKey: string,
+  open: () => ProviderRelayOpenWork | null
+): Promise<boolean> {
+  return (await detachAttached(chatKey, open)) ?? false
+}
+
+/** Null when nothing live is attached under this key. */
+function detachAttached(
+  chatKey: string,
+  open: ProviderRelayOpenWork | null | (() => ProviderRelayOpenWork | null)
+) {
+  const child = attached.get(chatKey)
   const markers = child ? markersFor.get(child) : undefined
   if (!child || !markers || child.exited !== null) {
-    return false
+    return null
   }
   attached.delete(chatKey)
-  handedOffAtQuit.add(chatKey)
   // Listed again, as a hand-back is: a reattach this quit abandons still finds its relay.
   const relay = relayOf.get(child)
   if (relay) {
     rememberKeptProviderRelay(chatKey, relay)
   }
   // A failed detach request still hands the agent off: the closing stream detaches it daemon-side.
-  await child.detach(policyFor(markers, carriedFor.get(child)?.merge(open) ?? open)).catch(() => {})
-  return true
+  // Read once the child reads no more lines, so the work covers all it handled.
+  const work = () => (typeof open === 'function' ? open() : open)
+  return child
+    .detach(() => policyFor(markers, carriedFor.get(child)?.merge(work()) ?? work()))
+    .catch(() => {})
+    .then(() => true)
 }
 
 /** Chats whose agent this quit handed to its daemon; the process ends with the quit. */

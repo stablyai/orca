@@ -3,6 +3,7 @@ import { CodexSharedServerRecovery } from './codex-shared-server-recovery'
 import { CodexSharedServerRouter } from './codex-shared-server-router'
 import { field, type CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
+import { restoreCodexSharedRecovery } from './codex-shared-server-handback'
 
 function chatLease() {
   const delivered: CodexSharedServerFrame[] = []
@@ -99,5 +100,24 @@ describe('a reattached shared server holding its chats threads', () => {
     expect(texts(delivered)).toEqual(['h1', 'g1', 'h2'])
     expect(lease.threads.has('grandchild')).toBe(true)
     expect(recovery.empty).toBe(true)
+  })
+
+  it('keeps a family’s owner and cut across a hand-back to the daemon, so its replay reaches the chat as cut', () => {
+    const before = reattachedRouter()
+    const chat = { sessionId: 'chat', threadId: 'root', workload: 'w' }
+    before.recovery.expect(chat)
+    // The child's announcement is gone with this attach: only recovery knows it is root's.
+    before.spawned('child', 'root')
+    before.recovery.markCut('root')
+    const handedBack = { recovery: before.recovery.kept(), lossUnknown: false }
+
+    const after = reattachedRouter()
+    restoreCodexSharedRecovery(after, handedBack, [chat])
+    after.output('child', 'c1')
+    const { lease, delivered } = chatLease()
+    after.leases.add(lease)
+    after.router.claim('root', lease, true)
+    expect(texts(delivered)).toEqual(['c1'])
+    expect(lease.recoveryCut).toBe(true)
   })
 })

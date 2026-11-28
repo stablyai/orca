@@ -326,7 +326,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   refuse(frame: CodexSharedServerFrame): void {
-    if (frame.kind === 'request' && !this.closed) {
+    // Handed to its daemon, a held request waits there for the next attach: never answered here.
+    if (frame.kind === 'request' && !this.closed && !this.keep.toDaemon) {
       this.physicalConnection?.respondWithError(
         frame.request.id,
         NO_OWNER_ERROR_CODE,

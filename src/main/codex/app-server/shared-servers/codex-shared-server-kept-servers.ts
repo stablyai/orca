@@ -10,6 +10,7 @@ import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
 import type { CodexRecoveredChat } from './codex-shared-recovery-group'
+import type { CodexSharedServerHandedBack } from './codex-shared-server-handback'
 import {
   codexDeletedPooledRelay,
   codexExpectedChats,
@@ -34,6 +35,10 @@ type PoolHost = {
 export class CodexKeptServers {
   private readonly byRelay = new Map<string, CodexSharedServer>()
   private readonly placements = new WeakMap<CodexSharedServer, CodexPooledServerPlacement>()
+  /** Servers handed back to their daemon, by relay: what their next attach is seeded with. */
+  private readonly handedBack = new Map<string, CodexSharedServerHandedBack>()
+  /** Hand-backs under way; an open of one of their chats waits, so it reattaches seeded. */
+  private readonly handing = new Map<string, Promise<boolean>>()
   /** Deletes stopping a chat's kept run; a second delete or a reopen waits for the first. */
   private readonly stopping = new Map<string, Promise<boolean>>()
 
@@ -69,10 +74,13 @@ export class CodexKeptServers {
     spec: CodexSharedServer['spec']
   ): Promise<{ server: CodexSharedServer; chat: CodexRecoveredChat } | null> {
     await this.stopping.get(sessionId)
+    await this.handing.get(run.relayId)
     let server = this.byRelay.get(run.relayId)
     if (!server || server.exited) {
       const relay = await codexPooledRunGate(sessionId)
       if (!relay) {
+        // Its daemon ended it: nothing is left to seed.
+        this.handedBack.delete(run.relayId)
         return null
       }
       server = this.byRelay.get(run.relayId) ?? this.reattachServer(spec, relay, run)
@@ -109,10 +117,14 @@ export class CodexKeptServers {
     if (!run) {
       return true
     }
+    await this.handing.get(run.relayId)
     let server = this.byRelay.get(run.relayId)
     if (!server || server.exited) {
       const relay = await codexDeletedPooledRelay(record)
       if (typeof relay === 'string') {
+        if (relay === 'gone') {
+          this.handedBack.delete(run.relayId)
+        }
         return relay === 'gone'
       }
       server = this.byRelay.get(run.relayId)
@@ -138,6 +150,7 @@ export class CodexKeptServers {
     run: CodexPooledRun
   ): CodexSharedServer {
     const key = codexSharedRelayServerKey(relay.info.chatKey) ?? spec.key
+    const handedBack = this.handedBack.get(run.relayId)
     const server = this.host.track(
       new CodexSharedServer(
         { ...spec, key },
@@ -147,14 +160,37 @@ export class CodexKeptServers {
         {
           chatKey: relay.info.chatKey,
           attach: relay,
-          expected: codexExpectedChats(run.relayId)
+          expected: codexExpectedChats(run.relayId),
+          ...(handedBack ? { handedBack } : {})
         }
       )
     )
+    // Kept until this attach has it: a failed one leaves it for the next.
+    server.ready.then(() => this.handedBack.delete(run.relayId)).catch(() => {})
     // Started under an older launch (an updated Codex): it serves the chats it kept, no new ones.
     server.draining = key !== spec.key
     this.placements.set(server, { relayId: run.relayId, daemon: run.daemon })
     return server
+  }
+
+  /**
+   * No chat here is open on this kept server: it goes back to its daemon, and what recovery knew
+   * waits for its next attach. False when it couldn't be handed back.
+   */
+  handBack(server: CodexSharedServer): Promise<boolean> {
+    const relayId = this.placements.get(server)?.relayId
+    this.forget(server)
+    const handing = server.keep.handToDaemon().then((kept) => {
+      if (kept && relayId) {
+        this.handedBack.set(relayId, kept)
+      }
+      return kept !== null
+    })
+    if (relayId) {
+      this.handing.set(relayId, handing)
+      void handing.finally(() => this.handing.delete(relayId))
+    }
+    return handing
   }
 
   /** A relayed server's chat runs there too, under its own tag; any other run ends with this app. */

@@ -5,23 +5,17 @@ import {
 } from './codex-shared-recovery-seq-floor'
 import {
   RecoveryGroup,
+  largestRecoveryGroup,
   recoveryFrameBytes,
-  type CodexRecoveredChat
+  type CodexRecoveredChat,
+  type CodexRecoveredGroup,
+  type CodexRecoveryKept
 } from './codex-shared-recovery-group'
 
 /** Thread identities (id and parent link, about 200 bytes each) one server holds for recovery. */
 export const CODEX_SHARED_RECOVERY_MAX_IDENTITIES = 4_096
 /** Dropped past the byte bound beyond what's needed, so a stream never drops one frame per frame. */
 const MIN_DROP_HEADROOM_BYTES = 256 * 1024
-
-/** What a chat takes over, or what an unwanted group lets go. */
-export type CodexRecoveredGroup = {
-  chat: CodexRecoveredChat | null
-  /** [thread, parent], parents first. */
-  threads: [string, string | null][]
-  frames: CodexSharedServerFrame[]
-  cut: boolean
-}
 
 /**
  * What a reattached shared server holds for chats that haven't claimed their threads yet: each
@@ -70,6 +64,21 @@ export class CodexSharedServerRecovery {
 
   expected(sessionId: string): CodexRecoveredChat | null {
     return this.bySession.get(sessionId)?.chat ?? null
+  }
+
+  /** What a hand-back keeps of it for the next attach: identities and cuts, no frames. */
+  kept(): CodexRecoveryKept {
+    const groups = [...this.groups.values()].map(({ chat, threads, cut }) => ({
+      chat,
+      threads: [...threads],
+      cut: cut || this.cutEverything
+    }))
+    return { groups, cutEverything: this.cutEverything }
+  }
+
+  /** Every group taken from here on is cut (frames an unknown thread held were let go). */
+  cutFromNowOn(): void {
+    this.cutEverything = true
   }
 
   /** The threads held for this chat now, left in place. */
@@ -147,7 +156,7 @@ export class CodexSharedServerRecovery {
         this.holdUnowned(threadId)
       } else {
         // Past the cap an unknown thread gets today's unrouted handling; any chat may own it.
-        this.cutEverything = true
+        this.cutFromNowOn()
       }
     }
     const group = this.groupOf.get(threadId)
@@ -272,7 +281,7 @@ export class CodexSharedServerRecovery {
     }
     over += Math.max(room / 8, MIN_DROP_HEADROOM_BYTES)
     // The largest goes first; past it, groups in order, each visited once per overflow.
-    const largest = this.largest((group) => group.droppable, this.droppable)
+    const largest = largestRecoveryGroup(this.droppable, (group) => group.droppable)
     over -= largest ? this.dropOldest(largest, over) : 0
     for (const group of this.droppable) {
       if (over <= 0) {
@@ -314,7 +323,7 @@ export class CodexSharedServerRecovery {
   private boundIdentities(): void {
     // Only descendants can collapse; roots are bounded by the chats and the reattach listing.
     while (this.groupOf.size > this.maxIdentities && this.groupOf.size > this.groups.size) {
-      const largest = this.largest((group) => group.threads.size - 1)
+      const largest = largestRecoveryGroup(this.groups.values(), (group) => group.threads.size - 1)
       if (!largest) {
         return
       }
@@ -345,21 +354,5 @@ export class CodexSharedServerRecovery {
       largest.cut = true
       largest.collapsed = true
     }
-  }
-
-  private largest(
-    size: (group: RecoveryGroup) => number,
-    among: Iterable<RecoveryGroup> = this.groups.values()
-  ): RecoveryGroup | null {
-    let best: RecoveryGroup | null = null
-    let bestSize = 0
-    for (const group of among) {
-      const value = size(group)
-      if (value > bestSize) {
-        best = group
-        bestSize = value
-      }
-    }
-    return best
   }
 }

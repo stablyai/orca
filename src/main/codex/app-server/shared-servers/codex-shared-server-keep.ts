@@ -1,5 +1,6 @@
 import {
   detachProviderRelayForQuit,
+  detachProviderRelayToDaemon,
   providerRelayChatDurable,
   providerRelayQuitting,
   trackProviderRelayQuitWork
@@ -20,9 +21,13 @@ import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semap
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { CodexSharedLeaseRelay } from './codex-shared-lease-host'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
-import type { CodexRecoveredGroup, CodexSharedServerRecovery } from './codex-shared-server-recovery'
+import type { CodexSharedServerRecovery } from './codex-shared-server-recovery'
+import type { CodexRecoveredGroup } from './codex-shared-recovery-group'
 import type { CodexSharedServerRouter } from './codex-shared-server-router'
 import type { CodexSharedRelayAcks } from './codex-shared-server-relay'
+import type { CodexSharedServerTurns } from './codex-shared-server-turns'
+import { CodexSharedServerOpenWork } from './codex-shared-server-open-work'
+import type { CodexSharedServerHandedBack } from './codex-shared-server-handback'
 
 type Work = Record<string, string[][]>
 
@@ -31,6 +36,7 @@ export type CodexKeptServer = {
   readonly leases: Set<CodexSharedServerLease>
   readonly router: CodexSharedServerRouter
   readonly recovery: CodexSharedServerRecovery
+  readonly turns: CodexSharedServerTurns
   readonly physicalConnection: CodexAppServerConnection | null
   readonly relayed?: { chatKey: string } | undefined
   readonly exited: boolean
@@ -63,6 +69,11 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   /** Open work of the chats quit handed off; null once one couldn't say (never idle-stopped). */
   private quitOpen: Work | null | undefined
   private handedOff = false
+  /** Every chat's open work on the server, held chats' included. */
+  readonly work = new CodexSharedServerOpenWork()
+  /** Handed to its daemon while the app runs: held requests wait there, never answered here. */
+  toDaemon = false
+  observe = (line: string): void => this.work.observe(line)
 
   /** Every metadata read on this server (reattach, retries, cleanup) shares these four permits. */
   private readonly readPermits = new PrioritySemaphore(CODEX_SHARED_REATTACH_READS)
@@ -187,13 +198,35 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
     }
     this.handedOff = true
     if (leases.length > 0 || this.quitOpen !== undefined || !this.server.recovery.empty) {
-      const open = this.quitOpen === undefined ? null : this.quitOpen
+      // Every chat's work, held chats' too, so the daemon can still idle-stop it.
+      const open = mergeWork(
+        this.quitOpen === undefined ? {} : this.quitOpen,
+        this.work.snapshot(this.server.turns)
+      )
       trackProviderRelayQuitWork(
         detachProviderRelayForQuit(this.server.relayed?.chatKey ?? '', open)
       )
     } else {
       trackProviderRelayQuitWork(this.server.stop())
     }
+  }
+
+  /**
+   * No chat here is open on it: it goes back to its daemon with every chat's open work, nothing
+   * held refused or acked, and what recovery knows that the spool can't rebuild is returned for
+   * the next attach. Null when it couldn't be handed back.
+   */
+  async handToDaemon(): Promise<CodexSharedServerHandedBack | null> {
+    this.toDaemon = true
+    const { server } = this
+    const handed = await detachProviderRelayToDaemon(server.relayed?.chatKey ?? '', () =>
+      this.work.snapshot(server.turns)
+    )
+    this.toDaemon = handed
+    // Read once it reads nothing more, so every claim and cut up to the detach is in it.
+    return handed
+      ? { recovery: server.recovery.kept(), lossUnknown: server.router.unknownLoss }
+      : null
   }
 
   /** A restored chat's open failed: its threads, and the frames it never saw, wait for it again. */

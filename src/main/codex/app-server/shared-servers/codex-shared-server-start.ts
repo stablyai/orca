@@ -4,6 +4,10 @@ import type { KeptProviderRelay } from '../../../provider-relay/app-provider-rel
 import type { CodexSharedServer } from './codex-shared-server'
 import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 import { recoverCodexSharedServerThreads } from './codex-shared-server-reattach'
+import {
+  restoreCodexSharedRecovery,
+  type CodexSharedServerHandedBack
+} from './codex-shared-server-handback'
 
 const INITIALIZE_TIMEOUT_MS = 15_000
 
@@ -12,6 +16,8 @@ export type CodexSharedServerRelayed = {
   chatKey: string
   attach?: KeptProviderRelay
   expected?: readonly CodexRecoveredChat[]
+  /** What its last hand-back to the daemon kept: seeded before discovery. */
+  handedBack?: CodexSharedServerHandedBack
 }
 
 /**
@@ -58,6 +64,10 @@ export async function startCodexSharedServer(
     throw error
   }
   if (expected && connection.relay?.reattached) {
+    server.keep.work.seed(connection.relay.openWork())
+    if (relayed?.handedBack) {
+      restoreCodexSharedRecovery(server, relayed.handedBack, expected)
+    }
     const unwanted = await recoverCodexSharedServerThreads({
       connection: server.keep.limited(connection),
       recovery: server.recovery,

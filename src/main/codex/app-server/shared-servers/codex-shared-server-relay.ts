@@ -39,13 +39,18 @@ export type CodexSharedRelayAcks = {
   floor: () => number | null
   /** Every chat on it has saved what it was handed. */
   durable: (force: boolean) => Promise<boolean>
+  /** Each line the relay reads, for the server-wide open work. */
+  observe: (line: string) => void
 }
 
 /** Codex's open-item floor, held lower still by what the server's chats haven't taken. */
 function sharedAckFloor(acks: CodexSharedRelayAcks): ProviderRelayAckFloor {
   const items = createCodexRelayAckFloor()
   return {
-    observe: items.observe,
+    observe: (seq, line) => {
+      items.observe(seq, line)
+      acks.observe(line)
+    },
     floor: (through, released = 0) => {
       const floors = [items.floor(through, released), acks.floor()]
       // A floor the daemon already let go of keeps nothing.
