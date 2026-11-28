@@ -20,6 +20,7 @@ import type { NativeChatComposerHandle } from '../../composer/native-chat-compos
 import { insertImageReferences } from '../../composer/editor/native-chat-composer-image-references'
 import { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
 import { useNativeChatNotesDelivery } from './use-native-chat-notes-delivery'
+import { takeOutNativeChatNotesHandOff } from './native-chat-notes-handoff'
 import {
   resetNativeChatNotesNoticesForTests,
   showNativeChatNotesNotice,
@@ -592,4 +593,71 @@ it('the line saying a gone viewer’s notes weren’t added stays until it is di
   } finally {
     vi.useRealTimers()
   }
+})
+
+it('the notes line and its Undo stay while the message box only rewrites its document', async () => {
+  updateNativeChatComposerDraft(SCOPE, { text: 'please check' }, 'immediate')
+  const { opener } = chat()
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  // The editor adopts the draft and writes back its own document for the same words.
+  act(() => {
+    const { text } = readNativeChatComposerDraft(SCOPE)
+    updateNativeChatComposerDraft(
+      SCOPE,
+      {
+        text,
+        document: { type: 'doc', content: [{ type: 'paragraph', attrs: { rewritten: true } }] }
+      },
+      'immediate'
+    )
+  })
+  expect(line.result.current?.action?.label).toBe('Undo')
+  act(() => line.result.current?.action?.onClick())
+  expect(draft()).toEqual({ text: 'please check', ids: [] })
+})
+
+it('a chat that stops taking images while the copy is saved says so, not that the image failed', async () => {
+  let blocked: 'images' | null = null
+  const { handle, opener } = chat({
+    attach: async () => {
+      blocked = 'images'
+      return null
+    }
+  })
+  handle.notesBlocked = () => blocked
+  const view = viewer(opener, vi.fn())
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  const { status } = view.result.current.editor
+  expect(status?.kind === 'error' && status.message).toBe('This chat takes no images.')
+  expect(draft()).toEqual({ text: '', ids: [] })
+})
+
+it('Undo leaves a message that ended in a line break as it was', async () => {
+  updateNativeChatComposerDraft(SCOPE, { text: 'please check\n' }, 'immediate')
+  const { opener } = chat()
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  act(() => line.result.current?.action?.onClick())
+  expect(draft()).toEqual({ text: 'please check\n', ids: [] })
+})
+
+it('taking a hand-off back also takes a line break the message box put after its notes', () => {
+  updateNativeChatComposerDraft(SCOPE, { text: 'please check' }, 'immediate')
+  appendToNativeChatComposerDraft(SCOPE, { images: [{ id: 'marked', path: '/m.png' }] })
+  insertImageReferences(SCOPE, null, ['marked'])
+  appendToNativeChatComposerDraft(SCOPE, { text: NOTES_TEXT }, undefined, undefined, true)
+  const { text } = readNativeChatComposerDraft(SCOPE)
+  updateNativeChatComposerDraft(SCOPE, { text: `${text}\n` }, 'immediate')
+  takeOutNativeChatNotesHandOff(SCOPE, { ids: ['marked'], text: NOTES_TEXT }, 'please check')
+  expect(draft()).toEqual({ text: 'please check', ids: [] })
 })

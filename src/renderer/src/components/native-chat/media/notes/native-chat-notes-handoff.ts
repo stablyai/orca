@@ -11,10 +11,7 @@ import {
   updateNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
 import type { NativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-storage'
-import {
-  sameNativeChatComposerDraftDocument,
-  sameNativeChatComposerDraftImages
-} from '../../drafts/native-chat-composer-draft-comparison'
+import { sameNativeChatComposerDraftImages } from '../../drafts/native-chat-composer-draft-comparison'
 import { slicePromptDocument } from '../../composer/editor/native-chat-prompt-document-text'
 import { removeImageWithReferences } from '../../composer/editor/native-chat-composer-image-references'
 import { nativeChatNotesSendWordsUnchanged } from './native-chat-notes-send-words'
@@ -205,6 +202,8 @@ export async function attachNativeChatNotes(args: {
       })
       // A chat that can't take images keeps no image, and so no notes text either.
       if (!id || !nativeChatNotesStillInDraft(composer.scopeKey, [id])) {
+        // A box that stopped taking notes meanwhile says why, rather than that the image failed.
+        stillTaking()
         throw new Error('The marked image could not be attached.')
       }
       ids.push(id)
@@ -246,13 +245,14 @@ export function takeOutNativeChatNotesHandOff(
   added: NativeChatNotesAdded,
   beforeText: string
 ): void {
-  const draft = readNativeChatComposerDraft(scopeKey)
+  // Whitespace the message box put after the notes text goes with it.
+  const words = readNativeChatComposerDraft(scopeKey).text.trimEnd()
   const text = !added.text
     ? null
-    : draft.text === added.text
+    : words === added.text
       ? ''
-      : draft.text.endsWith(`\n\n${added.text}`)
-        ? draft.text.slice(0, draft.text.length - added.text.length - 2)
+      : words.endsWith(`\n\n${added.text}`)
+        ? words.slice(0, words.length - added.text.length - 2)
         : null
   if (text !== null) {
     setDraftWords(scopeKey, text)
@@ -296,12 +296,12 @@ export function afterComposerRender(): Promise<void> {
   )
 }
 
-// Exactly the same draft: words, line breaks, the editor's document and each image (a filled
-// placeholder keeps its id but not its path).
+// The same message: exactly the same words (line breaks too) and images (a filled placeholder
+// keeps its id but not its path). The editor's document isn't compared: the message box rewrites
+// it as it adopts a draft (NativeChatPromptEditor's onTransaction) without anyone typing, and
+// Undo takes out only the hand-off's own additions, so a document-only change survives it.
 const sameDraft = (a: NativeChatComposerDraft, b: NativeChatComposerDraft): boolean =>
-  a.text === b.text &&
-  sameNativeChatComposerDraftDocument(a.document, b.document) &&
-  sameNativeChatComposerDraftImages(a.images, b.images)
+  a.text === b.text && sameNativeChatComposerDraftImages(a.images, b.images)
 
 /** "N notes added to your message" in the message box. Its Undo takes out exactly what the
  *  hand-off added (its marked images and its notes text) and nothing else. It is offered only when
