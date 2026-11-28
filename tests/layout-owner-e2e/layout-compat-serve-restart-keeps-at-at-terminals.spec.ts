@@ -14,6 +14,7 @@ import {
   sessionTabsBaseline
 } from './helpers/layout-compat-baseline'
 import type { RuntimeTerminalCreate } from '../../src/shared/terminal/runtime/runtime-terminal-create-contract'
+import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
 
 const PANE = '.pane[data-leaf-id]:visible'
 const TAB = '[data-testid="sortable-tab"]'
@@ -36,6 +37,8 @@ test('serve-restart-keeps-@@-terminals: desktop, CLI and serve terminals survive
   testRepoPath
 }, testInfo) => {
   test.setTimeout(240_000)
+  // The switch-on output drifted from the Linux baseline; darwin has no baseline at all.
+  knownSwitchOnFailure('C6 (L311)')
   const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })

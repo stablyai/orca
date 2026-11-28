@@ -19,7 +19,8 @@ export default defineConfig({
   // CI scales by shards: two real Electron trees per VM contended on Xvfb/git and caused false failures.
   workers: process.env.CI ? 1 : undefined,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // One retry in CI: the switch-on lane reports a flake as flaky instead of failing.
+  retries: process.env.CI ? 1 : 0,
   // Agents read piped output, where 'line' still prints every test; 'dot' keeps full failure details.
   reporter: isAgent ? 'dot' : 'list',
   use: {

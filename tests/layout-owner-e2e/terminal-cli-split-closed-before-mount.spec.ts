@@ -125,7 +125,10 @@ test('a CLI split runs its command while the window is stalled, and the window s
   electronApp,
   orcaPage
 }, testInfo) => {
-  knownSwitchOnFailure('A3')
+  // Fails on darwin every run; passed on the Linux lane.
+  if (process.platform === 'darwin') {
+    knownSwitchOnFailure('A3')
+  }
   test.skip(!LAYOUT_OWNER_BUILD, 'layout-owner build only')
   test.setTimeout(180_000)
   await waitForSessionReady(orcaPage)

@@ -82,7 +82,7 @@ jobs:
     uses: ./.github/workflows/e2e.yml
     with:
       ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      test_files: '["tests/layout-owner-e2e/workspace-layout-oracle.spec.ts","tests/layout-owner-e2e/relaunch-sleeping-agents-resume-on-view.spec.ts","tests/layout-owner-e2e/terminal-cli-split-closed-before-mount.spec.ts","tests/layout-owner-e2e/terminal-pane-close-layout-consistency.spec.ts","tests/layout-owner-e2e/layout-compat-old-phone-on-new-server.spec.ts","tests/layout-owner-e2e/layout-compat-serve-restart-keeps-at-at-terminals.spec.ts"]'
+      test_files: '["tests/layout-owner-e2e/workspace-layout-oracle.spec.ts","tests/layout-owner-e2e/relaunch-sleeping-agents-resume-on-view.spec.ts","tests/layout-owner-e2e/terminal-cli-split-closed-before-mount.spec.ts"]'
       playwright_config: tests/layout-owner-playwright.config.ts
       artifact_suffix: -layout-owner-window
       layout_owner: main
@@ -95,7 +95,7 @@ jobs:
     uses: ./.github/workflows/e2e.yml
     with:
       ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      test_files: '["tests/layout-owner-e2e/workspace-layout-oracle-headless.spec.ts","tests/layout-owner-e2e/default-tabs-mark-crash-relaunch.spec.ts","tests/layout-owner-e2e/layout-stream-loss-reopen.spec.ts","tests/layout-owner-e2e/relaunch-first-terminal.spec.ts","tests/layout-owner-e2e/unopened-workspace-agent-single-resume.spec.ts","tests/layout-owner-e2e/cli-first-worktree-single-terminal.spec.ts","tests/layout-owner-e2e/terminal-tab-close-restart-persistence.spec.ts","tests/layout-owner-e2e/finished-agent-ghost-resume.spec.ts","tests/layout-owner-e2e/cli-file-open-position.spec.ts","tests/layout-owner-e2e/local-cli-terminal-retention.spec.ts","tests/layout-owner-e2e/floating-workspace-pane-height.spec.ts","tests/layout-owner-e2e/editor-model-host-isolation.spec.ts","tests/layout-owner-e2e/terminal-cold-activation-deferral.spec.ts"]'
+      test_files: '["tests/layout-owner-e2e/workspace-layout-oracle-headless.spec.ts","tests/layout-owner-e2e/default-tabs-mark-crash-relaunch.spec.ts","tests/layout-owner-e2e/layout-stream-loss-reopen.spec.ts","tests/layout-owner-e2e/relaunch-first-terminal.spec.ts","tests/layout-owner-e2e/unopened-workspace-agent-single-resume.spec.ts","tests/layout-owner-e2e/cli-first-worktree-single-terminal.spec.ts","tests/layout-owner-e2e/terminal-tab-close-restart-persistence.spec.ts","tests/layout-owner-e2e/finished-agent-ghost-resume.spec.ts","tests/layout-owner-e2e/cli-file-open-position.spec.ts","tests/layout-owner-e2e/local-cli-terminal-retention.spec.ts","tests/layout-owner-e2e/floating-workspace-pane-height.spec.ts","tests/layout-owner-e2e/editor-model-host-isolation.spec.ts","tests/layout-owner-e2e/terminal-cold-activation-deferral.spec.ts","tests/layout-owner-e2e/terminal-pane-close-layout-consistency.spec.ts","tests/layout-owner-e2e/layout-compat-old-phone-on-new-server.spec.ts","tests/layout-owner-e2e/layout-compat-serve-restart-keeps-at-at-terminals.spec.ts"]'
       playwright_config: tests/layout-owner-playwright.config.ts
       artifact_suffix: -layout-owner-restore
       layout_owner: main

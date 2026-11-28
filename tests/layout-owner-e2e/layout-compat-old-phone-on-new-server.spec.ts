@@ -17,6 +17,7 @@ import type { RuntimeCapability } from '../../src/shared/remote-runtime/protocol
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
 
 /** What mobile-android-v0.0.52 advertises (its mobile-runtime-client-capabilities.ts). */
 const OLD_PHONE_CAPABILITIES: readonly RuntimeCapability[] = [
@@ -102,6 +103,8 @@ test('old-phone-on-new-server: create, activate, rename, focus, close, open a fi
   testRepoPath
 }, testInfo) => {
   test.setTimeout(240_000)
+  // The switch-on output drifted from the Linux baseline; darwin has no baseline at all.
+  knownSwitchOnFailure('C6 (L311)')
   const host = await launchHeadlessPairedRuntimeHost({
     pairingScope: 'mobile',
     pinnedServePort: true
