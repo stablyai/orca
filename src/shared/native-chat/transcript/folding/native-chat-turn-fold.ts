@@ -230,15 +230,18 @@ export function nativeChatTurnAnswerRows(
   return answers
 }
 
-/** Fold settled, unexpanded turns when they gain a duration/status row. Running turns stay open; newly settled turns start collapsed without separate disclosure cleanup. */
+/** Fold settled, unexpanded turns when they gain a duration/status row. Running turns stay open, but for work before a message the person sent into one; newly settled turns start collapsed without separate disclosure cleanup. */
 export function nativeChatTurnFold({
   rows,
   settledTurnKeys,
-  expandedTurnKeys
+  expandedTurnKeys,
+  foldsBefore
 }: {
   rows: readonly NativeChatTurnFoldRow[]
   settledTurnKeys: ReadonlySet<string>
   expandedTurnKeys: ReadonlySet<string>
+  /** A running turn the person wrote into: its work before this row index folds as if settled. */
+  foldsBefore?: ReadonlyMap<string, number>
 }): NativeChatTurnFold {
   const answers = nativeChatTurnAnswerRows(rows)
   const lastWorkByTurn = new Map<string, number>()
@@ -258,7 +261,7 @@ export function nativeChatTurnFold({
       !row.draws ||
       row.outlivesTurn ||
       row.explainsTurn ||
-      !settledTurnKeys.has(turnKey)
+      !(settledTurnKeys.has(turnKey) || index < (foldsBefore?.get(turnKey) ?? -1))
     ) {
       continue
     }

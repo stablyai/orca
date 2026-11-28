@@ -44,6 +44,7 @@ import {
 } from '../../messages/actions/native-chat-side-chat-fork-point'
 import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
 import { nativeChatBotIntroTurn, nativeChatShownRows } from './native-chat-quiet-turn-rows'
+import { nativeChatSteeredTurnBars } from './native-chat-steered-turn-bars'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot = NativeChatMessageSlot | NativeChatSubagentHeadSlot
@@ -159,15 +160,26 @@ export function buildNativeChatTranscript(
   const trailingRunIndex = messages.findLastIndex((message) =>
     nativeChatRowSpeaksOrActs(message, nativeChatRowRendersProse(message), receipts)
   )
+  const bars = nativeChatTurnBarRows(messages, turnKeys)
+  const introTurn = nativeChatBotIntroTurn(input, messages)
+  // A person's message into the running turn takes its live clock; the work before it settles.
+  const steered = nativeChatSteeredTurnBars({
+    messages,
+    turnKeys,
+    foldRows,
+    liveTurnKey: liveTurnKey === introTurn ? undefined : liveTurnKey,
+    live: turnStatuses.active,
+    bars,
+    quiet
+  })
   const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({
     rows: foldRows,
     settledTurnKeys,
-    expandedTurnKeys
+    expandedTurnKeys,
+    foldsBefore: steered?.foldsBefore
   })
-  const bars = nativeChatTurnBarRows(messages, turnKeys)
   const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
   const actingTurns = nativeChatActingTurnKeys(messages, turnKeys)
-  const introTurn = nativeChatBotIntroTurn(input, messages)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
   turnKeys.forEach((turnKey, index) => {
@@ -201,13 +213,15 @@ export function buildNativeChatTranscript(
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)
     const bar = turnKey === undefined || turnKey === introTurn ? undefined : bars.get(turnKey)
-    // A turn's bar draws at its first row, so a message folded into it (a steer) carries none.
+    // A turn's bar draws at its first row, so a message folded into it (a steer) carries none;
+    // while it runs, the person's newest message there carries the live clock (`steered`).
     const status =
-      turnKey === undefined || bar?.index !== index || quiet.turns.has(turnKey)
+      steered?.bars.get(index) ??
+      (turnKey === undefined || bar?.index !== index || quiet.turns.has(turnKey)
         ? undefined
         : turnKey === liveTurnKey
           ? (turnStatuses.active ?? undefined)
-          : (turnStatuses.completedByTurn[turnKey] ?? undefined)
+          : (turnStatuses.completedByTurn[turnKey] ?? undefined))
     const endsTurn = turnKey !== undefined && lastRowByTurn.get(turnKey) === index
     const turnDiff = endsTurn ? turnDiffs.get(turnKey) : undefined
     const openedPullRequests = endsTurn ? openedPullRequestsByTurn?.get(turnKey) : undefined
@@ -234,7 +248,7 @@ export function buildNativeChatTranscript(
         trailingRun: index === trailingRunIndex,
         receipt,
         status: status ?? undefined,
-        statusAbove: bar?.above === true && status !== undefined,
+        statusAbove: bar?.above === true && bar.index === index && status !== undefined,
         ...(leaving.rows.has(index)
           ? { leaving: 'row' as const }
           : status !== undefined && leaving.turns.has(turnKey!) && { leaving: 'bar' as const }),
