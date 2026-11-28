@@ -55,7 +55,7 @@ function createFakeProxySession(): FakeProxySession {
         url: 'https://example.com/',
         method: 'GET',
         referrer: '',
-        timestamp: Date.now(),
+        timestamp: 0,
         resourceType: 'mainFrame',
         uploadData: []
       }
