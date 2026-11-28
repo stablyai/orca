@@ -2,7 +2,8 @@ import { runKeyedSerializedOperation } from '../../../../src/shared/concurrency/
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import { NOTIFICATION_REPLY_ACTION } from '../../../../src/shared/notifications/notification-reply'
-import { sha256 } from '../../../../src/shared/hashing/sha256'
+import { notificationReplyResponseId } from './notification-reply-identity'
+import { readNotificationReplyDraftRecord } from './notification-reply-draft-record'
 import { parsePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
 import { editMobileNativeChatDraft } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { resolveHostIdForFingerprint } from '../payload-identity/push-host-fingerprint'
@@ -50,14 +51,8 @@ async function restoreDraft(data: unknown): Promise<void> {
   if (!raw) {
     return
   }
-  const saved: unknown = JSON.parse(raw)
-  if (
-    !saved ||
-    typeof saved !== 'object' ||
-    !('text' in saved) ||
-    typeof saved.text !== 'string' ||
-    ('restored' in saved && saved.restored === true)
-  ) {
+  const saved = readNotificationReplyDraftRecord(raw)
+  if (!saved) {
     return
   }
   const payload = readOrcaPushPayload(data)
@@ -104,30 +99,16 @@ export function handleNotificationReply(
   const text =
     'userText' in response && typeof response.userText === 'string' ? response.userText : ''
   const data = readNativeNotificationData(response.notification.request)
-  const payload = readOrcaPushPayload(data)
-  const id = Array.from(
-    sha256(
-      new TextEncoder().encode(
-        JSON.stringify([
-          payload?.hostFingerprint,
-          payload?.notificationEpoch,
-          payload?.notificationSeq,
-          response.notification.request.identifier,
-          text
-        ])
-      )
-    ),
-    (byte) => byte.toString(16).padStart(2, '0')
-  ).join('')
+  const id = notificationReplyResponseId(response)
   const pending = active.get(id)
   if (pending) {
-    return pending
+    return pending.finally(() => completeNativeReply(response))
   }
   const result = runKeyedSerializedOperation(recordQueues, id, () =>
     deliver(response, data, text, id)
   ).finally(async () => {
     active.delete(id)
-    await completeNativeReply(response.notification.request.identifier)
+    await completeNativeReply(response)
   })
   active.set(id, result)
   return result
