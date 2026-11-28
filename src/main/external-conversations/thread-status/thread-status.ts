@@ -240,10 +240,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       at: this.now(),
       stop: decided.stop
     }
-    this.write(current.link, {
-      ...withArmed(current.fact, current.armed, { seq }),
-      pending
-    })
+    this.write(current.link, { ...withArmed(current.fact, current.armed, { seq }), pending })
     // Marked unsent only once on the link: a failed write leaves the line before it as it was.
     if (read()?.fact.pending?.replyId === pending.replyId) {
       this.waits.saved(id, pending.replyId)
@@ -266,19 +263,20 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     if (!cloud || !link || !pending || !conversation || this.settleSaved(link) !== 'send') {
       return
     }
+    const id = idOf(link)
+    // An earlier try may already have posted it: a refusal or conflict now speaks only for this one.
+    const triedBefore = this.waits.mayHavePosted(id, pending.replyId)
     // From here the cloud may take it even if no answer comes back.
-    this.waits.sending(idOf(link))
+    this.waits.sending(id)
     // One try: the next tick sends it again under the same id once every check passes again.
     const sent = await sendThreadStatusLine(cloud, conversation, pending, () => false)
-    const id = idOf(link)
     this.notBefore.delete(id)
     if (sent.kind === 'later' && sent.retryAfterMs) {
       this.notBefore.set(id, this.now() + sent.retryAfterMs)
     }
     if (sent.kind === 'sent') {
       this.conflicted.delete(id)
-      this.hostLine(link, pending.replyId, this.now())
-      return
+      return this.hostLine(link, pending.replyId, this.now())
     }
     const current = findLink(this.deps.store, link)?.link
     const after = current?.threadStatus
@@ -289,11 +287,12 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       return void this.settleSaved(current)
     }
     // A refusal stops the thread's lines; a conflict drops the line, and a second in a row stops them.
-    if (sent.kind === 'never' || this.conflicted.has(id)) {
-      return this.disarm(current, withoutPending(after))
+    const dropped = triedBefore ? withoutSavedLine(after, this.now(), true) : withoutPending(after)
+    if (sent.kind === 'never' || this.conflicted.has(id) || !dropped.armed) {
+      return this.disarm(current, dropped)
     }
     this.conflicted.add(id)
-    this.write(current, withoutPending(after))
+    this.write(current, dropped)
   }
 
   /** What the saved line comes to now, by all that is known without waiting; a line no longer

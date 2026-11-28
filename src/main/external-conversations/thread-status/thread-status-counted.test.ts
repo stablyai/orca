@@ -208,6 +208,34 @@ describe('ThreadStatus saved lines', () => {
     })
   })
 
+  it('counts a line refused or in conflict on a retry after a try that got no answer', async () => {
+    // The first try may have posted it; the refusal speaks only for the retry.
+    const noAnswer = { ok: false as const, status: null, error: null }
+    const run = harness(botHome(), { answers: [noAnswer, { ok: false, status: 403, error: null }] })
+    await run.turnEnded()
+    await run.advance(31 * MIN)
+    expect(run.sent.map((body) => body.replyId)).toEqual([
+      statusReplyId(THREAD, START, 1),
+      statusReplyId(THREAD, START, 1)
+    ])
+    expect(run.fact()).toEqual({ seq: 1, day: '2026-11-26', dayCount: 1 })
+    await closeTestStores()
+
+    // A conflict on the retry drops the line as one that may have posted: the backoff holds.
+    const conflict = { ok: false as const, status: 409, error: 'reply_id_conflict' }
+    const again = harness(botHome(), { answers: [noAnswer, conflict] })
+    await again.turnEnded()
+    await again.advance(31 * MIN)
+    expect(again.fact()).toMatchObject({
+      dayCount: 1,
+      armed: { lastLineAt: START + 31 * MIN, dueStep: 1, lines: 1 }
+    })
+    await again.advance(59 * MIN)
+    expect(again.sent).toHaveLength(2)
+    await again.advance(MIN)
+    expect(again.lines().at(-1)).toBe('03:40 Still working on this (1 h 31 min).')
+  })
+
   it('keeps a never-sent line uncounted when the save of the line after it fails', async () => {
     const store = botHome()
     const save = store.updateFolderWorkspace.bind(store)
