@@ -44,8 +44,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Runs no release-source code: it pins the source commit before any source code runs, and publishes complete RC
-  # drafts with the workflow commit's own scripts, so prepare can run source code with a read-only token.
+  # Runs no release-source code. It pins the source commit, publishes complete RC drafts and computes the version with
+  # the workflow commit's own scripts, so prepare runs source code with a read-only token and no say in the version.
   resolve:
     # Limit version/tag mutations to canonical repo; fork schedules must not diverge their main and conflict upstream.
     if: github.repository == 'stablyai/orca'
@@ -55,9 +55,10 @@ jobs:
       contents: write
     outputs:
       sha: ${{ steps.source.outputs.sha }}
-      published_count: ${{ steps.publish_drafts.outputs.published_count }}
-      skipped_count: ${{ steps.publish_drafts.outputs.skipped_count }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
+      version: ${{ steps.version.outputs.version || steps.dry-run-version.outputs.version }}
+      recovered_tag: ${{ steps.version.outputs.recovered_tag }}
+      slot: ${{ steps.slot.outputs.value }}
     steps:
       # Same ref resolution the cut always used; the draft publisher also reads this checkout's HEAD and tags.
       - name: Checkout ref
@@ -71,9 +72,12 @@ jobs:
 
       - name: Resolve the source commit
         id: source
-        run: echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+        run: |
+          git config core.hooksPath /dev/null
+          echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
 
-      - name: Restore draft-publish scripts from the workflow ref
+      # Version math and draft publishing run the workflow commit's scripts over the source checkout as data.
+      - name: Restore release scripts from the workflow ref
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
@@ -83,7 +87,9 @@ jobs:
           git fetch -q --no-tags origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- \
             config/scripts/release/publication/publish-complete-draft-releases.mjs \
-            config/scripts/release/publication/verify-release-required-assets.mjs
+            config/scripts/release/publication/verify-release-required-assets.mjs \
+            config/scripts/release/versioning/latest-stable-release.mjs \
+            config/scripts/release/versioning/release-rc-history.mjs
 
       - name: Setup Node.js
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
@@ -99,182 +105,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
-
-  # Runs release-source code with a read-only token, so it only builds the tag locally; cut verifies and pushes it.
-  prepare:
-    needs: resolve
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    outputs:
-      new_tag: ${{ steps.tag.outputs.tag }}
-      version: ${{ steps.version.outputs.version || steps.dry-run-version.outputs.version }}
-      release_sha: ${{ steps.release-commit.outputs.sha }}
-      tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
-      should_release: ${{ (steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '') && steps.dry-run-version.outputs.version == '' }}
-      # Why: downstream SignPath Slack pings need the cut source (not only the
-      # new tag) so approvers know what they're signing and who cut it.
-      source_ref: ${{ steps.resolve.outputs.ref }}
-      source_sha: ${{ steps.resolve.outputs.sha }}
-      source_short_sha: ${{ steps.resolve.outputs.short_sha }}
-      ships_orcad_template: ${{ steps.orcad-template-support.outputs.ships }}
-    steps:
-      # Render dispatch audit summary locally rather than run mutable external action beside write token/secrets; parse env JSON with jq as data.
-      - name: Summarize workflow inputs
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          INPUTS_JSON: ${{ toJSON(inputs) }}
-        run: |
-          {
-            echo "## Workflow inputs"
-            echo ""
-            echo "| Input | Value |"
-            echo "| --- | --- |"
-            # Treat env JSON as data; collapse newlines so inputs cannot break the summary table.
-            jq -r '(. // {}) | to_entries[] | "| `\(.key)` | `\(.value | tostring | gsub("\n"; " "))` |"' <<<"$INPUTS_JSON"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Checkout ref
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.resolve.outputs.sha }}
-          fetch-depth: 0
-          # Version recovery needs complete history and tags, but not historical file contents.
-          filter: blob:none
-          # Fetch unpublished tags for version recovery; hidden tags can recreate/overwrite an existing version.
-          fetch-tags: true
-          # prepare pushes nothing and runs release-source code, so keep the write token out of git config.
-          persist-credentials: false
-
-      # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
-      - name: Refuse a ref that still ships the SSH relay
-        shell: bash
-        run: |
-          if [[ -e config/tsconfig.relay.json ]]; then
-            echo "::error::This ref predates #27215 and still ships the SSH relay; build a commit at or after 2b4b60a87e."
-            exit 1
-          fi
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          check-latest: true
-
-      - name: Configure git author
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Resolve ref SHA
-        id: resolve
-        env:
-          # Keep caller ref in env data so summary labels cannot inject shell.
-          INPUT_REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
-          REPO: ${{ github.repository }}
-          SERVER_URL: ${{ github.server_url }}
-        run: |
-          set -euo pipefail
-          input_ref="${INPUT_REF:-main}"
-          sha="$(git rev-parse HEAD)"
-          short_sha="$(git rev-parse --short=12 HEAD)"
-          echo "ref=$input_ref" >>"$GITHUB_OUTPUT"
-          echo "sha=$sha" >>"$GITHUB_OUTPUT"
-          echo "short_sha=$short_sha" >>"$GITHUB_OUTPUT"
-
-          # Push the version bump to main only when cutting its exact tip; older/off-main refs publish tags only.
-          git fetch origin main --quiet
-          main_sha="$(git rev-parse origin/main)"
-          if [[ "$sha" == "$main_sha" ]]; then
-            echo "push_main=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "push_main=false" >>"$GITHUB_OUTPUT"
-          fi
-
-          # Show the immutable commit and matching ref links: raw ref input is ambiguous and bare SHAs hide operator-readable names.
-          repo_url="${SERVER_URL}/${REPO}"
-
-          branches="$(
-            git for-each-ref --format='%(refname:short)' --points-at="$sha" 'refs/remotes/origin/*' \
-              | sed 's|^origin/||' \
-              | grep -vx 'HEAD' \
-              | sort -u \
-              || true
-          )"
-          tags="$(
-            git for-each-ref --format='%(refname:short)' --points-at="$sha" 'refs/tags/*' \
-              | sort -u \
-              || true
-          )"
-
-          # Preserve literal slashes in branch/tag tree URLs.
-          linkify_names() {
-            local url_kind="$1"
-            local names="$2"
-            if [[ -z "${names//[$'\t\r\n']/}" ]]; then
-              printf '_none_'
-              return
-            fi
-            local first=1
-            while IFS= read -r name; do
-              [[ -z "$name" ]] && continue
-              local path_name url
-              path_name="${name// /%20}"
-              case "$url_kind" in
-                branch) url="${repo_url}/tree/${path_name}" ;;
-                tag) url="${repo_url}/releases/tag/${path_name}" ;;
-                *) url="${repo_url}" ;;
-              esac
-              if [[ "$first" -eq 1 ]]; then
-                first=0
-              else
-                printf ', '
-              fi
-              printf '[`%s`](%s)' "$name" "$url"
-            done <<<"$names"
-          }
-
-          branch_md="$(linkify_names branch "$branches")"
-          tag_md="$(linkify_names tag "$tags")"
-
-          # Historical SHAs may lack a matching branch tip; name-rev supplies an auditable main~N label.
-          contains_md="_none_"
-          if [[ "$branch_md" == "_none_" ]]; then
-            approx="$(git name-rev --name-only --no-undefined --refs='refs/remotes/origin/*' "$sha" 2>/dev/null || true)"
-            if [[ -n "$approx" ]]; then
-              # name-rev prints remotes/origin/<branch>[~N]; strip to branch[~N].
-              approx="${approx#remotes/origin/}"
-              approx="${approx#origin/}"
-              contains_md="\`${approx}\`"
-            fi
-          fi
-
-          input_kind="ref"
-          if git rev-parse -q --verify "refs/remotes/origin/${input_ref}" >/dev/null 2>&1; then
-            input_kind="branch"
-          elif git rev-parse -q --verify "refs/tags/${input_ref}" >/dev/null 2>&1; then
-            input_kind="tag"
-          elif [[ "$input_ref" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
-            input_kind="sha"
-          fi
-
-          {
-            echo "## Resolved source"
-            echo ""
-            echo "Every cut resolves to a commit. Branch/tag rows list refs whose tip is that commit."
-            echo ""
-            echo "| Field | Value |"
-            echo "| --- | --- |"
-            echo "| Input ref | \`${input_ref}\` (${input_kind}) |"
-            echo "| Commit | [\`${short_sha}\`](${repo_url}/commit/${sha}) |"
-            echo "| Branches at commit | ${branch_md} |"
-            echo "| Tags at commit | ${tag_md} |"
-            if [[ "$branch_md" == "_none_" ]]; then
-              echo "| Also on | ${contains_md} |"
-            fi
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compute RC slot
         id: slot
@@ -354,7 +184,7 @@ jobs:
       - name: Compute next version
         id: version
         # Stop after RC-only draft recovery; stable dispatch still cuts its requested version.
-        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && needs.resolve.outputs.published_count != '0' && needs.resolve.outputs.skipped_count == '0')
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && steps.publish_drafts.outputs.published_count != '0' && steps.publish_drafts.outputs.skipped_count == '0')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
@@ -630,13 +460,186 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
         run: echo "version=0.0.0-rc.0" >>"$GITHUB_OUTPUT"
 
+  # Runs release-source code with a read-only token, so it only builds the tag locally; cut verifies and pushes it.
+  prepare:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      new_tag: ${{ steps.tag.outputs.tag }}
+      release_sha: ${{ steps.release-commit.outputs.sha }}
+      # Why: downstream SignPath Slack pings need the cut source (not only the
+      # new tag) so approvers know what they're signing and who cut it.
+      source_ref: ${{ steps.resolve.outputs.ref }}
+      source_sha: ${{ steps.resolve.outputs.sha }}
+      source_short_sha: ${{ steps.resolve.outputs.short_sha }}
+      ships_orcad_template: ${{ steps.orcad-template-support.outputs.ships }}
+    steps:
+      # Render dispatch audit summary locally rather than run mutable external action beside write token/secrets; parse env JSON with jq as data.
+      - name: Summarize workflow inputs
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: |
+          {
+            echo "## Workflow inputs"
+            echo ""
+            echo "| Input | Value |"
+            echo "| --- | --- |"
+            # Treat env JSON as data; collapse newlines so inputs cannot break the summary table.
+            jq -r '(. // {}) | to_entries[] | "| `\(.key)` | `\(.value | tostring | gsub("\n"; " "))` |"' <<<"$INPUTS_JSON"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout ref
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          fetch-depth: 0
+          # Version recovery needs complete history and tags, but not historical file contents.
+          filter: blob:none
+          # Fetch unpublished tags for version recovery; hidden tags can recreate/overwrite an existing version.
+          fetch-tags: true
+          # prepare pushes nothing and runs release-source code, so keep the write token out of git config.
+          persist-credentials: false
+
+      # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
+      - name: Refuse a ref that still ships the SSH relay
+        shell: bash
+        run: |
+          if [[ -e config/tsconfig.relay.json ]]; then
+            echo "::error::This ref predates #27215 and still ships the SSH relay; build a commit at or after 2b4b60a87e."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve ref SHA
+        id: resolve
+        env:
+          # Keep caller ref in env data so summary labels cannot inject shell.
+          INPUT_REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          input_ref="${INPUT_REF:-main}"
+          sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          echo "ref=$input_ref" >>"$GITHUB_OUTPUT"
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >>"$GITHUB_OUTPUT"
+
+          # Push the version bump to main only when cutting its exact tip; older/off-main refs publish tags only.
+          git fetch origin main --quiet
+          main_sha="$(git rev-parse origin/main)"
+          if [[ "$sha" == "$main_sha" ]]; then
+            echo "push_main=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "push_main=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          # Show the immutable commit and matching ref links: raw ref input is ambiguous and bare SHAs hide operator-readable names.
+          repo_url="${SERVER_URL}/${REPO}"
+
+          branches="$(
+            git for-each-ref --format='%(refname:short)' --points-at="$sha" 'refs/remotes/origin/*' \
+              | sed 's|^origin/||' \
+              | grep -vx 'HEAD' \
+              | sort -u \
+              || true
+          )"
+          tags="$(
+            git for-each-ref --format='%(refname:short)' --points-at="$sha" 'refs/tags/*' \
+              | sort -u \
+              || true
+          )"
+
+          # Preserve literal slashes in branch/tag tree URLs.
+          linkify_names() {
+            local url_kind="$1"
+            local names="$2"
+            if [[ -z "${names//[$'\t\r\n']/}" ]]; then
+              printf '_none_'
+              return
+            fi
+            local first=1
+            while IFS= read -r name; do
+              [[ -z "$name" ]] && continue
+              local path_name url
+              path_name="${name// /%20}"
+              case "$url_kind" in
+                branch) url="${repo_url}/tree/${path_name}" ;;
+                tag) url="${repo_url}/releases/tag/${path_name}" ;;
+                *) url="${repo_url}" ;;
+              esac
+              if [[ "$first" -eq 1 ]]; then
+                first=0
+              else
+                printf ', '
+              fi
+              printf '[`%s`](%s)' "$name" "$url"
+            done <<<"$names"
+          }
+
+          branch_md="$(linkify_names branch "$branches")"
+          tag_md="$(linkify_names tag "$tags")"
+
+          # Historical SHAs may lack a matching branch tip; name-rev supplies an auditable main~N label.
+          contains_md="_none_"
+          if [[ "$branch_md" == "_none_" ]]; then
+            approx="$(git name-rev --name-only --no-undefined --refs='refs/remotes/origin/*' "$sha" 2>/dev/null || true)"
+            if [[ -n "$approx" ]]; then
+              # name-rev prints remotes/origin/<branch>[~N]; strip to branch[~N].
+              approx="${approx#remotes/origin/}"
+              approx="${approx#origin/}"
+              contains_md="\`${approx}\`"
+            fi
+          fi
+
+          input_kind="ref"
+          if git rev-parse -q --verify "refs/remotes/origin/${input_ref}" >/dev/null 2>&1; then
+            input_kind="branch"
+          elif git rev-parse -q --verify "refs/tags/${input_ref}" >/dev/null 2>&1; then
+            input_kind="tag"
+          elif [[ "$input_ref" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            input_kind="sha"
+          fi
+
+          {
+            echo "## Resolved source"
+            echo ""
+            echo "Every cut resolves to a commit. Branch/tag rows list refs whose tip is that commit."
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Input ref | \`${input_ref}\` (${input_kind}) |"
+            echo "| Commit | [\`${short_sha}\`](${repo_url}/commit/${sha}) |"
+            echo "| Branches at commit | ${branch_md} |"
+            echo "| Tags at commit | ${tag_md} |"
+            if [[ "$branch_md" == "_none_" ]]; then
+              echo "| Also on | ${contains_md} |"
+            fi
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Bump package.json and tag
         id: tag
-        if: (steps.version.outputs.version != '' && steps.version.outputs.recovered != 'true') || steps.dry-run-version.outputs.version != ''
+        if: needs.resolve.outputs.version != '' && needs.resolve.outputs.recovered_tag == ''
         env:
           EVENT_NAME: ${{ github.event_name }}
-          SLOT: ${{ steps.slot.outputs.value }}
-          VERSION: ${{ steps.version.outputs.version || steps.dry-run-version.outputs.version }}
+          SLOT: ${{ needs.resolve.outputs.slot }}
+          VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           set -euo pipefail
           # Update package.json directly with Node rather than invoking npm version on a blobless checkout.
@@ -689,17 +692,17 @@ jobs:
 
       - name: Record release commit
         id: release-commit
-        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+        if: steps.tag.outputs.tag != '' || needs.resolve.outputs.recovered_tag != ''
         env:
-          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+          TAG: ${{ steps.tag.outputs.tag || needs.resolve.outputs.recovered_tag }}
         run: echo "sha=$(git rev-parse --verify "refs/tags/${TAG}^{commit}")" >>"$GITHUB_OUTPUT"
 
       # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
       - name: Detect whether the tag ships the orcad template
         id: orcad-template-support
-        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+        if: steps.tag.outputs.tag != '' || needs.resolve.outputs.recovered_tag != ''
         env:
-          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+          TAG: ${{ steps.tag.outputs.tag || needs.resolve.outputs.recovered_tag }}
         run: |
           set -euo pipefail
           if git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/orcad-distribution/template/packaged-orcad-template.cjs" 2>/dev/null || git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/packaged-orcad-template.cjs" 2>/dev/null; then
@@ -731,15 +734,15 @@ jobs:
       - resolve
       - prepare
     # Dry runs from other branches stop at prepare: only main may enter the release environment.
-    if: needs.prepare.outputs.should_release == 'true' || ((github.event_name == 'workflow_dispatch' && inputs.dry_run) && github.ref == 'refs/heads/main')
+    if: (needs.resolve.outputs.version != '' || needs.resolve.outputs.recovered_tag != '') && (!(github.event_name == 'workflow_dispatch' && inputs.dry_run) || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release
     permissions:
       contents: write
     outputs:
-      tag: ${{ needs.prepare.outputs.tag }}
-      should_release: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && needs.prepare.outputs.should_release == 'true' }}
+      tag: ${{ needs.resolve.outputs.recovered_tag || format('v{0}', needs.resolve.outputs.version) }}
+      should_release: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
       release_sha: ${{ steps.remote-tag.outputs.sha }}
       source_ref: ${{ needs.prepare.outputs.source_ref }}
       source_sha: ${{ needs.resolve.outputs.sha }}
@@ -749,7 +752,8 @@ jobs:
       SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
       PREPARED_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
       RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
-      TAG: ${{ needs.prepare.outputs.tag }}
+      TAG: ${{ needs.resolve.outputs.recovered_tag || format('v{0}', needs.resolve.outputs.version) }}
+      RECOVERED: ${{ needs.resolve.outputs.recovered_tag != '' }}
     defaults:
       run:
         working-directory: release
@@ -769,7 +773,7 @@ jobs:
           git fetch -q --no-tags --depth=1 origin "$SOURCE_SHA"
 
       - name: Download release tag bundle
-        if: needs.prepare.outputs.new_tag != ''
+        if: needs.resolve.outputs.recovered_tag == ''
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-tag-bundle
@@ -778,79 +782,42 @@ jobs:
       # Runs for recovered tags too: an existing tag is held to the same content rules as a new one.
       - name: Verify the tag is only a version bump of the source
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEW_TAG: ${{ needs.prepare.outputs.new_tag }}
-          PREPARED_VERSION: ${{ needs.prepare.outputs.version }}
-          DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
-          KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
-          EXPLICIT_VERSION: ${{ github.event_name == 'schedule' && '' || inputs.version }}
-          VERSION_SUFFIX: ${{ github.event_name == 'schedule' && '' || inputs.version_suffix }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          SLOT_SUFFIX: ${{ github.event_name == 'schedule' && format(' [rc-slot:{0}]', needs.resolve.outputs.slot) || '' }}
         run: |
           set -euo pipefail
           fail() { echo "::error::Refusing $TAG: $1" >&2; exit 1; }
-          if [[ -n "$NEW_TAG" ]]; then
-            VERSION="$PREPARED_VERSION"
-            [[ "$NEW_TAG" == "$TAG" && "$TAG" == "v$VERSION" ]] || fail "tag/version mismatch"
+          n='(0|[1-9][0-9]*)'
+          [[ "${TAG#v}" =~ ^$n\.$n\.$n(-rc\.$n(\.[0-9A-Za-z]+)?)?$ ]] || fail "not a release version tag"
+          if [[ "$RECOVERED" != true ]]; then
+            # resolve chose the version; prepare only built the commit and tag for it.
+            [[ "$NEW_TAG" == "$TAG" && "$TAG" == "v$VERSION" ]] || fail "prepare built '$NEW_TAG', not resolve's v$VERSION"
             bundle="$RUNNER_TEMP/bundle/release-tag.bundle"
             git bundle verify -q "$bundle"
             git -c transfer.fsckObjects=true fetch -q --no-tags "$bundle" "refs/tags/$TAG:refs/tags/$TAG"
             [[ "$(git cat-file -t "refs/tags/$TAG")" == tag ]] || fail "not an annotated tag"
+            [[ "$(git cat-file -p "refs/tags/$TAG" | sed '1,/^$/d')" == "$TAG" ]] || fail "tag message is not $TAG"
           else
+            [[ -z "$NEW_TAG" ]] || fail "prepare built a new tag for a recovered release"
             VERSION="${TAG#v}"
             git -c transfer.fsckObjects=true fetch -q --no-tags --depth=1 origin "+refs/tags/$TAG:refs/tags/$TAG"
           fi
-          # Canonical, at most nine digits per number (like the explicit-version gate), so the arithmetic below can't wrap.
-          n='(0|[1-9][0-9]{0,8})'
-          [[ "$VERSION" =~ ^$n\.$n\.$n(-rc\.$n(\.(0|[1-9][0-9]{0,8}|[0-9A-Za-z]*[A-Za-z][0-9A-Za-z]*))?)?$ && "$TAG" == "v$VERSION" ]] ||
-            fail "not a release version tag"
-          # Bind the version to what was dispatched, against the stable floor read here rather than from prepare.
-          if [[ "$DRY_RUN" == true ]]; then
-            [[ -n "$NEW_TAG" && "$VERSION" == "0.0.0-rc.0" ]] || fail "a dry run must use its placeholder version"
-          elif [[ -n "$EXPLICIT_VERSION" ]]; then
-            [[ "$VERSION" == "${EXPLICIT_VERSION#v}${VERSION_SUFFIX:+.$VERSION_SUFFIX}" ]] || fail "version is not the requested $EXPLICIT_VERSION"
-          elif [[ "$KIND" == rc ]]; then
-            # A recovered RC may predate the requested suffix, as recover_unpublished_tag allows.
-            [[ "$VERSION" == *-rc.* && ( -z "$NEW_TAG" || -z "$VERSION_SUFFIX" || "$VERSION" == *".$VERSION_SUFFIX" ) ]] || fail "an rc cut must be an rc version"
-          else
-            [[ "$VERSION" != *-* ]] || fail "a $KIND cut must be a stable version"
-          fi
-          if [[ "$DRY_RUN" != true && -z "$EXPLICIT_VERSION" ]]; then
-            # prepare's floor: the newest published desktop stable, raised to the source package.json's stable version.
-            floor="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft != true) | .tag_name' |
-              { grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true; } | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)"
-            pkg="$(git show "$SOURCE_SHA:package.json" | jq -r '.version // ""')"
-            if [[ "$pkg" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-              floor="$(printf '%s\n%s\n' "${floor:-0.0.0}" "$pkg" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)"
-            fi
-            IFS=. read -r fM fm fp <<<"${floor:-0.0.0}"
-            IFS=. read -r vM vm vp <<<"${VERSION%%-*}"
-            ok=false
-            # The upper bounds match prepare's 100-step tag-collision loop.
-            case "$KIND" in
-              rc) (( vM == fM && vm == fm && vp == fp + 1 )) && ok=true ;;
-              patch) (( vM == fM && vm == fm && vp > fp && vp <= fp + 100 )) && ok=true ;;
-              minor) (( vM == fM && vm > fm && vm <= fm + 100 && vp == 0 )) && ok=true ;;
-              major) (( vM > fM && vM <= fM + 100 && vm == 0 && vp == 0 )) && ok=true ;;
-            esac
-            # recover_unpublished_tag may also reuse the source's own unpublished stable tag, which is the floor.
-            [[ -z "$NEW_TAG" && "$KIND" != rc && "$VERSION" == "$floor" ]] && ok=true
-            [[ "$ok" == true ]] || fail "$VERSION is not the next $KIND after stable ${floor:-0.0.0}"
-            if [[ "$VERSION" == *-rc.* ]]; then
-              # RC numbers advance one at a time; allow prepare's history slack but not an arbitrary jump.
-              ord="${VERSION#*-rc.}" ord="${ord%%.*}" prefix="refs/tags/v${VERSION%%-*}-rc."
-              top="$(git ls-remote --tags --refs origin | cut -f2 | { grep -F "$prefix" || true; } |
-                sed "s|^${prefix//./\\.}||; s|\..*||" | { grep -xE '[0-9]{1,9}' || true; } | sort -n | tail -n 1)"
-              (( ord <= ${top:-0} + 100 )) || fail "rc.$ord jumps past the highest RC tag rc.${top:-none}"
-            fi
-          fi
           commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
           [[ "$commit" == "$RELEASE_SHA" ]] || fail "tag commit $commit is not prepare's $RELEASE_SHA"
-          if [[ -z "$NEW_TAG" && "$commit" == "$SOURCE_SHA" ]]; then
+          if [[ "$RECOVERED" == true && "$commit" == "$SOURCE_SHA" ]]; then
             echo "Recovered tag $TAG is the source commit itself."
             exit 0
           fi
           # Raw header and two-tree reads: a depth-1 fetch grafts away parents, and the message must not count.
           [[ "$(git cat-file -p "$commit" | sed '/^$/q' | awk '/^parent /{ print $2 }')" == "$SOURCE_SHA" ]] || fail "release commit is not a single-parent child of $SOURCE_SHA"
+          # Later version math reads release subjects, so the message is exactly what the bump step writes.
+          message="$(git cat-file -p "$commit" | sed '1,/^$/d')"
+          if [[ "$RECOVERED" != true ]]; then
+            [[ "$message" == "release: $TAG$SLOT_SUFFIX" ]] || fail "release commit message is not 'release: $TAG$SLOT_SUFFIX'"
+          else
+            [[ "$message" =~ ^release:\ ${TAG//./\\.}(\ \[rc-slot:[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}\])?$ ]] || fail "release commit message is not 'release: $TAG'"
+          fi
           changed="$(git diff-tree --name-only -r "$SOURCE_SHA" "$commit")"
           [[ -z "$changed" || "$changed" == package.json ]] || fail "release commit changes more than package.json"
           [[ "$(git ls-tree "$commit" package.json | cut -d' ' -f1-2)" == "$(git ls-tree "$SOURCE_SHA" package.json | cut -d' ' -f1-2)" ]] ||
@@ -863,7 +830,7 @@ jobs:
       # Mint before moving main, so a key or App problem fails the cut before anything is pushed.
       - name: Mint release App token
         id: app-token
-        if: needs.prepare.outputs.new_tag != ''
+        if: needs.resolve.outputs.recovered_tag == ''
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
@@ -891,7 +858,7 @@ jobs:
 
       # Main moves only when the source is still its exact tip, checked here rather than taken from prepare.
       - name: Fast-forward main to the release commit
-        if: needs.prepare.outputs.new_tag != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        if: needs.resolve.outputs.recovered_tag == '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -916,7 +883,7 @@ jobs:
           fi
 
       - name: Push release tag with the release App
-        if: needs.prepare.outputs.new_tag != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        if: needs.resolve.outputs.recovered_tag == '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
