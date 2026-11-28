@@ -119,7 +119,11 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     !scope.activeMarkdownTab &&
     !scope.activeFileTab &&
     !scope.activeBrowserTab
-  const dockBottomInset = dockShown && (sideRail || padAvailable) ? 0 : insets.bottom
+  // On the Duo's rail layout the chat composer also drops to the bottom edge.
+  const dockBottomInset =
+    (dockShown && (sideRail || padAvailable)) || (sideRail && scope.showNativeChat)
+      ? 0
+      : insets.bottom
   const reducedMotion = useReducedMotionEnabled()
   const toastRise = useMemo<MobileAnimatedInterpolation | 0>(
     () =>
