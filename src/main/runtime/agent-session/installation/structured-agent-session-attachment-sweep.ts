@@ -11,15 +11,11 @@ export function structuredAgentSessionAttachmentSweepFacts(
   const sweep = async (operation: Extract<JournalWriterEffect, { kind: 'sweep' }>['operation']) =>
     writable() ? (await database.effects([{ kind: 'sweep', operation }]))[0] : undefined
   return {
-    ...(retainedUploadIds
-      ? {
-          retention: {
-            isUnclaimed: async (uploadId) =>
-              (await sweep({ kind: 'unclaimed', uploadId })) === true,
-            uploads: retainedUploadIds
-          }
-        }
-      : {}),
+    ...(retainedUploadIds ? { retention: { uploads: retainedUploadIds } } : {}),
+    // A closed writer or failed request is unknown custody.
+    legacyCustodyKnown: async () =>
+      (await sweep({ kind: 'legacy-custody' }).catch(() => undefined)) === true,
+    isUnclaimed: async (uploadId) => (await sweep({ kind: 'unclaimed', uploadId })) === true,
     listBeingSwept: async () => {
       const uploads: string[] = []
       let after: string | null = null

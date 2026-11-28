@@ -3,6 +3,7 @@ import { runJournalTransaction } from './journal-database'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import {
   readAdoption,
+  readJournalLegacyClaims,
   adoptJournalLegacyChat,
   journalLegacyOriginalChatIds,
   retainEnumeratedClaims,
@@ -54,6 +55,11 @@ import {
   openReconcilableJournalLegacySource
 } from './journal-legacy-source-damage'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
+import {
+  JOURNAL_LEGACY_CUSTODY_UNKNOWN,
+  journalLegacyCustodyFrom,
+  type JournalLegacyCustodyStart
+} from './journal-legacy-custody'
 
 /** Set after a pass absorbed every original chat, so each chat here carries its revision. */
 export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
@@ -64,14 +70,18 @@ export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
  * chat beside it, so no turn it saved goes missing. Nothing here deletes a chat or its turns.
  * Terminal restore waits for this pass, so it reads no history: a copy's history converts later
  * like any unconverted chat's, and a chat needing a history compare is compared in the background.
+ * Upload custody stays unknown unless the pass kept every claim it read and the original held still.
  */
-export function reconcileJournalLegacySource(stateDirectory: string, db: Database.Database): void {
+export function reconcileJournalLegacySource(
+  stateDirectory: string,
+  db: Database.Database
+): JournalLegacyCustodyStart {
   const sourcePath = journalDatabasePath(stateDirectory)
   // Captured before reading, so a write during this pass is never taken as absorbed. Until every
   // chat here carries its revision (files converted before revisions were kept), each launch reads.
   const captured = captureJournalLegacySourceReceipt(sourcePath)
   if (captured.disposition === 'no-source-at-initialization') {
-    return
+    return journalLegacyCustodyFrom(sourcePath, captured)
   }
   const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
   const unchanged = sameJournalLegacySource(saved, captured)
@@ -82,15 +92,16 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   for (const [id, copy] of strandedCopies(db)) {
     forced.set(id, { stranded: copy })
   }
+  // Each sweep still proves the original's claims kept; this receipt is never that proof.
   if (unchanged && kept && forced.size === 0) {
-    return
+    return journalLegacyCustodyFrom(sourcePath, captured)
   }
   const source = openReconcilableJournalLegacySource(db, sourcePath, captured)
   if (!source) {
-    return
+    return journalLegacyCustodyFrom(sourcePath, captured)
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = { kept, forced, baselines: [], compares: [] }
+  const pass: Pass = { kept, forced, baselines: [], compares: [], claimsRetained: true }
   let complete = true
   let settled: { gone: string[]; clearedClaims: string[] } = { gone: [], clearedClaims: [] }
   try {
@@ -116,7 +127,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     captured.disposition === 'copied-source' &&
     !sameJournalLegacySource(receipt, captureJournalLegacySourceReceipt(sourcePath))
   ) {
-    return
+    return JOURNAL_LEGACY_CUSTODY_UNKNOWN
   }
   runJournalTransaction(db, () => {
     for (const id of settled.gone) {
@@ -138,6 +149,9 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
       deleteMeta(db, JOURNAL_LEGACY_SOURCE_DAMAGED)
     }
   })
+  return complete && pass.claimsRetained
+    ? journalLegacyCustodyFrom(sourcePath, captured)
+    : JOURNAL_LEGACY_CUSTODY_UNKNOWN
 }
 
 /** What one pass knows about the original, and the chats it takes as already shown here. */
@@ -150,6 +164,8 @@ type Pass = {
   /** Converted chats with no revision to compare, for the background compare. */
   compares: [string, string][]
   claimOwners?: Pick<Adoption['claims'], 'has'>
+  /** Every claim the pass read was kept here before any chat was adopted. */
+  claimsRetained: boolean
 }
 
 /**
@@ -163,13 +179,17 @@ function absorbChats(
   pass: Pass,
   walk: boolean
 ): boolean {
-  const adoption = readAdoption(source, db, walk ? null : [...pass.forced.keys()])
+  const only = walk ? null : [...pass.forced.keys()]
+  // Kept before reading anything else, so a later tab, catalog or chat failure can't drop them.
+  const claims = readJournalLegacyClaims(source, only)
+  pass.claimsRetained = retainEnumeratedClaims(db, claims)
+  const adoption = readAdoption(source, db, only, claims)
   pass.claimOwners = adoption.claims
   let chats: string[]
   try {
     chats = walk ? journalLegacyOriginalChatIds(source, 'saved') : [...pass.forced.keys()]
   } catch (error) {
-    retainEnumeratedClaims(db, adoption)
+    retainEnumeratedClaims(db, adoption.claims)
     throw error
   }
   const claimOnlyChats = new Set(adoption.claims.keys())
@@ -200,7 +220,7 @@ function absorbChats(
         (revision !== undefined && isSqliteCorruption(error)) ||
         db.isTransaction
       ) {
-        retainEnumeratedClaims(db, adoption)
+        retainEnumeratedClaims(db, adoption.claims)
         console.warn('[agent-session-journal] keeping chats an older Orca saved paused', error)
         return false
       }
@@ -224,7 +244,7 @@ function absorbChats(
           }
         })
       } catch (failureError) {
-        retainEnumeratedClaims(db, adoption)
+        retainEnumeratedClaims(db, adoption.claims)
         console.warn(
           '[agent-session-journal] keeping chats an older Orca saved paused',
           failureError
