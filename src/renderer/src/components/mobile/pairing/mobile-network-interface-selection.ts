@@ -1,5 +1,5 @@
 import {
-  isVirtualBridgeInterface,
+  isAutoAdvertisablePairingInterface,
   selectAutoAdvertisedPairingAddress,
   type PairingNetworkInterface
 } from '../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
@@ -23,8 +23,7 @@ export function selectRefreshedNetworkAddress(
   const currentInterface = interfaces.find((iface) => iface.address === currentAddress)
   if (
     currentInterface &&
-    (currentAddressWasExplicitlySelected ||
-      !isVirtualBridgeInterface(currentInterface.name, currentInterface.hasDefaultRoute))
+    (currentAddressWasExplicitlySelected || isAutoAdvertisablePairingInterface(currentInterface))
   ) {
     return currentAddress
   }

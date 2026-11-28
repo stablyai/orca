@@ -1,6 +1,8 @@
 import { isIP } from 'node:net'
-import { networkInterfaces } from 'node:os'
+import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os'
 import {
+  isAutoAdvertisablePairingInterface,
+  isTunnelInterface,
   isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress
 } from '../../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
@@ -17,6 +19,51 @@ export type NetworkInterface = {
 }
 
 export type DefaultRouteInterfaceLookup = () => Promise<ReadonlySet<string> | null>
+
+// One route lookup per adapter snapshot: the PowerShell spawn costs ~0.5 s on Windows. The TTL bounds
+// staleness when a tunnel changes the default route without adding an adapter.
+const ROUTE_NAMES_TTL_MS = 60_000
+let cachedRouteNames: { snapshot: string; names: ReadonlySet<string>; at: number } | null = null
+
+/** A failed lookup stays uncached so the next pairing screen retries it. */
+async function defaultRouteNamesFor(
+  snapshot: string,
+  lookup: DefaultRouteInterfaceLookup
+): Promise<ReadonlySet<string> | null> {
+  if (
+    cachedRouteNames?.snapshot === snapshot &&
+    Date.now() - cachedRouteNames.at < ROUTE_NAMES_TTL_MS
+  ) {
+    return cachedRouteNames.names
+  }
+  const names = await lookup()
+  if (names) {
+    cachedRouteNames = { snapshot, names, at: Date.now() }
+  }
+  return names
+}
+
+/** The route bonus only decides anything when the best non-Tailscale candidates rank equal. */
+function hasRankTie(interfaces: readonly NetworkInterface[]): boolean {
+  // A bridge is dropped before selection, so it can neither win the rank nor stand in for Tailscale.
+  const advertisable = interfaces.filter(isAutoAdvertisablePairingInterface)
+  // A Tailscale address wins every tie at rank 0, so the bonus cannot change the advertised one.
+  if (advertisable.some((iface) => isTailnetIPv4Address(iface.address))) {
+    return false
+  }
+  let best = Number.POSITIVE_INFINITY
+  let bestCount = 0
+  for (const iface of advertisable) {
+    const rank = rankInterface(iface)
+    if (rank < best) {
+      best = rank
+      bestCount = 1
+    } else if (rank === best) {
+      bestCount += 1
+    }
+  }
+  return bestCount > 1
+}
 
 // 0.0.0.0 cannot accept IPv6; only an IPv6 bind can offer both families (#31161).
 // `host` is a canonical IP literal.
@@ -50,14 +97,6 @@ export async function getPairingNetworkInterfaces(
   const result: NetworkInterface[] = []
   const interfaces = networkInterfaces()
   const hasHyperVInterface = Object.keys(interfaces).some((name) => /^vEthernet /i.test(name))
-  // Unknown default route cannot attest vEthernet reachability.
-  const defaultRouteInterfaceNames = hasHyperVInterface
-    ? await getDefaultRouteInterfaceNames()
-    : new Set<string>()
-  const normalizedDefaultRouteInterfaceNames =
-    defaultRouteInterfaceNames === null
-      ? null
-      : new Set([...defaultRouteInterfaceNames].map((name) => name.toLowerCase()))
 
   for (const [name, addrs] of Object.entries(interfaces)) {
     for (const addr of addrs ?? []) {
@@ -74,16 +113,31 @@ export async function getPairingNetworkInterfaces(
       if (!listenerServesFamily(listenerCanonical, addr.family)) {
         continue
       }
-      result.push({
-        name,
-        address: addr.address,
-        ...(normalizedDefaultRouteInterfaceNames?.has(name.toLowerCase())
-          ? { hasDefaultRoute: true }
-          : {})
-      })
+      result.push({ name, address: addr.address })
     }
   }
-  return result.sort((a, b) => rankInterface(a) - rankInterface(b))
+  // Ask only when the answer can change the ranking: vEthernet reachability, or a tie the bonus breaks.
+  const defaultRouteInterfaceNames =
+    hasHyperVInterface || hasRankTie(result)
+      ? await defaultRouteNamesFor(snapshotOf(interfaces), getDefaultRouteInterfaceNames)
+      : null
+  const normalizedDefaultRouteInterfaceNames =
+    defaultRouteInterfaceNames === null
+      ? null
+      : new Set([...defaultRouteInterfaceNames].map((name) => name.toLowerCase()))
+
+  return result
+    .map((iface) =>
+      normalizedDefaultRouteInterfaceNames?.has(iface.name.toLowerCase())
+        ? { ...iface, hasDefaultRoute: true }
+        : iface
+    )
+    .sort((a, b) => rankInterface(a) - rankInterface(b))
+}
+
+/** The adapter list itself: route names are only reused while the machine's set of adapters is unchanged. */
+function snapshotOf(interfaces: NodeJS.Dict<NetworkInterfaceInfo[]>): string {
+  return Object.keys(interfaces).sort().join('\n')
 }
 
 function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): number {
@@ -91,9 +145,11 @@ function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): nu
     return 0
   }
   const bridgePenalty = isVirtualBridgeInterface(name, hasDefaultRoute) ? 2 : 0
+  // A tunnel's default route is synthetic: keep it behind the LAN even when it holds the route.
+  const tunnelPenalty = isTunnelInterface(name) ? 2 : 0
   // The default-route adapter is the one the LAN reaches; it wins ties with idle or VPN adapters.
   const defaultRouteBonus = hasDefaultRoute ? 0.5 : 0
-  return (address.includes(':') ? 2 : 1) + bridgePenalty - defaultRouteBonus
+  return (address.includes(':') ? 2 : 1) + bridgePenalty + tunnelPenalty - defaultRouteBonus
 }
 
 // Every spelling of an IPv6 literal (`::`, `0:0:0:0:0:0:0:1`, `::ffff:127.0.0.1`) compares alike.
