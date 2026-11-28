@@ -53,6 +53,8 @@ export type PushSendNotification = {
   worktreeId?: string
   paneKey?: string
   executionHost?: `runtime:${string}`
+  /** Present only when the phone can answer with Allow/Deny. Old gateways reject the send. */
+  promptReply?: { allow: string; deny: string }
 }
 
 type PushGatewayClientOptions = {

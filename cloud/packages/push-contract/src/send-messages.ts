@@ -6,6 +6,16 @@ import {
 import { PUSH_LIMITS } from './push-limits.js'
 import { OpaqueIdSchema, SequenceSchema } from './wire-scalars.js'
 
+/** Must match WATCH_PROMPT_CATEGORY in src/shared/notifications/watch-prompt-reply.ts. */
+export const PUSH_PROMPT_DECISION_CATEGORY = 'orca.prompt-decision'
+
+const PushPromptReplySchema = z
+  .object({
+    allow: z.string().min(1).max(8),
+    deny: z.string().min(1).max(8)
+  })
+  .strict()
+
 export const PushNotificationSchema = z
   .object({
     // Absent for terminal-bell; printable ASCII only because desktop URL-encoded IDs become APNs collapse headers.
@@ -33,7 +43,9 @@ export const PushNotificationSchema = z
       .string()
       .max(2048)
       .regex(/^runtime:[^|\s]+$/)
-      .optional()
+      .optional(),
+    /** Binary Allow/Deny keystrokes. Absent on alerts an old phone cannot answer. */
+    promptReply: PushPromptReplySchema.optional()
   })
   .strict()
   .refine(
