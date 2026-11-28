@@ -29,20 +29,33 @@ export async function writeGeneratedConversationName(args: {
     }
     expected = null
   }
-  const named = await store.compareAndSetConversationName(
-    record.sessionId,
-    name,
-    expected,
-    contextId
-  )
-  const current = !named && typed ? store.getRecord(record.sessionId) : null
-  if (
-    typed &&
-    current &&
-    current.conversationName === undefined &&
-    current.conversationNameSource !== 'user'
-  ) {
-    await store.setUserConversationName(record.sessionId, typed, 'rename')
+  const restore = async () => {
+    if (!typed) {
+      return
+    }
+    const current = store.getRecord(record.sessionId)
+    if (
+      current &&
+      current.conversationName === undefined &&
+      current.conversationNameSource !== 'user'
+    ) {
+      await store.setUserConversationName(record.sessionId, typed, 'rename')
+    }
   }
-  return named
+  try {
+    const named = await store.compareAndSetConversationName(
+      record.sessionId,
+      name,
+      expected,
+      contextId
+    )
+    if (!named) {
+      await restore()
+    }
+    return named
+  } catch (error) {
+    // A failed restore still reports the compare-and-set error. The slot stays empty only if both fail.
+    await restore().catch(() => undefined)
+    throw error
+  }
 }

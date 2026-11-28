@@ -80,19 +80,26 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     applicable,
     prepare,
     execute: async (request, firstPrompt) => {
-      if (!applicable(request)) {
+      const record = request.automatic
+        ? request.record
+        : deps.getStore()?.getRecord(request.record.sessionId)
+      if (!record) {
+        return
+      }
+      const live = { ...request, record }
+      if (!applicable(live)) {
         return
       }
       const name = await generateName(
-        request.record,
+        live.record,
         firstPrompt,
-        request.record.conversationName ?? '',
-        request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
-        () => applicable(request)
+        live.record.conversationName ?? '',
+        live.automatic ? GENERATION_RETRY_DELAYS_MS : [],
+        () => applicable(live)
       )
       const store = deps.getStore()
-      if (name && store && applicable(request)) {
-        await setName(store, request.record, name)
+      if (name && store && applicable(live)) {
+        await setName(store, live.record, name)
       }
     },
     changed: (record) => refresh(record.location.workspaceId, record.sessionId),

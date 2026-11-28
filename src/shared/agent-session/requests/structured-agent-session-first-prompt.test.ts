@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import {
+  STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT,
+  createStructuredChatNamingPromptWindow,
   firstStructuredAgentSessionPrompt,
   joinStructuredChatNamingPrompts,
   structuredAgentSessionUserPrompts
@@ -54,5 +56,22 @@ describe('joinStructuredChatNamingPrompts', () => {
     expect(joined.startsWith('1. head-turn')).toBe(true)
     expect(joined.endsWith('3. tail-turn')).toBe(true)
     expect(joined.includes('\n…\n')).toBe(true)
+    expect(joined.length).toBeLessThanOrEqual(STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT)
+  })
+})
+
+describe('createStructuredChatNamingPromptWindow', () => {
+  it('keeps the opening turn and the latest turn after the joined budget is full', () => {
+    const window = createStructuredChatNamingPromptWindow()
+    const text = (index: number) => `t${index}-${'x'.repeat(40)}`
+    for (let index = 0; index < 2000; index++) {
+      window.add(text(index))
+    }
+    const prompts = window.prompts()
+    const joined = joinStructuredChatNamingPrompts(prompts)
+    expect(prompts[0]).toBe(text(0))
+    expect(prompts.at(-1)).toBe(text(1999))
+    expect(prompts.includes(text(1000))).toBe(false)
+    expect(joined.length).toBeLessThanOrEqual(STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT)
   })
 })

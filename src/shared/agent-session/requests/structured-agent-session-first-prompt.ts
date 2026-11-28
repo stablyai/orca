@@ -39,6 +39,10 @@ export function structuredAgentSessionUserPrompts(
   return prompts
 }
 
+const NAMING_PROMPT_SEPARATOR = '\n…\n'
+/** Slack for the `N. ` prefix while a long chat is still being paged. */
+const NAMING_PROMPT_NUMBER_SLACK = 8
+
 /** Numbered user turns for a person-asked rename; a single turn stays unnumbered. */
 export function joinStructuredChatNamingPrompts(prompts: readonly string[]): string {
   if (prompts.length === 0) {
@@ -52,8 +56,60 @@ export function joinStructuredChatNamingPrompts(prompts: readonly string[]): str
     return joined
   }
   const head = sliceAtCodeUnitLimit(joined, STRUCTURED_CHAT_NAME_PROMPT_LIMIT)
-  const tailStart = joined.length - (STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT - head.length)
-  return `${head}\n…\n${sliceFromCodeUnit(joined, tailStart)}`
+  const tailBudget =
+    STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT - head.length - NAMING_PROMPT_SEPARATOR.length
+  const tailStart = joined.length - Math.max(0, tailBudget)
+  return `${head}${NAMING_PROMPT_SEPARATOR}${sliceFromCodeUnit(joined, tailStart)}`
+}
+
+/** Keeps the opening turns and a rolling tail so a long chat still names its latest messages. */
+export function createStructuredChatNamingPromptWindow(): {
+  add: (prompt: string) => void
+  prompts: () => string[]
+} {
+  const head: string[] = []
+  const tail: string[] = []
+  let headUnits = 0
+  let tailUnits = 0
+  let overflow = false
+  const cost = (prompt: string) => prompt.length + NAMING_PROMPT_NUMBER_SLACK
+  const trimTail = () => {
+    const budget =
+      STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT - headUnits - NAMING_PROMPT_SEPARATOR.length
+    while (tail.length > 1 && tailUnits > budget) {
+      const removed = tail.shift()
+      if (removed) {
+        tailUnits -= cost(removed)
+      }
+    }
+  }
+  return {
+    add(prompt: string) {
+      const units = cost(prompt)
+      if (!overflow && headUnits + units <= STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT) {
+        head.push(prompt)
+        headUnits += units
+        return
+      }
+      if (!overflow) {
+        overflow = true
+        while (head.length > 0 && headUnits > STRUCTURED_CHAT_NAME_PROMPT_LIMIT) {
+          const moved = head.pop()
+          if (!moved) {
+            break
+          }
+          const movedUnits = cost(moved)
+          headUnits -= movedUnits
+          tail.unshift(moved)
+          tailUnits += movedUnits
+        }
+      }
+      tail.push(prompt)
+      tailUnits += units
+      trimTail()
+    },
+    prompts: () => head.concat(tail)
+  }
 }
 
 function structuredAgentSessionPromptFromItem(item: AgentJournalRenderItem): string {
