@@ -181,7 +181,7 @@ export class DaemonStreamBackpressure {
       ) {
         continue
       }
-      // Sent once per record; 'released' (detach, attach, failed termination) drops it so the next refresh asks again.
+      // Sent once per record; 'released' (detach, attach, failed termination) drops pause and unpausable so the next refresh asks again.
       let incarnation: string | undefined
       const paused = this.setPaused(sessionId, true, (reason) =>
         this.onStall(sessionId, reason, incarnation)
@@ -211,19 +211,16 @@ export class DaemonStreamBackpressure {
 
   /** Called before a session's PTY output is queued: only a live producer enqueues, so this is when a respawn shows. */
   noteSessionOutput(sessionId: string): void {
-    const recorded = this.recordIncarnation.get(sessionId)
-    if (this.recordIncarnation.has(sessionId) && recorded !== this.incarnationOf(sessionId)) {
-      // Every record belonged to an earlier incarnation: the new producer starts clean.
-      this.dropRecords(sessionId)
+    const live = this.recordIncarnation.has(sessionId) ? this.incarnationOf(sessionId) : undefined
+    // A late tail queued after the session left the host has no incarnation; only a new producer resets.
+    if (live === undefined || this.recordIncarnation.get(sessionId) === live) {
+      return
     }
-  }
-
-  /** Pause, unpausable, keep-tail and credit all go, so the next refresh starts from Flowing. */
-  private dropRecords(sessionId: string): void {
+    // Every record belonged to an earlier incarnation: pause, unpausable, keep-tail and credit all go.
     const wasKeepTail = this.stallReleasedSessions.delete(sessionId)
     this.unpausableSessions.delete(sessionId)
     this.forgetPause(sessionId)
-    // Only keep-tail changes droppability; anything else would rescan every backlog per attach or detach.
+    // Only keep-tail changes droppability; anything else would rescan every backlog.
     if (wasKeepTail) {
       this.onDroppabilityChanged(sessionId)
     }
@@ -261,7 +258,9 @@ export class DaemonStreamBackpressure {
       return
     }
     if (reason === 'released') {
-      this.dropRecords(sessionId)
+      // Keep-tail stays: the stalled consumer may still be there, and only a drain proves it isn't.
+      this.unpausableSessions.delete(sessionId)
+      this.forgetPause(sessionId)
       return
     }
     if (this.deliveries.progressed(sessionId)) {

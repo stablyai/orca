@@ -250,7 +250,7 @@ describe('DaemonStreamBackpressure', () => {
     expect(subprocess.pause).toHaveBeenCalledTimes(1)
   })
 
-  it('a release after keep-tail and termination returns the session to normal pausing', () => {
+  it('a release keeps keep-tail until the stalled backlog drains, then pauses normally', () => {
     let pauseCalls = 0
     let owner: StallHandler | undefined
     const backpressure = new DaemonStreamBackpressure(
@@ -266,11 +266,14 @@ describe('DaemonStreamBackpressure', () => {
     )
     backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
     owner?.('timeout')
-    expect(backpressure.isStallReleased('tui')).toBe(true)
     owner?.('terminating')
     owner?.('released')
-    expect(backpressure.isStallReleased('tui')).toBe(false)
     backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+    expect(pauseCalls).toBe(1)
+
+    backpressure.setQueued('client', new Map())
+    backpressure.setQueued('client', new Map([['tui', 202 * 1024]]))
     expect(pauseCalls).toBe(2)
   })
 

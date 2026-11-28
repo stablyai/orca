@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DaemonStreamBackpressure } from './daemon-stream-backpressure'
 import { SessionProducerPause } from '../../sessions/session-producer-pause'
+import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import type { ConnectedDaemonClient } from '../../server/daemon-client-connections'
 
 // Guards #51089: per-session pausing must not re-send pauses to paused floods or exited sessions on each unrelated update.
 describe('DaemonStreamBackpressure pause calls', () => {
@@ -208,6 +210,58 @@ describe('DaemonStreamBackpressure pause calls', () => {
 
       backpressure.setQueued('client', queued)
       expect(pauseCalls).toBe(2)
+    }
+  )
+
+  it.each(['timer', 'echo'] as const)(
+    'a control frame completing while paused earns no lossless resume on the %s flush path',
+    (path) => {
+      vi.useFakeTimers()
+      try {
+        // A deep socket that completes writes only when told, so each frame's completion is observable.
+        const completions: ((error?: Error | null) => void)[] = []
+        const socket = {
+          destroyed: false,
+          writableLength: 200 * 1024,
+          write: (_line: unknown, done: (error?: Error | null) => void) => completions.push(done),
+          once: () => socket,
+          on: () => socket,
+          off: () => socket,
+          removeListener: () => socket
+        }
+        let resumes = 0
+        let stall: ((reason: 'input' | 'timeout') => void) | undefined
+        const batcher = new DaemonStreamDataBatcher(
+          () =>
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the batcher uses only write, writableLength, destroyed and listener methods, all stubbed above.
+            ({ streamSocket: socket, streamFraming: 'ndjson' }) as unknown as Pick<
+              ConnectedDaemonClient,
+              'streamSocket' | 'streamFraming'
+            >,
+          {
+            onProducerBackpressureChanged: (_sessionId, paused, onStall) => {
+              stall = onStall ?? stall
+              resumes += paused ? 0 : 1
+              return true
+            }
+          }
+        )
+        batcher.enqueueControlEvent('client', 'tui', {
+          type: 'event',
+          event: 'sessionBackgroundMarker',
+          sessionId: 'tui',
+          payload: { background: false }
+        })
+        batcher.enqueue('client', 'tui', 'x'.repeat(200 * 1024), {
+          flushImmediately: path === 'echo'
+        })
+        vi.advanceTimersByTime(5)
+        completions[0]()
+        stall?.('input')
+        expect(resumes).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
     }
   )
 })
