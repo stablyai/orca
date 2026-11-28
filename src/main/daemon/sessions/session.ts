@@ -202,14 +202,14 @@ export class Session extends SessionProcessInspection {
     this.output.detachClient(token)
     // With no viewer left to resume the producer, release its pause eagerly.
     if (!this.output.hasAttachedClients) {
-      this.producerPause.release({ resume: true, detached: true })
+      this.producerPause.release({ resume: true, reason: 'detached' })
       this.reportFocusLost()
     }
   }
 
   detachAllClients(): void {
     this.output.clearClients()
-    this.producerPause.release({ resume: true, detached: true })
+    this.producerPause.release({ resume: true, reason: 'detached' })
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
@@ -319,7 +319,7 @@ export class Session extends SessionProcessInspection {
     }
     this._disposed = true
     this.output.markDisposed()
-    this.producerPause.release({ resume: true })
+    this.producerPause.release({ resume: true, reason: 'exited' })
     this.termination.cancelForceKillFallback()
     this.shellReady.dispose()
     this.termination.disposeSubprocessHandle()
@@ -350,7 +350,7 @@ export class Session extends SessionProcessInspection {
     this._state = 'exited'
     this.termination.clearTerminating()
     // The child is reaped; clear pause timers without resuming its handle.
-    this.producerPause.release({ resume: false })
+    this.producerPause.release({ resume: false, reason: 'exited' })
 
     this.termination.cancelForceKillFallback()
     this.shellReady.clearReadyTimer()

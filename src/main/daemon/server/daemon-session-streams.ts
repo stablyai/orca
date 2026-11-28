@@ -40,7 +40,8 @@ export function createDaemonSessionStreams(parts: SessionStreamParts): {
       isSessionDroppable: (sessionId) =>
         BACKGROUND_STREAM_DROP_ENABLED && transientFactRelay.isBackgrounded(sessionId),
       salvageDroppedData: salvageDroppedDaemonStreamQueries,
-      onLongProducerPause: (details) => parts.log.log('terminal-output-paused', details)
+      onLongProducerPause: (details) => parts.log.log('terminal-output-paused', details),
+      incarnationOf: (sessionId) => parts.host.sessionIncarnation(sessionId)
     }
   )
   return { attachments, transientFactRelay, streamDataBatcher }

@@ -15,6 +15,14 @@ export function pauseSessionProducer(
   return session.pauseProducer(source, onStreamStall)
 }
 
+/** The spawn-time incarnation now holding this id; a respawn under the same id gets a new one. */
+export function sessionIncarnation(
+  sessions: ReadonlyMap<string, Session>,
+  sessionId: string
+): string | undefined {
+  return sessions.get(sessionId)?.incarnationId
+}
+
 export function resumeSessionProducer(
   sessions: ReadonlyMap<string, Session>,
   sessionId: string,

@@ -71,7 +71,8 @@ export class DaemonStreamDataBatcher {
           this.isSessionDroppable,
           options.isSessionAttachedToClient,
           (sessionId) => this.refreshSessionDroppability(sessionId),
-          options.onLongProducerPause
+          options.onLongProducerPause,
+          options.incarnationOf
         )
       : undefined
   }

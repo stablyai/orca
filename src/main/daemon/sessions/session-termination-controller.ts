@@ -12,7 +12,7 @@ export type SessionTerminationControllerDeps = {
   sessionId: string
   subprocess: Pick<SubprocessHandle, 'kill' | 'forceKill' | 'signal' | 'dispose'>
   isExited(): boolean
-  releaseProducerPause(opts: { resume: boolean }): void
+  releaseProducerPause(opts: { resume: boolean; reason: 'exited' }): void
 }
 
 export class SessionTerminationController {
@@ -47,7 +47,7 @@ export class SessionTerminationController {
     }
     this._isTerminating = true
     // Resume a child blocked on write before snapshotting so it can process termination.
-    this.deps.releaseProducerPause({ resume: true })
+    this.deps.releaseProducerPause({ resume: true, reason: 'exited' })
     return true
   }
 
@@ -87,7 +87,7 @@ export class SessionTerminationController {
     }
     if (!this._isTerminating) {
       this._isTerminating = true
-      this.deps.releaseProducerPause({ resume: true })
+      this.deps.releaseProducerPause({ resume: true, reason: 'exited' })
     }
     // Escalate now rather than spend the physical-exit budget waiting for graceful shutdown.
     await this.requestForceKillWithRetry()

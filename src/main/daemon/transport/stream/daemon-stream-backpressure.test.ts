@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonStreamBackpressure } from './daemon-stream-backpressure'
 import { SessionProducerPause } from '../../sessions/session-producer-pause'
 
-type StallHandler = (reason: 'input' | 'timeout') => void
+type StallHandler = (reason: 'input' | 'timeout' | 'released' | 'exited') => void
 
 function recordingBackpressure(): {
   backpressure: DaemonStreamBackpressure
@@ -113,13 +113,78 @@ describe('DaemonStreamBackpressure', () => {
       () => false
     )
     backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
-    producer.release({ resume: true, detached: true })
+    producer.release({ resume: true, reason: 'detached' })
     expect(subprocess.resume).toHaveBeenCalledTimes(1)
 
     backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
     expect(subprocess.pause).toHaveBeenCalledTimes(2)
     vi.advanceTimersByTime(60_500)
     expect(backpressure.isStallReleased('tui')).toBe(true)
+  })
+
+  it('a respawn under the same id starts clean after its predecessor exited while paused', () => {
+    vi.useFakeTimers()
+    let incarnation = 'first'
+    const producers = new Map<string, SessionProducerPause>()
+    const producer = (): SessionProducerPause => {
+      const existing = producers.get(incarnation)
+      if (existing) {
+        return existing
+      }
+      const created = new SessionProducerPause({ pause: () => {}, resume: () => {} })
+      producers.set(incarnation, created)
+      return created
+    }
+    let pauseCalls = 0
+    const backpressure = new DaemonStreamBackpressure(
+      (_sessionId, isPaused, onStall) => {
+        if (!isPaused) {
+          producer().resumeClient('stream')
+          return
+        }
+        pauseCalls += 1
+        return producer().pause('stream', true, onStall)
+      },
+      () => false,
+      undefined,
+      undefined,
+      undefined,
+      () => incarnation
+    )
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    producer().release({ resume: false, reason: 'exited' })
+
+    incarnation = 'second'
+    backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
+    expect(pauseCalls).toBe(2)
+    vi.advanceTimersByTime(60_500)
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+  })
+
+  it('pauses a respawn whose id earlier answered exited', () => {
+    let incarnation = 'gone'
+    let pauseCalls = 0
+    const backpressure = new DaemonStreamBackpressure(
+      (_sessionId, isPaused) => {
+        if (!isPaused) {
+          return
+        }
+        pauseCalls += 1
+        return incarnation === 'gone' ? 'exited' : true
+      },
+      () => false,
+      undefined,
+      undefined,
+      undefined,
+      () => incarnation
+    )
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
+    expect(pauseCalls).toBe(1)
+
+    incarnation = 'respawned'
+    backpressure.setQueued('client', new Map([['tui', 202 * 1024]]))
+    expect(pauseCalls).toBe(2)
   })
 
   it('does not count an empty refill frame as the held session delivering', async () => {
