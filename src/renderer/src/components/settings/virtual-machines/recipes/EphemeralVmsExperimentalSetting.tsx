@@ -24,10 +24,10 @@ export function EphemeralVmsExperimentalSetting({
       title={entry.title}
       description={entry.description}
       keywords={entry.keywords}
-      className="max-w-none space-y-4 py-3"
+      className="space-y-4 py-3"
       id="ephemeral-vms"
     >
-      <div className="flex max-w-3xl items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
           <Label>{entry.title}</Label>
           <p className="text-xs text-muted-foreground">
