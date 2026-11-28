@@ -1,3 +1,4 @@
+// @protected-copy
 import { useId, useState } from 'react'
 import {
   Dialog,
@@ -14,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 
-export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent'
+export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent' | 'idle' | 'idle-chat'
 
 export default function CloseTerminalDialog({
   open,
@@ -121,9 +122,13 @@ function CloseTerminalDialogBody({
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const isAgent = copyKind !== 'command'
-  const title =
-    copyKind === 'chat-agent'
+  const isAgent = copyKind === 'agent' || copyKind === 'chat-agent'
+  const isIdle = copyKind === 'idle' || copyKind === 'idle-chat'
+  const title = isIdle
+    ? copyKind === 'idle-chat'
+      ? t('components.terminal.pane.CloseTerminalDialog.closeIdleChatTitle', 'Close this chat?')
+      : t('components.terminal.pane.CloseTerminalDialog.closeIdleTabTitle', 'Close this tab?')
+    : copyKind === 'chat-agent'
       ? t(
           'components.terminal.pane.CloseTerminalDialog.stopChatAgentTitle',
           'Stop the agent in this chat?'
@@ -166,6 +171,13 @@ function CloseTerminalDialogBody({
               'Its current work stops and won’t resume.'
             )}
           </DialogDescription>
+        ) : isIdle ? (
+          <DialogDescription>
+            {t(
+              'components.terminal.pane.CloseTerminalDialog.closeIdleDescription',
+              'Nothing is running in it.'
+            )}
+          </DialogDescription>
         ) : null}
       </DialogHeader>
       {onSleepInstead ? optOut : null}
@@ -178,7 +190,7 @@ function CloseTerminalDialogBody({
                 'Sleep workspace'
               )}
             </Button>
-          ) : (
+          ) : isIdle ? null : (
             optOut
           )
         }
@@ -193,13 +205,15 @@ function CloseTerminalDialogBody({
         </DialogCancel>
         <Button
           type="button"
-          variant="destructive"
+          variant={isIdle ? 'default' : 'destructive'}
           size="sm"
           onClick={() => onConfirm(dontAskAgain)}
         >
-          {isAgent
-            ? t('components.terminal.pane.CloseTerminalDialog.stopAgentSentence', 'Stop agent')
-            : t('components.terminal.pane.CloseTerminalDialog.stopAndClose', 'Stop and close')}
+          {isIdle
+            ? t('components.terminal.pane.CloseTerminalDialog.closeIdleButton', 'Close')
+            : isAgent
+              ? t('components.terminal.pane.CloseTerminalDialog.stopAgentSentence', 'Stop agent')
+              : t('components.terminal.pane.CloseTerminalDialog.stopAndClose', 'Stop and close')}
         </Button>
       </DialogFooter>
     </>

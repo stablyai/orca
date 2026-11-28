@@ -248,6 +248,7 @@ export function buildDefaultSettings(args: {
     alwaysForceDeleteWorktrees: false,
     alwaysForceDeletePreservedBranches: false,
     skipCloseTerminalWithRunningProcessConfirm: false,
+    confirmCloseIdleTabs: false,
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
     skipDeleteChatConfirm: false,

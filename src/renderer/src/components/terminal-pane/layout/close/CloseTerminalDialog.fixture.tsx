@@ -1,11 +1,15 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
+
+const store = { settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' as const } }
 
 function dialogFixture(
   copyKind: CloseTerminalDialogCopyKind,
   options: { workspaceName?: string; sleep?: boolean } = {}
 ) {
   return defineFixture({
+    store,
     width: 640,
     render: () => (
       <div className="h-[320px] bg-background">
@@ -34,3 +38,7 @@ export const agent = dialogFixture('agent', { workspaceName: 'fix-login' })
 export const chatAgent = dialogFixture('chat-agent')
 
 export const command = dialogFixture('command')
+
+export const idle = dialogFixture('idle')
+
+export const idleChat = dialogFixture('idle-chat')

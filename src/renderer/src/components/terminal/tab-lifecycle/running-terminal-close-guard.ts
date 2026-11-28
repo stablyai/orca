@@ -60,18 +60,35 @@ export function guardRunningTerminalClose(params: {
   worktreeId?: string
   /** Work the user already agreed to stop is not running work to ask about. */
   consentedPtyId?: string
+  /** A group/pane close is deliberate; it does not ask for each idle tab inside it. */
+  skipIdleCloseConfirm?: boolean
+  /** This call is an idle recheck; its probe may open a prompt after the idle callback returned. */
+  guardNextPromptFromRecheck?: boolean
   onClose: () => void
+  /** Confirm on the idle prompt; re-check running work so a tab that became busy during the prompt still asks. */
+  onIdleConfirm?: () => void
   onCancel?: () => void
 }): void {
-  const { terminalTabId, worktreeId, consentedPtyId, onClose, onCancel } = params
+  const {
+    terminalTabId,
+    worktreeId,
+    consentedPtyId,
+    skipIdleCloseConfirm,
+    guardNextPromptFromRecheck,
+    onClose,
+    onIdleConfirm,
+    onCancel
+  } = params
   const state = useAppStore.getState()
   const settings = state.settings
   const ptyIds = collectTabPtyIds(state, terminalTabId).filter((id) => id !== consentedPtyId)
-  // Opt-out and no-PTY closes stay synchronous.
-  if (ptyIds.length === 0 || settings?.skipCloseTerminalWithRunningProcessConfirm === true) {
-    onClose()
-    return
-  }
+  // The idle prompt is its own opt-in, so "don't ask again" for running work must not hide it.
+  // A consented close is already deliberate; it must not look idle after its pty is filtered out.
+  const confirmIdle =
+    settings?.confirmCloseIdleTabs === true &&
+    skipIdleCloseConfirm !== true &&
+    consentedPtyId === undefined
+  const skipRunning = settings?.skipCloseTerminalWithRunningProcessConfirm === true
 
   // Probe, timeout, and errors race; only the first decision may own the close.
   let decided = false
@@ -81,6 +98,20 @@ export function guardRunningTerminalClose(params: {
     }
     decided = true
     onClose()
+  }
+  const requestIdleConfirm = (): void => {
+    if (decided) {
+      return
+    }
+    useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
+      terminalTabId,
+      copyKind: 'idle',
+      ...(worktreeId ? { worktreeId } : {}),
+      ...(guardNextPromptFromRecheck ? { guardWhenVisible: true } : {}),
+      onConfirm: onIdleConfirm ?? onClose,
+      ...(onCancel ? { onCancel } : {})
+    })
+    decided = true
   }
   const confirmClose = (busyPtyIds: readonly string[]): void => {
     if (decided) {
@@ -100,11 +131,25 @@ export function guardRunningTerminalClose(params: {
       copyKind,
       ...(worktreeId ? { worktreeId } : {}),
       ...(canSleepInstead ? { canSleepInstead } : {}),
+      ...(guardNextPromptFromRecheck ? { guardWhenVisible: true } : {}),
       onConfirm: onClose,
       ...(onCancel ? { onCancel } : {})
     })
     // Claim ownership only once the prompt opens so thrown lookups can still fall through.
     decided = true
+  }
+
+  if (ptyIds.length === 0) {
+    if (confirmIdle) {
+      requestIdleConfirm()
+      return
+    }
+    closeNow()
+    return
+  }
+  if (skipRunning && !confirmIdle) {
+    closeNow()
+    return
   }
 
   void probePtyRunningWork(ptyIds, { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
@@ -114,6 +159,10 @@ export function guardRunningTerminalClose(params: {
       }
       // Unanswered probes are unknown; prompt for every candidate rather than kill uninspected remote work.
       if (probes.some((probe) => probe.timedOut)) {
+        if (skipRunning) {
+          closeNow()
+          return
+        }
         confirmClose(ptyIds)
         return
       }
@@ -127,6 +176,14 @@ export function guardRunningTerminalClose(params: {
         )
         .map((probe) => probe.ptyId)
       if (busyPtyIds.length === 0) {
+        if (confirmIdle) {
+          requestIdleConfirm()
+          return
+        }
+        closeNow()
+        return
+      }
+      if (skipRunning) {
         closeNow()
         return
       }

@@ -35,6 +35,12 @@ export function GeneralConfirmationsSection({
         })
     },
     {
+      ...entries.idle,
+      checked: settings.confirmCloseIdleTabs === true,
+      onChange: () =>
+        updateSettings({ confirmCloseIdleTabs: settings.confirmCloseIdleTabs !== true })
+    },
+    {
       ...entries.workspace,
       checked: !settings.skipDeleteWorktreeConfirm,
       onChange: () =>

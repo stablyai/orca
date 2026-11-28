@@ -6,7 +6,8 @@ import {
 import { useAppStore } from '@/store/index'
 import {
   guardPinnedTabClose,
-  resolvePinnedTabLabel
+  resolvePinnedTabLabel,
+  shouldConfirmPinnedTabClose
 } from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/lib/workspace/tabs/close/workspace-tab-close-commands'
 import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
@@ -225,8 +226,18 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
         : captureWorkspaceEmptiedReaction(target.worktreeId, {
             floatingPanelGuestOwned: command.floatingPanelGuestOwned
           })
+    // The pin dialog already asked; do not stack the idle close prompt on top of it.
+    const pinDialogWillAsk =
+      tab.contentType !== 'terminal' &&
+      tab.isPinned === true &&
+      command.bulk !== true &&
+      shouldConfirmPinnedTabClose(state)
     const close = () =>
-      commands.closeItem(tab.id, { whenEmptied, skipRunningProcessConfirm: command.bulk })
+      commands.closeItem(tab.id, {
+        whenEmptied,
+        skipRunningProcessConfirm: command.bulk,
+        skipIdleCloseConfirm: command.skipEmptyCheck === true || pinDialogWillAsk
+      })
     if (tab.contentType === 'terminal' || command.bulk) {
       close()
     } else {

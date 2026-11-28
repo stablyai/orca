@@ -9,6 +9,7 @@ import { closeTerminalTab } from '../../../../components/terminal/tab-lifecycle/
 import { closeWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 
 export function createWorkspaceTabCloseCommands({
@@ -42,7 +43,11 @@ export function createWorkspaceTabCloseCommands({
   /** `whenEmptied` is captured by the caller when the close is requested, before any prompt. */
   const closeItem = (
     itemId: string,
-    opts?: { whenEmptied?: () => void; skipRunningProcessConfirm?: boolean }
+    opts?: {
+      whenEmptied?: () => void
+      skipRunningProcessConfirm?: boolean
+      skipIdleCloseConfirm?: boolean
+    }
   ) => {
     const item = groupTabs.find((candidate) => candidate.id === itemId)
     if (!item) {
@@ -55,17 +60,24 @@ export function createWorkspaceTabCloseCommands({
           whenEmptied?.()
         }
       }
-      if (
-        !opts?.skipRunningProcessConfirm &&
-        useAppStore.getState().settings?.skipCloseTerminalWithRunningProcessConfirm !== true
-      ) {
+      const settings = useAppStore.getState().settings
+      const confirmIdle =
+        settings?.confirmCloseIdleTabs === true && opts?.skipIdleCloseConfirm !== true
+      const skipRunning = settings?.skipCloseTerminalWithRunningProcessConfirm === true
+      if (!opts?.skipRunningProcessConfirm && (confirmIdle || !skipRunning)) {
         void admitStructuredAgentSession(
           worktreeId,
           item,
           'close',
           (busy, attempt) =>
             new Promise<void>((resolve) => {
-              const confirmed = () => {
+              // A send that starts while the idle dialog waits may not be issued yet; count it as work.
+              const chatBecameBusy = (): boolean =>
+                attempt.busy() ||
+                getStructuredAgentSessionPendingSends(item.entityId).some(
+                  (entry) => entry.phase === 'sending'
+                )
+              const closeConfirmed = (): void => {
                 try {
                   if (attempt.current()) {
                     close()
@@ -74,13 +86,39 @@ export function createWorkspaceTabCloseCommands({
                   resolve()
                 }
               }
-              if (!busy) {
+              let askedForRunningWork = false
+              const confirmed = (): void => {
+                if (!attempt.current()) {
+                  resolve()
+                  return
+                }
+                if (
+                  !busy &&
+                  confirmIdle &&
+                  !skipRunning &&
+                  !askedForRunningWork &&
+                  chatBecameBusy()
+                ) {
+                  askedForRunningWork = true
+                  useRunningTerminalCloseConfirmStore
+                    .getState()
+                    .requestRunningTerminalCloseConfirm({
+                      terminalTabId: createBrowserUuid(),
+                      copyKind: 'chat-agent',
+                      onConfirm: closeConfirmed,
+                      onCancel: resolve
+                    })
+                  return
+                }
+                closeConfirmed()
+              }
+              if (busy ? skipRunning : !confirmIdle) {
                 return confirmed()
               }
               useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
                 // Consent belongs to this attempt; a reused tab ID must not inherit its dialog.
                 terminalTabId: createBrowserUuid(),
-                copyKind: 'chat-agent',
+                copyKind: busy ? 'chat-agent' : 'idle-chat',
                 onConfirm: confirmed,
                 onCancel: resolve
               })
@@ -96,6 +134,7 @@ export function createWorkspaceTabCloseCommands({
       closeTerminalTab(item.entityId, {
         reason: 'user',
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
+        ...(opts?.skipIdleCloseConfirm ? { skipIdleCloseConfirm: true } : {}),
         ...(whenEmptied ? { onClosed: whenEmptied } : {})
       })
       return

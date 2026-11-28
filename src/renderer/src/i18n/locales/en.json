@@ -1451,7 +1451,9 @@
         "automation": "Deleting an automation",
         "title": "Confirmations",
         "running": "Closing a running chat or terminal",
-        "chat": "Deleting a chat"
+        "chat": "Deleting a chat",
+        "idle": "Closing an idle tab",
+        "idleHelp": "Ask before closing a terminal or chat tab that has nothing running."
       },
       "pages": {
         "folder": "Workspace folder",
@@ -1492,7 +1494,9 @@
           "custom": "custom",
           "indentation": "indentation",
           "long_lines": "long lines",
-          "about": "about"
+          "about": "about",
+          "idle": "idle",
+          "empty": "empty"
         }
       },
       "cli": {
@@ -9663,7 +9667,8 @@
         "GeneralPane": {
           "editor_preview_tabs": "Reuse a preview tab when browsing files",
           "confirm_running_work_close": "Confirm before closing active chats or terminals",
-          "5cb5475664": "Confirm before closing pinned tabs"
+          "5cb5475664": "Confirm before closing pinned tabs",
+          "confirm_idle_tab_close": "Confirm before closing idle tabs"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -24527,7 +24532,11 @@
           "agentWorkStops": "Its current work stops and won’t resume.",
           "sleepWorkspaceInstead": "Sleep workspace",
           "stopAgentSentence": "Stop agent",
-          "stopAndClose": "Stop and close"
+          "stopAndClose": "Stop and close",
+          "closeIdleChatTitle": "Close this chat?",
+          "closeIdleTabTitle": "Close this tab?",
+          "closeIdleDescription": "Nothing is running in it.",
+          "closeIdleButton": "Close"
         }
       }
     },
