@@ -198,8 +198,8 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       finish({ segments: [], ok: false, failureReason: 'timeout' })
     }, SPAWN_TIMEOUT_MS)
 
-    const onStdoutData = (chunk: Buffer): void => {
-      stdout += chunk.toString('utf8')
+    const onStdoutData = (chunk: string): void => {
+      stdout += chunk
     }
 
     const onError = (): void => {
@@ -215,7 +215,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       finish({ segments, ok: true, failureReason: 'none' })
     }
 
-    child.stdout?.on('data', onStdoutData)
+    child.stdout?.setEncoding('utf8').on('data', onStdoutData)
     child.on('error', onError)
     child.on('close', onClose)
   })
