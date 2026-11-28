@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { resolveWorktreeResourceTarget } from '@/runtime/hosts/platform/execution-host-facts'
 import {
   AGENT_HOOK_TARGETS,
   type AgentHookTarget
@@ -98,6 +100,12 @@ function enqueue(agent: string): void {
   void showNext()
 }
 
+// Consent covers this computer only; an SSH or remote host keeps installing hooks itself.
+function isLocalWorktree(state: AppState, worktreeId: string): boolean {
+  const host = resolveWorktreeResourceTarget(state, worktreeId).host
+  return host === null || host.kind === 'local'
+}
+
 /** Agents a card could still ask about this run; empty once all are answered or hooks are off. */
 function wantedAgents(): ReadonlySet<string> {
   const settings = useAppStore.getState().settings
@@ -133,7 +141,7 @@ function followSettingsAnswers(): () => void {
 
 /** Watches terminals for each agent's first appearance this run; returns the unsubscribe. */
 export function startAgentHookConsentWatch(): () => void {
-  const stopWatch = watchAgentTerminalArrivals(enqueue, wantedAgents)
+  const stopWatch = watchAgentTerminalArrivals(enqueue, wantedAgents, isLocalWorktree)
   const stopFollow = followSettingsAnswers()
   return () => {
     stopWatch()

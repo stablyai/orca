@@ -70,7 +70,9 @@ export function startOrcadManagedAgentHooks(
       writeConsent: (agentHookConsent) =>
         store.updateSettings({ agentHookConsent }, { notifyListeners: true }),
       isQuitting: () => stopping,
-      shouldHydrateShellPath
+      shouldHydrateShellPath,
+      // Consent is asked on the desktop for this computer only; remote servers install as before.
+      grantUnasked: true
     })
   )
   // Grok's, Cursor's and Droid's own MCP files follow this host's list; off with its switch.

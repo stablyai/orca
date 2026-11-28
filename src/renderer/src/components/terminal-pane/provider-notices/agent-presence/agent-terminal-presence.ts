@@ -70,30 +70,34 @@ export function whenAgentTerminalAppears(agent: NoticeAgent, onAppear: () => voi
   return unsubscribe
 }
 
-/** The wanted agent ids running in a terminal now, from the same three sources as `hasAgentTerminal`. */
-function collectAgentTerminalIds(state: AppState, wanted: ReadonlySet<string>): Set<string> {
+/** Wanted agent ids running in a terminal of an accepted workspace, from the same three sources as `hasAgentTerminal`. */
+function collectAgentTerminalIds(
+  state: AppState,
+  wanted: ReadonlySet<string>,
+  acceptWorktree: (state: AppState, worktreeId: string) => boolean
+): Set<string> {
   const agents = new Set<string>()
-  const take = (agent: string | null | undefined): void => {
-    if (agent && wanted.has(agent)) {
-      agents.add(agent)
-    }
+  const acceptPane = (paneKey: string): boolean => {
+    const worktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, paneKeyTabId(paneKey))
+    return worktreeId !== null && acceptWorktree(state, worktreeId)
   }
-  for (const tabs of Object.values(state.tabsByWorktree)) {
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
-      take(tab.launchAgent)
+      if (tab.launchAgent && wanted.has(tab.launchAgent) && acceptWorktree(state, worktreeId)) {
+        agents.add(tab.launchAgent)
+      }
     }
   }
+  // A pane key only counts when it belongs to a terminal tab; native chat tabs run no CLI.
   for (const [paneKey, entry] of state.agentStatusByPaneKey.entries()) {
-    if (
-      entry.agentType &&
-      wanted.has(entry.agentType) &&
-      isTerminalTab(state, paneKeyTabId(paneKey))
-    ) {
+    if (entry.agentType && wanted.has(entry.agentType) && acceptPane(paneKey)) {
       agents.add(entry.agentType)
     }
   }
-  for (const entry of Object.values(state.paneForegroundAgentByPaneKey)) {
-    take(entry.agent)
+  for (const [paneKey, entry] of Object.entries(state.paneForegroundAgentByPaneKey)) {
+    if (entry.agent && wanted.has(entry.agent) && acceptPane(paneKey)) {
+      agents.add(entry.agent)
+    }
   }
   return agents
 }
@@ -107,7 +111,8 @@ const ARRIVAL_SCAN_MS = 1000
  */
 export function watchAgentTerminalArrivals(
   onAppear: (agent: string) => void,
-  wanted: () => ReadonlySet<string>
+  wanted: () => ReadonlySet<string>,
+  acceptWorktree: (state: AppState, worktreeId: string) => boolean = () => true
 ): () => void {
   const seen = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -117,7 +122,7 @@ export function watchAgentTerminalArrivals(
     if (pending.size === 0) {
       return
     }
-    for (const agent of collectAgentTerminalIds(useAppStore.getState(), pending)) {
+    for (const agent of collectAgentTerminalIds(useAppStore.getState(), pending, acceptWorktree)) {
       seen.add(agent)
       onAppear(agent)
     }

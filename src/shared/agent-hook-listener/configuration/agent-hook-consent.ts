@@ -75,3 +75,9 @@ export function parseAgentHookConsent(value: unknown): AgentHookConsent {
   }
   return consent
 }
+
+/** Every agent not yet asked, recorded as granted; a decline stays. Servers have no card to ask. */
+export function withUnaskedAgentsGranted(current: AgentHookConsent | undefined): AgentHookConsent {
+  const unasked = AGENT_HOOK_TARGETS.filter((agent) => current?.[agent] === undefined)
+  return withAgentHookConsent(current, unasked, 'granted')
+}

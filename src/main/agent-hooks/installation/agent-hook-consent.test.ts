@@ -120,6 +120,27 @@ describe('agent hook consent', () => {
     expect(calls.removed).toEqual([])
   })
 
+  it('a server startup installs every unasked agent as before, keeping a decline', async () => {
+    const codexDeclined: AgentHookConsent = { codex: 'declined' }
+    let current = { ...settings, agentHookConsent: codexDeclined }
+    reconcileStartupManagedAgentHooks({
+      getSettings: () => current,
+      writeConsent: (agentHookConsent) => {
+        current = { ...current, agentHookConsent }
+      },
+      isQuitting: () => false,
+      shouldHydrateShellPath: false,
+      grantUnasked: true
+    })
+    await vi.waitFor(() => expect(calls.installed.length).toBe(AGENT_HOOK_TARGETS.length - 1))
+
+    expect(new Set(calls.installed)).toEqual(
+      new Set(AGENT_HOOK_TARGETS.filter((agent) => agent !== 'codex'))
+    )
+    expect(current.agentHookConsent.codex).toBe('declined')
+    expect(calls.removed).toEqual([])
+  })
+
   it('offers an undecided agent and a decline never leaves hooks, with a class-backed store', async () => {
     // Why a class: the real Store reads `this`, which a detached method reference loses.
     class Store {
