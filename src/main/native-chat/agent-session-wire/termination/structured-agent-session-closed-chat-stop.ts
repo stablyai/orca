@@ -1,4 +1,3 @@
-import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import {
   stopStructuredAgentSessionAgentUnderSerialize,
   type StructuredAgentSessionCloseCause,
@@ -16,8 +15,8 @@ export async function stopClosedChat(
   const running = session?.child
   await stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, { cause })
   const ended = session?.lastEndedChild
-  // The close's own cause decides: one that only joined another stop (a workspace sleep's) is not a person's.
-  if (cause === 'user-close' && running && ended?.rootGone && sameProviderChild(ended, running)) {
+  // This close ended a live provider only when both causes are a person's: one that joined another stop did not.
+  if (cause === 'user-close' && running && ended?.cause === 'user-close') {
     context.deps.onUserClosedProvider?.({ sessionId, fence: ended.fence })
   }
 }

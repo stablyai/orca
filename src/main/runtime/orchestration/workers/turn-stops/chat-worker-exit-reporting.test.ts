@@ -363,6 +363,16 @@ it('fails the Dispatch and tells the coordinator once when a person closes a run
   expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('failed')
 })
 
+/** The provider outlives this stop, which keeps its cause on the still-live child. */
+async function leaveStopUnproven(
+  worker: Awaited<ReturnType<typeof startWorker>>,
+  stop: () => Promise<void>
+) {
+  worker.current.closeSession.mockResolvedValueOnce(false)
+  await expect(stop()).rejects.toThrow()
+  expect(worker.current.host.collaboratorsForTests().sessions.get(SESSION)?.child).toBeTruthy()
+}
+
 it.each([
   [
     'an Orca eviction',
@@ -371,10 +381,27 @@ it.each([
   [
     'an Orca eviction that joins a workspace sleep stop',
     async (worker: Awaited<ReturnType<typeof startWorker>>) => {
-      // Sleep stops the provider as a user close without this host close's report.
-      const slept = worker.lifetime.stopAgent(SESSION, { cause: 'user-close' })
+      // Sleep's stop is left unproven, so the eviction joins its 'user-close' on the live provider.
+      await leaveStopUnproven(worker, () =>
+        worker.lifetime.stopAgent(SESSION, { cause: 'user-close' })
+      )
       await worker.current.host.close(SESSION, 'evict')
-      await slept
+    }
+  ],
+  [
+    "a person's close that joins an unproven Stop",
+    async (worker: Awaited<ReturnType<typeof startWorker>>) => {
+      await leaveStopUnproven(worker, () =>
+        worker.lifetime.stopAgent(SESSION, { recorded: 'user-stop' })
+      )
+      await worker.current.host.close(SESSION, 'user-close')
+    }
+  ],
+  [
+    "a person's close after workspace sleep already stopped the provider",
+    async (worker: Awaited<ReturnType<typeof startWorker>>) => {
+      await worker.lifetime.stopAgent(SESSION, { cause: 'user-close' })
+      await worker.current.host.close(SESSION, 'user-close')
     }
   ],
   [
@@ -382,7 +409,7 @@ it.each([
     (worker: Awaited<ReturnType<typeof startWorker>>) =>
       worker.current.host.flushAllStreamedEvents({ trigger: 'quit' })
   ]
-])('sends nothing when %s ends a running chat worker', async (_, end) => {
+])('sends no closed-worker message for %s', async (_, end) => {
   const worker = await startWorker()
   await end(worker)
   expect(await worker.readReports()).toEqual([])
