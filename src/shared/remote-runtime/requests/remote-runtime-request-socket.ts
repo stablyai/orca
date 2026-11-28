@@ -106,7 +106,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
             'Timed out waiting for the remote Orca runtime to respond.',
             {
               pairingStage: router.pairingStage,
-              data: keyedRequestUnsent ? { requestSent: false } : undefined
+              ...(keyedRequestUnsent ? { data: { requestSent: false }, requestUnsent: true } : {})
             }
           )
         )

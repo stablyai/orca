@@ -7,6 +7,9 @@ export class RemoteRuntimeClientError extends Error {
   readonly data?: unknown
   readonly pairingStage?: RemoteRuntimePairingStage
   readonly closeCode?: number
+  /** This Orca's own proof that the keyed request never left it. A field, not `data`: data can come
+   *  from a server's answer, and a server must not be able to claim this for us. */
+  readonly requestUnsent?: boolean
 
   constructor(
     code: string,
@@ -15,6 +18,7 @@ export class RemoteRuntimeClientError extends Error {
       data?: unknown
       pairingStage?: RemoteRuntimePairingStage
       closeCode?: number
+      requestUnsent?: boolean
     }
   ) {
     super(message)
@@ -23,5 +27,6 @@ export class RemoteRuntimeClientError extends Error {
     this.data = details?.data
     this.pairingStage = details?.pairingStage
     this.closeCode = details?.closeCode
+    this.requestUnsent = details?.requestUnsent
   }
 }

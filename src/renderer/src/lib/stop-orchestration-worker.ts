@@ -102,8 +102,10 @@ function reportFailure(
   )
 }
 
+// `runtime_unavailable`: this Orca's status check timing out, its SSH tunnel failing, or its backoff.
 const NOT_CONNECTED_CODES: ReadonlySet<string> = new Set([
   'remote_runtime_unavailable',
+  'runtime_unavailable',
   'runtime_timeout',
   'runtime_manually_disconnected'
 ])
@@ -120,9 +122,11 @@ function unconfirmedStop(response: unknown): { reason: string | null; helper: bo
   if (!['stopped', 'succeeded', 'failed'].includes(state ?? '')) {
     return { reason: lastError || warning || next || null, helper: false }
   }
-  const helper = helpers?.find((entry) => !isHelperStopDone(entry))
-  if (helperStopError || helper) {
-    return { reason: helperStopError || helper?.lastError || null, helper: true }
+  const pending = helpers?.filter((entry) => !isHelperStopDone(entry)) ?? []
+  if (helperStopError || pending.length > 0) {
+    // A helper that says why (unconfirmed) over one that can't yet (still starting).
+    const reason = pending.find((entry) => entry.lastError)?.lastError
+    return { reason: helperStopError || reason || null, helper: true }
   }
   return null
 }

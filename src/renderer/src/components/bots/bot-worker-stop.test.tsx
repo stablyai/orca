@@ -178,6 +178,22 @@ it('names the paired computer when its version check fails before the stop', asy
   expect(options).toBeUndefined()
 })
 
+// This Orca's own status check gives up (its waiter timed out, its SSH tunnel failed, or it is backing
+// off) with `runtime_unavailable`: still before the stop, so the notice names the computer.
+it("names the paired computer when this Orca's status check can't reach it", async () => {
+  pairedCall.mockImplementation(async (args: { method: string }) =>
+    args.method === 'status.get'
+      ? refused('runtime_unavailable', 'Timed out waiting for the remote Orca runtime.')
+      : answered({ dispatchId: dispatch, state: 'stopped' })
+  )
+  clickChipStop(pairedBot)
+  const [title, options] = await toastShown()
+  expect(stopCalls()).toHaveLength(0)
+  expect(title).toEqual(expect.stringContaining('M4 Air'))
+  expect(title).toEqual(expect.stringContaining('Prod scan'))
+  expect(options).toBeUndefined()
+})
+
 // Sent, then no reply in time: the worker may be stopped, so this is unconfirmed, not unreachable.
 it('says the stop is unconfirmed when the paired computer times out after the send', async () => {
   pairedAnswers(
@@ -255,6 +271,14 @@ it('says so when a helper under the stopped worker is still starting', async () 
   clickChipStop(pairedBot)
   const [title] = await toastShown()
   expect(title).toEqual(expect.stringContaining('Prod scan'))
+})
+
+// One helper can't say why yet (still starting), a later one can: the notice keeps the reason.
+it('keeps the reason of an unconfirmed helper listed after a starting one', async () => {
+  pairedAnswers(stoppedWith(helperOf('starting'), helperOf('unconfirmed', 'C did not answer.')))
+  clickChipStop(pairedBot)
+  const [, options] = await toastShown()
+  expect(options).toEqual({ description: 'C did not answer.' })
 })
 
 it('is a clean stop when the only helper left running is one the user kept open', async () => {

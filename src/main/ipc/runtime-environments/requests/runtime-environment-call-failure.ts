@@ -44,15 +44,18 @@ export function runtimeEnvironmentCallFailure(
       message: error.message,
       data: clientMadeFailureData(
         error instanceof RemoteRuntimeClientError ? error.data : undefined,
-        error instanceof RemoteRuntimeClientError && failedBeforeAuth(error)
+        error instanceof RemoteRuntimeClientError && provenUnsent(error)
       )
     },
     _meta: { runtimeId: environment.runtimeId }
   }
 }
 
-/** A failure before the host authenticated us, when nothing but the handshake has been sent. (The
- *  socket's own keyed-request proof, `requestSent: false`, is in its data, which is kept.) */
-function failedBeforeAuth(error: RemoteRuntimeClientError): boolean {
-  return error.pairingStage !== undefined && error.pairingStage !== 'runtime'
+/** This Orca's own proof that nothing but the handshake left it: the socket's typed keyed-request
+ *  flag, or a failure before the host authenticated us. Never `error.data`, which a server can fill. */
+function provenUnsent(error: RemoteRuntimeClientError): boolean {
+  return (
+    error.requestUnsent === true ||
+    (error.pairingStage !== undefined && error.pairingStage !== 'runtime')
+  )
 }

@@ -89,13 +89,49 @@ it('marks a failure before the host answered the handshake as unsent', async () 
   expect(await failureData(error)).toEqual({ clientMade: true, requestSent: false })
 })
 
-// The socket's own keyed-request proof is kept, never overwritten by the marker.
+// The socket's own keyed-request proof (its typed flag) is kept.
 it("keeps the socket's proof that a keyed request was never sent", async () => {
   const error = new RemoteRuntimeClientError('runtime_timeout', 'Timed out.', {
     pairingStage: 'runtime',
-    data: { requestSent: false }
+    data: { requestSent: false },
+    requestUnsent: true
   })
   expect(await failureData(error)).toEqual({ clientMade: true, requestSent: false })
+})
+
+// An error's data can be a server's answer (a shared-control failure keeps it), forwarded from a
+// third computer: it can't claim this Orca's proof, whatever it says.
+it('never takes a delivery proof from the data of an error this Orca passes on', async () => {
+  const error = new RemoteRuntimeClientError('remote_runtime_unavailable', 'C is unreachable.', {
+    pairingStage: 'runtime',
+    data: { server: 'C', clientMade: true, requestSent: false }
+  })
+  expect(await failureData(error)).toEqual({ server: 'C', clientMade: true })
+})
+
+// The paired computer answered: its data can't say this Orca made the failure, or that the stop
+// never left this computer, whether it claims so itself or forwards another computer's claim.
+it.each([
+  ['the paired computer itself', { clientMade: true, requestSent: false }, {}],
+  [
+    'a third computer, forwarded',
+    { server: 'C', clientMade: true, requestSent: false },
+    { server: 'C' }
+  ]
+])("strips this Orca's provenance from an answer made by %s", async (_from, data, kept) => {
+  vi.mocked(callRuntimeEnvironment).mockResolvedValue({
+    id: 'rpc',
+    ok: false,
+    error: { code: 'remote_runtime_unavailable', message: 'Could not reach C.', data },
+    _meta: { runtimeId: 'runtime_m4' }
+  })
+  const response = await call(stop)
+  expect(response).toEqual({
+    id: 'rpc',
+    ok: false,
+    error: { code: 'remote_runtime_unavailable', message: 'Could not reach C.', data: kept },
+    _meta: { runtimeId: 'runtime_m4' }
+  })
 })
 
 // After the host authenticated us the request may have gone out: no proof either way.
