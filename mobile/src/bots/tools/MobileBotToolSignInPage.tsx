@@ -48,12 +48,16 @@ export function MobileBotToolSignInPage(props: {
       signIn.finish(pasted)
     }
   }
+  // This phone's shell can't open a link this long; the same attempt finishes from the browser.
+  const copying = signIn.failure !== 'needs-update' && !!attempt?.url && !signIn.opensHere
   const steps = [
     {
       title: t('bots.tools.signIn.action', 'Sign in'),
-      detail: t('bots.tools.signIn.step1Detail', 'Sign in to {{app}} and allow access.', {
-        app: props.app
-      })
+      detail: copying
+        ? t('bots.tools.signIn.step1Copy', 'Copy the link below and open it in your browser.')
+        : t('bots.tools.signIn.step1Detail', 'Sign in to {{app}} and allow access.', {
+            app: props.app
+          })
     },
     {
       title: t('bots.tools.signIn.step2', 'Copy the address'),
@@ -102,8 +106,7 @@ export function MobileBotToolSignInPage(props: {
             host: props.hostName
           })}
         </SettingsNote>
-      ) : attempt?.url && !signIn.opensHere ? (
-        // This phone's shell can't open a link this long; the same attempt finishes from the browser.
+      ) : copying ? (
         <SettingsSection
           footer={t('bots.tools.signIn.pasteInBrowser', 'Paste it into your browser to sign in.')}
         >
