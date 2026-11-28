@@ -104,7 +104,7 @@ export function getClonePathComparisonKey(clonePath: string): string {
   return normalizeRuntimePathForComparison(resolvedClonePath)
 }
 
-/** Creates the clone's parent folder; fresh installs may lack it. */
+/** Creates the parent folder for a clone or new project; fresh installs may lack it. */
 export async function ensureCloneDestination(destination: string): Promise<void> {
   try {
     await mkdir(destination, { recursive: true })

@@ -9,9 +9,14 @@ function isEditableElement(target: EventTarget | null): target is HTMLElement {
   )
 }
 
-export function useMobilePageEscape(onClose: () => void): void {
+/** Null leaves Escape alone (a pane embedded in Settings). */
+export function useMobilePageEscape(onClose: (() => void) | null): void {
   // Why: mirror Automations/Tasks — Esc first exits field focus, then closes the page.
   useEffect(() => {
+    if (!onClose) {
+      return
+    }
+    const close = onClose
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key !== 'Escape' || event.defaultPrevented) {
         return
@@ -26,7 +31,7 @@ export function useMobilePageEscape(onClose: () => void): void {
         return
       }
       event.preventDefault()
-      onClose()
+      close()
     }
     // Why: bubble phase lets Radix popovers/selects consume Escape first.
     window.addEventListener('keydown', onKeyDown)

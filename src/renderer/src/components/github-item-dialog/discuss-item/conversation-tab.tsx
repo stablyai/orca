@@ -169,7 +169,7 @@ export function ConversationTab({
         sourceContext,
         projectOrigin,
         body: resolvedBodyDraft,
-        parsedSlug: bodySlug
+        parsedSlug: prRepo
       })
       onBodyUpdated(resolvedBodyDraft, representation)
       setBodyEditing(false)
@@ -193,9 +193,9 @@ export function ConversationTab({
     bodyChanged,
     resolvedBodyDraft,
     bodySaving,
-    bodySlug,
     item,
     onBodyUpdated,
+    prRepo,
     projectOrigin,
     repoPath,
     sourceContext
@@ -308,7 +308,7 @@ export function ConversationTab({
                   repoId: item.repoId,
                   sourceContext,
                   type: item.type,
-                  prRepo: bodySlug
+                  prRepo
                 })
           }}
           item={item}

@@ -75,7 +75,8 @@ export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
-  options?: { deps: StructuredSessionActivationDeps; retry: () => Promise<unknown> },
+  /** `retry`: what Retry repeats, so a caller with a prerequisite step repeats it too. */
+  options?: { deps?: StructuredSessionActivationDeps; retry: () => Promise<unknown> },
   target?: RuntimeClientTarget
 ): Promise<boolean> {
   if (!session.structuredSession) {
@@ -84,7 +85,7 @@ export async function activateAiVaultStructuredSession(
   // A group member's session reopens the room it talks in, not the member's own chat.
   const room = botGroupRoomOfRow(readBotGroups(), session)
   if (room) {
-    if (!options?.deps.signal) {
+    if (!options?.deps?.signal) {
       cancelPendingBotThreadOpen()
     }
     await openBotGroupRoom(room.group, room.roomId, room.label)

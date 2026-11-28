@@ -14,10 +14,10 @@ import { journalLifecycleItemMutation } from '../../native-chat/agent-session-jo
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
-  createHistoryCatchUpBatch,
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import { createHistoryCatchUpBatches } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up-batches'
 import { LEGACY_IMPORT_BLOCK_LIMITS } from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import { legacyItemBody } from '../../native-chat/agent-session-journal/history-import/journal-replacement-items'
 import type {
@@ -40,6 +40,11 @@ import type { ClaudeTranscriptItemReader } from './claude-transcript-item-reader
 import { idleClaudeJournalTurn } from '../structured/turns/claude-session-state-turn-over'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 import { claudeTranscriptRowFrame } from './claude-local-command-reply'
+import {
+  createTranscriptCompactionRecovery,
+  isCompactionRow,
+  isRecoverableClaudeBoundary
+} from './claude-transcript-compaction-recovery'
 
 export function createClaudeTranscriptImportPlan(input: {
   sessionId: string
@@ -56,6 +61,7 @@ export function createClaudeTranscriptImportPlan(input: {
   let historicalScope: AgentJournalTurnScope | null = null
   let sourceObservedAt: number | undefined
   let workAt: number | undefined
+  const compactions = createTranscriptCompactionRecovery()
   const matchSource = (identities: AgentJournalItemIdentity[]) => {
     const matches = identities.flatMap((identity) => {
       const item = saved(agentJournalItemKey(identity))
@@ -73,6 +79,7 @@ export function createClaudeTranscriptImportPlan(input: {
       aliases.set(agentJournalItemKey(candidate), identity)
     }
     if (item) {
+      compactions.sawSavedHistory()
       const scope = scopeOf(item)
       historicalScope = scope.kind === 'unknown' ? null : scope
     }
@@ -89,14 +96,9 @@ export function createClaudeTranscriptImportPlan(input: {
     body: AgentJournalItemBody,
     options: StructuredAgentSessionItemAppendOptions
   ) => {
-    pending.push([
-      aliases.get(agentJournalItemKey(rawIdentity)) ?? rawIdentity,
-      body,
-      options,
-      historicalScope,
-      sourceObservedAt,
-      workAt
-    ])
+    const identity = aliases.get(agentJournalItemKey(rawIdentity)) ?? rawIdentity
+    compactions.proposed(agentJournalItemKey(identity), body)
+    pending.push([identity, body, options, historicalScope, sourceObservedAt, workAt])
     if (pending.length > HISTORY_CATCH_UP_MAX_OPERATIONS) {
       throw new Error('too-large')
     }
@@ -130,6 +132,7 @@ export function createClaudeTranscriptImportPlan(input: {
     workAt = observedAt
     idleClaudeJournalTurn(translator, input.sessionId, input.providerSessionId, observedAt)
     historicalScope = null
+    compactions.turnEnded()
     workAt = undefined
   }
   const uuids: string[] = []
@@ -147,7 +150,8 @@ export function createClaudeTranscriptImportPlan(input: {
         const uuid = String(row.uuid)
         const parsedAt = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
         sourceObservedAt = Number.isFinite(parsedAt) && parsedAt > 0 ? parsedAt : undefined
-        if (!envelope && !queued) {
+        const boundary = isRecoverableClaudeBoundary(row)
+        if (!envelope && !queued && !boundary) {
           if (row.type === 'system' && row.subtype === 'turn_duration') {
             idle(sourceObservedAt)
           }
@@ -189,7 +193,7 @@ export function createClaudeTranscriptImportPlan(input: {
           if (hasWork && sourceObservedAt !== undefined) {
             workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
           }
-          if (hasWork || envelope?.role === 'assistant') {
+          if (hasWork || envelope?.role === 'assistant' || boundary) {
             translator.handle({
               type: 'message',
               sessionId: input.sessionId,
@@ -215,6 +219,7 @@ export function createClaudeTranscriptImportPlan(input: {
         }
         const existing = saved(agentJournalItemKey(identity)) ?? localPrompt(identity.uuid)
         if (existing) {
+          compactions.sawSavedHistory()
           historicalScope = promptScope(existing, queued) ?? historicalScope
           return
         }
@@ -239,18 +244,33 @@ export function createClaudeTranscriptImportPlan(input: {
         await flushAppends()
       }
     },
-    finish: async (): Promise<HistoryCatchUpPlan | null> => {
+    finish: async (): Promise<HistoryCatchUpPlan[] | null> => {
       input.check()
       idle()
       translator.flush()
       await flushAppends()
-      // A row that renders nothing adds no divider either.
+      compactions.withdrawStale(mutations, saved)
+      // A row that renders nothing adds no divider either; a compaction row alone is not outside work.
       const rows = [...mutations.values()]
-      const batch = createHistoryCatchUpBatch()
+      const revised = new Set(
+        rows.flatMap((row) => {
+          const key = agentJournalItemKey(row.identity)
+          return row.kind === 'item' && saved(key) ? [key] : []
+        })
+      )
+      // Every commit checks the items the rows depend on that none of them rewrites.
+      const batch = createHistoryCatchUpBatches((first) => {
+        for (const [key, item] of dependencies) {
+          if (!revised.has(key)) {
+            first.expectItem(key, { canonicalItemId: item.itemId, revision: item.revision })
+          }
+        }
+      })
       const firstCreated = rows.find(
         (row) =>
           row.kind === 'item' &&
           row.body.kind !== 'turn' &&
+          !isCompactionRow(row.body) &&
           !dependencies.has(agentJournalItemKey(row.identity))
       )
       if (input.rewound !== null && firstCreated) {
@@ -267,27 +287,20 @@ export function createClaudeTranscriptImportPlan(input: {
           )
         )
       }
-      const revised = new Set<string>()
       for (const row of rows) {
-        const key = agentJournalItemKey(row.identity)
-        const existing = saved(key)
+        const existing = saved(agentJournalItemKey(row.identity))
         if (existing && row.kind === 'item') {
           batch.revise(row, { canonicalItemId: existing.itemId, revision: existing.revision })
-          revised.add(key)
         } else {
           batch.push(row)
         }
+        await batch.pause()
       }
-      for (const [key, item] of dependencies) {
-        if (!revised.has(key)) {
-          batch.expectItem(key, { canonicalItemId: item.itemId, revision: item.revision })
-        }
-      }
-      return batch.finish('claude-history-import', [
+      input.check()
+      return await batch.finish('claude-history-import', [
         input.epoch,
         input.providerSessionId,
-        uuids,
-        rows
+        uuids
       ])
     },
     dispose: () => translator.dispose()

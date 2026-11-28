@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult
@@ -14,10 +15,13 @@ import { requireReachableGitRoute } from '../../../providers/execution-host-prov
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
-export function registerGitRemoteCompareHandlers(context: FilesystemHandlerContext): void {
+export function registerGitRemoteCompareHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'git:branchCompare',
     async (
       _event,
@@ -45,7 +49,7 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:commitCompare',
     async (
       _event,

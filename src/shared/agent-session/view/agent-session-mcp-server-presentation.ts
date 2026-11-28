@@ -64,3 +64,37 @@ export function agentSessionMcpRowFailure(
     ? null
     : { kind: 'message', message: failure.message }
 }
+
+/** The ids of an at-rest chat's Orca servers its client can check before the agent starts, as
+ *  one key (empty when there are none). */
+export function uncheckedOrcaMcpServerIds(servers: readonly AgentSessionMcpServer[]): string {
+  return servers
+    .flatMap((server) => (server.orca && server.status === 'not-started' ? [server.orca.id] : []))
+    .sort()
+    .join(',')
+}
+
+/** Names one problems check, so cancelling it leaves the window's other checks running. */
+export function newMcpProblemsRequestId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** Orca's check of its host list (`mcpServers.problems`, by server id) on an at-rest chat's rows.
+ *  The check signs in as Claude Code or Codex, so only their chats take its sign-in verdict. */
+export function withOrcaMcpProblems(
+  servers: readonly AgentSessionMcpServer[],
+  problems: Readonly<Record<string, { kind: 'sign-in' | 'failed' | 'unconfirmed' }>>,
+  agent: string
+): readonly AgentSessionMcpServer[] {
+  if (Object.keys(problems).length === 0) {
+    return servers
+  }
+  return servers.map((server) => {
+    const problem = server.orca && server.status === 'not-started' && problems[server.orca.id]
+    // Orca's own sign-in state is the truth for a server it signs in to, as in its settings.
+    const notTheirs = server.orca?.signsIn || (agent !== 'claude' && agent !== 'codex')
+    return !problem || problem.kind === 'unconfirmed' || (problem.kind === 'sign-in' && notTheirs)
+      ? server
+      : { ...server, status: problem.kind === 'sign-in' ? 'needs-auth' : 'failed' }
+  })
+}

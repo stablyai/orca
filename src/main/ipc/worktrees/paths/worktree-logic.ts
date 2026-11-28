@@ -16,7 +16,11 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export { sanitizeWorktreeName, sanitizeWorktreeBranchName } from './worktree-name-sanitization'
+export {
+  getWorktreeNameGitPlatform,
+  sanitizeWorktreeName,
+  sanitizeWorktreeBranchName
+} from './worktree-name-sanitization'
 
 export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {
   const resolvedWorkspaceDir = resolve(workspaceDir)

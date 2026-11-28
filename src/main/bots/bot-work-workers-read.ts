@@ -3,7 +3,6 @@ import {
   resolveWorkerLineage,
   type WorkerLineage
 } from '../runtime/orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import { sessionWorkerIsWorking } from '../../shared/orchestration-session-workers'
 import { readServerOwnedWorker } from './bot-work-server-owned-worker'
 import type { BotWorkRuntime } from './bot-work-runtime'
@@ -36,6 +35,8 @@ export async function readWorkers(
     })
   )
   const readable = [...new Set([...latestOf.values()].flatMap((latest) => latest?.id ?? []))]
+  const { readDispatchWorkers } =
+    await import('../runtime/rpc/methods/orchestration/worker/session-workers-method')
   const workerReads = await readDispatchWorkers(runtime, readable, { lostTerminalsEnded: true })
   const reads = new Map(workerReads.map((entry) => [entry.dispatchId, entry]))
   const workers = new Map<string, BotWorkWorker | null>()
