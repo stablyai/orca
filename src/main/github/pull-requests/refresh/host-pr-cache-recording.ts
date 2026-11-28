@@ -25,42 +25,39 @@ export function hostPRCacheKey(repo: HostPRCacheRepo, branch: string): string | 
   return normalizedBranch ? getGitHubPRCacheKeyCandidates(repo, normalizedBranch)[0] : null
 }
 
-/** Records a served PR read into this host's own cache: a host with no renderer has no other writer (#50758). */
+/** Records a served PR read into this host's own cache: a host with no renderer has no other writer (#50758).
+ *  Returns the key when the read answered, written or not, so callers can count it as checked. */
 export function recordHostPROutcome(
   store: HostPRCacheStore,
   repo: HostPRCacheRepo,
   branch: string,
   outcome: PRSnapshotReply,
   request: HostPRReadRequest = {}
-): void {
+): string | null {
   // Errors and revalidation receipts carry no answer; keep the last known one.
   if (!('kind' in outcome) || (outcome.kind !== 'found' && outcome.kind !== 'no-pr')) {
-    return
+    return null
   }
   const key = hostPRCacheKey(repo, branch)
   if (!key) {
-    return
+    return null
   }
   const data = outcome.kind === 'found' ? outcome.pr : null
   const cache = store.getGitHubCache()
   const previous = cache.pr[key]
-  if (previous && previous.fetchedAt > outcome.fetchedAt) {
-    return
+  const keepsPrevious =
+    (previous && previous.fetchedAt > outcome.fetchedAt) ||
+    (outcome.kind === 'no-pr' &&
+      preservesMergedPRForMiss(previous?.data, request, outcome.rejectedPRUrls)) ||
+    // Unchanged answers skip the write so repeated reads add no persistence churn.
+    (previous && isDeepStrictEqual(previous.data, data))
+  if (!keepsPrevious) {
+    store.setGitHubCache({
+      ...cache,
+      pr: withBoundedCacheEntry(cache.pr, key, { data, fetchedAt: outcome.fetchedAt })
+    })
   }
-  if (
-    outcome.kind === 'no-pr' &&
-    preservesMergedPRForMiss(previous?.data, request, outcome.rejectedPRUrls)
-  ) {
-    return
-  }
-  // Unchanged answers skip the write so repeated reads add no persistence churn.
-  if (previous && isDeepStrictEqual(previous.data, data)) {
-    return
-  }
-  store.setGitHubCache({
-    ...cache,
-    pr: withBoundedCacheEntry(cache.pr, key, { data, fetchedAt: outcome.fetchedAt })
-  })
+  return key
 }
 
 /** Mirrors the renderer's fallback-miss rule: a miss without a linked PR keeps a merged PR whose head is still checked out. */
@@ -78,5 +75,6 @@ function preservesMergedPRForMiss(
     return false
   }
   const head = request.currentHeadOid?.trim()
-  return !!head && (current.headSha === head || current.confirmedContainedHeadOid === head)
+  // Fail safe: a miss that can't name the checked-out head keeps the merged evidence.
+  return !head || current.headSha === head || current.confirmedContainedHeadOid === head
 }

@@ -56,11 +56,19 @@ export function createHostPRCache(deps: {
     worktrees: readonly HostPRBackfillWorktree[]
     repos: readonly Repo[]
   }>
-  readPR: (repo: Repo, branch: string, linkedPR: number, head: string | null) => Promise<unknown>
+  readPR: (
+    repo: Repo,
+    branch: string,
+    linkedPR: number,
+    head: string | null,
+    signal?: AbortSignal
+  ) => Promise<unknown>
   now?: () => number
 }): HostPRCache {
   const now = deps.now ?? Date.now
   const attemptedAt = new Map<string, number>()
+  // Last answered read per key, from any client; an unchanged answer doesn't rewrite fetchedAt.
+  const checkedAt = new Map<string, number>()
   const inFlight = new Map<string, Promise<void>>()
   let lastUnawaitedRunAt = -Infinity
 
@@ -70,9 +78,11 @@ export function createHostPRCache(deps: {
     const { worktrees, repos } = await deps.listWorktrees()
     const cache = deps.store.getGitHubCache().pr
     const at = now()
-    for (const [key, time] of attemptedAt) {
-      if (at - time >= HOST_PR_BACKFILL_TTL_MS) {
-        attemptedAt.delete(key)
+    for (const times of [attemptedAt, checkedAt]) {
+      for (const [key, time] of times) {
+        if (at - time >= HOST_PR_BACKFILL_TTL_MS) {
+          times.delete(key)
+        }
       }
     }
     const targets: BackfillTarget[] = []
@@ -106,7 +116,7 @@ export function createHostPRCache(deps: {
       ) {
         continue
       }
-      if (attemptedAt.has(key)) {
+      if (attemptedAt.has(key) || checkedAt.has(key)) {
         continue
       }
       targets.push({
@@ -120,7 +130,7 @@ export function createHostPRCache(deps: {
     return { targets, pending }
   }
 
-  const start = (targets: BackfillTarget[]): Promise<void> => {
+  const start = (targets: BackfillTarget[], signal?: AbortSignal): Promise<void> => {
     let next = 0
     const worker = async (): Promise<void> => {
       while (next < targets.length) {
@@ -128,7 +138,7 @@ export function createHostPRCache(deps: {
         attemptedAt.set(target.key, now())
         // The read's reply is recorded through `record`; a failure just waits out the TTL.
         const read = deps
-          .readPR(target.repo, target.branch, target.linkedPR, target.head)
+          .readPR(target.repo, target.branch, target.linkedPR, target.head, signal)
           .then(
             () => undefined,
             () => undefined
@@ -143,8 +153,12 @@ export function createHostPRCache(deps: {
   }
 
   return {
-    record: (repo, branch, outcome, request) =>
-      recordHostPROutcome(deps.store, repo, branch, outcome, request),
+    record: (repo, branch, outcome, request) => {
+      const key = recordHostPROutcome(deps.store, repo, branch, outcome, request)
+      if (key) {
+        checkedAt.set(key, now())
+      }
+    },
     async backfill(options = {}) {
       if (!options.wait) {
         if (now() - lastUnawaitedRunAt < HOST_PR_BACKFILL_UNAWAITED_MIN_GAP_MS) {
@@ -152,12 +166,18 @@ export function createHostPRCache(deps: {
         }
         lastUnawaitedRunAt = now()
       }
-      const { targets, pending } = await selectTargets(
-        options.worktreeIds ? new Set(options.worktreeIds) : null
-      )
-      const run = Promise.all([start(targets), ...pending]).then(() => undefined)
-      if (options.wait) {
-        await waitBounded(run, options.signal)
+      try {
+        const { targets, pending } = await selectTargets(
+          options.worktreeIds ? new Set(options.worktreeIds) : null
+        )
+        // Unawaited runs have no caller signal: at most 16 reads may finish after the reply.
+        const run = Promise.all([start(targets, options.signal), ...pending]).then(() => undefined)
+        if (options.wait) {
+          await waitBounded(run, options.signal)
+        }
+      } catch (error) {
+        // The caller's own read must go on with whatever the cache holds.
+        console.warn('[orcad] PR cache backfill failed', error)
       }
     }
   }
@@ -193,7 +213,10 @@ export function installHostPRCache(
       fallbackPRNumber?: number | null,
       acceptMergedFallbackPR?: boolean,
       currentHeadOid?: string | null,
-      reason?: 'visible'
+      reason?: 'visible',
+      userRefresh?: boolean,
+      clientKind?: undefined,
+      signal?: AbortSignal
     ): Promise<unknown>
   }
 ): void {
@@ -201,7 +224,18 @@ export function installHostPRCache(
     store,
     listWorktrees: () => runtime.listHostPRCacheWorktrees(),
     // Budgeted background reads share the coordinator's admission, pacing and rate-limit gates.
-    readPR: (repo, branch, linkedPR, head) =>
-      runtime.getRepoPRForBranch(repo.id, branch, linkedPR, null, false, head, 'visible')
+    readPR: (repo, branch, linkedPR, head, signal) =>
+      runtime.getRepoPRForBranch(
+        repo.id,
+        branch,
+        linkedPR,
+        null,
+        false,
+        head,
+        'visible',
+        undefined,
+        undefined,
+        signal
+      )
   })
 }

@@ -95,6 +95,14 @@ describe('recordHostPROutcome', () => {
     expect(readWorkspaceReviewPR(worktree, repo, store.getGitHubCache().pr)).toBeNull()
   })
 
+  it('keeps a merged PR on an unlinked miss that names no head', () => {
+    const store = memoryStore()
+    const merged = { ...pr('merged'), headSha: 'abc' }
+    recordHostPROutcome(store, repo, 'feature', { kind: 'found', pr: merged, fetchedAt: 1 })
+    recordHostPROutcome(store, repo, 'feature', { kind: 'no-pr', fetchedAt: 2 })
+    expect(readWorkspaceReviewPR(worktree, repo, store.getGitHubCache().pr)?.state).toBe('merged')
+  })
+
   it('treats a reordered but equal PR as unchanged', () => {
     const store = memoryStore()
     const { number, ...rest } = pr('open')

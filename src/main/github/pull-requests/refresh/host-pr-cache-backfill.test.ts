@@ -102,7 +102,7 @@ describe('host PR cache backfill', () => {
     await hostCache.backfill({ wait: true })
     await hostCache.backfill({ wait: true })
     expect(readPR).toHaveBeenCalledTimes(1)
-    expect(readPR).toHaveBeenCalledWith(repo, 'refs/heads/stale', 7, 'stale-head')
+    expect(readPR).toHaveBeenCalledWith(repo, 'refs/heads/stale', 7, 'stale-head', undefined)
     time += HOST_PR_BACKFILL_TTL_MS
     await hostCache.backfill({ wait: true })
     expect(readPR).toHaveBeenCalledTimes(3)
@@ -119,5 +119,40 @@ describe('host PR cache backfill', () => {
     await hostCache.backfill()
     await hostCache.backfill()
     expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('counts an unchanged answer from any read as checked, without rewriting the entry', async () => {
+    let time = 1_000_000
+    const prCache = { 'repo-1::feature': { data: pr('open'), fetchedAt: 0 } }
+    const setGitHubCache = vi.fn()
+    const readPR = vi.fn(async () => undefined)
+    const hostCache = createHostPRCache({
+      store: { getGitHubCache: () => ({ pr: prCache, issue: {} }), setGitHubCache },
+      listWorktrees: async () => ({ worktrees: [worktree('feature', 7)], repos: [repo] }),
+      readPR,
+      now: () => time
+    })
+    // A desktop client's read returns the same open PR long after the stored fetchedAt.
+    hostCache.record(repo, 'feature', { kind: 'found', pr: pr('open'), fetchedAt: time })
+    await hostCache.backfill({ wait: true })
+    expect(setGitHubCache).not.toHaveBeenCalled()
+    expect(readPR).not.toHaveBeenCalled()
+    time += HOST_PR_BACKFILL_TTL_MS
+    await hostCache.backfill({ wait: true })
+    expect(readPR).toHaveBeenCalledTimes(1)
+  })
+
+  it('never fails the caller when listing worktrees fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const hostCache = createHostPRCache({
+      store: { getGitHubCache: () => ({ pr: {}, issue: {} }), setGitHubCache: vi.fn() },
+      listWorktrees: async () => {
+        throw new Error('listing failed')
+      },
+      readPR: vi.fn()
+    })
+    await expect(hostCache.backfill({ wait: true })).resolves.toBeUndefined()
+    await expect(hostCache.backfill()).resolves.toBeUndefined()
+    warn.mockRestore()
   })
 })
