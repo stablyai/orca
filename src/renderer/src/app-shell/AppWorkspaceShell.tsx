@@ -20,6 +20,7 @@ import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
 import { useRailPageFocusRecovery } from './chrome/use-rail-page-focus-recovery'
 import { RightSidebarToggle } from './chrome/RightSidebarToggle'
 import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
+import { useBotsNeedsYouInboxShortcut } from '../components/bots/needs-you-inbox/needs-you-inbox-open'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
 
@@ -48,6 +49,9 @@ const HandToBotFlow = lazy(() =>
   }))
 )
 const BotTemplatesDialog = lazy(() => import('../components/bots/templates/BotTemplatesDialog'))
+const BotsNeedsYouInboxDialog = lazy(
+  () => import('../components/bots/needs-you-inbox/BotsNeedsYouInboxDialog')
+)
 const BotShareReceiveFlow = lazy(() =>
   import('../components/bots/sharing/BotShareReceiveFlow').then((module) => ({
     default: module.BotShareReceiveFlow
@@ -129,6 +133,16 @@ function BotTemplatesMount(): React.JSX.Element | null {
   ) : null
 }
 
+function BotsNeedsYouInboxMount(): React.JSX.Element | null {
+  const open = useAppStore((s) => s.activeModal === 'bots-needs-you')
+  useBotsNeedsYouInboxShortcut()
+  return open ? (
+    <Suspense fallback={null}>
+      <BotsNeedsYouInboxDialog />
+    </Suspense>
+  ) : null
+}
+
 function HandToBotMount(): React.JSX.Element | null {
   const request = useHandToBotRequest()
   return request ? (
@@ -153,6 +167,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'plugins' ? <PluginsPage /> : null}
       <BotShareReceiveMount />
       <BotTemplatesMount />
+      <BotsNeedsYouInboxMount />
       <HandToBotMount />
       <Suspense fallback={null}>
         <GitHubInstallMount />

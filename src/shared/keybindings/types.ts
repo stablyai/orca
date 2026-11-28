@@ -134,6 +134,7 @@ export type KeybindingActionId =
   | 'botItem.back'
   | 'botItem.previous'
   | 'botItem.next'
+  | 'bots.needsYouInbox'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>

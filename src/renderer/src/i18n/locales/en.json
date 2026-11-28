@@ -26814,7 +26814,8 @@
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
       "botItemNext": "Next item",
-      "pageSearch": "Search this page"
+      "pageSearch": "Search this page",
+      "botsNeedsYouInbox": "Open Needs you inbox"
     },
     "group": {
       "global": "Global",
@@ -30978,6 +30979,32 @@
         "denied": "Access wasn’t allowed.",
         "expired": "The sign-in expired. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
+      }
+    },
+    "needsYouInbox": {
+      "title": "Needs you",
+      "open": "Needs you inbox",
+      "openCount": "Needs you inbox ({{total}})",
+      "order": {
+        "oldest": "Oldest first",
+        "bot": "By bot"
+      },
+      "close": "Close",
+      "closeTooltip": "Close · Esc",
+      "bots": "Bots",
+      "allBots": "All bots",
+      "showAllBots": "{{bot}}, show all bots",
+      "list": "Items that need you",
+      "back": "List",
+      "moreQuestions": "+{{more}}",
+      "keys": {
+        "move": "Move",
+        "answer": "Answer",
+        "reply": "Reply",
+        "open": "Open on its bot",
+        "done": "Done",
+        "snooze": "Snooze",
+        "group": "Group by bot"
       }
     }
   },

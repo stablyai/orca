@@ -31,6 +31,8 @@ export function useBotItemCommentStacked(
     return () => observer.disconnect()
   }, [stacked, field])
   const height = 'max-h-[min(132px,25cqh)] min-h-8'
+  // Why: never flex-1 and basis-full together: a utility sheet loaded later (react-grab in dev) re-declares
+  // flex-1 and would win the tie, leaving the text beside the controls.
   if (stacked) {
     return {
       slot: 'order-first basis-full',
@@ -40,7 +42,7 @@ export function useBotItemCommentStacked(
     }
   }
   return {
-    slot: '@max-[520px]/item-pane:order-first @max-[520px]/item-pane:basis-full',
+    slot: '@min-[520px]/item-pane:flex-1 @max-[520px]/item-pane:order-first @max-[520px]/item-pane:basis-full',
     inset: leads
       ? 'px-1 @max-[520px]/item-pane:px-0 @max-[520px]/item-pane:pt-0.5'
       : 'px-1 @max-[520px]/item-pane:px-0',

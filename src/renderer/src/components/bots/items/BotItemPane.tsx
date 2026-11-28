@@ -39,7 +39,9 @@ export function BotItemPane({
   walk,
   offline,
   onBack,
-  named = false
+  named = false,
+  backLabel,
+  keepFocus = false
 }: {
   bot: Bot
   uid: string
@@ -50,9 +52,20 @@ export function BotItemPane({
   onBack: () => void
   /** Opened from a group's list: the back row names whose item it is. */
   named?: boolean
+  /** Back's words where the list it returns to isn't Home. */
+  backLabel?: string
+  /** Shown beside its list: focus stays where it is as the pane opens. */
+  keepFocus?: boolean
 }): React.JSX.Element {
   return (
-    <BotItemPaneFrame walk={walk} offline={offline} onBack={onBack} owner={named ? bot : null}>
+    <BotItemPaneFrame
+      walk={walk}
+      offline={offline}
+      onBack={onBack}
+      owner={named ? bot : null}
+      backLabel={backLabel}
+      keepFocus={keepFocus}
+    >
       {(slots) => (
         <BotItemView
           key={uid}
@@ -77,6 +90,8 @@ export function BotItemPaneFrame({
   offline,
   onBack,
   owner = null,
+  backLabel,
+  keepFocus = false,
   children
 }: {
   walk: BotItemWalkState
@@ -84,6 +99,8 @@ export function BotItemPaneFrame({
   onBack: () => void
   /** Whose item it is, named after Back. */
   owner?: Bot | null
+  backLabel?: string
+  keepFocus?: boolean
   children: (slots: BotItemPaneSlots) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -146,8 +163,10 @@ export function BotItemPaneFrame({
   useBotItemChords(root, { back: onBack, step })
   // Open: focus here, so Esc works while the item reads; the item takes it once it shows.
   useEffect(() => {
-    root.current?.focus({ preventScroll: true })
-  }, [])
+    if (!keepFocus) {
+      root.current?.focus({ preventScroll: true })
+    }
+  }, [keepFocus])
   useEffect(() => {
     const pane = root.current
     return pane
@@ -190,7 +209,7 @@ export function BotItemPaneFrame({
       <div className="flex items-center gap-1 px-1.5 pb-1 text-xs text-muted-foreground">
         <Button variant="ghost" size="xs" onClick={onBack}>
           <ArrowLeft />
-          {t('bots.items.tab', 'Home')}
+          {backLabel ?? t('bots.items.tab', 'Home')}
         </Button>
         {owner ? (
           <span className="flex min-w-0 items-center gap-1.5 px-1 text-foreground">
