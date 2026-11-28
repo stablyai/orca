@@ -48,6 +48,8 @@ function DeleteOrcaChatsSwitch(props: HistorySettingProps): React.JSX.Element {
       {...props}
       settingKey="deleteOrcaChatsWithWorkspace"
       search={getDeleteOrcaChatsSearchEntry()}
+      // An older host has only the combined switch: keep it visible so it can still be turned off.
+      whenUnsupported={<LegacyCombinedHistorySwitch {...props} />}
       badge={t('components.settings.agents.deleteHistoryWithWorkspace.recommended', 'Recommended')}
       confirmTitle={t(
         'components.settings.agents.deleteHistoryWithWorkspace.orcaConfirmTitle',
@@ -77,6 +79,7 @@ function DeleteCliHistorySwitch(props: HistorySettingProps): React.JSX.Element {
       {...props}
       settingKey="deleteAgentTranscriptsWithWorkspace"
       search={search}
+      whenUnsupported={null}
       detail={
         historySize && diskUsage ? (
           <Tooltip>
@@ -129,6 +132,37 @@ function DeleteCliHistorySwitch(props: HistorySettingProps): React.JSX.Element {
   )
 }
 
+/** The single switch hosts before the split read: Orca, Claude Code and Codex history together. */
+function LegacyCombinedHistorySwitch(props: HistorySettingProps): React.JSX.Element {
+  const t = useTranslate()
+  const search = getDeleteOrcaChatsSearchEntry()
+  return (
+    <HistoryDeletionSwitch
+      {...props}
+      settingKey="deleteChatHistoryWithWorkspace"
+      search={{
+        ...search,
+        title: t(
+          'components.settings.agents.deleteHistoryWithWorkspace.legacyTitle',
+          'Delete agent history when a workspace is deleted'
+        ),
+        description: t(
+          'components.settings.agents.deleteHistoryWithWorkspace.legacyDescription',
+          "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+        )
+      }}
+      confirmTitle={t(
+        'components.settings.agents.deleteHistoryWithWorkspace.legacyConfirmTitle',
+        'Delete agent history from deleted workspaces?'
+      )}
+      confirmDescription={t(
+        'components.settings.agents.deleteHistoryWithWorkspace.legacyConfirmDescription',
+        "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered."
+      )}
+    />
+  )
+}
+
 function HistoryDeletionSwitch({
   hostScope,
   settings,
@@ -137,18 +171,23 @@ function HistoryDeletionSwitch({
   badge,
   detail,
   confirmTitle,
-  confirmDescription
+  confirmDescription,
+  whenUnsupported
 }: HistorySettingProps & {
   settingKey: Extract<
     HostOwnedSettingKey,
-    'deleteOrcaChatsWithWorkspace' | 'deleteAgentTranscriptsWithWorkspace'
+    | 'deleteOrcaChatsWithWorkspace'
+    | 'deleteAgentTranscriptsWithWorkspace'
+    | 'deleteChatHistoryWithWorkspace'
   >
+  /** What a host that predates this switch shows instead (null hides the row); absent shows "Update Orca". */
+  whenUnsupported?: React.JSX.Element | null
   search: { title: string; description: string; keywords: string[] }
   badge?: string
   detail?: React.ReactNode
   confirmTitle: string
   confirmDescription: string
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
   const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
   const hostLabel = useSettingsHostLabel(hostScope.target)
@@ -166,6 +205,9 @@ function HistoryDeletionSwitch({
   })
   const [confirming, setConfirming] = useState(false)
   const enabled = setting.state === 'ready' && setting.value
+  if (setting.state === 'unsupported' && whenUnsupported !== undefined) {
+    return whenUnsupported
+  }
 
   return (
     <>

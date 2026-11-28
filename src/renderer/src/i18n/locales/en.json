@@ -24246,7 +24246,11 @@
           "cliTitle": "Delete Claude Code and Codex history when a workspace is deleted",
           "cliDescription": "Claude Code and Codex transcripts from deleted workspaces are removed automatically to free disk space. They can't be recovered.",
           "orcaTitle": "Delete Orca chats when a workspace is deleted",
-          "orcaDescription": "Orca chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+          "orcaDescription": "Orca chats from deleted workspaces are removed automatically to free disk space. They can't be recovered.",
+          "legacyTitle": "Delete agent history when a workspace is deleted",
+          "legacyDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered.",
+          "legacyConfirmTitle": "Delete agent history from deleted workspaces?",
+          "legacyConfirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered."
         }
       },
       "notifications": {
