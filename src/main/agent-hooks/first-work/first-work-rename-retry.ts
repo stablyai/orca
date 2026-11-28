@@ -25,6 +25,7 @@ import {
   type NativeFirstMessageReads
 } from './first-work-native-first-message'
 import {
+  joinFirstWorkAttemptForRetry,
   runningFirstWorkAttempt,
   startFirstWorkAttempt,
   type FirstWorkAttempt
@@ -70,7 +71,8 @@ export async function retryFirstWorkRename(
       finishedAt: now()
     }
   }
-  const running = runningFirstWorkAttempt(worktreeId, incarnation)
+  // No await from here to the join or admission: the pause is gone before either can settle.
+  const running = joinFirstWorkAttemptForRetry(worktreeId, incarnation)
   if (running) {
     return running.promise
   }
