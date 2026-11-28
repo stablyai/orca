@@ -2,6 +2,8 @@ import type { MobileBrowserViewMode } from '../screencast/browser-screencast-req
 
 const BROWSER_VIEW_MODE_STATE_LIMIT = 40
 const browserViewModeByPageKey = new Map<string, MobileBrowserViewMode>()
+// Pages this phone opened; kept apart so they never evict a page's explicit choice.
+const phoneOpenedPageKeys = new Set<string>()
 
 export function getInitialMobileBrowserViewMode(
   worktreeId: string,
@@ -12,7 +14,21 @@ export function getInitialMobileBrowserViewMode(
   if (!pageKey) {
     return defaultMobileBrowserViewMode(url)
   }
-  return browserViewModeByPageKey.get(pageKey) ?? defaultMobileBrowserViewMode(url)
+  return (
+    browserViewModeByPageKey.get(pageKey) ??
+    (phoneOpenedPageKeys.has(pageKey) ? 'mobile' : defaultMobileBrowserViewMode(url))
+  )
+}
+
+/** A page the phone opened is read on the phone, so it starts at phone width. */
+export function markPhoneOpenedBrowserPage(worktreeId: string, browserPageId: string): void {
+  const pageKey = makeBrowserViewModePageKey(worktreeId, browserPageId)
+  if (!pageKey) {
+    return
+  }
+  phoneOpenedPageKeys.delete(pageKey)
+  phoneOpenedPageKeys.add(pageKey)
+  trimOldestKeys(phoneOpenedPageKeys)
 }
 
 function defaultMobileBrowserViewMode(url: string): MobileBrowserViewMode {
@@ -35,17 +51,22 @@ export function saveMobileBrowserViewMode(
   }
   browserViewModeByPageKey.delete(pageKey)
   browserViewModeByPageKey.set(pageKey, viewMode)
-  while (browserViewModeByPageKey.size > BROWSER_VIEW_MODE_STATE_LIMIT) {
-    const oldestKey = browserViewModeByPageKey.keys().next().value
+  trimOldestKeys(browserViewModeByPageKey)
+}
+
+function trimOldestKeys(keys: Map<string, unknown> | Set<string>): void {
+  while (keys.size > BROWSER_VIEW_MODE_STATE_LIMIT) {
+    const oldestKey = keys.keys().next().value
     if (typeof oldestKey !== 'string') {
       break
     }
-    browserViewModeByPageKey.delete(oldestKey)
+    keys.delete(oldestKey)
   }
 }
 
 export function clearMobileBrowserViewModeState(): void {
   browserViewModeByPageKey.clear()
+  phoneOpenedPageKeys.clear()
 }
 
 function makeBrowserViewModePageKey(
