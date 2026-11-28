@@ -80,7 +80,7 @@ export function useSourceControlCreatePrIntentReview({
         eligibilityDefaultBaseRef: eligibility.defaultBaseRef,
         composerBaseRef: prBase
       }).trim()
-      if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(token.branch).toLowerCase()) {
+      if (!base || stripBaseRef(base) === stripBaseRef(token.branch)) {
         setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message: translate(

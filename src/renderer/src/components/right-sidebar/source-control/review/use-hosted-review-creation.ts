@@ -124,7 +124,7 @@ export function useSourceControlHostedReviewCreation({
         return
       }
 
-      if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branchName).toLowerCase()) {
+      if (!base || stripBaseRef(base) === stripBaseRef(branchName)) {
         setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message: translate(

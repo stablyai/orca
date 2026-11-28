@@ -146,7 +146,7 @@ export function CreateHostedReviewComposer({
     setStackSelection({ key: stackSelectionKey ?? '', enabled })
   }
   const strippedBranch = stripBaseRef(branch)
-  const baseSameAsBranch = normalizedBase.toLowerCase() === strippedBranch.toLowerCase()
+  const baseSameAsBranch = normalizedBase === strippedBranch
   const createDisabled =
     imageUploadPending ||
     primaryAction.disabled ||

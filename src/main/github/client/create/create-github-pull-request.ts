@@ -77,7 +77,7 @@ export async function createGitHubPullRequest(
           error: 'Create PR failed: base branch and title are required.'
         }
       }
-      if (head && head.toLowerCase() === base.toLowerCase()) {
+      if (head && head === base) {
         return {
           ok: false,
           code: 'validation',

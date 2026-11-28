@@ -127,7 +127,7 @@ export async function prepareGitHubStackedPullRequest(
   }
   const base = normalizeHostedReviewBaseRef(input.base).trim()
   const head = input.head ? normalizeHostedReviewHeadRef(input.head).trim() : ''
-  if (!base || !head || base.toLowerCase() === head.toLowerCase()) {
+  if (!base || !head || base === head) {
     return stackedReviewFailure('stack_same_parent')
   }
 

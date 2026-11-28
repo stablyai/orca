@@ -198,7 +198,7 @@ export async function getHostedReviewCreationEligibility(
       nextAction: null
     }
   }
-  if (baseBranch && branch.toLowerCase() === baseBranch.toLowerCase()) {
+  if (baseBranch && branch === baseBranch) {
     return { ...baseResult, canCreate: false, blockedReason: 'default_branch', nextAction: null }
   }
   if (args.hasUncommittedChanges) {
