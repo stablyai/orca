@@ -7,30 +7,48 @@ const PLURAL_SUFFIX_RE = /_(?:zero|one|two|few|many|other)$/
 // Trojan-source reordering marks (U+061C, U+200E-F, U+202A-E, U+2066-9).
 const BIDI_CONTROL_RE = /\p{Bidi_Control}/u
 
-/** English text a pack entry translates; plural forms English lacks map to its `_other` form. */
-export type EnglishSourceLookup = (path: string) => string | undefined
+/** English string length and line-break eligibility, encoded as length × 2 plus a newline bit. */
+export type EnglishSourceLookup = (path: string) => number | undefined
 
-export function englishSourceLookup(english: Record<string, unknown>): EnglishSourceLookup {
-  const entries = new Map<string, string>()
+export function englishSourceFacts(value: string): number {
+  return value.length * 2 + Number(value.includes('\n'))
+}
+
+export type EnglishSourceEntry = [path: string, value: string]
+
+export function englishSourceEntries(english: Record<string, unknown>): EnglishSourceEntry[] {
+  const entries: EnglishSourceEntry[] = []
   const stack: [Record<string, unknown>, string][] = [[english, '']]
   while (stack.length > 0) {
     const [node, prefix] = stack.pop()!
     for (const [key, value] of Object.entries(node)) {
       const path = prefix ? `${prefix}.${key}` : key
       if (typeof value === 'string') {
-        entries.set(path, value)
+        entries.push([path, value])
       } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
         stack.push([Object.fromEntries(Object.entries(value)), path])
       }
     }
   }
+  return entries
+}
+
+export function englishSourceLookup(english: Record<string, unknown>): EnglishSourceLookup {
+  const entries = new Map(
+    englishSourceEntries(english).map(([path, value]) => [path, englishSourceFacts(value)])
+  )
+  return withEnglishPluralFallback((path) => entries.get(path))
+}
+
+/** Use the English `_other` or base value when English has no exact plural form. */
+export function withEnglishPluralFallback(readExact: EnglishSourceLookup): EnglishSourceLookup {
   return (path) => {
-    const exact = entries.get(path)
+    const exact = readExact(path)
     if (exact !== undefined) {
       return exact
     }
     const base = path.replace(PLURAL_SUFFIX_RE, '')
-    return base === path ? undefined : (entries.get(`${base}_other`) ?? entries.get(base))
+    return base === path ? undefined : (readExact(`${base}_other`) ?? readExact(base))
   }
 }
 
@@ -61,7 +79,7 @@ export function pluginTranslationStringProblem(
     return `translation at ${path} contains a control or bidirectional formatting character`
   }
   const source = english?.(path)
-  if (english && value.includes('\n') && !source?.includes('\n')) {
+  if (english && value.includes('\n') && (source === undefined || source % 2 === 0)) {
     return `translation at ${path} adds a line break the English text does not have`
   }
   const limit =
@@ -69,7 +87,7 @@ export function pluginTranslationStringProblem(
       ? PLUGIN_TRANSLATION_MAX_CHARACTERS
       : Math.min(
           PLUGIN_TRANSLATION_MAX_CHARACTERS,
-          Math.max(SOURCE_LENGTH_FLOOR, SOURCE_LENGTH_MULTIPLIER * source.length)
+          Math.max(SOURCE_LENGTH_FLOOR, SOURCE_LENGTH_MULTIPLIER * Math.floor(source / 2))
         )
   if (value.length > limit) {
     return source === undefined

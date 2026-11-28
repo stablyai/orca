@@ -4,11 +4,12 @@ import {
   type PluginLanguagePackRegistration
 } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import {
+  englishBaselinePartition,
   pluginLanguagePackCoverage,
-  translatableCatalogPaths
+  type TranslatableCatalogPaths
 } from '../../../shared/plugins/languages/plugin-language-pack-coverage'
 import {
-  englishSourceLookup,
+  withEnglishPluralFallback,
   type EnglishSourceLookup
 } from '../../../shared/plugins/languages/plugin-translation-string-policy'
 import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
@@ -19,16 +20,28 @@ import type { PluginContentVerifier } from '../artifacts/plugin-content-integrit
 
 type LanguagePackContribution = PluginManifest['contributes']['languagePacks'][number]
 
-type EnglishSource = { translatablePaths: ReadonlySet<string>; lookup: EnglishSourceLookup }
+type EnglishSource = { translatablePaths: TranslatableCatalogPaths; lookup: EnglishSourceLookup }
 
 let englishSource: Promise<EnglishSource> | null = null
 
-// Why lazy: the English catalog is ~1 MB and only matters once a language pack loads.
+// The build precomputes the flat baseline. Read it only when a language pack loads.
 function loadEnglishSource(): Promise<EnglishSource> {
-  englishSource ??= import('../../../renderer/src/i18n/locales/en.json').then((module) => ({
-    translatablePaths: translatableCatalogPaths(module.default),
-    lookup: englishSourceLookup(module.default)
-  }))
+  englishSource ??= import('./plugin-english-language-pack-baseline').then(
+    async ({ default: loadBaseline }) => {
+      const { partitions, translatableCount } = await loadBaseline()
+      const readExact = (path: string) => {
+        const entries = partitions[englishBaselinePartition(path)]
+        return Object.hasOwn(entries, path) ? entries[path] : undefined
+      }
+      return {
+        translatablePaths: { size: translatableCount, has: (path) => (readExact(path) ?? -1) >= 0 },
+        lookup: withEnglishPluralFallback((path) => {
+          const facts = readExact(path)
+          return facts === undefined || facts >= 0 ? facts : -facts - 1
+        })
+      }
+    }
+  )
   return englishSource
 }
 
