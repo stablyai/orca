@@ -80,6 +80,7 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
 export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
+  | 'agentHookConsent'
   | 'claudeSubagentNavigationEnabled'
   | 'botsEnabled'
   | 'defaultTuiAgent'

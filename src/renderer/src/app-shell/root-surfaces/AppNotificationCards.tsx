@@ -4,6 +4,7 @@ import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { CodexSharedSettingsNoticeCard } from '../../components/terminal-pane/provider-notices/codex-settings/CodexSharedSettingsNoticeCard'
 import { NotificationCardStack } from '../../components/notifications/NotificationCardStack'
 import { StarNagCard } from '../../components/star-nag/StarNagCard'
+import { AgentHookConsentCard } from '../../components/agent-hook-consent/AgentHookConsentCard'
 import { WorkspaceCleanupRunCard } from '../../components/workspace-cleanup/removal/run/WorkspaceCleanupRunCard'
 import { OverlayBoundary } from './app-root-surface-boundaries'
 
@@ -77,6 +78,9 @@ export function AppNotificationCards({
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
         <StarNagCard />
+      </OverlayBoundary>
+      <OverlayBoundary boundaryId="overlay.agent-hook-consent" resetKey={activeView}>
+        <AgentHookConsentCard />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.codex-shared-settings-notice" resetKey={activeView}>
         <CodexSharedSettingsNoticeCard />

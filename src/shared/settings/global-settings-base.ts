@@ -28,6 +28,7 @@ import type { NestedWorkerDepthSettings } from '../orchestration/workers/nested-
 import type { SshRemoteControlSettings } from '../remote-runtime/ssh/ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from '../agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from '../keybindings/global-settings'
+import type { AgentHookConsentGlobalSettings } from '../agent-hook-listener/configuration/agent-hook-consent'
 import type { WorkspaceCleanupPolicySettings } from '../workspace-cleanup/workspace-cleanup-policy'
 import type { PRAutoRefreshSettings } from '../source-control/hosted-review/review-refresh-policy'
 import type { ManagedAccountNameSettings } from '../agent-accounts/managed-account-display-names'
@@ -77,6 +78,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &
+  AgentHookConsentGlobalSettings &
   WorkspaceCleanupPolicySettings &
   PRAutoRefreshSettings &
   ManagedAccountNameSettings &

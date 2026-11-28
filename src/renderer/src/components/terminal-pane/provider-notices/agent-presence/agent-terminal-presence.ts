@@ -69,3 +69,45 @@ export function whenAgentTerminalAppears(agent: NoticeAgent, onAppear: () => voi
   })
   return unsubscribe
 }
+
+/** Every agent id running in a terminal now, from the same three sources as `hasAgentTerminal`. */
+function collectAgentTerminalIds(state: AppState): Set<string> {
+  const agents = new Set<string>()
+  for (const tabs of Object.values(state.tabsByWorktree)) {
+    for (const tab of tabs) {
+      if (tab.launchAgent) {
+        agents.add(tab.launchAgent)
+      }
+    }
+  }
+  for (const [paneKey, entry] of state.agentStatusByPaneKey.entries()) {
+    if (entry.agentType && isTerminalTab(state, paneKeyTabId(paneKey))) {
+      agents.add(entry.agentType)
+    }
+  }
+  for (const entry of Object.values(state.paneForegroundAgentByPaneKey)) {
+    if (entry.agent) {
+      agents.add(entry.agent)
+    }
+  }
+  return agents
+}
+
+/** Calls `onAppear` once per agent id, the first time a terminal running it exists. Returns the unsubscribe. */
+export function watchAgentTerminalArrivals(onAppear: (agent: string) => void): () => void {
+  const seen = new Set<string>()
+  const report = (state: AppState): void => {
+    for (const agent of collectAgentTerminalIds(state)) {
+      if (!seen.has(agent)) {
+        seen.add(agent)
+        onAppear(agent)
+      }
+    }
+  }
+  report(useAppStore.getState())
+  return useAppStore.subscribe((state, previous) => {
+    if (didSourcesChange(state, previous)) {
+      report(state)
+    }
+  })
+}

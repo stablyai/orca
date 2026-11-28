@@ -13,6 +13,7 @@ import {
   type WslFsResult
 } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { isAgentHookConsentGranted } from '../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 
 export async function installWslGuestHooks(options: {
   mux: SshChannelMultiplexer
@@ -35,7 +36,8 @@ export async function installWslGuestHooks(options: {
         commands: buildManagedHookDetectionCommands(settings, 'linux')
       })
     )
-    agents = detected.agents
+    // Only agents the user agreed to; the guest's configs are theirs too.
+    agents = detected.agents.filter((agent) => isAgentHookConsentGranted(settings, agent))
     claudeVersion = detected.claudeVersion
   } catch (error) {
     warn(

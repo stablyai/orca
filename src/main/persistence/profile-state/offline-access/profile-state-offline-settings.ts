@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import { parseAgentHookConsent } from '../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
@@ -29,11 +30,11 @@ export type ProfileStateOfflineLocation = {
 
 export type AgentHookSettings = Pick<
   GlobalSettings,
-  'agentStatusHooksEnabled' | 'disabledTuiAgents'
+  'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'agentHookConsent'
 >
 
 export type AgentHookSettingsUpdate = {
-  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents' | 'agentHookConsent'>
   settingsPath: string
 }
 
@@ -154,7 +155,8 @@ function projectAgentHookSettings(
       : {},
     disabledTuiAgents: Array.isArray(settings.disabledTuiAgents)
       ? settings.disabledTuiAgents.filter((value) => typeof value === 'string')
-      : []
+      : [],
+    agentHookConsent: parseAgentHookConsent(settings.agentHookConsent)
   }
 }
 
@@ -199,7 +201,8 @@ function readAgentHookSettingsFromSettingsValue(value: unknown): AgentHookSettin
   const settings = isRecord(value) ? value : {}
   return {
     agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
-    disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+    disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents),
+    agentHookConsent: parseAgentHookConsent(settings.agentHookConsent)
   }
 }
 

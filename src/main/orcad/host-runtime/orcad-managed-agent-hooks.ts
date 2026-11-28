@@ -37,7 +37,7 @@ export function stopOrcadAgentListeners(server: AgentHookServer): void {
  * Call `readinessPublished` once readiness is out; work held off the ready path starts then.
  */
 export function startOrcadManagedAgentHooks(
-  store: Pick<ProfilePreferences, 'getSettings' | 'onSettingsChanged'>,
+  store: Pick<ProfilePreferences, 'getSettings' | 'onSettingsChanged' | 'updateSettings'>,
   setStatusHooksEnabled: (enabled: boolean) => void,
   registerCleanup: (cleanup: BackendServiceCleanup) => void
 ): { readinessPublished: () => void } {
@@ -67,6 +67,8 @@ export function startOrcadManagedAgentHooks(
   void adoptLoginShellAgentHomes().then(() =>
     reconcileStartupManagedAgentHooks({
       getSettings,
+      writeConsent: (agentHookConsent) =>
+        store.updateSettings({ agentHookConsent }, { notifyListeners: true }),
       isQuitting: () => stopping,
       shouldHydrateShellPath
     })

@@ -24,6 +24,8 @@ import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-com
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
 import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { runtimeClientUpdateTouchesHooks } from './runtime-client-hook-reconcile'
+import { agentHookConsentPatch } from '../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
@@ -157,7 +159,6 @@ export class RuntimeClientSettingsController {
       throw new Error('runtime_unavailable')
     }
     const beforeSettings = this.store.getSettings()
-    const before = beforeSettings.agentStatusHooksEnabled !== false
     const { agentDefaultArgs, agentDefaultEnv, hostNotifications, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
@@ -180,6 +181,7 @@ export class RuntimeClientSettingsController {
             )
           : {}),
         ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {}),
+        ...agentHookConsentPatch(beforeSettings.agentHookConsent, updates.agentHookConsent),
         ...(updates.agentDefaultSurface !== undefined ? { agentDefaultSurfaceChosen: true } : {})
       },
       { notifyListeners: true }
@@ -190,14 +192,7 @@ export class RuntimeClientSettingsController {
     if (updates.worktreeVisibilityDefaults !== undefined || updates.nestWorkspaces !== undefined) {
       this.notifyReposChanged?.()
     }
-    if (
-      // An explicit enable while already enabled is a repair request (`orca agent hooks on`), so a wiped hook config reinstalls.
-      updates.agentStatusHooksEnabled === true ||
-      (typeof updates.agentStatusHooksEnabled === 'boolean' &&
-        before !== updates.agentStatusHooksEnabled) ||
-      (updates.disabledTuiAgents !== undefined &&
-        !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents))
-    ) {
+    if (runtimeClientUpdateTouchesHooks(updates, beforeSettings, settings)) {
       await this.reconcileManagedAgentHooks()
     }
     return this.get()

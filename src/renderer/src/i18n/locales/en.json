@@ -31509,5 +31509,68 @@
       "badJson": "Check the pasted JSON: it doesn’t parse.",
       "none": "Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported."
     }
+  },
+  "agentHookConsent": {
+    "safe": {
+      "onlyOrca": "Only active in Orca. {{agent}} outside Orca works exactly as before.",
+      "free": "Free: no tokens or usage.",
+      "asks": "{{agent}} still asks you before acting, just like today.",
+      "turnOff": "Turn off anytime in Settings › Agents.",
+      "writes": "Adds Orca’s hooks to"
+    },
+    "whatHooksDo": "What hooks do",
+    "declined": {
+      "title": "Didn’t install hooks for {{agent}}",
+      "description": "Install them anytime in Settings › Agents."
+    },
+    "close": "Close",
+    "installedMany": "Hooks installed for {{count}} agents",
+    "installed": "Hooks installed for {{agent}}",
+    "failed": "Couldn’t install hooks for {{agent}}",
+    "installedNext": "They apply the next time each one starts.",
+    "later": "Later",
+    "retry": "Try again",
+    "title": "Install hooks for {{agent}}?",
+    "previous": "Previous",
+    "slideN": "Slide {{n}}",
+    "next": "Next",
+    "allAgents": "Install for all my agents",
+    "dontAsk": "Don’t ask again",
+    "install": "Install",
+    "sample": {
+      "prompt": "Fix the login flake",
+      "claudeSummary": "Fixing the login test",
+      "question": "Run pnpm install?",
+      "working": "Working",
+      "notificationTitle": "orca / {{workspace}} - {{agent}} finished",
+      "notificationFallback": "{{agent}} finished.",
+      "notificationReply": "Tests pass. The race was in session refresh; I added a lock and a regression test.",
+      "waiting": "Waiting",
+      "subagentCount": "2 agents",
+      "subagentOne": "Explore auth tests",
+      "subagentTwo": "Review session refresh",
+      "approval": "Waiting for your approval: Bash: pnpm install",
+      "age": "2m",
+      "worker": "worker-2"
+    },
+    "slide": {
+      "status": "Status you can trust",
+      "statusEffect": "working, needs you, done",
+      "sidebar": "Richer sidebar",
+      "sidebarEffect": "your prompt and its current step",
+      "notification": "Notifications in its own words",
+      "waiting": "Know what it’s waiting on",
+      "subagents": "Every subagent gets a row",
+      "rename": "Auto-named workspaces",
+      "renameEffect": "from your first prompt",
+      "approvals": "Approvals reach your coordinator"
+    },
+    "now": "Now",
+    "withHooks": "With hooks",
+    "settings": {
+      "installed": "Installed",
+      "notInstalled": "Not installed",
+      "remove": "Remove"
+    }
   }
 }
