@@ -22759,7 +22759,10 @@
         "deleted": "此自動化已刪除",
         "loadFailed": "無法讀取此自動化",
         "openFullPage": "開啟頁面",
-        "onAgent": "由 {{name}} 執行"
+        "onAgent": "由 {{name}} 執行",
+        "open": "開啟",
+        "openNamed": "開啟 {{name}}",
+        "savedWhen": "已儲存：{{when}}"
       },
       "botContext": {
         "soul": "已套用更新後的靈魂",

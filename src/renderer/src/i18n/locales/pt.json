@@ -24223,7 +24223,10 @@
         "deleted": "Esta automação foi excluída",
         "loadFailed": "Não foi possível ler esta automação",
         "openFullPage": "Abrir página",
-        "onAgent": "em {{name}}"
+        "onAgent": "em {{name}}",
+        "open": "Abrir",
+        "openNamed": "Abrir {{name}}",
+        "savedWhen": "Salva: {{when}}"
       },
       "connectorOffer": {
         "heading": "Conectar um serviço",

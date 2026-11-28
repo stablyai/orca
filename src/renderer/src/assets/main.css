@@ -911,6 +911,26 @@ body[data-modal-overlay-open]
   border-color: var(--notice-border);
 }
 
+/* The saved-automation card: the user bubble's fill, with muted ink pulled toward the foreground by
+   the same mix so its small lines keep 4.5:1 on the fill in both themes. */
+.native-chat-automation-saved {
+  --foreground: var(--chat-source-foreground);
+  --background: var(--chat-source-background);
+  --muted-foreground: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-user-mix),
+    var(--chat-source-muted-foreground)
+  );
+}
+
+.native-chat-automation-saved-avatar {
+  background-color: color-mix(
+    in srgb,
+    var(--chat-source-foreground) calc(var(--chat-user-mix) + 6%),
+    var(--chat-canvas)
+  );
+}
+
 /* Re-evaluate chat colors where the appearance producer supplies their source colors. */
 :root,
 .dark,

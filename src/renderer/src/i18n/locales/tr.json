@@ -23096,7 +23096,10 @@
         "deleted": "Bu otomasyon silindi",
         "loadFailed": "Bu otomasyon okunamadı",
         "openFullPage": "Sayfayı aç",
-        "onAgent": "{{name}} üzerinde"
+        "onAgent": "{{name}} üzerinde",
+        "open": "Aç",
+        "openNamed": "{{name}} öğesini aç",
+        "savedWhen": "Kaydedildi: {{when}}"
       },
       "usageLimitActions": {
         "handOff": "Ajana devret",

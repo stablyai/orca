@@ -22958,7 +22958,10 @@
         "deleted": "Cette automatisation a été supprimée",
         "loadFailed": "Impossible de lire cette automatisation",
         "openFullPage": "Ouvrir la page",
-        "onAgent": "avec {{name}}"
+        "onAgent": "avec {{name}}",
+        "open": "Ouvrir",
+        "openNamed": "Ouvrir {{name}}",
+        "savedWhen": "Enregistrée : {{when}}"
       },
       "botContext": {
         "soul": "Mise à jour de l’âme prise en compte",

@@ -22587,7 +22587,10 @@
         "deleted": "This automation was deleted",
         "loadFailed": "Couldn’t read this automation",
         "openFullPage": "Open page",
-        "onAgent": "on {{name}}"
+        "onAgent": "on {{name}}",
+        "open": "Open",
+        "openNamed": "Open {{name}}",
+        "savedWhen": "Saved: {{when}}"
       },
       "botContext": {
         "soul": "Updated soul applied",

@@ -22590,7 +22590,10 @@
         "deleted": "Esta automatización se eliminó",
         "loadFailed": "No se pudo leer esta automatización",
         "openFullPage": "Abrir página",
-        "onAgent": "con {{name}}"
+        "onAgent": "con {{name}}",
+        "open": "Abrir",
+        "openNamed": "Abrir {{name}}",
+        "savedWhen": "Guardada: {{when}}"
       },
       "botContext": {
         "soul": "Se aplicó el alma actualizada",

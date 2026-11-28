@@ -16,8 +16,13 @@ const PLAIN: Record<AutomationRowMark, LucideIcon | null> = {
 }
 
 /** An automation row's icon slot: the connector that starts it, else a plain mark. */
-export function NativeChatAutomationMark({ mark }: { mark: AutomationRowMark }): React.JSX.Element {
-  const className = 'size-3.5'
+export function NativeChatAutomationMark({
+  mark,
+  className = 'size-3.5'
+}: {
+  mark: AutomationRowMark
+  className?: string
+}): React.JSX.Element {
   const Icon = PLAIN[mark]
   return Icon ? <Icon className={className} /> : <BotAppBrandMark id={mark} className={className} />
 }

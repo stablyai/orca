@@ -22321,7 +22321,10 @@
         "deleted": "이 자동화는 삭제되었습니다",
         "loadFailed": "이 자동화를 읽지 못했습니다",
         "openFullPage": "페이지 열기",
-        "onAgent": "{{name}}에서"
+        "onAgent": "{{name}}에서",
+        "open": "열기",
+        "openNamed": "{{name}} 열기",
+        "savedWhen": "저장됨: {{when}}"
       },
       "botContext": {
         "soul": "업데이트된 소울 적용됨",
