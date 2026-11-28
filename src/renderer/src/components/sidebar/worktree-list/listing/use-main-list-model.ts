@@ -50,12 +50,12 @@ import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-mode
 import { withWindowCreations } from './window-worktree-creations'
 export { withWindowCreations } from './window-worktree-creations'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
-import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
 
@@ -90,7 +90,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations, 'hidden'))
   )
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
-  const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
+  const { setWorkspaceHostOrder } = getAppStoreState()
   const domains = useMemo(
     () =>
       withWindowCreations(
@@ -267,10 +267,6 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       }),
     [rendered.sectionRows, worktreeByIdentity, folderByKey]
   )
-  const renderedSidebarRowKeys = useMemo(
-    () => collectRenderedSidebarRowKeys(sectionRows),
-    [sectionRows]
-  )
   const allRepoIds = useMemo(() => repos.map((repo) => repo.id), [repos])
   const { orderedHostOptions } = planned
   const handleReorderHostSections = useCallback(
@@ -299,7 +295,6 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       effectiveCollapsedGroups,
       rows: rendered.rows,
       sectionRows,
-      renderedSidebarRowKeys,
       allRepoIds,
       placeholderRepoIds: planned.placeholderRepoIds,
       handleReorderHostSections,

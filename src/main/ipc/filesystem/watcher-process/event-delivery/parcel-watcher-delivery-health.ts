@@ -13,13 +13,17 @@ export class WatcherDeliveryHealthMonitor {
   // Only the current, non-disposed child's reports count.
   private active = false
 
+  // Told when OS event delivery stalls and when the stall ends (recovery, child gone, dispose).
+  private onStallChange: ((stalled: boolean) => void) | undefined
+
   constructor(
     private readonly records: Map<number, WatcherProcessSubscriptionRecord>,
     private readonly crashFuse: WatcherProcessCrashFuse
   ) {}
 
-  childStarted(): void {
+  childStarted(onStallChange?: (stalled: boolean) => void): void {
     this.reset()
+    this.onStallChange = onStallChange
     this.active = true
     this.crashFuse.noteChildStarted()
   }
@@ -33,6 +37,7 @@ export class WatcherDeliveryHealthMonitor {
       if (!this.stalled) {
         this.stalled = true
         this.schedule(CANARY_STALL_BACKOFF_INITIAL_MS)
+        this.onStallChange?.(true)
       }
       return
     }
@@ -45,6 +50,9 @@ export class WatcherDeliveryHealthMonitor {
 
   /** The child is gone; crash recovery resyncs records through onInterruption. */
   reset(): void {
+    if (this.stalled) {
+      this.onStallChange?.(false)
+    }
     this.stalled = false
     if (this.timer !== null) {
       clearTimeout(this.timer)

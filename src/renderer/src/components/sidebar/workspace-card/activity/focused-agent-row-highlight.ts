@@ -1,7 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   isTerminalLeafId,
   makePaneKey
@@ -19,25 +18,13 @@ export type FocusedAgentRowHighlightState = Pick<
   | 'migrationUnsupportedByPtyId'
 >
 
-// This selector runs per row on every store update, and the pane key is a hash.
-const chatPaneKeyByTab = new WeakMap<Tab, string>()
-
-function chatPaneKey(tab: Tab): string {
-  let paneKey = chatPaneKeyByTab.get(tab)
-  if (!paneKey) {
-    paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    chatPaneKeyByTab.set(tab, paneKey)
-  }
-  return paneKey
-}
-
 function getActivePaneKeyForWorktree(
   state: FocusedAgentRowHighlightState,
   worktreeId: string
 ): string | null {
   if (state.activeTabType === 'agent-session') {
     const activeTab = state.getActiveTab(worktreeId)
-    return activeTab?.contentType === 'agent-session' ? chatPaneKey(activeTab) : null
+    return activeTab?.contentType === 'agent-session' ? chatPaneKey(activeTab.entityId) : null
   }
   if (state.activeTabType !== 'terminal') {
     return null

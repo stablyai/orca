@@ -1,4 +1,10 @@
-import { parseGitRepositoryIdentity, splitQualifiedPluginKey } from './plugin-marketplace'
+import {
+  isOfficialOrganizationGitSource,
+  isSameGitRepository,
+  parseGitRepositoryIdentity,
+  splitQualifiedPluginKey
+} from './plugin-marketplace'
+import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from './plugin-install-link'
 import { gitUrlPluginPublisher } from '../installation/plugin-publisher-derivation'
 
 const LINKABLE_GIT_HOSTS = new Set(['github.com', 'gitlab.com'])
@@ -70,4 +76,25 @@ export function pluginRepositoryOrigin(
   }
   const repository = `${identity.host}/${identity.path}`
   return { owner: identity.owner, repository: path ? `${repository} (${path})` : repository }
+}
+
+/** Who an install confirmation asks the reader to trust: the repository owner Orca parsed, else
+ *  the publisher. Why the community catalog's Orca-hosted sources name the publisher: Orca mirrors
+ *  community plugins there, so the owner would read stablyai; any other catalog cannot use an
+ *  Orca repository to put a publisher of its choosing in the prompt. */
+export function pluginInstallTrustee(source: {
+  url: string
+  publisher: string | null
+  catalogUrl: string | null
+}): string | null {
+  const { url, publisher, catalogUrl } = source
+  if (
+    publisher &&
+    catalogUrl &&
+    isSameGitRepository(catalogUrl, COMMUNITY_MARKETPLACE_GIT_SOURCE.url) &&
+    isOfficialOrganizationGitSource(url)
+  ) {
+    return publisher
+  }
+  return pluginRepositoryOrigin(url)?.owner ?? publisher
 }

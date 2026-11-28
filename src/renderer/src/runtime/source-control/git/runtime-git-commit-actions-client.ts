@@ -1,3 +1,4 @@
+import type { GitAbortOperationRequest } from '../../../../../shared/git/status/git-status-types'
 import type {
   GitCommitAction,
   GitCommitActionResult
@@ -77,19 +78,25 @@ export async function revertRuntimeGit(
 
 export async function sequencerAbortRuntimeGit(
   context: RuntimeGitContext,
-  operation: GitCommitAction
+  operation: GitCommitAction,
+  request: GitAbortOperationRequest = {}
 ): Promise<void> {
+  const expected = request.expectedRunIdentity
+    ? { expectedRunIdentity: request.expectedRunIdentity }
+    : {}
   if (context.target.kind === 'local' || !context.worktreeId) {
     return window.api.git.sequencerAbort({
       worktreePath: resolveLocalWorktreePath(context),
       connectionId: context.connectionId,
-      operation
+      operation,
+      ...expected
     })
   }
+  // Older servers drop the unknown field and abort as before.
   await callRuntimeRpc(
     context.target,
     'git.sequencerAbort',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), operation },
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), operation, ...expected },
     { timeoutMs: 30_000 }
   )
 }

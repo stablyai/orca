@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -21,15 +22,14 @@ export function useNativeChatHostCommandTerminal(input: {
 }): NativeChatHostCommandTerminal | null {
   const { worktreeId, groupId } = input
   const environmentId = input.target.kind === 'environment' ? input.target.environmentId : null
-  const [opening, setOpening] = useState(false)
-  // Why a ref: a notice and a transcript row can both press, and state lags a double press.
-  const openingRef = useRef(false)
+  // Kept with the chat tab, read synchronously: a notice and a transcript row can both press, and a view that
+  // replaced a released one must not open a second terminal.
+  const [opening, setOpening, readOpening] = useNativeChatViewGuard('host-command-terminal', false)
   const open = useCallback(
     (command: string, env?: Record<string, string>) => {
-      if (!worktreeId || openingRef.current) {
+      if (!worktreeId || readOpening()) {
         return Promise.resolve(false)
       }
-      openingRef.current = true
       setOpening(true)
       return (async () => {
         if (environmentId) {
@@ -72,12 +72,9 @@ export function useNativeChatHostCommandTerminal(input: {
           )
           return false
         })
-        .finally(() => {
-          openingRef.current = false
-          setOpening(false)
-        })
+        .finally(() => setOpening(false))
     },
-    [worktreeId, groupId, environmentId]
+    [worktreeId, groupId, environmentId, readOpening, setOpening]
   )
   return useMemo(() => (worktreeId ? { opening, open } : null), [worktreeId, opening, open])
 }

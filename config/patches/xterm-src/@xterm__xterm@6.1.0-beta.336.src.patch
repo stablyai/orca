@@ -194,10 +194,10 @@ index 18c275ccbe583f48ccb5c5f66cd26d0bd8621e39..2dc0ef346d3ce07b3d0b5f03fd72c4f5
      if (diff !== 0) {
        this._latestYDisp = newRow;
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c19123279d61d 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..c5fb9747231c3984060f834db16b6df48dbf293c 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
-@@ -1,17 +1,64 @@
+@@ -1,17 +1,65 @@
 +/// <reference lib="es2022.intl" />
  /**
   * Copyright (c) 2016 The xterm.js authors. All rights reserved.
@@ -232,6 +232,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +
 +/** Bounds the elements a tail repaint lays out; the cells past it join one unstyled run. */
 +const MAX_TAIL_RUNS = 64;
++const MAX_TAIL_WIDTH_CACHE_LOOKUPS = 256;
 +
 +const UNDERLINE_STYLES: { [style: number]: string } = {
 +  [UnderlineStyle.DOUBLE]: 'double',
@@ -264,7 +265,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
  /**
   * Encapsulates the logic for handling compositionstart, compositionupdate and compositionend
   * events, displaying the in-progress composition to the UI and forwarding the final composition
-@@ -24,6 +71,15 @@ export class CompositionHelper {
+@@ -24,6 +72,15 @@ export class CompositionHelper {
     */
    private _isComposing: boolean;
    public get isComposing(): boolean { return this._isComposing; }
@@ -280,7 +281,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
  
    /**
     * The position within the input textarea's value of the current composition.
-@@ -36,52 +92,200 @@ export class CompositionHelper {
+@@ -36,52 +93,202 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
  
@@ -359,6 +360,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +  private readonly _tailCell = new CellData();
 +
 +  private _tailWidthCache?: WidthCache;
++
++  private _tailWidthCacheLookups = 0;
 +
 +  /**
 +   * The cursor cell and the tail cells the view was last built from, four words per cell, so a
@@ -491,7 +494,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
    }
  
    /**
-@@ -89,22 +293,98 @@ export class CompositionHelper {
+@@ -89,22 +296,98 @@ export class CompositionHelper {
     * @param ev The event.
     */
    public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
@@ -599,7 +602,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
    }
  
    /**
-@@ -113,10 +393,33 @@ export class CompositionHelper {
+@@ -113,10 +396,33 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -634,7 +637,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
          return false;
        }
        if (ev.keyCode === 16 || ev.keyCode === 17 || ev.keyCode === 18) {
-@@ -128,6 +431,10 @@ export class CompositionHelper {
+@@ -128,6 +434,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
@@ -645,7 +648,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +445,135 @@ export class CompositionHelper {
+@@ -138,6 +448,135 @@ export class CompositionHelper {
      return true;
    }
  
@@ -781,7 +784,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
    /**
     * Finalizes the composition, resuming regular input actions. This is called when a composition
     * is ending.
-@@ -146,23 +582,52 @@ export class CompositionHelper {
+@@ -146,23 +585,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -845,7 +848,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,35 +637,313 @@ export class CompositionHelper {
+@@ -172,37 +640,315 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -1074,7 +1077,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +          id: pending.transactionId,
 +          data: input,
 +          dataPendingReconciliation: true
-+        }
+         }
+-      }, 0);
 +      }
 +    ));
 +  }
@@ -1082,9 +1086,9 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +  private _dispatchCompositionSessionEvent(event: CustomEvent): void {
 +    if (typeof this._textarea.dispatchEvent === 'function') {
 +      this._textarea.dispatchEvent(event);
-+    }
-+  }
-+
+     }
+   }
+ 
 +  private _dispatchCompositionTransactionSettled(): void {
 +    this._dispatchCompositionSessionEvent(new CustomEvent(
 +      'xterm-composition-transaction-settled',
@@ -1107,8 +1111,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +      if (!this._compositionEndBelongsToCurrentTransaction(endData)) {
 +        if (endData.length === 0 && !this._hasCompositionProgress()) {
 +          this._cancelComposition();
-         }
--      }, 0);
++        }
 +        return;
 +      }
 +      this._finalizeComposition(true, endData);
@@ -1180,13 +1183,15 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +  private _cancelDeferredTimer(timer?: ReturnType<typeof setTimeout>): void {
 +    if (timer === undefined) {
 +      return;
-     }
++    }
 +    clearTimeout(timer);
 +    this._compositionTimers.delete(timer);
-   }
- 
++  }
++
    /**
-@@ -222,6 +965,9 @@ export class CompositionHelper {
+    * Apply any changes made to the textarea after the current event chain is allowed to complete.
+    * This should be called when not currently composing but a keydown event with the "composition
+@@ -222,6 +968,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -1196,7 +1201,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +982,352 @@ export class CompositionHelper {
+@@ -236,6 +985,360 @@ export class CompositionHelper {
      }, 0);
    }
  
@@ -1277,6 +1282,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +    if (cellWidth !== this._tailKeyCellWidth) {
 +      // Cell width changes when the font loads or the zoom changes; either invalidates the widths.
 +      this._tailWidthCache?.clear();
++      this._tailWidthCacheLookups = 0;
 +      this._tailKeyCellWidth = cellWidth;
 +    }
 +    this._tailKeyHasPreedit = hasPreedit;
@@ -1393,6 +1399,10 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +        // Past the cap the glyphs drift off the grid, but no column of the row goes missing.
 +        open.text += chars;
 +        continue;
++      }
++      if (cellWidth > 0 && ++this._tailWidthCacheLookups > MAX_TAIL_WIDTH_CACHE_LOOKUPS) {
++        widths.clear();
++        this._tailWidthCacheLookups = 1;
 +      }
 +      const cellSpacing = cellWidth > 0
 +        ? columns * cellWidth - widths.get(chars, cell.isBold(), cell.isItalic())
@@ -1542,6 +1552,9 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +    this._compositionRemainderSpans = [];
 +    this._compositionCaret = undefined;
 +    this._tailKeyValid = false;
++    this._tailWidthCache?.dispose();
++    this._tailWidthCache = undefined;
++    this._tailWidthCacheLookups = 0;
 +    this._compositionView.style.display = '';
 +    this._compositionView.style.justifyContent = '';
 +  }
@@ -1549,7 +1562,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,10 +1335,26 @@ export class CompositionHelper {
+@@ -243,10 +1346,26 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
@@ -1577,7 +1590,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
  
-@@ -254,31 +1362,244 @@ export class CompositionHelper {
+@@ -254,31 +1373,244 @@ export class CompositionHelper {
        const cursorTop = this._bufferService.buffer.y * this._renderService.dimensions.css.cell.height;
        const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
  

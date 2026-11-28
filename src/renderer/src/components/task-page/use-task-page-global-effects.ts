@@ -12,6 +12,15 @@ function isTextEntryTarget(target: HTMLElement): boolean {
   )
 }
 
+// Why: Esc on a focused control outside Tasks (e.g. a sidebar note button) must not leave the task page.
+function isTaskPageEscapeTarget(target: HTMLElement): boolean {
+  return (
+    target === document.body ||
+    target === document.documentElement ||
+    target.closest('[data-task-page]') !== null
+  )
+}
+
 export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {
   const {
     closeTaskPage,
@@ -61,7 +70,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
         return
       }
       const target = event.target
-      if (!(target instanceof HTMLElement)) {
+      if (!(target instanceof HTMLElement) || !isTaskPageEscapeTarget(target)) {
         return
       }
 

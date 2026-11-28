@@ -15,11 +15,15 @@ function nonEmpty(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachment | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return null
   }
-  const raw: Record<string, unknown> = Object.fromEntries(Object.entries(value))
+  const raw = value
   const provider = raw.provider
   if (
     provider !== 'github' &&

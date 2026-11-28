@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "native": "node scripts/native-client.mjs",
-    "postinstall": "node scripts/build-terminal-webview-engine.mjs && node scripts/build-mermaid-page-engine.mjs && node scripts/build-katex-page-style.mjs && node scripts/build-terminal-document-script.mjs",
+    "postinstall": "node scripts/build-terminal-webview-engine.mjs && node scripts/build-mermaid-page-engine.mjs && node scripts/build-katex-page-style.mjs && node scripts/build-terminal-document-script.mjs && node scripts/build-compressed-locale-catalogs.mjs",
     "test": "vitest run",
     "typecheck": "node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --project=mobile/tsconfig.json",
     "typecheck:tests": "node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --project=mobile/tsconfig.test.json",

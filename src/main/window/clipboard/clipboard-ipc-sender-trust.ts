@@ -8,8 +8,12 @@ export function setTrustedClipboardRendererWebContentsId(webContentsId: number |
   trustedClipboardRendererWebContentsId = webContentsId
 }
 
+export function isTrustedClipboardSender(event: IpcMainInvokeEvent): boolean {
+  return isTrustedClipboardRenderer(event.sender)
+}
+
 export function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
-  if (!isTrustedClipboardRenderer(event.sender)) {
+  if (!isTrustedClipboardSender(event)) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
 }

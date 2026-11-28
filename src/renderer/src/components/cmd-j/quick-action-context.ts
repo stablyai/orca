@@ -7,6 +7,7 @@ import {
   runActiveNativeChatSplit
 } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { resolveActiveEditorReloadFileId } from './editor-reload-quick-action'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
@@ -48,6 +49,8 @@ export type CmdJQuickActionContext = {
   openAddQuickCommand: () => void
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
+  /** The active group's editor file that Reload File from Disk would act on, if any. */
+  activeEditorReloadFileId?: string | null
 }
 
 export function resolveCmdJActiveGroupId(
@@ -203,7 +206,12 @@ export function buildCmdJQuickActionContext(args: {
     openAddQuickCommand: args.openAddQuickCommand,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
-      runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)
+      runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction),
+    activeEditorReloadFileId: resolveActiveEditorReloadFileId(
+      args.state,
+      activeWorktreeId,
+      activeGroupId
+    )
   }
 }
 

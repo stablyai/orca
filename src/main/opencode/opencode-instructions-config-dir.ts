@@ -3,10 +3,11 @@
 // a config folder of its own that links every entry of the user's and adds the instructions to the
 // global AGENTS.md (checked live on 2.0.16, a fresh-process reopen included).
 
-import { cp, link, lstat, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises'
+import { link, lstat, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { hasReachedAppVersion } from '../../shared/app-lifecycle/identity/app-version'
 import { resolveOpenCodeConfigDirectory } from '../../shared/agent-launch/plugins/opencode/opencode-config-directory'
+import { copyPath } from '../../shared/copy-path'
 
 const GLOBAL_INSTRUCTIONS_FILE = 'AGENTS.md'
 
@@ -37,7 +38,9 @@ async function linkEntry(source: string, target: string): Promise<void> {
     await symlink(source, target, 'junction')
     return
   }
-  await link(source, target).catch(() => cp(source, target, { force: false, errorOnExist: true }))
+  await link(source, target).catch(() =>
+    copyPath(source, target, { force: false, errorOnExist: true })
+  )
 }
 
 // Followed: a dotfiles setup often links the whole config folder.

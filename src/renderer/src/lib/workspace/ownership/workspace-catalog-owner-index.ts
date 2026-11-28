@@ -58,3 +58,49 @@ export function worktreeOwnerHostIds(
     ? [physicalHostId, runtimeHostId]
     : [runtimeHostId]
 }
+
+export function worktreeOwnerMatchesHost(
+  owner: Pick<Worktree, 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>,
+  executionHostId: ExecutionHostId
+): boolean {
+  const physicalHostId = parseExecutionHostId(owner.hostId)?.id
+  const runtimeEnvironmentId = owner.runtimeOwnerEnvironmentId?.trim()
+  if (!runtimeEnvironmentId) {
+    return (physicalHostId ?? 'local') === executionHostId
+  }
+  const runtimeHostId = toRuntimeExecutionHostId(runtimeEnvironmentId)
+  return (
+    executionHostId === runtimeHostId ||
+    (physicalHostId !== undefined && executionHostId === physicalHostId)
+  )
+}
+
+export function resolveUniqueWorktreeOwnerEntry<
+  Entry extends { owner: Pick<Worktree, 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'> }
+>(
+  locations: Entry | Entry[] | undefined,
+  executionHostId?: ExecutionHostId
+): Entry | 'missing' | 'ambiguous' {
+  if (!locations) {
+    return 'missing'
+  }
+  if (!Array.isArray(locations)) {
+    return executionHostId && !worktreeOwnerMatchesHost(locations.owner, executionHostId)
+      ? 'missing'
+      : locations
+  }
+  let matched: Entry | null = null
+  let matchedIdentity: string | null = null
+  for (const entry of locations) {
+    if (executionHostId && !worktreeOwnerMatchesHost(entry.owner, executionHostId)) {
+      continue
+    }
+    if (!matched) {
+      matched = entry
+      matchedIdentity = worktreeOwnerIdentity(entry.owner)
+    } else if (worktreeOwnerIdentity(entry.owner) !== matchedIdentity) {
+      return 'ambiguous'
+    }
+  }
+  return matched ?? 'missing'
+}

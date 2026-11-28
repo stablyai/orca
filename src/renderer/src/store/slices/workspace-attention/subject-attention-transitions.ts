@@ -26,18 +26,24 @@ function paneKeysOfTabs(record: MarkerRecord, tabIds: ReadonlySet<string>): Set<
   )
 }
 
-/** Closed, slept or purged tabs drop every layer. */
-export function removeTabsAttention(s: Markers, tabIds: Iterable<string>): Markers {
+/** Closed, slept or purged tabs drop every layer. A chat's pane markers sit under its conversation
+ *  address, not its tab id, so chat callers name those pane tab parts separately. */
+export function removeTabsAttention(
+  s: Markers,
+  tabIds: Iterable<string>,
+  paneTabIds?: Iterable<string>
+): Markers {
   const removed = new Set(tabIds)
+  const paneTabs = paneTabIds === undefined ? removed : new Set(paneTabIds)
   return {
     unreadTerminalTabs: omitRecordKeys(s.unreadTerminalTabs, removed),
     unreadTerminalPanes: removePaneKeys(
       s.unreadTerminalPanes,
-      paneKeysOfTabs(s.unreadTerminalPanes, removed)
+      paneKeysOfTabs(s.unreadTerminalPanes, paneTabs)
     ),
     unreadAgentCompletionPanes: removePaneKeys(
       s.unreadAgentCompletionPanes,
-      paneKeysOfTabs(s.unreadAgentCompletionPanes, removed)
+      paneKeysOfTabs(s.unreadAgentCompletionPanes, paneTabs)
     )
   }
 }
