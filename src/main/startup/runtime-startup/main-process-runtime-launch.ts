@@ -280,7 +280,7 @@ export async function initializeMainProcessRuntimeLaunch(
 ): Promise<void> {
   const runtime = state.core.runtime
   const shellPathHydration = state.windowsShellPathHydration
-  if (!runtime || !shellPathHydration) {
+  if (!runtime || (process.platform === 'win32' && !shellPathHydration)) {
     throw new Error('Runtime and shell-path services must be initialized before launch')
   }
   let serveOptions: ReturnType<typeof getServeOptions> | null = null
@@ -295,7 +295,7 @@ export async function initializeMainProcessRuntimeLaunch(
   installCloudSessionShutdownFlush()
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
   installMainProcessConnectorCloud(serveOptions !== null)
-  const shellPathReady = shellPathHydration.whenReady()
+  const shellPathReady = shellPathHydration ? shellPathHydration.whenReady() : Promise.resolve()
   // Publish the same shell-PATH generation to renderer Git and terminal startup barriers.
   state.shellPathReady = shellPathReady
   // Repair known poisoned DACL before renderer initialization; the ordinary probe finishes too late to prevent its first crash.

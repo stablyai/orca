@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { fileEditDraftKey } from '../../drafts/document-edit-draft-rows'
 import { DocumentEditDraftOfferBar } from '../../drafts/DocumentEditDraftOfferBar'
 import {
@@ -9,21 +10,22 @@ import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 import { spacing } from '../../theme/mobile-theme'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { MobileFilePreviewSource } from '../preview/mobile-file-preview-request'
+import type { MobileFilePreviewSource } from './mobile-file-preview-request'
 import { resolveMarkdownFloatingActionsBottom } from '../session-documents/markdown-floating-actions-layout'
 
-/** Only terminal artifacts are editable in the file preview. */
+/** Artifacts key by absolute path and workspace files by relative path, which can never collide. */
 export function filePreviewEditDraftKey(
   source: MobileFilePreviewSource | null,
   hostId: string | undefined,
   executionHost: string | undefined
 ): string | null {
-  return source?.source === 'terminalArtifact' && hostId
-    ? fileEditDraftKey(
-        { hostId, executionHost, worktreeId: source.worktreeId },
-        source.absolutePath
-      )
-    : null
+  if (!source || !hostId) {
+    return null
+  }
+  return fileEditDraftKey(
+    { hostId, executionHost, worktreeId: source.worktreeId },
+    source.source === 'terminalArtifact' ? source.absolutePath : source.relativePath
+  )
 }
 
 /** Keeps the preview's unsaved edits in the device store, and offers back the ones a kill left. */
@@ -33,9 +35,26 @@ export function MobileFilePreviewEditDraft(props: {
   editable: boolean
   live: string
   onRestore: (content: string) => void
+  /** The bar shown when there is no offer, which would sit in the same place. */
+  fallback?: ReactNode
 }) {
   const { offer, restore, discardOffer } = useDocumentEditDraft(props)
-  return offer ? <OfferBar offer={offer} onDiscard={discardOffer} onRestore={restore} /> : null
+  return offer ? (
+    <OfferBar offer={offer} onDiscard={discardOffer} onRestore={restore} />
+  ) : (
+    (props.fallback ?? null)
+  )
+}
+
+/** Where the preview's floating bars sit: above the keyboard while it is up. */
+export function useFilePreviewFloatingBarBottom(): number {
+  const insets = useSafeAreaInsets()
+  const keyboardHeight = useKeyboardOcclusion()
+  return resolveMarkdownFloatingActionsBottom({
+    keyboardLift: keyboardHeight,
+    restingBottom: insets.bottom + spacing.lg,
+    liftedClearance: spacing.md
+  })
 }
 
 function OfferBar(props: {
@@ -44,16 +63,10 @@ function OfferBar(props: {
   onRestore: () => void
 }) {
   const clipboard = useClipboardWriter()
-  const insets = useSafeAreaInsets()
-  const keyboardHeight = useKeyboardOcclusion()
   return (
     <DocumentEditDraftOfferBar
       {...props}
-      bottom={resolveMarkdownFloatingActionsBottom({
-        keyboardLift: keyboardHeight,
-        restingBottom: insets.bottom + spacing.lg,
-        liftedClearance: spacing.md
-      })}
+      bottom={useFilePreviewFloatingBarBottom()}
       onCopy={() =>
         void clipboard.writeText(props.offer.content).then(triggerSuccess, triggerError)
       }

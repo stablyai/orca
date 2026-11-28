@@ -10,6 +10,9 @@ export const FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY = 'files.write.identical-no
 
 export const FILE_WRITE_IF_UNCHANGED_METHOD = 'files.writeIfUnchanged'
 
+// Why: earlier hosts refuse `files.writeIfUnchanged` from phones, so a phone offers Edit only with this.
+export const MOBILE_FILE_WRITE_RUNTIME_CAPABILITY = 'files.mobile-write-if-unchanged.v1' as const
+
 /** v1 hosts cannot check bytes or skip identical writes; require a client-side read only for saves that must refuse non-UTF-8 files. */
 export function hostEnforcesPrecondition(
   capabilities: readonly unknown[],

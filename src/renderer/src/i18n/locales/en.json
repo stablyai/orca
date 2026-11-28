@@ -30735,8 +30735,6 @@
         "automationEnded": "Ended"
       },
       "menu": {
-        "cancel": "Cancel",
-        "done": "Done",
         "waiting": "Waiting…"
       },
       "pill": {
@@ -30746,6 +30744,7 @@
         "moveTo": "Move to"
       },
       "row": {
+        "cancel": "Cancel",
         "done": "Done",
         "more": "More",
         "select": "Select {{title}}"
