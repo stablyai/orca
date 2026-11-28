@@ -159,6 +159,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         elapsedMs: Date.now() - startedAt
       }
       logSleepFolderRead(id, read, sleepFolder)
+      let finalOutcome: 'done' | 'unavailable' | 'uncaptured' | undefined
       const committed = await this.runExclusiveCheckpoint(
         async () => {
           // Set inside: a caller past its deadline leaves this checkpoint running without it.
@@ -166,7 +167,11 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
             this.probedShellCwds.set(id, sleepCwd)
           }
           try {
-            await this.checkpointSessions([id], { final: true, teardown: true })
+            const { settled } = await this.checkpointSessions([id], {
+              final: true,
+              teardown: true
+            })
+            finalOutcome = settled.get(id)
           } finally {
             this.probedShellCwds.delete(id)
           }
@@ -177,6 +182,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       if (!committed) {
         throw new FinalCheckpointWaitExpiredError(id)
       }
+      this.assertFinalCheckpointPreservation(id, finalOutcome)
       const wslDistro = this.wslDistrosBySessionId.get(id)
       const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
       const detected = detection?.status === 'restored' ? detection.restoreInfo : null
