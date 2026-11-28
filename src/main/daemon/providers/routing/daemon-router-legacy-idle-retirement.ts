@@ -141,7 +141,8 @@ export class DaemonRouterLegacyIdleRetirement {
     if (this.disposed || !this.isRetirableLegacy(adapter)) {
       return
     }
-    if (sessions.length > 0 || liveRelays > 0) {
+    // A generation still fenced by an unanswered attempt is asked again: its refusal reopens it.
+    if ((sessions.length > 0 || liveRelays > 0) && !adapter.isIdleRetirementAdmissionClosed()) {
       this.checkAgainLater(adapter)
       return
     }
