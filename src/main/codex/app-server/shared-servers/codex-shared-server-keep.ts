@@ -186,7 +186,7 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
       return
     }
     this.handedOff = true
-    if (leases.length > 0 || !this.server.recovery.empty) {
+    if (leases.length > 0 || this.quitOpen !== undefined || !this.server.recovery.empty) {
       const open = this.quitOpen === undefined ? null : this.quitOpen
       trackProviderRelayQuitWork(
         detachProviderRelayForQuit(this.server.relayed?.chatKey ?? '', open)

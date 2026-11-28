@@ -145,6 +145,13 @@ export class CodexSharedServerRouter {
       lease.missed()
     }
     for (const frame of recovered.frames) {
+      if (!lease.routable) {
+        // Handed back mid-claim (its cut kept): its requests wait for its reopen.
+        if (frame.kind === 'request') {
+          this.recovery?.hold(frame.threadId ?? recovered.threads[0]![0], frame)
+        }
+        continue
+      }
       if (frame.kind === 'notification') {
         this.discover(frame.method, frame.params)
       }

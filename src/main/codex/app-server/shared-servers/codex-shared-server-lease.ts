@@ -52,6 +52,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   private relaySeen = false
   /** The server's unknown-loss count this chat was told of. */
   lossEpoch = 0
+  /** Shed while still reading its kept state: only its requests are handed back. */
+  keepsOnlyRequests = false
   /** Quit handed its part to the daemon (durable already): it dispatches nothing more. */
   handedOff = false
   readonly unregister: () => void
@@ -233,9 +235,10 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   /** Too far behind: drops its queue and ends it alone; it reopens its thread on its next send. */
   shed(): void {
     if (this.holding && this.restored) {
-      // Still reading its kept state: what it holds is let go, and it catches up from history.
+      // Still reading its kept state: what it held is let go, and it catches up from history;
+      // its requests wait for it, never refused.
       this.recoveryCut = true
-      this.queue.drop()
+      this.keepsOnlyRequests = true
       this.handBack()
       return
     }
@@ -263,8 +266,10 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   }
 
   close(): Promise<boolean> {
-    if (this.handedOff || (this.holding && this.restored)) {
-      // Quit's part, or a restored chat whose open never finished: nothing of its run is stopped.
+    if (this.handedOff) {
+      // Quit's part: nothing of its run is stopped. (A restored chat's failed open hands back
+      // through its relay's `keep`; a Stop or cancel while it opens stops its run, as its own
+      // server's would.)
       this.handBack()
       return Promise.resolve(true)
     }

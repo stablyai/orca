@@ -158,7 +158,8 @@ export function dispatchCodexLeaseFrame(
 /** A restored chat's open ended without its run ending: what it hadn't seen goes back to wait. */
 export function endCodexLeaseQuietly(lease: CodexSharedServerLease): void {
   lease.unregister()
-  const frames = lease.queue.take()
+  const taken = lease.queue.take()
+  const frames = lease.keepsOnlyRequests ? taken.filter((frame) => frame.kind === 'request') : taken
   for (const giveUp of lease.outstanding) {
     giveUp(new Error('codex app-server connection closed'))
   }

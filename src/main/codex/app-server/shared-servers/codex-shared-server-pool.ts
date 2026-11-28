@@ -89,7 +89,8 @@ export class CodexSharedServerPool {
     const keepable = options.keepable !== false
     const launchSpec = await codexSharedServerSpec(launch, options.skillRoots, options.codexVersion)
     // A chat whose run ends with this app (a bot's) never shares a server that outlives it.
-    const spec = keepable ? launchSpec : { ...launchSpec, key: `${launchSpec.key}:app` }
+    const spec =
+      keepable || !this.relaying ? launchSpec : { ...launchSpec, key: `${launchSpec.key}:app` }
     this.ceiling.sampleIfStale()
     for (const stale of this.unproven) {
       this.stop(stale)
