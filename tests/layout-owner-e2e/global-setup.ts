@@ -32,6 +32,8 @@ const CLI_E2E_BUILD_TIMEOUT_MS = 120_000
 const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
+  // Run from an Orca terminal, orca-dev.mjs would hand spec CLI calls to that Orca's CLI instead of the app under test.
+  delete process.env.ORCA_CLI_COMMAND
   // Why: workers and teardown need this run's path, never another concurrent run's.
   process.env[E2E_TEST_REPO_PATH_FILE_ENV] = TEST_REPO_PATH_FILE
   const root = process.cwd()
