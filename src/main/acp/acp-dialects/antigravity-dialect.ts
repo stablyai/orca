@@ -276,6 +276,12 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
+  // Keep family selectors and their efforts. A shorter config menu must not hide other models.
+  additionalModels: (configured, available) =>
+    available.filter(({ modelId }) => {
+      const family = ANTIGRAVITY_LEVEL_SUFFIX.exec(modelId)?.[1]
+      return !configured.has(modelId) && !(family && configured.has(family))
+    }),
   familyEfforts,
   listedSelection: antigravityListedFamilySelection
 }

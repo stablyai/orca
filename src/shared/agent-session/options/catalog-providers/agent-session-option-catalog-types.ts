@@ -22,7 +22,11 @@ export type CatalogMidSessionApply =
 
 export type CatalogOptionApply = {
   cli?: readonly AgentChoiceCliForm[]
-  launchArgs?: (value: SessionOptionValue, trailingAgentArgs?: readonly string[]) => string[]
+  launchArgs?: (
+    value: SessionOptionValue,
+    trailingAgentArgs?: readonly string[],
+    launchModelId?: string
+  ) => string[]
   /** Removes conflicting free-form args, or detects when to omit the pick from launch args and the record. */
   removeAgentArgs?: (tokens: readonly string[]) => string[]
   composedIntoModel?: true

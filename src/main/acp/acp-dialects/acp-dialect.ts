@@ -207,6 +207,8 @@ export type AcpDialect = {
   ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
   modelEfforts?(model: ModelInfo): AcpAdvertisedEfforts
+  /** Top-level session model rows missing from the native model selector. */
+  additionalModels?(configured: ReadonlySet<string>, available: readonly ModelInfo[]): ModelInfo[]
   /** Efforts of a listed model family that `models` advertises only as per-effort variants. */
   familyEfforts?(family: string, models: readonly ModelInfo[]): AcpAdvertisedEfforts | undefined
   /** A saved model id the chat lists as another row and effort, e.g. a family's level id. */
