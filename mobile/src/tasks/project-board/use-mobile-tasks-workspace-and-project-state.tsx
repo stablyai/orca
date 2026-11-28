@@ -161,7 +161,8 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const projectRowHandoff = useBottomDrawerFollowUp(() => setProjectRowItem(null))
   const repoPickerHandoff = useBottomDrawerFollowUp(() => setWorkspaceRepoPickerItem(null))
 
-  return Object.assign(model, {
+  return {
+    ...model,
     projectRowHandoff,
     repoPickerHandoff,
     workspaceRepoPickerItem,
@@ -334,7 +335,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setProjectMutating,
     projectRepoNotInOrca,
     setProjectRepoNotInOrca
-  })
+  }
 }
 
 export type WorkspaceAndProjectStateModel = ReturnType<

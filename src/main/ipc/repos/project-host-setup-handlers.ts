@@ -53,9 +53,10 @@ function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetup
 export function registerProjectHostSetupHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  metadata: RepositoryMetadataOwner
+  metadata: RepositoryMetadataOwner,
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
 ): void {
-  ipcMain.handle(
+  ipc.handle(
     'projectHostSetups:create',
     (_event, rawArgs: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult => {
       const args = parseProjectGroupIpcArgs(
@@ -73,7 +74,7 @@ export function registerProjectHostSetupHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'projectHostSetups:update',
     async (_event, rawArgs: ProjectHostSetupUpdateArgs): Promise<ProjectHostSetupUpdateResult> => {
       const args = parseProjectGroupIpcArgs(
@@ -102,7 +103,7 @@ export function registerProjectHostSetupHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'projectHostSetups:delete',
     (_event, rawArgs: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult => {
       const args = parseProjectGroupIpcArgs(
@@ -120,7 +121,7 @@ export function registerProjectHostSetupHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'projectHostSetups:setupExistingFolder',
     async (
       _event,

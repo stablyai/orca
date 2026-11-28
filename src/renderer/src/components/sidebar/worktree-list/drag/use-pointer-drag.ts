@@ -178,7 +178,7 @@ export function useWorktreePointerDrag(args: {
         !workspaceBoardOpen &&
         onWorkspaceBoardDragPreviewStart !== NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
       if (
-        (session.worktreeDragGroups.find((group) => group.key === sourceGroupKey)?.worktreeIds
+        (session.getWorktreeDragGroups().find((group) => group.key === sourceGroupKey)?.worktreeIds
           .length ?? 0) <= 1 &&
         !hasWorkspaceKanbanSidebarDropBoard() &&
         !canPreviewWorkspaceBoardOnDrag

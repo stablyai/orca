@@ -24,18 +24,24 @@ export function countedRelayRecords(
   stream: Pick<Readable, 'on'> & { relayRecords?: ProviderRelayRecordTaking },
   onRecord: (record: unknown, line: string) => void,
   onRejected: (rejected: NdjsonRejectedRecord) => void
-): { onRecord: typeof onRecord; onRejected: typeof onRejected } {
+): {
+  /** `lines`: how many read lines the record stands for (a merged run is one record). */
+  onRecord: (record: unknown, line: string, lines?: number) => void
+  onRejected: typeof onRejected
+} {
   const records = stream.relayRecords
   if (!records) {
     return { onRecord, onRejected }
   }
   records.claim()
   return {
-    onRecord: (record, line) => {
+    onRecord: (record, line, lines = 1) => {
       try {
         onRecord(record, line)
       } finally {
-        records.taken()
+        for (let taken = 0; taken < lines; taken++) {
+          records.taken()
+        }
       }
     },
     onRejected: (rejected) => {

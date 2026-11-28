@@ -3,7 +3,7 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubUsageLimitFeed } from '../../component-fixtures/fixture-usage-limit-feed'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Bot } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -45,7 +45,7 @@ const owners = [devOpsOn, devOpsOff, longName]
 const LIMIT_RESET = now + 40 * MIN
 
 const chats: AgentStatusEntry[] = owners.map((owner) => ({
-  paneKey: structuredAgentSessionStatusPaneKey(`chat-${owner.id}`),
+  paneKey: chatPaneKey(`chat-${owner.id}`),
   worktreeId: folderWorkspaceKey(owner.folderWorkspaceId),
   agentType: 'claude',
   prompt: '',

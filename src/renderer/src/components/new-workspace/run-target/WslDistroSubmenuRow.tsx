@@ -123,6 +123,7 @@ export function WslDistroSubmenuRow({
         side="right"
         align="start"
         sideOffset={6}
+        wheelScroll
         className={SUBMENU_CONTENT}
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}

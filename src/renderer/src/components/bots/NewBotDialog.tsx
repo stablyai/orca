@@ -368,7 +368,6 @@ export function NewBotDialog({
               )}
             </div>
             <BotRunsOnPicker
-              variant="fields"
               hostChoice={hostChoice}
               setup={agentSetup.setup}
               model={menu.model}

@@ -1,5 +1,7 @@
 // Calendar windows in the calendar's own time zone: "today" is that zone's day, not this host's.
 
+import { hasImpossibleLeadingDate } from '../../shared/validation/calendar-date'
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
 /** The calendar day (YYYY-MM-DD) an instant falls on in a time zone. */
@@ -40,6 +42,9 @@ export function zonedMidnight(date: string, timeZone: string): string {
 /** A --from/--to value: a day (its midnight in the zone; `--to` days are included) or RFC 3339. */
 export function windowBound(value: string, timeZone: string, end: boolean): string | null {
   const trimmed = value.trim()
+  if (hasImpossibleLeadingDate(trimmed)) {
+    return null
+  }
   if (DATE.test(trimmed)) {
     return zonedMidnight(end ? addDays(trimmed, 1) : trimmed, timeZone)
   }

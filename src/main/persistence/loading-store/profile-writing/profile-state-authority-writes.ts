@@ -1,10 +1,20 @@
 import { createHash } from 'node:crypto'
 import { types } from 'node:util'
 import {
-  applySecretSentinelSubstitutions,
+  createTextSecretSentinelSubstituter,
   type SecretSentinelSubstitution
 } from './secret-sentinel-substitution'
 import type { ProfileStateDomainReplacement } from './profile-state-authority'
+
+const isRawJson =
+  'isRawJSON' in JSON && typeof JSON.isRawJSON === 'function' ? JSON.isRawJSON : undefined
+
+function hasCustomToJsonOrProxy(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') {
+    return false
+  }
+  return types.isProxy(value) || 'toJSON' in value
+}
 
 export function serializeSelectiveProfileStateDomains(
   state: Record<string, unknown>,
@@ -30,12 +40,23 @@ export function serializeCompleteProfileStateDomains(
 ): { payload: Buffer; stateHash: string; domains: readonly ProfileStateDomainReplacement[] } {
   const domains: ProfileStateDomainReplacement[] = []
   const hash = createHash('sha1').update(degradedPrefix)
+  const substituter = createTextSecretSentinelSubstituter(substitutions)
   for (const [domain, value] of Object.entries(state)) {
+    if (!hasCustomToJsonOrProxy(value)) {
+      const rawPayload = JSON.stringify(value)
+      if (rawPayload === undefined) {
+        continue
+      }
+      const serialized = substituter.apply(rawPayload, `{${JSON.stringify(domain)}:`, '}')
+      hash.update(serialized.stateHash)
+      domains.push({ domain, payload: serialized.payload })
+      continue
+    }
     const fragment = serializeProfileStateDomainFragment(domain, value)
     if (fragment === '{}') {
       continue
     }
-    const serialized = applySecretSentinelSubstitutions(fragment, substitutions, '', 'text')
+    const serialized = substituter.apply(fragment)
     hash.update(serialized.stateHash)
     domains.push({
       domain,
@@ -58,11 +79,7 @@ function serializeSelectiveProfileStateDomainFragment(domain: string, value: unk
   let needsNormalization = false
   const fragment = serializeProfileStateDomainFragment(domain, value, (_key, entry) => {
     if (entry !== null && typeof entry === 'object') {
-      needsNormalization ||=
-        types.isProxy(entry) ||
-        ('isRawJSON' in JSON &&
-          typeof JSON.isRawJSON === 'function' &&
-          JSON.isRawJSON(entry) === true)
+      needsNormalization ||= types.isProxy(entry) || isRawJson?.(entry) === true
     }
     return entry
   })

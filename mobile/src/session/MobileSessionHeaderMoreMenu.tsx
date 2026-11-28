@@ -8,6 +8,11 @@ import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
+import {
+  getMobileTerminalChatContinuationActions,
+  resolveMobileTerminalChatContinuation
+} from './native-chat/history/mobile-terminal-chat-continuation-actions'
+import { continueMobileTerminalInChat } from './mobile-terminal-chat-continuation'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
 type Props = {
@@ -98,13 +103,24 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef }: Props) {
         ]
       : [])
   ]
-  const tabs: ActionSheetAction[] = getMobileNativeChatCliForkActions({
-    controller,
-    tab: activeSessionTab?.type === 'agent-session' ? activeSessionTab : null,
-    workspaceOnPairedHost,
-    onDismiss: () => setShowHeaderMoreActions(false),
-    t
-  }).map((action) => ({ ...action, disabled: tabActionsDisabled }))
+  const tabs: ActionSheetAction[] = [
+    ...getMobileNativeChatCliForkActions({
+      controller,
+      tab: activeSessionTab?.type === 'agent-session' ? activeSessionTab : null,
+      workspaceOnPairedHost,
+      onDismiss: () => setShowHeaderMoreActions(false),
+      t
+    }).map((action) => ({ ...action, disabled: tabActionsDisabled })),
+    ...getMobileTerminalChatContinuationActions({
+      continuation: resolveMobileTerminalChatContinuation({
+        tab: activeSessionTab,
+        hostCapabilities: controller.hostCapabilities
+      }),
+      onDismiss: () => setShowHeaderMoreActions(false),
+      onContinue: (continuation) => void continueMobileTerminalInChat(controller, continuation),
+      t
+    }).map((action) => ({ ...action, disabled: tabActionsDisabled }))
+  ]
   return (
     <PullDownMenu
       visible={showHeaderMoreActions}

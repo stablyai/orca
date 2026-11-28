@@ -864,7 +864,9 @@
         "pending": "Bağlanıyor…",
         "tools_one": "{{count}} araç",
         "tools_other": "{{count}} araç",
-        "waitingForSignIn": "Oturum açılması bekleniyor…"
+        "waitingForSignIn": "Oturum açılması bekleniyor…",
+        "orcaRemoved": "Kaldırıldı: sonraki mesajda yeniden başlar",
+        "orcaChanged": "Değiştirildi: sonraki mesajda yeniden başlar"
       },
       "source": {
         "project": "Proje",
@@ -897,7 +899,8 @@
         "failed": "Başarısız: {{count}}"
       },
       "pasteHint": "Tarayıcı yüklenmeyen bir sayfaya yönlendiğinde adresi kopyalayıp buraya yapıştırın.",
-      "manage": "MCP sunucularını yönet"
+      "manage": "MCP sunucularını yönet",
+      "stillFailing": "Yeniden bağlandıktan sonra hâlâ başarısız."
     },
     "restartNote": {
       "continued": "Orca, yeniden başlatmanın ardından bu ajandan devam etmesini istedi. İsteminiz yeniden gönderilmedi.",
@@ -3346,7 +3349,7 @@
       "collapse": "Daralt"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Yeni CLI'de Devam Et"
+      "continueInTerminal": "Terminalde devam et"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "En sona kaydır"
@@ -3953,6 +3956,18 @@
       "needsYou": "Sizi bekliyor",
       "files": "Dosyalar",
       "otherWorkspaces": "Diğer çalışma alanları"
+    },
+    "terminalChatContinuation": {
+      "busy": "Başka bir sohbet veya terminal açılıyor. Bekleyin, sonra tekrar deneyin.",
+      "continueInChat": "Sohbette devam et",
+      "failed": "Sohbette devam edilemedi. {{detail}}",
+      "failedAfterClose": "Sohbette devam edilemedi. {{detail}} Konuşma Ajan Geçmişi'nde.",
+      "otherJob": "Bu terminalde {{process}} çalışıyor. Kapatın, ardından sohbette devam edin.",
+      "terminalChanged": "Orca kontrol ederken bu terminal değişti. Tekrar deneyin.",
+      "tryAgain": "Tekrar deneyin.",
+      "unavailable": "{{agent}} sohbetleri bu bilgisayarda kullanılamıyor.",
+      "uncheckable": "Orca bu terminalde neyin çalıştığını kontrol edemedi. Tekrar deneyin.",
+      "unconfirmed": "Orca sohbetin açıldığını doğrulayamadı. Tekrar denemeden önce sekmelerinizi kontrol edin."
     }
   },
   "settings": {
@@ -4546,6 +4561,9 @@
       "agentCouldNotStart": "{{label}} başlatılamadı. Ayarlar bölümündeki ajan komutunu kontrol edip yeniden deneyin.",
       "agentFailedToStart": "{{label}} başlatılamadı. Ayarlar bölümündeki ajan komutunu kontrol edip yeniden deneyin.",
       "agentReportedError": "{{label}} bir hata bildirdi.",
+      "antigravityInvalidEvents": "Antigravity geçersiz JSON olayları döndürdü.",
+      "antigravityInvalidResult": "Antigravity geçersiz bir sonuç döndürdü.",
+      "antigravityNoFinalResult": "Antigravity nihai bir sonuç döndürmedi.",
       "chatNameAgentUnsupported": "Bu eylem için Ayarlar -> Sohbet -> Sohbet adları bölümünde desteklenen bir sohbet adı oluşturma ajanı seçin. Desteklenen ajanlar: {{agents}} veya Özel komut.",
       "chatNameCustomCommandEmpty": "Özel komut boş. Ayarlar -> Sohbet -> Sohbet adları bölümünde bir komut ekleyin.",
       "cliFailed": "{{label}} CLI komutu {{exitCode}} hata koduyla sonlandı.",
@@ -6665,7 +6683,6 @@
       "suggestThree": "{{a}}, {{b}} ve {{c}}",
       "suggestMore": "{{a}}, {{b}} ve {{count}} tane daha",
       "pickOne": "Bir bot seçin",
-      "needsTwoBots": "{{host}} üzerinde 2 bot gerekir",
       "peerReadItems": "{{bot}}, öğeleriyle ilgili bir güncellemeyi okudu",
       "remoteReplied": "{{computer}} üzerinde yanıt verdi",
       "remoteNotice": "{{computer}} üzerinde yanıt vermedi",
@@ -8532,6 +8549,7 @@
     "workspacesCount": "{{count}} çalışma alanı",
     "workspacesAllButCount": "{{count}} hariç tümü",
     "headerMissing": "Bu sunucuyu eklemek için {{header}} alanını doldurun.",
-    "servers": "Sunucular"
+    "servers": "Sunucular",
+    "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar açılamıyor. Yeniden oturum açın."
   }
 }

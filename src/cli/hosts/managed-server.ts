@@ -235,12 +235,10 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       'managedServer.forget',
       params
     )
-    report(
-      response,
-      context.json,
-      ['forgotten'],
-      () =>
-        `Unlinked ${params.selector} from this machine and disconnected its SSH host. The host was not contacted, so orcad may still be running there; connect the host to set its server up again.`
+    report(response, context.json, ['forgotten'], (result) =>
+      result.sshTargetId
+        ? `Unlinked ${params.selector} from this machine and disconnected its SSH host. The host was not contacted, so orcad may still be running there; connect the host to set its server up again.`
+        : `Removed the WSL host ${params.selector} from this machine. Its distro was not contacted, so orcad may still be running there; add the distro again to set its server up again.`
     )
   },
   'environment cancel-stop': async (context) => {

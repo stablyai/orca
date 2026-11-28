@@ -164,7 +164,13 @@ export function registerTerminalPanePasteListeners({
     if (isClipboardEventPasteRequired()) {
       const eventText = getClipboardEventText(event)
       pasteFromClipboard(pane, 'paste-event', {
-        readClipboardText: (options) => assertClipboardTextWithinLimitWithYield(eventText, options),
+        // Web-only: browsers expose copied files only to the paste event itself.
+        readClipboardContent: async (options) => ({
+          text: await assertClipboardTextWithinLimitWithYield(eventText, options),
+          filePaths: [],
+          linkHtml: '',
+          hasImage: null
+        }),
         eventCopiedFilePaths,
         eventCarriedFiles,
         isUnreadWindowsClipboardFallback
@@ -209,7 +215,7 @@ export function registerTerminalPanePasteListeners({
       paneTransportsRef.current.get(pane.id)
     )
     void pasteTerminalClipboard({
-      readClipboardText: window.api.ui.readClipboardText,
+      readClipboardContent: window.api.ui.readClipboardPasteContent,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,

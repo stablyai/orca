@@ -14,7 +14,6 @@ import { TransientToast, useTransientToast } from '../components/feedback/Transi
 import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { SheetPageScroll } from '../components/nav-bar/sheet-page-scroll'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
-import { loadHosts, peekHosts } from '../host-catalog/host-store'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -30,25 +29,7 @@ import { MobileMcpWorkspacesPage } from './MobileMcpWorkspacesPage'
 import type { PhoneMcpServer } from './mcp-server-operations'
 import { useMcpServerActions } from './use-mcp-server-actions'
 import { useMcpServersData } from './use-mcp-servers-data'
-
-function useHostName(hostId: string): string {
-  const [name, setName] = useState(
-    () => peekHosts()?.find((host) => host.id === hostId)?.name ?? ''
-  )
-  useEffect(() => {
-    let live = true
-    void loadHosts().then((hosts) => {
-      const host = hosts.find((entry) => entry.id === hostId)
-      if (live && host) {
-        setName(host.name)
-      }
-    })
-    return () => {
-      live = false
-    }
-  }, [hostId])
-  return name
-}
+import { useMcpHostName } from './use-mcp-host-name'
 
 export function MobileMcpServersScreen() {
   const styles = useThemedStyles(stylesSheet)
@@ -58,7 +39,7 @@ export function MobileMcpServersScreen() {
   const { hostId = '' } = useLocalSearchParams<{ hostId: string }>()
   const { client, state } = useHostClient(hostId)
   const online = state === 'connected'
-  const hostName = useHostName(hostId)
+  const hostName = useMcpHostName(hostId)
   const { statusPending } = useHostProtocolGates()
   const capable = useRouteCapability(MCP_SERVERS_RUNTIME_CAPABILITY)
   const data = useMcpServersData(hostId, client, capable)

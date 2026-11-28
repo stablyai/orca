@@ -116,13 +116,9 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     options: PendingOfferOptions = {}
   ): TokenDeviceEntry {
     // Authentication marks seen before child sync, so pending runtime offers cannot have children.
-    const pending = new Set<DeviceEntry>(this.listPendingDevices(scope))
+    const pending = new Set<DeviceEntry>(this.listPendingDevices(scope, options.createdByDeviceId))
     const retained = this.devices.filter((d) => !pending.has(d))
     return this.createAndPersistDevice(retained, name, scope, pairingReach, grants, options)
-  }
-
-  listDelegatedMobileDevices(parentDeviceId: string): DeviceEntry[] {
-    return this.devices.filter((device) => device.parentDeviceId === parentDeviceId)
   }
 
   /** Create-or-return one mobile child per phoneKey under `parent`, in `phones` order. */
@@ -172,8 +168,12 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     )
   }
 
-  listPendingDevices(scope: DeviceScope): TokenDeviceEntry[] {
-    return pendingPairingOffers(this.devices, scope, this.seenDeviceIds)
+  /** A paired client's offers only when `createdByDeviceId` is given; the owner's call sees every one. */
+  listPendingDevices(scope: DeviceScope, createdByDeviceId?: string): TokenDeviceEntry[] {
+    const offers = pendingPairingOffers(this.devices, scope, this.seenDeviceIds)
+    return createdByDeviceId === undefined
+      ? offers
+      : offers.filter((offer) => offer.createdByDeviceId === createdByDeviceId)
   }
 
   listExpiredPairingOffers(scope: DeviceScope): DeviceEntry[] {

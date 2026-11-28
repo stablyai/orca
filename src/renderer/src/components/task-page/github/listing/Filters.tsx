@@ -1,9 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import {
-  getGitHubPRStateChips,
-  getGitHubPRWhoChips,
-  getIssueTaskQueryPresets
-} from '@/components/task-page/task-page-localized-options'
+import { getIssueTaskQueryPresets } from '@/components/task-page/task-page-localized-options'
 import { cn } from '@/lib/class-names'
 import PRFilterDropdowns, {
   PRFilterPills,
@@ -35,12 +31,7 @@ import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/I
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { deriveGitHubTaskPreset } from './task-page-preset-highlight'
-import {
-  deriveGitHubPRStateChip,
-  deriveGitHubPRWhoChip,
-  gitHubPRWhoChange,
-  gitHubPRWhoPreset
-} from './task-page-pr-chips'
+import { deriveGitHubPRStateChip } from './task-page-pr-chips'
 
 function PresetChip({
   label,
@@ -126,7 +117,6 @@ export function TaskPageGitHubListChrome({
   const pills = getPRFilterPills(appliedTaskQuery, defaultFilters, t)
   const highlightedPreset = deriveGitHubTaskPreset(activeGithubTaskKind, appliedTaskQuery)
   const prStateChip = deriveGitHubPRStateChip(appliedTaskQuery)
-  const prWhoChip = deriveGitHubPRWhoChip(appliedTaskQuery)
   // Why: filter metadata for the primary slug is read from the host that owns the repo it came from.
   const primaryGithubFilterSource = perRepoSourceState.find((state) =>
     activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
@@ -146,54 +136,9 @@ export function TaskPageGitHubListChrome({
   }
   const stateLabel = t('auto.components.TaskPage.issueFilterState', 'State')
   const presetLabel = t('auto.components.TaskPage.issueFilterPreset', 'Preset')
-  const presets = (
-    <div className="border-b border-border p-2">
-      {activeGithubTaskKind === 'prs' ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap gap-1.5">
-            {getGitHubPRStateChips().map(({ id, label }) => (
-              <PresetChip
-                key={id}
-                label={label}
-                active={prStateChip === id}
-                onSelect={() => {
-                  // Why: re-applying a lit chip would only rewrite the query and refetch the same rows.
-                  if (prStateChip !== id) {
-                    applyPRFilterChange({ state: id })
-                  }
-                }}
-                // Why: keeps main's right-click on Open, which saved the open-PRs preset.
-                onSetDefault={id === 'open' ? () => handleSetDefaultTaskPreset('prs') : undefined}
-              />
-            ))}
-            <PresetChip
-              label={t('auto.components.github.PRFilterSections.b930de7194', 'Draft only')}
-              active={appliedTaskQuery.draft}
-              onSelect={() => applyPRFilterChange({ draft: !appliedTaskQuery.draft })}
-            />
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {getGitHubPRWhoChips().map(({ id, label }) => (
-              <PresetChip
-                key={id}
-                label={label}
-                active={prWhoChip === id}
-                onSelect={() => {
-                  if (prWhoChip !== id) {
-                    applyPRFilterChange(gitHubPRWhoChange(id))
-                  }
-                }}
-                // Why: the default view is a saved preset, and only the open-state combinations are presets.
-                onSetDefault={
-                  prStateChip === 'open'
-                    ? () => handleSetDefaultTaskPreset(gitHubPRWhoPreset(id))
-                    : undefined
-                }
-              />
-            ))}
-          </div>
-        </div>
-      ) : (
+  const presets =
+    activeGithubTaskKind === 'issues' ? (
+      <div className="border-b border-border p-2">
         <div className="flex flex-col gap-2">
           <span aria-hidden className="text-2xs font-medium text-muted-foreground">
             {stateLabel}
@@ -236,9 +181,8 @@ export function TaskPageGitHubListChrome({
             ))}
           </div>
         </div>
-      )}
-    </div>
-  )
+      </div>
+    ) : undefined
   const sourceNotices = (() => {
     // Why: show the source-slug chip only when the selector can't render (no upstream to toggle); otherwise it duplicates the selector.
     const rows = githubSourceDisplayState.filter(
@@ -354,6 +298,7 @@ export function TaskPageGitHubListChrome({
             primarySlug={primaryGithubFilterSlug}
             ownerTarget={primaryGithubFilterTarget}
             onChange={applyPRFilterChange}
+            onSetDefaultPreset={handleSetDefaultTaskPreset}
             activeCount={pills.length}
             presets={presets}
           />

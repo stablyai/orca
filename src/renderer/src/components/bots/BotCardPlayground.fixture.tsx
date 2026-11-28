@@ -9,7 +9,6 @@ import { useAppStore } from '@/store'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { mascotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
@@ -23,6 +22,7 @@ import {
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { BotSidebarEntry } from './BotSidebarEntry'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const now = Date.now()
 const MIN = 60_000
@@ -123,7 +123,7 @@ const workerAgents: AgentStatusEntry[] = LINES.map((line) => ({
 }))
 
 const homeChat: AgentStatusEntry = {
-  paneKey: structuredAgentSessionStatusPaneKey(releaseBot.chatSessionId!),
+  paneKey: chatPaneKey(releaseBot.chatSessionId!),
   worktreeId: folderWorkspaceKey(home.id),
   agentType: 'claude',
   state: 'working',

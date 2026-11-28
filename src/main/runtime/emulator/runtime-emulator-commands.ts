@@ -289,10 +289,15 @@ export class RuntimeEmulatorCommands {
     emulator?: string
     worktree?: string
     managedOnly?: boolean
+    activeDevice?: string
   }): Promise<{ ok: true; deviceUdid?: string }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveCleanupWorktreeId(params.worktree)
     if (params.managedOnly && worktreeId && !params.device && !params.emulator) {
+      const active = bridge.getActiveForWorktree(worktreeId)
+      if (params.activeDevice && active && active.deviceUdid !== params.activeDevice) {
+        return { ok: true }
+      }
       const shutdownUdid = await bridge.shutdownActiveManagedForWorktree(worktreeId)
       return { ok: true, deviceUdid: shutdownUdid ?? undefined }
     }
