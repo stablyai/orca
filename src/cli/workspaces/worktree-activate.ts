@@ -29,8 +29,8 @@ function formatWorktreeActivate(
   const request =
     hostWindow === 'requested'
       ? `sent a request to the Orca window on ${computer} to open ${worktreeId}.`
-      : `requested to open ${worktreeId} on ${computer}. This Orca version does not report whether a window received the request.`
-  return `${scope}: ${request} Nothing changes on any other computer, phone, or Slack.`
+      : `sent a request to open ${worktreeId} on ${computer}. This Orca version does not report whether a window received the request.`
+  return `${scope}: ${request} No screen changes on any other computer, phone, or Slack.`
 }
 
 export const WORKTREE_ACTIVATE_HANDLERS: Record<string, CommandHandler> = {

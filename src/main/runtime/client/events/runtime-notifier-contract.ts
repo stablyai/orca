@@ -140,7 +140,7 @@ export type RuntimeNotifier = {
   renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
   /** False when the window could not be reached; absent on notifiers that predate pane titles. */
   setPaneTitle?(tabId: string, leafId: string, title: string | null): boolean
-  focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
+  focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): boolean | void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
   /** `userInitiated` lets a chat tab move the window to another worktree. */

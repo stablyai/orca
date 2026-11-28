@@ -157,8 +157,9 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
             navigated: false
           }
         }
-        notifier.focusTerminal(liveLeaf.tabId, liveLeaf.worktreeId, liveLeaf.leafId)
-        if (!ctx.isCurrent() || this.notifier !== notifier) {
+        // A window that refused the send was not focused, so the CLI must not say it was.
+        const sent = notifier.focusTerminal(liveLeaf.tabId, liveLeaf.worktreeId, liveLeaf.leafId)
+        if (sent === false || !ctx.isCurrent() || this.notifier !== notifier) {
           return {
             handle,
             tabId: liveLeaf.tabId,

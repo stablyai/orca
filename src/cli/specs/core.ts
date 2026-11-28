@@ -59,10 +59,11 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['worktree', 'activate'],
-    summary: 'Open a worktree on its host, waking a sleeping recipe VM behind it',
+    summary: "Ask the host's Orca window to open a worktree, waking a sleeping recipe VM behind it",
     usage: 'orca worktree activate --worktree <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
     notes: [
+      'Prints whether the request reached an Orca window on the host, not that the window switched. No screen changes on any other computer, phone, or Slack.',
       'With --environment naming a recipe VM that is asleep, Orca on this computer wakes the VM first and waits for it.',
       'Folder workspaces cannot be activated from the CLI yet; open them from the Orca sidebar.'
     ],

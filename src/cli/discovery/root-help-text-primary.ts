@@ -131,7 +131,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   'Worktrees:',
   '  worktree list             List Orca-managed worktrees',
   '  worktree show             Show one worktree',
-  '  worktree activate         Open a worktree on its host, waking a sleeping recipe VM',
+  "  worktree activate         Ask the host's Orca window to open a worktree; wakes a sleeping recipe VM",
   '  worktree current          Show the Orca-managed worktree for the current directory',
   '  worktree create           Create a new Orca-managed worktree',
   '  worktree set              Update Orca metadata for a worktree',
