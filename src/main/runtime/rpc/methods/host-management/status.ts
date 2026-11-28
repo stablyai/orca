@@ -32,5 +32,13 @@ export const STATUS_METHODS = [
         remoteUpdateSupport: snapshot.support
       }
     }
+  }),
+  defineMethod({
+    name: 'status.agentOrchestration',
+    permission: 'workspace',
+    params: null,
+    // Why: a paired client has no orchestration data of its own; this is the parent/child map
+    // (keyed by the host's pane keys) that lets it nest worker chats under their coordinator.
+    handler: (_params, { runtime }) => ({ byPaneKey: runtime.agentOrchestrationByPaneKey() ?? {} })
   })
 ]
