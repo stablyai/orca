@@ -83,9 +83,9 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
     expect(comments(uid)).toHaveLength(1)
     expect(comments(uid)[0]!.data.text).toContain('PR is up')
     expect(receipt.recorded).toEqual({ item: number, bot: 'Ranger' })
-    expect(receipt.next).toContain(`Recorded on item ${number} of Ranger`)
+    expect(receipt.next).toContain(`Done: recorded on item ${number} of Ranger`)
     expect(receipt.next).toContain(`orca bot item show ${number}`)
-    expect(receipt.next).toContain('Nothing was delivered')
+    expect(receipt.next).toContain("don't send it again")
   })
 
   it('refuses, naming the items, when the chat has several open items or none', async () => {
@@ -97,6 +97,22 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
     await expect(
       mail.send(RANGER_THREAD, { to: 'bot:Docs', type: 'status', body: 'b' })
     ).rejects.toThrow(new RegExp(`${second} \\(Two\\), ${first} \\(One\\).*orca bot item comment`))
+    expect(messageCount()).toEqual({ n: 0 })
+    expect(mail.runtime.notifyMessageArrived).not.toHaveBeenCalled()
+  })
+
+  it("records on the sender's own item that --item names, with no wake", async () => {
+    const { uid } = addItem('Mine')
+    addItem('Other')
+    const number = items.get(uid)!.number
+    const receipt = await mail.sent(RANGER_THREAD, {
+      to: 'bot:Docs',
+      type: 'status',
+      item: String(number),
+      body: 'b'
+    })
+    expect(receipt.recorded).toEqual({ item: number, bot: 'Ranger' })
+    expect(comments(uid)).toHaveLength(1)
     expect(messageCount()).toEqual({ n: 0 })
     expect(mail.runtime.notifyMessageArrived).not.toHaveBeenCalled()
   })

@@ -190,7 +190,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
         )
       }
       if ('recorded' in value) {
-        return withWarnings(`Recorded on item ${value.recorded.item} of ${value.recorded.bot}`)
+        return withWarnings(
+          `Status recorded on item ${value.recorded.item} of ${value.recorded.bot}`
+        )
       }
       if ('relay' in value) {
         if (value.relay.destination === 'worker') {

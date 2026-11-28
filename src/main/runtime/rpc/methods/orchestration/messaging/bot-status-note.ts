@@ -51,24 +51,33 @@ function isRecordedStatus(
   )
 }
 
-/** Refused before `--file` attachments are claimed: a recorded status takes none. */
-export async function assertNoStatusFiles(
+/** The bot whose own status send this is, when Orca records it instead of sending it; null for any
+ *  other mail. Read before `--item` routing and `--file` claims, which a recorded status skips. */
+export async function recordedStatusSender(
   runtime: OrcaRuntimeService,
-  mail: { params: { type?: string; files?: readonly string[] }; messageId?: string; to: string },
+  mail: { params: { type?: string }; messageId?: string; to: string },
   sender: OrchestrationPartyIdentity,
   callerSessionId: string | undefined
-): Promise<void> {
-  if (!mail.params.files?.length || mail.params.type !== 'status') {
-    return
+): Promise<Bot | null> {
+  if (mail.params.type !== 'status' || mail.messageId !== undefined) {
+    return null
   }
   // Which chat is a bot's is read from the session host, so it is up before the sender is placed.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-  const creator = creatorSession(runtime.getOrchestrationDb(), sender).sessionId
-  const sessionId = creator ?? callerSessionId
-  if (!sessionId || !botOfSession(runtime.bots, sessionId) || !isRecordedStatus(mail, sessionId)) {
-    return
+  const sessionId =
+    creatorSession(runtime.getOrchestrationDb(), sender).sessionId ?? callerSessionId
+  const bot = sessionId ? botOfSession(runtime.bots, sessionId) : null
+  return bot && isRecordedStatus(mail, sessionId) ? bot : null
+}
+
+/** A recorded status takes no files: refused before any is claimed. */
+export function assertNoStatusFiles(
+  statusSender: Bot | null,
+  files: readonly string[] | undefined
+) {
+  if (statusSender && files?.length) {
+    throw new OrchestrationError('invalid_argument', STATUS_FILES_REFUSAL)
   }
-  throw new OrchestrationError('invalid_argument', STATUS_FILES_REFUSAL)
 }
 
 /** A bot's own status send is recorded instead of sent, after the checks any bot request passes;
@@ -129,7 +138,7 @@ async function recordBotStatusNote(
     recorded: { item: item.number, bot: owner },
     messages: [],
     recipients: 0,
-    next: `Recorded on item ${item.number} of ${owner}; bots read it with \`orca bot item show ${item.number}\`. Nothing was delivered, so ${target.name} was not woken. To have it act or answer, send --type question or --type handoff.`
+    next: `Done: recorded on item ${item.number} of ${owner}. A status wakes no one by design: ${target.name} reads it with \`orca bot item show ${item.number}\` when it needs it, so don't send it again. Only if ${target.name} must act or answer, send --type question or --type handoff.`
   }
 }
 
