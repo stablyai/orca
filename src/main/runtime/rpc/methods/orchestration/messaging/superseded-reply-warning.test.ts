@@ -6,6 +6,7 @@ import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { supersededReplyWarning } from './superseded-reply-warning'
+import { localOrchestrationCliCommand } from '../../../../orchestration/workers/launch/orchestration-cli-command'
 
 const PANES: Record<string, string> = {
   term_lead: 'tab_a:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -64,7 +65,7 @@ describe('a reply to mail its sender has since followed up', () => {
       {
         code: 'superseded_reply',
         recipient: 'term_lead',
-        message: `${newer.id} from term_lead on this thread is newer than the message you answered; read it with \`orca orchestration inbox --terminal term_helper --limit 1 --full\`, and send a correction if your reply no longer fits.`
+        message: `${newer.id} from term_lead on this thread is newer than the message you answered; read it with \`${localOrchestrationCliCommand()} orchestration inbox --terminal term_helper --limit 1 --full\`, and send a correction if your reply no longer fits.`
       }
     ])
   })
