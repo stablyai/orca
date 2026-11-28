@@ -54,11 +54,12 @@ export function retireLocalBaseRefToast(target: string, id: string): void {
   }
 }
 
-// Why safe: sonner reads history only to find an id we create again or to dismiss all; a retired id is
-// never created again and is already closing. Its rendered copy lives in the Toaster's own state.
+// Why safe: sonner reads history to find an id we create again, to list active toasts (dismissed ids are
+// already filtered out) or to dismiss all; a retired id is never created again and is already closing.
+// Its rendered copy lives in the Toaster's own state. Searched from the newest end, where our entry usually is.
 function pruneRetiredToastFromHistory(id: string): void {
   const history = toast.getHistory()
-  const index = history.findIndex((entry) => entry.id === id)
+  const index = history.findLastIndex((entry) => entry.id === id)
   if (index !== -1) {
     history.splice(index, 1)
   }
