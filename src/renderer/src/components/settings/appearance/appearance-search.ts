@@ -11,6 +11,7 @@ import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-se
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { getStatusBarMemoryEntry } from './appearance-status-bar-memory-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import { getWindowTitleEntries } from './appearance-window-title-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
 
@@ -303,6 +304,7 @@ export function getAppearancePaneSearchEntries(
     ...getLayoutEntries(),
     ...getTitlebarEntries(),
     ...(options.showTilingWindowMode ? [getTilingWindowModeEntry()] : []),
+    ...getWindowTitleEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),

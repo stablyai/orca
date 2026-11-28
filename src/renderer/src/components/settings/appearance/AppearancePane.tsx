@@ -19,17 +19,15 @@ import {
   getStatusBarEntries,
   getThemeEntries,
   getTilingWindowModeEntry,
-  getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import { getAppearanceAdvancedEntries } from './appearance-advanced-search'
 import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
-import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getTerminalAppearanceSearchEntries } from '../terminal/terminal-search'
 import { TerminalAppearanceSection } from '../terminal/appearance/TerminalAppearanceSection'
 import type { UseTerminalConfigImportReturn } from '../terminal/configuration/useTerminalConfigImport'
@@ -112,10 +110,7 @@ export function AppearancePane({
     ...getZoomEntries(),
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
-    ...getTitlebarEntries(),
-    ...getReduceVisualEffectsEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
+    ...getAppearanceAdvancedEntries({ isDesktopWindows, isDesktopMac })
   ]
   const terminalSearchEntries = [
     { title: terminalTitle },

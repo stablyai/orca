@@ -43,6 +43,10 @@ type DesktopWindowSettings = {
   showMenuBarIcon?: boolean
   /** Linux: disables titlebar dragging and keeps only the close button. */
   linuxTilingWindowMode?: boolean
+  /** Opt-in: the native window title names the focused workspace for time trackers; screen shares and window switchers show it too. Absent reads as off. */
+  showWorkspaceInWindowTitle?: boolean
+  /** Window title template used while showWorkspaceInWindowTitle is on. Empty or absent uses the default. */
+  windowTitle?: string
 }
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */

@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../../../../shared/settings/global-setti
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
+import { WindowTitleSetting } from './WindowTitleSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
@@ -21,6 +22,7 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
+import { getAppearanceAdvancedEntries } from './appearance-advanced-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
@@ -103,12 +105,7 @@ export function AppearanceInterfaceSection({
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
-  const advancedEntries = [
-    ...getTitlebarEntries(),
-    ...getReduceVisualEffectsEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
-  ]
+  const advancedEntries = getAppearanceAdvancedEntries({ isDesktopWindows, isDesktopMac })
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
 
   return (
@@ -307,6 +304,7 @@ export function AppearanceInterfaceSection({
               }
             />
           </SearchableSetting>
+          <WindowTitleSetting settings={settings} updateSettings={updateSettings} />
 
           <ReduceVisualEffectsSetting
             entry={reduceVisualEffectsEntry}
