@@ -3108,6 +3108,7 @@
         "pairedServerUnpaired": "{{agent}} runs on a computer this Orca is no longer paired with, so it can't open it.",
         "pairedServerUnreachable": "Orca couldn't reach {{server}} to open {{agent}}.",
         "pairedServerGone": "{{agent}} is no longer running on {{server}}.",
+        "pairedServerElsewhere": "{{agent}} runs on a computer paired with {{server}}, not with this one, so Orca can't open it here.",
         "thisAgent": "This agent",
         "theAgent": "the agent",
         "worktreeDeleted": "The worktree was deleted.",

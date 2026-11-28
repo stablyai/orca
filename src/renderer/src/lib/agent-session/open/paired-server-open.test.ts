@@ -50,3 +50,44 @@ it('settles a call to the server that throws, naming the server', async () => {
   expect(result).toEqual({ kind: 'failed', failure: { reason: 'unknown', beforeEffects: true } })
   expect(toast.error).toHaveBeenCalledWith("Orca couldn't reach windows 2 to open Worker.")
 })
+
+// The server answered that it has no such worker: say so naming it, not the generic "can't find" text.
+it('names the server when it finds no chat or terminal for the worker', async () => {
+  paired({ id: 'env_server', name: 'windows 2' })
+  await openOnPairedServer(
+    'env_server',
+    'Worker',
+    structuredSessionOpenFeedback,
+    async (_host, feedback) => {
+      feedback.notLocated?.('Worker')
+      return { kind: 'failed', failure: { reason: 'unknown', beforeEffects: true } }
+    }
+  )
+  expect(toast.error).toHaveBeenCalledWith('Worker is no longer running on windows 2.')
+})
+
+// The server's environment IDs name its own pairings: one it reports never becomes, or is replaced by, one of ours.
+it('refuses a terminal the server places on another computer instead of addressing it to the server', async () => {
+  paired({ id: 'env_server', name: 'windows 2' })
+  const result = await openOnPairedServer(
+    'env_server',
+    'Worker',
+    structuredSessionOpenFeedback,
+    async () => ({
+      kind: 'terminal',
+      handle: 'term_far',
+      environmentId: 'env_third'
+    })
+  )
+  expect(result).toEqual({ kind: 'failed', failure: { reason: 'unknown', beforeEffects: true } })
+  const own = await openOnPairedServer(
+    'env_server',
+    'Worker',
+    structuredSessionOpenFeedback,
+    async () => ({
+      kind: 'terminal',
+      handle: 'term_here'
+    })
+  )
+  expect(own).toEqual({ kind: 'terminal', handle: 'term_here', environmentId: 'env_server' })
+})

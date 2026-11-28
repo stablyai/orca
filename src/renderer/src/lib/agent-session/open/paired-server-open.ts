@@ -52,6 +52,16 @@ export const pairedServerOpenText = {
         agent:
           agent || translate('auto.lib.activateAiVaultStructuredSession.thisAgent', 'This agent')
       }
+    ),
+  elsewhere: (server: string, agent?: string) =>
+    translate(
+      'auto.lib.activateAiVaultStructuredSession.pairedServerElsewhere',
+      "{{agent}} runs on a computer paired with {{server}}, not with this one, so Orca can't open it here.",
+      {
+        server,
+        agent:
+          agent || translate('auto.lib.activateAiVaultStructuredSession.thisAgent', 'This agent')
+      }
     )
 }
 
@@ -67,6 +77,8 @@ export function pairedServerOpenFeedback(
       context?.starting
         ? base.unavailable(name, context)
         : toast.error(pairedServerOpenText.unreachable(server, name || agent)),
+    // The server answered and finds no chat or terminal for it.
+    notLocated: (name) => toast.error(pairedServerOpenText.gone(server, name || agent)),
     terminalGone: () => toast.error(pairedServerOpenText.gone(server, agent))
   }
 }
@@ -93,8 +105,16 @@ export async function openOnPairedServer(
       { kind: 'environment', environmentId },
       pairedServerOpenFeedback(base, server, agent)
     )
-    // Its terminal is that server's.
-    return opened.kind === 'terminal' ? { ...opened, environmentId } : opened
+    if (opened.kind !== 'terminal') {
+      return opened
+    }
+    // A terminal the server names another computer for is on that server's own pairing, which this
+    // desktop can't address; any other is the server's own.
+    if (opened.environmentId) {
+      toast.error(pairedServerOpenText.elsewhere(server, agent))
+      return failed
+    }
+    return { ...opened, environmentId }
   } catch {
     // The call there failed before any answer, so nothing has said so yet.
     toast.error(pairedServerOpenText.unreachable(server, agent))
