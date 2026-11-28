@@ -61,13 +61,11 @@ export function useChatAccountSignIn(input: {
     useOptionalHostProtocolGates()?.hostCapabilities.includes(
       MOBILE_HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
     ) === true
-  // The notice row whose Sign in is running, and the last one it signed in (as desktop keeps one).
-  const askingRow = useRef<string | undefined>(undefined)
+  // The notice row whose own sign-in last finished (as desktop keeps one).
   const [signedInRow, setSignedInRow] = useState<string | null>(null)
-  const signIn = useHostAccountSignIn(client, (account) => {
-    const row = askingRow.current
-    if (row !== undefined) {
-      setSignedInRow(row)
+  const signIn = useHostAccountSignIn(client, (account, target) => {
+    if (target.askedBy !== undefined) {
+      setSignedInRow(target.askedBy)
     }
     if (account) {
       onSignedIn(
@@ -92,13 +90,12 @@ export function useChatAccountSignIn(input: {
         return
       }
       looking.current = true
-      askingRow.current = rowId
       const asked = ++lookup.current
       void selectedManagedAccount(client, provider)
         .then(
           (accountId) => {
             if (asked === lookup.current) {
-              return accountId ? start({ provider, accountId }) : onOpenAccounts?.()
+              return accountId ? start({ provider, accountId, askedBy: rowId }) : onOpenAccounts?.()
             }
           },
           () => {

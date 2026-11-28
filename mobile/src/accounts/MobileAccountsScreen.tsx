@@ -268,11 +268,11 @@ export function MobileAccountsScreen() {
                     .join(' · ') || undefined
                 }
                 {...signedOutRow.props}
-                accessibilityLabel={
+                accessibilityLabel={signedOutRow.label(
                   provider === 'codex'
                     ? getCodexAccountDisplayLabel(account, state.accounts)
                     : getManagedAccountInlineLabel(account)
-                }
+                )}
                 // A signed-out account has no usage to show until it signs in again.
                 detail={
                   signedOut ? undefined : (

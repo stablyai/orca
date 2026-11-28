@@ -18,6 +18,8 @@ export type HostAccountSignInTarget = {
   accountId?: string
   /** The accounts already saved, so the one an Add made can be named. */
   knownAccountIds?: readonly string[]
+  /** What asked for it (a chat notice row), handed back with its outcome. */
+  askedBy?: string
 }
 
 export type HostAccountSignInView =
@@ -44,7 +46,7 @@ function signedInAccount(
 
 export function useHostAccountSignIn(
   client: RpcClient | null,
-  onSignedIn: (account: SignedInAccount | null, provider: HostAccountSignInProvider) => void
+  onSignedIn: (account: SignedInAccount | null, target: HostAccountSignInTarget) => void
 ) {
   // The last sign-in asked for, kept while the sheet slides away.
   const [target, setTarget] = useState<HostAccountSignInTarget | null>(null)
@@ -93,7 +95,7 @@ export function useHostAccountSignIn(
             runRef.current = null
             setOpen(false)
           }
-          signedIn.current(signedInAccount(next, status), next.provider)
+          signedIn.current(signedInAccount(next, status), next)
         },
         (error: unknown) => {
           const message = error instanceof Error ? error.message : String(error)

@@ -126,7 +126,11 @@ function signedOutRowProps(
     signedOut,
     offerSignIn,
     note: signedOut ? t('accounts.screen.signedOut', 'Signed out') : null,
+    /** A screen reader hears the action, not only the account, when the row signs it in. */
+    label: (account: string) =>
+      offerSignIn ? `${account}, ${t('accounts.screen.signIn', 'Sign in')}` : account,
     props: {
+      accessibilityRole: offerSignIn ? ('button' as const) : undefined,
       subtitleColor: signedOut ? colors.statusRed : undefined,
       value: offerSignIn ? t('accounts.screen.signIn', 'Sign in') : undefined,
       valueColor: offerSignIn ? colors.accentBlue : undefined

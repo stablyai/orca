@@ -105,8 +105,8 @@ function OpenPageRow(props: { n: number; opened: boolean; url: string; onOpened:
       accessory={<ArrowUpRight size={16} color={colors.textMuted} strokeWidth={2.2} />}
       accessibilityRole="link"
       onPress={() => {
-        props.onOpened()
-        void openExternalLink(props.url)
+        // Ticked only once the phone's browser took the page; a refused open leaves step 1 to retry.
+        void openExternalLink(props.url).then((opened) => opened && props.onOpened())
       }}
     />
   )

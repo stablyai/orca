@@ -197,6 +197,10 @@ export class HostAccountSignInRun<TStatus extends FlowStatus = HostAccountSignIn
     } catch (error) {
       // Why ask again for as long as the host keeps the flow: the person is on the sign-in page, where a
       // phone is suspended and loses its waits. A cancelled run stops sooner.
+      // A cancel's answer may have settled the flow while this wait was out; that outcome stands.
+      if (this.status && HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES.has(this.status.phase)) {
+        return
+      }
       const now = Date.now()
       if (
         !transport.isLostAnswer(error) ||
