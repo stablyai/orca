@@ -85,10 +85,11 @@ export class AgentSessionSubscribers {
     input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
   ): () => void {
     const { journal, ...fields } = input
+    const liveCursor = journal.cursor()
     const subscriber: Subscriber = {
       ...fields,
       readForkMarker: () => this.hooks.readForkMarker?.(fields.sessionId),
-      cursor: input.cursor ?? { epoch: journal.cursor().epoch, sequence: 0 },
+      cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
       boundedFrames: input.boundedFrames === true,
       readsCurrentRequests: input.readsCurrentRequests === true,
       snapshotCatchUp: input.snapshotCatchUp !== false
@@ -122,7 +123,8 @@ export class AgentSessionSubscribers {
       await this.sendLiveTail(subscriber, journal, input.fence)
     })
     this.promptSuggestions.opened(subscriber)
-    return () => void (!subscriber.stopped?.aborted && this.close(input.sessionId, input.id))
+    const { sessionId, id } = subscriber
+    return () => void (!subscriber.stopped?.aborted && this.close(sessionId, id))
   }
 
   close(sessionId: string, id: string): void {
@@ -246,20 +248,11 @@ export class AgentSessionSubscribers {
     const { sessionId } = subscriber
     const readers = liveText.subscriberLiveTextReaders(subscriber)
     const taken = this.hooks.readLiveText?.(sessionId, readers)
-    const items =
-      taken?.length &&
-      liveText.subscriberAtHead(subscriber, journal) &&
-      this.lanes.of(subscriber).sendsLiveText(taken)
-        ? taken
-        : []
-    const sent = liveText.publishSubscriberLiveText(this.deliveryPort(), {
-      sessionId,
-      journal,
-      fence,
-      items,
-      subscribers: [subscriber],
-      hostNow: this.now()
-    })
+    const sends = !!taken?.length && liveText.subscriberAtHead(subscriber, journal)
+    const items = sends && this.lanes.of(subscriber).sendsLiveText(taken) ? taken : []
+    const [subscribers, hostNow] = [[subscriber], this.now()]
+    const tail = { sessionId, journal, fence, items, subscribers, hostNow }
+    const sent = liveText.publishSubscriberLiveText(this.deliveryPort(), tail)
     return subscriber.readsProviderReceived
       ? sent.then(() => this.providerReceipts.caughtUp(subscriber, journal))
       : sent

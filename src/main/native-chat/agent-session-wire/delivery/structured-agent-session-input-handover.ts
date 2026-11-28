@@ -191,10 +191,8 @@ export async function beginStructuredAgentSessionInputHandover(
                     latest !== binding.permissionMode))
               // Past the hold a replay stays acked, so only 'due' (never 'pending') replaces a child.
               const acquire =
-                reason === 'tools'
-                  ? (await toolsRefresh()) === 'due'
-                  : reason === 'replaced' || permissionAcquire
-              if (!acquire) {
+                reason === 'tools' ? (await toolsRefresh()) === 'due' : permissionAcquire
+              if (!acquire && reason !== 'replaced') {
                 return null
               }
               await (deps.stopPermissionTransitionChild

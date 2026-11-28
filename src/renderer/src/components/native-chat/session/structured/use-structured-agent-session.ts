@@ -57,6 +57,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     target,
     transportEnabled = true
   } = args
+  const agentName = structuredAgentLabel(agent)
   const {
     state,
     receipts,
@@ -78,7 +79,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     target,
     isVisible: args.isVisible,
     enabled: transportEnabled,
-    agentName: structuredAgentLabel(agent)
+    agentName
   })
   const commandMenu = useStructuredAgentSessionCommandMenu(
     target,
@@ -171,9 +172,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     enabled: providerVisible
   })
 
-  const { pending } = sends
+  const { pending, send: sendSubmission } = sends
   const commandWrite = useStructuredAgentSessionCommandWrite(sessionId, write)
-  const agentName = structuredAgentLabel(agent)
   const sending = pending.some((entry) => entry.phase === 'sending')
   // What the host refuses a rewind behind; a command's own hold is the runner's below.
   const conversationBusy = transportState.conversationBusy || prompts.length > 0 || sending
@@ -190,11 +190,11 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     write,
     capturePresentation
   })
-  const send = (...input: Parameters<typeof sends.send>) =>
+  const send = (...input: Parameters<typeof sendSubmission>) =>
     // Legacy: an older host refuses sends while a command runs; removable once those hosts age out.
     (!commandPending.current || hostStatesTurnScopes(journalItems)) &&
     rewind.admitsSend() &&
-    sends.send(...input)
+    sendSubmission(...input)
   const threadGoal = useStructuredAgentSessionThreadGoal({
     journalItems,
     journalEpoch: state.epoch,
