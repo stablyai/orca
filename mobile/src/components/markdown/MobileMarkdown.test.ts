@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseMobileMarkdownTree } from './parsing/mobile-markdown-tree'
 import { normalizeMobileMarkdownPreviewHtml } from './parsing/mobile-markdown-preview-html'
 
 describe('normalizeMobileMarkdownPreviewHtml', () => {
@@ -215,4 +216,25 @@ describe('normalizeMobileMarkdownPreviewHtml', () => {
       `${'x'.repeat(4095)}\nx`
     )
   })
+})
+
+it('preserves a streamed Codex source path and completes surrounding Markdown', () => {
+  const source =
+    'See :codex-file-citation{path="C:\\Exports\\Budget [Q4.xlsx" purpose="source" sheet="Sales"} **Ready'
+  const root = parseMobileMarkdownTree(source, true, true)
+  expect(root.children).toEqual([
+    {
+      type: 'paragraph',
+      children: [
+        { type: 'text', value: 'See ' },
+        {
+          type: 'link',
+          url: '#orca-native-chat-file-path=C%3A%5CExports%5CBudget%20%5BQ4.xlsx',
+          children: [{ type: 'text', value: 'Budget [Q4.xlsx' }]
+        },
+        { type: 'text', value: ' ' },
+        { type: 'strong', children: [{ type: 'text', value: 'Ready' }] }
+      ]
+    }
+  ])
 })

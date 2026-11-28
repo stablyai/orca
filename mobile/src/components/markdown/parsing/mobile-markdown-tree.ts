@@ -2,7 +2,6 @@ import MarkdownIt from 'markdown-it'
 import cjkFriendly from 'markdown-it-cjk-friendly'
 import footnote from 'markdown-it-footnote'
 import type { AlignType, Parent, PhrasingContent, Root, RootContent, Table } from 'mdast'
-import remend from 'remend'
 import { forEachGitHubCallout } from '../../../../../src/shared/github/markdown/github-callouts'
 import { codeNode, type Token } from '../blocks/mobile-markdown-code-nodes'
 import { inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
@@ -14,19 +13,21 @@ import {
   displayFormulas,
   inlineMathNode,
   mathBlockNode,
-  mathClosed,
   mathFenceNode,
   withoutMath
 } from '../math/mobile-markdown-math-nodes'
 import { withImagesSplitOut } from './mobile-markdown-html-images'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { endLinkifyUrlsAtProsePunctuation } from './markdown-linkify-prose-boundary'
+import { mobileMarkdownCodexFileCitations } from './mobile-markdown-codex-file-citations'
+import { withLastBlockClosed } from './mobile-markdown-streaming-tail'
 
 // Match desktop CommonMark/GFM tables, strikethrough, autolinks, footnotes and CJK emphasis using phone-efficient parser.
 const markdown = new MarkdownIt({ html: true, linkify: true })
   .use(footnote)
   .use(cjkFriendly)
   .use(mobileMarkdownMath)
+  .use(mobileMarkdownCodexFileCitations)
 // Every href parses as a link, file: included; routeMarkdownHref decides what a tap opens.
 markdown.validateLink = () => true
 endLinkifyUrlsAtProsePunctuation(markdown.linkify)
@@ -273,22 +274,6 @@ function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {
       return blocks.children
     })
   })
-}
-
-/** The text with the markup its last top-level block leaves open closed, as desktop closes it.
- *  Only that block: a lone `*` earlier in the reply is no opener, and remend would close it. */
-function withLastBlockClosed(source: string, tokens: readonly Token[], chatMath: boolean): string {
-  const last = tokens.findLast((token) => token.level === 0 && token.map)
-  const lastBlock = last?.map?.[0] ?? 0
-  const lines = source.split('\n')
-  const tail = lines.slice(lastBlock).join('\n')
-  // Like desktop, unfinished math stays as typed: remend would rewrite TeX as Markdown.
-  const tailTokens = last ? tokens.slice(tokens.indexOf(last)) : []
-  if (tailTokens.some((token) => !mathClosed(token)) || (chatMath && /\\[[(]/.test(tail))) {
-    return source
-  }
-  const closed = remend(tail, { linkMode: 'text-only', katex: false })
-  return closed === tail ? source : [...lines.slice(0, lastBlock), closed].join('\n')
 }
 
 /** `growing`: the text is still arriving, so markup its end leaves open is closed first, instead

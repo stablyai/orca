@@ -21,6 +21,7 @@ import { useNativeChatVisualMarkdownExtension } from '../media/visuals/native-ch
 import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
 import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDeferredMarkdownImage'
+import { remarkNativeChatCodexFileCitations } from './native-chat-codex-file-citation'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 import { remarkNativeChatListItemNumbers } from './native-chat-markdown-list-item-numbers'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
@@ -89,6 +90,7 @@ function withFileDestinations(
   return {
     remarkPlugins: [
       ...(visualExtension?.remarkPlugins ?? []),
+      remarkNativeChatCodexFileCitations,
       remarkNativeChatFileDestinations,
       ...(mentions?.remarkPlugins ?? [])
     ],
