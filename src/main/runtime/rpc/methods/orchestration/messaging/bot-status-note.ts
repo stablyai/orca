@@ -1,6 +1,6 @@
 // A bot's `send --type status` to another bot or its own other chat wakes no one: where its work
 // stands lives on an item, so Orca records it there and the other bot reads it when it needs it.
-import { BOT_ITEM_OPEN_STATUSES } from '../../../../../../shared/bots/bot-items'
+import { BOT_ITEM_OPEN_STATUSES, BOT_ITEM_STATUSES } from '../../../../../../shared/bots/bot-items'
 import { BOT_ITEM_MAIL_ID_PREFIX } from '../../../../../../shared/bots/bot-item-note-runs'
 import type { Bot } from '../../../../../../shared/bot-types'
 import type { BotItemRecord } from '../../../../../bots/bot-items-schema'
@@ -94,8 +94,12 @@ async function statusItem(
   const own = (item: BotItemRecord | null | undefined): item is BotItemRecord =>
     item?.ownerBotId === acting.bot.id
   if (acting.worker) {
-    const uids = await store.itemsLinking('dispatch', [acting.worker], CANDIDATES_SHOWN)
-    const linked = (await Promise.all(uids.map((uid) => store.get(uid)))).filter(own)
+    const { items: linked } = await store.list({
+      botId: acting.bot.id,
+      link: { kind: 'dispatch', ref: acting.worker },
+      statuses: BOT_ITEM_STATUSES,
+      limit: CANDIDATES_SHOWN
+    })
     if (linked.length > 0) {
       return pickOne(linked)
     }
