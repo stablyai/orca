@@ -132,6 +132,7 @@ it('persists an ended group turn before the provider close control', async () =>
       handle: codexProviderHandle(HOST_TEST_THREAD),
       reason: 'closed'
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The rig accepts the production close shape.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The rig accepts the production close shape.
     } as never)
     expect(store.message('post-1')!.turns[0].end).toBe('finished')
     translator.dispose()
