@@ -156,6 +156,7 @@ export function beginDesktopCoreShutdown(
   )
   core.desktopPushService?.stop()
   native.afterPushStopped()
+  const localConnectorShutdown = runtime?.localConnectors.stop() ?? Promise.resolve()
   const { pluginHostShutdown, codexBackfillRecoveryShutdown, structuredAgentSessionShutdown } =
     stopPluginsAndSessions(core, trigger)
   // Wait briefly for ref maintenance instead of killing mid-prune and stranding its lock; an orphan can finish safely.
@@ -268,6 +269,7 @@ export function beginDesktopCoreShutdown(
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'notification-dismissals', promise: notificationDismissalClose },
     { name: 'stats', promise: statsFlush },
+    { name: 'local-connectors', promise: localConnectorShutdown },
     { name: 'connector-turn-ends', promise: connectorTurnEndsFlush },
     { name: 'bot-memory-history', promise: botMemoryHistoryFlush },
     { name: 'bot-slack-icon-records', promise: botSlackIconRecordsFlush },

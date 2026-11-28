@@ -7,6 +7,7 @@ import type {
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { Bot } from '../../shared/bot-types'
 import {
+  cloudConversation,
   CONNECTOR_CLIENT_LIMITS,
   type ConnectorBotPostAnswer,
   type ConnectorTurnFor
@@ -308,10 +309,15 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
               noteId,
               { kind: 'status', text }
             ),
-          replyInThread: (conversation, replyId, text, turnFor) =>
-            runtime
-              .getConnectorCloud()
-              ?.reply({ replyId, conversation, turnId: Date.now(), text, turnFor }) ?? null,
+          // A local connector's thread has no cloud conversation to post through.
+          replyInThread: (key, replyId, text, turnFor) => {
+            const conversation = cloudConversation(key)
+            return conversation
+              ? (runtime
+                  .getConnectorCloud()
+                  ?.reply({ replyId, conversation, turnId: Date.now(), text, turnFor }) ?? null)
+              : null
+          },
           // The host delivers the run's own result: no request to verify.
           turnForOf: (sessionId) => botTurnFor(runtime, sessionId, 'host'),
           ...runtimeBotOwnerNotice(runtime)

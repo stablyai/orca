@@ -15,6 +15,7 @@ import { capAnswer } from '../connector-cloud/connector-snapshot'
 import type { AgentSessionJournalReads } from '../native-chat/agent-session-journal/journal-reads'
 import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
+import { isLocalConnectorSource } from '../../shared/connectors/external-conversation-link'
 import type { EmptyTurnRetry } from './external-conversation-reply-empty-retry'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -173,9 +174,11 @@ export function conversationReplyFill(
       if (!filling.has(conversation) || silencedWhole.has(conversation) || !quietIn(row)) {
         continue
       }
+      // A local connector's conversations are its paired owner's alone, as a Slack DM is.
       const ownerDm =
         row.quietRule === undefined &&
-        isSlackDirectMessage(row.conversation) &&
+        (isSlackDirectMessage(row.conversation) ||
+          isLocalConnectorSource(row.conversation.source)) &&
         (ownerAsked.has(keyOf(row.account, row.deliveryId)) ||
           (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false)) === true)
       silencedWhole.set(conversation, row.quietRule === undefined && !ownerDm)
