@@ -5,7 +5,8 @@ import type {
 } from '../../../../../../shared/worktree/types'
 import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
+import { getPlacedWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-status-placement'
+import { getVisibleLineageAncestorRoots } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-placement'
 import { compareWorktreeDisplayName } from '../../../../../../shared/worktree/display-name-order'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
@@ -25,17 +26,25 @@ export function groupWorkspaceKanbanWorktrees(params: {
   visibleWorktreeIds: ReadonlySet<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   sortBy: SortBy
+  /** Children by parent host identity, as the sidebar nests them. */
+  childrenByParentIdentity?: ReadonlyMap<string, readonly Worktree[]>
 }): Map<WorkspaceStatus, Worktree[]> {
   const { worktrees, visibleWorktreeIds, workspaceStatuses, sortBy } = params
   const grouped = new Map<WorkspaceStatus, Worktree[]>(
     workspaceStatuses.map((status) => [status.id, []])
   )
-
-  for (const worktree of worktrees) {
-    if (!visibleWorktreeIds.has(getWorktreeHostIdentity(worktree))) {
-      continue
-    }
-    grouped.get(getWorkspaceStatus(worktree, workspaceStatuses))!.push(worktree)
+  const visible = worktrees.filter((worktree) =>
+    visibleWorktreeIds.has(getWorktreeHostIdentity(worktree))
+  )
+  // Cards follow their top shown ancestor's lane, as sidebar rows do.
+  const displayRoots = getVisibleLineageAncestorRoots(
+    visible,
+    params.childrenByParentIdentity ?? new Map(),
+    getWorktreeHostIdentity
+  )
+  for (const worktree of visible) {
+    const root = displayRoots.get(getWorktreeHostIdentity(worktree))
+    grouped.get(getPlacedWorkspaceStatus(worktree, root, workspaceStatuses))!.push(worktree)
   }
 
   for (const items of grouped.values()) {

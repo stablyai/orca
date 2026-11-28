@@ -7,10 +7,10 @@ import {
 } from '../../../../src/shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/worktree/types'
 import {
-  getWorkspaceStatus,
   getWorkspaceStatusGroupKey,
   withDefaultWorkspaceStatuses
 } from '../../../../src/shared/workspace/status/workspace-statuses'
+import { getPlacedWorkspaceStatus } from '../../../../src/shared/workspace/status/workspace-status-placement'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace/status/workspace-status-defaults'
 import {
   getMobileOccurrenceRows,
@@ -223,7 +223,11 @@ export function buildMobileWorkspacePlan(
         const renderableWorkspaceStatuses = withDefaultWorkspaceStatuses(workspaceStatuses)
         const byStatus = new Map<string, Worktree[]>()
         for (const w of canonicalGroupWorktrees) {
-          const key = getWorkspaceStatus(w, renderableWorkspaceStatuses)
+          const key = getPlacedWorkspaceStatus(
+            w,
+            displayRootByIdentity.get(getWorktreeRowIdentity(w)),
+            renderableWorkspaceStatuses
+          )
           const list = byStatus.get(key)
           if (list) {
             list.push(w)
