@@ -26032,8 +26032,7 @@
         "failing": "실패",
         "running": "실행 중",
         "cancelled": "취소됨",
-        "passing": "통과",
-        "more": "+{{count}}개 더"
+        "passing": "통과"
       }
     },
     "attachments": {

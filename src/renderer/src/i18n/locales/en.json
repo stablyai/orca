@@ -26057,8 +26057,7 @@
         "failing": "failing",
         "running": "running",
         "cancelled": "cancelled",
-        "passing": "passing",
-        "more": "+{{count}} more"
+        "passing": "passing"
       }
     },
     "attachments": {
