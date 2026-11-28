@@ -181,9 +181,10 @@ describe('installLocalWebhooks', () => {
       modeChanged: () => {},
       redeliverMs: 10
     })
+    const timers = vi.spyOn(globalThis, 'setTimeout')
     installed.attach(() => true)
     await expect.poll(() => failedReads).toBe(2)
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(failedReads).toBe(2)
+    // The retry pass after the first failed read; the second, failing after stop, arms none.
+    expect(timers.mock.calls.filter(([, ms]) => ms === 10)).toHaveLength(1)
   })
 })
