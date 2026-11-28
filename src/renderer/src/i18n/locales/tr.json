@@ -23888,7 +23888,6 @@
           "dialog": {
             "createToken": "Oluştur",
             "environmentManagedLine": "ORCA_BITBUCKET_* ortam değişkenleriyle ayarlandı. Burada kaydetmek için bunları kaldırın.",
-            "savedLocallyOnly": "Yalnızca bu bilgisayara kaydedilir.",
             "accessTokenNeeds": "Pull request'lere okuma erişimi gerekir.",
             "atlassianEmail": "Atlassian e-postası",
             "requiredScopes": "Gerekli kapsamlar",
@@ -23974,6 +23973,7 @@
           "deleted": "Silindi",
           "kept": "Korunan: {{count}}",
           "showMore": "{{count}} tane daha göster",
+          "showFewer": "Daha az göster",
           "waiting": "Etkin olmayan süre: {{elapsed}} gün · Eşik: {{after}} gün",
           "title": "Etkinlik",
           "notListed_one": "Korunan 1 çalışma alanı daha listede gösterilmiyor.",
@@ -25646,7 +25646,10 @@
       "chatPasteCode": "Kodu yapıştır",
       "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi",
       "launchesUse": "Yeni agy başlatmaları bu hesabı kullanır",
-      "loginNow": "agy'nin şu anki oturumu"
+      "loginNow": "agy'nin şu anki oturumu",
+      "signedInUnread": "agy'de oturum açık",
+      "unreadDetail": "Hangisi olduğunu görmek için hesabı gösterin. macOS anahtar zinciri erişimine izin vermenizi isteyebilir.",
+      "showAccount": "Hesabı göster"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",

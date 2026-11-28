@@ -23222,6 +23222,7 @@
           "deleted": "已刪除",
           "kept": "已保留 · {{count}}",
           "showMore": "再顯示 {{count}} 個",
+          "showFewer": "顯示較少",
           "waiting": "已閒置 {{elapsed}}/{{after}} 天",
           "title": "活動記錄",
           "notListed_other": "另有 {{count}} 個保留的工作區未列出。",
@@ -23386,7 +23387,6 @@
           "dialog": {
             "createToken": "建立權杖",
             "environmentManagedLine": "已由 ORCA_BITBUCKET_* 環境變數設定。取消設定後才能在此儲存。",
-            "savedLocallyOnly": "僅儲存在這台電腦上。",
             "accessTokenNeeds": "需要提取要求的讀取權限。",
             "atlassianEmail": "Atlassian 電子郵件",
             "requiredScopes": "必要範圍",
@@ -24889,7 +24889,10 @@
       "chatPasteCode": "貼上代碼",
       "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址",
       "launchesUse": "新啟動的 agy 將使用此帳號",
-      "loginNow": "agy 目前的登入"
+      "loginNow": "agy 目前的登入",
+      "signedInUnread": "agy 已登入",
+      "unreadDetail": "顯示帳戶以查看是哪一個。macOS 可能會要求你允許存取鑰匙圈。",
+      "showAccount": "顯示帳戶"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於你下次啟動的 Claude。",

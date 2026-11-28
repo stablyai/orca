@@ -22529,7 +22529,6 @@
           "dialog": {
             "createToken": "作成する",
             "environmentManagedLine": "ORCA_BITBUCKET_* 環境変数で設定されています。ここで保存するには解除してください。",
-            "savedLocallyOnly": "このコンピューターにのみ保存されます。",
             "accessTokenNeeds": "プルリクエストの読み取り権限が必要です。",
             "atlassianEmail": "Atlassian のメールアドレス",
             "requiredScopes": "必要なスコープ",
@@ -22758,6 +22757,7 @@
           "deleted": "削除済み",
           "kept": "保持 · {{count}}",
           "showMore": "さらに {{count}} 件を表示",
+          "showFewer": "表示数を減らす",
           "waiting": "非アクティブ: {{elapsed}} / {{after}} 日",
           "title": "アクティビティ",
           "notListed_other": "保持された他の {{count}} 個のワークスペースは一覧に表示されていません。",
@@ -24704,7 +24704,10 @@
       "chatPasteCodeLabel": "サインイン後に Google が表示するコード、またはそのページのアドレス",
       "apiKeyGet": "APIキーを取得する",
       "launchesUse": "新しく起動する agy はこのアカウントを使います",
-      "loginNow": "現在の agy のログイン"
+      "loginNow": "現在の agy のログイン",
+      "signedInUnread": "agy はサインイン済みです",
+      "unreadDetail": "どのアカウントかを確認するにはアカウントを表示してください。macOS がキーチェーンへのアクセス許可を求めることがあります。",
+      "showAccount": "アカウントを表示"
     },
     "claude": {
       "added": "アカウントを追加しました。次に起動する Claude で使用するには、これを選択してください。",

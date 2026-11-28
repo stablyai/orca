@@ -22923,6 +22923,7 @@
           "deleted": "已删除",
           "kept": "已保留 · {{count}}",
           "showMore": "再显示 {{count}} 个",
+          "showFewer": "收起",
           "waiting": "已不活跃 {{elapsed}}/{{after}} 天",
           "title": "活动记录",
           "notListed_other": "另有 {{count}} 个保留的工作区未列出",
@@ -23078,7 +23079,6 @@
           "dialog": {
             "createToken": "创建令牌",
             "environmentManagedLine": "已由 ORCA_BITBUCKET_* 环境变量设置。取消设置后才能在此保存",
-            "savedLocallyOnly": "仅保存在这台电脑上",
             "accessTokenNeeds": "需要拉取请求的读取权限",
             "atlassianEmail": "Atlassian 邮箱",
             "requiredScopes": "所需范围",
@@ -25115,7 +25115,10 @@
       "locationGlobal": "global",
       "signInGoogle": "使用 Google 登录",
       "launchesUse": "新启动的 agy 将使用此账号",
-      "loginNow": "agy 当前的登录"
+      "loginNow": "agy 当前的登录",
+      "signedInUnread": "agy 已登录",
+      "unreadDetail": "显示账户以查看是哪一个。macOS 可能会要求你允许访问钥匙串。",
+      "showAccount": "显示账户"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于你下次启动的 Claude",

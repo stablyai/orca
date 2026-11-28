@@ -23099,6 +23099,7 @@
           "deleted": "Eliminado",
           "kept": "Conservados · {{count}}",
           "showMore": "Mostrar {{count}} más",
+          "showFewer": "Mostrar menos",
           "waiting": "Inactivo {{elapsed}} de {{after}} días",
           "title": "Actividad",
           "notListed_one": "1 espacio de trabajo conservado más no aparece en la lista.",
@@ -23274,7 +23275,6 @@
           "dialog": {
             "createToken": "Crear uno",
             "environmentManagedLine": "Definido por variables de entorno ORCA_BITBUCKET_*. Quítalas para guardar uno aquí.",
-            "savedLocallyOnly": "Se guarda solo en este equipo.",
             "accessTokenNeeds": "Necesita acceso de lectura a las pull requests.",
             "atlassianEmail": "Correo de Atlassian",
             "requiredScopes": "Ámbitos necesarios",
@@ -24714,7 +24714,10 @@
       "chatPasteCode": "Pega el código",
       "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página",
       "launchesUse": "Los nuevos inicios de agy usan esta cuenta",
-      "loginNow": "Sesión actual de agy"
+      "loginNow": "Sesión actual de agy",
+      "signedInUnread": "agy tiene la sesión iniciada",
+      "unreadDetail": "Muestra la cuenta para ver cuál es. macOS puede pedirte que permitas el acceso al llavero.",
+      "showAccount": "Mostrar cuenta"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",

@@ -45,8 +45,14 @@ export function getLineagePlacementRows<Row>(args: {
   duplicatePinned: boolean
 }): LineagePlacementRows<Row> {
   const { rows, childrenByParentIdentity, identityOf } = args
-  const pinnedRoots = rows.filter(args.isPinned)
-  if (pinnedRoots.length === 0) {
+  let pinnedRoots: Row[] | undefined
+  for (const row of rows) {
+    if (args.isPinned(row)) {
+      pinnedRoots ??= []
+      pinnedRoots.push(row)
+    }
+  }
+  if (!pinnedRoots) {
     return {
       pinned: [],
       natural: rows,
@@ -109,7 +115,16 @@ export function buildWorktreeOccurrencePlan<
     const isPinnedSection = section.placement === 'pinned'
     const occurrences: WorktreeOccurrence<Row>[] = []
     const emitted = new Set<string>()
-    if (!parentByIdentity) {
+    let sectionHasLineageChild = false
+    if (parentByIdentity) {
+      for (const row of section.items) {
+        if (parentByIdentity.has(identityOf(row))) {
+          sectionHasLineageChild = true
+          break
+        }
+      }
+    }
+    if (!parentByIdentity || !sectionHasLineageChild) {
       const items = section.items
       const lastIndex = items.length - 1
       for (let i = 0; i < items.length; i += 1) {

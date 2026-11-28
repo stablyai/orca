@@ -3,8 +3,16 @@ import type { Stats } from 'node:fs'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { forEachCodexSessionLedgerRecord } from '../rollouts/codex-session-ledger-stream'
+import {
+  bufferSliceContains,
+  forEachCodexSessionLedgerRecord
+} from '../rollouts/codex-session-ledger-stream'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
+
+const UNICODE_ESCAPE_BYTES = Buffer.from('\\u')
+const FILE_EVENT_ID_BYTES = Buffer.from('fileEventId')
+const DIAGNOSTIC_EVENT_ID_BYTES = Buffer.from('diagnosticEventId')
+const RUN_SUMMARY_BYTES = Buffer.from('run-summary')
 
 export type CodexSessionBackfillAuditWriter = (record: Record<string, unknown>) => Promise<boolean>
 
@@ -85,11 +93,11 @@ export async function readCodexSessionBackfillAuditCoverage(
     },
     {
       throwOnReadFailure: true,
-      shouldParseLine: (raw) =>
-        raw.includes('\\u') ||
-        raw.includes('fileEventId') ||
-        raw.includes('diagnosticEventId') ||
-        raw.includes('run-summary')
+      shouldParseBuffer: (buf, start, end) =>
+        bufferSliceContains(buf, start, end, UNICODE_ESCAPE_BYTES) ||
+        bufferSliceContains(buf, start, end, FILE_EVENT_ID_BYTES) ||
+        bufferSliceContains(buf, start, end, DIAGNOSTIC_EVENT_ID_BYTES) ||
+        bufferSliceContains(buf, start, end, RUN_SUMMARY_BYTES)
     }
   )
   return coverage

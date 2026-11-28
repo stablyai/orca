@@ -23552,6 +23552,7 @@
           "deleted": "Supprimé",
           "kept": "Conservés · {{count}}",
           "showMore": "Afficher {{count}} de plus",
+          "showFewer": "Afficher moins",
           "waiting": "Inactivité : {{elapsed}} / {{after}} j",
           "title": "Activité",
           "notListed_one": "{{count}} autre espace de travail conservé n'est pas listé.",
@@ -23727,7 +23728,6 @@
           "dialog": {
             "createToken": "En créer un",
             "environmentManagedLine": "Défini par les variables d'environnement ORCA_BITBUCKET_*. Supprimez-les pour en enregistrer un ici.",
-            "savedLocallyOnly": "Enregistré uniquement sur cet ordinateur.",
             "accessTokenNeeds": "Nécessite un accès en lecture aux pull requests.",
             "atlassianEmail": "E-mail Atlassian",
             "requiredScopes": "Portées requises",
@@ -25453,7 +25453,10 @@
       "chatPasteCode": "Collez le code",
       "chatPasteCodeLabel": "Le code que Google affiche après la connexion, ou l'adresse de cette page",
       "launchesUse": "Les nouveaux lancements d'agy utilisent ce compte",
-      "loginNow": "Connexion agy actuelle"
+      "loginNow": "Connexion agy actuelle",
+      "signedInUnread": "agy est connecté",
+      "unreadDetail": "Affichez le compte pour savoir lequel c’est. macOS peut vous demander d’autoriser l’accès au trousseau.",
+      "showAccount": "Afficher le compte"
     },
     "claude": {
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",
