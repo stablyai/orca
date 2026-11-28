@@ -30,7 +30,17 @@ export async function postPushGatewayJson(
       body: JSON.stringify(body)
     })
     return { ok: true, response }
-  } catch {
+  } catch (error) {
+    const cause: unknown = error instanceof Error ? error.cause : undefined
+    const failures: unknown[] = cause instanceof AggregateError ? cause.errors : [cause]
+    const codes = ['ETIMEDOUT', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT'].filter((code) =>
+      failures.some(
+        (failure) => failure instanceof Error && 'code' in failure && failure.code === code
+      )
+    )
+    if (codes.length > 0) {
+      console.warn(`[push] Push gateway handshake connection failed (${codes.join(', ')})`)
+    }
     return { ok: false, reason: 'unreachable' }
   }
 }
