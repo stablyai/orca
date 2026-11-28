@@ -131,7 +131,7 @@ export function createRuntimeAutomationService(input: {
                 await import('./observation/runtime-chat-run-observer')
               if (sentByRun) {
                 const recovery = await import('./observation/self-sent-run-restart-recovery')
-                await recovery.sendRunPromptKeptAtRestart(runtime, run)
+                await recovery.sendRunPromptKeptAtRestart(runtime, run, options.signal)
               }
               return await observeAutomationChatRun(runtime, run, options.signal, sentByRun)
             } catch (error) {

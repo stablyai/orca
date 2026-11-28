@@ -18,7 +18,8 @@ import { selfSentRunPlacement } from './self-sent-run-placement'
  *  kept card, and a consumed card is never sent again. */
 export async function sendRunPromptKeptAtRestart(
   runtime: OrcaRuntimeService,
-  run: Pick<AutomationRun, 'id' | 'createdAt' | 'chatSessionId'>
+  run: Pick<AutomationRun, 'id' | 'createdAt' | 'chatSessionId'>,
+  signal: AbortSignal
 ): Promise<void> {
   const sessionId = run.chatSessionId
   await runtime.ensureStructuredAgentSessionHost()
@@ -37,6 +38,8 @@ export async function sendRunPromptKeptAtRestart(
   if (submission?.rejection?.kind !== 'hostRestarted' || card?.state !== 'waiting') {
     return
   }
+  // A teardown that began during the reads never starts the agent's turn.
+  signal.throwIfAborted()
   const fields = { messageId }
   const sent = await host.queuedMessageSend(
     { callerKey: rpcCallerOperationKey(AUTOMATION_AGENT_CALLER) },

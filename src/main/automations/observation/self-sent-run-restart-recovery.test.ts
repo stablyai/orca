@@ -24,6 +24,7 @@ const placementOf = (runtime: OrcaRuntimeService, of: { id: string; createdAt: n
 // Orca quit while a self-sent run's prompt waited for its agent to start: after the restart, the run finds
 // its chat by the prompt's id and sends the kept prompt exactly once, however often recovery runs.
 let rig: QueuedMessageTestRig | null = null
+const live = new AbortController().signal
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
 })
@@ -90,20 +91,28 @@ it('sends a run prompt kept at restart once, straight from a cold start', async 
   expect(await placementOf(runtime, run)).toMatchObject({ kind: 'chat', sessionId: SESSION })
   expect(await placementOf(runtime, { id: 'run-2', createdAt: NOW })).toEqual({ kind: 'unsent' })
   await Promise.all([
-    sendRunPromptKeptAtRestart(runtime, run),
-    sendRunPromptKeptAtRestart(runtime, run)
+    sendRunPromptKeptAtRestart(runtime, run, live),
+    sendRunPromptKeptAtRestart(runtime, run, live)
   ])
-  await sendRunPromptKeptAtRestart(runtime, run)
+  await sendRunPromptKeptAtRestart(runtime, run, live)
   expect(await chat.submission(messageId)).toMatchObject({ rejection: { kind: 'hostRestarted' } })
   expect(await sendsOf(chat)).toHaveLength(1)
   expect(await chat.drafts()).toEqual([])
+})
+
+it('never sends a kept prompt once Orca is quitting', async () => {
+  const chat = await quitBeforeTheAgentGotIt()
+  const quitting = new AbortController()
+  quitting.abort()
+  await expect(sendRunPromptKeptAtRestart(runtimeOf(chat), run, quitting.signal)).rejects.toThrow()
+  expect(await sendsOf(chat)).toEqual([])
 })
 
 it('never sends a kept prompt someone withdrew', async () => {
   const chat = await quitBeforeTheAgentGotIt()
   expect(await chat.drafts()).toEqual([expect.objectContaining({ messageId, state: 'waiting' })])
   expect(await chat.deleteQueued(messageId)).toMatchObject({ ok: true })
-  await sendRunPromptKeptAtRestart(runtimeOf(chat), run)
+  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
   expect(await sendsOf(chat)).toEqual([])
 })
 
@@ -114,7 +123,7 @@ it('leaves a prompt queued behind a running turn to the queue, and still finds i
   await sendRunPrompt(rig)
   const runtime = runtimeOf(rig)
   expect(await placementOf(runtime, run)).toMatchObject({ kind: 'chat', sessionId: SESSION })
-  await sendRunPromptKeptAtRestart(runtime, run)
+  await sendRunPromptKeptAtRestart(runtime, run, live)
   expect(await rig.drafts()).toEqual([expect.objectContaining({ messageId, state: 'waiting' })])
   expect(await sendsOf(rig)).toEqual([])
 })
