@@ -42,11 +42,12 @@ export class DaemonRouterSpawn {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    const generations = this.state.legacy.length
     try {
       return await this.spawnOnce(opts)
     } catch (error) {
       // An older generation that retired under this spawn owned nothing; route again without it.
-      if (!(await this.legacyIdle.settleHeldRetirements(error))) {
+      if (!(await this.legacyIdle.settleHeldRetirements(error, generations))) {
         throw error
       }
       return await this.spawnOnce(opts)

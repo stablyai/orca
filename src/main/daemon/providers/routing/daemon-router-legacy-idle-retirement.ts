@@ -97,14 +97,14 @@ export class DaemonRouterLegacyIdleRetirement {
     }
   }
 
-  /** After a spawn failed: forgets every held generation that retired under it; true if any did. */
-  async settleHeldRetirements(error: unknown): Promise<boolean> {
+  /** After a spawn failed: true when a held generation retired under it (already forgotten, or now). */
+  async settleHeldRetirements(error: unknown, generationsAtStart: number): Promise<boolean> {
     if (!mayComeFromRetirement(error)) {
       return false
     }
     const held = this.options.legacy().filter((adapter) => this.modes.get(adapter) === 'held')
     const settled = await Promise.all(held.map((adapter) => this.confirmRetired(adapter, true)))
-    return settled.includes(true)
+    return settled.includes(true) || this.options.legacy().length < generationsAtStart
   }
 
   private async hold(adapter: DaemonPtyAdapter): Promise<void> {
