@@ -20,22 +20,28 @@ export function configureKeptToolGrants(installed: KeptToolGrantsConfig): void {
 }
 
 /**
- * Each owner's reach from the current config; null for a bot that no longer exists, undefined
- * while the bots can't be read.
+ * Each owner's reach from the current config, read once for a whole serve reply: null for a bot
+ * that no longer exists, undefined while the bots can't be read.
  */
-export function keptGrantOwnerFolders(owner: string): RelayFolders | null | undefined {
+export function keptGrantOwnerFolders(): (owner: string) => RelayFolders | null | undefined {
   const bots = config?.bots()
   if (!bots) {
-    return undefined
+    return () => undefined
   }
-  if (owner === MCP_HOST_LIST_RELAY_OWNER) {
-    return { host: mcpHostListFolder() }
+  const byId = new Map(bots.map((bot) => [bot.id, bot]))
+  return (owner) => {
+    if (owner === MCP_HOST_LIST_RELAY_OWNER) {
+      return { host: mcpHostListFolder() }
+    }
+    const bot = byId.get(owner)
+    if (!bot) {
+      return null
+    }
+    return {
+      bot: botHomeFolder(bot),
+      ...(bot.hostMcpServers ? { host: mcpHostListFolder() } : {})
+    }
   }
-  const bot = bots.find((entry) => entry.id === owner)
-  if (!bot) {
-    return null
-  }
-  return { bot: botHomeFolder(bot), ...(bot.hostMcpServers ? { host: mcpHostListFolder() } : {}) }
 }
 
 /** A daemon start keeps some agent's grants: every start's front is served, once per run. */

@@ -113,18 +113,18 @@ export class ProviderRelayFrontMovedError extends Error {
   }
 }
 
-/** Chats whose launch was given a front but couldn't run under its daemon start: app-bound for this run. */
+/** Chats whose last launch was given a front but couldn't run under its daemon start. */
 const frontRefused = new Set<string>()
 
-/** Whether the chat's launches get their tools at the app's own address only, for this run. */
-export function providerRelayFrontRefused(chatKey: string): boolean {
-  return frontRefused.has(chatKey)
+/** Taken by the chat's next launch, which gets its tools at the app's own address. */
+export function takeProviderRelayFrontRefused(chatKey: string): boolean {
+  return frontRefused.delete(chatKey)
 }
 
 /**
  * A launch given a daemon start's front whose agent didn't start under that start (no relay, or a
  * fallback after the pin was taken) never runs: its tools would name an address the start's exit
- * frees. The chat's next send gets the app's own address.
+ * frees. The chat's next launch gets the app's own address.
  */
 export function refuseUnrelayedFront<R>(
   relay: { chatKey: string; only?: 'spawn' | 'reattach' },

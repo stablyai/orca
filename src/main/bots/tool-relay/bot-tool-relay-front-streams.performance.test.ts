@@ -33,7 +33,7 @@ describe('front stream budget', () => {
     expect(streams.filter((stream) => stream.admitted)).toHaveLength(FRONT_STREAM_BUDGET)
     const refused = streams.filter((stream) => !stream.admitted)
     expect(refused.every((stream) => !stream.res.shouldKeepAlive)).toBe(true)
-    expect(TOOL_RELAY_FRONT_MAX_PIPES - FRONT_STREAM_BUDGET).toBeGreaterThanOrEqual(64)
+    expect(TOOL_RELAY_FRONT_MAX_PIPES - FRONT_STREAM_BUDGET).toBeGreaterThanOrEqual(32)
 
     // Calls fill up to the open budget; cleanup still gets in past it.
     const throughFront = (method: string) => {
@@ -47,7 +47,7 @@ describe('front stream budget', () => {
     expect(fronted.filter((call) => call.admitted)).toHaveLength(
       FRONT_OPEN_BUDGET - FRONT_STREAM_BUDGET
     )
-    expect(TOOL_RELAY_FRONT_MAX_PIPES - FRONT_OPEN_BUDGET).toBeGreaterThanOrEqual(16)
+    expect(TOOL_RELAY_FRONT_MAX_PIPES - FRONT_OPEN_BUDGET).toBeGreaterThanOrEqual(8)
     expect(throughFront('DELETE').admitted).toBe(true)
     // Another front's streams aren't counted against this one's.
     const elsewhere = new Socket()

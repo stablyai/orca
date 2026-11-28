@@ -26,6 +26,7 @@ import {
   type RelayFolders
 } from './bot-tool-relay-grants'
 import { KeptRelayGrants, type RelayGrantAnswer } from './bot-tool-relay-kept-grants'
+import type { ToolRelayKeep } from './bot-tool-relay-fronts'
 import { header, readBody, RelayRefusal } from './bot-tool-relay-requests'
 import { answerSignInNeeded, answerUnavailable } from './bot-tool-relay-sign-in-answer'
 import {
@@ -72,7 +73,7 @@ export class BotToolRelay {
     owner: string,
     folders: RelayFolders,
     /** A chat's launch, whose agent may outlive this app: it gets a daemon-held front when it can. */
-    options: { keepFor?: string } = {}
+    options: { keepFor?: ToolRelayKeep } = {}
   ): Promise<RelayGrantAnswer> {
     const origin = async () => `http://127.0.0.1:${await this.listen()}`
     return this.kept.grant(owner, folders, origin, options.keepFor)

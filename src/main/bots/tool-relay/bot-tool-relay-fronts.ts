@@ -17,7 +17,7 @@ import {
   keptProviderRelay,
   keptRunningProviderRelayPid
 } from '../../provider-relay/provider-relay-launch-inventory'
-import { providerRelayFrontRefused } from '../../provider-relay/provider-relay-front-pins'
+import { daemonReadsFolder } from '../../provider-relay/provider-relay-spawn-request'
 
 const CONNECT_TIMEOUT_MS = 1_000
 const FRONT_REQUEST_TIMEOUT_MS = 5_000
@@ -26,6 +26,9 @@ const SERVE_RETRY_MAX_MS = 60_000
 
 /** A launch's front: its loopback origin and the daemon start holding it. */
 export type ToolRelayFront = { origin: string; daemonInstance: string }
+
+/** A chat's launch whose agent the terminal daemon will run in `cwd`, so it may outlive the app. */
+export type ToolRelayKeep = { chatKey: string; cwd: string }
 
 type Watched = {
   stop: () => void
@@ -53,22 +56,30 @@ export class ToolRelayFronts {
     /** Takes a front's connection, with the port of the front it came through. */
     private readonly accept: (socket: Socket, port: number | null) => void,
     /** The grants a daemon start holds for the agents it keeps, from each serve's reply. */
-    private readonly adopt: (client: DaemonClient, kept: readonly ToolRelayFrontKeptRelay[]) => void
+    private readonly adopt: (client: DaemonClient, kept: readonly ToolRelayFrontKeptRelay[]) => void,
+    /** A kept agent's relay ended on that start, so its grants went there. */
+    private readonly keptEnded: (client: DaemonClient, relayId: string) => void
   ) {}
 
   /**
-   * The front of the daemon start `chatKey`'s agent runs on: the one its kept agent runs under, or
-   * the one new agents go to. Null where there is none (an older daemon, Windows, a remote host).
+   * The front of the daemon start the chat's agent runs on: the one its kept agent runs under, or
+   * the one new agents go to. Null where there is none (an older daemon, Windows, a remote host),
+   * or where that start couldn't keep the agent, so the launch wouldn't run under it.
    */
-  async current(chatKey: string): Promise<ToolRelayFront | null> {
+  async current({ chatKey, cwd }: ToolRelayKeep): Promise<ToolRelayFront | null> {
     const route = providerRelayRoute()
-    if (!route || this.closed || providerRelayFrontRefused(chatKey)) {
+    if (!route || this.closed) {
       return null
     }
     // A kept agent still running is reattached under its start; any other launch spawns on the current one.
     const kept = keptRunningProviderRelayPid(chatKey) === null ? null : keptProviderRelay(chatKey)
     const client = kept ? kept.channel.client : await route.current().catch(() => null)
-    if (!client || !(await connected(client)) || !client.getDaemonIdentity()?.toolRelayFront) {
+    if (!client || !(await connected(client))) {
+      return null
+    }
+    const identity = client.getDaemonIdentity()
+    const keeps = identity?.toolRelayFront && identity.providerRelay && identity.providerRelayKeep
+    if (!keeps || (!kept && !(await daemonReadsFolder(client, cwd)))) {
       return null
     }
     this.watch(client)
@@ -131,9 +142,13 @@ export class ToolRelayFronts {
       if (jsonProperty(event, 'event') !== TOOL_RELAY_FRONT_EVENT) {
         return
       }
-      const id = jsonProperty(jsonProperty(event, 'payload'), 'frontConnectionId')
+      const payload = jsonProperty(event, 'payload')
+      const id = jsonProperty(payload, 'frontConnectionId')
+      const ended = jsonProperty(payload, 'keptEnded')
       if (typeof id === 'string') {
         void this.answer(client, id)
+      } else if (typeof ended === 'string') {
+        this.keptEnded(client, ended)
       }
     })
     // Each hello (a reconnect, or a new daemon start under the same client) serves again.
@@ -141,6 +156,10 @@ export class ToolRelayFronts {
       const watched = this.watched.get(client)
       if (watched) {
         watched.connection += 1
+        // The last connection's retry is moot; this one's failure schedules its own.
+        clearTimeout(watched.retry ?? undefined)
+        watched.retry = null
+        watched.retryMs = SERVE_RETRY_MIN_MS
       }
       void this.serveOnce(client).catch(() => {})
     })

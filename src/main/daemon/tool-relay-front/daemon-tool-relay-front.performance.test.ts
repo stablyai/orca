@@ -9,7 +9,12 @@ import {
   TOOL_RELAY_FRONT_MAX_PIPES
 } from './daemon-tool-relay-front'
 
+import type { ToolRelayFrontEventPayload } from '../protocol/daemon-tool-relay-front-protocol'
+
 const opened: Socket[] = []
+
+const heldId = (event: ToolRelayFrontEventPayload): string =>
+  'frontConnectionId' in event ? event.frontConnectionId : ''
 let front: DaemonToolRelayFront | null = null
 let pairs: Server | null = null
 
@@ -55,7 +60,7 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     front = new DaemonToolRelayFront('start-1', TOOL_RELAY_FRONT_HOLD_MS, budget)
     const port = await front.open()
     const announced: string[] = []
-    front.serve('app', new Socket(), (id) => announced.push(id))
+    front.serve('app', new Socket(), (event) => announced.push(heldId(event)))
     const calls = Array.from({ length: 4 }, () => agent(port))
     await vi.waitFor(() => expect(front!.heldCount).toBe(4))
     // Two pipes take four descriptors; with the listener and two held that is the budget.
@@ -89,7 +94,7 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     // chat launch) announces nothing more.
     const control = new Socket()
     for (let launch = 0; launch < 100; launch += 1) {
-      front.serve('app', control, (id) => announced.push(id))
+      front.serve('app', control, (event) => announced.push(heldId(event)))
     }
     expect(announced).toHaveLength(TOOL_RELAY_FRONT_MAX_HELD)
     for (const id of announced) {
@@ -136,15 +141,15 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     expect(front.heldCount).toBe(0)
   })
 
-  it('keeps live pipes at 256 however many connections arrive', async () => {
+  it('keeps live pipes at the cap however many connections arrive', async () => {
     front = new DaemonToolRelayFront('start-1')
     const port = await front.open()
     let spliced = 0
     let handled = 0
     const answered: Promise<string>[] = []
-    front.serve('app', new Socket(), (id) => {
+    front.serve('app', new Socket(), (event) => {
       void appSocket().then((socket) => {
-        if (front!.splice(id, socket, 'app')) {
+        if (front!.splice(heldId(event), socket, 'app')) {
           spliced += 1
         }
         handled += 1

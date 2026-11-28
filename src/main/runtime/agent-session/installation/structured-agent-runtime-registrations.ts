@@ -81,7 +81,8 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
           ...(deps.prepareLaunchAccountHome
             ? { prepareLaunchAccountHome: deps.prepareLaunchAccountHome }
             : {}),
-          ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
+          ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {}),
+          ...(deps.sharedCodexServers ? { sharedServers: deps.sharedCodexServers } : {})
         })
       ),
       deps.readCodexInstallation

@@ -52,12 +52,17 @@ export const TOOL_RELAY_FRONT_REQUEST_TYPES: ReadonlySet<string> = new Set([
   'toolRelayFrontRevoke'
 ])
 
-/** Sent on the serving client's stream: open a `tool-relay` connection naming this id. */
+/**
+ * Sent on the serving client's stream: open a `tool-relay` connection naming `frontConnectionId`,
+ * or `keptEnded`: that relay ended, so its agent's grants are gone here.
+ */
+export type ToolRelayFrontEventPayload = { frontConnectionId: string } | { keptEnded: string }
+
 export type ToolRelayFrontConnectionEvent = {
   type: 'event'
   event: 'toolRelayFrontConnection'
   sessionId: 'tool-relay-front'
-  payload: { frontConnectionId: string }
+  payload: ToolRelayFrontEventPayload
 }
 
 export const TOOL_RELAY_FRONT_EVENT = 'toolRelayFrontConnection'

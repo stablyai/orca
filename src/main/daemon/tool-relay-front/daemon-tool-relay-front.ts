@@ -5,10 +5,12 @@
 import { randomUUID } from 'node:crypto'
 import { createServer, type Server, type Socket } from 'node:net'
 import { DaemonToolRelayKeptGrants } from './daemon-tool-relay-kept-grants'
+import type { ToolRelayFrontEventPayload } from '../protocol/daemon-tool-relay-front-protocol'
 
 export const TOOL_RELAY_FRONT_HOLD_MS = 30_000
 export const TOOL_RELAY_FRONT_MAX_HELD = 64
-export const TOOL_RELAY_FRONT_MAX_PIPES = 256
+/** Keeps the front's whole share (below) under 400 descriptors, well inside a default limit. */
+export const TOOL_RELAY_FRONT_MAX_PIPES = 128
 /** Connections being answered 503 (each lingers briefly for its peer to read the answer). */
 export const TOOL_RELAY_FRONT_MAX_ANSWERING = 64
 /**
@@ -46,7 +48,7 @@ type Pipe = { front: Socket; app: Socket; clientId: string }
 type Serving = {
   clientId: string
   control: Socket
-  announce: (frontConnectionId: string) => void
+  announce: (payload: ToolRelayFrontEventPayload) => void
 }
 
 export class DaemonToolRelayFront {
@@ -111,7 +113,7 @@ export class DaemonToolRelayFront {
   serve(
     clientId: string,
     control: Socket,
-    announce: (frontConnectionId: string) => void
+    announce: (payload: ToolRelayFrontEventPayload) => void
   ): number | null {
     const replaced = this.serving?.control !== control
     if (!this.watchedControls.has(control)) {
@@ -121,11 +123,18 @@ export class DaemonToolRelayFront {
     this.serving = { clientId, control, announce }
     // The same connection serving again already heard of every held connection.
     if (replaced) {
-      for (const id of this.held.keys()) {
-        announce(id)
+      for (const frontConnectionId of this.held.keys()) {
+        announce({ frontConnectionId })
       }
     }
     return this.port
+  }
+
+  /** A kept agent's relay ended: its grants go, and the app serving the front hears so. */
+  forgetKept(relayId: string): void {
+    if (this.kept.forget(relayId)) {
+      this.serving?.announce({ keptEnded: relayId })
+    }
   }
 
   /** An app's control connection closed: it answers nothing more, and its pipes close. */
@@ -151,8 +160,8 @@ export class DaemonToolRelayFront {
     this.held.delete(frontConnectionId)
     clearTimeout(held.timer)
     const front = held.socket
-    // The held socket is already counted; its pipe adds the app's.
-    if (this.pipes.size >= TOOL_RELAY_FRONT_MAX_PIPES || this.descriptorCount + 1 > this.fdBudget) {
+    // No longer held, so its pipe adds both sockets.
+    if (this.pipes.size >= TOOL_RELAY_FRONT_MAX_PIPES || this.descriptorCount + 2 > this.fdBudget) {
       app.destroy()
       this.answerAndClose(front)
       return false
@@ -229,7 +238,7 @@ export class DaemonToolRelayFront {
         this.held.delete(id)
       }
     })
-    this.serving?.announce(id)
+    this.serving?.announce({ frontConnectionId: id })
   }
 
   /**

@@ -14,7 +14,7 @@ import {
   restoreKeptSharedToolCaller
 } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { RelayGrants, type RelayFolders, type RelayGrant } from './bot-tool-relay-grants'
-import { ToolRelayFronts } from './bot-tool-relay-fronts'
+import { ToolRelayFronts, type ToolRelayKeep } from './bot-tool-relay-fronts'
 import { keptGrantOwnerFolders } from './kept-tool-grants'
 
 const REVOKE_TIMEOUT_MS = 5_000
@@ -25,11 +25,14 @@ const REVOKE_TIMEOUT_MS = 5_000
  * pipe, and everything but cleanup stops short of it so DELETE does. A front's connections close
  * after each answer, so open pipes are the requests counted here.
  */
-export const FRONT_STREAM_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 64
-export const FRONT_OPEN_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 16
+export const FRONT_STREAM_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 32
+export const FRONT_OPEN_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 8
 
 /** A grant's address and token; `front` names the daemon start whose front the origin is. */
 export type RelayGrantAnswer = { origin: string; token: string; front?: string }
+
+type AdoptedRelay = { chatKey: string; tokens: string[]; callerToken?: string }
+type AdoptedRelays = { relays: Map<string, AdoptedRelay>; holders: Map<string, number> }
 
 export class KeptRelayGrants {
   private readonly grants = new RelayGrants()
@@ -39,10 +42,10 @@ export class KeptRelayGrants {
   private readonly frontCounts = new Map<number, { streams: number; open: number }>()
   /** The first serve of every daemon start: kept agents' tokens are known once it settles. */
   private serving: Promise<void> | null = null
-  /** The kept agents' tokens each daemon start last handed back. */
-  private readonly adopted = new Map<DaemonClient, Set<string>>()
-  /** The kept callers each daemon start last handed back, by chat. */
-  private readonly adoptedCallers = new Map<DaemonClient, Map<string, string>>()
+  /** What each daemon start last handed back, by relay, with how many of its relays hold each token. */
+  private readonly adopted = new Map<DaemonClient, AdoptedRelays>()
+  /** Owners revoked this run (deleted bots): a serve before the config drops them adopts none. */
+  private readonly revoked = new Set<string>()
 
   /** `server`: the relay's HTTP server, listening; a front's connection is served as one made to it. */
   constructor(server: () => Promise<Server | null>) {
@@ -62,7 +65,8 @@ export class KeptRelayGrants {
           () => socket.destroy()
         )
       },
-      (client, kept) => this.adopt(client, kept)
+      (client, kept) => this.adopt(client, kept),
+      (client, relayId) => this.keptEnded(client, relayId)
     )
   }
 
@@ -75,7 +79,7 @@ export class KeptRelayGrants {
     owner: string,
     folders: RelayFolders,
     appOrigin: () => Promise<string>,
-    keepFor: string | undefined
+    keepFor: ToolRelayKeep | undefined
   ): Promise<RelayGrantAnswer> {
     const origin = await appOrigin()
     const token = this.grants.grant(owner, folders)
@@ -84,7 +88,7 @@ export class KeptRelayGrants {
     if (!front || !granted || keepFor === undefined) {
       return { origin, token }
     }
-    stageProviderRelayFrontGrant(keepFor, front.daemonInstance, {
+    stageProviderRelayFrontGrant(keepFor.chatKey, front.daemonInstance, {
       owner,
       token,
       folders: granted.folders
@@ -163,6 +167,7 @@ export class KeptRelayGrants {
    * (so no restarted app takes them back), then this run forgets them.
    */
   async revoke(owner: string): Promise<void> {
+    this.revoked.add(owner)
     try {
       const clients =
         (await providerRelayRoute()
@@ -183,40 +188,77 @@ export class KeptRelayGrants {
    * The grants a daemon start holds for the agents it keeps. A deleted bot's are dropped there too;
    * the rest reach their folders as the current config names them.
    */
-  private adopt(client: DaemonClient, kept: readonly ToolRelayFrontKeptRelay[]): void {
-    const tokens = new Set<string>()
-    const callers = new Map<string, string>()
+  adopt(client: DaemonClient, kept: readonly ToolRelayFrontKeptRelay[]): void {
+    const configured = keptGrantOwnerFolders()
+    const ownerFolders = (owner: string) => (this.revoked.has(owner) ? null : configured(owner))
+    const revoked = new Set<string>()
+    const earlier = this.adopted.get(client)
+    const now: AdoptedRelays = { relays: new Map(), holders: new Map() }
+    this.adopted.set(client, now)
     for (const relay of kept) {
+      const held: AdoptedRelay = { chatKey: relay.chatKey, tokens: [] }
       for (const grant of relay.grants) {
-        const folders = keptGrantOwnerFolders(grant.owner)
+        const folders = ownerFolders(grant.owner)
         if (folders === null) {
-          void revokeOn(client, grant.owner)
+          if (!revoked.has(grant.owner)) {
+            revoked.add(grant.owner)
+            void revokeOn(client, grant.owner)
+          }
           continue
         }
-        tokens.add(grant.token)
+        held.tokens.push(grant.token)
+        now.holders.set(grant.token, (now.holders.get(grant.token) ?? 0) + 1)
         this.grants.adopt(grant.owner, grant.token, folders ?? grant.folders)
       }
       const caller = relay.caller
-      if (caller && keptGrantOwnerFolders(caller.owner) !== null) {
+      if (caller && ownerFolders(caller.owner) !== null) {
         restoreKeptSharedToolCaller(relay.chatKey, caller)
-        callers.set(relay.chatKey, caller.token)
+        held.callerToken = caller.token
+      }
+      now.relays.set(relay.relayId, held)
+    }
+    // What this start no longer holds (its agents ended) goes, unless another start holds it.
+    const callers = new Map([...now.relays.values()].map((relay) => [relay.chatKey, relay]))
+    for (const relay of earlier?.relays.values() ?? []) {
+      const token = relay.callerToken
+      if (token !== undefined && callers.get(relay.chatKey)?.callerToken !== token) {
+        forgetKeptSharedToolChat(relay.chatKey, token)
       }
     }
-    for (const [chatKey, token] of this.adoptedCallers.get(client) ?? []) {
-      if (callers.get(chatKey) !== token) {
-        forgetKeptSharedToolChat(chatKey, token)
+    for (const token of earlier?.holders.keys() ?? []) {
+      this.forgetUnheld(token)
+    }
+  }
+
+  /** A relay that daemon start kept ended: only its agent's tokens and caller go. */
+  keptEnded(client: DaemonClient, relayId: string): void {
+    const adopted = this.adopted.get(client)
+    const relay = adopted?.relays.get(relayId)
+    if (!adopted || !relay) {
+      return
+    }
+    adopted.relays.delete(relayId)
+    if (relay.callerToken !== undefined) {
+      forgetKeptSharedToolChat(relay.chatKey, relay.callerToken)
+    }
+    for (const token of relay.tokens) {
+      const count = (adopted.holders.get(token) ?? 1) - 1
+      if (count > 0) {
+        adopted.holders.set(token, count)
+      } else {
+        adopted.holders.delete(token)
+        this.forgetUnheld(token)
       }
     }
-    this.adoptedCallers.set(client, callers)
-    // A token this start no longer holds (its agents ended) and no other start holds goes.
-    const earlier = this.adopted.get(client) ?? new Set<string>()
-    this.adopted.set(client, tokens)
-    const held = [...this.adopted.values()]
-    for (const token of earlier) {
-      if (!held.some((set) => set.has(token))) {
-        this.grants.forget(token)
+  }
+
+  private forgetUnheld(token: string): void {
+    for (const adopted of this.adopted.values()) {
+      if (adopted.holders.has(token)) {
+        return
       }
     }
+    this.grants.forget(token)
   }
 
   /**
@@ -240,6 +282,7 @@ export class KeptRelayGrants {
   close(): void {
     this.fronts.close()
     this.grants.clear()
+    this.adopted.clear()
   }
 }
 

@@ -127,7 +127,8 @@ export class ProviderRelayHost {
     )
     const failure: { error: (Error & { code?: unknown }) | null } = { error: null }
     managed.child.on('error', (error: Error & { code?: unknown }) => void (failure.error ??= error))
-    const relay = new ProviderRelay({
+    // Grants held for an agent whose relay never forms go with it.
+    const relay: ProviderRelay = this.spawnHolding(relayId, () => new ProviderRelay({
       relayId,
       chatKey,
       agent: typeof agent === 'string' && agent.length <= MAX_CHAT_KEY_CHARS ? agent : null,
@@ -142,7 +143,7 @@ export class ProviderRelayHost {
       log: this.options.log,
       onSettled: () => {
         if (!relay.live) {
-          this.toolRelayFront?.kept.forget(relayId)
+          this.toolRelayFront?.forgetKept(relayId)
         }
         this.removeIfFinished(relay)
         this.expireWhenAbandoned(relay)
@@ -154,7 +155,7 @@ export class ProviderRelayHost {
         this.cap.detached(relay)
       },
       onIdleUnread: () => this.cap.idleUnread(relay)
-    })
+    }))
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     relay.pending.kept.configure(keep)
     this.relays.set(relayId, relay)
@@ -284,7 +285,7 @@ export class ProviderRelayHost {
     try {
       return start()
     } catch (error) {
-      this.toolRelayFront?.kept.forget(relayId)
+      this.toolRelayFront?.forgetKept(relayId)
       throw error
     }
   }
@@ -317,7 +318,7 @@ export class ProviderRelayHost {
 
   private remove(relay: ProviderRelay): void {
     this.retention.clear(relay)
-    this.toolRelayFront?.kept.forget(relay.relayId)
+    this.toolRelayFront?.forgetKept(relay.relayId)
     if (this.registered(relay)) {
       this.relays.delete(relay.relayId)
       void relay.dispose()

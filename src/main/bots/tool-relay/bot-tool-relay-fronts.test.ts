@@ -67,7 +67,7 @@ async function servedFront(): Promise<number> {
     relay.close()
     installProviderRelayRoute(null)
   })
-  const front = await relay.kept.fronts.current('chat-1')
+  const front = await relay.kept.fronts.current({ chatKey: 'chat-1', cwd: tmpdir() })
   expect(front?.origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
   return Number(new URL(front!.origin).port)
 }
@@ -85,7 +85,7 @@ describe.skipIf(process.platform === 'win32')('tool relay fronts', () => {
     expect(answer).toMatch(/^HTTP\/1\.1 401 /)
   })
 
-  // 260 sequential connections through a real daemon, each a socket, hello and splice.
+  // Past the pipe cap in sequential connections through a real daemon, each a socket, hello and splice.
   it('keep-alive calls past the pipe cap never hold pipes, so cleanup still gets through', async () => {
     const port = await servedFront()
     // Each asks to keep its connection; the relay closes it after answering, freeing its pipe.

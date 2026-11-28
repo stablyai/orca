@@ -63,6 +63,8 @@ export type CodexStructuredLaunchPartDeps = {
     pathEnv?: string | null
     homePath?: string
   }) => StructuredAgentCommand
+  /** Threads share pooled app-servers, which the terminal daemon doesn't run. */
+  sharedServers?: () => boolean
 }
 
 export type CodexStructuredInvocationDeps = Pick<
@@ -181,7 +183,10 @@ export function codexStructuredLaunchPart(
     const tools = await deliverHostMcpServers(
       record.sessionId,
       'Codex',
-      await basis.toolServers(),
+      // A chat's own app-server runs under the terminal daemon (as its connection opens it).
+      await basis.toolServers(
+        !configuredProgram && process.platform !== 'win32' && deps.sharedServers?.() !== true
+      ),
       async () => [
         ...(await readCodexInheritedToolNames(codexHome)),
         ...(await agentOwnMcpServerNames('codex', environment, launchDirectory)),

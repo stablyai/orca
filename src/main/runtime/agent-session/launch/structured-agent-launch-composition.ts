@@ -2,7 +2,10 @@
 
 import { toolFreeSession, type ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
-import { pinProviderRelayFront } from '../../../provider-relay/provider-relay-front-pins'
+import {
+  pinProviderRelayFront,
+  takeProviderRelayFrontRefused
+} from '../../../provider-relay/provider-relay-front-pins'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -57,7 +60,9 @@ export type StructuredAgentLaunchSources = {
   /** The MCP servers Orca adds to the session: a bot's own, and the host's list; absent adds none. */
   resolveToolServers?: (
     record: AgentSessionRecord,
-    launchDirectory: string
+    launchDirectory: string,
+    /** The launch's agent runs under the terminal daemon, so its tools may reach a daemon front. */
+    relays: boolean
   ) => Promise<SessionMcpTools>
   /** A bot's linked-skills folder and the projects in it, scanned for this launch; absent: none. */
   resolveLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
@@ -79,8 +84,9 @@ export type StructuredAgentLaunchBasis = {
   visuals(): Promise<NativeChatVisualsLaunch | null>
   /** Null when there are none. A resumed conversation keeps the ones it started with, in both agents. */
   instructions(linkedSkills?: string | null): Promise<string | null>
-  /** The MCP servers Orca adds (a bot's own and the host's list); none for a read-only session. */
-  toolServers(): Promise<SessionMcpTools>
+  /** The MCP servers Orca adds (a bot's own and the host's list); none for a read-only session.
+   *  `relays`: the part starts this launch's agent under the terminal daemon; the first call decides. */
+  toolServers(relays?: boolean): Promise<SessionMcpTools>
   /** The bot's linked-skills folder the chat loads beside the agent's own; none for any other chat. */
   linkedSkills(): Promise<LinkedSkills>
   /** After launch, when the agent turned the linked skill roots down. */
@@ -148,6 +154,12 @@ function once<T>(read: () => T): () => T {
   return () => (result ??= { value: read() }).value
 }
 
+/** As `once`, the first call's argument deciding. */
+function onceWith<A, T>(read: (arg?: A) => T): (arg?: A) => T {
+  let result: { value: T } | null = null
+  return (arg) => (result ??= { value: read(arg) }).value
+}
+
 function admittedRecord(
   definition: StructuredAgentDefinition,
   store: StructuredAgentLaunchSources['store'],
@@ -187,6 +199,8 @@ async function composedPart<L>(
   const record = admittedRecord(definition, sources.store, identity.sessionId)
   const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})
   const launchDirectory = once(() => resolveAgentSessionLaunchDirectory(sources, record))
+  // The launch after one refused its daemon front gets its tools at the app's own address.
+  const frontRefused = takeProviderRelayFrontRefused(record.sessionId)
   const readEnvironments = () => ({
     base: once(sources.resolveBaseEnvironment),
     agent: once(() => sources.resolveAgentEnvironment(definition.agent))
@@ -220,11 +234,15 @@ async function composedPart<L>(
             : linkedSkills)())
     })(),
     // A read-only session gets none: Look around keeps every tool off.
-    toolServers: once(async () => {
+    toolServers: onceWith(async (relays = false) => {
       const tools =
         readOnly || !sources.resolveToolServers
           ? SessionMcpTools.none
-          : await sources.resolveToolServers(record, await launchDirectory())
+          : await sources.resolveToolServers(
+              record,
+              await launchDirectory(),
+              relays && !frontRefused
+            )
       // An agent given a daemon start's tool front may only run under that start.
       pinProviderRelayFront(record.sessionId, tools.front)
       return tools

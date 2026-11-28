@@ -83,8 +83,8 @@ export class DaemonToolRelayKeptGrants {
   }
 
   /** The relay ended (or never started): its agent's tokens are no one's from now on. */
-  forget(relayId: string): void {
-    this.relays.delete(relayId)
+  forget(relayId: string): boolean {
+    return this.relays.delete(relayId)
   }
 
   /** The owner's grants and callers leave every relay. */

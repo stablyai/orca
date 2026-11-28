@@ -15,6 +15,7 @@ import {
   type RelayFolders
 } from '../bots/tool-relay/bot-tool-relay'
 import { relayProcessUrl } from '../bots/tool-relay/bot-tool-relay-grants'
+import type { ToolRelayKeep } from '../bots/tool-relay/bot-tool-relay-fronts'
 
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '::1']
 
@@ -69,8 +70,8 @@ export class SessionMcpTools {
       bot: SessionMcpBot
       agent: string
       terminal?: boolean
-      /** A chat's launch (its session id), whose agent may outlive the app on a daemon front. */
-      keepFor?: string
+      /** A chat's launch the terminal daemon runs, whose agent may outlive the app on its front. */
+      keepFor?: ToolRelayKeep
     },
     sources: { own?: readonly BotToolServer[]; host?: SessionHostMcpServers | undefined }
   ): Promise<SessionMcpTools> {

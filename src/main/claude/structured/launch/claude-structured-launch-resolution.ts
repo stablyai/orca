@@ -240,7 +240,8 @@ export function claudeStructuredLaunchPart(
     // Fixed homes can be checked before the final account-routing recheck.
     const resumedWithoutRouter = router ? undefined : await resumes(accountHome.path)
     // Resolve auth after awaited launch preparation; account routing is rechecked below.
-    const tools = await basis.toolServers()
+    // Claude's agent runs under the terminal daemon wherever it can.
+    const tools = await basis.toolServers(true)
     const { command, prefixArgs, env } = await resolveClaudeStructuredInvocation(
       envDeps,
       (base) =>

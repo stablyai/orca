@@ -37,7 +37,7 @@ export function answerToolRelayFrontRequest(
     front.kept.revoke(owner)
     return Promise.resolve({})
   }
-  const port = front.serve(client.clientId, socket, (frontConnectionId) => {
+  const port = front.serve(client.clientId, socket, (payload) => {
     const stream = client.streamSocket
     if (!stream || stream.destroyed) {
       return
@@ -46,7 +46,7 @@ export function answerToolRelayFrontRequest(
       type: 'event',
       event: TOOL_RELAY_FRONT_EVENT,
       sessionId: 'tool-relay-front',
-      payload: { frontConnectionId }
+      payload
     }
     stream.write(streamFramesFor(client.streamFraming).control(event))
   })

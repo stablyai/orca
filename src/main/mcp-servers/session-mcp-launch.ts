@@ -89,9 +89,14 @@ export async function sessionMcpLaunchTools(
   bot: Pick<Bot, 'id' | 'hostMcpServers'> | null,
   record: LaunchRecord,
   launchDirectory: string,
-  deps: { relay?: Pick<BotToolRelay, 'grant'>; hostFolder?: string } = {}
+  deps: { relay?: Pick<BotToolRelay, 'grant'>; hostFolder?: string; relays?: boolean } = {}
 ): Promise<{ tools: SessionMcpTools; launched: SessionLaunchedTools | null }> {
   const relay = deps.relay ?? botToolRelay
+  // Only an agent the terminal daemon runs may outlive the app, so only its tools reach a front.
+  const keep =
+    deps.relays && record.sessionId
+      ? { keepFor: { chatKey: record.sessionId, cwd: launchDirectory } }
+      : {}
   if (bot) {
     const own = await readBotLaunchServers(launchDirectory)
     // A bot's home isn't one of the user's workspaces: it takes every server on for its agent.
@@ -105,7 +110,7 @@ export async function sessionMcpLaunchTools(
       {
         bot: { botId: bot.id, folder: launchDirectory },
         agent: record.provider,
-        ...(record.sessionId ? { keepFor: record.sessionId } : {})
+        ...keep
       },
       { own: own.servers, ...(host ? { host } : {}) }
     )
@@ -124,7 +129,7 @@ export async function sessionMcpLaunchTools(
           {
             bot: null,
             agent: record.provider,
-            ...(record.sessionId ? { keepFor: record.sessionId } : {})
+            ...keep
           },
           { host: read.host }
         )

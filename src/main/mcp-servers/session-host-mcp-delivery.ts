@@ -79,11 +79,18 @@ export function withOrcaMcpSource(
  * `cwd`, and `also`. `hostOff`: the agent ignores a session's servers, so none of the host list's.
  */
 export async function deliverHostMcpServersBesideConfig(
-  basis: { record: { sessionId: string }; toolServers(): Promise<SessionMcpTools> },
+  basis: { record: { sessionId: string }; toolServers(relays?: boolean): Promise<SessionMcpTools> },
   agent: string,
-  launch: { env: NodeJS.ProcessEnv; cwd: string; also?: readonly string[]; hostOff?: boolean }
+  launch: {
+    env: NodeJS.ProcessEnv
+    cwd: string
+    also?: readonly string[]
+    hostOff?: boolean
+    /** The agent runs under the terminal daemon. */
+    relays?: boolean
+  }
 ): Promise<SessionMcpTools> {
-  const tools = await basis.toolServers()
+  const tools = await basis.toolServers(launch.relays === true)
   noteSessionIgnoresHostMcp(basis.record.sessionId, launch.hostOff === true)
   const offered = launch.hostOff ? tools.beside(tools.hostNames).tools : tools
   return deliverHostMcpServers(basis.record.sessionId, agent, offered, async () => [
