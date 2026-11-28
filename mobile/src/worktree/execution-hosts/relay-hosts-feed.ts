@@ -27,6 +27,8 @@ export type RelayHostsFeed = {
   getAllSnapshot: () => readonly MobileRelayHost[] | null
   /** Answers from the snapshot while the desktop's notices keep it current; reads otherwise. */
   read: () => Promise<readonly MobileRelayHost[] | null>
+  /** `read`, with servers this phone also pairs with directly, for rows an open route resolves. */
+  readAll: () => Promise<readonly MobileRelayHost[] | null>
 }
 
 const feeds = new WeakMap<RpcClient, RelayHostsFeed>()
@@ -214,7 +216,8 @@ function createFeed(client: RpcClient): RelayHostsFeed {
     },
     getSnapshot: () => listed,
     getAllSnapshot: () => snapshot,
-    read
+    read,
+    readAll: () => read().then(() => snapshot)
   }
 }
 

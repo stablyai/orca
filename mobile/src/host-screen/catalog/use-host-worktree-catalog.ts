@@ -23,8 +23,11 @@ import {
 import { savePinnedIds } from '../../storage/preferences'
 import type { HostScreenState } from '../use-host-screen-state'
 import { relaysToServers } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
-import { NO_SERVER_WORKSPACES } from '../../worktree/execution-hosts/server-workspaces'
-import { useRelayHosts } from '../../worktree/execution-hosts/relay-hosts-feed'
+import {
+  listedServerWorkspaces,
+  NO_SERVER_WORKSPACES
+} from '../../worktree/execution-hosts/server-workspaces'
+import { relayHostsFeed, useRelayHosts } from '../../worktree/execution-hosts/relay-hosts-feed'
 import { WorktreeCatalogReadError } from '../../worktree/catalog/worktree-catalog-snapshot-client'
 import { useHostQuery } from '../../query/host-query'
 import { hostReadClient } from '../../query/host-read-client'
@@ -228,7 +231,9 @@ export function useHostWorktreeCatalog(args: {
 
   useEffect(() => {
     if (servers.data && !relaysRuledOut) {
-      setServerWorkspaces(servers.data)
+      // The read just refreshed the feed, which knows which servers this phone pairs with directly.
+      const listed = client ? relayHostsFeed(client).getSnapshot() : null
+      setServerWorkspaces(listedServerWorkspaces(servers.data, listed))
       const confirmed = servers.data.worktrees
       setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed, true))
     } else if (!relays) {
@@ -236,7 +241,7 @@ export function useHostWorktreeCatalog(args: {
       setServerWorkspaces(NO_SERVER_WORKSPACES)
     }
     // An unchanged reply keeps its reference, but still confirms which slept rows woke.
-  }, [relays, relaysRuledOut, servers.data, servers.dataUpdatedAt])
+  }, [client, relays, relaysRuledOut, servers.data, servers.dataUpdatedAt])
 
   const fetchWorktrees = useCallback(
     async (options: { allowDuringModal?: boolean } = {}) => {
