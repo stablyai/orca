@@ -11,7 +11,13 @@ import {
   type ListedFolders
 } from './deleted-workspace-folders'
 
-export type ChatHistorySweepResult = { deleted: number; failed: number; freedBytes: number }
+export type ChatHistorySweepResult = {
+  deleted: number
+  failed: number
+  freedBytes: number
+  /** Chats left for a later sweep, neither deleted nor failed. */
+  skipped?: number
+}
 
 export type GoneFolderSweepScope = {
   store: RuntimeStore
@@ -100,6 +106,9 @@ export async function sweepGoneWorkspaceFolderGroups<T>(
     result.deleted += removed.deleted
     result.failed += removed.failed
     result.freedBytes += removed.freedBytes
+    if (removed.skipped) {
+      result.skipped = (result.skipped ?? 0) + removed.skipped
+    }
   }
   return result
 }

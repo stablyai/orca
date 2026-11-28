@@ -42,6 +42,8 @@ export const deletedChatsSweepSchema = lazyZodSchema(() =>
       transcripts_on: z.boolean(),
       orca_chats_bucket: count,
       orca_failed_bucket: count,
+      // Left for a later sweep while an older Orca's copy of the chat is still being converted.
+      orca_skipped_bucket: count,
       transcripts_bucket: count,
       transcripts_failed_bucket: count,
       elapsed_ms_bucket: duration

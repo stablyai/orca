@@ -61,6 +61,7 @@ export function reportDeletedChatsSweep(sweep: {
     transcripts_on: sweep.transcriptsOn,
     orca_chats_bucket: countBucket(sweep.orcaChats.deleted),
     orca_failed_bucket: countBucket(sweep.orcaChats.failed),
+    orca_skipped_bucket: countBucket(sweep.orcaChats.skipped ?? 0),
     transcripts_bucket: countBucket(sweep.transcripts.deleted),
     transcripts_failed_bucket: countBucket(sweep.transcripts.failed),
     elapsed_ms_bucket: durationBucket(sweep.elapsedMs)

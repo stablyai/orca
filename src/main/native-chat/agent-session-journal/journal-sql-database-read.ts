@@ -51,6 +51,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
   | { kind: 'chat-exists'; sessionId: string }
+  | { kind: 'chat-copy-state'; sessionId: string }
   | { kind: 'message-chats'; messageId: string }
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
@@ -74,6 +75,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
   | { kind: 'chat-exists'; exists: boolean }
+  | { kind: 'chat-copy-state'; state: ReturnType<typeof readJournalChatCopyState> }
   | { kind: 'message-chats'; sessionIds: string[] }
   | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
   | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
@@ -234,12 +236,12 @@ function read(
     }
     case 'forgotten-chats':
       return { kind: 'forgotten-chats', sessionIds: readForgottenJournalChats(db, operation.after) }
+    case 'chat-copy-state':
+      return { kind: 'chat-copy-state', state: readJournalChatCopyState(db, operation.sessionId) }
     case 'chat-exists':
       return {
         kind: 'chat-exists',
-        exists: !!db
-          .prepare('SELECT 1 FROM journal_chat_state WHERE session_id=?')
-          .get(operation.sessionId)
+        exists: readJournalChatCopyState(db, operation.sessionId) !== 'absent'
       }
     case 'deleted-chats':
       return { kind: 'deleted-chats', chats: readDeletedChats(db) }
@@ -259,4 +261,16 @@ function readMessageChats(db: Database.Database, messageId: string): string[] {
     )
     .all(messageId)
     .map((row) => String(row.session_id))
+}
+
+/**
+ * Whether a cleanup may delete the chat now: its rows are in this store (`copied`), it never had
+ * any (`absent`), or an older Orca's copy of it is still being converted (`pending`).
+ */
+function readJournalChatCopyState(
+  db: Database.Database,
+  sessionId: string
+): 'copied' | 'absent' | 'pending' {
+  const row = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(sessionId)
+  return !row ? 'absent' : row.epoch === null ? 'pending' : 'copied'
 }
