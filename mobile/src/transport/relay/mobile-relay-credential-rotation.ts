@@ -98,11 +98,44 @@ export function mobileRelayCredentialNeedsRotation(
   )
 }
 
+// A committed install can only follow `expectedCurrentHash`, so the relay numbered it current + 1.
+// The relay alone knows its expiry; the lease stays dialable until the relay answers, and a refused one only
+// retries on the slow credential reprobe.
+export function pendingRelayCredentialLease(
+  bundle: MobileRelayCredentialBundle
+): MobileRelayCredentialBundle['current'] | null {
+  if (!bundle.pending) {
+    return null
+  }
+  return {
+    token: bundle.pending.token,
+    hash: bundle.pending.hash,
+    version: bundle.current.version + 1,
+    expiresAt: Number.MAX_SAFE_INTEGER
+  }
+}
+
 export function applyResumeConfirmation(
   bundle: MobileRelayCredentialBundle,
   usedCredentialVersion: number,
   confirmation: DeviceResumeConfirmed
 ): MobileRelayCredentialBundle {
+  const pending = pendingRelayCredentialLease(bundle)
+  const usedPendingOrCurrent =
+    usedCredentialVersion ===
+    (confirmation.acceptedAs === 'current' ? pending?.version : bundle.current.version)
+  if (pending && confirmation.currentVersion === pending.version && usedPendingOrCurrent) {
+    // The relay names pending's version as current, so a rotation committed but its reply was lost.
+    // Adopt it as direct reconciliation would; resumeExpiresAt is always the relay's current expiry.
+    return MobileRelayCredentialBundleSchema.parse({
+      ...bundle,
+      current: { ...pending, expiresAt: confirmation.resumeExpiresAt },
+      grace: confirmation.graceExpiresAt
+        ? { ...bundle.current, expiresAt: confirmation.graceExpiresAt }
+        : undefined,
+      pending: undefined
+    })
+  }
   if (
     confirmation.acceptedAs === 'current' &&
     confirmation.renewed &&

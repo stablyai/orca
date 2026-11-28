@@ -73,6 +73,14 @@ export class LogicalClientConnectionPath {
     })
   }
 
+  holdsSteadyVerdict(): boolean {
+    return (
+      this.relayHostReachability === 'credential-refused' ||
+      this.relayHostReachability === 'host-offline' ||
+      this.relayHostReachability === 'signed-out'
+    )
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -84,11 +92,13 @@ export class LogicalClientConnectionPath {
     const previousRejected = this.pairingRejected
     const previousReachability = this.relayHostReachability
     apply()
+    // A steady refused, offline or signed-out verdict outranks path and attempt, so retries under it must not
+    // refresh every listener (Home re-projects all hosts) when nothing visible changed.
     if (
-      previousPath === this.pending() &&
-      previousAttempt === this.reconnectAttempt(0) &&
       previousRejected === this.pairingRejected &&
-      previousReachability === this.relayHostReachability
+      previousReachability === this.relayHostReachability &&
+      (this.holdsSteadyVerdict() ||
+        (previousPath === this.pending() && previousAttempt === this.reconnectAttempt(0)))
     ) {
       return
     }

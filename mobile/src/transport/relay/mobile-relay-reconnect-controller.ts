@@ -1,11 +1,10 @@
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import { relayDirectorRetryAfterMs } from './mobile-relay-resume-director'
 import {
   isExplicitCredentialRejection,
+  isRelayHostOffline,
   RelayCredentialEligibility
 } from './relay-credential-eligibility'
 import type { RelayHostReachability } from './relay-host-reachability'
@@ -25,6 +24,8 @@ export type RelayReconnectDependencies = {
 }
 
 type RecoveryGate = 'external-signal' | 'fresh-credential'
+// evidence: an earlier refusal in the attempt, when the final error names no verdict, keeps that verdict standing.
+type DialOutcome = { evidence?: Error | null }
 type RetainableRelaySession = Pick<MobileRelayRpcSession, 'getFailure' | 'notifyForeground'>
 
 export class RelayReconnectController {
@@ -148,10 +149,11 @@ export class RelayReconnectController {
     return needsCredentialRefresh
   }
 
+  // A refreshed or promoted credential supersedes every refused version.
   completeCredentialRefresh(): void {
+    this.credentials.clearRejected()
     if (this.recoveryGate === 'fresh-credential') {
       this.evidence.clear()
-      this.credentials.clearRejected()
       this.reset()
     }
   }
@@ -233,19 +235,20 @@ export class RelayReconnectController {
     return null
   }
 
-  registerFailure(error: Error | null, scheduleRetry = true): void {
+  registerFailure(error: Error | null, scheduleRetry = true, dial: DialOutcome = {}): void {
     // Bank rejection evidence before gated early return, except when a live authenticated relay disproves revocation.
     if (!this.activeSession) {
-      this.evidence.record(error)
+      this.evidence.record(dial.evidence ?? error)
     }
-    const hostOffline =
-      error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
+    const hostOffline = isRelayHostOffline(error)
     const credentialRejected = isExplicitCredentialRejection(error)
     if (
       this.recoveryGate === 'fresh-credential' ||
       (this.recoveryGate === 'external-signal' && !credentialRejected)
     ) {
-      // Keep slow gated reprobes running only while active; foreground restores cadence.
+      // A director Retry-After still floors the next gated reprobe; then keep slow reprobes running only while active.
+      const retryAfterMs = relayDirectorRetryAfterMs(error)
+      this.nextAttemptAt = Math.max(this.nextAttemptAt, this.dependencies.now() + retryAfterMs)
       this.holdGate(scheduleRetry)
       return
     }
@@ -328,7 +331,8 @@ export class RelayReconnectController {
     if (this.timer) {
       return
     }
-    this.timerDueAt = this.dependencies.now() + delay
+    // A director Retry-After (booked in nextAttemptAt) is a floor for reprobes too.
+    this.timerDueAt = Math.max(this.dependencies.now() + delay, this.nextAttemptAt)
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
       // Advance cadence once per fired tick, not on repeated arm attempts.
@@ -338,7 +342,7 @@ export class RelayReconnectController {
         this.gateReprobePending = true
       }
       this.onRetry()
-    }, delay)
+    }, this.timerDueAt - this.dependencies.now())
   }
 
   // Keep only slow reprobes under a gate, and no timers while backgrounded/stopped.

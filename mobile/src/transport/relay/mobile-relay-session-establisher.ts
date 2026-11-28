@@ -5,15 +5,20 @@ import {
   toError
 } from './mobile-relay-director-fallback'
 import { RelayHostOfflineStreak } from './relay-host-offline-streak'
-import { RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
+import { RelayDirectorHttpError, RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
 import { isExplicitCredentialRejection } from './relay-credential-eligibility'
+import { relayHostReachabilityForFailure } from './relay-host-reachability-latch'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
+
+function isDirectorRefusal(error: Error | null): boolean {
+  return error instanceof RelayDirectorHttpError && error.status === 401
+}
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }
 
@@ -26,6 +31,10 @@ export class MobileRelaySessionEstablisher {
   private relay: MobileRelayEndpoint
   private readonly hostOfflineStreak: RelayHostOfflineStreak
   private readonly resolveTimeout = new RelayResolveTimeoutBudget()
+  private resolvedThisAttempt = false
+  // A director 401 for an older token: the next attempt gives pending the director lookup, so a moved host's
+  // pending can find its cell, while current stays eligible (it is retired only by pending's promotion).
+  private pendingLookupNext = false
 
   constructor(
     private readonly args: {
@@ -64,15 +73,39 @@ export class MobileRelaySessionEstablisher {
     this.relay = relay
   }
 
-  // Try the grace credential only after an explicit rejection.
+  // Try the next credential only after the relay refuses one; pending comes last (relayDialCandidates).
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
-    { outcome: 'established' } | { outcome: 'aborted' } | { outcome: 'failed'; error: Error | null }
+    | { outcome: 'established' }
+    | { outcome: 'aborted' }
+    | { outcome: 'failed'; error: Error | null; evidence?: Error }
   > {
     let lastError: Error | null = null
-    for (const credential of credentials) {
-      const result = await this.dial(credential)
+    let refusal: Error | undefined
+    let directorRefused = false
+    const pendingToken = this.args.bundle()?.pending?.token
+    const pendingFirst = this.pendingLookupNext
+    this.pendingLookupNext = false
+    const ordered = pendingFirst
+      ? [
+          ...credentials.filter((credential) => credential.token === pendingToken),
+          ...credentials.filter((credential) => credential.token !== pendingToken)
+        ]
+      : credentials
+    this.resolvedThisAttempt = false
+    for (const credential of ordered) {
+      // After a director 401 the rest only redial the cell that sent us there, which can know only the newer
+      // pending install; redialing current or grace would just repeat its wrong-assignment answer.
+      if (directorRefused && credential.token !== pendingToken) {
+        continue
+      }
+      // The director admits one resolve per host per window, so after any lookup the rest only dial the cell.
+      const result = await this.dial(
+        credential,
+        !this.resolvedThisAttempt,
+        credential.token !== pendingToken
+      )
       if (result.ok) {
         return { outcome: 'established' }
       }
@@ -81,23 +114,49 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (!isExplicitCredentialRejection(result.error)) {
+      if (isExplicitCredentialRejection(result.error)) {
+        // Why: a rejected version stays invalid; retry only the later credentials. Pending is the exception: its
+        // install may commit after this refusal, so it stays dialable on the slow credential reprobe, and only a
+        // confirmed version is retired.
+        if (credential.token !== pendingToken) {
+          this.args.controller.recordRejectedCredential(credential.version)
+        }
+        refusal ??= result.error
+        continue
+      }
+      // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so it condemns
+      // nothing: try pending at this cell now, and give pending the lookup on the next attempt.
+      if (!isDirectorRefusal(result.error)) {
         break
       }
-      // Why: a rejected version stays invalid; retry only the grace credential.
-      this.args.controller.recordRejectedCredential(credential.version)
+      this.pendingLookupNext ||= pendingToken !== undefined && credential.token !== pendingToken
+      directorRefused = true
     }
-    return { outcome: 'failed', error: lastError }
+    return {
+      outcome: 'failed',
+      error: lastError,
+      // A verdict-less last failure (say, a director 503 for pending) must not reopen the refused verdict.
+      evidence: relayHostReachabilityForFailure(lastError) === 'connecting' ? refusal : undefined
+    }
   }
 
-  dial(credential: { token: string; version: number }): Promise<EstablishResult> {
+  // redialUnchanged: false for pending, which a same-cell answer gives no new reason to retry this attempt.
+  dial(
+    credential: { token: string; version: number },
+    canResolve = true,
+    redialUnchanged = true
+  ): Promise<EstablishResult> {
     return dialRelayThroughDirectorFallback({
+      canResolve,
+      redialUnchanged,
       resumeToken: credential.token,
       hostOfflineStreak: this.hostOfflineStreak,
       relay: () => this.relay,
       dial: () => this.establish(credential),
       resolveRelay: (input) => this.resolveRelay(input),
-      persistResolvedRelay: (resolved) => this.adoptRelay(resolved)
+      // A director answer landing after a direct win is stale; direct rotation's route still goes through adoptRelay.
+      persistResolvedRelay: (resolved) =>
+        directWon(this.args.logical) ? Promise.resolve() : this.adoptRelay(resolved)
     })
   }
 
@@ -105,6 +164,7 @@ export class MobileRelaySessionEstablisher {
     relay: MobileRelayEndpoint
     resumeToken: string
   }): Promise<MobileRelayEndpoint> {
+    this.resolvedThisAttempt = true
     try {
       const resolved = await this.args.resolveRelay({
         ...input,
@@ -124,8 +184,8 @@ export class MobileRelaySessionEstablisher {
   }): Promise<EstablishResult> {
     const { args } = this
     const bundle = args.bundle()
-    // Why: director resolution and grace fallback can finish after background/stop.
-    if (!args.isActive() || !bundle) {
+    // Why: director resolution and grace fallback can finish after background/stop or a direct win.
+    if (!args.isActive() || !bundle || directWon(args.logical)) {
       return { ok: false, error: new RelayDialAbortedError() }
     }
     let session: ReturnType<typeof args.openRelay>
@@ -172,6 +232,10 @@ export class MobileRelaySessionEstablisher {
         writeBundle: args.writeBundle
       })
       args.adoptBundle(applied.bundle)
+      if (applied.bundle.current.version !== bundle.current.version) {
+        // Pending was promoted; the old versions' refusals would force a needless direct rotation.
+        args.controller.completeCredentialRefresh()
+      }
       args.scheduleLease(applied.leaseExpiry)
     } catch (error) {
       // Report post-migration bookkeeping separately; counting it as dial failure could suspend the healthy session.

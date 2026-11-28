@@ -46,7 +46,13 @@ export class MobileEndpointCredentialRotator {
       const result = await rotateMobileRelayCredential({
         client: args.logical,
         bundle,
-        writeBundle: args.dependencies.writeBundle,
+        // Adopt the persisted pending at once so a lost reply leaves Relay recovery able to dial it.
+        writeBundle: async (next) => {
+          await args.dependencies.writeBundle(next)
+          if (!args.isStopped()) {
+            args.adoptBundle(next)
+          }
+        },
         randomBytes: args.dependencies.randomBytes
       })
       args.adoptBundle(result.bundle)

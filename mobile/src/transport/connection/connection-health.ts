@@ -19,6 +19,12 @@ export function isEarlyConnectRetry(
 }
 
 // Relay verdicts describe the desktop directly; Tailscale advice would misdiagnose offline/signed-out hosts.
+// A link-local endpoint (169.254/16, fe80::/10, or 169.254/16 mapped into IPv6) is never dialed, so only re-pairing refreshes its
+// Relay access. A literal-prefix check: the full shared parser costs the web bundle's size budget.
+export function isUndialableLinkLocal(endpoint: string | null | undefined): boolean {
+  return /\/\/(169\.254\.|\[(fe[89ab]|::ffff:(169\.254\.|a9fe:)))/i.test(endpoint ?? '')
+}
+
 function relayHostCopy(
   t: Translate
 ): Record<
@@ -46,14 +52,15 @@ function relayHostCopy(
         "Check it's awake, Orca is running, and you're signed in"
       )
     },
-    // Re-pairing repairs refused credentials even when direct rotation is unavailable.
+    // Relay refuses missing, expired and revoked credentials alike; one direct connection refreshes the first two.
     'credential-refused': {
       kind: 'unreachable',
       label: (host) =>
         t('connection.connectionHealth.relayAccessRefused', 'Relay refused access for {{host}}', {
           host
         }),
-      detail: t('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
+      // Placeholder: refusedCredentialDetail fills in the host-specific advice for this verdict only.
+      detail: ''
     },
     // Cell reachability failure says nothing about desktop health, so keep it amber.
     unreachable: {
@@ -62,6 +69,21 @@ function relayHostCopy(
       detail: t('connection.connectionHealth.checkConnection', 'Check your connection')
     }
   }
+}
+
+// Only a refused verdict pays for the endpoint check and the interpolated advice.
+function refusedCredentialDetail(
+  host: string,
+  endpoint: string | null | undefined,
+  t: Translate
+): string {
+  return isUndialableLinkLocal(endpoint)
+    ? t('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
+    : t(
+        'connection.connectionHealth.relayAccessRefreshDetail',
+        'Connect once on {{host}}’s network to refresh Relay access, or re-pair',
+        { host }
+      )
 }
 
 /** The Relay evidence a verdict came from, so callers can tell a desktop that is off from one Relay cannot vouch for. */
@@ -97,6 +119,8 @@ export function classifyConnection(
     // Include host identity because header labels can appear without a row title.
     hostName?: string
     nowMs?: number
+    // Callers that read only the verdict's kind (Home's unreachable projection) skip formatting refusal advice.
+    omitAdvice?: boolean
   },
   t: Translate
 ): ConnectionVerdict {
@@ -136,7 +160,10 @@ export function classifyConnection(
           kind: 'unreachable',
           label: copy.label(host),
           reason: staleReason,
-          detail: copy.detail,
+          detail:
+            reachability === 'credential-refused' && !args.omitAdvice
+              ? refusedCredentialDetail(host, args.endpoint, t)
+              : copy.detail,
           relay: reachability
         }
   }

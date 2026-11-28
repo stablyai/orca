@@ -44,7 +44,8 @@ export function classifyHomeHostConnection(
   host: { id: string; name: string; endpoint: string },
   inputs: HomeHostConnectionInputs,
   t: Translate,
-  nowMs?: number
+  nowMs?: number,
+  omitAdvice = false
 ): { state: ConnectionState; verdict: ConnectionVerdict } {
   const state = resolveHomeHostConnectionState(
     host.id,
@@ -62,7 +63,8 @@ export function classifyHomeHostConnection(
       pairingRejected: connection?.pairingRejected ?? false,
       relayHostReachability: connection?.relayHostReachability ?? 'connecting',
       hostName: host.name,
-      nowMs
+      nowMs,
+      omitAdvice
     },
     t
   )
@@ -78,7 +80,7 @@ export function homeUnreachableHostIds(
   t: Translate
 ): string[] {
   return hosts.flatMap((host) => {
-    const { state, verdict } = classifyHomeHostConnection(host, inputs, t, nowMs)
+    const { state, verdict } = classifyHomeHostConnection(host, inputs, t, nowMs, true)
     return state !== 'connected' && !isConnectionDialing(verdict) ? [host.id] : []
   })
 }

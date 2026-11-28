@@ -49,7 +49,8 @@ export class RelayHostReachabilityLatch {
     }
     this.streak = next === this.candidate ? this.streak + 1 : 1
     this.candidate = next
-    if (this.streak >= RELAY_HOST_REACHABILITY_STREAK) {
+    // A relay-hello refusal is the cell's verdict and gates the redial that would repeat it.
+    if (isExplicitCredentialRejection(error) || this.streak >= RELAY_HOST_REACHABILITY_STREAK) {
       this.publish(next)
     }
   }
