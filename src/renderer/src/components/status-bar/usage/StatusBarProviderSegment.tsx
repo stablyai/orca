@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { resolveStatusBarUsageTemplate } from '../../../../../shared/status-bar/status-bar-usage-format'
 import { buildUsageFormatValues, renderUsageFormatTemplate } from './usage-format-template'
 import { AlertTriangle } from 'lucide-react'
@@ -350,12 +351,11 @@ export function ProviderSegment({
       ? [formatUsageChipTitle(p, sections[0], display, t), hostLabel].filter(Boolean).join('\n')
       : undefined
 
-  return (
+  const segment = (
     <span
       className={
         compactBar ? 'inline-flex items-center gap-[5px]' : 'inline-flex items-center gap-1.5'
       }
-      title={compactTitle}
     >
       <ProviderIcon provider={provider} />
       {!template && mode === 'verbose' && tightest && !compact ? (
@@ -386,5 +386,15 @@ export function ProviderSegment({
       ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
+  )
+  return compactTitle ? (
+    <Tooltip>
+      <TooltipTrigger asChild>{segment}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4} className="whitespace-pre-line">
+        {compactTitle}
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    segment
   )
 }

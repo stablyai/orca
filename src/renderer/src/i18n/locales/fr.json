@@ -22054,7 +22054,6 @@
         "action": "Créer une branche à partir de cette réponse",
         "pending": "Création d’une branche de cette conversation…",
         "checking": "Vérification de la possibilité de créer une branche…",
-        "tooltip": "Créer une branche à partir de cette réponse. La nouvelle conversation contient toute cette réponse, jusqu’à la fin de son tour.",
         "unconfirmed": "{{agent}} n’a pas pu confirmer la création de la branche",
         "unconfirmedDetail": "La conversation s’est peut-être ouverte malgré tout. Consultez l’historique des sessions avant de réessayer.",
         "failed": "{{agent}} n’a pas pu créer de branche de cette conversation",

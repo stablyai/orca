@@ -2,15 +2,12 @@ import React from 'react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { useCombinedRefs } from '@dnd-kit/utilities'
 import { cn } from '@/lib/class-names'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { animateSidebarSectionFold, SidebarSectionFoldChevron } from './sidebar-section-fold'
 
 export type SidebarSectionFold = {
   collapsed: boolean
   /** Spoken action, e.g. "Collapse Projects". */
   label: string
-  /** Hover text when the spoken label carries more than the action; defaults to `label`. */
-  tooltip?: string
   onToggle: () => void
   /** Nothing to fold yet: the button stays inert and the arrow is hidden. */
   disabled?: boolean
@@ -75,30 +72,23 @@ export function SidebarSectionHeader({
         data-contextual-tour-target={tourTarget}
       >
         {fold ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                ref={setActivatorNodeRef}
-                {...listeners}
-                type="button"
-                className="peer absolute inset-0 rounded-md enabled:cursor-pointer focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                aria-label={fold.label}
-                aria-expanded={!fold.collapsed}
-                disabled={fold.disabled}
-                data-sidebar-section-fold={sectionId}
-                onClick={(event) => {
-                  animateSidebarSectionFold(event.currentTarget, fold.onToggle)
-                  // A clicked header must not keep focus once the pointer leaves.
-                  if (event.detail > 0) {
-                    event.currentTarget.blur()
-                  }
-                }}
-              />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="start" sideOffset={6}>
-              {fold.tooltip ?? fold.label}
-            </TooltipContent>
-          </Tooltip>
+          <button
+            ref={setActivatorNodeRef}
+            {...listeners}
+            type="button"
+            className="peer absolute inset-0 rounded-md enabled:cursor-pointer focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            aria-label={fold.label}
+            aria-expanded={!fold.collapsed}
+            disabled={fold.disabled}
+            data-sidebar-section-fold={sectionId}
+            onClick={(event) => {
+              animateSidebarSectionFold(event.currentTarget, fold.onToggle)
+              // A clicked header must not keep focus once the pointer leaves.
+              if (event.detail > 0) {
+                event.currentTarget.blur()
+              }
+            }}
+          />
         ) : null}
         {showChevron ? <SidebarSectionFoldChevron collapsed={fold.collapsed} /> : null}
         <span

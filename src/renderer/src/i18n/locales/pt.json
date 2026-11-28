@@ -23512,7 +23512,6 @@
         "hostUnsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente.",
         "pending": "Criando ramificação deste chat…",
         "checking": "Verificando se este chat pode ser ramificado…",
-        "tooltip": "Crie uma ramificação a partir desta resposta. O novo chat inclui toda esta resposta, até o fim do turno.",
         "unconfirmed": "{{agent}} não conseguiu confirmar a ramificação",
         "unconfirmedDetail": "Ela pode ter sido aberta. Confira o histórico de sessões antes de tentar novamente.",
         "failed": "{{agent}} não conseguiu ramificar este chat",
