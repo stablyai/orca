@@ -28,15 +28,23 @@ it('preserves independent tag edits and the first spelling of each tag', () => {
 
 it('takes overflow from the inserted text and preserves the text after the caret', () => {
   const suffix = `${'😀'.repeat(29)}Z`
-  expect(limitBotTagDraft(`aXYZ${suffix}`, 4)).toBe(`aX${suffix}`)
+  expect(limitBotTagDraft(`aXYZ${suffix}`, 1, 4)).toBe(`aX${suffix}`)
 })
 
 it('keeps the suffix and surrounding tags when editing a tag in a list', () => {
   const suffix = `${'😀'.repeat(31)}Z`
   const before = 'First, '
-  expect(limitBotTagDraft(`${before}X${suffix}, Last`, before.length + 1)).toBe(
+  expect(limitBotTagDraft(`${before}X${suffix}, Last`, before.length, before.length + 1)).toBe(
     `${before}${suffix}, Last`
   )
+})
+
+it('rejects an oversized merge that would take text from outside the edit', () => {
+  const right = `${'b'.repeat(29)}Z, Tail`
+  expect(limitBotTagDraft(`Ops${right}`, 3, 3)).toBeNull()
+  expect(limitBotTagDraft(`OpsX${right}`, 3, 4)).toBeNull()
+  const fitting = `Op${right}`
+  expect(limitBotTagDraft(fitting, 2, 2)).toBe(fitting)
 })
 
 it('only plans a complete batch of distinct additions that fits', () => {

@@ -1,4 +1,4 @@
-import { useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import { Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -20,16 +20,40 @@ import {
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
 
+type TagDraftSelection = {
+  value: string
+  start: number
+  end: number
+  direction: HTMLInputElement['selectionDirection']
+}
+
+function readDraftSelection(field: HTMLInputElement): TagDraftSelection {
+  return {
+    value: field.value,
+    start: field.selectionStart ?? field.value.length,
+    end: field.selectionEnd ?? field.value.length,
+    direction: field.selectionDirection
+  }
+}
+
 function limitDraft(
   field: HTMLInputElement,
+  previous: TagDraftSelection,
   suffixStart = field.selectionEnd ?? field.value.length
-) {
-  const limited = limitBotTagDraft(field.value, suffixStart)
+): boolean {
+  const editStart = Math.min(previous.start, suffixStart)
+  const limited = limitBotTagDraft(field.value, editStart, suffixStart)
+  if (limited === null) {
+    field.value = previous.value
+    field.setSelectionRange(previous.start, previous.end, previous.direction ?? undefined)
+    return false
+  }
   if (limited !== field.value) {
     const caret = limited.length - (field.value.length - suffixStart)
     field.value = limited
     field.setSelectionRange(caret, caret)
   }
+  return true
 }
 
 export function BotSettingsTags({
@@ -43,8 +67,24 @@ export function BotSettingsTags({
   const supported = useBotHostHas(bot.hostId, BOTS_TAGS_RUNTIME_CAPABILITY)
   const supportsTagEdits = useBotHostHas(bot.hostId, BOTS_TAG_EDIT_RUNTIME_CAPABILITY)
   const input = useRef<HTMLInputElement>(null)
-  const compositionSuffix = useRef<string | null>(null)
+  const beforeEdit = useRef<TagDraftSelection | null>(null)
+  const compositionDraft = useRef<TagDraftSelection | null>(null)
   const draftRevision = useRef(0)
+  useEffect(() => {
+    const field = input.current
+    if (!supported || !field) {
+      return
+    }
+    // Native beforeinput captures deletions before the browser collapses the selection.
+    const captureEdit = (): void => {
+      beforeEdit.current = readDraftSelection(field)
+    }
+    field.addEventListener('beforeinput', captureEdit)
+    return () => {
+      field.removeEventListener('beforeinput', captureEdit)
+      beforeEdit.current = null
+    }
+  }, [supported])
   if (!supported) {
     return null
   }
@@ -110,15 +150,18 @@ export function BotSettingsTags({
     const text = ('clipboardData' in event ? event.clipboardData : event.dataTransfer).getData(
       'text'
     )
-    if (!field.readOnly && compositionSuffix.current === null && text.includes(',')) {
+    if (!field.readOnly && compositionDraft.current === null && text.includes(',')) {
       event.preventDefault()
       draftRevision.current++
-      const start = field.selectionStart ?? field.value.length
-      const end = field.selectionEnd ?? start
-      field.setRangeText(text, start, end, 'end')
+      const previous = readDraftSelection(field)
+      field.setRangeText(text, previous.start, previous.end, 'end')
       const suffixStart = field.selectionEnd ?? field.value.length
-      if (suffixStart < field.value.length && field.value[suffixStart] !== ',') {
-        limitDraft(field, suffixStart)
+      if (
+        suffixStart < field.value.length &&
+        field.value[suffixStart] !== ',' &&
+        !limitDraft(field, previous, suffixStart)
+      ) {
+        return
       }
       commitDraft(field)
     }
@@ -160,35 +203,38 @@ export function BotSettingsTags({
               readOnly={atLimit}
               onChange={({ currentTarget }) => {
                 draftRevision.current++
-                if (compositionSuffix.current === null) {
-                  limitDraft(currentTarget)
+                const previous = beforeEdit.current
+                beforeEdit.current = null
+                if (compositionDraft.current === null && previous) {
+                  limitDraft(currentTarget, previous)
                 }
               }}
               onPaste={onTransfer}
               onDrop={onTransfer}
               onCompositionStart={({ currentTarget }) => {
                 draftRevision.current++
-                compositionSuffix.current = currentTarget.value.slice(
-                  currentTarget.selectionEnd ?? currentTarget.value.length
-                )
+                compositionDraft.current = readDraftSelection(currentTarget)
               }}
               onCompositionEnd={({ currentTarget }) => {
-                const suffix = compositionSuffix.current
-                compositionSuffix.current = null
-                const suffixStart =
-                  suffix !== null && currentTarget.value.endsWith(suffix)
-                    ? currentTarget.value.length - suffix.length
-                    : undefined
-                limitDraft(currentTarget, suffixStart)
+                const previous = compositionDraft.current
+                compositionDraft.current = null
+                if (!previous) {
+                  return
+                }
+                const suffix = previous.value.slice(previous.end)
+                const suffixStart = currentTarget.value.endsWith(suffix)
+                  ? currentTarget.value.length - suffix.length
+                  : undefined
+                limitDraft(currentTarget, previous, suffixStart)
               }}
               onBlur={(event) => {
                 if (event.currentTarget === document.activeElement) {
                   return
                 }
-                if (compositionSuffix.current === null) {
+                if (compositionDraft.current === null) {
                   commitDraft(event.currentTarget)
                 }
-                compositionSuffix.current = null
+                compositionDraft.current = null
               }}
               onKeyDown={onKeyDown}
             />

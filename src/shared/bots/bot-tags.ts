@@ -6,8 +6,12 @@ export function truncateBotTag(value: string, length = BOT_TAG_LENGTH): string {
   return Array.from(value).slice(0, length).join('')
 }
 
-/** Limit the tag at the caret, keeping its suffix and the other tags intact. */
-export function limitBotTagDraft(value: string, suffixStart: number): string {
+/** Limit the tag at the caret, or reject an edit that cannot fit without losing retained text. */
+export function limitBotTagDraft(
+  value: string,
+  editStart: number,
+  suffixStart: number
+): string | null {
   const tagStart = suffixStart > 0 ? value.lastIndexOf(',', suffixStart - 1) + 1 : 0
   const delimiter = value.indexOf(',', suffixStart)
   const prefix = value.slice(tagStart, suffixStart)
@@ -16,11 +20,12 @@ export function limitBotTagDraft(value: string, suffixStart: number): string {
   const tagPrefix = inList ? prefix.trimStart() : prefix
   const tagSuffix = inList ? suffix.trimEnd() : suffix
   const available = Math.max(0, BOT_TAG_LENGTH - Array.from(tagSuffix).length)
-  return (
-    value.slice(0, suffixStart - tagPrefix.length) +
-    truncateBotTag(tagPrefix, available) +
-    value.slice(suffixStart)
-  )
+  const prefixStart = suffixStart - tagPrefix.length
+  const fitted = truncateBotTag(tagPrefix, available)
+  if (prefixStart + fitted.length < editStart) {
+    return null
+  }
+  return value.slice(0, prefixStart) + fitted + value.slice(suffixStart)
 }
 
 export type BotTagEdit = { add: string[] } | { remove: string }
