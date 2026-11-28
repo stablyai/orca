@@ -63,7 +63,8 @@ export function createBotActiveWorkReader() {
           Math.max(0, (working.counts.working ?? 0) - working.items.length) +
           Math.max(0, (waiting.counts.waiting ?? 0) - waiting.items.length) +
           Math.max(0, (page.counts.needs_you ?? 0) - needsYou.length),
-        now
+        now,
+        workingItemNumbers: new Set(working.items.map(({ number }) => number))
       })
     })()
     cache.set(botId, { at: now, section })

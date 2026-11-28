@@ -12,7 +12,7 @@ import {
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
 import type { GoogleClientConfig } from '../../shared/google/google-client-config'
-import type { CallerOwnedSignInChannel } from '../runtime/caller-owned-sign-in-flows'
+import type { CallerOwnedSignInChannel } from '../runtime/caller-owned-sign-in-contract'
 import {
   serveHeldLoopbackCallback,
   type HeldLoopbackReturn

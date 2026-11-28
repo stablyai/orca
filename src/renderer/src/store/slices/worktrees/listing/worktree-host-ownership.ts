@@ -115,10 +115,13 @@ export function toVisibleWorktrees(
   hostId: ExecutionHostId,
   setup?: ProjectHostSetup
 ): Worktree[] {
-  return result.worktrees
-    .filter((worktree) => worktree.visible)
-    .map(toVisibleWorktree)
-    .map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
+  const visible: Worktree[] = []
+  for (const worktree of result.worktrees) {
+    if (worktree.visible) {
+      visible.push(withRepoHostOwnership(toVisibleWorktree(worktree), hostId, setup))
+    }
+  }
+  return visible
 }
 
 export function getProjectHostSetupForRepoHost(
@@ -220,10 +223,19 @@ export function mergeWorktreesForHost<
 ): T[] {
   // Why: host-scoped refreshes replace that host in place so alternating local/runtime refreshes don't churn sibling row order or sortEpoch.
   const existing = current ?? []
-  const reconciled = reuseEqualCatalogRows(
-    existing.filter((worktree) => worktreeMatchesHost(worktree, hostId, options)),
-    refreshed
-  )
+  let matchingForHost: T[] | null = null
+  for (let i = 0; i < existing.length; i++) {
+    const worktree = existing[i]
+    if (worktreeMatchesHost(worktree, hostId, options)) {
+      matchingForHost?.push(worktree)
+    } else if (!matchingForHost) {
+      matchingForHost = existing.slice(0, i)
+    }
+  }
+  if (!matchingForHost) {
+    return reuseEqualCatalogRows(existing, refreshed)
+  }
+  const reconciled = reuseEqualCatalogRows(matchingForHost, refreshed)
   const next: T[] = []
   let inserted = false
 
@@ -285,7 +297,10 @@ export function getRemovedWorktreeIdsAfterAuthoritativeScan(
   if (!detected.authoritative) {
     return []
   }
-  const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
+  const detectedIds = new Set<string>()
+  for (const worktree of detected.worktrees) {
+    detectedIds.add(worktree.id)
+  }
   return getKnownWorktreeIdsForPurge(state, repoId, hostId).filter((id) => !detectedIds.has(id))
 }
 

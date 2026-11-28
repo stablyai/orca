@@ -10,7 +10,7 @@ import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { resolveServePinnedBindHost } from '../serve-launch/serve-pinned-bind-host'
 import { isOrcadSidecarLaunch } from '../../window/activation/foreground-activation-policy'
 import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
-import { registerMobileHandlers } from '../../ipc/mobile'
+import { registerLazyMobileHandlers } from '../../ipc/register-lazy-mobile-handlers'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts'
 import { registerHeadlessPtyRuntime } from '../../ipc/pty/register-headless-runtime'
 import { publishHeadlessRuntimeGraph } from '../../runtime/session-graph/headless-runtime-graph'
@@ -49,7 +49,6 @@ import { mainProcessState as state } from '../main-process-state'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../../updater/lifecycle/main-window-updater'
 import { preserveStateBeforeUpdateRestart } from '../../core-desktop/update-restart-preservation'
-import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from '../agent-accounts/agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browser-identity-mode-store'
@@ -115,7 +114,7 @@ function installRuntimeRpc(
   state.core.runtimeRpc = runtimeRpc
   runtime.setAgentSenderPeerKey(() => runtimeRpc.getE2EEPublicKey())
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
-  registerMobileHandlers(runtimeRpc, {
+  registerLazyMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
     consumePendingUnpairedDeviceAuthFailure: (webContentsId) => {
       if (
@@ -221,7 +220,7 @@ async function launchServeMode(
     onBeforeUpdateQuit: () =>
       preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.core.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',
-    updateInstallMode: resolveUpdateInstallMode(true)
+    isServeMode: true
   })
 }
 

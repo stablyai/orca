@@ -2,7 +2,10 @@ import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
-import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
+import {
+  DEFAULT_LAZY_RPC_METHOD_GROUPS,
+  EAGER_RPC_METHODS
+} from '../methods/eager-rpc-method-registry'
 import type { RpcTransport } from '../transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
@@ -152,13 +155,16 @@ export class RuntimeRpcState {
     methods
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
-    this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? ALL_RPC_METHODS })
+    const registeredMethods = methods ?? EAGER_RPC_METHODS
+    const lazyGroups = methods ? [] : DEFAULT_LAZY_RPC_METHOD_GROUPS
+    this.dispatcher = new RpcDispatcher({ runtime, methods: registeredMethods, lazyGroups })
     // By declaration, so every subscription, current or future, is classified the same way.
-    this.streamingMethods = new Set(
-      eraseRpcMethods(methods ?? ALL_RPC_METHODS)
+    this.streamingMethods = new Set([
+      ...eraseRpcMethods(registeredMethods)
         .filter(isStreamingMethod)
-        .map((method) => method.name)
-    )
+        .map((method) => method.name),
+      ...lazyGroups.flatMap((group) => group.streamingNames ?? [])
+    ])
     this.userDataPath = userDataPath
     this.pid = pid
     this.platform = platform

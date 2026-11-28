@@ -15,7 +15,7 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
   const groups: WorktreeDragGroup[] = []
   let current: { key: string; ids: string[] } | null = null
   const folderLaneIds = new Map<string, string[]>()
-  const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
+  let naturalWorktreeKeys: Set<string> | undefined
 
   for (const row of rows) {
     if (row.type === 'header') {
@@ -33,8 +33,11 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
       continue
     }
     const worktreeKey = getWorktreeHostIdentity(row.worktree)
-    if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeKeys.has(worktreeKey)) {
-      continue
+    if (row.sectionKey === PINNED_GROUP_KEY) {
+      naturalWorktreeKeys ??= getNaturalWorktreeKeys(rows)
+      if (naturalWorktreeKeys.has(worktreeKey)) {
+        continue
+      }
     }
     if (isFolderLaneSectionKey(row.sectionKey)) {
       let ids = folderLaneIds.get(row.sectionKey)
@@ -63,7 +66,7 @@ export function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
   const groupKeyByRowKey = new Map<string, string>()
   const groupIndexByRowKey = new Map<string, number>()
   const groupIndexes = new Map<string, number>()
-  const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
+  let naturalWorktreeKeys: Set<string> | undefined
   for (const row of rows) {
     if (row.type === 'header') {
       groupIndexes.set(row.key, 0)
@@ -72,11 +75,11 @@ export function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
     if (row.type !== 'item') {
       continue
     }
-    if (
-      row.sectionKey === PINNED_GROUP_KEY &&
-      naturalWorktreeKeys.has(getWorktreeHostIdentity(row.worktree))
-    ) {
-      continue
+    if (row.sectionKey === PINNED_GROUP_KEY) {
+      naturalWorktreeKeys ??= getNaturalWorktreeKeys(rows)
+      if (naturalWorktreeKeys.has(getWorktreeHostIdentity(row.worktree))) {
+        continue
+      }
     }
     const index = groupIndexes.get(row.sectionKey) ?? 0
     groupKeyByRowKey.set(row.rowKey, row.sectionKey)

@@ -57,6 +57,26 @@ export function useStructuredNativeChatSubagents({
     />
   )
   const party = nativeChatWorkerApprovalParty({ sessionId })
+  const chip = isVisible ? (
+    <NativeChatStructuredDock
+      part="chip"
+      hasWork={hasWork}
+      strip={strip}
+      target={target}
+      party={party}
+      isVisible={isVisible}
+    />
+  ) : null
+  const approvals = isVisible ? (
+    <NativeChatStructuredDock
+      part="approvals"
+      hasWork={hasWork}
+      strip={strip}
+      target={target}
+      party={party}
+      isVisible={isVisible}
+    />
+  ) : null
   return {
     layer: {
       paneKey,
@@ -79,15 +99,10 @@ export function useStructuredNativeChatSubagents({
         {card}
       </NativeChatSubagentSheetPromptSlot>
     ),
-    dock: isVisible ? (
-      <NativeChatStructuredDock
-        hasWork={hasWork}
-        strip={strip}
-        target={target}
-        party={party}
-        isVisible={isVisible}
-      />
-    ) : null,
+    /** The worker chip, for the transcript's end. */
+    chip,
+    /** Workers' open prompts, for the dock above the composer. */
+    dock: approvals,
     /** Agents in this paired server's chat asking agents on this computer: answered here. */
     pairedAsks: <NativeChatPairedServerAskStack target={target} party={party} />
   }

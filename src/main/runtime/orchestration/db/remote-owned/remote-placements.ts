@@ -54,6 +54,7 @@ export function reserveRemotePlacement(
     requestKey: string
     create?: TaskCreation
     retryOf?: string
+    retriesAttemptHere?: boolean
     /** Who is starting it, recorded as a local start records its Dispatch's creator. */
     creator: DispatchCreator
   }
@@ -95,7 +96,8 @@ export function reserveRemotePlacement(
         runId: link.run_id
       })
     }
-    claimTaskForStart(db, task, { retryOf: params.retryOf, onServer: link.environment_id })
+    const { retryOf, retriesAttemptHere } = params
+    claimTaskForStart(db, task, { retryOf, retriesAttemptHere, onServer: link.environment_id })
     const creator = recordedCreatorIdentity(params.creator)
     db.db
       .prepare(
@@ -118,7 +120,8 @@ export function reserveRemotePlacement(
         link.conversation_id,
         params.requestKey,
         task.status,
-        params.retryOf ?? null,
+        // An attempt that ran here is not the server's, so a refusal there leaves no placement.
+        retriesAttemptHere ? null : (retryOf ?? null),
         creator.creatorOrcaSessionId,
         creator.creatorPaneKey
       )

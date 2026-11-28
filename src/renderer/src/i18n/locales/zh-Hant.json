@@ -379,10 +379,11 @@
     },
     "clientHosted": {
       "preparationFailed": "無法在此桌面上啟動遠端瀏覽器。檢查配對連線並重試。",
-      "unavailableTitle": "用戶端代管的瀏覽器無法使用",
-      "unavailableDescription": "此頁面目前無法在此桌面上使用。",
-      "unavailableOtherDesktopDescription": "此頁面已在另一台電腦上開啟。",
-      "unavailableHostOfflineDescription": "{{host}} 已離線。重新連線後，此頁面將在此處重新載入。",
+      "runsOnServerTitle": "此分頁在你的伺服器上執行",
+      "runsOnServerBody": "請在那裡開啟以繼續。",
+      "details": "詳細資料",
+      "noBrowserTitle": "無法在此開啟此分頁",
+      "noBrowserBody": "此伺服器沒有瀏覽器。",
       "download": {
         "started": "正在下載 {{filename}}…",
         "completed": "已下載 {{filename}}",
@@ -407,9 +408,9 @@
       "reload": "重新載入"
     },
     "reopenOnServer": {
-      "action": "在伺服器上重新開啟",
-      "pending": "正在重新開啟…",
-      "caveat": "這會在遠端主機上，以此頁面上次的網址開啟新頁面。登入狀態及其他暫存狀態可能不同；透過表單提交開啟的頁面則會顯示空白。",
+      "action": "在伺服器上開啟",
+      "pending": "正在開啟…",
+      "caveat": "將在伺服器上以此頁面的最後位址開啟。登入狀態可能不同。",
       "failed": "無法在遠端主機上開啟此頁面。檢查連線並重試。"
     },
     "deviceMove": {
@@ -1741,7 +1742,8 @@
         "add": "為此存放庫新增伺服器",
         "files": "來自此存放庫的檔案",
         "open": "開啟 {{file}}"
-      }
+      },
+      "unreadable": "無法在這台電腦上開啟已儲存的登入或金鑰"
     },
     "navigation": {
       "accounts": {
@@ -2166,13 +2168,14 @@
           "localBaseRefNotUpdatedDirty": "{{value0}} 有未提交的變更。",
           "localBaseRefNotUpdatedNotFastForward": "{{value0}} 有僅存在於本機的提交。",
           "localBaseRefNotUpdatedError": "Git 錯誤。",
-          "localBaseRefHideDetails": "隱藏詳細資料",
-          "localBaseRefShowDetails": "詳細資料",
           "localBaseRefShallowHistoryTitle": "本機 {{value0}} 未更新：淺層複製",
           "localBaseRefShallowHistoryNamed": "「{{value0}}」已從 {{value1}} 建立，不受影響。Orca 無法同時更新本機 {{value2}} 分支，因為此複製僅包含近期的歷史記錄，Git 無法確認本機 {{value2}} 是否只是落後。若要避免之後建立工作區時再發生此問題，請執行一次：",
           "localBaseRefShallowHistory": "工作區已從 {{value0}} 建立，不受影響。Orca 無法同時更新本機 {{value1}} 分支，因為此複製僅包含近期的歷史記錄，Git 無法確認本機 {{value1}} 是否只是落後。若要避免之後建立工作區時再發生此問題，請執行一次：",
           "localBaseRefRefreshTurnOff": "停用檢查",
           "localBaseRefRefreshTurnOffHelp": "「停用檢查」的作用",
+          "localBaseRefRefreshDisable": "停用",
+          "localBaseRefRefreshDisableTooltip": "停止檢查 {{value0}}",
+          "localBaseRefClose": "關閉",
           "localBaseRefRefreshTurnOffTooltip": "關閉 Orca 的 {{value0}} 設定。建立工作區時，Orca 將不再更新本機 {{value1}}，也不會再顯示此警告。新工作區不受影響。可隨時在「設定」›「Git」重新開啟。",
           "localBaseRefUnshallow": "取得完整歷史記錄",
           "localBaseRefUnshallowFailed": "無法為此工作區開啟終端機",
@@ -4029,7 +4032,7 @@
         "99c2755218": "搜尋議題或輸入 JQL，例如 project = ABC",
         "2ff9fd71fd": "重新整理 Jira 議題",
         "0b65d3fb2c": "搜尋 Linear 專案...",
-        "eec0c5c079": "搜尋 Linear 議題...",
+        "eec0c5c079": "搜尋...",
         "8964184a8b": "重新整理 Linear",
         "3feb524d42": "新增 Linear 議題",
         "0cbf7e5cf3": "Linear 任務模式",
@@ -13037,8 +13040,11 @@
           "restarting": "正在重新啟動…",
           "updated": "已更新",
           "failed": "更新失敗",
-          "serviceManagerHelp": "在伺服器主機上更新 Orca — 如果是從 .deb 或 .rpm 安裝的，則透過其系統套件管理程式，否則透過啟動它的服務管理程式。",
-          "unpackedHelp": "開發版本必須從檢出的原始碼更新。",
+          "nodeServerHelp": "遠端更新已關閉：此伺服器執行 Orca 時沒有內建更新程式，Orca 的 Node 伺服器（orcad）就是如此。請在伺服器上安裝較新的 Orca 版本，然後重新啟動 orca serve。",
+          "updaterNotStartedHelp": "遠端更新已關閉：此伺服器上的 Orca 尚未啟動更新程式。請在伺服器上重新啟動 Orca 後再檢查一次，或直接在伺服器上更新。",
+          "headlessServeHelp": "遠端更新已關閉：此伺服器執行 orca serve 時沒有更新監督程式，因此無法自行以新版本重新啟動。請在伺服器上更新 Orca，然後重新啟動其服務。",
+          "systemPackageHelp": "遠端更新已關閉：此伺服器上的 Orca 是透過系統套件或其他安裝程式安裝的，必須由它來更新。請用安裝時的方式更新，例如 .deb 或 .rpm 使用 apt 或 dnf。",
+          "devBuildHelp": "遠端更新已關閉：此伺服器執行的是開發版本。請從其原始碼目錄更新。",
           "legacyHelp": "此伺服器無法遠端更新。請在伺服器主機上更新 Orca。",
           "managedOverSshHelp": "這臺電腦會透過 SSH 更新此伺服器。請在「遠端 Orca 伺服器」中，點選此伺服器所在列的「更新」。"
         },
@@ -13798,7 +13804,12 @@
             "rollbackStopIncomplete": "未完成：Orca 無法確認目前的伺服器已結束，因此沒有回復舊版。請先檢查主機上 ~/.orca-remote 中伺服器安裝資料夾內的 orcad.log，再重試。",
             "failed": "Orca 無法在伺服器上完成此操作。請重試。",
             "defaultServer": "未完成：此伺服器是新專案的預設主機。停止前，請先在「新專案開啟位置」選擇其他主機。",
-            "wslMoveRunning": "未完成：有專案正在移至此伺服器。移動完成後，Orca 會更新它。"
+            "wslMoveRunning": "未完成：有專案正在移至此伺服器。移動完成後，Orca 會更新它。",
+            "recoveryRequired": "未完成：中斷的更新或停止作業正佔用此主機。如果 Orca 提供「恢復」或「取消停止」，請使用後再重試。",
+            "snapshotSpace": "未完成：此主機沒有足夠空間存放 Orca 在更新前建立的副本。請釋放主機空間後重試。",
+            "policyRefused": "未完成：Orca 不會在此主機上啟用此建置版本。請檢查主機後再次更新；如果上次執行它的是較新版本的 Orca，請先更新 Orca。",
+            "hostNewer": "未完成：上次執行此主機伺服器的是較新版本的 Orca。請更新 Orca 後重試。",
+            "preflightFailed": "未完成：新的 Orca 伺服器未通過此主機上的啟動檢查，因此 Orca 沒有變更此主機。"
           },
           "reassurance": "在各臺主機上執行，並透過自己的 SSH 連線存取。程式碼與檔案會留在原處，只有 Orca 的專案、分頁與終端機清單會遷移至主機。"
         },
@@ -15201,10 +15212,7 @@
             "keepFile": "保留檔案",
             "keepDeletion": "保留刪除",
             "refreshAll": "全部重新整理",
-            "rebaseConflictCount_other": "{{count}} 個衝突",
-            "rebasePaused": "重定基底已暫停",
             "rebaseResolveConflictsFirst": "請先解決衝突",
-            "rebaseAbort": "中止",
             "rebaseContinue": "繼續",
             "continueRebasePausedAgain": "重定基底在下一個衝突處暫停",
             "continueRebaseFailed": "繼續重定基底失敗",
@@ -15215,7 +15223,6 @@
             "rebaseStopMovedOn": "重定基底已經繼續進行。請查看面板後再試一次。",
             "rebaseEmptyStep": "此步驟沒有可提交的內容。請中止重定基底，或在終端機中完成它。",
             "rebaseStepUnreadableShort": "檢查失敗",
-            "rebaseCheckAgain": "再次檢查",
             "rebaseRetryInspect": "重試",
             "rebaseRetryInspectLabel": "重新檢查重定基底步驟",
             "rebaseStoppedFinishInTerminal": "Git 已在此步驟暫停。請在終端機中完成或中止。",
@@ -15247,7 +15254,11 @@
             "scopeNoUncommitted": "沒有未提交的變更。",
             "scopeCommitFiles": "檔案",
             "gitGraphButton": "圖譜",
-            "compareLoadingAgainst": "正在與 {{base}} 比較"
+            "compareLoadingAgainst": "正在與 {{base}} 比較",
+            "operationResolve": "解決",
+            "operationResolveLabel": "用 AI 解決衝突",
+            "operationMoreActions": "更多操作",
+            "operationAbortConfirm": "再次選取以中止"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",
@@ -15394,7 +15405,6 @@
                 "failingCount_other": "{{count}} 個失敗",
                 "pendingCount_other": "{{count}} 個等待中",
                 "unresolvedCount_other": "{{count}} 個未解決",
-                "sendQueuedCommentsToAi_other": "傳送 {{count}} 則佇列中的留言給 AI",
                 "conflictsBlockThisMr": "衝突阻擋了此 MR",
                 "conflictsBlockThisPr": "衝突阻擋了此 PR",
                 "copyComment": "複製留言",
@@ -15852,15 +15862,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "合併衝突",
-                    "7f3af87549": "變基衝突",
-                    "6a8e9ad490": "挑選衝突",
-                    "bdf8772106": "衝突",
-                    "edc2d82a2b": "合併正在進行中",
-                    "5c3707aa44": "變基正在進行中",
-                    "ffe53a1da6": "挑選正在進行中",
-                    "35eb76d323": "操作正在進行中",
-                    "completeMerge": "完成合併"
+                    "bdf8772106": "衝突"
                   }
                 }
               },
@@ -17415,10 +17417,6 @@
           "39b6b9e4e4": "已提交到分支"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "已傳送",
-          "84898c548d": "清除",
-          "88b70d0ef5": "複製",
-          "bb84b4c374": "AI 備註",
           "948a5fd6c8": "清除備註",
           "0f806a2ab1": "取消",
           "b6c3b84476": "顯示檔案樹",
@@ -17428,7 +17426,6 @@
           "820ec01f24": "衝突檔案單獨審查",
           "fd8892b120": "沒有可顯示的變更",
           "eb5f40e49c": "此差異檢視排除了未解決的衝突，因為一般的雙向差異處理流程無法安全處理衝突。",
-          "45cf23b418": "無法清除備註。",
           "ec5053c7f5": "並排",
           "f786fd54e1": "行內",
           "ea08dae15b": "全部收合",
@@ -17443,13 +17440,9 @@
           "noExtension": "（無副檔名）",
           "diffLoadTimedOut": "差異載入未完成。",
           "diffLoadFailed": "無法載入差異。",
-          "moreNotesInSourceControl_other": "原始碼控制中還有 {{count}} 則備註",
-          "clearNotesConfirm_other": "清除此工作樹中的 {{count}} 則備註？",
           "changedFilesVs_other": "相較於 {{baseRef}}，有 {{count}} 個檔案變更",
           "changedFilesIn_other": "{{compareRef}} 中有 {{count}} 個檔案變更",
           "changedFiles_other": "{{count}} 個變更的檔案",
-          "showAiNotes_other": "顯示 {{count}} 則 AI 備註",
-          "send": "傳送",
           "openDiff": "開啟差異",
           "openInEditor": "在編輯器中開啟",
           "skippedConflictsExcluded": "{{count}} 個未解決的衝突已被排除在此差異檢視之外。"
@@ -17648,7 +17641,6 @@
           "b1bfc04034": "選定的文字",
           "f37b98999e": "這則備註",
           "2b2b31382c": "前置資料",
-          "bb629de58a": "複製備註給代理程式",
           "322afab6ff": "審查備註",
           "0f9969a159": "跳至第一則審查備註",
           "12052c639c": "關閉搜尋",
@@ -17721,7 +17713,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "傳送備註",
-          "433928cd9f": "將 {{value0}} 傳送給代理程式",
           "thisNote": "這則備註",
           "noteAlreadySent": "備註已傳送",
           "sendNotesToAgent": "將備註傳送給代理程式",
@@ -17807,8 +17798,6 @@
           "3ababd949d": "審查備註"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "複製備註給代理程式",
-          "a807596997": "已複製備註",
           "8aaf2c4c69": "顯示審查備註",
           "af02dc2456": "隱藏審查備註"
         },
@@ -18684,8 +18673,6 @@
             "b5ba6085de": "疑問",
             "143204e423": "改變",
             "b71dc3d930": "重新連線",
-            "d51ef37351": "複製",
-            "6f4ab3592b": "已複製",
             "168350ae6a": "按一下元素或將游標停留在元素上，然後按 C 進行複製或按 S 進行螢幕截圖。",
             "777b5bc4ec": "點選元素，為代理程式新增回饋。",
             "b733a91bd9": "為所選元素新增回饋。",
@@ -18723,9 +18710,7 @@
             "devToolsDockRight": "停駐於右側",
             "devToolsDockBottom": "停駐於底部",
             "devToolsUndock": "在獨立視窗中開啟",
-            "devToolsClose": "關閉 DevTools",
-            "11c5084aa2": "清除註解",
-            "734e4343ec": "清除瀏覽器註解"
+            "devToolsClose": "關閉 DevTools"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -19968,8 +19953,7 @@
           "more": "更多成品操作"
         },
         "ArtifactCollection": {
-          "loadMore": "載入更多",
-          "noMatches": "沒有符合項"
+          "loadMore": "載入更多"
         },
         "ArtifactDetailHeader": {
           "publicLink": "任何取得此連結的人都能檢視",
@@ -20370,7 +20354,8 @@
         "failedSome_other": "無法恢復：{{total}} 個中的 {{count}} 個",
         "resumedOne": "已恢復 {{name}}",
         "resumedMany_other": "已恢復 {{count}} 個聊天",
-        "needYou_other": "{{count}} 個需要你處理"
+        "needYou_other": "{{count}} 個需要你處理",
+        "resumedCount_other": "已恢復 {{count}} 個"
       },
       "RunTargetCombobox": {
         "noWslDistros": "找不到 WSL 發行版",
@@ -22403,7 +22388,9 @@
           "needsAuth": "需要登入",
           "needsAuthAfterSend": "需要登入。傳送訊息後即可在此登入。",
           "pending": "正在連線…",
-          "tools_other": "{{count}} 個工具"
+          "tools_other": "{{count}} 個工具",
+          "orcaRemoved": "已移除：下一則訊息時重新啟動",
+          "orcaChanged": "已變更：下一則訊息時重新啟動"
         },
         "signIn": {
           "external": "請在開啟的頁面完成",
@@ -22443,7 +22430,8 @@
           "user": "使用者",
           "plugin": "外掛",
           "session": "工作階段"
-        }
+        },
+        "stillFailing": "重新連線後仍然失敗。"
       }
     },
     "tab": {
@@ -23810,6 +23798,21 @@
         "cancel": "取消",
         "tryAgain": "再試一次"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sending": "正在傳送…",
+        "sendShort": "傳送 {{count}} 則",
+        "clearNotes": "清除備註…",
+        "sendCommentsToAgent_other": "將 {{count}} 則留言傳送給代理程式",
+        "sendNotes_other": "傳送 {{count}} 則備註",
+        "sendComments_other": "傳送 {{count}} 則留言",
+        "clearPageNotes_other": "清除此頁面中的 {{count}} 則備註？",
+        "copyNotes": "複製備註",
+        "sendNotesToAgent_other": "將 {{count}} 則備註傳送給代理程式",
+        "sentNotesStillListed": "備註已傳送，但仍在清單中。",
+        "removeSentNotes": "移除"
+      }
     }
   },
   "dashboardPopout": {
@@ -24259,6 +24262,9 @@
         "planModelWithoutThinking": "模型「{{model}}」不支援設定思考強度。",
         "planThinkingLevelInvalid": "思考強度「{{level}}」不適用於 {{model}}。",
         "openCodeInvalidEvents": "OpenCode 傳回無效的 JSON 事件。",
+        "antigravityInvalidEvents": "Antigravity 傳回無效的 JSON 事件。",
+        "antigravityInvalidResult": "Antigravity 傳回無效的結果。",
+        "antigravityNoFinalResult": "Antigravity 未傳回最終結果。",
         "kimiUnreadableOutput": "Kimi 傳回 Orca 無法讀取的輸出。請再試一次。",
         "kimiSessionOccupied": "Kimi 無法使用此工作階段，因為它正在另一個用戶端中使用。請在該用戶端停止工作階段或結束該用戶端，然後再試一次。",
         "kimiInterrupted": "Kimi 在完成文字產生前遭到中斷。請再試一次。",
@@ -24994,6 +25000,7 @@
       "errors": {
         "ownerSilent": "發起這次登入的裝置已停止回應。",
         "superseded": "此主機上的帳戶變更中斷了登入。請重新開始。",
+        "noPrompt": "伺服器的登入指令在一分鐘內沒有顯示登入連結。請更新伺服器上的 Orca，然後再試一次。",
         "failed": "登入失敗。請再試一次。"
       }
     },
@@ -25019,7 +25026,9 @@
     "failed": "搜尋失敗。再試一次。",
     "filters": {
       "toggle": "顯示或隱藏搜尋詳細設定",
-      "active": "已啟用 {{count}} 個"
+      "active": "已啟用 {{count}} 個",
+      "includeSummary": "包含：{{patterns}}",
+      "excludeSummary": "排除：{{patterns}}"
     },
     "noResults": "沒有結果。請嘗試其他搜尋內容或調整篩選條件。"
   },
@@ -25277,8 +25286,7 @@
         "failing": "失敗",
         "running": "待處理",
         "cancelled": "已取消",
-        "passing": "通過",
-        "more": "另有 {{count}} 個"
+        "passing": "通過"
       }
     },
     "attachments": {
@@ -26960,15 +26968,11 @@
       "colorSlate": "石板灰",
       "colorGraphite": "石墨灰",
       "colorInk": "墨黑",
-      "noChatAgents": "此電腦上沒有可用的聊天代理程式。",
-      "change": "變更",
       "computer": "電腦",
-      "computerHint": "機器人執行的位置。",
       "computerAccountHint": "機器人執行的位置，以 {{account}} 身分登入 Orca。",
       "useChatDefaults": "使用聊天預設設定",
       "chatDefault": "聊天預設",
       "agent": "代理程式",
-      "folder": "資料夾：{{path}}",
       "name": "名稱",
       "validation": {
         "addName": "新增名稱",
@@ -27868,13 +27872,10 @@
     "loadFailed": "無法載入 Git 歷史記錄",
     "updateHost": "請更新 {{host}} 上的 Orca 以開啟 Git 圖",
     "title": "Git 圖",
-    "revertConflicts": "還原提交衝突",
-    "revertInProgress": "正在還原提交",
     "abortOperationTitle": "中止{{operation}}？",
     "abortOperationDescription": "這會取消進行中的操作，並可能捨棄在此期間完成的衝突解決。",
     "abortOperation": "中止{{operation}}",
     "recoveryFailed": "無法完成操作。請重新整理原始碼管理後再試。",
-    "continueOperation": "繼續{{operation}}",
     "reverting": "正在還原提交",
     "updateActionsHost": "請更新{{host}}上的 Orca 以操作提交",
     "thisHost": "此主機",

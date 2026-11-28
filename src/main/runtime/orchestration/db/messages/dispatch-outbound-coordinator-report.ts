@@ -3,6 +3,7 @@ import { isDispatchAssignee } from '../dispatch-context/dispatch-lookup'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../orchestration-records'
 import {
+  coordinatorReach,
   coordinatorRecipients,
   latestConsumedCoordinatorMessage,
   parseDispatchUtcMs,
@@ -18,6 +19,8 @@ const OUTBOUND_REPORT_TYPES = new Set([
   'merge_ready',
   'handoff'
 ])
+// Reports that leave the next move to the coordinator; a plain status does not cover mail that came after it.
+const HANDOFF_REPORT_TYPES = new Set(['question', 'escalation'])
 const SYSTEM_REPORT_ID_PREFIXES = [
   'msg_stop_',
   'msg_rest_',
@@ -60,11 +63,15 @@ export function hasOutboundCoordinatorReport(
   }
   const { dispatch } = target
   const latest = latestConsumedCoordinatorMessage(db, dispatch.id, stop)
-  const recipients = coordinatorRecipients(db, dispatch, latest?.from)
+  const reachesCoordinator = coordinatorReach(
+    db,
+    dispatch,
+    coordinatorRecipients(db, dispatch, latest?.from)
+  )
   const { candidates, provenanceIds } = readWorkerOutboundCandidates(
     db,
     dispatch,
-    latest?.sequence ?? 0
+    stop.turnStartedAfterSequence ?? latest?.sequence ?? 0
   )
   const dispatchCreatedAt = parseDispatchUtcMs(dispatch.created_at)
   const dispatchCompletedAt = Date.parse(dispatch.completed_at ?? '')
@@ -72,28 +79,37 @@ export function hasOutboundCoordinatorReport(
     ? formatOrcaSessionAddress(dispatch.assignee_orca_session_id)
     : null
   return candidates.some((candidate) => {
-    if (!isWorkerReportCandidate(db, dispatch.id, candidate) || !recipients.has(candidate.to)) {
+    if (!isWorkerReportCandidate(db, dispatch.id, candidate)) {
       return false
     }
     const sentAt = parseDispatchUtcMs(candidate.createdAt)
     const fromThisDispatch =
       provenanceIds.has(candidate.id) ||
       candidate.from === `dispatch:${dispatch.id}` ||
-      ((latest ? candidate.sequence > latest.sequence : sentAt >= dispatchCreatedAt) &&
+      (sentAt >= dispatchCreatedAt &&
         (Number.isNaN(dispatchCompletedAt) || sentAt <= dispatchCompletedAt) &&
         (isDispatchAssignee(dispatch, candidate.from, candidate.senderPaneKey) ||
           assigneeSession === candidate.from))
     if (!fromThisDispatch) {
       return false
     }
-    if (latest) {
-      return (
-        answersCoordinatorMessage(candidate, latest) ||
-        (candidate.sequence > latest.sequence && sentInCurrentLocalTurn(candidate, stop))
-      )
-    }
-    return sentAt >= dispatchCreatedAt && sentInCurrentLocalTurn(candidate, stop)
+    // A report this turn counts; before coordinator mail the turn took later, only one that ends the exchange.
+    const reports =
+      (latest !== undefined && answersCoordinatorMessage(candidate, latest)) ||
+      (sentInCurrentLocalTurn(candidate, stop) &&
+        (latest === undefined ||
+          candidate.sequence > latest.sequence ||
+          endsExchange(candidate.type, candidate.id, latest)))
+    return reports && reachesCoordinator(candidate.to)
   })
+}
+
+/** A question or escalation the latest coordinator mail answered is the coordinator's move done, not the worker's. */
+function endsExchange(type: string, id: string, latest: ConsumedCoordinatorMessage): boolean {
+  return (
+    type === 'worker_done' ||
+    (HANDOFF_REPORT_TYPES.has(type) && latest.threadId !== id && latest.replyTo !== id)
+  )
 }
 
 function isWorkerReportCandidate(
@@ -226,7 +242,12 @@ function hasRemoteOutboundReport(
       if (!OUTBOUND_REPORT_TYPES.has(kind) || isSystemReportId(messageId)) {
         return false
       }
-      if (latestSec !== null && Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec) {
+      if (
+        latest &&
+        latestSec !== null &&
+        Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec &&
+        !endsExchange(kind, messageId, latest)
+      ) {
         return false
       }
       if (stop.turnStartedAfterSequence !== undefined) {

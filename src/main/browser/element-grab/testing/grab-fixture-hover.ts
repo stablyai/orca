@@ -3,9 +3,9 @@ import type { WebContents } from 'electron'
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Moves the pointer and returns once the picker has hovered the element under it. The picker
- * records the hovered element on the frame after a move, so a click sent a fixed delay later can
- * arrive first on a loaded machine and cancel the pick instead of selecting.
+ * Moves the pointer and returns once the page has received the move. No frame wait: the pick
+ * hit-tests at the click's own point (settleHover), and a frame-starved guest under Xvfb can
+ * produce no frame for seconds, which made a frame wait flake.
  */
 export async function hoverForPick(page: WebContents, point: { x: number; y: number }) {
   const before: number = await page.executeJavaScript(`(() => {
@@ -22,15 +22,5 @@ export async function hoverForPick(page: WebContents, point: { x: number; y: num
       throw new Error('The pointer move never reached the page')
     }
     await wait(20)
-  }
-  // The picker's listener ran first and queued its hover for the next frame; two frames cover it.
-  // Bounded: a throttled hidden window may produce no frames, which fails here instead of hanging.
-  const painted: boolean = await page.executeJavaScript(`new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(false), 1000);
-    requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(timer); resolve(true) }));
-  })`)
-  // Fail at the hover rather than let the click cancel the pick for want of a hovered element.
-  if (!painted) {
-    throw new Error('The page produced no frame after the pointer move, so the pick has no target')
   }
 }

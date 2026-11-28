@@ -16,14 +16,19 @@ export function registerLazyEmulatorHandlers(
     const [
       { registerEmulatorFrameStreamHandlers },
       { registerEmulatorVideoStreamHandlers },
-      { registerEmulatorScrcpyKeyboardHandler }
+      { registerEmulatorScrcpyKeyboardHandler },
+      { pairedForwardAvccUrl }
     ] = await Promise.all([
       import('./emulator-frame-stream'),
       import('./emulator-video-stream'),
-      import('./emulator-scrcpy-keyboard')
+      import('./emulator-scrcpy-keyboard'),
+      import('../../emulator/paired-emulator-video-url')
     ])
     registerEmulatorFrameStreamHandlers(ipc)
-    registerEmulatorVideoStreamHandlers(resolveIosVideoStreamUrl, ipc)
+    registerEmulatorVideoStreamHandlers(
+      (id, streamUrl) => pairedForwardAvccUrl(streamUrl) ?? resolveIosVideoStreamUrl(id),
+      ipc
+    )
     registerEmulatorScrcpyKeyboardHandler(ipc)
   })
 

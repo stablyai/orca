@@ -21,6 +21,14 @@ export function cancelPendingBotThreadOpen(): void {
   previous?.controller.abort()
 }
 
+let started = 0
+
+/** How many external bot thread links began opening in this window. It only grows, so an older open
+ *  still sees a newer link after that link settled or was cancelled by its own navigation. */
+export function botThreadOpenRevision(): number {
+  return started
+}
+
 export function noteBotThreadPaneActivation(
   tabId: string,
   leafId: string,
@@ -92,6 +100,7 @@ export function runBotThreadOpen(
     return pending.result
   }
   cancelPendingBotThreadOpen()
+  started += 1
   const controller = new AbortController()
   const result = open(controller.signal).finally(() => {
     if (pending?.controller === controller) {

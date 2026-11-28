@@ -1,6 +1,5 @@
 import { defineFixture } from '../../../../../component-fixtures/component-fixture'
 import { NativeChatBackgroundTasksStatus } from '../NativeChatBackgroundTasksStatus'
-import { NativeChatWorkerDockFrame } from './NativeChatWorkerDockFrame'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import type { AgentSessionBackgroundTask } from '../../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import { workerDockFixturePane } from './worker-dock-pane-fixture'
@@ -95,26 +94,25 @@ function dock(
     offersStopAll?: boolean
   }
 ) {
+  // The pane draws the chip's frame, as a chat's message list does.
   return (
-    <NativeChatWorkerDockFrame>
-      <NativeChatBackgroundTasksStatus
-        sessionId={SOURCE}
-        tasks={tasks}
-        settledTasks={[]}
-        supportsTaskStop={!offersStopAll}
-        offersStopAll={offersStopAll}
-        stoppingTaskIds={new Set()}
-        stoppingAll={false}
-        indicatorActive
-        isVisible
-        expanded={expanded}
-        onExpandedChange={() => {}}
-        onStop={() => {}}
-        workerRows={new Map(workers.map((row) => [row.id, row]))}
-        workerIdentities={workers}
-        onWorkerAction={noop}
-      />
-    </NativeChatWorkerDockFrame>
+    <NativeChatBackgroundTasksStatus
+      sessionId={SOURCE}
+      tasks={tasks}
+      settledTasks={[]}
+      supportsTaskStop={!offersStopAll}
+      offersStopAll={offersStopAll}
+      stoppingTaskIds={new Set()}
+      stoppingAll={false}
+      indicatorActive
+      isVisible
+      expanded={expanded}
+      onExpandedChange={() => {}}
+      onStop={() => {}}
+      workerRows={new Map(workers.map((row) => [row.id, row]))}
+      workerIdentities={workers}
+      onWorkerAction={noop}
+    />
   )
 }
 
@@ -197,7 +195,7 @@ export const clearFailedWorkersOpen = defineFixture({
     })
 })
 // A failed worker pair, a failed command Clear leaves, and the chat's own Stop all, at 320.
-const FOOTER_CASE = {
+const ACTIONS_CASE = {
   workers: [
     ...WORKERS,
     failedWorker(5, 'Rename the example module'),
@@ -207,23 +205,32 @@ const FOOTER_CASE = {
   tasks: [SUBAGENT, COMMAND],
   offersStopAll: true
 }
-export const footerStopClear320 = defineFixture({
+export const actionsStopClear320 = defineFixture({
   width: 320,
-  render: () => chat(true, FOOTER_CASE)
+  render: () => chat(true, ACTIONS_CASE)
 })
-export const footerStopClear420 = defineFixture({
+export const actionsStopClear420 = defineFixture({
   width: 420,
-  render: () => chat(true, FOOTER_CASE)
+  render: () => chat(true, ACTIONS_CASE)
 })
 // The same without a failed command, so Clear reads just "Clear failed".
-const FOOTER_SHORT_CASE = { ...FOOTER_CASE, workers: FOOTER_CASE.workers.slice(0, 4) }
-export const footerStopClearShort320 = defineFixture({
+const ACTIONS_SHORT_CASE = { ...ACTIONS_CASE, workers: ACTIONS_CASE.workers.slice(0, 4) }
+export const actionsStopClearShort320 = defineFixture({
   width: 320,
-  render: () => chat(true, FOOTER_SHORT_CASE)
+  render: () => chat(true, ACTIONS_SHORT_CASE)
 })
-export const footerStopClearShort420 = defineFixture({
+export const actionsStopClearShort420 = defineFixture({
   width: 420,
-  render: () => chat(true, FOOTER_SHORT_CASE)
+  render: () => chat(true, ACTIONS_SHORT_CASE)
+})
+// Wide enough for the chip's label, Clear and Stop side by side in the header.
+export const actionsStopClear560 = defineFixture({
+  width: 560,
+  render: () => chat(true, ACTIONS_CASE)
+})
+export const actionsStopClearShort560 = defineFixture({
+  width: 560,
+  render: () => chat(true, ACTIONS_SHORT_CASE)
 })
 export const workflowStopAllOpen = defineFixture({
   width: 420,

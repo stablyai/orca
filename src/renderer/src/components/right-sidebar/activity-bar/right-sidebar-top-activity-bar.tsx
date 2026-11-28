@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import type {
   ActiveRightSidebarTab,
   ActivityBarPosition
@@ -13,7 +13,8 @@ import type { TopActivityBarLayout } from './activity-bar-overflow'
 import { SortableActivityButton } from './sortable-activity-button'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
 
-import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
+import { ActivityBarPositionMenuHost } from './lazy-activity-bar-position-menu'
+import { useActivityBarContextPlugin } from './use-activity-bar-context-plugin'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
   RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME,
@@ -48,6 +49,7 @@ export function RightSidebarTopActivityBar({
   onChangeActivityBarPosition: (pos: ActivityBarPosition) => void
 }): React.JSX.Element {
   const contextPlugin = useActivityBarContextPlugin()
+  const [contextMenuOpen, setContextMenuOpen] = useState(false)
   const pillGap = topActivityLayout.visibleItems.some((item) => item.labeledTab) && 'gap-0.5'
   const tabs = (
     <SortableContext
@@ -85,7 +87,7 @@ export function RightSidebarTopActivityBar({
     />
   )
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={setContextMenuOpen}>
       <div className="flex h-(--app-header-height) min-h-(--app-header-height) items-center overflow-hidden border-b border-border right-sidebar-header-inset right-sidebar-header-drag">
         {!hasDesktopWindowChrome && (
           <TooltipProvider>
@@ -146,7 +148,8 @@ export function RightSidebarTopActivityBar({
           </ContextMenuTrigger>
         </TooltipProvider>
       )}
-      <ActivityBarPositionMenu
+      <ActivityBarPositionMenuHost
+        open={contextMenuOpen}
         currentPosition={activityBarPosition}
         onChangePosition={onChangeActivityBarPosition}
         pluginKey={contextPlugin.pluginKey}

@@ -28,6 +28,8 @@ export const BrowserTabCreateParams = lazyZodSchema(() =>
 export const BrowserOpenUrlParams = lazyZodSchema(() =>
   z.object({
     url: z.url(),
-    worktree: z.string().min(1)
+    worktree: z.string().min(1),
+    // The terminal tab that opened it: only screens showing it move to a page the server opens. Older hosts drop it.
+    fromTabId: OptionalString
   })
 )

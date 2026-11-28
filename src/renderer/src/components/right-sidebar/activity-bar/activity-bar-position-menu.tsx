@@ -35,38 +35,15 @@ async function disableActivityBarPlugin(
   }
 }
 
-export function useActivityBarContextPlugin(): {
-  pluginKey: string | null
-  itemId: string | null
-  onContextMenu: React.MouseEventHandler<HTMLElement>
-  onPointerDown: React.PointerEventHandler<HTMLElement>
-} {
-  const [itemId, setItemId] = useState<string | null>(null)
-  const [pluginKey, setPluginKey] = useState<string | null>(null)
-  const updatePluginKey = (event: React.SyntheticEvent<HTMLElement>): void => {
-    const target = event.target
-    setItemId(
-      target instanceof Element
-        ? (target.closest('[data-activity-item-id]')?.getAttribute('data-activity-item-id') ?? null)
-        : null
-    )
-    setPluginKey(
-      target instanceof Element
-        ? (target.closest('[data-activity-plugin-key]')?.getAttribute('data-activity-plugin-key') ??
-            null)
-        : null
-    )
-  }
-  return {
-    pluginKey,
-    itemId,
-    onContextMenu: updatePluginKey,
-    onPointerDown: (event) => {
-      if (event.pointerType !== 'mouse') {
-        updatePluginKey(event)
-      }
-    }
-  }
+export type ActivityBarPositionMenuProps = {
+  currentPosition: ActivityBarPosition
+  onChangePosition: (pos: ActivityBarPosition) => void
+  pluginKey?: string | null
+  itemId?: string | null
+  items: ActivityBarItem[]
+  isBotPage?: boolean
+  /** Top layout: moves run only among the tabs in the strip, not those under More. */
+  stripItemIds?: ReadonlySet<string>
 }
 
 export function ActivityBarPositionMenu({
@@ -77,16 +54,7 @@ export function ActivityBarPositionMenu({
   items,
   isBotPage = false,
   stripItemIds
-}: {
-  currentPosition: ActivityBarPosition
-  onChangePosition: (pos: ActivityBarPosition) => void
-  pluginKey?: string | null
-  itemId?: string | null
-  items: ActivityBarItem[]
-  isBotPage?: boolean
-  /** Top layout: moves run only among the tabs in the strip, not those under More. */
-  stripItemIds?: ReadonlySet<string>
-}): React.JSX.Element {
+}: ActivityBarPositionMenuProps): React.JSX.Element {
   const t = useTranslate()
   const hidden = useAppStore((s) => s.activityBarHidden)
   const setHidden = useAppStore((s) => s.setActivityBarHidden)

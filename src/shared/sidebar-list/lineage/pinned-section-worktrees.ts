@@ -12,12 +12,17 @@ export function getSidebarLineageRowsByIdentity(
   worktreeMap: ReadonlyMap<string, Worktree>,
   folderRows: readonly Worktree[] = []
 ): Map<string, Worktree> {
-  return new Map(
-    [...worktreeMap.values(), ...worktrees, ...folderRows].map((worktree) => [
-      getWorktreeHostIdentity(worktree),
-      worktree
-    ])
-  )
+  const rowsByIdentity = new Map<string, Worktree>()
+  for (const worktree of worktreeMap.values()) {
+    rowsByIdentity.set(getWorktreeHostIdentity(worktree), worktree)
+  }
+  for (const worktree of worktrees) {
+    rowsByIdentity.set(getWorktreeHostIdentity(worktree), worktree)
+  }
+  for (const worktree of folderRows) {
+    rowsByIdentity.set(getWorktreeHostIdentity(worktree), worktree)
+  }
+  return rowsByIdentity
 }
 
 /** Children by parent identity. Folder workspace rows parent only through resolved identities, and a
@@ -35,14 +40,23 @@ export function getSidebarLineageChildren(
     worktreeMap,
     lineageParentIdentities ? folderRows : []
   )
-  const folderIdentities = new Set(folderRows.map(getWorktreeHostIdentity))
-  const allowedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
   const parentByIdentity = getSidebarLineageParentsByIdentity(
     lineageById,
     rowsByIdentity,
     lineageParentIdentities
   )
   const childrenByParentIdentity = new Map<string, Worktree[]>()
+  if (parentByIdentity.size === 0) {
+    return childrenByParentIdentity
+  }
+  const allowedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
+  let folderIdentities: Set<string> | null = null
+  if (allowedRepoIds && folderRows.length > 0) {
+    folderIdentities = new Set<string>()
+    for (const folderRow of folderRows) {
+      folderIdentities.add(getWorktreeHostIdentity(folderRow))
+    }
+  }
   for (const [childIdentity, child] of rowsByIdentity) {
     const parent = parentByIdentity.get(childIdentity)
     if (
@@ -50,14 +64,17 @@ export function getSidebarLineageChildren(
       (allowedRepoIds &&
         (!allowedRepoIds.has(child.repoId) ||
           (!allowedRepoIds.has(parent.repoId) &&
-            !folderIdentities.has(getWorktreeHostIdentity(parent)))))
+            !folderIdentities?.has(getWorktreeHostIdentity(parent)))))
     ) {
       continue
     }
     const identity = getWorktreeHostIdentity(parent)
-    const children = childrenByParentIdentity.get(identity) ?? []
-    children.push(child)
-    childrenByParentIdentity.set(identity, children)
+    const children = childrenByParentIdentity.get(identity)
+    if (children) {
+      children.push(child)
+    } else {
+      childrenByParentIdentity.set(identity, [child])
+    }
   }
   return childrenByParentIdentity
 }
