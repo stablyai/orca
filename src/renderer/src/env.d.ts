@@ -18,6 +18,12 @@ declare module 'monaco-editor/esm/vs/basic-languages/markdown/markdown.js' {
   export const language: languages.IMonarchLanguage
 }
 
+// Every Monaco basic language module has this shape; the entries above predate the pattern.
+declare module 'monaco-editor/esm/vs/basic-languages/*.js' {
+  export const conf: languages.LanguageConfiguration
+  export const language: languages.IMonarchLanguage
+}
+
 declare module 'monaco-editor/esm/vs/basic-languages/cpp/cpp.js' {
   export const conf: languages.LanguageConfiguration
   export const language: languages.IMonarchLanguage

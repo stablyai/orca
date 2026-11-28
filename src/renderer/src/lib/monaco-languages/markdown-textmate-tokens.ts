@@ -7,6 +7,7 @@ import {
 } from '../editor/appearance/plugin-monaco-token-rules'
 import { COLD_GRAMMAR_LINE_ATTEMPTS } from '../syntax-highlighting/textmate-core'
 import { loadBuiltInMarkdownRules, matchesPrefix } from './markdown-monaco-theme-rules'
+import { REFINED_TOKEN_STOCK_RULES } from './monarch-token-refinements'
 import { createTokensProvider, loadEditorCore } from './textmate-token-provider'
 
 type MonacoModule = {
@@ -72,13 +73,19 @@ export async function createMarkdownTokensProvider(
   await editorCore.core.loadLanguage(...markdownGrammars, ...yamlGrammars)
 
   // Why: Orca's editors all use the built-in theme names; redefining them keeps every setTheme caller unchanged.
+  // Why the refined-token rules too: redefining a theme replaces the rules defined before.
   monaco.editor.defineTheme('vs-dark', {
     base: 'vs-dark',
     inherit: true,
-    rules: darkRules,
+    rules: [...REFINED_TOKEN_STOCK_RULES.dark, ...darkRules],
     colors: {}
   })
-  monaco.editor.defineTheme('vs', { base: 'vs', inherit: true, rules: lightRules, colors: {} })
+  monaco.editor.defineTheme('vs', {
+    base: 'vs',
+    inherit: true,
+    rules: [...REFINED_TOKEN_STOCK_RULES.light, ...lightRules],
+    colors: {}
+  })
   const mapScopes = createScopeMapper(
     new Set([
       ...[...darkRules, ...lightRules].map((rule) =>

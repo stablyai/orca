@@ -1,7 +1,7 @@
 // Why these names: Monaco themes style Monaco's own token names (`type`, `number`, `keyword.flow`,
-// …) rather than TextMate scopes, so plugin grammars are mapped onto them. Names the built-in
-// themes leave plain (`function`, `identifier`, `operator`) or style by parent (`keyword.heading`)
-// only take a color from a plugin theme's `tokenColors`.
+// …) rather than TextMate scopes, so plugin grammars are mapped onto them, the same names Orca's
+// refined core grammars emit. Names the built-in themes leave plain (`identifier`, `operator`) or
+// style by parent (`keyword.heading`) only take a color from a plugin theme's `tokenColors`.
 export const PLUGIN_SYNTAX_TOKEN_TYPES = [
   'comment',
   'string',
