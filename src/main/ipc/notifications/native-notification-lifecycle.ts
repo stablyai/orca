@@ -38,7 +38,13 @@ export function retainNotificationUntilRelease(
 
   function onClose(details?: Electron.NotificationCloseEventParams): void {
     // Windows hides the banner before the notification leaves Action Center.
-    if (process.platform === 'win32' && details?.reason === 'timedOut') {
+    // If explicitly canceled/dismissed by the user, release immediately.
+    // Otherwise (timed out or reason undefined in Electron Windows), retain for Action Center click.
+    if (process.platform === 'win32') {
+      if (details?.reason === 'userCanceled') {
+        release()
+        return
+      }
       return
     }
     release()

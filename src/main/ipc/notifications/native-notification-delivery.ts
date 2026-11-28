@@ -25,6 +25,14 @@ import {
   showDesktopNotification
 } from '../../notifications/desktop-notification'
 
+function extractChatTabId(paneKey?: string): string | null {
+  if (!paneKey) {
+    return null
+  }
+  const last = paneKey.lastIndexOf(':')
+  return last > 0 ? paneKey.slice(0, last) : paneKey
+}
+
 export function deliverNativeNotification(
   args: NotificationDispatchRequest,
   notificationOptions: ReturnType<typeof buildNotificationOptions>,
@@ -86,10 +94,13 @@ export function deliverNativeNotification(
   const worktreeId = args.worktreeId
   const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
   // Structured chat keys have synthetic leaves; reveal their unified tab instead of a nonexistent PTY pane.
-  const chatTarget = args.surface === 'agent-session' ? paneTarget : null
+  const chatTarget =
+    args.surface === 'agent-session'
+      ? paneTarget ?? (extractChatTabId(args.paneKey) ? { tabId: extractChatTabId(args.paneKey)! } : null)
+      : null
   // Repo-less folder/floating workspaces still bind clicks through their pane target.
   const repoId = worktreeId?.includes('::') ? getRepoIdFromWorktreeId(worktreeId) : null
-  if (worktreeId && (repoId !== null || paneTarget)) {
+  if (worktreeId) {
     clickHandler = () => {
       release()
       const win = getTrustedUIRendererWindow()
@@ -100,9 +111,25 @@ export function deliverNativeNotification(
         app.focus({ steal: true })
       }
       safelyRevealWindow(win)
-      if (repoId !== null) {
-        win.webContents.send('ui:activateWorktree', { repoId, worktreeId })
+      if (process.platform === 'win32' && !isBackgroundLaunch()) {
+        try {
+          win.moveTop()
+          win.setAlwaysOnTop(true)
+          setTimeout(() => {
+            if (!win.isDestroyed()) {
+              win.setAlwaysOnTop(false)
+            }
+          }, 250)
+        } catch {
+          // Best-effort foreground activation on Windows
+        }
       }
+      const targetRepoId = repoId ?? worktreeId
+      win.webContents.send('ui:activateWorktree', {
+        repoId: targetRepoId,
+        worktreeId,
+        ...(chatTarget ? { providesInitialSurface: true } : {})
+      })
       if (chatTarget) {
         win.webContents.send('ui:focusEditorTab', {
           tabId: chatTarget.tabId,
