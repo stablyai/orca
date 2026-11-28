@@ -1,7 +1,6 @@
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { NativeChatUserBubble } from './NativeChatUserBubble'
-import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
@@ -12,9 +11,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from '../actions/NativeChatRewindAction'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
-import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
-import { NativeChatUserMessageFold } from './NativeChatUserMessageFold'
-import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
+import { NativeChatUserMessageBody } from './NativeChatUserMessageBody'
 import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { useFoldedIntoBotRequest } from '../../bot-request-folded-mail'
@@ -144,29 +141,14 @@ export function NativeChatUserMessageRow({
                 runtimeContext={runtimeContext}
                 enablePreview={runtimeContext !== undefined}
               />
-              <NativeChatUserMessageFold
+              <NativeChatUserMessageBody
                 messageId={message.id}
                 markdown={markdown}
+                drawnMarkdown={drawn}
+                structuredAttachments={structuredAttachments}
+                runtimeContext={runtimeContext}
                 onRefolded={onRefolded}
-                // List numbers hang into the bubble's padding; clipping at the text edge cut them off.
-                className="-mx-3.5 px-3.5"
-              >
-                <NativeChatTextAttachments
-                  content={drawn ?? markdown}
-                  structured={structuredAttachments}
-                  runtimeContext={runtimeContext}
-                  renderText={(text) => (
-                    <NativeChatMarkdown
-                      rowKey={message.id}
-                      content={text}
-                      variant="document"
-                      slackMentions={drawn !== undefined}
-                      className="text-sm"
-                      renderCodeBlock={NativeChatCodeBlock}
-                    />
-                  )}
-                />
-              </NativeChatUserMessageFold>
+              />
             </>
           ) : (
             <NativeChatImageAttachments

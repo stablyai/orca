@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 // Why: while a target's toast is open, a newer result updates it in place (nothing is queued against an
 // open id, so there is nothing to race). Every close path retires the id first and for good, since sonner
 // may still act on it (exit timer, dismissal frames); the next result then gets a never-used id.
-// Results never grow sonner's history; each closed notice keeps one entry, like any other toast.
+// Results never grow sonner's history, and a retired id's entry is pruned, since sonner never drops one.
 // The latest result's render is kept so a late re-render (e.g. a resize) can't republish an older result.
 const openToasts = new Map<string, { id: string; render: () => void }>()
 let toastGeneration = 0
@@ -50,6 +50,18 @@ export function rerenderLocalBaseRefToast(target: string, id: string): void {
 export function retireLocalBaseRefToast(target: string, id: string): void {
   if (openToasts.get(target)?.id === id) {
     openToasts.delete(target)
+    pruneRetiredToastFromHistory(id)
+  }
+}
+
+// Why safe: sonner reads history to find an id we create again, to list active toasts (dismissed ids are
+// already filtered out) or to dismiss all; a retired id is never created again and is already closing.
+// Its rendered copy lives in the Toaster's own state. Searched from the newest end, where our entry usually is.
+function pruneRetiredToastFromHistory(id: string): void {
+  const history = toast.getHistory()
+  const index = history.findLastIndex((entry) => entry.id === id)
+  if (index !== -1) {
+    history.splice(index, 1)
   }
 }
 

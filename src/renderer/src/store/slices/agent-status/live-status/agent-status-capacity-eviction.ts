@@ -1,10 +1,10 @@
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AppState } from '../../../types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getTabIdFromPaneKey } from '../pane-authority/agent-status-pane-key-tab-binding'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // Why: missed pane teardown can leak heavy live rows in any state and amplify every status-map copy (#9872).
 export const MAX_LIVE_AGENT_STATUSES = 500
@@ -46,10 +46,7 @@ export function classifyPaneKeyLiveness(
 ): (paneKey: string) => PaneLiveness {
   return (paneKey) => {
     const tab = representedTabs?.get(paneKey)
-    if (
-      tab?.contentType === 'agent-session' &&
-      structuredAgentSessionPaneKey(tab.id, tab.entityId) === paneKey
-    ) {
+    if (tab?.contentType === 'agent-session' && chatPaneKey(tab.entityId) === paneKey) {
       return 'live'
     }
     for (const tabId of paneKeyCandidateTabIds(paneKey)) {

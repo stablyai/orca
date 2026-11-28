@@ -15,10 +15,6 @@ import type {
   NotificationDispatchRequest,
   NotificationSettings
 } from '../../../../shared/notifications/notification-settings-types'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { isNotificationSourceEnabled } from '../../../../shared/notifications/notification-source-gate'
 import {
@@ -36,6 +32,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import type { Bot } from '../../../../shared/bot-types'
 import { isBotAttentionSilenced } from '../../../../shared/bot-notifications'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type StructuredAttentionWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
 
@@ -151,10 +148,7 @@ export function createStructuredAttentionMobileDelivery(
       }
       const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
       // The host has no window tab id; the phone matches this session-derived key to the chat.
-      const paneKey = structuredAgentSessionPaneKey(
-        structuredAgentSessionTabId(sessionId),
-        sessionId
-      )
+      const paneKey = chatPaneKey(sessionId)
       if (
         deps.isMuted(scope, news) ||
         isCoordinatorOnlyChatNews(edge, news.agentState, () => deps.readOrchestration(paneKey))

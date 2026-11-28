@@ -39,8 +39,8 @@ export type WorktreeReorderArgs = {
 export type WorktreeDropCommitContext = {
   scrollRef: React.RefObject<HTMLDivElement | null>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  worktreeDragGroups: readonly WorktreeDragGroup[]
-  worktreeDragUnitGroups: readonly WorktreeDragUnitGroup[]
+  getWorktreeDragGroups: () => readonly WorktreeDragGroup[]
+  getWorktreeDragUnitGroups: () => readonly WorktreeDragUnitGroup[]
   computeWorktreeDrop: (pointerY: number) => WorktreeSidebarDropPreview | null
   computeWorktreeStatusDrop: (
     request: WorktreeStatusDropRequest

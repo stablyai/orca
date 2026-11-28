@@ -11,6 +11,10 @@ import { mobileAgentAskLine } from './mobile-session-tab-rows'
 
 const SHOWN = 3
 
+// Hosts send 0 for a workspace that has never been active, as the desktop card reads it.
+const knownTime = (at: number | null | undefined): number | null =>
+  at !== undefined && at !== null && at > 0 ? at : null
+
 export type OtherWorkspaceRow = {
   worktreeId: string
   name: string
@@ -68,7 +72,7 @@ export function otherWorkspaceRows(
       row,
       needsYou,
       waiting,
-      activityAt: row.lastActivityAt ?? row.lastOutputAt ?? null
+      activityAt: knownTime(row.lastActivityAt) ?? knownTime(row.lastOutputAt)
     }
     const at = best.findIndex((other) => ahead(candidate, other))
     if (at !== -1 || best.length < SHOWN) {

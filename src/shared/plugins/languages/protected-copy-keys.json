@@ -597,6 +597,7 @@
     "auto.components.sidebar.workspaceBatchActionLabels.deleteSelected",
     "auto.components.sidebar.workspaceBatchActionLabels.sleep",
     "auto.components.sidebar.workspaceBatchActionLabels.sleepCount",
+    "auto.components.sidebar.wslHostRemoval.forgotten",
     "auto.components.sidebar.wslHostRemoval.keptForOthers",
     "auto.components.sidebar.wslHostRemoval.partial",
     "auto.components.sidebar.wslHostRemoval.pending",

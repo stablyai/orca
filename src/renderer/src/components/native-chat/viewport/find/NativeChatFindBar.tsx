@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './native-chat-find.css'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,13 +15,16 @@ export function NativeChatFindBar({
   isVisible: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const { query, setQuery, close, rootRef, barRef, inputRef, revealMatch } = find
+  const { query, setQuery, close, rootRef, barRef, inputRef, takeOpenFocus, revealMatch } = find
+  // A bar restored with its chat doesn't jump to a match: the reader's place comes back instead.
+  const [restored] = useState(() => !find.isOpenedHere())
   const { matchCount, activeIndex, step } = useNativeChatFindMatches({
     rootRef,
     barRef,
     query,
     isVisible,
-    revealMatch
+    revealMatch,
+    restoredQuery: restored ? query : null
   })
 
   const opened = useRef(false)
@@ -30,9 +33,12 @@ export function NativeChatFindBar({
       return
     }
     opened.current = true
+    if (!takeOpenFocus()) {
+      return
+    }
     inputRef.current?.focus()
     inputRef.current?.select()
-  }, [inputRef])
+  }, [inputRef, takeOpenFocus])
 
   const status =
     query && matchCount === 0

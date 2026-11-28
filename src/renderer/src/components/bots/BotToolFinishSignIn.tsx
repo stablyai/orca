@@ -28,6 +28,7 @@ export function BotToolFinishSignIn({
   return (
     <>
       <SignInAddressPaste
+        memoryKey={`bot-tool:${bot.id}:${name}`}
         hint={
           hosted
             ? t(

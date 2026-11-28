@@ -22,7 +22,11 @@ import { buildMirroredAgentTabs } from '../tab-projection/terminal-surfaces'
 import { recordDirectlyOpenedChat } from '../tracking/directly-opened-chat-tabs'
 import { getSessionTabsRuntimeIdFromResponse } from '../tracking/publisher-identity-fences'
 import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
-import { admitWebSessionTabsChatRead } from '../tracking/tracking'
+import {
+  admitWebSessionTabsChatRead,
+  recordWebSessionTabsReplyForChatReadMarks
+} from '../tracking/tracking'
+import { canMoveWebChatReadMarks } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 import { waitForChatLinkSessionTabs } from './remote-runtime-session-tabs-inflight'
 
 /** Materialize one listed chat before its subscription frame arrives. */
@@ -50,7 +54,7 @@ export async function readPairedChatTab(args: {
     scope: { registration, connectionGeneration, timeoutMs: args.timeoutMs },
     minimumReceivedFrame: args.minimumReceivedFrame,
     signal,
-    load: async (admission) => {
+    load: async (admission, frame) => {
       if (!isSameConnection()) {
         throw createRuntimeRpcAbortError()
       }
@@ -70,7 +74,18 @@ export async function readPairedChatTab(args: {
           expectedEnvironmentPairingRevision: registration?.revision
         }
       )
-      return { snapshot: response.result, runtimeId: getSessionTabsRuntimeIdFromResponse(response) }
+      const reply = response.result
+      const replyRuntimeId = getSessionTabsRuntimeIdFromResponse(response)
+      if (
+        canMoveWebChatReadMarks() &&
+        isSameConnection() &&
+        reply?.worktree === worktreeId &&
+        !isWebSessionTabsWorktreeRemovalFrame(reply) &&
+        hostSnapshotAffirmsWorktreeContents(reply)
+      ) {
+        recordWebSessionTabsReplyForChatReadMarks(environmentId, reply, frame, replyRuntimeId)
+      }
+      return { snapshot: reply, runtimeId: replyRuntimeId }
     }
   })
   if (

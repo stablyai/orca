@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import {
   Archive,
   ArrowUpFromLine,
   Bot,
   ChevronDown,
+  ChevronUp,
   CircleHelp,
   CircleMinus,
   Clock,
@@ -68,8 +70,11 @@ export function ActivityKeptRows({
 }): React.JSX.Element {
   const t = useTranslate()
   const [showAll, setShowAll] = useState(false)
+  const rowsId = useId()
+  const toggleRef = useRef<HTMLButtonElement>(null)
   const visible = showAll ? rows : rows.slice(0, KEPT_PREVIEW_COUNT)
-  const hidden = rows.length - visible.length
+  const hidden = rows.length - KEPT_PREVIEW_COUNT
+  const notListed = total - rows.length
   return (
     <>
       <ActivityGroupLabel>
@@ -78,7 +83,10 @@ export function ActivityKeptRows({
         })}
       </ActivityGroupLabel>
       {/* Capping the reason track keeps one long reason from pushing every name onto two lines. */}
-      <div className={`${WIDE_ROWS} @xl:grid-cols-[minmax(12rem,1fr)_fit-content(50%)]`}>
+      <div
+        id={rowsId}
+        className={`${WIDE_ROWS} @xl:grid-cols-[minmax(12rem,1fr)_fit-content(50%)]`}
+      >
         {visible.map((row) => (
           <div
             key={workspaceCleanupRowKey(row)}
@@ -89,27 +97,44 @@ export function ActivityKeptRows({
           </div>
         ))}
       </div>
-      {hidden > 0 ? (
-        <div className="py-1">
-          <Button variant="ghost" size="xs" className="-ml-2" onClick={() => setShowAll(true)}>
-            {t('components.settings.workspaceCleanup.activity.showMore', 'Show {{count}} more', {
-              count: hidden
-            })}
-            <ChevronDown className="size-3" />
-          </Button>
-        </div>
-      ) : total > rows.length ? (
+      {(hidden <= 0 || showAll) && notListed > 0 ? (
         // The host saves a capped receipt, so a busy run lists fewer rows than it kept.
         <p className="py-1 text-xs text-muted-foreground">
           {t(
             'components.settings.workspaceCleanup.activity.notListed',
             '{{count}} more kept workspaces are not listed.',
             {
-              count: total - rows.length,
+              count: notListed,
               defaultValue_one: '1 more kept workspace is not listed.'
             }
           )}
         </p>
+      ) : null}
+      {hidden > 0 ? (
+        // One toggle in place both ways, so keyboard focus never drops to the page.
+        <div className="py-1">
+          <Button
+            ref={toggleRef}
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="-ml-1.5 scroll-my-1"
+            aria-expanded={showAll}
+            aria-controls={rowsId}
+            onClick={() => {
+              // Rows resize above the toggle, so keep it and its focus ring on screen.
+              flushSync(() => setShowAll((value) => !value))
+              toggleRef.current?.scrollIntoView({ block: 'nearest' })
+            }}
+          >
+            {showAll
+              ? t('components.settings.workspaceCleanup.activity.showFewer', 'Show fewer')
+              : t('components.settings.workspaceCleanup.activity.showMore', 'Show {{count}} more', {
+                  count: hidden
+                })}
+            {showAll ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          </Button>
+        </div>
       ) : null}
     </>
   )

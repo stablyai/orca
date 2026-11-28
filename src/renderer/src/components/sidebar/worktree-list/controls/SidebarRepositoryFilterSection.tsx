@@ -44,6 +44,9 @@ type SidebarRepositoryFilterSectionProps = {
   includeHidden?: boolean
 }
 
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+const EMPTY_STRING_SET: ReadonlySet<string> = new Set()
+
 const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilterSection({
   preserveWorkspaceBoardOpen = false,
   filterRepoIds: filterRepoIdsProp,
@@ -53,7 +56,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   const t = useTranslate()
   useUiLanguageRevision()
   const workspaceFilterRepoIds = useAppStore((s) => s.filterRepoIds)
-  const setWorkspaceFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
+  const { setFilterRepoIds: setWorkspaceFilterRepoIds } = getAppStoreState()
   const allRepos = useAppStore((s) => s.repos)
   const repos = useMemo(
     () => (includeHidden ? allRepos : withoutHiddenRepos(allRepos)),
@@ -65,6 +68,9 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   const canFilterRepos = repos.length > 1
   // Ignore removed repo IDs so counts cannot imply a stale active filter.
   const selectedRepoIdSet = useMemo(() => {
+    if (filterRepoIds.length === 0) {
+      return EMPTY_STRING_SET
+    }
     const set = new Set<string>()
     for (const repo of repos) {
       if (filterRepoIds.includes(repo.id)) {

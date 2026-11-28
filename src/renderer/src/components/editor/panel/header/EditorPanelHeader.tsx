@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
@@ -27,6 +27,8 @@ import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import type { ArtifactWriteRequest } from '../../../../../../shared/artifacts/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { editorArtifactSourceKey } from '../editor-artifact-upload'
+import { useEditorHeaderReloadControls } from '../../external-changes/reload-from-disk/EditorHeaderReloadControls'
+import type { EditorReloadUi } from '../../external-changes/reload-from-disk/editor-reload-from-disk-feedback'
 
 const NO_CUSTOM_EDITOR_TITLES: Readonly<Record<CustomEditorToggleValue, string>> = {}
 
@@ -67,6 +69,8 @@ type EditorPanelHeaderProps = {
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
   createArtifactRequest?: () => Promise<ArtifactWriteRequest>
+  /** Reload from Disk; absent where the panel can't reload (e.g. fixtures without a panel). */
+  onReloadFromDisk?: (ui?: EditorReloadUi) => void
 }
 
 export function EditorPanelHeader({
@@ -103,9 +107,12 @@ export function EditorPanelHeader({
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
-  createArtifactRequest
+  createArtifactRequest,
+  onReloadFromDisk
 }: EditorPanelHeaderProps): React.JSX.Element {
   const t = useTranslate()
+  const headerRef = useRef<HTMLDivElement>(null)
+  const reloadControls = useEditorHeaderReloadControls(activeFile, headerRef, onReloadFromDisk)
   const { owner: commentOwner, comments: diffComments } = useVisibleWorktreeDiffComments(
     activeFile.worktreeId,
     activeFile
@@ -150,7 +157,7 @@ export function EditorPanelHeader({
   )
 
   return (
-    <div className="editor-header">
+    <div className="editor-header" ref={headerRef}>
       <EditorPanelHeaderPath
         activeFile={activeFile}
         copiedPathVisible={copiedPathVisible}
@@ -177,6 +184,7 @@ export function EditorPanelHeader({
         </SendNotesSlot>
       )}
       {clearNotes.dialog}
+      {reloadControls.headerControls}
       {canOpenPreview && (
         <TooltipProvider>
           <Tooltip>
@@ -355,6 +363,7 @@ export function EditorPanelHeader({
             <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
           ) : undefined
         }
+        reloadAction={reloadControls.menuItem}
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
         diffShowWhitespace={diffShowWhitespace}

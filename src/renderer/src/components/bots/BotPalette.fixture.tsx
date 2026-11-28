@@ -18,8 +18,8 @@ import { stubBots } from '../../component-fixtures/fixture-bots'
 import { SidebarBotsSection } from './SidebarBotsSection'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { makeAgentEntry } from '../worktree-jump/worktree-jump-palette-test-fixtures'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const OFFLINE_HOST = 'runtime:palette-preview'
 const waitingBot: Bot = {
@@ -56,7 +56,7 @@ const bothLive: BotHostListing = {
   updateNeeded: []
 }
 const approval = makeAgentEntry('palette-waiting-chat', 'waiting', Date.now(), {
-  paneKey: structuredAgentSessionStatusPaneKey('palette-waiting-chat'),
+  paneKey: chatPaneKey('palette-waiting-chat'),
   worktreeId: 'folder:fw-waiting',
   agentType: 'claude',
   lastAssistantMessage: 'Waiting for approval'

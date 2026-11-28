@@ -25,8 +25,6 @@ jobs:
     uses: ./.github/workflows/qualified-orcad-template.yml
     with:
       ref: ${{ github.sha }}
-      # SignPath origin verification covers reusable-workflow jobs, so they stay GitHub-hosted.
-      fast_runners: false
 
   rehearse:
     needs: orcad-template
