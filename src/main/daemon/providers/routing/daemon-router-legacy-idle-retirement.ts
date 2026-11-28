@@ -3,8 +3,8 @@ import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from '../../protocol/daemon-protoco
 
 /** Lets a burst of exits settle into one inventory. */
 const EXIT_SETTLE_MS = 250
-/** Work this app sees no exit for (chat agents, terminals it never attached) is rechecked this slowly. */
-const UNWATCHED_WORK_RECHECK_MS = 60_000
+/** Chat agents, terminals this app never attached and missed exits are caught by this slow recheck. */
+const RECHECK_MS = 60_000
 /** A hung decision must not hold reattaches; the generation's own fence still refuses them. */
 const DECISION_FENCE_MAX_MS = 2_000
 
@@ -18,11 +18,7 @@ export type LegacyIdleRetirementOptions = {
   timing?: { exitSettleMs?: number; recheckMs?: number; fenceMaxMs?: number }
 }
 
-/**
- * Retires an older daemon generation once it owns nothing. The daemon decides atomically
- * (`shutdownIfIdle`); reattaches, the only work that can reach an older generation, are
- * counted so none is in flight when that decision is asked for, and wait it out.
- */
+/** Retires an older generation once it owns nothing; the daemon decides atomically, and reattaches (the only work that reaches it) never overlap that decision. */
 export class DaemonRouterLegacyIdleRetirement {
   private readonly timers = new Map<DaemonPtyAdapter, Timer>()
   private readonly checking = new Set<DaemonPtyAdapter>()
@@ -115,18 +111,28 @@ export class DaemonRouterLegacyIdleRetirement {
       this.waitingForQuiet.add(adapter)
       return
     }
+    // Accepted under another router (a restart carries adapters over): it is already leaving.
+    if (adapter.hasRetiredForIdle()) {
+      this.options.drop(adapter)
+      return
+    }
     this.checking.add(adapter)
     try {
       await this.retireIfEmpty(adapter)
     } catch (error) {
-      // An unanswered inventory proves nothing; the next exit or recheck asks again.
+      // An unanswered inventory proves nothing; ask again later.
       console.warn('[daemon] Older terminal host emptiness check failed:', error)
+      this.checkAgainLater(adapter)
     } finally {
       this.checking.delete(adapter)
       if (this.checkAgain.delete(adapter)) {
         this.schedule(adapter)
       }
     }
+  }
+
+  private checkAgainLater(adapter: DaemonPtyAdapter): void {
+    this.schedule(adapter, this.options.timing?.recheckMs ?? RECHECK_MS)
   }
 
   private async retireIfEmpty(adapter: DaemonPtyAdapter): Promise<void> {
@@ -136,10 +142,7 @@ export class DaemonRouterLegacyIdleRetirement {
       return
     }
     if (sessions.length > 0 || liveRelays > 0) {
-      const watched = new Set(adapter.getActiveSessionIds())
-      if (liveRelays > 0 || sessions.some((session) => !watched.has(session.sessionId))) {
-        this.schedule(adapter, this.options.timing?.recheckMs ?? UNWATCHED_WORK_RECHECK_MS)
-      }
+      this.checkAgainLater(adapter)
       return
     }
     // A reattach that began after the inventory may bring work it missed.
@@ -162,7 +165,7 @@ export class DaemonRouterLegacyIdleRetirement {
     fenceTimer.unref?.()
     try {
       const result = await adapter.requestIdleRetirement()
-      if (this.disposed) {
+      if (this.disposed && result.state !== 'retiring') {
         return
       }
       // Unverifiable: it owned nothing and refuses new work, so leaving lets it retire on disconnect.
@@ -171,7 +174,7 @@ export class DaemonRouterLegacyIdleRetirement {
         return
       }
       if (result.state === 'busy') {
-        this.schedule(adapter, this.options.timing?.recheckMs ?? UNWATCHED_WORK_RECHECK_MS)
+        this.checkAgainLater(adapter)
       }
     } finally {
       clearTimeout(fenceTimer)

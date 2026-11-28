@@ -125,11 +125,13 @@ describe.skipIf(process.platform === 'win32')('retiring an empty older daemon ge
     const { dir, current, legacy } = await setup()
     await seedOlderTerminal(legacy, 'old-1')
 
-    // First launch reattaches, then quits without ending the terminal.
+    // First launch reattaches, then quits without ending either terminal.
     const first = launchApp(dir, current, legacy)
     await first.router.discoverLegacySessions()
     const firstAttach = await first.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })
     expect(firstAttach.isReattach).toBe(true)
+    // Quit retires an empty current daemon by design; one terminal keeps it for the next launch.
+    const kept = await first.router.spawn({ ...size, cwd: dir })
     await first.router.disconnectOnly()
 
     // Second launch: the older generation still owns the terminal, so it keeps serving it.
@@ -145,6 +147,8 @@ describe.skipIf(process.platform === 'win32')('retiring an empty older daemon ge
     expect(app.router.getLegacyAdapters()).toEqual([])
 
     // The current generation keeps serving, empty or not.
+    current.endSession(kept.id)
+    await vi.waitFor(() => expect(current.server.host.listSessions()).toEqual([]))
     const fresh = await app.router.spawn({ ...size, cwd: dir })
     current.endSession(fresh.id)
     await new Promise((resolve) => setTimeout(resolve, 100))

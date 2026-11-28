@@ -15,8 +15,11 @@ export class LegacyDaemonExitProof {
     }
   }
 
-  // Require a vanished PID; this legacy PID-only proof fails closed on Windows.
+  // Require a vanished PID, or the daemon's own idle-retirement acceptance; the PID proof fails closed on Windows.
   hasExited(adapter: DaemonPtyAdapter): boolean {
+    if (typeof adapter.hasRetiredForIdle === 'function' && adapter.hasRetiredForIdle()) {
+      return true
+    }
     // Prefer current authenticated identity so a replacement is not judged by its predecessor's PID.
     const pid =
       (typeof adapter.getLastAuthenticatedDaemonIdentity === 'function'

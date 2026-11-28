@@ -23,7 +23,11 @@ import type { DaemonIdleRetirementResult } from '../adapter/daemon-pty-runtime-s
 import { DaemonRouterRetirement } from './daemon-router-retirement'
 import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
 import { findLegacySessionOwner } from './daemon-router-legacy-owner'
-import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
+import {
+  dropLegacyAdapter,
+  retireExitedLegacyAdapter,
+  type ExitedLegacyVerdict
+} from './daemon-router-exited-legacy'
 import { DaemonRouterLegacyIdleRetirement } from './daemon-router-legacy-idle-retirement'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
@@ -310,17 +314,9 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   private dropIdleRetiredLegacy(adapter: DaemonPtyAdapter): void {
-    const index = this.legacy.indexOf(adapter)
-    if (index === -1) {
-      return
+    if (dropLegacyAdapter(adapter, this.legacy, this.subscriptions)) {
+      this.ownerResolver.forgetProvider(adapter)
     }
-    this.legacy.splice(index, 1)
-    this.subscriptions.dropAdapter(adapter)
-    this.ownerResolver.forgetProvider(adapter)
-    // It owns nothing; releasing its connection is all that is left.
-    void Promise.resolve()
-      .then(() => adapter.disconnectOnly())
-      .catch(() => undefined)
   }
 
   private retireExitedLegacy(adapter: DaemonPtyAdapter, error: unknown): ExitedLegacyVerdict {

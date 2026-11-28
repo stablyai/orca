@@ -22,16 +22,25 @@ export function retireExitedLegacyAdapter(args: {
   ) {
     return 'not-exited'
   }
-  const index = args.legacy.indexOf(adapter)
+  return dropLegacyAdapter(adapter, args.legacy, args.subscriptions) ? 'retired' : 'already-retired'
+}
+
+/** Forgets an older generation that owns nothing any more and releases its connection. */
+export function dropLegacyAdapter(
+  adapter: DaemonPtyAdapter,
+  legacy: DaemonPtyAdapter[],
+  subscriptions: DaemonPtyAdapterSubscriptionFanout
+): boolean {
+  const index = legacy.indexOf(adapter)
   if (index === -1) {
-    return 'already-retired'
+    return false
   }
-  args.legacy.splice(index, 1)
+  legacy.splice(index, 1)
   // The subscription fanout holds its own copy of the adapter list.
-  args.subscriptions.dropAdapter(adapter)
+  subscriptions.dropAdapter(adapter)
   // Disconnect failure must not undo proven retirement.
   void Promise.resolve()
     .then(() => adapter.disconnectOnly())
     .catch(() => undefined)
-  return 'retired'
+  return true
 }
