@@ -13,12 +13,13 @@ import { AutomationService } from '../automation-service'
 import type { AutomationBotLauncher } from '../launch/automation-launch'
 import { automationRunOperationId } from '../launch/automation-run-operation'
 import { recoverSelfSentRun } from './self-sent-run-restart-recovery'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 
-// Orca quit after a self-sent run claimed its dispatch but before its prompt reached its agent. The
-// next start hands the run to whoever sends its prompt, and only that owner settles it: the run's own
-// launch when nothing holds the prompt, or its room's delivery when a room post still owes it.
+// Orca quit after a self-sent run claimed its dispatch but before its prompt reached its agent. When
+// nothing holds the prompt, the next start hands the run to its own launch, which alone settles it; a
+// room post that holds the prompt keeps the run from ever being sent again.
 const NOW = Date.parse('2026-11-27T12:00:00Z')
 let orchestration: OrchestrationDb
 beforeEach(() => {
@@ -59,20 +60,16 @@ function botAutomation(store: Store) {
   })
 }
 
-/** One host's journal (`held`: the chat holding the run's prompt) and its group rooms. */
-function hostOf(store: Store) {
-  const journal: { held: string | null } = { held: null }
+/** One host where no chat holds any run's prompt; group rooms are read from `orchestration`. */
+function hostOf() {
   const runtime = {
     openAgentSessionRecordStore: async () => ({
-      chatsHoldingRun: async () => ({ byMessage: journal.held ? [journal.held] : [], byRun: [] }),
-      getConversation: () => ({ location: { workspaceId: 'ws-1' } })
+      chatsHoldingRun: async () => ({ byMessage: [], byRun: [] })
     }),
-    getOrchestrationDb: () => orchestration,
-    bots: { list: () => store.getBots() },
-    notifyBotGroupsChanged: () => {}
+    getOrchestrationDb: () => orchestration
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the reads recovery and group rooms make
-  return { journal, runtime: runtime as unknown as OrcaRuntimeService }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the reads recovery makes
+  return { runtime: runtime as unknown as OrcaRuntimeService }
 }
 
 /** One Orca process: the service and its completion watcher, recovering as the runtime's own
@@ -88,7 +85,7 @@ function startOrca(
     terminalObserver: {
       resolveRunTerminal: (run) => `automation:${run.id}`,
       observeCompletion: async (_handle, { run, signal }) => {
-        const automation = store.listAutomations()[0]!
+        const automation = store.listAutomations().find((entry) => entry.id === run!.automationId)!
         const recovered = await recoverSelfSentRun(selfSent, automation, run!, signal)
         if ('settled' in recovered) {
           return recovered.settled
@@ -133,7 +130,7 @@ const runOf = (store: Store, run: AutomationRun) =>
 
 it('resumes a run whose prompt reached nothing through its own launch, which alone settles it', async () => {
   const store = createStore()
-  const { runtime } = hostOf(store)
+  const { runtime } = hostOf()
   const run = await quitMidDispatch(store, runtime)
   const sent: string[] = []
   const second = startOrca(store, runtime, launched(sent))
@@ -148,7 +145,7 @@ it('resumes a run whose prompt reached nothing through its own launch, which alo
 
 it('skips a resumed run as any launch would when its target is paused now', async () => {
   const store = createStore()
-  const { runtime } = hostOf(store)
+  const { runtime } = hostOf()
   const run = await quitMidDispatch(store, runtime)
   const folderWorkspaceId = store.getBots()[0]!.folderWorkspaceId
   store.saveBot(makeTestBot({ folderWorkspaceId, paused: true }))
@@ -162,21 +159,22 @@ it('skips a resumed run as any launch would when its target is paused now', asyn
 
 it('never resumes an existing dispatching run a later request reuses', async () => {
   const store = createStore()
-  const { runtime } = hostOf(store)
+  const { runtime } = hostOf()
   const run = await quitMidDispatch(store, runtime)
   const sent: string[] = []
   const second = startOrca(store, runtime, launched(sent)).service
   // Same occurrence: the store hands back the claimed run rather than a new one.
   vi.setSystemTime(run.scheduledFor)
   expect((await second.runNow(run.automationId)).id).toBe(run.id)
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  // Its lane runs the request after runNow returns; an empty turn behind it waits for that request.
+  await second.runInAutomationLane(run.automationId, async () => {})
   expect(sent).toEqual([])
   expect(runOf(store, run).status).toBe('dispatching')
 })
 
 it('leaves the run for the next start when Orca quits during the resumed launch', async () => {
   const store = createStore()
-  const { runtime } = hostOf(store)
+  const { runtime } = hostOf()
   const run = await quitMidDispatch(store, runtime)
   let stopped: ((error: Error) => void) | null = null
   const second = startOrca(store, runtime, () => new Promise((_, reject) => (stopped = reject)))
@@ -184,7 +182,9 @@ it('leaves the run for the next start when Orca quits during the resumed launch'
   await vi.waitFor(() => expect(stopped).not.toBeNull())
   second.service.stop()
   stopped!(new Error('host stopped'))
-  await new Promise((resolve) => setTimeout(resolve, 20))
+  // The failed launch settles in its lane, then its failure handler runs on a later turn.
+  await second.service.runInAutomationLane(run.automationId, async () => {})
+  await yieldToEventLoop()
   expect(runOf(store, run)).toMatchObject({ status: 'dispatching', chatSessionId: null })
 })
 
@@ -218,7 +218,7 @@ function owedRoomPost(runtime: OrcaRuntimeService, run: AutomationRun) {
 it('never re-dispatches a run whose prompt a room post holds, owed or revoked', async () => {
   for (const state of ['owed', 'revoked'] as const) {
     const store = createStore()
-    const { runtime } = hostOf(store)
+    const { runtime } = hostOf()
     const run = await quitMidDispatch(store, runtime)
     const { groups, operationId } = owedRoomPost(runtime, run)
     if (state === 'revoked') {
@@ -242,7 +242,7 @@ it('never re-dispatches a run whose prompt a room post holds, owed or revoked', 
 
 it('never hands on a run that is no longer claimed, even with no chat', async () => {
   const store = createStore()
-  const { runtime } = hostOf(store)
+  const { runtime } = hostOf()
   const run = await quitMidDispatch(store, runtime)
   store.updateAutomationRun({ runId: run.id, status: 'dispatched', chatSessionId: null })
   const sent: string[] = []
