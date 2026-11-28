@@ -1,22 +1,31 @@
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { basename, extname, isAbsolute, posix, relative, resolve } from 'node:path'
 import { readBundledWebClientFiles } from '../../../../../shared/web-client/bundled-web-client-manifest'
+import {
+  resolveStaticWebIcon,
+  WEB_ICON_CONTENT_TYPES,
+  WEB_ICON_ROUTE,
+  type StaticWebIcon
+} from './static-web-client-icon'
 
-const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
+const STATIC_WEB_ALLOWED_PATHS = new Set([
+  '/web-index.html',
+  '/orca-web-icon',
+  '/manifest.webmanifest'
+])
 const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']
 const STATIC_WEB_CONTENT_TYPES = new Map([
+  ...WEB_ICON_CONTENT_TYPES,
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
-  ['.png', 'image/png'],
-  ['.svg', 'image/svg+xml; charset=utf-8'],
   ['.wasm', 'application/wasm'],
-  ['.webp', 'image/webp'],
   ['.woff2', 'font/woff2']
 ])
+const WEB_MANIFEST_ROUTE = '/manifest.webmanifest'
 
 /** A server without a web client still answers plain HTTP, so callers fail fast instead of hanging. */
 export const answerWithoutWebClient: RequestListener = (_request, response) => {
@@ -36,14 +45,22 @@ export function createStaticWebClientHandler(staticRoot: string): RequestListene
   if (basename(resolvedRoot) === 'renderer' && !files) {
     return answerWithoutWebClient
   }
+  // A failed lookup must not crash orcad through an unhandled rejection.
+  const icon = resolveStaticWebIcon(resolvedRoot, files, process.env.ORCA_WEB_ICON).catch(
+    (error: unknown) => {
+      console.warn(`[ws-transport] web client icon lookup failed: ${String(error)}`)
+      return undefined
+    }
+  )
   return (request, response) => {
-    void handleStaticRequest(resolvedRoot, files, request, response)
+    void handleStaticRequest(resolvedRoot, files, icon, request, response)
   }
 }
 
 async function handleStaticRequest(
   staticRoot: string,
   files: ReadonlySet<string> | undefined,
+  iconPromise: Promise<StaticWebIcon | undefined>,
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
@@ -59,6 +76,22 @@ async function handleStaticRequest(
   const pathname = parseStaticPathname(request.url)
   if (!pathname) {
     writeHttpStatus(response, 400)
+    return
+  }
+  const icon = await iconPromise
+  if (response.destroyed) {
+    return
+  }
+  if (pathname === WEB_ICON_ROUTE || pathname === WEB_MANIFEST_ROUTE) {
+    if (!icon) {
+      writeHttpStatus(response, 404)
+      return
+    }
+    if (pathname === WEB_ICON_ROUTE) {
+      await streamStaticFile(response, request, icon.absolutePath, icon.contentType, 'no-cache')
+      return
+    }
+    writeJsonBody(response, request, buildWebManifest(icon))
     return
   }
   if (!isAllowedStaticWebPath(pathname) || (files && !files.has(pathname.slice(1)))) {
@@ -88,16 +121,95 @@ async function handleStaticRequest(
     return
   }
 
-  response.statusCode = 200
-  response.setHeader(
-    'Content-Type',
-    STATIC_WEB_CONTENT_TYPES.get(extname(absolutePath)) ?? 'application/octet-stream'
-  )
-  response.setHeader('Content-Length', fileStat.size)
-  response.setHeader(
-    'Cache-Control',
+  if (pathname === '/web-index.html' && icon) {
+    await sendWebIndex(response, request, absolutePath, icon)
+    return
+  }
+
+  await streamStaticFile(
+    response,
+    request,
+    absolutePath,
+    STATIC_WEB_CONTENT_TYPES.get(extname(absolutePath)) ?? 'application/octet-stream',
     pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'
   )
+}
+
+/** Buffers only the index page; linking the icon and manifest costs one small read per load. */
+async function sendWebIndex(
+  response: ServerResponse,
+  request: IncomingMessage,
+  absolutePath: string,
+  icon: StaticWebIcon
+): Promise<void> {
+  let html: string
+  try {
+    html = await readFile(absolutePath, 'utf8')
+  } catch {
+    writeHttpStatus(response, 404)
+    return
+  }
+  if (response.destroyed) {
+    return
+  }
+  const links =
+    `<link rel="icon" type="${icon.contentType}" href=".${WEB_ICON_ROUTE}">` +
+    `<link rel="manifest" href=".${WEB_MANIFEST_ROUTE}">`
+  const headEnd = html.indexOf('</head>')
+  const body = headEnd === -1 ? html : html.slice(0, headEnd) + links + html.slice(headEnd)
+  response.statusCode = 200
+  response.setHeader('Content-Type', 'text/html; charset=utf-8')
+  response.setHeader('Content-Length', Buffer.byteLength(body))
+  response.setHeader('Cache-Control', 'no-cache')
+  response.end(request.method === 'HEAD' ? undefined : body)
+}
+
+function writeJsonBody(response: ServerResponse, request: IncomingMessage, value: unknown): void {
+  const body = JSON.stringify(value)
+  response.statusCode = 200
+  response.setHeader('Content-Type', 'application/manifest+json; charset=utf-8')
+  response.setHeader('Content-Length', Buffer.byteLength(body))
+  response.setHeader('Cache-Control', 'no-cache')
+  response.end(request.method === 'HEAD' ? undefined : body)
+}
+
+function buildWebManifest(icon: StaticWebIcon): unknown {
+  return {
+    name: 'Orca',
+    short_name: 'Orca',
+    // Relative URLs resolve against the manifest URL so prefix proxies keep working.
+    start_url: 'web-index.html',
+    display: 'standalone',
+    icons: icon.manifestIcons.map((entry) => ({ ...entry, purpose: 'any' }))
+  }
+}
+
+async function streamStaticFile(
+  response: ServerResponse,
+  request: IncomingMessage,
+  absolutePath: string,
+  contentType: string,
+  cacheControl: string
+): Promise<void> {
+  let fileStat
+  try {
+    fileStat = await stat(absolutePath)
+  } catch {
+    writeHttpStatus(response, 404)
+    return
+  }
+  if (response.destroyed) {
+    return
+  }
+  if (!fileStat.isFile()) {
+    writeHttpStatus(response, 404)
+    return
+  }
+
+  response.statusCode = 200
+  response.setHeader('Content-Type', contentType)
+  response.setHeader('Content-Length', fileStat.size)
+  response.setHeader('Cache-Control', cacheControl)
   if (request.method === 'HEAD') {
     response.end()
     return
@@ -153,6 +265,12 @@ function parseStaticPathname(rawUrl: string | undefined): string | null {
 function mapProxyPrefixedStaticPathname(pathname: string): string {
   if (pathname === '/web-index.html' || pathname.endsWith('/web-index.html')) {
     return '/web-index.html'
+  }
+  if (pathname.endsWith(WEB_ICON_ROUTE)) {
+    return WEB_ICON_ROUTE
+  }
+  if (pathname.endsWith(WEB_MANIFEST_ROUTE)) {
+    return WEB_MANIFEST_ROUTE
   }
   const prefixIndex = STATIC_WEB_ALLOWED_PREFIXES.reduce(
     (deepest, prefix) => Math.max(deepest, pathname.indexOf(prefix)),
