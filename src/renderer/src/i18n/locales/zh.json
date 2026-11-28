@@ -1314,6 +1314,8 @@
       },
       "askNewHomeChat": "开始新的主聊天前询问",
       "askNewHomeChatDescription": "在“新的主聊天”替换 bot 当前的对话之前进行确认",
+      "allowCliCreate": "允许本机 CLI 直接创建 bot",
+      "allowCliCreateDescription": "允许在本机运行 `orca bot create` 时跳过确认卡片直接创建 bot。默认关闭；开启后，本机运行的任意终端或智能体都可创建 bot。",
       "notifyCouldNotFinishOnHostDescription": "当自动化运行或工作者失败时。只有与 {{host}} 配对的手机会收到通知",
       "group": {
         "noAccount": "Orca 账户",

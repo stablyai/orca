@@ -9,6 +9,8 @@ export type OrcadOptions = {
   /** Request a mobile-scoped pairing offer and terminal QR. */
   mobilePairing?: boolean
   grantDesktopControl?: boolean
+  /** This machine's own `orca` CLI may create bots. */
+  allowCliBotCreate?: boolean
   /** Print only the ephemeral-VM recipe line. */
   recipeJson?: boolean
   projectRoot?: string

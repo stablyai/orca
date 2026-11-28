@@ -1,3 +1,4 @@
+import { setCliBotCreateAllowed } from '../../bots/bot-cli-create'
 import {
   getServeFlagTypoError,
   getServeOptionValidationError
@@ -12,6 +13,7 @@ export type ServeOptions = {
   noPairing: boolean
   mobilePairing: boolean
   grantDesktopControl: boolean
+  allowCliBotCreate: boolean
   allowPublic: boolean
   refusePublic: boolean
   recipeJson: boolean
@@ -132,6 +134,10 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
       '--serve-grant-desktop-control',
       '--grant-desktop-control'
     ]),
+    allowCliBotCreate: lastBooleanValue(optionsArgv, [
+      '--serve-allow-cli-bot-create',
+      '--allow-cli-bot-create'
+    ]),
     allowPublic: lastBooleanValue(optionsArgv, ['--serve-allow-public', '--allow-public']),
     refusePublic: lastBooleanValue(optionsArgv, ['--serve-refuse-public', '--refuse-public']),
     recipeJson: lastBooleanValue(optionsArgv, ['--serve-recipe-json', '--recipe-json']),
@@ -146,5 +152,7 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
   if (validationError) {
     throw new Error(validationError)
   }
+  // Electron serve parses these once at launch, before the runtime takes any call.
+  setCliBotCreateAllowed(options.allowCliBotCreate)
   return options
 }

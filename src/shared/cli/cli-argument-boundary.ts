@@ -6,6 +6,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'activate',
   'agent-wait',
   'all',
+  'allow-cli-bot-create',
   'allow-failed-archive-hook',
   'allow-public',
   'allow-system-shortcut',
