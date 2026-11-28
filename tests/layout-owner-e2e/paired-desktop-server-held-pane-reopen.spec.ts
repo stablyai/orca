@@ -182,9 +182,14 @@ test.describe("paired desktop reopens a switch-on server's held pane", () => {
             message: "The desktop never showed the server's held pane on the banner"
           })
           .toContain('Reopen terminal')
-        expect(await readHostHandles(host, worktreeId, hostTabId)).toEqual({
-          [created.leafId]: null
-        })
+        // The desktop re-activates the tab on its own; none of those may start the held pane.
+        for (const deadline = Date.now() + 5_000; Date.now() < deadline;) {
+          expect(await readHostHandles(host, worktreeId, hostTabId)).toEqual({
+            [created.leafId]: null
+          })
+          expect(isAlive(fake.daemon!.pid!)).toBe(true)
+          await new Promise((resolve) => setTimeout(resolve, 250))
+        }
       })
 
       await test.step("Reopen stops the server's newer build and the pane binds", async () => {
