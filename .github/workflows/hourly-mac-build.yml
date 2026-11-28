@@ -92,6 +92,7 @@ jobs:
     with:
       ref: ${{ needs.preflight.outputs.head_sha }}
       build_template: true
+      reuse_windows_prebuild_cache: true
 
   release-javascript:
     needs: preflight
