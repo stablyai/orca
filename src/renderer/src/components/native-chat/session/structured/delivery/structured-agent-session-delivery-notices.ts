@@ -18,7 +18,8 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
 const NO_COMMANDS: ReadonlySet<string> = new Set()
 
-/** Show sending until host rows arrive and host-worded rejections afterward; settled uncertain input remains ordinary transcript content. */
+/** Sending ends when the host records the message, not when the agent echoes it: the working line
+ *  covers the agent's wait. Rejections take the host's words; uncertain input reads as content. */
 export function structuredAgentSessionDeliveryNotices(args: {
   pending: readonly StructuredAgentSessionPendingSend[]
   submissions: readonly AgentJournalSubmission[]
@@ -31,7 +32,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
   // A row under the id is the host's to describe, before the sender settles from it.
   const recorded = new Set(submissions.map((submission) => submission.clientMessageId))
   for (const entry of args.pending) {
-    if (entry.phase !== 'unconfirmed' && !recorded.has(entry.clientMessageId)) {
+    if (entry.phase === 'sending' && !recorded.has(entry.clientMessageId)) {
       notices.set(
         agentJournalSubmissionKey(entry.clientMessageId),
         STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
@@ -44,9 +45,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
     : new Set<string>()
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
-    if (submission.dispatchState === 'pending') {
-      notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
-    } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
+    if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)
       const statedByRow = agentSessionFailureStatedByRow(fact, args.startFailures)
