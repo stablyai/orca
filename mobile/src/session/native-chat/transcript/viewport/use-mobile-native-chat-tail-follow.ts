@@ -43,6 +43,10 @@ export function isAtTail(event: MobileScrollTailMetrics): boolean {
 export type MobileNativeChatListHandle = {
   scrollToOffset: (params: { animated: boolean; offset: number }) => void
   scrollToEnd: (params: { animated: boolean }) => void
+  hasPreviousMessage?: (keys: readonly string[]) => boolean
+  revealPreviousMessage?: (keys: readonly string[], animated: boolean) => void
+  /** Puts the drawn row `key`'s start at the top of the view; only the page list draws row keys. */
+  scrollRowToTop?: (key: string) => void
 }
 
 export type MobileNativeChatTailFollow = {
@@ -54,6 +58,11 @@ export type MobileNativeChatTailFollow = {
     onPlaceRestored: (scope: string) => void
   }
   showJumpToTail: boolean
+  showPreviousMessage: boolean
+  /** Latest user and assistant row keys, in document order. The view writes this during render. */
+  previousStopsRef: { current: readonly string[] }
+  jumpToPreviousMessage: (animated: boolean) => void
+  refreshPreviousMessage: () => void
   pinToTail: (event?: LayoutChangeEvent) => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
@@ -84,6 +93,10 @@ export function useMobileNativeChatTailFollow(args: {
   const atTailRef = useRef(true)
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
+  // A previous-message jump must not re-arm tail follow when its scroll events look like a reader.
+  const programmaticRef = useRef(false)
+  const previousStopsRef = useRef<readonly string[]>([])
+  const [showPreviousMessage, setShowPreviousMessage] = useState(false)
   const scopeKeyRef = useRef(scopeKey)
   const restoredScopeRef = useRef<string | null>(null)
 
@@ -138,34 +151,58 @@ export function useMobileNativeChatTailFollow(args: {
     }
   }, [])
 
+  const refreshPreviousMessage = useCallback(() => {
+    const next = listRef.current?.hasPreviousMessage?.(previousStopsRef.current) ?? false
+    setShowPreviousMessage((current) => (current === next ? current : next))
+  }, [])
+
   const recordScrollMetrics = useCallback(
     (event: MobileScrollTailMetrics) => {
       viewport.record(event)
       if (listReportsGestures()) {
         setAtTail(isAtTail(event))
       }
+      refreshPreviousMessage()
     },
-    [setAtTail, viewport]
+    [refreshPreviousMessage, setAtTail, viewport]
   )
 
   // Detach even on one-point reader moves; programmatic corrections must not alter intent.
   const onEndDistance = useCallback(
     (fromEnd: number, byReader: boolean) => {
       setAtTail(fromEnd <= AT_TAIL_SLOP)
-      if (byReader) {
+      if (byReader && !programmaticRef.current) {
         setFollowing(fromEnd <= 1)
       }
+      if (programmaticRef.current && fromEnd > 1) {
+        programmaticRef.current = false
+      }
+      refreshPreviousMessage()
     },
-    [setAtTail, setFollowing]
+    [refreshPreviousMessage, setAtTail, setFollowing]
   )
 
   const followTail = useCallback(() => {
     clearUserScrollSettle()
+    programmaticRef.current = false
     userScrollActiveRef.current = false
     setAtTail(true)
     setFollowing(true)
     pinToTail()
   }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
+
+  const jumpToPreviousMessage = useCallback(
+    (animated: boolean) => {
+      clearUserScrollSettle()
+      userScrollActiveRef.current = false
+      programmaticRef.current = true
+      setAtTail(false)
+      setFollowing(false)
+      listRef.current?.revealPreviousMessage?.(previousStopsRef.current, animated)
+      requestAnimationFrame(refreshPreviousMessage)
+    },
+    [clearUserScrollSettle, refreshPreviousMessage, setAtTail, setFollowing]
+  )
 
   // The reader chose the tail (send, jump to latest), even while the chat's rows are still loading.
   const jumpToTail = useCallback(() => {
@@ -182,6 +219,7 @@ export function useMobileNativeChatTailFollow(args: {
 
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
+    programmaticRef.current = false
     userScrollActiveRef.current = true
     setFollowing(false)
   }, [clearUserScrollSettle, setFollowing])
@@ -267,6 +305,10 @@ export function useMobileNativeChatTailFollow(args: {
     listProps: { ref: attachList },
     pageListProps: { ref: attachList, isFollowing, onEndDistance, onPlaceRestored },
     showJumpToTail: !following && !atTail,
+    showPreviousMessage,
+    previousStopsRef,
+    jumpToPreviousMessage,
+    refreshPreviousMessage,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,

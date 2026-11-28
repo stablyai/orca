@@ -35,7 +35,7 @@ import { useMobileNativeChatTurnDisclosure } from './transcript/turn-state/use-m
 import { mobileNativeChatComposerPlaceholder } from './composer/field/use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './transcript/messages/MobileNativeChatLiveLine'
 import { MobileNativeChatAwaitingInputRow } from './transcript/messages/MobileNativeChatAwaitingInputRow'
-import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
+import { MobileNativeChatCanvasJumps } from './lower-region/MobileNativeChatFloatingControls'
 import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
 import { useMobileNativeChatWorkerApprovalSlot } from './input/prompts/MobileNativeChatWorkerApproval'
@@ -402,17 +402,14 @@ export function MobileNativeChatView({
                         roots={disclosures.roots}
                         contentContainerStyle={styles.listContent}
                         pinchGesture={pinchGesture}
+                        resolveRow={turns.resolveRow}
                       />
                     </MobileWorkerApprovalReceiptsContext>
                   </MobileNativeChatScrollRootsBoundary>
                 </MobileMarkdownBotCardContext.Provider>
               </MobileBotCardSendContext.Provider>
             </MobileNativeChatDisclosureContext.Provider>
-            <MobileNativeChatFloatingControls
-              canvasFades
-              showJumpToTail={tail.showJumpToTail}
-              onJumpToTail={jumpToTail}
-            />
+            <MobileNativeChatCanvasJumps tail={tail} />
           </GestureHandlerRootView>
         )}
         <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>
