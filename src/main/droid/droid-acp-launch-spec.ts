@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { DROID_ACP_DIALECT } from '../acp/acp-dialects/droid-dialect'
+import { readDroidModelCatalog } from '../acp/acp-dialects/droid-model-catalog'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { deliverDroidInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
@@ -40,10 +41,11 @@ export const DROID_LAUNCH_SPEC: AcpLaunchSpec = {
   permissionModeConfig: {
     values: { ask: 'normal', auto: 'auto-medium', 'full-access': 'auto-high' }
   },
-  // Only a session lists the account's models, and Droid cannot delete a listing session.
   modelDiscovery: {
-    kind: 'unavailable',
-    reason: 'Droid lists its models only inside a session it cannot delete'
+    kind: 'initialize',
+    read: (_initialized, connection) => readDroidModelCatalog(connection),
+    // Each model's listed default effort is its own, not the model a new session starts on.
+    listingNamesConfiguredModel: false
   },
   instructions: deliverDroidInstructions,
   transcriptImport: DROID_TRANSCRIPT_IMPORT,
