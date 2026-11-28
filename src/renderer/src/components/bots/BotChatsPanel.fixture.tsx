@@ -6,6 +6,7 @@ import {
   fixtureCos,
   stubBotPanel
 } from '../../component-fixtures/fixture-bot-panel'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import type { BotActivity } from '../../../../shared/bots/bot-activity-model'
 import type { BotChatTreeWorker } from '../../../../shared/bots/bot-chat-tree'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -47,9 +48,10 @@ const done = (
   ...extra
 })
 const chat = fixtureChat
-// The bot's page with its Chats tab open.
+// The bot's page with its Chats tab open, in English so its interactions don't depend on the host locale.
 const chatsTab = (chatState: 'working' | null) => ({
   ...botPanelPage(true, chatState),
+  settings: { ...getDefaultSettings('/home/fixture'), uiLanguage: 'en' as const },
   rightSidebarTab: 'bot-chats' as const
 })
 
@@ -227,11 +229,79 @@ const click = (frame: HTMLElement, label: string): void => {
   button?.click()
 }
 
+const pause = async (ms = 300): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+const rowOf = (frame: HTMLElement, title: string): HTMLElement | null =>
+  [...frame.querySelectorAll<HTMLElement>('div')].find(
+    (entry) => entry.className.includes('group/bot-chat') && entry.textContent?.includes(title)
+  ) ?? null
+
+const clickMenuItem = async (label: string): Promise<void> => {
+  await pause(100)
+  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((entry) =>
+    entry.textContent?.includes(label)
+  )
+  if (!item) {
+    throw new Error(`Fixture menu item missing: ${label}`)
+  }
+  item.click()
+  await pause()
+}
+
+const openChatActions = (frame: HTMLElement, title: string): void => {
+  const row = rowOf(frame, title)
+  const actions = row?.querySelector<HTMLButtonElement>('button[aria-label="Chat actions"]')
+  if (!actions) {
+    throw new Error('Fixture chat actions missing')
+  }
+  actions.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
+  )
+}
+
+const archiveLayoutChat = async (frame: HTMLElement): Promise<void> => {
+  await pause()
+  click(frame, 'Show 4 older')
+  await pause()
+  openChatActions(frame, 'Feedback on HTML layout')
+  await clickMenuItem('Archive chat')
+}
+
 export const normalDay = defineFixture({
   width: 350,
   store: chatsTab('working'),
   setup: stubBotPanel(ACTIVITY, bot, CHATS),
   render: () => <BotPanelFrame />
+})
+
+/** Archive is a navigation choice: the row leaves Active, then the same chat shows under Archived. */
+export const archivedChat = defineFixture({
+  width: 350,
+  store: chatsTab('working'),
+  setup: stubBotPanel(ACTIVITY, bot, CHATS),
+  render: () => <BotPanelFrame />,
+  interact: async (frame) => {
+    await archiveLayoutChat(frame)
+    click(frame, 'Archived')
+    await pause()
+  }
+})
+
+/** Restore removes only that marker; the archived list is empty again. */
+export const restoredChat = defineFixture({
+  width: 350,
+  store: chatsTab('working'),
+  setup: stubBotPanel(ACTIVITY, bot, CHATS),
+  render: () => <BotPanelFrame />,
+  interact: async (frame) => {
+    await archiveLayoutChat(frame)
+    click(frame, 'Archived')
+    await pause()
+    openChatActions(frame, 'Feedback on HTML layout')
+    await clickMenuItem('Restore chat')
+  }
 })
 
 /** Home Chat unfolded: five workers, then Show more. */

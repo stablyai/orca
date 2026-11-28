@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Plus, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useTranslate } from '@/i18n/use-translate'
 import { startBotSession } from '@/lib/bot-catalog'
 import { useBotHostOffline } from '@/lib/bot-host-views'
@@ -21,6 +22,7 @@ import {
   type BotChatSearchAsk
 } from '../../../../shared/bots/use-bot-chat-search'
 import type { BotChatSearchResult } from '../../../../shared/bots/bot-chat-search'
+import { isBotChatArchived } from '../../../../shared/bots/bot-chat-archive'
 import { BotChatTreeGroup } from './BotChatTreeGroup'
 import {
   BotUsageLimitStopsContext,
@@ -39,6 +41,7 @@ import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
 import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotChatsSkeleton } from './BotChatsSkeleton'
+import { useBotChatArchive } from './use-bot-chat-archive'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
@@ -98,6 +101,7 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const stopIndex = useMemo(() => indexUsageLimitStops(stops), [stops])
   const [steps, setSteps] = useState(0)
   const [query, setQuery] = useState('')
+  const [chatScope, setChatScope] = useState<'active' | 'archived'>('active')
   // The panel's own folds, apart from the sidebar's: every chat starts folded here.
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set())
   const fold = (chatId: string, open: boolean): void =>
@@ -111,6 +115,18 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
       return next
     })
   const { hostId, id: botId } = bot
+  const archive = useBotChatArchive()
+  const activeChats = useMemo(
+    () => chats.filter((chat) => !isBotChatArchived(archive, hostId, botId, chat)),
+    [chats, archive, hostId, botId]
+  )
+  const archivedChats = useMemo(
+    () => chats.filter((chat) => isBotChatArchived(archive, hostId, botId, chat)),
+    [chats, archive, hostId, botId]
+  )
+  const listedChats = chatScope === 'archived' ? archivedChats : activeChats
+  const noArchivedChats =
+    chatScope === 'archived' && tree.state === 'ready' && archivedChats.length === 0
   const ask = useCallback<BotChatSearchAsk>(
     (text) =>
       callBotRpc<BotChatSearchResult>({ hostId }, 'bots.chats.search', {
@@ -123,11 +139,14 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
     [hostId, botId]
   )
   const search = useBotChatSearch(ask, chats, query)
-  const { found, older, onlyHome, noMatch, searchFailed, moreMatches } = botChatListView(chats, {
-    steps,
-    query,
-    search
-  })
+  const { found, older, onlyHome, noMatch, searchFailed, moreMatches } = botChatListView(
+    listedChats,
+    {
+      steps,
+      query,
+      search
+    }
+  )
   const searching = query.trim() !== ''
   // A search lists the chats it found by their own words, then the workers it found by title.
   const chatHits = found.filter((hit) => hit.matches === null)
@@ -178,6 +197,29 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
               <span className="@max-[240px]:hidden">{newChatLabel}</span>
             </Button>
           </div>
+          {!searching ? (
+            <div className="flex px-0.5 pb-2">
+              <ToggleGroup
+                type="single"
+                variant="segmented-pill"
+                size="xs"
+                density="compact"
+                value={chatScope}
+                aria-label={t('bots.chats.title', 'Chats')}
+                onValueChange={(value) => {
+                  if (value === 'active' || value === 'archived') {
+                    setChatScope(value)
+                    setSteps(0)
+                  }
+                }}
+              >
+                <ToggleGroupItem value="active">{t('bots.chats.active', 'Active')}</ToggleGroupItem>
+                <ToggleGroupItem value="archived">
+                  {t('bots.chats.archived', 'Archived')}
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          ) : null}
           {chats.length === 0 && tree.state !== 'ready' ? (
             tree.state === 'loading' ? (
               <BotChatsSkeleton />
@@ -225,6 +267,9 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
           ) : null}
           {moreMatches > 0 ? (
             <p className={NOTE}>{botChatMoreMatchesNote(t, moreMatches)}</p>
+          ) : null}
+          {noArchivedChats && !searching ? (
+            <p className={NOTE}>{t('bots.chats.archivedEmpty', 'Archived chats show up here.')}</p>
           ) : null}
           {onlyHome ? (
             <p className={NOTE}>

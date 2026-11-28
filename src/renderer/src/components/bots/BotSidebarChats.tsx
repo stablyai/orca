@@ -22,6 +22,7 @@ import {
   type BotSidebarChatTrailing,
   type BotSidebarChatView
 } from '../../../../shared/bots/bot-sidebar-tree'
+import { isBotChatArchived } from '../../../../shared/bots/bot-chat-archive'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
@@ -31,6 +32,7 @@ import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
 import { BotSidebarOlderToggle } from './BotSidebarOlderChats'
+import { useBotChatArchive } from './use-bot-chat-archive'
 import {
   useBotHomeFrontTab,
   useBotSidebarOlderChats,
@@ -111,6 +113,14 @@ export function BotSidebarChats({
   }, [revealNonce, foldedHolder, setBotChatFold, bot.hostId, bot.id])
   const { held, ref: holdRef, handlers: holdHandlers } = useListHold()
   const front = useBotHomeFrontTab(bot.folderWorkspaceId)
+  const archive = useBotChatArchive()
+  const visibleChats = useMemo(
+    () =>
+      view.chats.filter(
+        (chatView) => !isBotChatArchived(archive, bot.hostId, bot.id, chatView.chat)
+      ),
+    [view.chats, archive, bot.hostId, bot.id]
+  )
   // The older chat whose row (or portaled menu, through React's tree) holds focus, so Hide can take
   // focus first; checked against the chats listed as older now, so a row that lifted out never counts.
   const focusedOlderChat = useRef<string | null>(null)
@@ -134,7 +144,7 @@ export function BotSidebarChats({
   const { recent, older } = useBotSidebarOlderChats({
     bot,
     entryKey: botSidebarEntryKey(bot),
-    views: view.chats,
+    views: visibleChats,
     readChats: chats,
     workspaces: allWorkspaces,
     workspaceChats,

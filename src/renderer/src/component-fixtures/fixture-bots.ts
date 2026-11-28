@@ -33,6 +33,7 @@ export function stubBots(
     'bots.groups.list': { groups: [] },
     'bots.upNext.unseen': { unseen: {} },
     'bots.chatTree': { chats: [], workspaceChats: {} },
+    'pairedServerAsks.list': { cards: [] },
     ...calls.results
   }
   const runtime: unknown = window.api.runtime

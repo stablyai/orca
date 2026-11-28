@@ -4,6 +4,7 @@ import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fix
 import { useState } from 'react'
 import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { useAppStore } from '@/store'
+import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import type { AppState } from '@/store/types'
 import BotActivityPanel from '@/components/bots/BotActivityPanel'
@@ -59,8 +60,9 @@ export function stubBotPanel(
   items: BotItem[] = []
 ): () => void {
   return () => {
-    // The page is reused across fixtures: each panel starts with its default folds.
+    // The page is reused across fixtures: each panel starts with its default folds and no archived chats.
     window.localStorage.removeItem('orca.bots.panelFolds')
+    window.localStorage.removeItem('orca.bot-chat-archive.v1')
     stubBots([bot])
     // No connector is linked; their reads answer as an unlinked account's do.
     const unlinked = { state: async () => ({ ok: false, error: { code: 'not_linked' } }) }
@@ -227,7 +229,9 @@ export function BotPanelFrame(): React.JSX.Element {
           <SidebarToggleIcon side="right" size={16} />
         </span>
       </div>
-      {tab === 'bot-chats' ? <BotChatsPanel /> : <BotActivityPanel />}
+      <ConfirmationDialogProvider>
+        {tab === 'bot-chats' ? <BotChatsPanel /> : <BotActivityPanel />}
+      </ConfirmationDialogProvider>
     </div>
   )
 }

@@ -30554,6 +30554,11 @@
       "readFailed": "Couldn't read this bot's chats.",
       "delete": "Delete chat",
       "open": "Open",
+      "archive": "Archive chat",
+      "restore": "Restore chat",
+      "active": "Active",
+      "archived": "Archived",
+      "archivedEmpty": "Archived chats show up here.",
       "actions": "Chat actions",
       "needsYouCount": "{{count}} needs you",
       "hideOlder": "Hide older"
