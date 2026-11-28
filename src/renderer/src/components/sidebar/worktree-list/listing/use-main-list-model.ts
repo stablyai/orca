@@ -50,7 +50,6 @@ import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-mode
 import { withWindowCreations } from './window-worktree-creations'
 export { withWindowCreations } from './window-worktree-creations'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
-import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
@@ -268,10 +267,6 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       }),
     [rendered.sectionRows, worktreeByIdentity, folderByKey]
   )
-  const renderedSidebarRowKeys = useMemo(
-    () => collectRenderedSidebarRowKeys(sectionRows),
-    [sectionRows]
-  )
   const allRepoIds = useMemo(() => repos.map((repo) => repo.id), [repos])
   const { orderedHostOptions } = planned
   const handleReorderHostSections = useCallback(
@@ -300,7 +295,6 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       effectiveCollapsedGroups,
       rows: rendered.rows,
       sectionRows,
-      renderedSidebarRowKeys,
       allRepoIds,
       placeholderRepoIds: planned.placeholderRepoIds,
       handleReorderHostSections,

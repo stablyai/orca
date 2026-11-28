@@ -251,7 +251,7 @@ const WorktreeList = React.memo(function WorktreeList({
 
   useSidebarRevealRequests({
     groupBy,
-    renderedSidebarRowKeys: rowModel.renderedSidebarRowKeys,
+    sectionRows: rowModel.sectionRows,
     visibleWorktrees,
     visibleFolderWorkspaces: visibleScope.visibleFolderWorkspacesForRows,
     currentSidebarWorktreeId,

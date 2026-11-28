@@ -28,7 +28,6 @@ import {
   scopeHostSectionCollapse
 } from '../../../../../../shared/sidebar-list/hosts/host-section-collapse'
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
-import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import {
   mergeDraggedHostSectionOrder,
   orderHostSectionOptions
@@ -284,11 +283,6 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     orderedHostOptions,
     rows
   ])
-  const renderedSidebarRowKeys = useMemo(
-    () => collectRenderedSidebarRowKeys(sectionRows),
-    [sectionRows]
-  )
-
   const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
     occurrencePlan: rowPlan.occurrencePlan,
@@ -296,7 +290,6 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     effectiveCollapsedGroups,
     rows,
     sectionRows,
-    renderedSidebarRowKeys,
     allRepoIds,
     placeholderRepoIds,
     handleReorderHostSections,
