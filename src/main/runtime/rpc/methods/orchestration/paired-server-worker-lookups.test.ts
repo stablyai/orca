@@ -9,6 +9,7 @@ import { routeRemoteOwnedCall } from '../../../orchestration/federation/remote-o
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { eraseRpcMethods, type RpcContext } from '../../core'
 import { ORCHESTRATION_CALLER_METHODS } from './caller-show'
+import { ORCHESTRATION_WORKER_TRANSCRIPT_METHODS } from './worker/worker-transcript'
 
 const TASK = 'task_0123456789ab'
 const DISPATCH = 'ctx_0123456789ab'
@@ -68,3 +69,15 @@ it.each(['orchestration.partyOpen', 'orchestration.partyLocation'])(
     expect(callServer).not.toHaveBeenCalled()
   }
 )
+
+// A paired server's log path names a file on that server: this computer's read never fetches it to open here.
+it('the worker log read for a worker a paired server runs stays on this computer and finds none', async () => {
+  const method = eraseRpcMethods(ORCHESTRATION_WORKER_TRANSCRIPT_METHODS)[0]!
+  const params = { dispatch: DISPATCH }
+  const request = { id: 'r1', authToken: '', method: method.name, params }
+  expect(await routeRemoteOwnedCall(runtime, method, request, params, ctx)).toEqual({
+    handled: false
+  })
+  expect(await method.handler(params, ctx)).toEqual({ transcript: null })
+  expect(callServer).not.toHaveBeenCalled()
+})

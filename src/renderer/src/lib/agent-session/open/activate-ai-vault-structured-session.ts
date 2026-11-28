@@ -25,6 +25,7 @@ import type {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { nativeChatRestartStillStarting } from '@/components/native-chat-recovery/offers/native-chat-restart-runtimes'
 import { showChatOpenUnavailable, type ChatOpenUnavailable } from './chat-open-failure-toast'
+import { openOnPairedServer, pairedServerToAsk } from './paired-server-open'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
 
@@ -143,22 +144,17 @@ export async function openDesktopStructuredSession(
     return result
   }
   // This computer started it on a paired server, which alone knows where it runs: ask there, as
-  // `worker-show --environment` does. Its terminal is that server's.
-  const opened = await openDesktopStructuredSession(source, {
-    ...options,
-    target: { kind: 'environment', environmentId: pairedServer }
-  })
-  return opened.kind === 'terminal' ? { ...opened, environmentId: pairedServer } : opened
-}
-
-/** The paired server this computer's host says runs the party; a paired host's answer names its own pairings. */
-function pairedServerToAsk(
-  result: StructuredSessionOpenResult,
-  owner: RuntimeClientTarget
-): string | undefined {
-  return owner.kind === 'local' && result.kind === 'failed' && result.failure.reason === 'unknown'
-    ? result.failure.pairedServer
-    : undefined
+  // `worker-show --environment` does.
+  const agent = source.kind === 'sender' ? source.displayName : source.agent
+  const base = feedback ?? deps ?? structuredSessionOpenFeedback
+  return openOnPairedServer(pairedServer, agent, base, (host, onServer) =>
+    openDesktopStructuredSession(source, {
+      ...options,
+      locate: undefined,
+      target: host,
+      feedback: onServer
+    })
+  )
 }
 
 /** The chat an open is for, when the source names one before the host answers. */
