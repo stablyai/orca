@@ -92,6 +92,7 @@ async function acquireServiceLock(userDataPath: string) {
     try {
       return acquireOrcadInstanceLock(join(userDataPath, 'backend-service'), {
         role: 'orcad',
+        scope: 'service',
         enforcePrivateDataRoot: false,
         onExclusivityLost: () => {
           void stop()

@@ -12,7 +12,7 @@ export type JournalSqlRequest = {
   command:
     | { type: 'write'; command: JournalWriterCommand }
     | { type: 'effects'; effects: readonly JournalWriterEffect[] }
-    | { type: 'maintenance'; operation: JournalSqlMaintenance }
+    | { type: 'maintenance'; operation: JournalSqlMaintenance; retirementPermit?: Int32Array }
     | { type: 'close' }
     /** Mark a chat's already queued writes urgent; no reply. */
     | { type: 'promote'; sessionId: string }

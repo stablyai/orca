@@ -152,7 +152,7 @@ export class JournalLegacyProof {
         (cursor) => this.saveProgress(observation, cursor)
       )
     } catch (error) {
-      if (error instanceof JournalLegacyRetentionError && error.reason) {
+      if (!this.signal.aborted && error instanceof JournalLegacyRetentionError && error.reason) {
         this.refusal = {
           version: 2,
           phase: 'refused',

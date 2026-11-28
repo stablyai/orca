@@ -9,6 +9,7 @@ import {
 } from './journal-legacy-retirement.test-fixture'
 import { readJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
 import { legacyDestinationMain } from './journal-legacy-retirement-files'
+import * as retirementFiles from './journal-legacy-retirement-files'
 import { journalDomainDatabasePath } from './database/journal-host-database'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
@@ -29,6 +30,32 @@ function recordEvents(): LegacyJournalRetirementEvent[] {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   return events
 }
+
+it.each([true, false])(
+  'keeps pre-admission file errors local unless ownership is proven (%s)',
+  async (owner) => {
+    const events = recordEvents()
+    const held = await profile()
+    const key = 'journal.legacy-retirement-reported.v1'
+    const marker = () =>
+      held.db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)?.value
+    const fileError = Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    const stat = vi.spyOn(retirementFiles, 'legacyFilePresent').mockRejectedValue(fileError)
+    cleanup.push(() => stat.mockRestore())
+    const owns = vi.fn(() => owner)
+    const launch = held.launch('1.0.1', owns, undefined, undefined, false)
+    await launch.run()
+    await launch.run()
+    expect(owns).toHaveBeenCalledOnce()
+    expect(events).toHaveLength(owner ? 1 : 0)
+    expect(held.errors).toEqual([fileError])
+    if (owner) {
+      expect(marker()).toEqual(expect.stringContaining('proving'))
+    } else {
+      expect(marker()).toBeUndefined()
+    }
+  }
+)
 
 it('a build that keeps the file proves once and keeps it; a build that deletes proves again in full', async () => {
   const events = recordEvents()
@@ -84,7 +111,7 @@ it.each([
   { version: '1.0.1', owns: false, defer: 'not_owner' },
   { version: null, owns: true, defer: 'no_version' }
 ])(
-  'reports $defer once per launch without store writes or later reports',
+  'logs $defer once per launch without store writes or later reports',
   async ({ version, owns, defer }) => {
     const held = await profile()
     const snapshot = () =>
@@ -106,7 +133,7 @@ it.each([
       .mockClear()
     const launch = held.launch(version, owns, undefined, undefined, false)
     await launch.run()
-    expect(events).toMatchObject([{ outcome: 'deferred', defer, deletes: false }])
+    expect(events).toMatchObject(owns ? [{ outcome: 'deferred', defer, deletes: false }] : [])
     expect(log.mock.calls).toEqual([
       [expect.stringContaining(`old chat journal: deferred (reason none, defer ${defer},`)]
     ])
@@ -115,11 +142,11 @@ it.each([
     accepts = true
     await launch.run()
     await launch.run()
-    expect(events).toHaveLength(1)
+    expect(events).toHaveLength(owns ? 1 : 0)
     expect(log.mock.calls).toHaveLength(1)
     expect(snapshot()).toEqual(before)
     await held.launch(version, owns, undefined, undefined, false).run()
-    expect(events).toHaveLength(2)
+    expect(events).toHaveLength(owns ? 2 : 0)
     expect(log.mock.calls).toHaveLength(2)
     for (const event of events) {
       expect(legacyJournalRetirementSchema.parse(event)).toMatchObject({

@@ -78,7 +78,11 @@ export function legacyJournalRetirementEvent(
 export class LegacyJournalRetirementLaunchReport {
   reported = false
 
-  async defer(defer: 'not_owner' | 'no_version', deletes: boolean): Promise<void> {
+  async defer(
+    defer: 'not_owner' | 'no_version',
+    deletes: boolean,
+    canDeliver?: () => boolean
+  ): Promise<void> {
     if (this.reported) {
       return
     }
@@ -86,7 +90,9 @@ export class LegacyJournalRetirementLaunchReport {
     this.reported = true
     const event = legacyJournalRetirementEvent({ defer, deletes })
     logLegacyJournalRetirement(event)
-    await sendLegacyJournalRetirement(event)
+    if (defer === 'no_version') {
+      await sendLegacyJournalRetirement(event, canDeliver)
+    }
   }
 }
 
@@ -103,11 +109,12 @@ function logLegacyJournalRetirement(event: LegacyJournalRetirementEvent): void {
 
 /** True only when the usage client took the event (consent given, under its limits). */
 export async function sendLegacyJournalRetirement(
-  event: LegacyJournalRetirementEvent
+  event: LegacyJournalRetirementEvent,
+  canDeliver: () => boolean = () => true
 ): Promise<boolean> {
   // Reporting never fails the cleanup.
   try {
-    return (await host?.report(event)) === true
+    return canDeliver() && (await host?.report(event)) === true
   } catch {
     return false
   }
@@ -181,7 +188,8 @@ export class LegacyJournalRetirementReporter {
       maintain(operation: { kind: 'legacy-retirement-reported'; value: string }): Promise<unknown>
     },
     private readonly version: string | null,
-    private readonly deletes: boolean
+    private readonly deletes: boolean,
+    private readonly canDeliver: () => boolean = () => true
   ) {}
 
   /** What the store last recorded; read once per launch, before the first report. */
@@ -189,7 +197,7 @@ export class LegacyJournalRetirementReporter {
     this.last ??= reported
   }
 
-  async report(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
+  async report(fields: Partial<LegacyJournalRetirementOutcome>, deliver = true): Promise<void> {
     const event = legacyJournalRetirementEvent({
       ...fields,
       deletes: this.deletes
@@ -219,6 +227,9 @@ export class LegacyJournalRetirementReporter {
       this.logged.add(signature)
       logLegacyJournalRetirement(event)
     }
+    if (!deliver) {
+      return
+    }
     // Whatever it says, this observation supersedes a refused older one.
     this.unsent = null
     if (this.news(outcome, progress)) {
@@ -228,14 +239,14 @@ export class LegacyJournalRetirementReporter {
 
   /** A report the usage client refused (no consent yet, say) goes once it would take it. */
   async resendUnsent(): Promise<void> {
-    if (this.unsent && host?.accepting?.() === true) {
+    if (this.unsent && this.canDeliver() && host?.accepting?.() === true) {
       await this.deliver(this.unsent.event, this.unsent.signature)
     }
   }
 
   // Marked reported only once the usage client took it, so a dropped event is sent again later.
   private async deliver(event: LegacyJournalRetirementEvent, signature: string): Promise<void> {
-    if (!(await sendLegacyJournalRetirement(event))) {
+    if (!(await sendLegacyJournalRetirement(event, this.canDeliver))) {
       this.unsent = { event, signature }
       return
     }

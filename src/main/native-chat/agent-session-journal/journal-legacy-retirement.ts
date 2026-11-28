@@ -1,5 +1,5 @@
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
-import { ownsOrcadProfileDirectory } from '../../orcad/instance-lock/orcad-instance-lock-hold'
+import { findOrcadProfileLock } from '../../orcad/instance-lock/orcad-instance-lock-hold'
 import {
   journalDatabasePath,
   journalDomainDatabasePath,
@@ -16,7 +16,12 @@ import {
   acquireJournalLegacyFileLock,
   createJournalLegacyFileEligibility
 } from './journal-legacy-file-lock'
-import type { JournalSqlOwner } from './journal-sql-owner'
+import { JournalIndeterminateWriteError, type JournalSqlOwner } from './journal-sql-owner'
+import {
+  assertJournalRetirementPermit,
+  JournalRetirementCancelledError,
+  JournalRetirementRecordsPendingError
+} from './journal-retirement-permit'
 import {
   LegacyJournalRetirementReporter,
   LegacyJournalRetirementLaunchReport,
@@ -53,6 +58,10 @@ import {
 export class JournalLegacyRetirement {
   private readonly filename: string
   private readonly stopped = new AbortController()
+  private readonly permit = new Int32Array(new SharedArrayBuffer(4))
+  private readonly writer: Pick<JournalSqlOwner, 'maintain'>
+  private readonly ownsProfile: () => boolean
+  private unsubscribe?: () => void
   private readonly proof: JournalLegacyProof
   private diagnosed?: string
   private retryAt = 0
@@ -72,89 +81,146 @@ export class JournalLegacyRetirement {
 
   constructor(
     private readonly directory: string,
-    private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
+    writer: Pick<JournalSqlOwner, 'maintain'>,
     private readonly readers: Pick<
       JournalSqlReaderPool,
       'legacyProof' | 'importState' | 'recycleSourceReaders' | 'releaseSourceReaders'
     >,
     conversions: Pick<JournalSqlConversions, 'ensure'>,
-    boundary: () => Promise<boolean>,
+    boundary: (signal: AbortSignal) => Promise<boolean>,
     private readonly report: (error: unknown) => void,
-    private readonly ownsProfile = () => ownsOrcadProfileDirectory(directory),
+    ownsProfile?: () => boolean,
     private readonly lock = acquireJournalLegacyFileLock,
-    rest: (started: number) => Promise<void> = async () => {},
+    rest: (started: number, signal: AbortSignal) => Promise<void> = async () => {},
     private readonly eligibility = createJournalLegacyFileEligibility(),
     private readonly version = journalRunningOrcaVersion(),
     private readonly deletes = LEGACY_JOURNAL_RETIREMENT_DELETES
   ) {
+    const profile = ownsProfile ? undefined : findOrcadProfileLock(directory)
+    this.ownsProfile = ownsProfile ?? profile?.ownsProfile ?? (() => false)
+    if (profile || ownsProfile) {
+      Atomics.store(this.permit, 0, 1)
+    }
+    const { signal } = this.stopped
+    const authority = { permit: this.permit, signal }
+    const canDeliver = () => Atomics.load(this.permit, 0) === 1
+    this.writer = {
+      maintain: async (operation) => {
+        assertJournalRetirementPermit(this.permit)
+        return writer.maintain(operation, this.permit)
+      }
+    }
     this.filename = journalDatabasePath(directory)
-    this.reporter = new LegacyJournalRetirementReporter(writer, version, deletes)
+    this.reporter = new LegacyJournalRetirementReporter(this.writer, version, deletes, canDeliver)
     this.proof = new JournalLegacyProof(
-      writer,
+      this.writer,
       readers,
       // A conversion can wait for idle inside, so active time leaves conversions out entirely.
-      { ensure: this.waits.timed((id, foreground) => conversions.ensure(id, foreground)) },
-      this.waits.timed(boundary),
-      this.stopped.signal,
-      this.waits.timed(rest)
+      {
+        ensure: this.waits.timed((id, foreground) => conversions.ensure(id, foreground, authority))
+      },
+      this.waits.timed(() => boundary(signal)),
+      signal,
+      this.waits.timed((started) => rest(started, signal))
     )
+    this.unsubscribe = profile?.onEnd(this.permit, () => this.stop())
   }
 
   stop(): void {
-    this.stopped.abort()
+    if (!this.stopped.signal.aborted) {
+      Atomics.store(this.permit, 0, 0)
+      this.unsubscribe?.()
+      this.unsubscribe = undefined
+      this.stopped.abort(new JournalRetirementCancelledError())
+    }
   }
 
   async run(): Promise<void> {
+    if (this.stopped.signal.aborted) {
+      return
+    }
     try {
-      await this.attempt()
+      if (this.done) {
+        // Rides the maintenance tick: a report the usage client refused goes once it would take it.
+        return await this.reporter.resendUnsent()
+      }
+      if (performance.now() < this.retryAt || this.launchReport.reported) {
+        return
+      }
+      let present: boolean
+      try {
+        present = await legacyFilePresent(this.filename)
+      } catch (error) {
+        const admitted = !this.stopped.signal.aborted && this.ownsProfile()
+        await this.failed(error, admitted)
+        return
+      }
+      this.stopped.signal.throwIfAborted()
+      await this.attempt(present)
     } catch (error) {
-      // Unsupported storage or file identity doesn't change while this process runs.
-      if (error instanceof JournalLegacyIneligibleError && !this.done) {
-        this.done = true
-        await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
-      } else if (this.leftovers) {
-        await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }).catch(() => {})
-      } else {
-        const failed = legacyProofFailureOutcome(
-          error,
-          walkedFor(this.finishedWalk, this.observed) ?? this.proof.walked,
-          this.proof.finished && this.deletes,
-          this.stopped.signal.aborted
-        )
-        failed.sourceBytes = this.observed ? sourceBytes(this.observed) : null
-        failed.activeMs = this.activeMs
-        await this.outcome(failed).catch(() => {})
-      }
-      this.later()
-      const message = error instanceof Error ? error.message : String(error)
-      if (this.diagnosed !== message) {
-        this.diagnosed = message
-        this.report(error)
-      }
+      await this.failed(error)
     }
   }
 
-  private async attempt(): Promise<void> {
-    if (this.done && !this.stopped.signal.aborted) {
-      // Rides the maintenance tick: a report the usage client refused goes once it would take it.
-      return this.reporter.resendUnsent()
-    }
-    if (this.done || this.stopped.signal.aborted || performance.now() < this.retryAt) {
+  private async failed(error: unknown, deliver = true): Promise<void> {
+    if (error instanceof JournalRetirementRecordsPendingError) {
+      this.later()
       return
     }
-    if (this.launchReport.reported) {
+    if (error instanceof JournalRetirementCancelledError) {
       return
     }
-    const present = await legacyFilePresent(this.filename)
+    if (this.stopped.signal.aborted) {
+      if (error instanceof JournalIndeterminateWriteError) {
+        this.diagnose(error)
+      }
+      return
+    }
+    // Unsupported storage or file identity doesn't change while this process runs.
+    if (error instanceof JournalLegacyIneligibleError && !this.done) {
+      this.done = true
+      await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }, deliver).catch(
+        () => {}
+      )
+    } else if (this.leftovers) {
+      await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }, deliver).catch(() => {})
+    } else {
+      const failed = legacyProofFailureOutcome(
+        error,
+        walkedFor(this.finishedWalk, this.observed) ?? this.proof.walked,
+        this.proof.finished && this.deletes
+      )
+      failed.sourceBytes = this.observed ? sourceBytes(this.observed) : null
+      failed.activeMs = this.activeMs
+      await this.outcome(failed, deliver).catch(() => {})
+    }
+    this.later()
+    this.diagnose(error)
+  }
+
+  private diagnose(error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error)
+    if (this.diagnosed !== message) {
+      this.diagnosed = message
+      this.report(error)
+    }
+  }
+
+  private async attempt(present: boolean): Promise<void> {
+    const { signal } = this.stopped
     // Main skips ownership only when the original is present and the version is unknown.
     if ((!present || this.version !== null) && !this.ownsProfile()) {
+      signal.throwIfAborted()
       return this.launchReport.defer('not_owner', this.deletes)
     }
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!present) {
       const { reported, retirement } = await readRetirementState(this.writer)
+      signal.throwIfAborted()
       this.reporter.saved(reported)
-      if (await legacyCompanionsPresent(this.filename)) {
+      const companions = await legacyCompanionsPresent(this.filename)
+      signal.throwIfAborted()
+      if (companions) {
         // Finishing a removal cut short deletes too, so a build that keeps the file keeps these.
         if (!this.deletes) {
           this.done = true
@@ -162,6 +228,7 @@ export class JournalLegacyRetirement {
         }
         this.leftovers = true
         await removeLeftoverLegacyCompanions(this.filename, absorbedWal(retirement))
+        signal.throwIfAborted()
         // A WAL this store never proved absorbed stays, so the file isn't fully gone.
         if (await legacyCompanionsPresent(this.filename)) {
           this.done = true
@@ -172,16 +239,22 @@ export class JournalLegacyRetirement {
       return this.outcome({ outcome: deletedBefore(retirement) ? 'deleted_before' : 'absent' })
     }
     if (this.version === null) {
-      return this.launchReport.defer('no_version', this.deletes)
+      return this.launchReport.defer(
+        'no_version',
+        this.deletes,
+        () => Atomics.load(this.permit, 0) === 1
+      )
     }
     this.startedAt ??= performance.now()
     const saved = await readRetirementState(this.writer)
+    signal.throwIfAborted()
     this.reporter.saved(saved.reported)
     // Retirement runs on an update: the version that copied the profile, or an older one, keeps it.
     const later = laterVersion(this.version, saved.convertedBy)
     const observation = later
       ? await observeLegacySource(this.filename, this.directory, saved)
       : null
+    signal.throwIfAborted()
     if (!observation || this.proof.refused(saved.retirement, observation)) {
       this.done = true
       const reason = observation ? this.proof.refusalReason : undefined
@@ -205,7 +278,9 @@ export class JournalLegacyRetirement {
       return this.outcome(provenOutcome('proof_complete', held, observation, null, true))
     }
     await this.eligibility.present()
-    await this.eligibility.check(this.filename, this.stopped.signal)
+    signal.throwIfAborted()
+    await this.eligibility.check(this.filename, signal)
+    signal.throwIfAborted()
     this.proof.observe(observation)
     this.proof.resume(saved.retirement, observation)
     const started = performance.now()
@@ -215,8 +290,11 @@ export class JournalLegacyRetirement {
     } finally {
       this.activeMs += performance.now() - started - (this.waits.waitedMs() - waited)
     }
+    signal.throwIfAborted()
     // Every early return below waits out the backoff: no helper or full-sync commit each minute.
-    if (!(await legacySourceUnchanged(this.filename, this.directory, observation))) {
+    const unchanged = await legacySourceUnchanged(this.filename, this.directory, observation)
+    signal.throwIfAborted()
+    if (!unchanged) {
       return this.later()
     }
     const walked = walkedFor(this.finishedWalk, observation) ?? this.proof.walked
@@ -237,12 +315,14 @@ export class JournalLegacyRetirement {
     if (!recycled) {
       return this.later()
     }
-    const signal = AbortSignal.any([recycled.signal, this.stopped.signal])
+    const removalSignal = AbortSignal.any([recycled.signal, signal])
     let lease: Awaited<ReturnType<typeof acquireJournalLegacyFileLock>> | undefined
     let removal: Partial<LegacyJournalRetirementOutcome>
     try {
+      signal.throwIfAborted()
       // One full-sync commit makes every converted row durable before the original goes.
       const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
+      signal.throwIfAborted()
       if (destination.main !== observation.store) {
         return this.later()
       }
@@ -263,7 +343,9 @@ export class JournalLegacyRetirement {
       ) {
         throw new Error('legacy retirement commit was not acknowledged')
       }
-      lease = await this.lock(this.filename, signal)
+      signal.throwIfAborted()
+      lease = await this.lock(this.filename, removalSignal)
+      signal.throwIfAborted()
       // Checked again while held: from here no SQLite connection can open or write the original.
       if (
         !lease.held() ||
@@ -272,6 +354,7 @@ export class JournalLegacyRetirement {
       ) {
         return this.later()
       }
+      signal.throwIfAborted()
       this.done = await lease.retire(observation.walBytes)
       if (!this.done) {
         this.later()
@@ -315,9 +398,10 @@ export class JournalLegacyRetirement {
     await this.outcome(provenOutcome('proof_complete', proven, observation, this.activeMs, resumed))
   }
 
-  private outcome(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
+  private outcome(fields: Partial<LegacyJournalRetirementOutcome>, deliver = true): Promise<void> {
+    this.stopped.signal.throwIfAborted()
     const elapsedMs = this.startedAt === undefined ? null : performance.now() - this.startedAt
-    return this.reporter.report({ elapsedMs, ...fields })
+    return this.reporter.report({ elapsedMs, ...fields }, deliver)
   }
 
   /** Tried again after the backoff; a finished proof is never reused without its checks. */

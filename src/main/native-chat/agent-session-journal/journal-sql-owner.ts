@@ -17,6 +17,12 @@ import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+import {
+  assertJournalRetirementPermit,
+  JournalRetirementCancelledError,
+  JournalRetirementRecordsPendingError,
+  requireJournalRetirementPermit
+} from './journal-retirement-permit'
 
 export class JournalIndeterminateWriteError extends Error {
   override readonly name = 'JournalIndeterminateWriteError'
@@ -132,8 +138,16 @@ export class JournalSqlOwner {
     return response.results
   }
 
-  async maintain(operation: JournalSqlMaintenance): Promise<JournalSqlMaintenanceResult> {
-    const response = await this.request({ type: 'maintenance', operation })
+  async maintain(
+    operation: JournalSqlMaintenance,
+    retirementPermit?: Int32Array
+  ): Promise<JournalSqlMaintenanceResult> {
+    requireJournalRetirementPermit(operation.kind, retirementPermit)
+    const response = await this.request({
+      type: 'maintenance',
+      operation,
+      ...(retirementPermit ? { retirementPermit } : {})
+    })
     if (response.type !== 'maintenance') {
       throw new Error('journal writer returned no maintenance result')
     }
@@ -156,13 +170,23 @@ export class JournalSqlOwner {
   }
 
   private async request(command: JournalSqlRequest['command']): Promise<JournalSqlResponse> {
+    const permit = command.type === 'maintenance' ? command.retirementPermit : undefined
+    assertJournalRetirementPermit(permit)
     // A failed startup write preserves readers; every later writer request retries its prerequisite.
     if (
       this.recordInstallationRequired &&
       command.type !== 'close' &&
       !(command.type === 'maintenance' && command.operation.kind === 'records-install')
     ) {
-      await this.finishRecordInstallation()
+      if (permit) {
+        if (!this.recordInstallation) {
+          throw new JournalRetirementRecordsPendingError()
+        }
+        await this.recordInstallation
+        assertJournalRetirementPermit(permit)
+      } else {
+        await this.finishRecordInstallation()
+      }
     }
     if (this.closing && command.type !== 'close') {
       throw new Error('journal SQL owner is closing')
@@ -232,7 +256,9 @@ export class JournalSqlOwner {
       pending?.reject(
         response.outcome === 'indeterminate'
           ? new JournalIndeterminateWriteError('journal commit outcome is unknown', { cause })
-          : cause
+          : response.error.name === 'JournalRetirementCancelledError' && !response.fatal
+            ? new JournalRetirementCancelledError(response.outcome)
+            : cause
       )
       if (response.fatal || response.id === undefined) {
         this.fail(cause)

@@ -1,6 +1,10 @@
 import type Database from '../../sqlite/sync-database'
 import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
 import { isSqliteDriverError } from '../../sqlite/sqlite-read-failure'
+import {
+  assertJournalRetirementPermit,
+  JournalRetirementCancelledError
+} from './journal-retirement-permit'
 
 export type JournalSqlBatchOutcome<Value> =
   | { committed: true; value: Value }
@@ -53,7 +57,8 @@ export class JournalSqlBatch {
     commands: readonly Command[],
     apply: (command: Command) => Value | Promise<Value>,
     durability: 'normal' | 'full' | 'retirement' = 'normal',
-    urgent = false
+    urgent = false,
+    retirementPermit?: Int32Array
   ): Promise<JournalSqlBatchResult<Value>> {
     if (this.failure) {
       throw new JournalSqlBatchError('not-dispatched', this.failure)
@@ -84,6 +89,9 @@ export class JournalSqlBatch {
       }
       this.db.exec('BEGIN IMMEDIATE')
       began = true
+      if (retirementPermit) {
+        assertJournalRetirementPermit(retirementPermit)
+      }
       for (const command of drain) {
         this.db.exec('SAVEPOINT journal_command')
         try {
@@ -99,6 +107,9 @@ export class JournalSqlBatch {
           this.db.exec('ROLLBACK TO journal_command; RELEASE journal_command')
           outcomes.push({ committed: false, error })
         }
+      }
+      if (retirementPermit && Atomics.load(retirementPermit, 0) !== 1) {
+        throw new JournalRetirementCancelledError()
       }
       committing = true
       this.db.exec('COMMIT')
