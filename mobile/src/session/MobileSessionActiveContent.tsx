@@ -29,6 +29,7 @@ import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca
 import { useMobileTerminalLinkOpen } from '../terminal/session/links/use-mobile-terminal-link-open'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
+import { useChatAccountSignIn } from '../accounts/sign-in/use-chat-account-sign-in'
 import { useHostProfile } from '../host-catalog/use-host-profile'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { FileReader } from '../files/session-documents/MobileSessionFileReader'
@@ -133,6 +134,14 @@ export function MobileSessionActiveContent({
     [client, worktreeId]
   )
   const openNativeChatAccounts = useOpenHostAccounts(controller.router, hostId)
+  // Accounts open on the paired host, so a chat another server runs offers none.
+  const chatAccounts = useChatAccountSignIn({
+    client,
+    onPairedHost: executionHost === undefined,
+    hostName: hostTitle,
+    onSignedIn: showToast,
+    openAccounts: openNativeChatAccounts
+  })
   const navigateToSender = useCallback(
     (senderWorktreeId: string, paneKey: string) => {
       const execution = executionHost ? `&executionHost=${encodeURIComponent(executionHost)}` : ''
@@ -363,10 +372,8 @@ export function MobileSessionActiveContent({
                     linkOpenMode={controller.linkOpenMode}
                     hostOutage={nativeChatHostOutage}
                     onRunInTerminal={nativeChatTerminalRunner(controller)}
-                    // Accounts open on the paired host, so a chat another server runs offers none.
-                    onOpenAccounts={
-                      executionHost === undefined ? openNativeChatAccounts : undefined
-                    }
+                    onOpenAccounts={chatAccounts.openAccounts}
+                    onSignInAccount={chatAccounts.signInAccount}
                   />
                 </MobileSessionBotIdentity>
               </MobileBotCardHostProvider>
@@ -374,6 +381,7 @@ export function MobileSessionActiveContent({
           </MobileAgentMessageProvider>
         </MobileNativeChatDictationPreviewContext.Provider>
         {terminalLinks.terminalLinkSheet}
+        {chatAccounts.sheet}
         {toast}
       </View>
     )

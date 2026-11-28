@@ -30,7 +30,11 @@ import { isBrowserIdentityModeStoreInitialized } from '../../browser/identity/mo
 import { servesLocalWslMigrationSource } from '../../orcad/migration/orcad-migration-wsl-destination'
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import { advertisedOrcadMigrationDestinationCapabilities } from '../../orcad/migration/orcad-migration-destination-capabilities'
-import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import {
+  MOBILE_HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY,
+  USAGE_CREDENTIALS_RUNTIME_CAPABILITY
+} from '../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import { hostAccountSignInRunsOn } from '../agent-session/environment/host-account-sign-in-flows'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
@@ -116,7 +120,10 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
           supportsDurableTerminalPromptDelivery()) &&
         (capability !== REMOTE_SERVER_UPDATE_CAPABILITY || isRemoteServerUpdaterConfigured()) &&
         // Only hosts running their own usage poller can consume saved keys.
-        (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY || this.getUsageRateLimits() !== null)
+        (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY ||
+          this.getUsageRateLimits() !== null) &&
+        (capability !== MOBILE_HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY ||
+          hostAccountSignInRunsOn(process.platform))
     )
     capabilities.push(BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY)
     if (hasOffscreen || hasHeadlessCommands) {

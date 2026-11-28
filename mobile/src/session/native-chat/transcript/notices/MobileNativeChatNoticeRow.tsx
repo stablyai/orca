@@ -20,7 +20,6 @@ import {
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { isAgentSessionSetupFailureKind } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { agentSessionFailureDetailText } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-quoted-detail'
-import { agentSessionSignInCommand } from '../../../../../../src/shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext
@@ -37,6 +36,7 @@ import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { noticeLineText } from './native-chat-notice-line-text'
+import { nativeChatNoticeSignIn } from './native-chat-notice-sign-in'
 import { nativeChatReviewNoticeSummary } from './native-chat-review-notice-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { mobileNativeChatBotCard } from '../bot-cards/mobile-native-chat-bot-cards'
@@ -130,12 +130,13 @@ export function MobileNativeChatNoticeRow({
     cardId !== undefined &&
     names.unresolvedFailureRows !== undefined &&
     !names.unresolvedFailureRows.has(cardId)
-  const signInCommand =
-    failure?.kind === 'notSignedIn' && !resolved
-      ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
-      : null
-  const runInTerminal = names.onRunInTerminal
-  const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
+  const { signIn, shownText, detail } = nativeChatNoticeSignIn({
+    failure: failure?.kind === 'notSignedIn' && !resolved ? failure : null,
+    names,
+    lineText,
+    failureDetail,
+    t
+  })
   const reviewed = look.kind === 'settled-permission' || look.kind === 'auto-review-denied'
   const diagnosticText = reviewed ? notice.text : detail
   const payload = notice.providerFrame?.payload
@@ -298,18 +299,15 @@ export function MobileNativeChatNoticeRow({
       const content = (
         <View style={look.tone ? styles.toneText : undefined}>
           <Text selectable={INLINE_TEXT_SELECTION} style={textStyle}>
-            {lineText}
+            {shownText}
           </Text>
           {continueOffered ? (
             <MobileNativeChatInterruptedContinueButton onPress={continuation.continueNow} />
-          ) : signInCommand && runInTerminal ? (
+          ) : signIn ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityHint={t(
-                'chat.notice.signInHint',
-                'Opens a terminal on the computer running this chat'
-              )}
-              onPress={() => runInTerminal(signInCommand)}
+              accessibilityHint={signIn.hint}
+              onPress={signIn.onPress}
               style={({ pressed }) => [
                 sheetPrimaryButtonStyles.button,
                 styles.action,

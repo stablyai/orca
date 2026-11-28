@@ -18,7 +18,10 @@
       "title": "계정",
       "useReset": "재설정권 사용",
       "pairingInvalidMessage": "계정을 보려면 이 휴대폰을 데스크톱과 다시 페어링하세요.",
-      "weeklyWindow": "7일"
+      "weeklyWindow": "7일",
+      "signedOut": "로그아웃됨",
+      "addAccount": "계정 추가",
+      "signIn": "로그인"
     },
     "claude": {
       "usageSignInLabel": "다시 로그인",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}}% 남음"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "이 로그인을 시작한 기기가 더 이상 응답하지 않습니다.",
+        "superseded": "이 호스트에서 계정이 변경되어 로그인이 중단되었습니다. 다시 시작하세요.",
+        "noPrompt": "서버의 로그인 명령이 1분 안에 로그인 링크를 표시하지 않았습니다. 서버의 Orca를 업데이트한 후 다시 시도하세요.",
+        "failed": "로그인하지 못했습니다. 다시 시도하세요."
+      },
+      "starting": "{{host}}에서 로그인을 시작합니다…",
+      "copied": "복사됨",
+      "copyLink": "링크 복사",
+      "continue": "계속",
+      "copyCode": "코드 복사",
+      "signingIn": "로그인 중…",
+      "tryAgain": "다시 시도",
+      "titleClaude": "Claude에 로그인",
+      "titleCodex": "Codex에 로그인",
+      "savedOn": "{{host}}에 저장됨",
+      "newCode": "새 코드 받기",
+      "openPage": "로그인 페이지 열기",
+      "pasteStep": "코드 붙여넣기",
+      "codePlaceholder": "페이지의 코드",
+      "enterCodeStep": "이 코드 입력",
+      "waitingForPage": "페이지에서 완료하기를 기다리는 중",
+      "signedInAs": "{{email}}(으)로 로그인됨"
     }
   },
   "agentHistory": {
@@ -701,7 +729,9 @@
       "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}.",
       "signIn": "로그인",
       "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다",
-      "forkedFrom": "분기 원본"
+      "forkedFrom": "분기 원본",
+      "notSignedIn": "{{agent}}에 로그인하지 않았습니다.",
+      "signInAccountHint": "이 채팅을 실행하는 컴퓨터에서 이 계정에 다시 로그인합니다"
     },
     "ciResultLine": {
       "failingLead": "CI 실패:",

@@ -1,40 +1,19 @@
 // Import's "Another app…": copy the message that asks the old bot to copy its own files to Downloads, then give
 // the new bot the folder it made on the bot's computer; its reply goes with the name. The desktop's ImportBotExportFields.
 import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import {
-  Check,
-  ChevronDown,
-  Copy,
-  Folder,
-  FolderPlus,
-  MessageSquareText,
-  X
-} from 'lucide-react-native'
+import { Pressable, Text } from 'react-native'
+import { ChevronDown, Copy, Folder, FolderPlus, MessageSquareText, X } from 'lucide-react-native'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListRow } from '../components/list/ListGroup'
+import { ListStepMark } from '../components/list/ListStepMark'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { radii, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { getRuntimePathBasename } from '../../../src/shared/file-access/cross-platform-path'
 import { BOT_IMPORT_EXPORT_PROMPT } from '../../../src/shared/bots/bot-import'
 import type { ExportFolder } from './MobileBotExportFolderPage'
-
-function StepMark({ n, done }: { n: number; done: boolean }) {
-  const colors = useMobileColors()
-  const styles = useThemedStyles(stylesSheet)
-  return (
-    <View style={[styles.step, done && styles.stepDone]}>
-      {done ? (
-        <Check size={13} color={colors.bgBase} strokeWidth={3} />
-      ) : (
-        <Text style={styles.stepNumber}>{n}</Text>
-      )}
-    </View>
-  )
-}
 
 export function MobileBotImportExportSteps(props: {
   /** The computer was read and had no other-app bots. */
@@ -64,7 +43,7 @@ export function MobileBotImportExportSteps(props: {
       <SettingsSection separatorInset={LIST_LEADING_INSET}>
         <ListRow
           key="send"
-          leading={<StepMark n={1} done={copied} />}
+          leading={<ListStepMark n={1} done={copied} />}
           title={t('bots.import.sendStep', 'Send your old bot this message')}
           wrapTitle
         />
@@ -96,7 +75,7 @@ export function MobileBotImportExportSteps(props: {
         ) : null}
         <ListRow
           key="add"
-          leading={<StepMark n={2} done={folder !== null} />}
+          leading={<ListStepMark n={2} done={folder !== null} />}
           title={t('bots.import.addStep', 'Add the folder it made')}
           wrapTitle
         />
@@ -143,17 +122,6 @@ export function MobileBotImportExportSteps(props: {
 }
 
 const stylesSheet = themedStyleSheet((colors) => ({
-  step: {
-    width: 22,
-    height: 22,
-    borderRadius: radii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // bgRaised is the group's own colour in dark; the translucent fill shows on both.
-    backgroundColor: colors.translucentFill
-  },
-  stepDone: { backgroundColor: colors.textPrimary },
-  stepNumber: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   // Under its row's title, as a subtitle sits.
   prompt: {
     fontSize: 13,

@@ -18,7 +18,10 @@
       "title": "帳戶",
       "useReset": "使用重設額度",
       "pairingInvalidMessage": "請將這支手機與電腦重新配對，以查看其帳戶。",
-      "weeklyWindow": "7 天"
+      "weeklyWindow": "7 天",
+      "signedOut": "已登出",
+      "addAccount": "新增帳戶",
+      "signIn": "登入"
     },
     "claude": {
       "usageSignInLabel": "重新登入",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "剩餘 {{value}}%"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "發起這次登入的裝置已停止回應。",
+        "superseded": "此主機上的帳戶變更中斷了登入。請重新開始。",
+        "noPrompt": "伺服器的登入指令在一分鐘內沒有顯示登入連結。請更新伺服器上的 Orca，然後再試一次。",
+        "failed": "登入失敗。請再試一次。"
+      },
+      "starting": "正在 {{host}} 上啟動登入…",
+      "copied": "已複製",
+      "copyLink": "複製連結",
+      "continue": "繼續",
+      "copyCode": "複製代碼",
+      "signingIn": "正在登入…",
+      "tryAgain": "再試一次",
+      "titleClaude": "登入 Claude",
+      "titleCodex": "登入 Codex",
+      "savedOn": "儲存在 {{host}}",
+      "newCode": "取得新代碼",
+      "openPage": "開啟登入頁面",
+      "pasteStep": "貼上代碼",
+      "codePlaceholder": "頁面上的代碼",
+      "enterCodeStep": "輸入此代碼",
+      "waitingForPage": "正在等待你在頁面上完成",
+      "signedInAs": "已登入為 {{email}}"
     }
   },
   "agentHistory": {
@@ -433,7 +461,9 @@
       "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
       "signIn": "登入",
       "signInHint": "在執行此聊天的電腦上開啟終端機",
-      "forkedFrom": "分支來源"
+      "forkedFrom": "分支來源",
+      "notSignedIn": "{{agent}} 尚未登入。",
+      "signInAccountHint": "在執行此聊天的電腦上重新登入此帳號"
     },
     "ciResultLine": {
       "failingLead": "CI 失敗於",

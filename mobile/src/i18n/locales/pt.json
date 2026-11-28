@@ -18,7 +18,10 @@
       "title": "Contas",
       "useReset": "Redefinir agora",
       "weeklyWindow": "7d",
-      "pairingInvalidMessage": "Emparelhe novamente este telefone com seu desktop para ver suas contas."
+      "pairingInvalidMessage": "Emparelhe novamente este telefone com seu desktop para ver suas contas.",
+      "signedOut": "Desconectado",
+      "addAccount": "Adicionar conta",
+      "signIn": "Entrar"
     },
     "claude": {
       "usageSignInLabel": "Entrar novamente",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}}% restante"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "O dispositivo que iniciou este login parou de responder.",
+        "superseded": "Uma alteração de conta neste host interrompeu o login. Inicie novamente.",
+        "noPrompt": "O comando de login do servidor não mostrou um link de login em um minuto. Atualize o Orca no servidor e tente novamente.",
+        "failed": "Falha no login. Tente novamente."
+      },
+      "starting": "Iniciando login em {{host}}…",
+      "copied": "Copiado",
+      "copyLink": "Copiar link",
+      "continue": "Continuar",
+      "copyCode": "Copiar código",
+      "signingIn": "Entrando…",
+      "tryAgain": "Tentar novamente",
+      "titleClaude": "Entrar no Claude",
+      "titleCodex": "Entrar no Codex",
+      "savedOn": "Salvo em {{host}}",
+      "newCode": "Obter um novo código",
+      "openPage": "Abrir a página de login",
+      "pasteStep": "Colar o código",
+      "codePlaceholder": "Código da página",
+      "enterCodeStep": "Digitar este código",
+      "waitingForPage": "Aguardando você concluir na página",
+      "signedInAs": "Conectado como {{email}}"
     }
   },
   "agentHistory": {
@@ -440,7 +468,9 @@
       "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
       "signIn": "Entrar",
       "signInHint": "Abre um terminal no computador que executa este chat",
-      "forkedFrom": "Ramificado de"
+      "forkedFrom": "Ramificado de",
+      "notSignedIn": "O {{agent}} não está conectado à conta.",
+      "signInAccountHint": "Entra novamente nesta conta no computador que executa este chat"
     },
     "ciResultLine": {
       "failingLead": "CI falhando em",
