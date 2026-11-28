@@ -197,7 +197,7 @@ export function ArtifactCollection({
               hasMore={hasMore}
               selectArtifact={selectArtifact}
               toggleChecked={selection.toggle}
-              deleteArtifact={(item) => void deleteArtifacts([item])}
+              deleteArtifact={(item) => void deleteArtifacts([item]).then(restoreFocusToFilter)}
             />
           ) : (
             <div className="flex flex-col items-center gap-1 px-3 py-6 text-sm text-muted-foreground">
