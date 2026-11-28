@@ -8,7 +8,9 @@ export function timestampMs(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return Number.NaN
   }
-  return value > 1_000_000_000_000 ? value : value * 1000
+  const milliseconds = value > 1_000_000_000_000 ? value : value * 1000
+  // Finite numbers can still exceed Date's range and make transcript ISO serialization throw.
+  return milliseconds <= 8_640_000_000_000_000 ? milliseconds : Number.NaN
 }
 
 export function timeObjectValue(value: unknown, key: string): string | null {
