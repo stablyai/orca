@@ -5,7 +5,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/file-access/cross-platform-path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
-import { streamCodexSessionLedgerRecords } from '../rollouts/codex-session-ledger-stream'
+import { forEachCodexSessionLedgerRecord } from '../rollouts/codex-session-ledger-stream'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 
 // Bump after semantics changes to retry outcomes recorded under older versions.
@@ -43,38 +43,44 @@ export async function collectPendingHealThreads(
 ): Promise<PendingHealThread[]> {
   const processed = await readProcessedHealThreads(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
-  for await (const line of streamCodexSessionLedgerRecords(paths.auditLogPath, {
-    throwOnReadFailure: true
-  })) {
-    if (line.action !== 'hardlink' && line.action !== 'copy' && line.action !== 'existing') {
-      continue
-    }
-    if (typeof line.target !== 'string') {
-      continue
-    }
-    // The audit spans custom homes; only index rollouts in this invocation's target.
-    if (!isPathInsideOrEqual(paths.systemSessionsRoot, line.target)) {
-      continue
-    }
-    const rollout = parseCodexRolloutThreadId(line.target)
-    if (!rollout) {
-      continue
-    }
-    const { threadId } = rollout
-    const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
-    if (
-      auditRecordId
-        ? processed.healedAuditRecords.has(`${threadId}\0${auditRecordId}`) ||
-          processed.missingAuditRecords.has(`${threadId}\0${auditRecordId}`)
-        : processed.legacyHealedThreadIds.has(threadId) ||
-          processed.legacyMissingThreadIds.has(threadId)
-    ) {
-      // A newer processed publication displaces any older pending event for this thread.
-      pendingByThreadId.delete(threadId)
-      continue
-    }
-    pendingByThreadId.set(threadId, { threadId, rolloutStamp: rollout.rolloutStamp, auditRecordId })
-  }
+  await forEachCodexSessionLedgerRecord(
+    paths.auditLogPath,
+    (line) => {
+      if (line.action !== 'hardlink' && line.action !== 'copy' && line.action !== 'existing') {
+        return
+      }
+      if (typeof line.target !== 'string') {
+        return
+      }
+      // The audit spans custom homes; only index rollouts in this invocation's target.
+      if (!isPathInsideOrEqual(paths.systemSessionsRoot, line.target)) {
+        return
+      }
+      const rollout = parseCodexRolloutThreadId(line.target)
+      if (!rollout) {
+        return
+      }
+      const { threadId } = rollout
+      const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
+      if (
+        auditRecordId
+          ? processed.healedAuditRecords.has(`${threadId}\0${auditRecordId}`) ||
+            processed.missingAuditRecords.has(`${threadId}\0${auditRecordId}`)
+          : processed.legacyHealedThreadIds.has(threadId) ||
+            processed.legacyMissingThreadIds.has(threadId)
+      ) {
+        // A newer processed publication displaces any older pending event for this thread.
+        pendingByThreadId.delete(threadId)
+        return
+      }
+      pendingByThreadId.set(threadId, {
+        threadId,
+        rolloutStamp: rollout.rolloutStamp,
+        auditRecordId
+      })
+    },
+    { throwOnReadFailure: true }
+  )
   return [...pendingByThreadId.values()].sort((left, right) =>
     left.rolloutStamp < right.rolloutStamp ? 1 : left.rolloutStamp > right.rolloutStamp ? -1 : 0
   )
@@ -91,7 +97,7 @@ async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Prom
   const missingAuditRecords = new Set<string>()
   const legacyMissingThreadIds = new Set<string>()
   const expectedRoot = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
-  for await (const line of streamCodexSessionLedgerRecords(paths.healLedgerPath)) {
+  await forEachCodexSessionLedgerRecord(paths.healLedgerPath, (line) => {
     if (
       line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
       typeof line.threadId === 'string' &&
@@ -112,7 +118,7 @@ async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Prom
         legacyMissingThreadIds.add(threadId)
       }
     }
-  }
+  })
   return {
     healedAuditRecords,
     legacyHealedThreadIds,

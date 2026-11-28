@@ -2,6 +2,7 @@ import type {
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
 } from '../options/protocol/agent-session-mcp'
+import type { AgentSessionMcpFailure } from './use-agent-session-mcp-panel'
 
 export type AgentSessionMcpServerGroup = {
   /** null for an agent that reports no source; its servers show without a heading. */
@@ -31,6 +32,14 @@ export function groupAgentSessionMcpServers(
     : [...groups.values()]
 }
 
+/** The status a row's dot and the tray's counts show: one Orca removed is neither failing nor
+ *  waiting for a sign-in, only gone after the next message. */
+export function agentSessionMcpShownStatus(
+  server: AgentSessionMcpServer
+): AgentSessionMcpServer['status'] {
+  return server.orcaChange === 'removed' ? 'not-started' : server.status
+}
+
 const CLAUDE_AI_PREFIX = 'claude.ai '
 
 /** claude.ai connectors already sit under a claude.ai heading. */
@@ -44,12 +53,14 @@ export function agentSessionMcpServerDisplayName(server: AgentSessionMcpServer):
 
 export type AgentSessionMcpRowFailure =
   | { kind: 'signInUnfinished' }
+  /** A reconnect left it failing for the reason its status line already gives. */
+  | { kind: 'stillFailing' }
   | { kind: 'message'; message: string | null }
 
 /** What a row shows for its last refused action, if anything. */
 export function agentSessionMcpRowFailure(
   server: AgentSessionMcpServer,
-  failure: { server: string; message: string | null } | null,
+  failure: AgentSessionMcpFailure | null,
   signIn: AgentSessionMcpSignIn | null
 ): AgentSessionMcpRowFailure | null {
   if (failure?.server !== server.name) {
@@ -58,6 +69,15 @@ export function agentSessionMcpRowFailure(
   // The provider refuses a reconnect until its own site finishes the sign-in.
   if (signIn?.server === server.name && signIn.finish === 'external') {
     return { kind: 'signInUnfinished' }
+  }
+  if (failure.stillFailing) {
+    // A server that recovered since says nothing; one failing for a new reason shows it.
+    if (agentSessionMcpShownStatus(server) !== 'failed') {
+      return null
+    }
+    if (failure.message === null || failure.message === server.error) {
+      return { kind: 'stillFailing' }
+    }
   }
   // The status line already says why the server failed.
   return failure.message !== null && failure.message === server.error

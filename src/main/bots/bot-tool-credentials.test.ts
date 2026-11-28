@@ -78,7 +78,8 @@ describe("a bot's sealed tool credentials", () => {
       })
     )
     expect(readBotToolCredential(folder, 'cred-1')).toBeNull()
-    expect(await ask(folder, 'cred-1')).toEqual({ kind: 'missing' })
+    // Nothing is sent: the row asks for a new sign-in or key instead.
+    expect(await ask(folder, 'cred-1')).toEqual({ kind: 'unreadable' })
   })
 
   it('open only for the folder and id they were sealed for', () => {

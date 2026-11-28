@@ -1,11 +1,3 @@
-import {
-  Bot,
-  CalendarClock,
-  Gauge,
-  LayoutList,
-  SquareTerminal,
-  type LucideIcon
-} from 'lucide-react-native'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
@@ -19,15 +11,8 @@ import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduce
 import { radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { HOME_TAB_ICONS, type HomeTabIconProps } from './home-tab-icons'
 import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
-
-const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
-  feed: LayoutList,
-  bots: Bot,
-  agents: SquareTerminal,
-  usage: Gauge,
-  automations: CalendarClock
-}
 
 export const HOME_TAB_BAR_HEIGHT = 52
 
@@ -64,7 +49,7 @@ export function MobileHomeTabBar(props: {
       {props.tabs.map((tab) => (
         <TabButton
           key={tab}
-          icon={TAB_ICONS[tab]}
+          icon={HOME_TAB_ICONS[tab]}
           label={labels[tab]}
           selected={tab === props.active}
           badge={badges[tab] ?? 0}
@@ -76,7 +61,7 @@ export function MobileHomeTabBar(props: {
 }
 
 function TabButton(props: {
-  icon: LucideIcon
+  icon: (props: HomeTabIconProps) => React.JSX.Element
   label: string
   selected: boolean
   badge: number
@@ -109,7 +94,7 @@ function TabButton(props: {
           }
         ]}
       >
-        <Icon size={25} strokeWidth={props.selected ? 2.2 : 1.8} color={tint} />
+        <Icon size={24} color={tint} active={props.selected} />
         {props.badge > 0 ? <TabBadge count={props.badge} /> : null}
       </Animated.View>
       <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
