@@ -29923,7 +29923,9 @@
       "hidePaused": "Hide paused bots",
       "hideSleepingWorkers": "Hide sleeping workers",
       "hideSleepingWorkersAria": "Hide a bot's worker workspaces that have nothing running",
-      "allHidden": "All bots are paused and hidden."
+      "allHidden": "All bots are paused and hidden.",
+      "noBotsOnHost": "No bots to show on this host.",
+      "showAllHosts": "Show all hosts"
     },
     "share": {
       "shareBot": "Share bot…",

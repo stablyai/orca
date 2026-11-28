@@ -2,8 +2,9 @@ import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { normalizeSidebarBotsHeight } from '../../../../../shared/sidebar-bots-height'
 import { DEFAULT_BOT_SIDEBAR_VIEW } from '../../../../../shared/bots/bot-sidebar-view'
 import { botChatFoldKey, withBotChatFold } from '../../../../../shared/bots/bot-chat-tree'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../shared/execution-host/execution-host'
 
-/** The bot sidebar's persisted preferences: its height, view, chat folds and hidden bot workspaces. */
+/** The Bots sidebar's view and preferences. */
 export function createUiBotPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     hideBotCreatedWorkspaces: true,
@@ -17,6 +18,8 @@ export function createUiBotPreferenceActions(set: UISliceSet, get: UISliceGet): 
       set({ botSidebarView })
       window.api.ui.set({ botSidebarView }).catch(console.error)
     },
+    botSidebarHostFilter: { scope: ALL_EXECUTION_HOSTS_SCOPE, removed: false },
+    setBotSidebarHostFilter: (botSidebarHostFilter) => set({ botSidebarHostFilter }),
     botChatFolds: {},
     botChatFold: (hostId, botId, chatId) =>
       get().botChatFolds[botChatFoldKey(hostId, botId, chatId)],

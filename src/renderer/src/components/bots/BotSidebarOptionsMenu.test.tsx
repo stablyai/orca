@@ -52,7 +52,7 @@ it('the sort choices follow a language switch without remounting', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   render(
     <TranslationScopeProvider>
-      <BotSidebarOptionsMenu />
+      <BotSidebarOptionsMenu hostFilter={null} />
     </TranslationScopeProvider>
   )
   expect(screen.getByText('Manual')).toBeTruthy()
