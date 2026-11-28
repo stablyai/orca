@@ -18,6 +18,7 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
   const [command, setCommand] = useState<string>()
   const [deferSave, setDeferSave] = useState(false)
   const [cliMissing, setCliMissing] = useState(false)
+  const [chatInventoryReady, setChatInventoryReady] = useState(true)
   const [disabledAgents, setDisabledAgents] = useState(() => new Set<TuiAgent>())
   const setEnabled = (agents: TuiAgent[], enabled: boolean): void =>
     setDisabledAgents((previous) => {
@@ -111,6 +112,13 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
           <Button
             variant="outline"
             size="xs"
+            onClick={() => setChatInventoryReady(!chatInventoryReady)}
+          >
+            Chat inventory ready: {String(chatInventoryReady)}
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
             onClick={() => setEnabled([moving.id], !firstEnabled)}
           >
             First agent enabled: {String(firstEnabled)}
@@ -157,6 +165,7 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
               activeServerName={null}
               onRefresh={() => {}}
               getRowProps={rowProps}
+              chatInventoryReady={chatInventoryReady}
               onSetAvailableEnabled={async (agents, enabled) => setEnabled(agents, enabled)}
             />
             <SettingsGroup title="Codex history">

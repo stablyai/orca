@@ -23,6 +23,7 @@ export function AgentDetectionCatalog({
   activeServerName,
   onRefresh,
   getRowProps,
+  chatInventoryReady = true,
   onSetAvailableEnabled
 }: {
   detectedAgents: AgentCatalogEntry[]
@@ -34,6 +35,7 @@ export function AgentDetectionCatalog({
   activeServerName: string | null
   onRefresh: () => void
   getRowProps: (agent: AgentCatalogEntry, isDetected: boolean) => AgentCatalogRowProps
+  chatInventoryReady?: boolean
   onSetAvailableEnabled?: (agents: TuiAgent[], enabled: boolean) => Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -181,6 +183,7 @@ export function AgentDetectionCatalog({
                         detectionPending ||
                         detectionFailed ||
                         isRefreshing ||
+                        !chatInventoryReady ||
                         availableRows.every(({ row }) => row.isEnabled === enabled)
                       }
                       onClick={() => setAvailableEnabled(enabled)}
