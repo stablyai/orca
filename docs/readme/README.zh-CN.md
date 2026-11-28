@@ -41,7 +41,7 @@
 
 </td>
 <td width="50%">
-  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Orca 中的一个 Bot：用两个 worker 修复了结账 bug，关联了 PR，正在“需要你”中等待你回答一个问题" width="100%" /></picture></a>
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Orca 中的一个 Bot：用两个 worker 修复了结账 bug，关联了 PR，正在等待你回答一个问题" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
