@@ -2,34 +2,35 @@ import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-ses
 
 /** A chat worker's usage-limit stop as Orca's automatic continue sees it. */
 export type ChatWorkerUsageLimit = {
-  /** Orca's own automatic continues that led here; above zero, the limit was already reported. */
-  chain: number
+  /** Orca still continues the chat by itself. */
+  continues: boolean
   resetsAt?: number
-  /** When Orca continues the chat by itself; absent when it won't. */
+  /** When it continues; absent while it waits for its account to show room. */
   continuesAt?: number
 }
 
-/** Null when the chat ended on no usage limit, or its journal is unreadable. */
+/** Read for the failed turn: a later or other cut never continues it. Null when unreadable. */
 export async function readChatWorkerUsageLimit(
-  sessionId: string
+  sessionId: string,
+  turnItemId: string
 ): Promise<ChatWorkerUsageLimit | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
-    const cut = await (await host.journalReads(sessionId)).usageLimitCut()
-    if (!cut) {
-      return null
-    }
-    const state = host.usageLimitContinue.readState(sessionId, cut)
-    const pending =
-      state?.state === 'scheduled' &&
-      (await host.usageLimitContinue.disposition(sessionId, cut.turnItemId)) === 'pending'
+    const [state, disposition] = await Promise.all([
+      host.readUsageLimitContinue(sessionId),
+      host.usageLimitContinue.disposition(sessionId, turnItemId)
+    ])
+    const known = state?.turnItemId === turnItemId ? state : undefined
+    const continues = disposition === 'pending'
     return {
-      chain: cut.chain,
-      ...(cut.resetsAt !== undefined ? { resetsAt: cut.resetsAt } : {}),
-      ...(pending ? { continuesAt: state.continueAt ?? state.resetsAt } : {})
+      continues,
+      ...(known ? { resetsAt: known.resetsAt } : {}),
+      ...(continues && known?.state === 'scheduled'
+        ? { continuesAt: known.continueAt ?? known.resetsAt }
+        : {})
     }
   } catch {
     return null

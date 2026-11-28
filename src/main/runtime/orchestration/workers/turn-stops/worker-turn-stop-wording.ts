@@ -60,14 +60,19 @@ export function redactFailure(text: string): string {
 
 /** Times are UTC: the coordinator may read them on another machine's clock. */
 function describeUsageLimitNextStep(
-  limit: { resetsAt?: number; continuesAt?: number } | undefined,
+  limit: { resetsAt?: number; continuesAt?: number; continues?: boolean } | undefined,
   context: StopContext
 ): string[] {
   const at = (ms: number) => new Date(ms).toISOString()
-  const move = `\`orchestration worker-stop --dispatch ${context.dispatchId}\` and retry the task on another agent with \`orchestration worker-start --task ${context.taskId} --retry-of ${context.dispatchId} --agent <other>\``
-  if (limit?.continuesAt !== undefined) {
+  const move = `stop the worker with your Orca CLI's \`orchestration worker-stop --dispatch ${context.dispatchId}\` and retry the task on another agent with \`orchestration worker-start --task ${context.taskId} --retry-of ${context.dispatchId} --agent <other>\``
+  if (limit?.continues) {
+    const when =
+      limit.continuesAt !== undefined
+        ? `at ${at(limit.continuesAt)}, after the limit resets`
+        : 'once its account has room again (the agent gave no reset time)'
+    const check = limit.continuesAt !== undefined ? `after ${at(limit.continuesAt)}` : 'later'
     return [
-      `Orca continues this worker by itself at ${at(limit.continuesAt)}, after the limit resets; you will be told again only if Orca stops continuing it. To move the task sooner, stop the worker with your Orca CLI's ${move}.`
+      `Orca continues this worker by itself ${when}. If it is still stopped ${check}, ${move}.`
     ]
   }
   const reset =
@@ -75,7 +80,7 @@ function describeUsageLimitNextStep(
       ? `the limit resets at ${at(limit.resetsAt)}`
       : 'the agent gave no reset time'
   return [
-    `Orca has not scheduled a continue for this worker (${reset}). Stop the worker with your Orca CLI's ${move}, or wait until the limit resets.`
+    `Orca has not scheduled a continue for this worker (${reset}). To move the task, ${move}, or wait until the limit resets.`
   ]
 }
 

@@ -30,7 +30,6 @@ import { createSessionWorkerLivenessReader } from '../lifecycle/session-worker-l
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
 import { reportChatWorkerProviderDeath } from './chat-worker-provider-death'
 import { observeChatWorkerWorking } from './chat-worker-turn-stops'
-import type { ChatWorkerUsageLimit } from './chat-worker-usage-limit-read'
 
 const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
 const HANDLE = mintStructuredWorkerHandle()
@@ -51,8 +50,8 @@ afterEach(async () => {
 
 async function startWorker({
   unavailableErrorRead = false,
-  usageLimits = []
-}: { unavailableErrorRead?: boolean; usageLimits?: ChatWorkerUsageLimit[] } = {}) {
+  autoContinue = { enabled: false }
+} = {}) {
   const database = new OrchestrationDb(':memory:')
   db = database
   const run = database.createRun({
@@ -86,12 +85,16 @@ async function startWorker({
     sessionId: SESSION,
     restartable: true,
     hostDeps: {
+      usageLimitAutoContinue: {
+        isEnabled: () => autoContinue.enabled,
+        isWorkspaceAsleep: () => false,
+        subscribe: () => () => {}
+      },
       onRequestFailure: (failure) => {
         const request = unavailableErrorRead
           ? { ...failure, read: () => Promise.reject(new Error('journal read unavailable')) }
           : failure
-        const limit = usageLimits.shift() ?? null
-        reports.push(escalateChatWorkerError(request, deps, async () => limit))
+        reports.push(escalateChatWorkerError(request, deps))
       },
       onIdleProviderDeath: (death) => reportChatWorkerProviderDeath(death, deps)
     }
@@ -319,31 +322,26 @@ it('wakes on a proven exit when the journal detail read fails and leaves an expl
   expect(await worker.readReports()).toHaveLength(1)
 })
 
-it('escalates a usage limit once while Orca keeps continuing the worker, and again when it stops', async () => {
-  const continuesAt = NOW + 60_000
-  const worker = await startWorker({
-    usageLimits: [
-      { chain: 0, resetsAt: continuesAt, continuesAt },
-      { chain: 1, resetsAt: continuesAt, continuesAt },
-      { chain: 2, resetsAt: continuesAt }
-    ]
-  })
+it('escalates a usage limit once while Orca keeps continuing the worker, and again once it stops', async () => {
+  const autoContinue = { enabled: true }
+  const worker = await startWorker({ autoContinue })
+  const resetsAt = new Date(NOW + 60_000).toISOString()
   await worker.finishAtUsageLimit()
-  const first = await worker.readReports()
-  expect(first).toMatchObject([
-    { failureKind: 'usageLimitReached', continuesAt: new Date(continuesAt).toISOString() }
+  expect(await worker.readReports()).toMatchObject([
+    { failureKind: 'usageLimitReached', resetsAt, continuesAt: resetsAt, orcaContinues: true }
   ])
 
-  // Orca's automatic continue opens a turn that meets the same limit: no second escalation.
+  // The continued turn meets the same limit while Orca still continues it: no second escalation.
   observeChatWorkerWorking(SESSION, worker.deps)
   await worker.finishAtUsageLimit('continued')
   expect(await worker.readReports()).toHaveLength(1)
 
-  // Orca stops continuing it: the coordinator hears once more, with the reset.
+  // Orca no longer continues it: the next limit escalates once more, with the reset.
+  autoContinue.enabled = false
   observeChatWorkerWorking(SESSION, worker.deps)
-  await worker.finishAtUsageLimit('given-up')
+  await worker.finishAtUsageLimit('stopped')
   const reports = await worker.readReports()
   expect(reports).toHaveLength(2)
-  expect(reports[1]).toMatchObject({ resetsAt: new Date(continuesAt).toISOString() })
-  expect(reports[1]).not.toHaveProperty('continuesAt')
+  expect(reports[1]).toMatchObject({ failureKind: 'usageLimitReached', resetsAt })
+  expect(reports[1]).not.toHaveProperty('orcaContinues')
 })

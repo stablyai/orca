@@ -16,6 +16,7 @@ import { readWorkerPresence } from '../../db/worker-presence/worker-presence-sto
 import { redactFailure } from './worker-turn-stop-wording'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { readChatWorkerUsageLimit } from './chat-worker-usage-limit-read'
+import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
 
@@ -55,11 +56,25 @@ function movedOnSince(db: OrchestrationDb, dispatchId: string, seen: number | un
   return now !== null && now.generation !== seen && !now.fence?.startsWith(REQUEST_FENCE)
 }
 
+/** The worker's latest mail to its coordinator is a usage-limit escalation: nothing happened since. */
+function lastReportWasUsageLimit(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  from: string
+): boolean {
+  const row = db.db
+    .prepare(
+      `SELECT CASE WHEN json_valid(payload) THEN json_extract(payload, '$.failureKind') END AS kind
+         FROM messages WHERE to_handle = ? AND from_handle = ? ORDER BY sequence DESC LIMIT 1`
+    )
+    .get(dispatchReportMailbox(db, dispatch), from)
+  return row?.kind === 'usageLimitReached'
+}
+
 /** Capture authority synchronously; notification bookkeeping never rejects a committed write. */
 export async function escalateChatWorkerError(
   request: StructuredAgentSessionRequestFailure,
-  deps: WorkerTurnStopReportDeps,
-  readUsageLimit = readChatWorkerUsageLimit
+  deps: WorkerTurnStopReportDeps
 ): Promise<void> {
   try {
     const db = deps.getDb()
@@ -87,11 +102,10 @@ export async function escalateChatWorkerError(
     const { kind } = error
     const text = redactFailure(error.text)
     const detail = error.detail && redactFailure(error.detail)
-    const limit = kind === 'usageLimitReached' ? await readUsageLimit(request.sessionId) : null
-    const usageLimit = limit && {
-      ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
-      ...(limit.continuesAt !== undefined ? { continuesAt: limit.continuesAt } : {})
-    }
+    const limit =
+      kind === 'usageLimitReached' && request.kind === 'turn'
+        ? await readChatWorkerUsageLimit(request.sessionId, request.id)
+        : null
     for (const { dispatch, from } of targets) {
       // The journal read awaited: the Dispatch may have settled, or the worker moved on.
       const current = db.getDispatchContextById(dispatch.id)
@@ -110,8 +124,8 @@ export async function escalateChatWorkerError(
           fence: `${REQUEST_FENCE}${request.sessionId}:${request.kind}:${request.id}`,
           legacyStopKey: `request:${request.kind}:${request.id}`,
           legacyReportId: escalationId(dispatch.id, request),
-          // Orca's own continue met the limit it already reported, and continues again: no news.
-          ...(limit && limit.chain > 0 && limit.continuesAt !== undefined
+          // The limit was the worker's last news and Orca still continues it: no news.
+          ...(limit?.continues && lastReportWasUsageLimit(db, dispatch, from)
             ? { unreported: true as const }
             : {}),
           rest: {
@@ -122,7 +136,7 @@ export async function escalateChatWorkerError(
               text,
               ...(detail ? { detail } : {}),
               ...(kind ? { kind } : {}),
-              ...(usageLimit ? { usageLimit } : {}),
+              ...(limit ? { usageLimit: limit } : {}),
               facts: {
                 sessionId: request.sessionId,
                 agent: request.agent,
@@ -131,12 +145,13 @@ export async function escalateChatWorkerError(
                 ...(kind ? { failureKind: kind } : {}),
                 error: text,
                 ...(detail ? { detail } : {}),
-                ...(usageLimit?.resetsAt !== undefined
-                  ? { resetsAt: new Date(usageLimit.resetsAt).toISOString() }
+                ...(limit?.resetsAt !== undefined
+                  ? { resetsAt: new Date(limit.resetsAt).toISOString() }
                   : {}),
-                ...(usageLimit?.continuesAt !== undefined
-                  ? { continuesAt: new Date(usageLimit.continuesAt).toISOString() }
-                  : {})
+                ...(limit?.continuesAt !== undefined
+                  ? { continuesAt: new Date(limit.continuesAt).toISOString() }
+                  : {}),
+                ...(limit?.continues ? { orcaContinues: true } : {})
               }
             }
           }
