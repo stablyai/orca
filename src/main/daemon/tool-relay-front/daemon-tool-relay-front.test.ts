@@ -3,10 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonClient } from '../transport/client/daemon-client'
 import { openDaemonToolRelayConnection } from '../transport/client/daemon-client-tool-relay-connection'
 import { DaemonServer } from '../server/daemon-server'
+import { DaemonServerLifecycle } from '../server/daemon-server-lifecycle'
 import { getDaemonSocketPath } from '../launch/daemon-spawner'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
@@ -97,7 +98,10 @@ describe.skipIf(process.platform === 'win32')('tool relay front protocol', () =>
     expect(stolen).toContain('Invalid token')
     expect(stolen).not.toContain('POST /bot-tools')
 
-    // The app's own connection gets the held request, and its answer reaches the agent.
+    // The app's own connection gets the held request, and its answer reaches the agent. Its
+    // close (one per tool call) runs no idle check, which reads every terminal session.
+    const idleChecks = vi.spyOn(DaemonServerLifecycle.prototype, 'reevaluateIdleShutdown')
+    cleanups.push(() => idleChecks.mockRestore())
     const { socket: app } = await openDaemonToolRelayConnection(client, id)
     cleanups.push(() => {
       app.destroy()
@@ -116,6 +120,12 @@ describe.skipIf(process.platform === 'win32')('tool relay front protocol', () =>
     app.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}')
     expect(await reply).toContain('200 OK')
     agent.destroy()
+    if (!app.destroyed) {
+      await new Promise((resolve) => app.once('close', resolve))
+    }
+    // The daemon's end closes a moment after this one; a regression would show by then.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(idleChecks).not.toHaveBeenCalled()
   })
 
   it('an older daemon offers no front, so its chats stay app-bound', async () => {

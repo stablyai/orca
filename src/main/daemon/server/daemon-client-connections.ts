@@ -66,8 +66,9 @@ export class DaemonClientConnections {
     this.options.onConnectionAccepted()
     this.transportSockets.add(socket)
     socket.once('close', () => {
-      this.transportSockets.delete(socket)
-      this.options.onTransportChanged()
+      if (this.transportSockets.delete(socket)) {
+        this.options.onTransportChanged()
+      }
     })
     socket.on('error', () => socket.destroy())
 
@@ -202,6 +203,8 @@ export class DaemonClientConnections {
     }
     if (toolRelay && hello.frontConnectionId !== undefined) {
       // Its own connection, not a client's; nothing past its hello is read before the splice.
+      // The front owns it from here, so its close (one per tool call) re-runs no idle check.
+      this.transportSockets.delete(socket)
       socket.removeAllListeners('data')
       socket.pause()
       front.splice(hello.frontConnectionId, socket, hello.clientId)
