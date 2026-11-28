@@ -12,7 +12,7 @@ export type CloneFolderOverride = {
   taken: { folderName: string; reason: 'other-repository' | 'not-empty' }
 }
 
-async function checkCloneTargetOn(
+export async function checkCloneTargetOn(
   target: RuntimeClientTarget,
   args: CloneTargetArgs
 ): Promise<CloneTargetCheck | null> {

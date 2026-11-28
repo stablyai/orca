@@ -31377,5 +31377,29 @@
       "badJson": "붙여넣은 JSON을 확인하세요. 해석할 수 없습니다.",
       "none": "Orca가 추가할 수 있는 서버를 찾지 못했습니다. SSE 서버, 자체 OAuth 클라이언트나 도구 필터가 있는 서버, 환경에서 읽는 값(${VAR})은 지원하지 않습니다."
     }
+  },
+  "openOnHost": {
+    "menuItem": "{{host}}에서 열기…",
+    "checking": "{{host}} 확인 중…",
+    "title": "{{host}}에서 {{name}} 열기",
+    "existingLocation": "{{path}}에서 열립니다",
+    "cloneLocation": "{{url}}에서 {{path}}(으)로 클론",
+    "branch": "브랜치 {{branch}}",
+    "pushFirst": "먼저 {{branch}} 푸시",
+    "publishFirst": "먼저 {{branch}} 게시",
+    "unpublishedBlocked": "{{branch}}이(가) 아직 원격에 없어 {{host}}에서 가져올 수 없습니다. 먼저 게시하세요",
+    "detached": "{{host}}에서 이 워크스페이스를 열려면 브랜치를 체크아웃하세요",
+    "primary": "{{host}}에서 열기",
+    "opening": "여는 중…",
+    "cancel": "취소",
+    "noRemote": "다른 컴퓨터에서 이 프로젝트를 열려면 Git 원격을 추가하세요",
+    "updateOrca": "이 기능을 사용하려면 {{host}}의 Orca를 업데이트하세요",
+    "cloneFolderTaken": "{{path}}은(는) {{host}}에서 이미 사용 중입니다. 프로젝트 설정에서 {{host}}의 이 프로젝트 위치를 지정하세요",
+    "sourceUnavailable": "이 워크스페이스의 호스트에 연결할 수 없습니다",
+    "noRemoteBranch": "이 브랜치에는 {{host}}이(가) 열 수 있는 원격 브랜치가 없습니다",
+    "missingRemote": "{{host}}의 클론에 원격 {{remote}}이(가) 없습니다",
+    "headMismatch": "{{host}}의 {{branch}} 복사본은 {{source}}와(과) 다른 커밋에 있습니다",
+    "hostCopyNotLoaded": "{{host}}의 이 프로젝트 복사본이 아직 로드되지 않았습니다",
+    "localCommitsStay_other": "로컬 커밋 {{count}}개는 {{source}}에 남습니다"
   }
 }

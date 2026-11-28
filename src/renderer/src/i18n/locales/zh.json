@@ -31087,5 +31087,29 @@
       "none": "Orca 未找到可添加的服务器。SSE 服务器、自带 OAuth 客户端或工具筛选器的服务器，以及从环境读取的值（${VAR}）都不支持",
       "unsupported": "这个服务器用了 SSE、自带的 OAuth 客户端，或从环境读取的值，Orca 无法按原样添加"
     }
+  },
+  "openOnHost": {
+    "menuItem": "在 {{host}} 上打开…",
+    "checking": "正在检查 {{host}}…",
+    "title": "在 {{host}} 上打开 {{name}}",
+    "existingLocation": "在 {{path}} 中打开",
+    "cloneLocation": "从 {{url}} 克隆到 {{path}}",
+    "branch": "分支 {{branch}}",
+    "pushFirst": "先推送 {{branch}}",
+    "publishFirst": "先发布 {{branch}}",
+    "unpublishedBlocked": "{{branch}} 尚未在远程仓库中，{{host}} 无法获取。请先发布",
+    "detached": "检出一个分支后才能在 {{host}} 上打开此工作区",
+    "primary": "在 {{host}} 上打开",
+    "opening": "正在打开…",
+    "cancel": "取消",
+    "noRemote": "添加 Git 远程仓库后才能在另一台机器上打开此项目",
+    "updateOrca": "请更新 {{host}} 上的 Orca 以使用此功能",
+    "cloneFolderTaken": "{{path}} 在 {{host}} 上已被占用。请在项目设置中设置此项目在 {{host}} 上的位置",
+    "sourceUnavailable": "无法连接此工作区的主机",
+    "noRemoteBranch": "此分支没有 {{host}} 可以打开的远程分支",
+    "missingRemote": "{{host}} 上的克隆没有远程仓库 {{remote}}",
+    "headMismatch": "{{host}} 上的 {{branch}} 副本与 {{source}} 处于不同的提交",
+    "hostCopyNotLoaded": "{{host}} 上此项目的副本尚未加载",
+    "localCommitsStay_other": "你的 {{count}} 个本地提交保留在 {{source}} 上"
   }
 }
