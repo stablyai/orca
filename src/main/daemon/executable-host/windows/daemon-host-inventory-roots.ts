@@ -142,10 +142,12 @@ export async function inventoryRootsAsync(
   return [...plan.roots, ...plan.optional.filter((_, index) => present[index])]
 }
 
-/** Matches copy destRels that fall under a fingerprint root, so a fresh copy can fingerprint what it wrote. */
-export function inventoryCodeMatcher(
-  roots: readonly CodeFileSource[]
-): (destRel: string) => boolean {
-  const rels = roots.map((root) => root.destRel)
+/**
+ * Matches copy destRels under any fingerprint root, optional ones included even when absent,
+ * so a root an update creates mid-copy still counts as code.
+ */
+export function daemonHostCodeMatcher(sources: DaemonHostSources): (destRel: string) => boolean {
+  const plan = inventoryPlan(sources)
+  const rels = [...plan.roots, ...plan.optional].map((root) => root.destRel)
   return (destRel) => rels.some((rel) => destRel === rel || destRel.startsWith(`${rel}/`))
 }

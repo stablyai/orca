@@ -27,11 +27,7 @@ import {
   type DaemonHostBuildInventory,
   type DaemonHostBuildMarker
 } from './daemon-host-build-inventory'
-import {
-  inventoryCodeMatcher,
-  inventoryRootsAsync,
-  type CodeFileSource
-} from './daemon-host-inventory-roots'
+import { daemonHostCodeMatcher, inventoryRootsAsync } from './daemon-host-inventory-roots'
 import { daemonHostStagingName } from './daemon-host-reclaim'
 
 // Copy the Electron runtime outside NSIS's install-directory kill zone; failures fall back to the install runtime.
@@ -253,7 +249,7 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
   const roots = await inventoryRootsAsync(sources).catch(() => null)
   // With no build to compare against, skip hashing sources up front; the copy fingerprints its own bytes.
   if (roots && !(await hasBuildCandidates())) {
-    return publishRelocatedHost(sources, roots, null)
+    return publishRelocatedHost(sources, null)
   }
   const inventory = roots ? await collectDaemonHostBuildInventoryAsync(sources, roots) : null
   const existing = await findRelocatedDaemonHostAsync(
@@ -263,12 +259,11 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
   if (existing || !roots || !inventory) {
     return existing
   }
-  return publishRelocatedHost(sources, roots, inventory)
+  return publishRelocatedHost(sources, inventory)
 }
 
 async function publishRelocatedHost(
   sources: DaemonHostSources,
-  roots: CodeFileSource[],
   inventory: DaemonHostBuildInventory | null
 ): Promise<RelocatedDaemonHost | null> {
   // Reject incomplete sources before copying a runtime the mirror check would refuse anyway.
@@ -289,7 +284,7 @@ async function publishRelocatedHost(
   try {
     await mkdir(versionRoot, { recursive: true })
     const hashes = await executeManifest(buildDaemonHostManifest(sources), staging, {
-      isCode: inventoryCodeMatcher(roots),
+      isCode: daemonHostCodeMatcher(sources),
       ...(inventory
         ? { expected: new Map(inventory.files.map((file) => [file.path, file.sha256])) }
         : {})

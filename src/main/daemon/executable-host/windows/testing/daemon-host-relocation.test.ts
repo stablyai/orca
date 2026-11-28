@@ -36,7 +36,8 @@ function installHostApp(): void {
 }
 import { createHash } from 'node:crypto'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
-import { executeManifest } from '../daemon-host-manifest'
+import { buildDaemonHostManifest, executeManifest, toPosixRelative } from '../daemon-host-manifest'
+import { daemonHostCodeMatcher } from '../daemon-host-inventory-roots'
 import { removeDaemonHostTree } from '../daemon-host-tree-walk'
 import { collectPinnedDaemonVersions } from '../daemon-host-pinned-versions'
 import {
@@ -270,6 +271,42 @@ describe('executeManifest optional code roots', () => {
         join(tempDir, 'optional'),
         { isCode }
       )
+    ).rejects.toThrow('code changed while copying')
+  })
+})
+
+describe('daemon-host copy with the production manifest', () => {
+  it('rejects a cold copy when the absent chunks folder appears mid-copy', async () => {
+    const mainDir = join(installDir, 'resources', 'app.asar.unpacked', 'out', 'main')
+    const chunks = join(mainDir, 'chunks')
+    rmSync(chunks, { recursive: true, force: true })
+    const entrySourcePath = join(mainDir, 'daemon-entry.js')
+    const sources = {
+      appDir: installDir,
+      execPath: join(installDir, 'Orca.exe'),
+      resourcesPath: join(installDir, 'resources'),
+      entrySourcePath,
+      entryRelPath: toPosixRelative(installDir, entrySourcePath),
+      windowsProcessTreeDir: join(
+        installDir,
+        'resources',
+        'node_modules',
+        '@vscode',
+        'windows-process-tree'
+      )
+    }
+    const isProductionCode = daemonHostCodeMatcher(sources)
+    let entryChecks = 0
+    const isCode = (rel: string): boolean => {
+      // The second entry check is the copy loop, after chunks/ was found absent.
+      if (rel === sources.entryRelPath && ++entryChecks === 2) {
+        mkdirSync(chunks)
+        writeFileSync(join(chunks, 'b.js'), 'chunk')
+      }
+      return isProductionCode(rel)
+    }
+    await expect(
+      executeManifest(buildDaemonHostManifest(sources), join(tempDir, 'prod-staging'), { isCode })
     ).rejects.toThrow('code changed while copying')
   })
 })
