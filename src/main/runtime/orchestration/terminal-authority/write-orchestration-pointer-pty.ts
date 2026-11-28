@@ -164,8 +164,9 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ...(paneTitle ? { paneTitle } : {}),
       connected: slept ? true : provenAbsent ? false : leaf.connected,
       writable: slept ? true : provenAbsent ? false : leaf.writable,
-      // A pane with a status is never connected; its verdict says what the host knows.
-      ...(ORCA_LAYOUT_OWNER_IS_MAIN && mainPane?.hasStatus
+      // A pane with a status is never connected; its verdict says what the host knows. A slept agent's
+      // pane carries a sleeping status yet answers as the idle agent.
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN && mainPane?.hasStatus && !slept
         ? { connected: false, writable: false }
         : {}),
       lastOutputAt: slept ? slept.lastOutputAt : leaf.lastOutputAt,

@@ -7,6 +7,12 @@ import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/c
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type Database from '../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../orca-runtime'
+import type { SleptPaneResume } from '../routing/slept-pane-resume'
+import type {
+  RestoredPane,
+  RestoredPaneTrigger,
+  StartedPty
+} from '../../../terminal/recovery/restored-pane-start'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import type { RuntimeStore } from '../../../construction/runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
@@ -77,8 +83,29 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
 }
 
 class MailboxRuntime extends OrcaRuntimeService {
+  /** Stands in for the process main spawns into a restored pane: resolves to the started terminal. */
+  startRestoredPane:
+    | ((pane: RestoredPane, trigger: RestoredPaneTrigger) => Promise<string>)
+    | null = null
+
   get idleEvidenceSource() {
     return this.tuiIdleEvidenceSource
+  }
+
+  /** The one resume every slept-pane wake takes. */
+  resumeSleptPaneForTest(
+    worktreeId: string,
+    paneKey: string,
+    opts: SleptPaneResume
+  ): Promise<boolean> {
+    return this.resumeSleptPaneTerminal(worktreeId, paneKey, opts)
+  }
+
+  protected override async startRestoredPaneTerminal(
+    ...args: Parameters<OrcaRuntimeService['startRestoredPaneTerminal']>
+  ): Promise<StartedPty> {
+    const start = this.startRestoredPane
+    return start ? { id: await start(args[0], args[2]) } : super.startRestoredPaneTerminal(...args)
   }
 }
 
@@ -88,11 +115,19 @@ export type MailboxNotificationHarness = {
   requestRepaint: ReturnType<typeof vi.fn>
 }
 
+const MAILBOX_REPO = {
+  id: 'repo-mailbox',
+  path: '/tmp/mailbox',
+  displayName: 'mailbox',
+  badgeColor: 'blue',
+  addedAt: 1
+}
+
 /** Keep main-owned pane bindings in the fixture's session layout. */
 function mailboxLayoutStore(): RuntimeStore {
   return {
-    getRepos: () => [],
-    getRepo: () => undefined,
+    getRepos: () => [MAILBOX_REPO],
+    getRepo: (id) => (id === MAILBOX_REPO.id ? MAILBOX_REPO : undefined),
     addRepo: vi.fn<RuntimeStore['addRepo']>(),
     updateRepo: vi.fn<RuntimeStore['updateRepo']>(),
     getAllWorktreeMeta: () => ({}),

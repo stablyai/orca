@@ -273,7 +273,9 @@ export function composeMainTerminalSurfaces(
   graph: RuntimeSyncWindowGraph,
   main: MainTerminalSurfaces,
   /** The registered terminal of that id: a saved binding alone is not a live one. */
-  registered: (ptyId: string) => BoundTerminal | null
+  registered: (ptyId: string) => BoundTerminal | null,
+  /** Certified exit: the pane keeps its binding in the layout but shows no terminal, as the window draws it. */
+  exited: (ptyId: string) => boolean
 ): RuntimeSyncWindowGraph {
   const mounted = new Map(
     (graph.mountedLeaves ?? []).map((leaf) => [`${leaf.tabId}::${leaf.leafId}`, leaf])
@@ -288,6 +290,7 @@ export function composeMainTerminalSurfaces(
       ...main.leaves.map((bound) => {
         const holds =
           bound.ptyId !== null &&
+          !exited(bound.ptyId) &&
           (pairedRuntimeHostOfBinding(bound.ptyId) !== null ||
             terminalHoldsPane(
               registered(bound.ptyId),

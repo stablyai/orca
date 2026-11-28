@@ -28,6 +28,8 @@ import {
   type PtyPaneOf
 } from '../../terminal/surface/pty-pane-query'
 
+const MAIN_REPUBLISH = { includeAgentSenders: false, republishedByMain: true } as const
+
 export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends OrcaRuntimeWithSyncWindowGraph {
   abstract get workspaceLayoutReads(): WorkspaceLayoutReads
   declare protected readonly paneStartStatuses: PaneStartStatuses | null
@@ -68,9 +70,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       live: (ptyId) => this.ptysById.get(ptyId)?.connected === true,
       paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null,
       readyGraphPublisher: () => (this.graphStatus === 'ready' ? this.authoritativeWindowId : null),
-      publish: (publisher, next) => {
-        this.syncWindowGraph(publisher, next, { includeAgentSenders: false })
-      },
+      publish: (publisher, next) => void this.syncWindowGraph(publisher, next, MAIN_REPUBLISH),
       heldRows: () => this.mobileSessionTabsByWorktree,
       replaceHeldRows: (worktreeId, next) => {
         this.storeMobileSessionSnapshot(worktreeId, next)

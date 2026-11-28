@@ -21,6 +21,8 @@ import {
 } from '../lifecycle/workspace-lifecycle-commands'
 import { getRuntimeWorktreeRemovalOptionsKey } from '../catalog/runtime-worktree-selection'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type {
   RecipeWorkspaceRemoval,
@@ -193,8 +195,19 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     )
   }
 
+  /** The window resumes only what main does not: panes in tabs whose layout main does not own. */
   wakeWindowHibernatedAgents(worktreeId: string): void {
-    this.notifier?.resumeSleepingAgents?.(worktreeId)
+    const records = this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey
+    if (
+      !ORCA_LAYOUT_OWNER_IS_MAIN ||
+      Object.values(records ?? {}).some(
+        (record) =>
+          worktreeIdsEqual(record.worktreeId, worktreeId) &&
+          !this.mainHoldsSleptPane(worktreeId, record.paneKey)
+      )
+    ) {
+      this.notifier?.resumeSleepingAgents?.(worktreeId)
+    }
   }
 
   notifyWorkspaceSleep(notice: WorkspaceSleepNotice): void {

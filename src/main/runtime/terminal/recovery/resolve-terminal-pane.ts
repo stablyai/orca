@@ -199,8 +199,8 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
   }
 
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
-    // A slept agent whose tab isn't mounted shows as the idle agent its saved record names.
-    const pty = this.unmountedSleptAgentLeaf(handle) ? null : this.getLivePtyForHandle(handle)
+    // A slept agent shows as the idle agent in its pane, not as its stopped process.
+    const pty = this.sleptAgentHandle(handle) ? null : this.getLivePtyForHandle(handle)
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
       const summary = this.buildPtyTerminalSummary(pty.pty, worktreesById)
