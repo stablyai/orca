@@ -15,11 +15,13 @@ export function getBrowserHostLeaseRegistry(
   if (!registry) {
     registry = new BrowserHostLeaseRegistry({
       authorityRuntimeId: runtime.getRuntimeId(),
-      // A page not published yet (an adoption still initializing) is the host's.
-      onClientPageInitializationChanged: (page) =>
-        runtime.notifyBrowserPageList?.(
-          getRuntimeBrowserPageRegistry(runtime).getPage(page.browserPageId) ?? page
-        ),
+      // Lists show published pages alone: one not published yet, or retired, is in no list.
+      onClientPageInitializationChanged: ({ browserPageId }) => {
+        const page = getRuntimeBrowserPageRegistry(runtime).getPage(browserPageId)
+        if (page) {
+          runtime.notifyBrowserPageList(page)
+        }
+      },
       onClientPageReleased: (browserPageId, pageHostGeneration) => {
         void releaseBrowserClientDownloadTransfersForPage(
           runtime,

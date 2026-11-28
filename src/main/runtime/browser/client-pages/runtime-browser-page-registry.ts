@@ -27,10 +27,6 @@ export function pageListOf(page: Pick<RuntimeBrowserClientPage, 'holder'>): Page
   return page.holder ?? 'host'
 }
 
-/** A page change is announced with the page (`notifyBrowserPageList`), never its workspace, so only
- *  the list that holds it hears. */
-export type PageListRef = Pick<RuntimeBrowserClientPage, 'workspaceId' | 'holder'>
-
 export class RuntimeBrowserPageRegistry {
   private readonly pages = new Map<string, RuntimeBrowserClientPage>()
   private globalActivePageId: string | null = null
@@ -41,7 +37,6 @@ export class RuntimeBrowserPageRegistry {
   private readonly maxPages: number
   private onRetired?: (page: RuntimeBrowserClientPage) => void
   private holderOf: (browserPageId: string) => TeammateTabListKey | null = () => null
-  private onHeldPageChanged?: (page: RuntimeBrowserClientPage) => void
 
   constructor(options: { maxPages?: number } = {}) {
     this.maxPages = options.maxPages ?? DEFAULT_MAX_RUNTIME_BROWSER_PAGES
@@ -54,23 +49,14 @@ export class RuntimeBrowserPageRegistry {
     this.onRetired = listener
   }
 
-  /** Who holds a page as it is published (a teammate's own list that opened it, or none), and who
-   *  hears when a held page changes (`notifyBrowserPageList`: their list redraws and is saved). */
-  setHolders(
-    holderOf: (browserPageId: string) => TeammateTabListKey | null,
-    onHeldPageChanged: (page: RuntimeBrowserClientPage) => void
-  ): void {
+  /** Who holds a page as it is published: a teammate's own list that opened it, or none. */
+  setHolderLookup(holderOf: (browserPageId: string) => TeammateTabListKey | null): void {
     this.holderOf = holderOf
-    this.onHeldPageChanged = onHeldPageChanged
   }
 
-  /** Every page record write passes here. */
-  private store(page: RuntimeBrowserClientPage): RuntimeBrowserClientPage {
-    this.pages.set(page.browserPageId, page)
-    if (page.holder) {
-      this.onHeldPageChanged?.(page)
-    }
-    return page
+  /** The teammate's list holding a page, published or not (an adoption asks before it publishes). */
+  heldBy(browserPageId: string): TeammateTabListKey | null {
+    return this.holderOf(browserPageId)
   }
 
   /** Omitting the picker publishes as asked, as restores and adoptions do. */
@@ -100,7 +86,7 @@ export class RuntimeBrowserPageRegistry {
     }
     const page = freezePage({
       ...input,
-      ...(holder ? { holder } : {}),
+      holder: holder ?? undefined,
       active,
       placement: Object.freeze({ ...input.placement }),
       title: input.title ?? 'Browser',
@@ -108,7 +94,7 @@ export class RuntimeBrowserPageRegistry {
       canGoForward: input.canGoForward ?? false,
       metadataRevision: input.metadataRevision ?? 0
     })
-    this.store(page)
+    this.pages.set(page.browserPageId, page)
     if (held) {
       this.heldPersonPicks.set(page.workspaceId, page.browserPageId)
     } else if (active && picker !== undefined) {
@@ -126,7 +112,9 @@ export class RuntimeBrowserPageRegistry {
     update: RuntimeBrowserPageUpdate
   ): RuntimeBrowserClientPage {
     const current = this.requireExactPage(browserPageId, placement)
-    return this.store(freezePage({ ...current, ...update, placement: current.placement }))
+    const next = freezePage({ ...current, ...update, placement: current.placement })
+    this.pages.set(browserPageId, next)
+    return next
   }
 
   updatePageMetadata(
@@ -142,7 +130,8 @@ export class RuntimeBrowserPageRegistry {
       return false
     }
     const { revision, ...metadata } = update
-    this.store(
+    this.pages.set(
+      browserPageId,
       freezePage({
         ...current,
         ...metadata,
@@ -252,7 +241,8 @@ export class RuntimeBrowserPageRegistry {
       metadataRevision: 0,
       placement: Object.freeze({ ...placement })
     })
-    return this.store(next)
+    this.pages.set(browserPageId, next)
+    return next
   }
 
   getPage(browserPageId: string): RuntimeBrowserClientPage | undefined {

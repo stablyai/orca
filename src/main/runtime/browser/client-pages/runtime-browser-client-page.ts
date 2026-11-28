@@ -21,8 +21,9 @@ export type RuntimeBrowserClientPage = Readonly<{
   metadataRevision: number
   /** The teammate whose own list in a shared agent's Home holds this page (teammate-rules.ts, rule 4).
    *  Stamped once, when it is published; it never takes or clears the workspace's selection, so
-   *  pageless commands and the host's lists keep the host's page. */
-  holder?: TeammateTabListKey
+   *  pageless commands and the host's lists keep the host's page. Required, so a page's list can only
+   *  be read from its record (`TabListRef`). */
+  holder: TeammateTabListKey | undefined
 }>
 
 export type RuntimeBrowserClientPageInput = Pick<

@@ -155,6 +155,14 @@ export type TabTeammate = { botId: string; accountId: string }
 export type TeammateTabListKey = `teammate:${string}`
 export type TabOwner = 'owner' | 'shared' | TeammateTabListKey
 
+/** One tab list in a workspace: the host's (`holder` undefined) or a teammate's own. `holder` is read
+ *  from the stamp on the terminal's or page's record, never chosen by a caller, and is required so
+ *  no change can name a workspace alone. */
+export type TabListRef = {
+  readonly workspaceId: string
+  readonly holder: TeammateTabListKey | undefined
+}
+
 export function teammateTabListKey(teammate: TabTeammate): TeammateTabListKey {
   // Encoded so no bot id and account id pair spells another's.
   return `teammate:${encodeURIComponent(teammate.botId)}:${encodeURIComponent(teammate.accountId)}`

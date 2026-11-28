@@ -1,8 +1,6 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
-import type {
-  PageListRef,
-  RuntimeBrowserPageRegistry
-} from '../client-pages/runtime-browser-page-registry'
+import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
 import {
   navigationTargetsClients,
   navigationTargetsHost,
@@ -32,7 +30,7 @@ export type BrowserTabCreatePublicationHost = {
     options: BrowserSessionTabSelectionOptions
   ): Promise<void>
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
-  notifyBrowserPageList?(page: PageListRef): void
+  notifyBrowserPageList(page: TabListRef): void
 }
 
 /** A client page's tab changed: the list that holds the page hears; an engine tab's, its workspace. */
@@ -43,7 +41,7 @@ function notifyPublishedTab(
 ): void {
   const page = host.getRuntimeBrowserPageRegistry().getPage(browserPageId)
   if (page) {
-    host.notifyBrowserPageList?.(page)
+    host.notifyBrowserPageList(page)
   } else {
     host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
   }

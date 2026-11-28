@@ -19,7 +19,8 @@ export function browserProfileRpcFixture(executorRuntimeId: string, outerRuntime
       getBrowserHostRequestRegistry: unavailable,
       getAgentBrowserBridge: unavailable,
       resolveBrowserWorkspace: unavailable,
-      resolveBrowserNetworkExecutionHost: unavailable
+      resolveBrowserNetworkExecutionHost: unavailable,
+      notifyBrowserPageList: unavailable
     },
     { requireAgentBrowserBridge: unavailable, resolveBrowserCommandTarget: async () => ({}) },
     {

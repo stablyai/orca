@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -12,16 +13,22 @@ import type { BrowserHostLeaseIdentity } from '../../browser-host/leases/browser
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type {
   RuntimeBrowserClientPage,
-  RuntimeBrowserPageRegistry,
-  PageListRef
+  RuntimeBrowserPageRegistry
 } from './runtime-browser-page-registry'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
+
+/** The page an initialization is for, by identity alone: which list hears is read from the
+ *  registry's record (`TabListRef`), which an adoption has not published yet. */
+export type InitializingPage = Pick<
+  RuntimeBrowserClientPage,
+  'browserPageId' | 'workspaceId' | 'browserProfileId' | 'placement'
+>
 
 export function admitRuntimeBrowserPageInitialization(input: {
   authority: Pick<BrowserHostLeaseRegistry, 'admitClientPageInitialization'>
   lease: BrowserHostLeaseIdentity
   pages: RuntimeBrowserPageRegistry
-  page: RuntimeBrowserClientPage
+  page: InitializingPage
   previous?: BrowserClientHostedPageInventory
   pageHostGeneration?: number
   url: string
@@ -30,8 +37,8 @@ export function admitRuntimeBrowserPageInitialization(input: {
   closeTimeoutMs?: number
   claim?(): void
   resolveExecutionHostKey(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
-  notifyPageList(page: PageListRef): void
-  releaseUnrecoverablePage?(page: RuntimeBrowserClientPage): void
+  notifyPageList(page: TabListRef): void
+  releaseUnrecoverablePage?(page: InitializingPage): void
   settled?(outcome: InitializationOutcome): void
   signal?: AbortSignal
   completed?(url?: string): void
@@ -56,7 +63,12 @@ export function admitRuntimeBrowserPageInitialization(input: {
     expected: page.placement,
     url: input.url,
     replace: input.replace,
-    changed: () => input.notifyPageList(page),
+    changed: () => {
+      const current = input.pages.getPage(page.browserPageId)
+      if (current) {
+        input.notifyPageList(current)
+      }
+    },
     ...(input.previous ? { previous: input.previous } : {}),
     ...(input.pageHostGeneration === undefined
       ? {}
@@ -86,11 +98,12 @@ export function admitRuntimeBrowserPageInitialization(input: {
         placement,
         executionHostKey
       )
-      input.pages.updatePage(page.browserPageId, placement, {
-        url: redactKagiSessionToken(normalizeBrowserNavigationUrl(url) ?? url),
-        loading: false
-      })
-      input.notifyPageList(page)
+      input.notifyPageList(
+        input.pages.updatePage(page.browserPageId, placement, {
+          url: redactKagiSessionToken(normalizeBrowserNavigationUrl(url) ?? url),
+          loading: false
+        })
+      )
       const published = input.pages.getPage(page.browserPageId)
       if (!published || !sameRuntimeBrowserPlacement(published.placement, placement)) {
         throw new Error('browser_page_placement_stale')

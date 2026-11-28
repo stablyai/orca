@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import { batchBrowserPageInitializationNotifications } from './browser-page-initialization-notifications'
 import {
   isRecoverableByLease,
@@ -23,8 +24,7 @@ import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type {
   RuntimeBrowserClientPage,
-  RuntimeBrowserPageRegistry,
-  PageListRef
+  RuntimeBrowserPageRegistry
 } from './runtime-browser-page-registry'
 
 const MAX_RECOVERY_CONCURRENCY = 4
@@ -68,7 +68,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   pages: RuntimeBrowserPageRegistry
   /** Placements as of the attach inventory. Omitting it recovers against unfenced live state. */
   pagePlacementsAtAttach?: ReadonlyMap<string, RuntimeBrowserClientPage['placement']>
-  notifyPageList(page: PageListRef): void
+  notifyPageList(page: TabListRef): void
   /** Drops a page whose placement recovery destroyed without replacing it. */
   releaseUnrecoverablePage?: (page: RuntimeBrowserClientPage) => void
   /** Skip newly adopted pages: inventory still names predecessor authority and would wrongly trigger their teardown. */

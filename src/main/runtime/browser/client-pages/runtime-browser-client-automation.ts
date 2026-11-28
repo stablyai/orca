@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import { actOnRuntimeBrowserInitialization } from './runtime-browser-page-initialization-action'
 import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/browser-expected-url'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
@@ -11,8 +12,7 @@ import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/brow
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type {
   RuntimeBrowserClientPage,
-  RuntimeBrowserPageRegistry,
-  PageListRef
+  RuntimeBrowserPageRegistry
 } from './runtime-browser-page-registry'
 import { isAgentRpcCaller, type RpcCallerIdentity } from '../../rpc/callers/rpc-caller-identity'
 import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
@@ -29,7 +29,7 @@ type ClientAutomationRoute = {
   pages: RuntimeBrowserPageRegistry
   leases: BrowserHostLeaseRegistry
   resolveExecutionHostKey?(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
-  notifyPageList?(page: PageListRef): void
+  notifyPageList?(page: TabListRef): void
   resolveWorkspace(selector: string): Promise<{ id: string }>
 }
 

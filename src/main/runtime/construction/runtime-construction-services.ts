@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../bots/team-share/teammate-rules'
 import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-contract'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
@@ -98,12 +99,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
 
   protected abstract handleGraphReloadTimeout(windowId: number): void
   protected abstract flushScheduledMobileSessionTabsChanged(worktreeId: string): void
-  abstract touchMobileSessionTabsForWorktree(
-    worktreeId: string,
-    options?: {
-      immediate?: boolean
-    }
-  ): void
+  abstract touchSessionTabList(list: TabListRef, options?: { immediate?: boolean }): void
   protected abstract readonly ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   protected abstract repointPendingMessagesForHandle(handle: string): void
   protected abstract getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform

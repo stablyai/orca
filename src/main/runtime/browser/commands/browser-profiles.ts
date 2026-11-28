@@ -99,7 +99,7 @@ export class RuntimeBrowserProfiles {
             undefined,
             profile.id
           )
-        this.host.notifyBrowserPageList?.(replaced)
+        this.host.notifyBrowserPageList(replaced)
       }
       // Deleted while the target resolved: the client would rebuild the page in a retired profile.
       requireBrowserProfile(profile.id)

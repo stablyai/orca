@@ -20,6 +20,7 @@ export type BrowserClientPageQueryHost = Pick<
   | 'getRuntimeBrowserPageRegistry'
   | 'markHeadlessBrowserSessionTabActive'
   | 'notifyHeadlessBrowserSessionTabsChanged'
+  | 'notifyBrowserPageList'
 >
 
 export type BrowserEngineTabs = {

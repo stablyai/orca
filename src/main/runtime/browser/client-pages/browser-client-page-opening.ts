@@ -155,7 +155,7 @@ export async function createBrowserClientPage(
     })
       .then(() => ({ url }))
       .catch(() => ({}))
-    host.notifyBrowserPageList?.(
+    host.notifyBrowserPageList(
       pages.updatePage(browserPageId, created.placement, { ...loaded, loading: false })
     )
   }

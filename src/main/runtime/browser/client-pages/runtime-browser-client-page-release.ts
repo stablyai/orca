@@ -1,12 +1,13 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
 } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
-import { getRuntimeBrowserPageRegistry, type PageListRef } from './runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 export type RuntimeBrowserClientPageReleaseHost = {
   /** See `notifyBrowserPageList`: only the list that holds the page hears. */
-  notifyBrowserPageList?(page: PageListRef): void
+  notifyBrowserPageList(page: TabListRef): void
   retireRuntimeOwnedBrowserSessionTab?(workspaceId: string, browserPageId: string): void
 }
 
@@ -24,7 +25,7 @@ export function releaseRuntimeBrowserClientPageRecord(
   if (runtime.retireRuntimeOwnedBrowserSessionTab) {
     runtime.retireRuntimeOwnedBrowserSessionTab(page.workspaceId, browserPageId)
   } else {
-    runtime.notifyBrowserPageList?.(page)
+    runtime.notifyBrowserPageList(page)
   }
   return true
 }
@@ -42,8 +43,6 @@ export function retainRuntimeBrowserClientPageRecord(
     return false
   }
   // Republish undrivable retained pages to clear transient loading state.
-  runtime.notifyBrowserPageList?.(
-    pages.updatePage(browserPageId, page.placement, { loading: false })
-  )
+  runtime.notifyBrowserPageList(pages.updatePage(browserPageId, page.placement, { loading: false }))
   return true
 }

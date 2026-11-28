@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -9,8 +10,7 @@ import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import type {
   RuntimeBrowserClientPage,
-  RuntimeBrowserPageRegistry,
-  PageListRef
+  RuntimeBrowserPageRegistry
 } from './runtime-browser-page-registry'
 import { admitRuntimeBrowserPageInitialization } from './runtime-browser-page-initialization'
 
@@ -49,7 +49,7 @@ export function actOnRuntimeBrowserInitialization(input: {
   action: BrowserPageInitializationAction
   explicitUrl?: boolean
   resolveExecutionHostKey(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
-  notifyPageList(page: PageListRef): void
+  notifyPageList(page: TabListRef): void
 }): Promise<string | undefined> {
   const { pages, authority, page, action } = input
   const url = action.type === 'navigate' ? normalizeBrowserNavigationUrl(action.url) : undefined

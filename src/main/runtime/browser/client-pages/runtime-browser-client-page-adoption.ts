@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { admitModernAdoptions } from './runtime-browser-client-page-modern-adoption'
@@ -11,7 +12,7 @@ import {
   type AdoptableClientHostedPage
 } from '../../browser-host/client-pages/browser-host-client-page-adoption'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
-import type { PageListRef, RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 type AdoptionAuthority = Pick<
   BrowserHostLeaseRegistry,
@@ -33,7 +34,7 @@ export type RuntimeBrowserClientPageAdoptionOptions = {
   lease: BrowserHostLease
   authority: AdoptionAuthority
   pages: RuntimeBrowserPageRegistry
-  notifyPageList: (page: PageListRef) => void
+  notifyPageList: (page: TabListRef) => void
   /** The execution-host key that workspace's pages would be created under now. */
   resolveExecutionHostKey: (workspaceId: string) => Promise<BrowserExecutionHostKeyResolution>
   signal?: AbortSignal
@@ -66,14 +67,23 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
   ) {
     return NOTHING_TO_ADOPT
   }
-  const inventoryByPageId = new Map(inventory.map((page) => [page.browserPageId, page]))
+  // A teammate's computer brings a page back only into a list still holding it (a record here, or
+  // their own list): one closed while it was away stays closed, in no one's list.
+  const listed = options.lease.teammate
+    ? inventory.filter(
+        (page) =>
+          options.pages.getPage(page.browserPageId) !== undefined ||
+          options.pages.heldBy(page.browserPageId) !== null
+      )
+    : inventory
+  const inventoryByPageId = new Map(listed.map((page) => [page.browserPageId, page]))
   const modern = options.lease.hostCapabilities.includes(
     BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY
   )
   const pending = (page: BrowserClientHostedPageInventory): boolean =>
     page.state !== 'active' || (!modern && page.currentUrl === undefined)
   const adoptable = selectAdoptableClientHostedPages({
-    inventory,
+    inventory: listed,
     browserHostClientId: options.lease.browserHostClientId,
     authorityRuntimeId: options.authority.authorityRuntimeId,
     hasSavedPage: (inventory) => {
@@ -167,7 +177,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
     )
   )
   const byPageId = new Map(adoptable.map((page) => [page.browserPageId, page]))
-  const publishedLists = new Map<string, PageListRef>()
+  const publishedLists = new Map<string, TabListRef>()
   const publishedPageIds: string[] = []
   for (const browserPageId of adoptedPageIds) {
     const page = byPageId.get(browserPageId)

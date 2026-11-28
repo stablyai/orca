@@ -55,7 +55,7 @@ export async function retireRuntimeBrowserClientPage(
   if (host.retireRuntimeOwnedBrowserSessionTab) {
     host.retireRuntimeOwnedBrowserSessionTab(clientPage.workspaceId, clientPage.browserPageId)
   } else {
-    host.notifyBrowserPageList?.(clientPage)
+    host.notifyBrowserPageList(clientPage)
   }
   return { closed: true }
 }

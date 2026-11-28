@@ -7,6 +7,7 @@ import {
   homeTabListOf,
   isTeammateTabList,
   teammateTabListKey,
+  type TabListRef,
   type TabPerson,
   type TeammateTabListKey
 } from '../../../bots/team-share/teammate-rules'
@@ -24,7 +25,6 @@ import { createMobileSessionTabsNotifyCoalescer } from '../../session-lifecycle/
 import { isSafeMobileRelativePath } from '../../files/mobile-file-kind'
 import { joinWorktreeRelativePath } from '../../files/paths/runtime-relative-paths'
 import { OrcaRuntimeWithPersonSessionTabs, type OwnList } from './person-session-tab-publication'
-import type { PageListRef } from '../../browser/client-pages/runtime-browser-page-registry'
 
 /** A chat tab write: the publication, and the person it is for. */
 export type PersonChatTabPublication = StructuredSessionTabPublicationInput & { person: TabPerson }
@@ -194,7 +194,7 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
   /** The one way a browser page's change is announced, from every page write and client-page path:
    *  only the list that holds the page hears. A teammate's page redraws and saves their own list (so
    *  it survives a restart); a host page notifies the host's list, which saves it. */
-  notifyBrowserPageList(page: PageListRef): void {
+  notifyBrowserPageList(page: TabListRef): void {
     if (!page.holder) {
       this.notifyMobileSessionTabsChanged(page.workspaceId)
       return

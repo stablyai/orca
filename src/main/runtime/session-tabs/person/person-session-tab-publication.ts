@@ -30,10 +30,7 @@ import {
   type SessionTabListName
 } from '../../client/navigation/client-session-tab-selection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
-import {
-  getRuntimeBrowserPageRegistry,
-  type PageListRef
-} from '../../browser/client-pages/runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { PersonSessionTabLists } from './person-session-tab-lists'
 import type { PersonSurface } from './person-tab-list-snapshot'
 import { personSurfaceRow, withoutHeldTabs } from './person-surface-rows'
@@ -118,12 +115,11 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
       this.personSessionTabs.hydrate(persisted)
       this.pruneTeammateTabLists()
     }
-    getRuntimeBrowserPageRegistry(this).setHolders(
+    getRuntimeBrowserPageRegistry(this).setHolderLookup(
       (browserPageId) =>
         this.personSessionTabs.holderOfSurface(
           (surface) => surface.kind === 'browser' && surface.browserPageId === browserPageId
-        )?.person ?? null,
-      (page) => this.notifyBrowserPageList(page)
+        )?.person ?? null
     )
     const bots = () => this.store?.getBots?.() ?? []
     this.clientSessionTabSelections.setPersistListener(() => this.persistSessionTabLists())
@@ -327,7 +323,6 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
   /** Stops a closed terminal, closes a closed page. */
   protected abstract endPersonSurface(worktreeId: string, surface: PersonSurface): void
   protected abstract schedulePersonListRedraw(person: TeammateTabListKey, worktreeId: string): void
-  abstract notifyBrowserPageList(page: PageListRef): void
 
   /** The workspace is gone: each person's list there, and their devices' picks in it, go too. */
   protected forgetPersonTabListsIn(worktreeId: string): void {

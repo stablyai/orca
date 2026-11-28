@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { physicalReload } from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { getRuntimeBrowserPageRegistry } from '../../runtime/browser/client-pages/runtime-browser-page-registry'
@@ -19,6 +20,9 @@ import { retainRuntimeBrowserClientPageRecord } from '../../runtime/browser/clie
 import { getBrowserHostRequestRegistry } from '../../runtime/browser-host/leases/browser-host-request-registry'
 import { BROWSER_HOST_WEBVIEW_CAPABILITY } from '../../runtime/browser-host/leases/browser-host-capability-selection'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
+import { installHookStatusSessionTabsRepublish } from '../../agent-hooks/runtime/hook-status-session-tabs-republish'
+import type { AgentHookStatusRowMutation } from '../../agent-hooks/server/server-types'
 
 afterEach(async () => {
   setRuntimeBrowserCommandsFactory(null)
@@ -256,6 +260,97 @@ it('keeps a teammate’s page in their own list across a host restart, and quiet
   )
   expect(tabIds(await fresh.list('mate-phone'))).toEqual([matesPage])
   expect(tabIds(await fresh.list('owner-desk'))).toEqual([ownersPage])
+})
+
+it('never brings back a teammate’s page closed while their computer was away', async () => {
+  servePagesHeadless()
+  const r = await rig()
+  hostPagesOnTheCallersComputer(r)
+  const worktree = `id:${r.workspace}`
+  await openPage(r, 'owner-desk')
+  const matesPage = await openPage(r, 'mate-desk')
+  const page = getRuntimeBrowserPageRegistry(r.runtime).getPage(matesPage)!
+  // Their computer goes away, and they close the page from their phone.
+  retainRuntimeBrowserClientPageRecord(r.runtime, matesPage, page.placement)
+  await r.call('mate-phone', 'session.tabs.close', { worktree, tabId: matesPage, reason: 'user' })
+  await chatTabCommandsSettled()
+  const ownersFrames = await r.subscribe('owner-phone')
+  const before = await ownersSide(r)
+  const framesBefore = ownersFrames.length
+
+  // It returns after a host restart still showing the page, as the host before the restart made it.
+  const replies = r.stream('mate-desk', 'browser.clientHost.attach', {
+    authorityRuntimeId: r.runtime.getRuntimeId(),
+    browserHostClientId: 'mate-desk-host',
+    hostCapabilities: [
+      BROWSER_HOST_WEBVIEW_CAPABILITY,
+      BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY
+    ],
+    pageCommandProtocolVersion: 1,
+    pageInventoryProtocolVersion: 1,
+    pageReconciliationProtocolVersion: 1,
+    pageInventory: [
+      {
+        authorityRuntimeId: 'host-before-restart',
+        authorityEpoch: 'epoch-before-restart',
+        browserHostClientId: 'mate-desk-host',
+        browserHostGeneration: 1,
+        browserPageId: matesPage,
+        pageHostGeneration: 1,
+        browserProfileId: page.browserProfileId,
+        executionHostKey: page.executionHostKey,
+        state: 'active',
+        currentUrl: 'https://example.com/',
+        workspaceId: r.workspace
+      }
+    ]
+  })
+  await vi.waitFor(() => expect(replies.length).toBeGreaterThan(0))
+  await chatTabCommandsSettled()
+  expect(await ownersSide(r)).toBe(before)
+  expect(ownersFrames.length).toBe(framesBefore)
+  expect(getRuntimeBrowserPageRegistry(r.runtime).getPage(matesPage)).toBeUndefined()
+  expect(tabIds(await r.list('mate-phone'))).toEqual([])
+})
+
+it('keeps a hook status from a teammate’s terminal out of the owner’s list', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  await openTerminal(r, 'owner-desk')
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+  let mutate: ((mutation: AgentHookStatusRowMutation) => void) | undefined
+  const uninstall = installHookStatusSessionTabsRepublish(
+    {
+      subscribeStatusRowMutations: (listener) => {
+        mutate = listener
+        return () => {}
+      },
+      subscribeStatusFreshness: () => () => {}
+    },
+    () => r.runtime
+  )
+  const ownersFrames = await r.subscribe('owner-phone')
+  const before = await ownersSide(r)
+  const framesBefore = ownersFrames.length
+  const matesFrames = await r.subscribe('mate-phone')
+  const matesBefore = matesFrames.length
+
+  // An agent in Mate's terminal reports, as its hook names the terminal it runs in.
+  const [tabId, leafId] = matesTerminal.id.split('::')
+  mutate?.({
+    before: null,
+    after: {
+      paneKey: makePaneKey(tabId!, leafId!),
+      worktreeId: r.workspace,
+      terminalHandle: matesTerminal.terminal
+    }
+  })
+  await chatTabCommandsSettled()
+  uninstall()
+  await vi.waitFor(() => expect(matesFrames.length).toBeGreaterThan(matesBefore))
+  expect(ownersFrames.length).toBe(framesBefore)
+  expect(await ownersSide(r)).toBe(before)
 })
 
 it('never picks a teammate’s computer for a page no one placed, nor asks it to host one', async () => {

@@ -63,8 +63,9 @@ export function admitModernAdoptions(
               }
             : {}),
           releaseUnrecoverablePage: (held) => {
-            if (options.pages.retirePage(held.browserPageId, held.placement)) {
-              notifyPageList(held)
+            const current = options.pages.getPage(held.browserPageId)
+            if (current && options.pages.retirePage(held.browserPageId, held.placement)) {
+              notifyPageList(current)
             }
           },
           settled: (outcome) => {

@@ -32,6 +32,7 @@ export class RuntimeBrowserTabQueries {
       | 'getRuntimeBrowserPageRegistry'
       | 'markHeadlessBrowserSessionTabActive'
       | 'notifyHeadlessBrowserSessionTabsChanged'
+      | 'notifyBrowserPageList'
       | 'readBrowserPageAnnotations'
     >,
     private readonly targets: Pick<

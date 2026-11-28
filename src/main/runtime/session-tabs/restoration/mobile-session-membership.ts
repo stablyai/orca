@@ -13,6 +13,8 @@ import type {
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   protected abstract createMobileSessionTabsDelivery(): ReturnType<
@@ -28,6 +30,9 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     clientNavigationId?: string,
     candidates?: Iterable<MobileSessionTabSubscription>
   ): MobileSessionTabSubscription[]
+
+  abstract getTerminalPtyIdForHandle(handle: string): string | null
+  protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
 
   abstract getTerminalWorktreeIdForPaneKey(
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
@@ -52,17 +57,22 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
       )
       for (const worktreeId of changed) {
         if (this.selectMobileSessionTabsListeners(worktreeId, undefined, listeners).length > 0) {
-          this.touchMobileSessionTabsForWorktree(worktreeId)
+          // Sender scope is carried by the host's snapshot frames alone.
+          this.touchSessionTabList({ workspaceId: worktreeId, holder: undefined })
         }
       }
     })
   }
 
-  /** Bump snapshotVersion before emitting (coalesced and owed until a client frame unless immediate); clients discard re-emits at the same version. */
-  touchMobileSessionTabsForWorktree(
-    worktreeId: string,
-    options: { immediate?: boolean } = {}
-  ): void {
+  /** The one touch for a tab list that reads differently. A teammate's own list redraws alone; the
+   *  host's bumps snapshotVersion before emitting (coalesced and owed until a client frame unless
+   *  immediate), and clients discard re-emits at the same version. */
+  touchSessionTabList(list: TabListRef, options: { immediate?: boolean } = {}): void {
+    if (list.holder) {
+      this.schedulePersonListRedraw(list.holder, list.workspaceId)
+      return
+    }
+    const worktreeId = list.workspaceId
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
       return
@@ -107,21 +117,37 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     )
   }
 
-  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId: string): void {
-    if (this.mobileSessionTabListeners.size === 0) {
+  /** Agent status reads stale on a timer, so the host's list refreshes while a hook is alive. A
+   *  teammate's terminal row shows no agent status: their list has nothing to refresh. */
+  scheduleSessionTabListAgentStatusHeartbeat(list: TabListRef): void {
+    if (list.holder || this.mobileSessionTabListeners.size === 0) {
       return
     }
-    this.mobileSessionTabsAgentStatusHeartbeat.scheduleWorktreeHeartbeat(worktreeId)
+    this.mobileSessionTabsAgentStatusHeartbeat.scheduleWorktreeHeartbeat(list.workspaceId)
   }
 
-  /** Republish the workspace snapshot after a pane's hook status changed.
-   *  Hook rows feed the headless `agentStatus` projection, which nothing else touches. */
-  touchMobileSessionTabsForPane(paneKey: string, worktreeId?: string | null): void {
-    const resolved = worktreeId ?? this.getTerminalWorktreeIdForPaneKey(paneKey)
-    if (!resolved) {
-      return
-    }
-    this.touchMobileSessionTabsForWorktree(resolved)
+  /** The list a hook-reported terminal is in, from its PTY's stamp; a pane with no PTY record here is
+   *  the host's (only a PTY carries a teammate's stamp). */
+  getTerminalTabList(identity: {
+    paneKey: string
+    worktreeId?: string
+    terminalHandle?: string
+  }): TabListRef | null {
+    const ptyId = identity.terminalHandle
+      ? this.getTerminalPtyIdForHandle(identity.terminalHandle)
+      : null
+    const pty =
+      (ptyId ? this.ptysById.get(ptyId) : undefined) ??
+      this.getPtyRecordForPaneKey(identity.paneKey) ??
+      undefined
+    const workspaceId =
+      identity.worktreeId ??
+      pty?.worktreeId ??
+      (identity.terminalHandle
+        ? this.getTerminalWorktreeIdForHandle(identity.terminalHandle)
+        : null) ??
+      this.getTerminalWorktreeIdForPaneKey(identity.paneKey)
+    return workspaceId ? { workspaceId, holder: pty?.holder } : null
   }
 
   protected mobileSessionSnapshotHasSurface(
