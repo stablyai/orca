@@ -22259,7 +22259,8 @@
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
         "title": "Context",
         "estimated": "Estimated from the last response.",
-        "deferredNote": "Loaded on demand. Not counted in the used total."
+        "deferredNote": "Loaded on demand. Not counted in the used total.",
+        "compact": "Compact"
       },
       "contextMenu": {
         "copyOrcaSessionId": "Copy Orca Session ID",

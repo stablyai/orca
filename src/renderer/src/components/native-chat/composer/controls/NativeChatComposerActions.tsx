@@ -63,6 +63,7 @@ export type NativeChatComposerActionsProps = {
   onExitGoalMode?: () => void
   /** Absent until the session has reported or the transcript can estimate. */
   contextUsage?: NativeChatContextUsageSummary | null
+  onCompactContext?: () => void
   /** The chat's agent, whose permission modes the picker describes. */
   agent?: string
   /** A launch prompt: Attach and dictation are its only controls; launching is the panel's. */
@@ -96,6 +97,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   sessionOptionsPickerRequest,
   onExitGoalMode,
   contextUsage,
+  onCompactContext,
   focusComposer,
   agent,
   launchPrompt = false
@@ -257,7 +259,20 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           {
             id: 'context',
             priority: 0,
-            content: <NativeChatContextUsageRing usage={contextUsage} />
+            content: (
+              <NativeChatContextUsageRing
+                usage={contextUsage}
+                onCompact={
+                  onCompactContext
+                    ? () => {
+                        onCompactContext()
+                        // The card closes without restoring focus, so typing would otherwise land on the page.
+                        focusComposer?.()
+                      }
+                    : undefined
+                }
+              />
+            )
           }
         ]
       : []),

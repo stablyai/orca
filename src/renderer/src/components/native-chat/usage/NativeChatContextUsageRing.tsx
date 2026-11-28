@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
 import { useTranslate } from '@/i18n/use-translate'
@@ -94,9 +95,12 @@ function ContextUsageRowList({
 
 /** Composer ring for context-window usage; hover, click, tap, or Enter shows the provider's breakdown. */
 export function NativeChatContextUsageRing({
-  usage
+  usage,
+  onCompact
 }: {
   usage: NativeChatContextUsageSummary
+  /** Present only where the session can compact. */
+  onCompact?: (() => void) | undefined
 }): React.JSX.Element {
   const t = useTranslate()
   const { filled, critical, used, window } = contextUsageRingReadout(usage)
@@ -214,6 +218,20 @@ export function NativeChatContextUsageRing({
                   'Estimated from the last response.'
                 )}
               </p>
+            ) : null}
+            {onCompact ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() => {
+                  setOpen(false)
+                  onCompact()
+                }}
+              >
+                {t('components.native-chat.contextUsage.compact', 'Compact')}
+              </Button>
             ) : null}
           </div>
         </PopoverContent>
