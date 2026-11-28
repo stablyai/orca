@@ -12,7 +12,8 @@ vi.mock('node:fs/promises', () => ({ stat: vi.fn(async () => ({ isDirectory: () 
 vi.mock('../../../filesystem/asar-transparent-fs', () => ({ statWithoutArchiveLock: statMock }))
 vi.mock('../watcher-process/parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: subscribeMock,
-  disposeWatcherProcess: vi.fn()
+  disposeWatcherProcess: vi.fn(),
+  setSharedWatcherDeliveryStallListener: vi.fn()
 }))
 
 import { closeAllWatchers } from './filesystem-watcher-shutdown'
@@ -65,7 +66,7 @@ it('hands back an edit that was queued or still flushing when the window unwatch
     { worktreePath: '/repo/linked/a/b', handOver: true }
   )
   await vi.advanceTimersByTimeAsync(1_000)
-  expect(queued.send).not.toHaveBeenCalled()
+  expect(queued.send).not.toHaveBeenCalledWith('fs:changed', expect.anything())
   expect(fromQueue).toEqual(handedBack)
 
   await closeAllWatchers()
@@ -84,7 +85,7 @@ it('hands back an edit that was queued or still flushing when the window unwatch
     { sender: flushing },
     { worktreePath: '/repo/linked/a/b', handOver: true }
   )
-  expect(flushing.send).not.toHaveBeenCalled()
+  expect(flushing.send).not.toHaveBeenCalledWith('fs:changed', expect.anything())
   expect(fromFlush).toEqual(handedBack)
 
   await closeAllWatchers()

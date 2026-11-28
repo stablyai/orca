@@ -10,7 +10,9 @@ const AgentActivityPaneKeys = lazyZodSchema(() =>
 export const AgentActivitySetReadParams = lazyZodSchema(() =>
   z.object({
     paneKeys: AgentActivityPaneKeys,
-    read: z.boolean()
+    read: z.boolean(),
+    /** When set on a read, ignore panes whose latest turn is newer than what the client displayed. */
+    upToTimestamp: z.number().finite().positive().optional()
   })
 )
 

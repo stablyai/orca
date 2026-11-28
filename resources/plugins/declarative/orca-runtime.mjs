@@ -87,6 +87,19 @@ var onPersistedChange = null;
 var onMemoryChange = null;
 var onStorageAtom = null;
 var writableAtoms = /* @__PURE__ */ new Set();
+var writableAtomCleanup = new FinalizationRegistry((ref) => {
+  writableAtoms.delete(ref);
+});
+function* liveWritableAtomStates() {
+  for (const ref of writableAtoms) {
+    const target = ref.deref();
+    if (!target) {
+      writableAtoms.delete(ref);
+      continue;
+    }
+    yield target[ATOM];
+  }
+}
 function create(initial, fields = {}) {
   const created = Object.freeze({
     [ATOM]: {
@@ -100,14 +113,16 @@ function create(initial, fields = {}) {
     }
   });
   if (!created[ATOM].readonly) {
-    writableAtoms.add(created[ATOM]);
+    const ref = new WeakRef(created);
+    writableAtoms.add(ref);
+    writableAtomCleanup.register(created, ref);
   }
   return created;
 }
 function resetAtoms() {
   snapshot.plugin = /* @__PURE__ */ new Map();
   snapshot.workspace = /* @__PURE__ */ new Map();
-  for (const inner of writableAtoms) {
+  for (const inner of liveWritableAtomStates()) {
     inner.value = inner.initial;
   }
 }
@@ -259,7 +274,7 @@ function applyStorageValue(key, value) {
 }
 function captureAtomValues() {
   const values = /* @__PURE__ */ new Map();
-  for (const inner of writableAtoms) {
+  for (const inner of liveWritableAtomStates()) {
     values.set(inner, inner.value);
   }
   return () => {

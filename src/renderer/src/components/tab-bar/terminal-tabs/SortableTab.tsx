@@ -1,5 +1,5 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import React, { useCallback, useEffect } from 'react'
 import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { Minimize2 } from 'lucide-react'
@@ -89,10 +89,8 @@ export default function SortableTab({
   const t = useTranslate()
   const canClose = closable && !isPinned
   const naming = useNativeChatNamingFailure(namingFailure)
-  // A chat's status and unread rows still name it by its session's pane address.
-  const statusTabId = nativeChat
-    ? structuredAgentSessionAddressTabId(tab.id, nativeChat.sessionId)
-    : tab.id
+  // A chat's status and unread rows name it by its conversation's pane address.
+  const statusTabId = nativeChat ? chatPaneAddressTabId(nativeChat.sessionId) : tab.id
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore(
     (s) =>

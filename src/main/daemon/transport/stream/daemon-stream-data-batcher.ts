@@ -69,8 +69,8 @@ export class DaemonStreamDataBatcher {
       ? new DaemonStreamBackpressure(
           options.onProducerBackpressureChanged,
           this.isSessionDroppable,
-          options.isSessionAttachedToClient,
-          (sessionId) => this.refreshSessionDroppability(sessionId)
+          (sessionId) => this.refreshSessionDroppability(sessionId),
+          options
         )
       : undefined
   }
@@ -86,6 +86,7 @@ export class DaemonStreamDataBatcher {
       return
     }
 
+    this.backpressure?.noteSessionOutput(sessionId)
     const batch = this.getOrCreateBatch(clientId)
     const queuedAfter = appendDaemonStreamData(batch, sessionId, data, options)
     const queuedBefore = queuedAfter - data.length
@@ -186,7 +187,9 @@ export class DaemonStreamDataBatcher {
         }
         batch.queue.shift()
         releaseDaemonStreamEntry(batch, entry)
-        this.write(clientId, entry.sessionId, socket, frames.control(entry.control))
+        // Control frames carry no output, so they earn the session no delivery credit.
+        const control = frames.control(entry.control)
+        this.write(clientId, entry.sessionId, socket, control, undefined, false)
         continue
       }
       if (socketDeep && batch.queuedChars <= HELD_WRITE_THROUGH_TOTAL_CHARS) {
@@ -255,7 +258,7 @@ export class DaemonStreamDataBatcher {
       if (!socket.destroyed) {
         const sessionId = retained[0].sessionId
         this.heldRefill.arm(clientId, frames.noop(sessionId), (line, complete) =>
-          this.write(clientId, sessionId, socket, line, complete)
+          this.write(clientId, sessionId, socket, line, complete, false)
         )
       }
       return
@@ -268,10 +271,11 @@ export class DaemonStreamDataBatcher {
     sessionId: string,
     socket: Socket,
     line: string | Buffer,
-    onComplete?: () => void
+    onComplete?: () => void,
+    carriesSessionOutput = true
   ): void {
     if (this.backpressure) {
-      this.backpressure.write(clientId, sessionId, socket, line, onComplete)
+      this.backpressure.write(clientId, sessionId, socket, line, onComplete, carriesSessionOutput)
     } else {
       socket.write(line, onComplete)
     }
@@ -299,8 +303,8 @@ export class DaemonStreamDataBatcher {
 
     const socket = client.streamSocket
     const frames = streamFramesFor(client.streamFraming)
-    flushDaemonStreamSession(batch, sessionId, this.maxLineBytes, frames, (line) =>
-      this.write(clientId, sessionId, socket, line)
+    flushDaemonStreamSession(batch, sessionId, this.maxLineBytes, frames, (line, carries) =>
+      this.write(clientId, sessionId, socket, line, undefined, carries)
     )
     if (batch.queue.length === 0) {
       this.pendingByClient.delete(clientId)

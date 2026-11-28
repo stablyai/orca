@@ -1,7 +1,7 @@
 // Where the setup is stuck, from the host's reading, and the buttons that move it on. A press that
 // fixes something on this computer (a new sign-in, an imported key) then tells the bot with a card
 // answer, so it wakes and checks again instead of waiting for a chat message.
-import React, { useState } from 'react'
+import React from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -28,6 +28,7 @@ import { useGoogleClientFile } from '../use-google-client-file'
 import type { useGoogleSignIn } from '../use-google-sign-in'
 import { googleSetupActionText, googleSetupBlockerText } from './google-setup-blocker-copy'
 import { answerGoogleSetup } from './google-setup-run-store'
+import { useNativeChatViewGuard } from '../../../native-chat/pane/ownership/native-chat-view-memory'
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -46,16 +47,20 @@ export function GoogleSetupBlockerPanel({
   signIn?: ReturnType<typeof useGoogleSignIn>
 }): React.JSX.Element {
   const t = useTranslate()
-  const [busy, setBusy] = useState(false)
+  // Kept with the chat tab: a panel released mid-answer returns still busy.
+  const [busy, setBusy] = useNativeChatViewGuard(`google-setup-blocker:${run.id}`, false)
   const host = useGoogleHost(botTarget(bot))
   const client = host.status === 'ready' ? host.google.client : null
   const accounts = host.status === 'ready' ? host.google.accounts : []
   const answer = (values: string[]): Promise<void> => answerGoogleSetup(bot, 'step', values)
-  const file = useGoogleClientFile(async (text) => {
-    await importGoogleApp(botTarget(bot), text)
-    const client = run.steps.client?.status
-    await answer(client === 'done' || client === 'skipped' ? ['resume'] : ['done', 'client'])
-  })
+  const file = useGoogleClientFile(
+    async (text) => {
+      await importGoogleApp(botTarget(bot), text)
+      const client = run.steps.client?.status
+      await answer(client === 'done' || client === 'skipped' ? ['resume'] : ['done', 'client'])
+    },
+    { memoryKey: `blocker:${run.id}` }
+  )
   // A new sign-in fixes it on this computer; the bot hears so it runs done again.
   const signInThen = async (
     services: GoogleSetupRun['services'],

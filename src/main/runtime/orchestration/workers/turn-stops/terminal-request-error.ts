@@ -24,18 +24,21 @@ export function terminalRequestError(row: AgentStatusIpcPayload): WorkerRequestE
   const error = failureRequestError(words.text, fact)
   const text = redactFailure(error.text)
   const detail = error.detail && redactFailure(error.detail)
+  const resetsAt = fact.kind === 'usageLimitReached' ? fact.usageLimit?.resetsAt : undefined
   return {
     text,
     ...(detail ? { detail } : {}),
     kind: fact.kind,
     heldByWaits: true,
+    ...(resetsAt !== undefined ? { usageLimit: { resetsAt } } : {}),
     facts: {
       stopReason: 'errored',
       agent: 'claude',
       turnOutcome: 'failure',
       failureKind: fact.kind,
       error: text,
-      ...(detail ? { detail } : {})
+      ...(detail ? { detail } : {}),
+      ...(resetsAt !== undefined ? { resetsAt: new Date(resetsAt).toISOString() } : {})
     }
   }
 }

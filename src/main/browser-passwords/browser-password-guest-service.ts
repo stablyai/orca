@@ -26,9 +26,7 @@ import {
 } from './browser-password-save-prompts'
 import {
   browserPasswordSettings,
-  browserPasswordVaultForGuest as vaultForGuest,
-  setBrowserPasswordSettingsSource,
-  type BrowserPasswordSettings
+  browserPasswordVaultForGuest as vaultForGuest
 } from './browser-password-vault-access'
 import {
   readBrowserPasswordCapture,
@@ -55,13 +53,9 @@ const guests = new Map<number, GuestState>()
 const pendingFills = new Map<string, PendingFill>()
 let guestHandlersInstalled = false
 
-export function configureBrowserPasswords(readSettings: () => BrowserPasswordSettings): void {
-  setBrowserPasswordSettingsSource(readSettings)
-  installGuestHandlers()
-}
-
 /** Starts password detection for a browsing guest; documents opt in on every dom-ready. */
-export function attachBrowserPasswordGuest(guest: WebContents): void {
+export function attachBrowserPasswordGuest(guest: WebContents, domReadyAlreadyFired = false): void {
+  installGuestHandlers()
   if (guests.has(guest.id)) {
     return
   }
@@ -86,13 +80,17 @@ export function attachBrowserPasswordGuest(guest: WebContents): void {
   guests.set(guest.id, state)
 
   attachBrowserPasswordPickerKeyboard(guest, state)
-  guest.on('dom-ready', () => {
+  const onDomReady = (): void => {
     state.tracker.documentReady()
     if (vaultForGuest(guest)) {
       const enable: BrowserPasswordGuestEnable = { reportPageForms: state.tracker.wantsPageForms() }
       guest.send(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable, enable)
     }
-  })
+  }
+  guest.on('dom-ready', onDomReady)
+  if (domReadyAlreadyFired) {
+    onDomReady()
+  }
   guest.on('did-start-navigation', (details) => {
     if (!details.isMainFrame || details.isSameDocument) {
       return
@@ -101,14 +99,12 @@ export function attachBrowserPasswordGuest(guest: WebContents): void {
     // Address-bar, back/forward and Orca reloads carry no initiating frame; page navigations do.
     state.tracker.navigationStarted(details.initiator != null)
   })
-  guest.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
-    if (isMainFrame) {
+  guest.on('did-fail-load', (_e, _c, _d, _u, isMain) => {
+    if (isMain) {
       state.tracker.navigationFailed()
     }
   })
-  guest.on('did-navigate', (_event, _url, httpResponseCode) => {
-    state.tracker.navigated(httpResponseCode)
-  })
+  guest.on('did-navigate', (_e, _u, code) => state.tracker.navigated(code))
   guest.once('destroyed', () => {
     state.tracker.dispose()
     guests.delete(guest.id)

@@ -76,6 +76,7 @@ export function createClaudeStreamedTextCheckpoints(
   deps: ClaudeStreamedTextCheckpointDeps
 ): ClaudeStreamedTextCheckpoints {
   const identities = new Map<string, AgentJournalItemIdentity>()
+  const keyOf = new WeakMap<AgentJournalItemIdentity, string>()
   /** Retain producer scope because persist has no frame to read. */
   const scopes = new Map<string, string | null>()
   /** Last written linkage, used only to skip revisions that change nothing. */
@@ -162,7 +163,12 @@ export function createClaudeStreamedTextCheckpoints(
 
   return {
     append: (identity, text, parentToolUseId = null) => {
-      const key = agentJournalItemKey(identity)
+      // A block's identity is one object for all its deltas, so its key is built once.
+      let key = keyOf.get(identity)
+      if (key === undefined) {
+        key = agentJournalItemKey(identity)
+        keyOf.set(identity, key)
+      }
       identities.set(key, identity)
       scopes.set(key, parentToolUseId)
       unsaved.add(key)

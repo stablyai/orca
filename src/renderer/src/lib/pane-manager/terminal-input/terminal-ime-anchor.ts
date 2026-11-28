@@ -17,19 +17,12 @@ export function resolveCursorAgentImeAnchor(args: {
   cursorX: number
   cursorY: number
   knownCursorAgent?: boolean
-  /** A previously resolved prompt row, checked in one row read before rescanning the screen. */
-  promptRow?: number
 }): TerminalImeAnchor | null {
   const cursorLine = getVisibleLine(args.buffer, args.cursorY)
   if (args.cursorX !== 0 || !isBlankLine(cursorLine)) {
     return null
   }
-  // A cached row was resolved as Cursor Agent, so typed input is allowed like knownCursorAgent.
-  const cachedAnchor =
-    args.promptRow === undefined
-      ? null
-      : resolveRowInputAnchor(args.buffer, args.promptRow, args.cols, true)
-  return cachedAnchor ?? findCursorAgentScreenInputAnchor(args)
+  return findCursorAgentScreenInputAnchor(args)
 }
 
 function findCursorAgentScreenInputAnchor(args: {

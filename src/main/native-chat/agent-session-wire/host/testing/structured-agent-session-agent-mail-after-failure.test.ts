@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
-import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey
-} from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_NOW,
@@ -17,6 +12,7 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
+import { appendUsageLimitedTurn } from './structured-agent-session-usage-limited-turn.test-fixture'
 
 // Another agent's mail behind a failed turn runs as the next turn, except after a usage limit; the
 // person's own queued follow-ups stay held until the chat continues.
@@ -32,41 +28,6 @@ const MAIL: AgentMessageSource = {
 
 function journal() {
   return rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-}
-
-async function failedTurn(name: string): Promise<string> {
-  const key = { provider: 'orca' as const, clientMessageId: `turn-${name}` }
-  await journal().appendItem(
-    key,
-    {
-      kind: 'turn',
-      turnId: name,
-      providerTurnId: name,
-      state: 'completed',
-      outcome: 'failure',
-      startedAt: HOST_TEST_NOW,
-      completedAt: HOST_TEST_NOW
-    },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  return agentJournalItemKey(key)
-}
-
-async function failAtUsageLimit(): Promise<void> {
-  const turnItemId = await failedTurn('limited')
-  await journal().appendItem(
-    { provider: 'orca', clientMessageId: 'limited-limit' },
-    {
-      kind: 'status',
-      ...agentSessionFailureWords(
-        agentSessionFailureFact('usageLimitReached', {
-          usageLimit: { resetsAt: HOST_TEST_NOW + 60_000 }
-        }),
-        { surface: 'row' }
-      )
-    },
-    { fence: 1, turnScope: { kind: 'turn', turnItemId } }
-  )
 }
 
 /** The provider's turn for the person's send `id`. */
@@ -148,7 +109,7 @@ describe("another agent's mail after a failed turn", () => {
 
   it('waits behind a usage limit', async () => {
     rig = await createQueuedMessageTestRig()
-    await failAtUsageLimit()
+    await appendUsageLimitedTurn(journal(), { fence: 1, resetsAt: HOST_TEST_NOW + 60_000 })
     const sent = await mail()
     expect(sent.queued).toBeDefined()
     expect(await journal().queuedMessages.failureHolds()).toBe(true)
@@ -157,7 +118,7 @@ describe("another agent's mail after a failed turn", () => {
 
   it('waits behind a usage limit while another send is still pending', async () => {
     rig = await createQueuedMessageTestRig()
-    await failAtUsageLimit()
+    await appendUsageLimitedTurn(journal(), { fence: 1, resetsAt: HOST_TEST_NOW + 60_000 })
     const pending = rig.send('are you there?')
     expect(await pending.result).toMatchObject({ ok: true })
     await eventually(async () =>

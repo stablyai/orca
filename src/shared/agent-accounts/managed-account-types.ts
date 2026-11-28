@@ -144,6 +144,8 @@ export type ClaudeAccountSelectionChange = {
   runningSessions?: ClaudeAccountSwitchRunningSessions
   /** Nothing was selected: this answers the Ask a switch to this account left open. */
   answersAskFor?: string | null
+  /** Opaque token from the Ask summary being answered so an older toast cannot answer a later switch. */
+  answersAskId?: string
 }
 
 /** What a server did with its running Claude terminals when its account switched. */
@@ -154,6 +156,8 @@ export type ClaudeHostRunningSessionsMove = {
   notMoved: number
   /** Of `notMoved`, those the server restarts when the same switch is sent again with `restart`. */
   canRestart?: number
+  /** Identifies this Ask so only a reply to this exact toast can restart the sessions it counted. */
+  askId?: string
 }
 
 /** `runningSessions` is absent from older servers, and from hosts whose window moves its own. */

@@ -179,7 +179,6 @@ function BotItemCommentField({
     targetKey: JSON.stringify([scopeKey, access.session?.sessionId]),
     disabled: false,
     resolveAttachmentOwner,
-    attachResolvedPaths: attachments.attachResolvedPaths,
     attachCopiedFiles: fileDrops.attachExternalPaths,
     captureCopiedFiles: fileDrops.captureCopiedFiles,
     captureExternalPaths: fileDrops.captureExternalPaths,

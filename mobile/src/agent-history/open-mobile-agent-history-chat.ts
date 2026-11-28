@@ -36,7 +36,7 @@ export async function openMobileAgentHistoryChat(args: {
   })
   assertCurrentOwner()
   if (result.kind === 'opened') {
-    args.opened(mobileStructuredSessionHref(args.hostId, result.target, result.tab))
+    args.opened(mobileStructuredSessionHref(args.hostId, result.target))
   } else if (
     result.kind === 'failed' &&
     result.failure.reason === 'unsupported' &&

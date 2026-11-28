@@ -23,15 +23,32 @@ const DEFAULTED_FIELDS = Object.keys(WORKTREE_META_PERSISTED_DEFAULTS) as Defaul
 
 /** Drop default-valued fields, preserving input identity when unchanged. */
 export function omitDefaultWorktreeMetaFields(meta: WorktreeMeta): WorktreeMeta {
-  let compacted: WorktreeMeta | undefined
+  let hasDefault = false
   for (const field of DEFAULTED_FIELDS) {
-    if (meta[field] !== WORKTREE_META_PERSISTED_DEFAULTS[field]) {
+    if (meta[field] === WORKTREE_META_PERSISTED_DEFAULTS[field]) {
+      hasDefault = true
+      break
+    }
+  }
+  if (!hasDefault) {
+    return meta
+  }
+  const defaults: Record<string, unknown> = WORKTREE_META_PERSISTED_DEFAULTS
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WorktreeMeta is a plain persisted record whose own keys are copied without changing property types.
+  const source = meta as Record<string, unknown>
+  const compacted: Record<string, unknown> = {}
+  for (const key in source) {
+    if (!Object.hasOwn(source, key)) {
       continue
     }
-    compacted ??= { ...meta }
-    delete (compacted as Record<string, unknown>)[field]
+    const value = source[key]
+    if (Object.hasOwn(defaults, key) && value === defaults[key]) {
+      continue
+    }
+    compacted[key] = value
   }
-  return compacted ?? meta
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: compacted copies every non-default own property of meta, preserving all remaining WorktreeMeta field types.
+  return compacted as WorktreeMeta
 }
 
 /** Preserve map identity when no row changes. */
@@ -39,7 +56,11 @@ export function omitDefaultWorktreeMetaFieldsInMap<T extends Record<string, Work
   metaById: T
 ): T {
   let compacted: Record<string, WorktreeMeta> | undefined
-  for (const [key, meta] of Object.entries(metaById)) {
+  for (const key in metaById) {
+    if (!Object.hasOwn(metaById, key)) {
+      continue
+    }
+    const meta = metaById[key]
     const next = omitDefaultWorktreeMetaFields(meta)
     if (next === meta) {
       continue

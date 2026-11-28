@@ -90,6 +90,7 @@ export async function installOnJournal(
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
     ...(deps.onIdleProviderDeath ? { onIdleProviderDeath: deps.onIdleProviderDeath } : {}),
+    ...(deps.onUserClosedProvider ? { onUserClosedProvider: deps.onUserClosedProvider } : {}),
     observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.readWorkerDockPresence ? { readWorkerDockPresence: deps.readWorkerDockPresence } : {}),

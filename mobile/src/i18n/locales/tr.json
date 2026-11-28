@@ -6683,7 +6683,6 @@
       "suggestThree": "{{a}}, {{b}} ve {{c}}",
       "suggestMore": "{{a}}, {{b}} ve {{count}} tane daha",
       "pickOne": "Bir bot seçin",
-      "needsTwoBots": "{{host}} üzerinde 2 bot gerekir",
       "peerReadItems": "{{bot}}, öğeleriyle ilgili bir güncellemeyi okudu",
       "remoteReplied": "{{computer}} üzerinde yanıt verdi",
       "remoteNotice": "{{computer}} üzerinde yanıt vermedi",
