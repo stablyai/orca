@@ -27,8 +27,15 @@ import { dropWorkspacesTheListingInvalidates } from '../../../persistence/restor
 import { notifyWatchedWorktreeCatalogChanged } from './watched-worktree-catalog-notification'
 import { setWslStoppedWorktreeRescanNotifier } from './wsl-stopped-worktree-listing'
 import { scanWorktreesStartingWslDistro } from './wsl-distro-starting-scan'
+import { settleLocalDetectedListingWithin } from './settle-local-detected-listing'
 
 export const DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS = 30_000
+
+function warnLocalListingUnsettled(repoId: string): void {
+  console.warn(
+    `[worktrees] local listDetected for ${repoId} did not settle in ${DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS} ms; continuing with the metadata fallback (#43572)`
+  )
+}
 
 export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): void {
   const { store, detectedWorktreeCancellations } = context
@@ -90,9 +97,21 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
                 }
               : undefined
           )
-          return abortedResult
-            ? await Promise.race([providerResult, abortedResult])
-            : await providerResult
+          if (abortedResult) {
+            return await Promise.race([providerResult, abortedResult])
+          }
+          // A local host-qualified listing needs the same deadline as the legacy local path.
+          return (
+            (await settleLocalDetectedListingWithin(
+              providerResult,
+              DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS,
+              () => warnLocalListingUnsettled(args.repoId)
+            )) ?? {
+              providerRequestId: args.providerRequestId,
+              executionHostId: args.executionHostId,
+              status: 'timed-out'
+            }
+          )
         } finally {
           if (timeout) {
             clearTimeout(timeout)
@@ -113,12 +132,16 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
       }
       const connectionId = getRepoDialableSshTargetId(repo)
       const authority = connectionId ? { ...getSshProviderAuthority(connectionId) } : undefined
-      const result = await listDetectedWorktreesForCapturedRepo(
-        store,
-        repo,
-        () =>
-          isCapturedRepoCurrent(store, repo) &&
-          (!connectionId || (authority !== undefined && isCurrentSshProviderAuthority(authority)))
+      const result = await settleLocalDetectedListingWithin(
+        listDetectedWorktreesForCapturedRepo(
+          store,
+          repo,
+          () =>
+            isCapturedRepoCurrent(store, repo) &&
+            (!connectionId || (authority !== undefined && isCurrentSshProviderAuthority(authority)))
+        ),
+        DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS,
+        () => warnLocalListingUnsettled(repo.id)
       )
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         dropWorkspacesTheListingInvalidates(store, result)
