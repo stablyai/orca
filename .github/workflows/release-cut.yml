@@ -44,7 +44,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  cut:
+  # Runs release-source code, so it only builds the tag locally; the keyed cut job verifies and pushes it.
+  prepare:
     # Limit version/tag mutations to canonical repo; fork schedules must not diverge their main and conflict upstream.
     if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
@@ -52,6 +53,10 @@ jobs:
     permissions:
       contents: write
     outputs:
+      new_tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      push_main: ${{ steps.resolve.outputs.push_main }}
+      release_sha: ${{ steps.release-commit.outputs.sha }}
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
@@ -612,26 +617,29 @@ jobs:
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
 
-      - name: Push tag
+      # A bundle holds only git objects, so the keyed cut job can verify and push it without running source code.
+      - name: Bundle release commit and tag
         if: steps.tag.outputs.tag != ''
         env:
-          PUSH_MAIN: ${{ steps.resolve.outputs.push_main }}
+          SOURCE_SHA: ${{ steps.resolve.outputs.sha }}
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if [[ "$PUSH_MAIN" == "true" ]]; then
-            push_log="$RUNNER_TEMP/release-push-main.log"
-            if git push origin "HEAD:refs/heads/main" >"$push_log" 2>&1; then
-              cat "$push_log"
-            elif grep -Fq 'GH013' "$push_log" && grep -Fq 'Changes must be made through a pull request.' "$push_log"; then
-              cat "$push_log"
-              echo "::notice::Main requires pull requests; leaving its version unchanged and publishing only $TAG."
-            else
-              cat "$push_log"
-              exit 1
-            fi
-          fi
-          git push origin "$TAG"
+        run: git bundle create "$RUNNER_TEMP/release-tag.bundle" "refs/tags/$TAG" "^$SOURCE_SHA"
+
+      - name: Upload release tag bundle
+        if: steps.tag.outputs.tag != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-tag-bundle
+          path: ${{ runner.temp }}/release-tag.bundle
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Record release commit
+        id: release-commit
+        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+        run: echo "sha=$(git rev-parse --verify "refs/tags/${TAG}^{commit}")" >>"$GITHUB_OUTPUT"
 
       # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
       - name: Detect whether the tag ships the orcad template
@@ -662,6 +670,129 @@ jobs:
             echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Only job that can read the release App key. It runs no release-source code (no checkout of a working tree, no
+  # Node, hooks off) and pushes prepare's tag only after checking it is exactly a version bump of the source.
+  # Why the App: GITHUB_TOKEN can't push a tag whose commit carries .github/workflows changes versus main.
+  cut:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ needs.prepare.outputs.tag }}
+      should_release: ${{ needs.prepare.outputs.should_release }}
+      release_sha: ${{ steps.remote-tag.outputs.sha }}
+      source_ref: ${{ needs.prepare.outputs.source_ref }}
+      source_sha: ${{ needs.prepare.outputs.source_sha }}
+      source_short_sha: ${{ needs.prepare.outputs.source_short_sha }}
+      ships_orcad_template: ${{ needs.prepare.outputs.ships_orcad_template }}
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    defaults:
+      run:
+        working-directory: release
+    steps:
+      - name: Fetch release source as data only
+        working-directory: .
+        run: |
+          set -euo pipefail
+          git init -q release
+          cd release
+          git config core.hooksPath /dev/null
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch -q --no-tags --depth=1 origin "$SOURCE_SHA"
+
+      - name: Download release tag bundle
+        if: needs.prepare.outputs.new_tag != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-tag-bundle
+          path: ${{ runner.temp }}/bundle
+
+      - name: Verify the tag is only a version bump of the source
+        if: needs.prepare.outputs.new_tag != ''
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::Refusing to push $TAG: $1" >&2; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+(\.[0-9A-Za-z]+)?)?$ && "$TAG" == "v$VERSION" ]] || fail "tag/version mismatch"
+          bundle="$RUNNER_TEMP/bundle/release-tag.bundle"
+          git bundle verify -q "$bundle"
+          git -c transfer.fsckObjects=true fetch -q --no-tags "$bundle" "refs/tags/$TAG:refs/tags/$TAG"
+          [[ "$(git cat-file -t "refs/tags/$TAG")" == tag ]] || fail "not an annotated tag"
+          [[ "$(git cat-file -p "refs/tags/$TAG" | sed -n '2s/^type //p')" == commit ]] || fail "tag does not point at a commit"
+          commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          [[ "$commit" == "$RELEASE_SHA" ]] || fail "tag commit $commit is not prepare's $RELEASE_SHA"
+          [[ "$(git rev-list --parents -n 1 "$commit")" == "$commit $SOURCE_SHA" ]] || fail "release commit is not a single-parent child of $SOURCE_SHA"
+          changed="$(git diff-tree --no-commit-id --name-only -r "$commit")"
+          [[ -z "$changed" || "$changed" == package.json ]] || fail "release commit changes more than package.json"
+          # Byte-for-byte: the source package.json with only its version line replaced.
+          cmp -s <(git show "$commit:package.json") <(git show "$SOURCE_SHA:package.json" |
+            awk -v v="$VERSION" '!done && /^  "version": "[^"]*",$/ { print "  \"version\": \"" v "\","; done = 1; next } { print }') ||
+            fail "package.json differs from the source beyond its version"
+
+      - name: Fast-forward main to the release commit
+        if: needs.prepare.outputs.new_tag != '' && needs.prepare.outputs.push_main == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          push_log="$RUNNER_TEMP/release-push-main.log"
+          if GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              git push origin "$RELEASE_SHA:refs/heads/main" >"$push_log" 2>&1; then
+            cat "$push_log"
+          elif grep -Fq 'GH013' "$push_log" && grep -Fq 'Changes must be made through a pull request.' "$push_log"; then
+            cat "$push_log"
+            echo "::notice::Main requires pull requests; leaving its version unchanged and publishing only $TAG."
+          else
+            cat "$push_log"
+            exit 1
+          fi
+
+      - name: Mint release App token
+        id: app-token
+        if: needs.prepare.outputs.new_tag != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-workflows: write
+
+      - name: Push release tag with the release App
+        if: needs.prepare.outputs.new_tag != ''
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$APP_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          if ! GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              git push origin "refs/tags/$TAG:refs/tags/$TAG"; then
+            echo "::error::App push of $TAG failed. Manual fallback: download this run's release-tag-bundle artifact, run 'git fetch release-tag.bundle refs/tags/$TAG:refs/tags/$TAG && git push origin refs/tags/$TAG', then re-dispatch Cut Release with the same kind and ref; it recovers the pushed tag."
+            exit 1
+          fi
+
+      - name: Confirm the remote tag resolves to the release commit
+        id: remote-tag
+        run: |
+          set -euo pipefail
+          git fetch -q --no-tags --depth=1 origin "+refs/tags/$TAG:refs/remotes/origin-tags/$TAG"
+          remote_sha="$(git rev-parse "refs/remotes/origin-tags/$TAG^{commit}")"
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ || "$remote_sha" != "$RELEASE_SHA" ]]; then
+            echo "::error::Remote tag $TAG resolves to $remote_sha, not the verified release commit $RELEASE_SHA."
+            exit 1
+          fi
+          echo "sha=$RELEASE_SHA" >>"$GITHUB_OUTPUT"
+
   create-release:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -675,7 +806,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
 
       - name: Restore draft-release scripts from the workflow ref
         env:
@@ -700,7 +831,7 @@ jobs:
     if: needs.cut.outputs.should_release == 'true' && !contains(needs.cut.outputs.tag, '-')
     uses: ./.github/workflows/dependency-security.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       runner: ubuntu-latest
 
   terminal-rendering-golden:
@@ -724,7 +855,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
 
       - name: Restore golden test harness from the workflow ref
         shell: bash
@@ -833,7 +964,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -880,7 +1011,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
 
       - name: Trust the checked-out workspace in the job container
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -922,7 +1053,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/qualified-orcad-template.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
 
   # Server-only Linux tarballs from the same qualified template. Nothing depends on this job, so a
   # failure here never holds the desktop release.
@@ -936,7 +1067,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/orca-server-artifact.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       template_artifact: orcad-template
 
   # Gate SignPath artifact requests behind blocking tests to avoid approvals for unpublishable builds.
@@ -967,7 +1098,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/release-javascript.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       runner: ubuntu-latest
     secrets:
       ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
@@ -1037,7 +1168,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
 
       # GitHub reruns also resume jobs skipped behind a failed gate. Never
       # recreate Windows signing requests on a rerun; reuse the assets from the
@@ -2373,13 +2504,13 @@ jobs:
 
   homebrew-bump-published-rc-draft:
     needs:
-      - cut
+      - prepare
     # Why: publish-complete-draft-releases can expose a recovered RC without
     # running the build/publish jobs; still advance the RC cask to that tag.
-    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
+    if: ${{ needs.prepare.outputs.latest_published_rc_tag != '' }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
-      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
+      tag: ${{ needs.prepare.outputs.latest_published_rc_tag }}
     secrets: inherit
 
   homebrew-bump:
