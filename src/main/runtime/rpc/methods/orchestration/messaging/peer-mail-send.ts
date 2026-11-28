@@ -133,8 +133,9 @@ export async function sendPeerMail(args: {
         console.warn('[orchestration] arming the peer mail relay failed', relay)
       }
     }
-    // Kept only for mail the server says it stored, whose answer will come. An unknown outcome
-    // forgets it as before: one that never arrived would settle a later reply in its thread.
+    // Kept only for mail the server says it stored, so an answer can settle it or an unpair can say
+    // it may be lost. An unknown outcome forgets it as before: one that never arrived would settle
+    // a later reply in its thread.
     const stored = error instanceof OrchestrationError && error.code === 'peer_mail_stored'
     if (recorded && !stored) {
       // A cleanup that fails too mustn't hide why the send failed, or the files it left there.

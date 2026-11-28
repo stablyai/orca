@@ -641,7 +641,7 @@ describe('files sent with mail to a bot on a paired server', () => {
 
     expect(claimsOn(path)).toEqual([B_SESSION])
   })
-  it('forgets a question whose delivery outcome is unknown, as before, and still pulls replies', async () => {
+  it('forgets a question whose delivery outcome is unknown, as before, and arms the reply relay', async () => {
     deliveryTimesOut = true
     const relay = vi
       .spyOn(a.runtime, 'ensureOrchestrationPeerMailRelay')
