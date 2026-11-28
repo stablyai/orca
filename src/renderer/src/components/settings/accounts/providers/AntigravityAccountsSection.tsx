@@ -47,6 +47,8 @@ export function AntigravityAccountsSection({
   const [state, setState] = useState<AntigravityAccountState | null>(null)
   const [error, setError] = useState<AntigravityAccountError | null>(null)
   const mounted = useRef(true)
+  // Reads can answer out of order (the mount read and a login-change re-read); the newest wins.
+  const reads = useRef({ issued: 0, applied: 0 })
   const { busy, run } = useAntigravityAccountRun(perform, mounted)
   const ownerKind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
@@ -86,9 +88,11 @@ export function AntigravityAccountsSection({
       ownerKind === 'environment' && environmentId
         ? { kind: 'environment', environmentId }
         : { kind: 'local' }
+    const read = ++reads.current.issued
     void callAntigravityAccounts(currentOwner, { runtime, wslDistro }, 'List').then(
       (next) => {
-        if (!cancelled) {
+        if (!cancelled && read > reads.current.applied) {
+          reads.current.applied = read
           setState(next)
         }
       },
@@ -117,11 +121,16 @@ export function AntigravityAccountsSection({
     if (!keepShown) {
       setError(null)
     }
-    try {
-      const next = await callAntigravityAccounts(owner, target, action, accountId)
-      if (mounted.current) {
+    const apply = (read: number, next: AntigravityAccountState | null) => {
+      if (mounted.current && read > reads.current.applied) {
+        reads.current.applied = read
         setState(next)
       }
+    }
+    const read = ++reads.current.issued
+    try {
+      const next = await callAntigravityAccounts(owner, target, action, accountId)
+      apply(read, next)
       if (action === 'Select' && accountId) {
         announceAntigravityAccountSwitch(next, accountId, target.runtime === 'host')
       }
@@ -130,15 +139,11 @@ export function AntigravityAccountsSection({
         announceAntigravityAccountSwitchFailure(cause)
       }
       if (action === 'Select' || action === 'Remove' || action === 'AddCurrent') {
+        const reread = ++reads.current.issued
         try {
-          const observed = await callAntigravityAccounts(owner, target, 'List')
-          if (mounted.current) {
-            setState(observed)
-          }
+          apply(reread, await callAntigravityAccounts(owner, target, 'List'))
         } catch {
-          if (mounted.current) {
-            setState(null)
-          }
+          apply(reread, null)
         }
       }
       // A background re-read fails quietly, and a failed switch says why in its toast.
@@ -169,7 +174,10 @@ export function AntigravityAccountsSection({
   useOnLaterChange(signedInFlow, reread)
   useAgyLoginChange(state, signIn.loginRevision, reread, () => {
     setError(null)
-    clearAntigravityChatSignInError(owner)
+    // The sign-in store follows the host's agy, which a WSL distro's login doesn't change.
+    if (chats) {
+      clearAntigravityChatSignInError(owner)
+    }
   })
   const description = windowsHost
     ? t(

@@ -112,14 +112,19 @@ export class AntigravityAccountService {
       if (vault.accounts.some((entry) => this.matches(entry, current))) {
         return this.state({ vault, current })
       }
+      // Google rejects an expired access token, so a kept login skips asking it.
+      const expired =
+        current.accessTokenExpiresAt !== null && current.accessTokenExpiresAt <= this.now()
       const identity =
         current.identity ??
-        (await this.lookupIdentity(current.accessToken).catch((error: unknown) => {
-          if (options?.keepUnidentified) {
-            return null
-          }
-          throw error
-        }))
+        (options?.keepUnidentified && expired
+          ? null
+          : await this.lookupIdentity(current.accessToken).catch((error: unknown) => {
+              if (options?.keepUnidentified) {
+                return null
+              }
+              throw error
+            }))
       if (!current.identity && (await this.backend.read())?.contents !== current.contents) {
         throw new Error('The native Antigravity account changed. Save the current account again.')
       }

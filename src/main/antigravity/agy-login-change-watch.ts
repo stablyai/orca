@@ -7,7 +7,8 @@ import { getAntigravityWindowsHome } from './native-windows-credentials'
 const SETTLE_MS = 500
 
 let loginRevision = 0
-let watchers: FSWatcher[] | null = null
+// By store folder; a folder agy hasn't created yet, or whose watch failed, is tried again.
+const watchers = new Map<string, FSWatcher>()
 let settle: ReturnType<typeof setTimeout> | null = null
 
 /** Counts the changes seen to agy's stored login, which Settings reads again on each. */
@@ -45,12 +46,8 @@ function changed(): void {
   settle.unref?.()
 }
 
-/** Starts once, when a client first follows agy's sign-in; a store that can't be watched is skipped. */
+/** Called each time a client follows agy's sign-in: watches every store not watched yet. */
 export function watchAgyLoginChanges(): void {
-  if (watchers) {
-    return
-  }
-  watchers = []
   let stores: { dir: string; file: string }[]
   try {
     stores = agyLoginStores()
@@ -58,16 +55,22 @@ export function watchAgyLoginChanges(): void {
     return
   }
   for (const { dir, file } of stores) {
+    if (watchers.has(dir)) {
+      continue
+    }
     try {
       const watcher = watch(dir, { persistent: false }, (_event, name) => {
         if (!name || name.toString() === file) {
           changed()
         }
       })
-      watcher.on('error', () => watcher.close())
-      watchers.push(watcher)
+      watcher.on('error', () => {
+        watcher.close()
+        watchers.delete(dir)
+      })
+      watchers.set(dir, watcher)
     } catch {
-      // agy hasn't created this store on this host.
+      // agy hasn't created this store on this host yet.
     }
   }
 }

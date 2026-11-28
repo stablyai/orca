@@ -117,6 +117,8 @@ const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost =
     forgetAgyLogin(runtime)
     // A new login with no new selection: idle chats start again on it.
     restartIdleAgyChats({ runtime: 'host' })
+    // Signing in may have created the store agy keeps its login in.
+    watchAgyLoginChanges()
     if (intent === 'changeAccount') {
       await saveCurrentAgyLogin()
     }

@@ -260,6 +260,10 @@ export function AntigravityAgyAccountRows({
     )
   }
   if (state?.currentAccount && !signingIn && expiredAt === undefined) {
+    const showsCurrentError = Boolean(signIn) && !currentLoginErrorShown
+    if (showsCurrentError) {
+      currentLoginErrorShown = true
+    }
     terminalRows.push(
       signIn ? (
         <AntigravityAccountRow
@@ -269,7 +273,7 @@ export function AntigravityAgyAccountRows({
             'accounts.antigravity.addAccountInApp',
             'Sign in to another Google account. Both stay saved here to switch between.'
           )}
-          error={signInAlert ?? (currentLoginErrorShown ? null : currentLoginError)}
+          error={signInAlert ?? (showsCurrentError ? currentLoginError : null)}
           actions={
             <Button
               size="xs"
@@ -297,6 +301,11 @@ export function AntigravityAgyAccountRows({
           </span>
         </div>
       )
+    )
+  }
+  if (currentLoginError && !currentLoginErrorShown) {
+    terminalRows.push(
+      <AntigravityAccountRow key="action-error" title={null} error={currentLoginError} />
     )
   }
   return <>{terminalRows}</>
