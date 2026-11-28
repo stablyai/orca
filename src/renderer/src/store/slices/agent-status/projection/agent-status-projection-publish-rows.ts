@@ -10,6 +10,15 @@ import type { ProjectionTopology } from './agent-status-projection-topology'
 import type { ProjectionRows } from './agent-status-projection-rows'
 import { agentRowEntriesEqual } from '@/components/sidebar/workspace-card/activity/worktree-agent-live-index-patch'
 
+function hasPaneKey(rows: readonly { paneKey: string }[], targetKey: string): boolean {
+  for (let i = 0; i < rows.length; i += 1) {
+    if (rows[i].paneKey === targetKey) {
+      return true
+    }
+  }
+  return false
+}
+
 export function publishProjectionRows(
   data: AgentStatusProjectionState,
   state: AppState,
@@ -38,7 +47,7 @@ export function publishProjectionRows(
       cleanup.add(next.worktreeId)
     }
     for (const rowKey of oldKeys) {
-      if (oldOwner !== next.worktreeId || !next.rows.some((row) => row.paneKey === rowKey)) {
+      if (oldOwner !== next.worktreeId || !hasPaneKey(next.rows, rowKey)) {
         if (oldOwner) {
           const b = data.worktrees.get(oldOwner)!
           b.keys.delete(rowKey)
@@ -84,10 +93,16 @@ export function publishProjectionRows(
     }
     const hadOwner = data.ownerForSource.has(key)
     if (next.rows.length && next.worktreeId) {
-      data.rowsForSource.set(
-        key,
-        next.rows.map((row) => row.paneKey)
-      )
+      let rowKeys: string[]
+      if (next.rows.length === 1) {
+        rowKeys = [next.rows[0].paneKey]
+      } else {
+        rowKeys = []
+        for (let i = 0; i < next.rows.length; i += 1) {
+          rowKeys.push(next.rows[i].paneKey)
+        }
+      }
+      data.rowsForSource.set(key, rowKeys)
       data.ownerForSource.set(key, next.worktreeId)
     } else {
       data.rowsForSource.delete(key)
