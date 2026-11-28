@@ -6,11 +6,9 @@ import { useHelpMenuController } from '@/components/sidebar/chrome/help-menu-con
 import { useSetupGuideProgressSnapshot } from '@/components/setup-guide/setup-guide-progress-snapshot'
 import { nextAppRailFocusIndex } from './app-rail-roving-focus'
 import { WORKSPACE_LIST_REGION_ID } from './app-rail-layout'
-import {
-  activateWorkspacesRailItem,
-  isWorkspacesRailItemActive,
-  navigateFromRail
-} from './app-rail-navigation'
+import { activateListRailItem, navigateFromRail } from './app-rail-navigation'
+import { decodeRailListState, selectRailListState } from './app-rail-list-state'
+import { ActivityRailButton } from './ActivityRailButton'
 import {
   APP_RAIL_ICON_SIZE,
   APP_RAIL_ICON_STROKE_WIDTH,
@@ -47,11 +45,11 @@ export function AppRail({
   style?: React.CSSProperties
 }): React.JSX.Element {
   const t = useTranslate()
-  const workspacesActive = useAppStore(isWorkspacesRailItemActive)
+  const { workspacesActive, activityActive, listShowsWorkspaces, activityInbox } =
+    decodeRailListState(useAppStore(selectRailListState))
   const settingsActive = useAppStore((s) => s.activeView === 'settings')
   const shownDestinationsKey = useAppStore(selectShownRailDestinationsKey)
   const currentDestination = useAppStore(selectCurrentRailDestination)
-  const listShowsWorkspaces = useAppStore((s) => (s.sidebarBody ?? 'workspaces') === 'workspaces')
   const listRegionPresent = useWorkspaceListRegionPresent()
   const setupProgress = useSetupGuideProgressSnapshot()
   // The account menu's Milestones row and ring read the app-wide setup reading; the rail runs no setup checks itself.
@@ -97,13 +95,18 @@ export function AppRail({
   )
   // Hidden destinations are left out before partitioning; hidden is never folded.
   const shownDestinations = shownRailDestinationsFromKey(shownDestinationsKey)
-  const partition = partitionAppRail(shownDestinations.length, capacity)
+  // Activity (bots on) is fixed under Workspaces and never folds, so it takes one slot before partitioning.
+  const partition = partitionAppRail(
+    shownDestinations.length,
+    activityInbox ? Math.max(0, capacity - 1) : capacity
+  )
   const railDestinations = shownDestinations.slice(0, partition.shownDestinations)
   const foldedDestinations = shownDestinations.slice(partition.shownDestinations)
   const destinationActive = (id: AppRailDestinationId): boolean => id === currentDestination
 
   const renderedItems: AppRailItemId[] = [
     'workspaces',
+    ...(activityInbox ? (['activity'] as const) : []),
     ...railDestinations,
     partition.more ? 'more' : 'customize',
     'account'
@@ -112,13 +115,15 @@ export function AppRail({
     currentDestination && shownDestinations.includes(currentDestination) ? currentDestination : null
   const activeItem: AppRailItemId | null = workspacesActive
     ? 'workspaces'
-    : shownCurrentDestination
-      ? railDestinations.includes(shownCurrentDestination)
-        ? shownCurrentDestination
-        : 'more'
-      : settingsActive
-        ? 'account'
-        : null
+    : activityActive
+      ? 'activity'
+      : shownCurrentDestination
+        ? railDestinations.includes(shownCurrentDestination)
+          ? shownCurrentDestination
+          : 'more'
+        : settingsActive
+          ? 'account'
+          : null
   const [lastFocusedItem, setLastFocusedItem] = useState<AppRailItemId | null>(null)
   const tabStopItem =
     lastFocusedItem && renderedItems.includes(lastFocusedItem)
@@ -310,9 +315,22 @@ export function AppRail({
                 listShowsWorkspaces && listRegionPresent ? WORKSPACE_LIST_REGION_ID : undefined
               }
               tabStop={tabStopItem === 'workspaces'}
-              onClick={() => navigateFromRail(() => activateWorkspacesRailItem(useAppStore))}
+              onClick={() =>
+                navigateFromRail(() => activateListRailItem(useAppStore, 'workspaces'))
+              }
             />
           </RailItem>
+          {activityInbox ? (
+            <ActivityRailButton
+              active={activityActive}
+              expanded={listShowsWorkspaces ? undefined : listVisible}
+              controls={
+                !listShowsWorkspaces && listRegionPresent ? WORKSPACE_LIST_REGION_ID : undefined
+              }
+              tabStop={tabStopItem === 'activity'}
+              onClick={() => navigateFromRail(() => activateListRailItem(useAppStore, 'activity'))}
+            />
+          ) : null}
           {railDestinations.map((id) => (
             <RailItem key={id} tooltip={destinationLabel(id)}>
               <AppRailButton

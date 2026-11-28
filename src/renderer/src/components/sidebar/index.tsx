@@ -29,6 +29,7 @@ import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBo
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { SidebarActivityBody } from './sidebar-activity-body'
 import { LocalGitToolchainScanBanner } from '../repo/toolchain/LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from '../maintenance/terminal-daemon/SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/StalledTerminalDaemonBanner'
@@ -37,6 +38,7 @@ import { SidebarContentViewport } from './SidebarContentViewport'
 import { SidebarSectionDragOverlay } from './SidebarSectionDragOverlay'
 import { PROJECTS_SECTION_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { useBotsEnabled } from '@/lib/bot-catalog'
+import { selectActivityInboxEnabled } from '@/lib/bots-enabled'
 import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
 import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCardsIntroNotice'
 import {
@@ -48,8 +50,6 @@ import { useRailPageListFocusRelease } from '@/components/app-rail/rail-page-lis
 import { setWorkspaceListRegionPresent } from '@/components/app-rail/workspace-list-region-presence'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
 
-// Load the shared Activity badge/list pipeline after the sidebar shell.
-const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
 const SidebarBotsSection = lazyWithRetry(() =>
   import('@/components/bots/SidebarBotsSection').then((module) => ({
     default: module.SidebarBotsSection
@@ -126,6 +126,8 @@ function Sidebar({
   const settings = useAppStore((s) => s.settings)
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
+  // With the experimental rail and bots on, Activity is an inbox opened from the rail; it mounts only while open.
+  const activityInbox = useAppStore(selectActivityInboxEnabled)
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
   const agentReadFilter = useAppStore((s) => s.agentsReadFilter)
@@ -249,6 +251,7 @@ function Sidebar({
   const projectsSection = (
     <React.Fragment key="projects">
       <SidebarHeader
+        activityInbox={activityInbox}
         activityBadgeTarget={setAgentBadgeTarget}
         onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
         activityOptionsTarget={setAgentOptionsTarget}
@@ -261,7 +264,8 @@ function Sidebar({
         fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
       >
         <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
-          <SidebarAgentsList
+          <SidebarActivityBody
+            inbox={activityInbox}
             active={sidebarBody === 'agents'}
             readFilter={agentReadFilter}
             setReadFilter={setAgentReadFilter}
@@ -332,7 +336,8 @@ function Sidebar({
                 }}
               >
                 <SidebarContentViewport>
-                  <SidebarNav />
+                  {/* The inbox lists only what needs you; workspace search stays with Workspaces. */}
+                  {activityInbox && sidebarBody === 'agents' ? null : <SidebarNav />}
                   {projectsFirst ? [projectsSection, botsSection] : [botsSection, projectsSection]}
                 </SidebarContentViewport>
                 <SidebarSectionDragOverlay sidebarStyle={leftSidebarStyle} />

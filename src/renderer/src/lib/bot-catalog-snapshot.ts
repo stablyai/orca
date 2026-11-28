@@ -34,7 +34,9 @@ type BotHostEntry = {
   waits: BotListWaits
   // Each bot's Needs you items that aren't stale, from this session's last full read or items notice;
   // an older host sends none, and a kept list never carries them.
-  needsYou: Readonly<Record<string, number>> | undefined
+  // With each counted bot's newest event by anyone but its owner among those items (`othersLast`; an older
+  // host sends none), so a window tells what is new to the owner without reading the items.
+  needsYou: Pick<BotNeedsYouCounts, 'counts' | 'othersLast'> | undefined
   // When the host counted them (its clock), so an older count landing late never replaces a newer one;
   // and when (this clock) the next counted item goes stale.
   needsYouAt: number | undefined
@@ -123,6 +125,7 @@ export function publishBots(
     webhooks: boolean | undefined
     waits?: BotListWaits
     needsYou?: Readonly<Record<string, number>>
+    needsYouOthersLast?: Readonly<Record<string, number>>
     needsYouAt?: number
     needsYouStaleInMs?: number
     connectorNeedsSignIn?: boolean
@@ -147,13 +150,12 @@ export function publishBots(
       if (entry.needsYouAt === undefined) {
         takeNeedsYou(entry, undefined)
       }
-    } else if (answer.needsYouAt === undefined) {
-      // An older host doesn't say when it counted: its answer stands.
-      takeNeedsYou(entry, { counts: answer.needsYou, at: -Infinity })
     } else {
       takeNeedsYou(entry, {
         counts: answer.needsYou,
-        at: answer.needsYouAt,
+        othersLast: answer.needsYouOthersLast,
+        // An older host doesn't say when it counted: its answer stands.
+        at: answer.needsYouAt ?? -Infinity,
         ...(answer.needsYouStaleInMs !== undefined ? { staleInMs: answer.needsYouStaleInMs } : {})
       })
     }
@@ -190,7 +192,8 @@ function takeNeedsYou(entry: BotHostEntry, needsYou: BotNeedsYouCounts | undefin
   if (entry.needsYouAt !== undefined && needsYou.at < entry.needsYouAt) {
     return
   }
-  entry.needsYou = reuseEqualJson(entry.needsYou, needsYou.counts)
+  const { counts, othersLast } = needsYou
+  entry.needsYou = reuseEqualJson(entry.needsYou, othersLast ? { counts, othersLast } : { counts })
   entry.needsYouAt = needsYou.at === -Infinity ? undefined : needsYou.at
   entry.needsYouStaleAt =
     needsYou.staleInMs !== undefined ? Date.now() + needsYou.staleInMs : undefined
@@ -380,6 +383,13 @@ export function readHostBots(hostId: ExecutionHostId): readonly Bot[] {
 export function readBotItemsNeedingOwner(
   bot: Pick<Bot, 'id'> & { hostId: ExecutionHostId }
 ): number | null {
-  const counts = entryOf(bot.hostId)?.needsYou
+  const counts = entryOf(bot.hostId)?.needsYou?.counts
   return counts ? (counts[bot.id] ?? 0) : null
+}
+
+/** The newest event by anyone but its owner among the bot's counted Needs you items; 0 for none. Null
+ *  when its host hasn't counted, or is too old to say. */
+export function readBotNeedsYouOthersLast(bot: Pick<Bot, 'id' | 'hostId'>): number | null {
+  const othersLast = entryOf(bot.hostId)?.needsYou?.othersLast
+  return othersLast ? (othersLast[bot.id] ?? 0) : null
 }

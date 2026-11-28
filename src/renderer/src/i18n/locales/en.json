@@ -31458,7 +31458,9 @@
     "customize": "Customize",
     "pageRegion": "Page",
     "account": "Account",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "activity": "Activity",
+    "activityNew": "New activity"
   },
   "chats": {
     "delete": {
@@ -31494,5 +31496,14 @@
       "badJson": "Check the pasted JSON: it doesn’t parse.",
       "none": "Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported."
     }
+  },
+  "activityInbox": {
+    "accessRequest": "{{name}} asked for access",
+    "accessContext": "Access request · {{source}}",
+    "caughtUp": "You’re all caught up",
+    "caughtUpDetail": "Agents waiting on you, bots with tasks for you and finished work show up here. Running agents stay on their workspace cards.",
+    "itemNeedsYou": "Needs you",
+    "accessContextExpires": "Access request · {{source}} · Expires in {{left}}",
+    "toDo": "To do"
   }
 }

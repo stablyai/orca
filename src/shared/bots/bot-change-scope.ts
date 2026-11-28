@@ -28,6 +28,8 @@ export type BotNeedsYouCounts = {
   counts: Readonly<Record<string, number>>
   at: number
   staleInMs?: number
+  /** Each counted bot's newest event by anyone but the owner among those items; absent from an older host. */
+  othersLast?: Readonly<Record<string, number>>
 }
 
 /** A notice's scope. No `botIds`: every bot (an older host says nothing more). No `kinds`: anything.
@@ -332,13 +334,28 @@ function readBotNeedsYouCounts(value: unknown): BotNeedsYouCounts | undefined {
   ) {
     return undefined
   }
-  const counts: Record<string, number> = {}
-  for (const [botId, count] of Object.entries(value.counts)) {
-    if (typeof count === 'number') {
-      counts[botId] = count
-    }
-  }
+  const counts = readNumbers(value.counts) ?? {}
   const staleInMs =
     'staleInMs' in value && typeof value.staleInMs === 'number' ? value.staleInMs : undefined
-  return { counts, at: value.at, ...(staleInMs !== undefined ? { staleInMs } : {}) }
+  const othersLast = 'othersLast' in value ? readNumbers(value.othersLast) : undefined
+  return {
+    counts,
+    at: value.at,
+    ...(staleInMs !== undefined ? { staleInMs } : {}),
+    ...(othersLast ? { othersLast } : {})
+  }
+}
+
+/** A record of numbers (each bot's), read loosely; undefined for anything but an object. */
+export function readNumbers(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const out: Record<string, number> = {}
+  for (const [key, number] of Object.entries(value)) {
+    if (typeof number === 'number') {
+      out[key] = number
+    }
+  }
+  return out
 }

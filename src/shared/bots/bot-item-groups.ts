@@ -182,14 +182,22 @@ export function botItemsNeedingOwner(
 
 /** The same count for every bot at once, from each Needs you item's bot, last activity and snooze: what
  *  the bot list carries so a phone shows it before reading any items; and when the count next changes,
- *  as a counted item goes stale or a snoozed one comes back (`staleInMs`, named for the first). */
+ *  as a counted item goes stale or a snoozed one comes back (`staleInMs`, named for the first).
+ *  `othersLast`: each counted bot's newest event by anyone but the owner among those items, so a window
+ *  tells against the bot's `itemsSeen` whether any is new to the owner without reading them. */
 export function botItemsNeedingOwnerByBot(
-  rows: readonly { botId: string; lastActivityAt: number; snoozedUntil: number | null }[],
+  rows: readonly {
+    botId: string
+    lastActivityAt: number
+    snoozedUntil: number | null
+    othersLastEventId?: number
+  }[],
   bots: readonly { id: string; itemsStale?: BotItemsStale }[],
   now: number
-): { counts: Record<string, number>; staleInMs?: number } {
+): { counts: Record<string, number>; othersLast: Record<string, number>; staleInMs?: number } {
   const staleDays = new Map(bots.map((bot) => [bot.id, botItemStaleDays(bot.itemsStale)]))
   const counts: Record<string, number> = {}
+  const othersLast: Record<string, number> = {}
   let staleInMs: number | undefined
   const next = (left: number) => {
     staleInMs = Math.min(staleInMs ?? left, left)
@@ -204,10 +212,11 @@ export function botItemsNeedingOwnerByBot(
       next((row.snoozedUntil ?? now) - now)
     } else if (!isBotItemStale(item, days, now)) {
       counts[row.botId] = (counts[row.botId] ?? 0) + 1
+      othersLast[row.botId] = Math.max(othersLast[row.botId] ?? 0, row.othersLastEventId ?? 0)
       if (days !== null) {
         next(botItemNeedsYouStaleAt(botItemActivityAt(item, now), days) - now)
       }
     }
   }
-  return { counts, ...(staleInMs !== undefined ? { staleInMs } : {}) }
+  return { counts, othersLast, ...(staleInMs !== undefined ? { staleInMs } : {}) }
 }

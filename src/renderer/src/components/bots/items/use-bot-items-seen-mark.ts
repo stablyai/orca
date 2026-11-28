@@ -1,6 +1,7 @@
 // The "new since you last looked" mark an Items list opens with, and the tab marking itself opened.
 import { useEffect, useRef, useState } from 'react'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
+import { noteBotItemsSeen } from '@/lib/bot-items-seen'
 import type { Bot } from '../../../../../shared/bot-types'
 import { parseBotItemEventId } from '../../../../../shared/bots/bot-items'
 import { KEPT_ITEM_LISTS, type BotItemsRead } from './use-bot-items'
@@ -51,6 +52,8 @@ export function useBotItemsSeenAtOpen(
     void callBotRpc<{ seenEventId?: string }>({ hostId }, 'bots.items.owner.opened', { botId: id })
       .then((result) => {
         if (result?.seenEventId) {
+          // The Activity dot reads the same mark: it clears now, not at the bot list's next read.
+          noteBotItemsSeen({ hostId, id }, result.seenEventId)
           // Overlapping opens can reply out of order: keep the newest mark.
           const key = botRefKey({ hostId, id })
           const later = laterMark(result.seenEventId, openedMarks.get(key))

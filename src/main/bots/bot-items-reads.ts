@@ -133,17 +133,25 @@ export class BotItemsReads extends BotItemsTables {
     return { items, counts }
   }
 
-  /** Every Needs you item's bot, last activity and snooze, so the bot list counts what needs the owner. */
-  needsYou(): { botId: string; lastActivityAt: number; snoozedUntil: number | null }[] {
+  /** Every Needs you item's bot, last activity, snooze and newest event by anyone but the owner, so the
+   *  bot list counts what needs the owner and says whether any of it is new to them. */
+  needsYou(): {
+    botId: string
+    lastActivityAt: number
+    snoozedUntil: number | null
+    othersLastEventId: number
+  }[] {
     return this.db
       .prepare(
-        `SELECT owner_bot_id, last_activity_at, snoozed_until FROM items WHERE status = 'needs_you'`
+        `SELECT owner_bot_id, last_activity_at, snoozed_until, others_last_event_id FROM items
+           WHERE status = 'needs_you'`
       )
       .all()
       .map((row) => ({
         botId: String(row.owner_bot_id),
         lastActivityAt: Number(row.last_activity_at),
-        snoozedUntil: optionalInteger(row, 'snoozed_until')
+        snoozedUntil: optionalInteger(row, 'snoozed_until'),
+        othersLastEventId: Number(row.others_last_event_id)
       }))
   }
 
