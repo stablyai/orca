@@ -1,6 +1,29 @@
 import { getOptionalJsonFlag, getOptionalStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function jsonObjectPayload(rawPayload: string): Record<string, unknown> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(rawPayload)
+  } catch {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--payload must be a JSON object when combined with structured payload flags.'
+    )
+  }
+  if (!isJsonObject(parsed)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--payload must be a JSON object when combined with structured payload flags.'
+    )
+  }
+  return parsed
+}
+
 export function getOptionalStructuredMessagePayload(
   flags: Map<string, string | boolean>
 ): string | undefined {
@@ -21,13 +44,7 @@ export function getOptionalStructuredMessagePayload(
   if (!hasStructuredPayload) {
     return rawPayload
   }
-  if (rawPayload !== undefined) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Use either --payload or structured payload flags, not both.'
-    )
-  }
-  // Structured flags avoid fragile PowerShell JSON quoting.
+  // Structured flags avoid fragile PowerShell JSON quoting. They override the same keys.
   const payload: Record<string, string | string[]> = {}
   if (taskId) {
     payload.taskId = taskId
@@ -56,5 +73,8 @@ export function getOptionalStructuredMessagePayload(
   if (phase) {
     payload.phase = phase
   }
-  return JSON.stringify(payload)
+  if (rawPayload === undefined) {
+    return JSON.stringify(payload)
+  }
+  return JSON.stringify({ ...jsonObjectPayload(rawPayload), ...payload })
 }
