@@ -1369,7 +1369,7 @@
 3 src/main/startup/network-compatibility/http1-compatibility-marker.ts
 9 src/main/startup/network-compatibility/http1-compatibility-profile-state.ts
 1 src/main/startup/plugin-startup/main-process-plugin-rpc.ts
-4 src/main/startup/plugin-startup/main-process-plugins.ts
+3 src/main/startup/plugin-startup/main-process-plugins.ts
 2 src/main/startup/profile-startup/desktop-profile-instance-lock.ts
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
