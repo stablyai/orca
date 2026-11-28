@@ -3,6 +3,7 @@ import { Maximize2, Minimize2 } from 'lucide-react-native'
 import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { composerInputStylesSheet as inputStylesSheet } from '../../../components/composer-input/composer-input-styles'
+import { useKeyboardPersistingTaps } from '../../../platform/keyboard/keyboard-persisting-taps'
 import { useThemedStyles } from '../../../theme/themed-styles'
 import type { ChatWidthToggle } from './use-chat-bottom-fit'
 
@@ -14,9 +15,12 @@ export function MobileNativeChatWidthToggle({
   const t = useMobileTranslation()
   const colors = useMobileColors()
   const inputStyles = useThemedStyles(inputStylesSheet)
+  // Keep focus in the composer field so the idle pill does not unmount this button mid-tap.
+  const keepsFocus = useKeyboardPersistingTaps('always')
   const Icon = expanded ? Minimize2 : Maximize2
   return (
     <Pressable
+      ref={keepsFocus}
       accessibilityRole="button"
       accessibilityLabel={
         expanded
