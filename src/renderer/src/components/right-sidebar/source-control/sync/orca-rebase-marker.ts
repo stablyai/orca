@@ -21,7 +21,8 @@ export function orcaRebaseMarkerFromResult(
 /** Store the stop a Continue/inspect reported, and arm the marker when it finished Orca's rebase. */
 export function recordRebaseStopReading(
   operationStore: OperationStore,
-  result: ContinueRebaseResult
+  result: ContinueRebaseResult,
+  stagedReady = false
 ): void {
   const finishedOrcaRebase =
     result.branch &&
@@ -35,7 +36,8 @@ export function recordRebaseStopReading(
           ...(result.indexObservation ? { indexObservation: result.indexObservation } : {}),
           branch: result.branch ?? null,
           blocked:
-            result.outcome === 'empty' || result.outcome === 'stopped' ? result.outcome : null
+            result.outcome === 'empty' || result.outcome === 'stopped' ? result.outcome : null,
+          ...(stagedReady && result.indexObservation ? { stagedReady: true as const } : {})
         }
       : null,
     rebaseStopInspectFailure: null,

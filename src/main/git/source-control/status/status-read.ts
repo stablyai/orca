@@ -21,7 +21,10 @@ import {
 } from '../../worktrees/content-paths/worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from '../git-read-cache-invalidation'
-import { readRebaseIndexObservation } from '../mutations/rebase-index-observation'
+import {
+  readRebaseIndexObservation,
+  statusNeedsRebaseIndexObservation
+} from '../mutations/rebase-index-observation'
 import { detectConflictOperation } from '../mutations/git-conflict-operation'
 import { parseUnmergedEntry } from '../../../../shared/git/status/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from '../upstream/effective-upstream-status-cache'
@@ -234,7 +237,8 @@ async function runGetStatus(
   }
 
   const indexObservation =
-    statusSucceeded && conflictOperation === 'rebase'
+    statusSucceeded &&
+    statusNeedsRebaseIndexObservation(worktreePath, options, conflictOperation === 'rebase')
       ? await readRebaseIndexObservation(worktreePath, options)
       : null
   return {

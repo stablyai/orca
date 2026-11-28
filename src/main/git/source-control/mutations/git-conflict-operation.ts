@@ -11,6 +11,7 @@ import { trackGitOperationWriters } from '../../command-runner/git-writer-lifeti
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 import { resolveGitDir } from '../resolve-git-dir'
+import { noteRebaseEmptyStep } from './rebase-index-observation'
 
 // HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
 export async function detectConflictOperation(
@@ -83,6 +84,7 @@ export async function abortRebase(
       ),
     lifetime.waitForWriters
   )
+  noteRebaseEmptyStep(worktreePath, options, false)
 }
 
 // Git 2.55 reworded "Applying autostash resulted in conflicts"; match both.

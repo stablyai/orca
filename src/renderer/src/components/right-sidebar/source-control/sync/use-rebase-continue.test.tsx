@@ -282,3 +282,176 @@ it('ignores an inspection superseded by staging and unstaging during the read', 
     indexObservation: 'index-a'
   })
 })
+
+type HookProps = {
+  store: ReturnType<typeof getWorktreeOperationStore>
+  worktreeId: string
+  head: string
+  indexObservation: string | null
+  refresh?: () => Promise<void>
+}
+
+// Reads the stop the way the panel does, so readiness and the hook see the same store.
+async function renderStoreBackedHook(initialProps: HookProps) {
+  const { useStore } = await import('zustand')
+  const { resolveRebaseContinueState } = await import('../panel/base-rebase-state')
+  const noop = async () => {}
+  const target = { kind: 'local' as const }
+  return renderHook(
+    ({ store, worktreeId, head, indexObservation, refresh }: HookProps) => {
+      const rebaseStop = useStore(store, (state) => state.rebaseStop)
+      const inspectFailure = useStore(store, (state) => state.rebaseStopInspectFailure)
+      const state = resolveRebaseContinueState(rebaseStop, head, inspectFailure, indexObservation)
+      return {
+        state,
+        ...useSourceControlRebaseContinue({
+          activeRepoTarget: target,
+          activeWorktreeId: worktreeId,
+          conflictOperation: 'rebase',
+          operationStore: store,
+          rebaseStopUnread: state === 'unknown',
+          rebaseStop,
+          inspectFailure,
+          indexObservation,
+          refreshActiveGitStatusAfterMutation: refresh ?? noop,
+          refreshBranchCompareRef: { current: noop },
+          refreshGitHistoryRef: { current: noop },
+          statusHead: head,
+          worktreePath: `/repo/${worktreeId}`
+        })
+      }
+    },
+    { initialProps }
+  )
+}
+
+it('Retry re-reads an empty step after a failed read at a different index', async () => {
+  const store = getWorktreeOperationStore('wt-retry-empty', 'local', 'instance-1')
+  const token = { head: 'S1', step: '1', incarnation: 'run-1' }
+  store.setState({
+    rebaseStop: { token, branch: 'feature', blocked: 'empty', indexObservation: 'index-a' }
+  })
+  git.continueRebase.mockResolvedValueOnce({ outcome: 'failed', message: 'busy' })
+  const props = { store, worktreeId: 'wt-retry-empty', head: 'S1', indexObservation: 'index-b' }
+  const { result, rerender } = await renderStoreBackedHook(props)
+  await act(flush)
+  expect(result.current.state).toBe('unreadable')
+  // Back at the index the empty reading was taken at; Retry must still ask the host.
+  rerender({ ...props, indexObservation: 'index-a' })
+  git.continueRebase.mockResolvedValueOnce({
+    outcome: 'inspected',
+    stop: token,
+    branch: 'feature',
+    indexObservation: 'index-a',
+    hasStagedChanges: false
+  })
+  await act(async () => {
+    result.current.handleRetryRebaseInspect()
+    await flush()
+  })
+  await act(flush)
+  expect(git.continueRebase).toHaveBeenCalledTimes(2)
+  expect(result.current.state).toBe('empty')
+  expect(result.current.isRetryingRebaseInspect).toBe(false)
+})
+
+it('drops readiness accepted on staged changes once the index changes back', async () => {
+  const store = getWorktreeOperationStore('wt-staged-ready', 'local', 'instance-1')
+  const token = { head: 'S1', step: '1', incarnation: 'run-1' }
+  store.setState({
+    rebaseStop: { token, branch: 'feature', blocked: 'empty', indexObservation: 'index-a' }
+  })
+  git.continueRebase.mockResolvedValueOnce({
+    outcome: 'inspected',
+    stop: token,
+    branch: 'feature',
+    indexObservation: 'index-b',
+    hasStagedChanges: true
+  })
+  const props = { store, worktreeId: 'wt-staged-ready', head: 'S1', indexObservation: 'index-b' }
+  const { result, rerender } = await renderStoreBackedHook(props)
+  await act(flush)
+  expect(result.current.state).toBe('ready')
+
+  const unstaged = deferred<ContinueRebaseResult>()
+  git.continueRebase.mockReturnValueOnce(unstaged.promise)
+  rerender({ ...props, indexObservation: 'index-a' })
+  // The staged evidence is gone: Continue waits for the re-read instead of running Git on it.
+  expect(result.current.state).toBe('unknown')
+  await act(async () => {
+    await result.current.handleContinueRebase()
+  })
+  expect(git.continueRebase).toHaveBeenCalledTimes(2)
+  expect(git.continueRebase).not.toHaveBeenCalledWith(
+    expect.anything(),
+    'continue',
+    expect.anything()
+  )
+  await act(async () => {
+    unstaged.resolve({
+      outcome: 'inspected',
+      stop: token,
+      branch: 'feature',
+      indexObservation: 'index-a',
+      hasStagedChanges: false
+    })
+    await flush()
+  })
+  expect(result.current.state).toBe('empty')
+})
+
+it('keeps Retry feedback on the worktree that started it and refuses a second press', async () => {
+  const first = getWorktreeOperationStore('wt-owner-a', 'local', 'instance-1')
+  const second = getWorktreeOperationStore('wt-owner-b', 'local', 'instance-1')
+  first.setState({ rebaseStop: null, rebaseStopInspectFailure: { head: 'S1', message: null } })
+  const held = deferred<ContinueRebaseResult>()
+  const other = deferred<ContinueRebaseResult>()
+  git.continueRebase.mockReturnValueOnce(held.promise).mockReturnValueOnce(other.promise)
+  const props = { store: first, worktreeId: 'wt-owner-a', head: 'S1', indexObservation: null }
+  const { result, rerender } = await renderStoreBackedHook(props)
+  act(() => {
+    result.current.handleRetryRebaseInspect()
+    result.current.handleRetryRebaseInspect()
+  })
+  expect(result.current.isRetryingRebaseInspect).toBe(true)
+  expect(git.continueRebase).toHaveBeenCalledTimes(1)
+
+  // An unread worktree reached mid-Retry runs its own check without inheriting Retry's progress.
+  rerender({ store: second, worktreeId: 'wt-owner-b', head: 'T1', indexObservation: null })
+  expect(result.current.isRetryingRebaseInspect).toBe(false)
+  expect(git.continueRebase).toHaveBeenCalledTimes(2)
+  await act(async () => {
+    held.resolve(inspected('S1'))
+    other.resolve(inspected('T1'))
+    await flush()
+  })
+  expect(second.getState().rebaseStop?.token.head).toBe('T1')
+  expect(first.getState().rebaseStop).toBeNull()
+})
+
+it('reads a HEAD that disagrees with status once, then offers Retry if status stays put', async () => {
+  const { useAppStore } = await import('@/store')
+  const store = getWorktreeOperationStore('wt-mismatch', 'local', 'instance-1')
+  useAppStore.setState({
+    gitStatusHeadByWorktree: {
+      ...useAppStore.getState().gitStatusHeadByWorktree,
+      'wt-mismatch': 'A'
+    }
+  })
+  git.continueRebase.mockResolvedValue(inspected('B'))
+  const refresh = vi.fn(async () => {})
+  const props = { store, worktreeId: 'wt-mismatch', head: 'A', indexObservation: null, refresh }
+  const { result, rerender } = await renderStoreBackedHook(props)
+  for (let i = 0; i < 5; i++) {
+    await act(flush)
+  }
+  expect(git.continueRebase).toHaveBeenCalledTimes(1)
+  expect(refresh).toHaveBeenCalledTimes(1)
+  expect(result.current.state).toBe('unreadable')
+
+  // A status that does catch up settles the same reading without another read.
+  rerender({ ...props, head: 'B' })
+  await act(flush)
+  expect(result.current.state).toBe('ready')
+  expect(git.continueRebase).toHaveBeenCalledTimes(1)
+})
