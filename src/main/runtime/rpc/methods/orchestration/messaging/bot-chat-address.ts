@@ -13,9 +13,8 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { Bot } from '../../../../../../shared/bot-types'
 import { resolveItem } from '../../bots-items-write-support'
-import { refuse } from './bot-recipient'
+import { mayReachBot, refuse } from './bot-recipient'
 import { sendToBot } from './bot-request-send'
-import { mayReachBot } from './bot-recipient'
 import { itemMailFilesBody, withItemMailFiles } from './bot-item-mail-files'
 
 /** `--chat new`: the receiving bot starts a new chat for a handoff or question. */
