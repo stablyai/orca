@@ -46,11 +46,7 @@ import {
   pickTuiAgent
 } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
-import {
-  agentChoiceOpensAsChat,
-  readChatProgram,
-  resolveChatProgramContext
-} from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { agentChoiceOpensAsChat } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { agentLaunchRouteStoreFor } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import {
@@ -74,7 +70,7 @@ import {
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
-import { chatProgramInstalled } from '../../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
+import { useSettingsChatInventory } from './use-settings-chat-inventory'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -137,21 +133,11 @@ export function AgentLaunchSettingsCatalog({
     managedRuntimeChatAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
-  const chatOnlyKey = useAppStateValueWithHostStatuses((appState, statuses) => {
-    if (detectionTarget.kind === 'ssh') {
-      return ''
-    }
-    const state = agentLaunchRouteStoreFor(appState, statuses)
-    const context = resolveChatProgramContext(state, workspace)
-    const selectedDetected = detectionTarget.kind === 'runtime' ? detected : installedHere
-    return chatProviderAgents(context.executionHostId, statuses)
-      .filter(
-        (agent) =>
-          !selectedDetected?.includes(agent) &&
-          chatProgramInstalled(readChatProgram(statuses, agent, context, selectedDetected))
-      )
-      .join(' ')
-  })
+  const { chatOnlyKey, chatInventoryReady } = useSettingsChatInventory(
+    workspace,
+    detectionTarget.kind === 'runtime' ? detected : installedHere,
+    detectionTarget.kind !== 'ssh'
+  )
   const chatOnly = new Set(chatOnlyKey.split(' '))
   const catalog = getAgentCatalog()
   const installedAgents = catalog.filter(
@@ -393,6 +379,12 @@ export function AgentLaunchSettingsCatalog({
           refreshSettings?.()
         }}
         getRowProps={rowProps}
+        chatInventoryReady={chatInventoryReady}
+        onSetAvailableEnabled={
+          settings.bulkAvailability
+            ? (agents, enabled) => mutate({ type: 'bulk-availability', agents, enabled })
+            : undefined
+        }
       />
     </>
   )

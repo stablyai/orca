@@ -58,6 +58,13 @@ export const AgentLaunchSettingsMutation = lazyZodSchema(() =>
     z.object({ type: z.literal('availability'), agent: Agent, enabled: z.boolean() }).strict(),
     z
       .object({
+        type: z.literal('bulk-availability'),
+        agents: z.array(Agent).min(1).max(256),
+        enabled: z.boolean()
+      })
+      .strict(),
+    z
+      .object({
         type: z.literal('permissions'),
         mode: z.enum(['manual', 'yolo', 'auto']),
         agent: Agent.optional(),

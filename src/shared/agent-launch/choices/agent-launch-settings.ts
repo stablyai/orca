@@ -11,6 +11,7 @@ import type { TuiAgent } from '../catalog/tui-agent'
 import { buildDefaultAgentSettingsUpdate } from './default-agent-settings'
 import {
   buildAgentAvailabilitySettingsUpdate,
+  buildBulkAgentAvailabilitySettingsUpdate,
   normalizeDisabledTuiAgents
 } from '../catalog/tui-agent-selection'
 import {
@@ -62,6 +63,8 @@ export type AgentLaunchSettings = {
   defaultTuiAgent: GlobalSettings['defaultTuiAgent']
   newWorkspaceSetupOnly?: boolean
   disabledTuiAgents: TuiAgent[]
+  /** Absent on hosts that only accept single-agent availability changes. */
+  bulkAvailability?: true
   agentCmdOverrides: NonNullable<GlobalSettings['agentCmdOverrides']>
   agentDefaultArgs: NonNullable<GlobalSettings['agentDefaultArgs']>
   environmentNames: Partial<Record<TuiAgent, string[]>>
@@ -81,6 +84,7 @@ export type AgentLaunchSettings = {
 export type AgentLaunchSettingsMutation =
   | { type: 'default'; agent: GlobalSettings['defaultTuiAgent']; setupOnly?: boolean }
   | { type: 'availability'; agent: TuiAgent; enabled: boolean }
+  | { type: 'bulk-availability'; agents: TuiAgent[]; enabled: boolean }
   | {
       type: 'permissions'
       mode: Exclude<AgentPermissionMode, 'mixed'>
@@ -127,6 +131,7 @@ export function projectAgentLaunchSettings(
     defaultTuiAgent: settings.defaultTuiAgent ?? null,
     newWorkspaceSetupOnly: false,
     disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents),
+    bulkAvailability: true,
     agentCmdOverrides: { ...settings.agentCmdOverrides },
     agentDefaultArgs: normalizeTuiAgentArgsRecord(composed.agentDefaultArgs),
     environmentNames: Object.fromEntries(
@@ -194,6 +199,15 @@ export function agentLaunchSettingsMutationUpdates(
           disabledTuiAgents: settings.disabledTuiAgents ?? []
         },
         mutation.agent,
+        mutation.enabled
+      )
+    case 'bulk-availability':
+      return buildBulkAgentAvailabilitySettingsUpdate(
+        {
+          defaultTuiAgent: settings.defaultTuiAgent ?? null,
+          disabledTuiAgents: settings.disabledTuiAgents ?? []
+        },
+        mutation.agents,
         mutation.enabled
       )
     case 'permission':

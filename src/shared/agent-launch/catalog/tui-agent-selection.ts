@@ -113,16 +113,26 @@ export function buildAgentAvailabilitySettingsUpdate(
   id: TuiAgent,
   enabled: boolean
 ): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
-  const latestDisabled = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+  return buildBulkAgentAvailabilitySettingsUpdate(settings, [id], enabled)
+}
+
+export function buildBulkAgentAvailabilitySettingsUpdate(
+  settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>,
+  agents: readonly TuiAgent[],
+  enabled: boolean
+): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
+  const latestDisabled = new Set(normalizeDisabledTuiAgents(settings.disabledTuiAgents))
+  const targets = new Set(agents)
   const nextDisabled = enabled
-    ? latestDisabled.filter((agent) => agent !== id)
-    : latestDisabled.includes(id)
-      ? latestDisabled
-      : [...latestDisabled, id]
+    ? [...latestDisabled].filter((agent) => !targets.has(agent))
+    : [...new Set([...latestDisabled, ...targets])]
+  const defaultAgent = settings.defaultTuiAgent
 
   return {
     disabledTuiAgents: nextDisabled,
-    ...(settings.defaultTuiAgent === id && !enabled ? { defaultTuiAgent: null } : {})
+    ...(!enabled && defaultAgent && defaultAgent !== 'blank' && targets.has(defaultAgent)
+      ? { defaultTuiAgent: null }
+      : {})
   }
 }
 

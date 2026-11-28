@@ -524,6 +524,8 @@
       "permissionArgsTerminalOnly": "这些参数可能控制 {{agent}} 的终端权限，因此 Orca 不添加任何标志。聊天使用上方的权限选择",
       "localSaveFailed": "无法保存智能体设置。请重试",
       "localSaveFailedAgent": "无法保存 {{agent}} 设置。请重试",
+      "enableAllAvailable": "全部启用",
+      "disableAllAvailable": "全部禁用",
       "permissionFromArgs": "{{agent}} 在终端和新聊天中已设为 {{mode}}",
       "permissionFromArgsTerminals": "{{agent}} 在终端中已设为 {{mode}}",
       "permissionOwnAgent": "使用 {{agent}} 自己的设置",
