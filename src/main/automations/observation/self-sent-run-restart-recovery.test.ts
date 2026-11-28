@@ -15,7 +15,6 @@ import { agentSessionMessagePayload } from '../../../shared/agent-session/reques
 import { automationRunOperationId } from '../launch/automation-run-operation'
 import { selfSentRunReceipt, sendRunPromptKeptAtRestart } from './self-sent-run-restart-recovery'
 
-/** Where the run's prompt went, as recovery reads it. */
 // Orca quit while a self-sent run's prompt waited for its agent to start: after the restart, the run finds
 // its chat by the prompt's id and sends the kept prompt exactly once, however often recovery runs.
 let rig: QueuedMessageTestRig | null = null
@@ -105,6 +104,8 @@ it('leaves a prompt queued behind a running turn to the queue, and still finds i
   setStructuredAgentSessionHost(rig.host)
   await rig.workingSend()
   await sendRunPrompt(rig)
+  // Restarting holds it like a kept prompt, but the restart never cut a send of it.
+  await restartAgain(rig)
   const runtime = runtimeOf(rig)
   expect(await selfSentRunReceipt(runtime, run)).toMatchObject({ kind: 'chat', sessionId: SESSION })
   await sendRunPromptKeptAtRestart(runtime, run, live)
@@ -137,4 +138,23 @@ it('never sends a kept prompt its agent refused', async () => {
   await restartAgain(chat)
   await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
   expect(await sendsOf(chat)).toHaveLength(1)
+})
+
+it('never resends a kept prompt whose chat the person closed after recovery sent it', async () => {
+  const chat = await quitBeforeTheAgentGotIt()
+  chat.holdNextStart()
+  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
+  await chat.host.close(SESSION, 'user-close')
+  await restartAgain(chat)
+  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
+  expect(await sendsOf(chat)).toHaveLength(1)
+})
+
+it('never sends a kept prompt while a Stop of a later turn holds the queue', async () => {
+  const chat = await quitBeforeTheAgentGotIt()
+  chat.holdNextStart()
+  await chat.send('something else').result
+  expect(await chat.stop()).toMatchObject({ ok: true })
+  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
+  expect(await sendsOf(chat)).toEqual([])
 })
