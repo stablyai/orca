@@ -26,13 +26,13 @@ const PasteSource = lazyZodSchema(() =>
 
 // `workspaces`: where it's on from the start, in the same write (a repo's "Add a server for this
 // repo"); all workspaces without it.
-const AddedWorkspaces = { workspaces: McpServerWorkspacesSchema.optional() }
+const addedWorkspaces = () => ({ workspaces: McpServerWorkspacesSchema.optional() })
 
 export const McpServerAdd = lazyZodSchema(() =>
   z.union([
     // `name` renames a paste that names one server; a paste naming several adds each.
-    z.strictObject({ source: PasteSource, name: ServerName.optional(), ...AddedWorkspaces }),
-    z.strictObject({ config: BotToolInputSchema, ...AddedWorkspaces })
+    z.strictObject({ source: PasteSource, name: ServerName.optional(), ...addedWorkspaces() }),
+    z.strictObject({ config: BotToolInputSchema, ...addedWorkspaces() })
   ])
 )
 
@@ -47,11 +47,21 @@ export const McpServerUpdate = lazyZodSchema(() =>
 export const McpServerTarget = lazyZodSchema(() => z.object({ id: ServerId }))
 
 // `agent`: which agent's CLI checks them (default Claude Code); `remote`: only URL servers, so no command starts.
+// One request id per asker, so a window's trays and Settings each cancel only their own check.
+const ProblemsRequestId = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9_-]{1,64}$/))
+
 export const McpServerProblems = lazyZodSchema(() =>
   z.object({
     agent: z.enum(['claude', 'codex']).optional(),
-    scope: z.enum(['all', 'remote']).optional()
+    scope: z.enum(['all', 'remote']).optional(),
+    /** Check only these servers (a chat's own); all of the list's when absent. */
+    ids: z.array(ServerId).max(256).optional(),
+    requestId: ProblemsRequestId.optional()
   })
+)
+
+export const McpServerProblemsCancel = lazyZodSchema(() =>
+  z.object({ requestId: ProblemsRequestId.optional() })
 )
 
 // Orca's own sign-in, run on the host for the calling device. `routed`: the host's listener takes the
@@ -60,18 +70,18 @@ export const McpServerProblems = lazyZodSchema(() =>
 export const McpServerSignInStart = lazyZodSchema(() =>
   z.object({ id: ServerId, mode: z.enum(['routed', 'paste']) })
 )
-const SignInFlow = { flowId: z.string().min(1).max(64) }
-export const McpServerSignInFlow = lazyZodSchema(() => z.object(SignInFlow))
+const signInFlow = () => ({ flowId: z.string().min(1).max(64) })
+export const McpServerSignInFlow = lazyZodSchema(() => z.object(signInFlow()))
 export const McpServerSignInWait = lazyZodSchema(() =>
   z.object({
-    ...SignInFlow,
+    ...signInFlow(),
     afterRevision: z.number().int().nonnegative().default(0)
   })
 )
 // Only the query the browser returned with; the host never fetches a client's address.
 export const McpServerSignInFinish = lazyZodSchema(() =>
   z.object({
-    ...SignInFlow,
+    ...signInFlow(),
     query: z.string().trim().min(1).max(8_192)
   })
 )

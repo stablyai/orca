@@ -35,8 +35,11 @@ export type AcpSessionModelDiscovery = {
   /** Starting the agent is heavy, so it lists only when a picker asks, never in warm-up. */
   listsOnDemand?: true
   /** Removes a listing session, after its process exits, from an agent that can't delete sessions
-   *  over ACP; `cwd` is the private folder it ran in, so only that session matches. */
+   *  over ACP. */
   discardSession?(session: AcpListingSession): Promise<void>
+  /** A session in the chat's folder still reports the commands that chat gets, so a resting chat
+   *  reads them there (current clients ask when a `/` menu opens). */
+  listsCommandsInChatFolder?: true
 }
 
 export type AcpListingSession = {
@@ -51,6 +54,15 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
   return (
     (discovery.kind === 'session' && !discovery.inPrivateFolder) ||
     (discovery.kind === 'command' && discovery.otherReleasesListInSession === true)
+  )
+}
+
+/** Whether a resting chat's `/` menu can read the agent's commands from a throwaway session in
+ *  its folder. */
+export function acpListsCommandsAtRest(discovery: AcpModelDiscovery): boolean {
+  return (
+    acpListingNeedsChatFolder(discovery) ||
+    (discovery.kind === 'session' && discovery.listsCommandsInChatFolder === true)
   )
 }
 

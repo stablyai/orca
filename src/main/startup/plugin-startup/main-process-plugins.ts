@@ -1,9 +1,9 @@
 import { join } from 'node:path'
 import { PluginImageCache } from '../../plugins/media/plugin-image-cache'
-import { installPluginImageProtocolHandler } from '../../plugins/media/plugin-image-protocol'
+import { PLUGIN_IMAGE_SCHEME } from '../../../shared/plugins/images/plugin-image-url'
 import { getPluginDesktopFrameServices } from '../../plugins/panels/desktop-actions/plugin-frame-desktop-services'
 import { pluginHostVersion } from '../../../shared/plugins/installation/plugin-host-version'
-import { app, BrowserWindow, net } from 'electron'
+import { app, BrowserWindow, net, protocol } from 'electron'
 import { performance } from 'node:perf_hooks'
 import { PluginService } from '../../plugins/plugin-service'
 import { PluginKillListService } from '../../plugins/catalog/plugin-kill-list-service'
@@ -15,14 +15,11 @@ import { PluginAutoUpdater } from '../../plugins/catalog/plugin-auto-updater'
 import { PluginReleaseFirstSeenStore } from '../../plugins/catalog/plugin-release-first-seen-store'
 import { PluginUpdateReviewNotices } from '../../plugins/catalog/plugin-update-review-notices'
 import { isPluginAutoUpdateOn } from '../../../shared/plugins/catalog/plugin-update-policy'
-import { PluginBundledBootstrapCoordinator } from '../../plugins/bootstrap/plugin-bundled-bootstrap-coordinator'
 import { getPluginsDataDir } from '../../plugins/discovery/plugin-discovery'
 import { bundledPluginRootForApp } from '../../plugins/bootstrap/plugin-bundled-bootstrap'
-import { approveBundledPluginsFromStore } from '../../plugins/bootstrap/plugin-bundled-approval'
 import { resolvePluginHostEntryPath } from '../../plugins/workers/parent-process/plugin-host-process'
 import { applyPluginConsent, revokePluginConsent } from '../../plugins/activation/plugin-enablement'
-import { clearRemovedPluginSettings } from '../../plugins/installation/plugin-removal-settings'
-import { clearPluginFrameStorage } from '../../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
+import { createLazyBundledPluginBootstrapRequester } from './lazy-bundled-plugin-bootstrap'
 import { bindPluginRpcServices } from './main-process-plugin-rpc'
 import { bindPluginDesktopViews } from '../../plugins/view/plugin-view-desktop-binding'
 import {
@@ -45,7 +42,6 @@ import { PluginStatusBarState } from '../../plugins/status-bar/plugin-status-bar
 import { createDesktopPluginAppearance } from '../../plugins/appearance/desktop-plugin-appearance'
 import { bindPluginEditorTypography } from '../../plugins/appearance/plugin-editor-typography'
 import { bindDesktopPluginNotices } from './desktop-plugin-notices'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { watchTeamPluginPolicy } from './team-plugin-policy-reconciliation'
@@ -199,35 +195,26 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
         .catch((error) => console.warn('[plugins] auto-update failed:', error))
     }
   }
-  installPluginImageProtocolHandler({
-    cache: pluginImageCache,
-    findValidPlugin: (pluginKey) => core.pluginService?.findValidPlugin(pluginKey) ?? null,
-    findApprovedPlugin: (pluginKey) =>
-      core.pluginService?.findApprovedPlugin(pluginKey, true) ?? null
-  })
-  const bundledPluginBootstrap = new PluginBundledBootstrapCoordinator({
-    root: bundledPluginRoot,
-    userDataPath: app.getPath('userData'),
-    hostVersion: pluginHostVersion(app.getVersion()),
-    isEnabled: () => store.getSettings().pluginSystemEnabled === true,
-    blockedPluginReason: (pluginKey) => core.pluginKillListService?.reason(pluginKey) ?? null,
-    // Why: a retired bundled plugin must not leave consent, theme choices or frame storage behind.
-    beforeRetire: (pluginKey) => clearRemovedPluginSettings(store, pluginKey),
-    afterRetire: (pluginKey) => clearPluginFrameStorage(pluginKey),
-    refreshPlugins: () => core.pluginService?.refresh() ?? Promise.resolve(),
-    approveContentPlugins: (pluginKeys) =>
-      approveBundledPluginsFromStore(store, pluginService, pluginKeys)
-  })
-  const requestBundledPluginBootstrap = (): void => {
-    void bundledPluginBootstrap
-      .request()
-      .then((result) => {
-        for (const failure of result?.errors ?? []) {
-          console.warn(`[plugins] failed to publish bundled ${failure.pluginKey}:`, failure.error)
-        }
+  let pluginImageHandler: ((request: Request) => Promise<Response>) | null = null
+  protocol.handle(PLUGIN_IMAGE_SCHEME, async (request) => {
+    if (!pluginImageHandler) {
+      const { createPluginImageRequestHandler } =
+        await import('../../plugins/media/plugin-image-protocol')
+      pluginImageHandler = createPluginImageRequestHandler({
+        cache: pluginImageCache,
+        findValidPlugin: (pluginKey) => core.pluginService?.findValidPlugin(pluginKey) ?? null,
+        findApprovedPlugin: (pluginKey) =>
+          core.pluginService?.findApprovedPlugin(pluginKey, true) ?? null
       })
-      .catch((error) => console.warn('[plugins] failed to bootstrap bundled plugins:', error))
-  }
+    }
+    return pluginImageHandler(request)
+  })
+  const requestBundledPluginBootstrap = createLazyBundledPluginBootstrapRequester(
+    core,
+    store,
+    pluginService,
+    bundledPluginRoot
+  )
   core.pluginKillListService.onChanged(() => {
     void core.pluginService
       ?.reconcileActivationState()
@@ -261,7 +248,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     }
   })
   // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
-  const pluginDelegate = bindPluginRuntime(pluginService, runtime, agentHookServer, ALL_RPC_METHODS)
+  const pluginDelegate = bindPluginRuntime(pluginService, runtime, agentHookServer)
   bindPluginRpcServices(store, pluginService, {
     marketplace: core.pluginMarketplaceService,
     installer: core.pluginMarketplaceInstaller

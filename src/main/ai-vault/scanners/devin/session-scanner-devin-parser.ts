@@ -82,11 +82,12 @@ function parseDevinSessionRecord(
 function decodeDevinStepMessage(
   step: Record<string, unknown>,
   role: 'user' | 'assistant',
-  includeTools: boolean
+  includeTools: boolean,
+  timestamp: string | null
 ): DecodedSessionMessage | null {
   const wrapped = asRecord(step.message)
   for (const content of [wrapped ? wrapped.content : step.message, step.text, step.content]) {
-    const message = decodeSessionMessage(role, content, null, { includeTools })
+    const message = decodeSessionMessage(role, content, timestamp, { includeTools })
     if (message.blocks.some((block) => ('text' in block ? block.text.trim().length > 0 : true))) {
       return message
     }
@@ -134,7 +135,7 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
     return
   }
   const metadata = asRecord(stepRecord.metadata)
-  updateTimeline(
+  const timestamp = updateTimeline(
     accumulator,
     extractString(stepRecord.timestamp) ?? extractString(metadata?.created_at)
   )
@@ -166,7 +167,8 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
   const message = decodeDevinStepMessage(
     stepRecord,
     isUser ? 'user' : 'assistant',
-    accumulator.messages.active
+    accumulator.messages.active,
+    timestamp
   )
   if (!message) {
     return

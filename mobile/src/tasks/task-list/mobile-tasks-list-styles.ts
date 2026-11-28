@@ -1,8 +1,7 @@
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { StyleSheet } from 'react-native'
+import { radii, spacing } from '../../theme/mobile-theme'
 
-export const mobileTasksListStyles = themedStyleSheet(() => ({
+export const mobileTasksListStylesSheet = themedStyleSheet((colors) => ({
   taskRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -11,14 +10,6 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
   },
   taskRowPressed: {
     backgroundColor: colors.bgRaised
-  },
-  taskRowCentered: {
-    alignItems: 'center'
-  },
-  taskRowSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg
   },
   taskIcon: {
     width: 20,
@@ -69,60 +60,6 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
     fontSize: 11,
     color: colors.textSecondary
   },
-  taskRowMeta: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  branchMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: 3,
-    minWidth: 0
-  },
-  branchMetaText: {
-    flexShrink: 1,
-    minWidth: 0,
-    maxWidth: 180,
-    fontSize: 11,
-    color: colors.textPrimary
-  },
-  branchMetaBase: {
-    flexShrink: 1,
-    minWidth: 0,
-    fontSize: 10,
-    color: colors.textMuted
-  },
-  prSignalRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs + 1
-  },
-  prSignalChip: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgPanel,
-    paddingHorizontal: spacing.xs + 2,
-    paddingVertical: 2
-  },
-  prSignalSuccess: {
-    borderColor: colors.statusGreen
-  },
-  prSignalWarning: {
-    borderColor: colors.statusAmber
-  },
-  prSignalDanger: {
-    borderColor: colors.statusRed
-  },
-  prSignalText: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    fontWeight: '600'
-  },
   statusPill: {
     maxWidth: 112,
     backgroundColor: colors.bgRaised,
@@ -152,15 +89,6 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
     height: 7,
     borderRadius: radii.pill
   },
-  linearListTrailing: {
-    alignItems: 'flex-end',
-    gap: spacing.xs
-  },
-  taskRowTrailing: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2
-  },
   statusText: {
     fontSize: 11,
     color: colors.textSecondary
@@ -168,40 +96,5 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
   statusTextFlex: {
     flex: 1,
     minWidth: 0
-  },
-  paginationFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm
-  },
-  paginationButton: {
-    width: 44,
-    minHeight: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm
-  },
-  paginationButtonDisabled: {
-    opacity: 0.45
-  },
-  paginationLabel: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    textAlign: 'center'
-  },
-  paginationLabelButton: {
-    flex: 1,
-    alignItems: 'center',
-    borderRadius: radii.control,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.sm
   }
 }))

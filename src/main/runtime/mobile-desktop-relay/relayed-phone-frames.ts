@@ -1,3 +1,5 @@
+import { DELEGATED_PHONE_SERVER_OFFER_METHOD } from '../../../shared/remote-runtime/pairing/delegated-phone-server-offer-contract'
+import type { MobilePairingConnectionMode } from '../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
@@ -114,11 +116,31 @@ export function withRelayedSourceControlAiSettings(
   return JSON.stringify({ ...parsed, params: { ...stamped, ...parsed.params } })
 }
 
+// The phone's own pairing with this desktop decides whether its server pairing may use Relay.
+export function withRelayedPhoneConnectionMode(
+  frame: string,
+  method: string,
+  connectionMode: () => MobilePairingConnectionMode
+): string {
+  if (method !== DELEGATED_PHONE_SERVER_OFFER_METHOD) {
+    return frame
+  }
+  const parsed: unknown = JSON.parse(frame)
+  if (!isRecord(parsed)) {
+    return frame
+  }
+  const params = isRecord(parsed.params) ? parsed.params : {}
+  // Overwrites any mode the phone sent: a local-only phone must not mint a Relay pairing.
+  return JSON.stringify({ ...parsed, params: { ...params, connectionMode: connectionMode() } })
+}
+
 export type RelayedDesktopDefaults = {
   /** Whether this desktop's settings open `agent` as a chat. */
   nativeChatDefault: (agent: string) => boolean
   /** This desktop's Source Control AI settings, which its own calls to a server send. */
   sourceControlAiSettings: () => CommitMessageGenerationSettings
+  /** How the relayed phone itself paired with this desktop. */
+  phoneConnectionMode: (phoneDeviceId: string) => MobilePairingConnectionMode
 }
 
 /** Stamp the desktop's own defaults on a relayed frame, as its own calls to that server carry them. */
@@ -126,13 +148,18 @@ export function withRelayedDesktopDefaults(
   frame: string,
   method: string,
   environmentId: string,
+  phoneDeviceId: string,
   desktop: RelayedDesktopDefaults
 ): string {
-  return withRelayedSourceControlAiSettings(
-    withRelayedLaunchChatDefault(frame, method, desktop.nativeChatDefault),
+  return withRelayedPhoneConnectionMode(
+    withRelayedSourceControlAiSettings(
+      withRelayedLaunchChatDefault(frame, method, desktop.nativeChatDefault),
+      method,
+      environmentId,
+      desktop.sourceControlAiSettings
+    ),
     method,
-    environmentId,
-    desktop.sourceControlAiSettings
+    () => desktop.phoneConnectionMode(phoneDeviceId)
   )
 }
 

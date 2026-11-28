@@ -13,10 +13,15 @@ import { stableJson } from './workspace-layout-load-report'
 export function adoptTouchedFoldedRows(
   stored: WorkspaceSessionState,
   patched: WorkspaceSessionState,
-  loaded: WorkspaceSessionState
+  loaded: WorkspaceSessionState,
+  workspaces: readonly string[] = Object.keys(stored.tabsByWorktree ?? {})
 ): WorkspaceSessionState {
   let adopted = stored
-  for (const [key, rows] of Object.entries(stored.tabsByWorktree ?? {})) {
+  for (const key of workspaces) {
+    const rows = stored.tabsByWorktree?.[key]
+    if (!rows) {
+      continue
+    }
     const canonical = readCanonicalPtyOwners(stored, key, rows)
     for (const row of rows) {
       if (canonical.tabIds.has(row.id)) {

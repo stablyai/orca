@@ -28,10 +28,12 @@ const SETUP: SetupMilestones = { done: 3, total: 5 }
 
 function RailShell({
   milestones = null,
-  height = 600
+  height = 600,
+  settingsActive = false
 }: {
   milestones?: SetupMilestones | null
   height?: number
+  settingsActive?: boolean
 }): React.JSX.Element {
   const help = useHelpMenuController(null, 'grouped')
   return (
@@ -40,7 +42,7 @@ function RailShell({
         <AppRailAccountMenu
           help={help}
           milestones={milestones}
-          settingsActive={false}
+          settingsActive={settingsActive}
           onOpenSettings={() => {}}
           tabStop
         />
@@ -68,6 +70,17 @@ export const signedOut = defineFixture({
   width: 300,
   store: { orcaProfileAuthStatus: SIGNED_OUT },
   render: () => <RailShell height={120} />
+})
+/** Settings is the open page: the avatar's own fill strengthens, with no tile behind it. */
+export const signedInActive = defineFixture({
+  width: 300,
+  store: { orcaProfileAuthStatus: ALEX },
+  render: () => <RailShell height={120} settingsActive />
+})
+export const signedOutActive = defineFixture({
+  width: 300,
+  store: { orcaProfileAuthStatus: SIGNED_OUT },
+  render: () => <RailShell height={120} settingsActive />
 })
 export const setupSignedIn = defineFixture({
   width: 300,

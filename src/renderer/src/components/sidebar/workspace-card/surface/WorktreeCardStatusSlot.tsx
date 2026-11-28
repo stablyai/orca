@@ -283,8 +283,12 @@ export function WorktreeCardStatusSlot({
     ? t('auto.components.sidebar.WorktreeCardStatusSlot.markAsRead', 'Mark as read')
     : t('auto.components.sidebar.WorktreeCardStatusSlot.markAsUnread', 'Mark as unread')
   const statusTooltipLabel = vmState ? getVmStateLabel(vmState, t) : passiveStatusLabel
+  // A running or blocked turn is newer than the prior turn's unread, so it keeps its glyph and the bell becomes a dot.
+  // Monitoring keeps the bell: that turn has ended and its result is waiting for the user.
+  const showsUnreadBell =
+    isUnread && !(showStatus && !vmState && (status === 'working' || status === 'permission'))
   const tooltip =
-    showStatus && !isUnread ? `${statusTooltipLabel} · ${unreadTooltip}` : unreadTooltip
+    showStatus && !showsUnreadBell ? `${statusTooltipLabel} · ${unreadTooltip}` : unreadTooltip
 
   return (
     <>
@@ -325,8 +329,8 @@ export function WorktreeCardStatusSlot({
               ) : (
                 <span className="sr-only">{actionLabel}</span>
               )
-            ) : isUnread ? (
-              <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
+            ) : showsUnreadBell ? (
+              <FilledBellIcon className="size-[13px] text-unread-bell drop-shadow-sm" />
             ) : showStatus ? (
               <>
                 {vmState ? (
@@ -341,7 +345,21 @@ export function WorktreeCardStatusSlot({
                     className="transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0"
                   />
                 )}
-                <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
+                {isUnread ? (
+                  <>
+                    <FilledBellIcon className="absolute size-[13px] text-unread-bell opacity-0 drop-shadow-sm transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
+                    <span
+                      data-worktree-unread-alert=""
+                      className={cn(
+                        unreadAlertDotClassName,
+                        'transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0'
+                      )}
+                      aria-hidden="true"
+                    />
+                  </>
+                ) : (
+                  <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
+                )}
               </>
             ) : (
               <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />

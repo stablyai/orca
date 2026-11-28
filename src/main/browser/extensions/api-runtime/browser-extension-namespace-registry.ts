@@ -58,6 +58,30 @@ export function defineBrowserExtensionMethod<Params extends ZodType<unknown[]>>(
 }
 
 const namespaces = new Map<string, BrowserExtensionNamespace>()
+let namespaceLoader: (() => Promise<void>) | null = null
+let namespaceLoadPromise: Promise<void> | null = null
+let namespacesLoaded = false
+
+/** Registers the lazy loader invoked on the first extension API call when namespaces are not loaded yet. */
+export function setBrowserExtensionNamespaceLoader(loader: () => Promise<void>): void {
+  namespaceLoader = loader
+}
+
+export async function ensureBrowserExtensionNamespacesRegistered(): Promise<void> {
+  if (namespacesLoaded || !namespaceLoader) {
+    return
+  }
+  namespaceLoadPromise ??= namespaceLoader().then(
+    () => {
+      namespacesLoaded = true
+    },
+    (error: unknown) => {
+      namespaceLoadPromise = null
+      throw error
+    }
+  )
+  await namespaceLoadPromise
+}
 
 /** Wave 2+ adds an API by registering here and listing it in the preload's API surface. */
 export function registerBrowserExtensionNamespace(

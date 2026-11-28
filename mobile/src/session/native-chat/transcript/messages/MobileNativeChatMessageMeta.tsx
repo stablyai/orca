@@ -1,35 +1,43 @@
 import { View } from 'react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatMessageCopyText } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-message-copy-text'
-import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
+import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import { MobileNativeChatRewindButton } from '../message-actions/MobileNativeChatRewindButton'
 import { MobileNativeChatResponseActions } from '../message-actions/MobileNativeChatResponseActions'
-import { mobileNativeChatRowHoldsForkSlot } from '../../history/use-mobile-native-chat-fork'
-import { styles } from './mobile-native-chat-message-styles'
+import { stylesSheet } from './mobile-native-chat-message-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
-/** A chat turn's time, then its actions together: copy, fork and scroll-to-top, and rewind on a user row the chat can rewind to. */
+/** A reply's copy and ⋯ (its time, fork and the rest); your own message shows only Rewind, while the chat can. */
 export function MobileNativeChatMessageMeta({
   message,
-  rowKey,
-  fontScale,
   rewindable
 }: {
   message: NativeChatMessage
-  rowKey: string
-  fontScale: number
   rewindable?: true
-}): React.JSX.Element {
-  const copyText = nativeChatMessageCopyText(message)
-  return (
-    <View style={styles.meta}>
-      <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
-      {/* An empty wrapper would still pull the time over by the icons' edge margin. */}
-      {copyText.length > 0 || rewindable || mobileNativeChatRowHoldsForkSlot(message) ? (
+}): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
+  if (message.role === 'user') {
+    return rewindable ? (
+      <View style={styles.meta}>
         <View style={styles.metaActions}>
-          <MobileNativeChatResponseActions message={message} rowKey={rowKey} copyText={copyText} />
-          {rewindable ? <MobileNativeChatRewindButton itemId={message.id} /> : null}
+          <MobileNativeChatRewindButton itemId={message.id} />
         </View>
-      ) : null}
+      </View>
+    ) : null
+  }
+  // A row of tool work alone says nothing to act on; an image or visual reply still has ⋯.
+  const content = deriveNativeChatRowContent(message.blocks)
+  if (!content.hasText && !content.hasImages) {
+    return null
+  }
+  return (
+    <View style={[styles.meta, styles.metaReply]}>
+      <View style={styles.metaActions}>
+        <MobileNativeChatResponseActions
+          message={message}
+          copyText={nativeChatMessageCopyText(message)}
+        />
+      </View>
     </View>
   )
 }

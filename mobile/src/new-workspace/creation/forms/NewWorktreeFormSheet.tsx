@@ -4,7 +4,6 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { WorkspaceSshGate } from '../workspace-ssh-gate'
 import type { useMobileComposerSource } from '../../source-selection/use-mobile-composer-source'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
@@ -16,13 +15,14 @@ import {
 } from '../../../components/list/ListGroup'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import type { NewWorktreeAgentOption } from '../runtime/new-worktree-agent-selection'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { newWorktreeFormStylesSheet } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
 import { NewWorktreeFormOptions } from './NewWorktreeFormOptions'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
 import { NewWorkspaceSshConnectionField } from './NewWorkspaceSshConnectionField'
 import { SheetPrimaryButton } from '../../../components/sheets/SheetPrimaryButton'
 import { SmartWorkspaceSourceField } from '../../source-selection/presentation/SmartWorkspaceSourceField'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type Composer = ReturnType<typeof useMobileComposerSource>
 type Selection = { label: string; detail?: string }
@@ -69,13 +69,11 @@ export function NewWorktreeFormSheet(props: {
   onWaitForSetupChange: (wait: boolean) => void
   onCreate: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(newWorktreeFormStylesSheet)
   const t = useMobileTranslation()
   const gated = props.sshGate.requiresConnection
-  // Desktop's rule: a git project makes a worktree, a folder project a plain workspace.
-  const title = props.selectedRepoIsGit
-    ? t('components.newWorktreeFormSheet.createWorktree', 'Create worktree')
-    : t('components.newWorktreeFormSheet.createWorkspace', 'Create workspace')
+  // One name with the + that opens it; the project row says whether it makes a worktree.
+  const title = t('components.newWorktreeFormSheet.newWorkspace', 'New workspace')
   const agentLabel = gated
     ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
     : props.selectedAgent.label
@@ -179,7 +177,9 @@ export function NewWorktreeFormSheet(props: {
           <View style={styles.footer}>
             <SheetPrimaryButton
               label={
-                gated ? t('components.newWorktreeFormSheet.connectTarget', 'Connect target') : title
+                gated
+                  ? t('components.newWorktreeFormSheet.connectTarget', 'Connect target')
+                  : t('components.newWorktreeFormSheet.create', 'Create')
               }
               busy={props.creating}
               disabled={!props.canCreate}

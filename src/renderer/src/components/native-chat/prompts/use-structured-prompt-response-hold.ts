@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
+import { useNativeChatViewState } from '../pane/ownership/native-chat-view-memory'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
 
 type Respond = ReturnType<typeof useStructuredAgentSession>['respond']
@@ -11,7 +12,8 @@ export function useStructuredPromptResponseHold(respond: Respond): {
   respond: Respond
   holds: (item: PromptItem) => boolean
 } {
-  const [heldKey, setHeldKey] = useState<string | null>(null)
+  // Kept with the tab, so a view released mid-response still blocks a second response when it returns.
+  const [heldKey, setHeldKey] = useNativeChatViewState<string | null>('prompt-response-hold', null)
   const holdingRespond = useCallback<Respond>(
     async (item, response) => {
       const key = promptKey(item)
@@ -28,7 +30,7 @@ export function useStructuredPromptResponseHold(respond: Respond): {
         throw error
       }
     },
-    [respond]
+    [respond, setHeldKey]
   )
   return { respond: holdingRespond, holds: (item) => heldKey === promptKey(item) }
 }

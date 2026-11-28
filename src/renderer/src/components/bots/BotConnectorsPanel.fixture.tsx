@@ -186,6 +186,21 @@ const fresh = (options: Parameters<typeof stub>[0]): void => {
   openBotConnectorPage(null)
 }
 
+/** gh signed out on the computer the bot runs on: the GitHub row's status line. */
+export const ghSignedOutList = defineFixture({
+  width: 372,
+  setup: () => fresh({ linearLinked: true, composio: false, ghSignedOut: true }),
+  render: () => <Panel bot={base} />
+})
+
+/** gh signed out: one line under the GitHub page's header. */
+export const ghSignedOutGitHubPage = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false, ghSignedOut: true }),
+  render: () => <Panel bot={base} />,
+  interact: () => openRow('GitHub · stablyai')
+})
+
 /** A connector's own page, opened from its row. */
 export const slackPage = defineFixture({
   width: 420,

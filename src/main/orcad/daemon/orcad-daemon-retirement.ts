@@ -1,7 +1,7 @@
 // Daemons outlive orcad; retire only after their atomic cross-generation census proves no live sessions.
 // Busy/unresponsive daemons stay up, and orcad shutdown does not wait indefinitely.
 import {
-  listLiveDaemonSessions,
+  countLiveDaemonSessionsAndRelays,
   releaseDaemonRetirementFence,
   requestIdleDaemonRetirement
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
@@ -20,7 +20,7 @@ export type OrcadDaemonRetirement = {
 
 export async function countLiveOrcadDaemonSessions(): Promise<number | null> {
   try {
-    return (await listLiveDaemonSessions())?.length ?? null
+    return await countLiveDaemonSessionsAndRelays()
   } catch {
     return null
   }

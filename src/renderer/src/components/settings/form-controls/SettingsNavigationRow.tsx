@@ -17,8 +17,9 @@ export function SettingsNavigationRow({
       data-settings-row=""
       data-settings-row-hover=""
       onClick={onClick}
-      // The fill bleeds over the group card's px-5 inset so the card's rounded clip shapes it.
-      className="relative isolate flex w-full items-center gap-5 py-2.5 text-left outline-none after:pointer-events-none after:absolute after:-inset-x-5 after:-top-px after:bottom-0 after:-z-10 hover:after:bg-foreground/5 focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring"
+      // The ::after bleeds over the card's px-5 inset as the hit area, fill and focus ring, so the
+      // edges stay clickable, the card's rounded clip shapes them, and the divider stays inset.
+      className="relative isolate flex w-full items-center gap-5 py-2.5 text-left outline-none after:absolute after:-inset-x-5 after:-top-px after:bottom-0 after:-z-10 hover:after:bg-foreground/5 focus-visible:after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
     >
       <span className="min-w-0 flex-1">
         <span className="block text-sm">{title}</span>

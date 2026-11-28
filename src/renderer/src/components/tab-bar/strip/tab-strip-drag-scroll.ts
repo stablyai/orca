@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
 
 const TAB_STRIP_DRAG_SCROLL_INTERVAL_MS = 180
@@ -15,7 +15,9 @@ export function useTabStripDragScrollHandlers(
   const isTabDragActive = useTabDragActive()
   const intervalRef = useRef<number | null>(null)
   const canScrollRef = useRef(canScroll)
-  canScrollRef.current = canScroll
+  useLayoutEffect(() => {
+    canScrollRef.current = canScroll
+  })
 
   const stopDragScroll = useCallback((): void => {
     if (intervalRef.current !== null) {

@@ -1,6 +1,6 @@
 import { Play } from 'lucide-react-native'
 import { spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatNoticePill } from './MobileNativeChatNoticePill'
 
@@ -9,6 +9,7 @@ export function MobileNativeChatInterruptedContinueButton({
 }: {
   onPress: () => void
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <MobileNativeChatNoticePill
@@ -24,7 +25,7 @@ export function MobileNativeChatInterruptedContinueButton({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   button: {
     alignSelf: 'flex-start',
     marginTop: spacing.sm

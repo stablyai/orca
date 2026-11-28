@@ -75,9 +75,16 @@ export async function listDetectedWorktreesForCapturedRepo(
       if (!isCurrent()) {
         return null
       }
-      const folderWorkspaceIds = Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) =>
-        isFolderWorkspaceIdForRepo(repo, worktreeId)
-      )
+      const folderWorkspaceIds: string[] = []
+      const allWorktreeMeta = store.getAllWorktreeMeta()
+      for (const worktreeId in allWorktreeMeta) {
+        if (
+          Object.hasOwn(allWorktreeMeta, worktreeId) &&
+          isFolderWorkspaceIdForRepo(repo, worktreeId)
+        ) {
+          folderWorkspaceIds.push(worktreeId)
+        }
+      }
       if (hasConflictingStoredWorktreeOwner(store, repo, folderWorkspaceIds)) {
         return {
           repoId: repo.id,

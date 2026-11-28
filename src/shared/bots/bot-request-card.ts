@@ -2,6 +2,7 @@
 // question or a handoff, and how it ended, or why it wasn't sent. Older clients and the phone paint
 // its `text` as a plain line.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
@@ -9,19 +10,23 @@ import type {
 
 export const BOT_REQUEST_CARD_PRESENTATION = 'bot-request'
 
-export const BotRequestCardSchema = z.object({
-  toBotId: z.string().min(1),
-  toBotName: z.string().min(1).max(200),
-  purpose: z.enum(['question', 'handoff']),
-  subject: z.string().max(300),
-  /** The request's mail; absent when Orca refused to send it. */
-  messageId: z.string().min(1).optional(),
-  /** Why it wasn't sent: a bot-request refusal code. */
-  refusal: z.string().min(1).max(80).optional(),
-  /** Sent to an agent on a computer paired to this host (`send --on-client`): that computer, by its
-   *  installation id and name. An older client drops it and shows the plain line. */
-  client: z.object({ installationId: z.string().min(1), computer: z.string().max(200) }).optional()
-})
+export const BotRequestCardSchema = lazyZodSchema(() =>
+  z.object({
+    toBotId: z.string().min(1),
+    toBotName: z.string().min(1).max(200),
+    purpose: z.enum(['question', 'handoff']),
+    subject: z.string().max(300),
+    /** The request's mail; absent when Orca refused to send it. */
+    messageId: z.string().min(1).optional(),
+    /** Why it wasn't sent: a bot-request refusal code. */
+    refusal: z.string().min(1).max(80).optional(),
+    /** Sent to an agent on a computer paired to this host (`send --on-client`): that computer, by its
+     *  installation id and name. An older client drops it and shows the plain line. */
+    client: z
+      .object({ installationId: z.string().min(1), computer: z.string().max(200) })
+      .optional()
+  })
+)
 
 export type BotRequestCard = z.infer<typeof BotRequestCardSchema>
 
