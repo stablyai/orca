@@ -101,6 +101,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         })
       }
     }
+    this.personChatTabs.restore()
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
     // No host means no one can say which chats exist; with none on disk, empty is the answer.
     this.structuredAgentSessionInventoryUnverifiable =

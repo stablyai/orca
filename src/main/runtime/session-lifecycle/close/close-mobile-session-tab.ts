@@ -56,8 +56,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     const owner = this.homeTabListOf(options.person, worktreeId)
     if (isTeammateTabList(owner)) {
       // Closed already, or now: a teammate's own list is theirs alone to close from.
-      this.closePersonSessionTab(owner, worktreeId, tabId)
-      return committedMobileSessionTabClose(this.clientSessionTabSelections, worktreeId, [])
+      return this.personChatTabs.closeTeammateTab(owner, worktreeId, tabId, options)
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()

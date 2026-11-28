@@ -10,7 +10,7 @@ import { physicalReload } from '../../runtime/agent-session/lifecycle/structured
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { getRuntimeBrowserPageRegistry } from '../../runtime/browser/client-pages/runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../../runtime/browser-host/leases/browser-host-lease-registry-instance'
-import { C, O, rig, settleTeammateRig, type Tabs } from './teammate-tabs.test-support'
+import { O, rig, settleTeammateRig, type Tabs } from './teammate-tabs.test-support'
 import {
   browserUnavailableError,
   setRuntimeBrowserCommandsFactory
@@ -140,9 +140,6 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
   // The owner's own terminal there, as before.
   const ownersTerminal = await openTerminal(r, 'owner-desk')
   expect(tabIds(await r.list('owner-phone'))).toContain(ownersTerminal.id)
-  // Mate already picked a tab on their desk: what they open next still shows there.
-  await r.reveal('mate-desk', C)
-  await r.activate('mate-desk', C)
   await chatTabCommandsSettled()
   const before = await ownersSide(r)
 
@@ -162,9 +159,9 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
   await chatTabCommandsSettled()
 
   const mates = await r.list('mate-phone')
-  expect(tabIds(mates)).toEqual([`agent-session:${C}`, terminal.id, page, file])
+  expect(tabIds(mates)).toEqual([terminal.id, page, file])
   expect(mates.tabGroups).toMatchObject([
-    { tabOrder: [`agent-session:${C}`, parentTabId, page, file], activeTabId: file }
+    { tabOrder: [parentTabId, page, file], activeTabId: file }
   ])
   expect(mates.tabs.at(-1)).toMatchObject({ type: 'file', relativePath: 'notes/plan.md' })
   expect((await r.list('mate-desk')).activeTabId).toBe(file)
@@ -185,7 +182,7 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
     reason: 'user'
   })
   await chatTabCommandsSettled()
-  expect(tabIds(await r.list('mate-phone'))).toEqual([`agent-session:${C}`, page, file])
+  expect(tabIds(await r.list('mate-phone'))).toEqual([page, file])
   expect(r.runtime['ptysById'].get(terminal.ptyId)?.connected).not.toBe(true)
   expect(await ownersSide(r)).toBe(before)
   for (const tabId of [file, page]) {
@@ -195,7 +192,7 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
       reason: 'user'
     })
   }
-  expect(tabIds(await r.list('mate-desk'))).toEqual([`agent-session:${C}`])
+  expect(tabIds(await r.list('mate-desk'))).toEqual([])
   expect(await ownersSide(r)).toBe(before)
 })
 

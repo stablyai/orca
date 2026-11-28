@@ -97,8 +97,13 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
-    // A teammate's own list titles its tabs as it is read; its devices redraw with the new name.
-    this.republishPersonListsHolding(workspaceId, sessionId)
+    // Each teammate's own workspace in the Home retitles its rows as the Home does.
+    for (const list of [workspaceId, ...this.personChatTabs.listsOf(workspaceId)]) {
+      this.retitleStructuredConversationTabs(list, sessionId)
+    }
+  }
+
+  private retitleStructuredConversationTabs(workspaceId: string, sessionId: string): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(workspaceId)
     if (!snapshot) {
       return

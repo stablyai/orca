@@ -212,6 +212,7 @@ export async function commitStructuredAgentSessionCreate(args: {
               }
               return args.runtime.publishStructuredAgentSessionTab({
                 person: args.personOf(sessionId),
+                founded: true,
                 workspaceId: tab.workspaceId,
                 sessionId,
                 agent: tab.agent,
@@ -248,6 +249,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   try {
     await args.runtime.publishStructuredAgentSessionTab({
       person: args.personOf(result.value.sessionId),
+      founded: true,
       workspaceId: prepared.tab.workspaceId,
       sessionId: result.value.sessionId,
       agent: prepared.tab.agent,

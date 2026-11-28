@@ -54,7 +54,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         })
       }
       let publication: StructuredSessionSurface | null = null
-      let personList = false
+      let personList: string | undefined
       let revealed: StructuredAgentSessionReveal
       try {
         const host = requireStructuredHost(ctx)
@@ -144,7 +144,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           agent: revealed.agent,
           capture: (surface) => {
             publication = surface
-            personList = surface.personList === true
+            personList = surface.personList
           },
           activate: params.navigation !== 'caller',
           ...(params.navigation ? { navigation: params.navigation } : {})
@@ -165,7 +165,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         if (
           caller?.kind === 'paired-device' &&
           !(await ctx.runtime.reopenMobileSessionTabForClient(
-            revealed.workspaceId,
+            personList ?? revealed.workspaceId,
             revealed.sessionId,
             caller.deviceId
           ))
