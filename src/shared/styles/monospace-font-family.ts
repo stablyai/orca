@@ -28,14 +28,23 @@ export function buildFontFamily(fontFamily: string): string {
   if (families.length > 1) {
     return buildFontFamilyList(families, FALLBACKS)
   }
-  // Why: a single family is quoted as typed, keyword or not, and drops each fallback its name contains.
+  // Why: a single family is quoted via JSON.stringify (preserves inner quotes) and drops fallbacks
+  // it exactly matches or ends with (so "ui-monospace" drops "monospace" but
+  // "Cascadia Mono, D2Coding" does not drop "Cascadia Mono").
   const family = families[0] ?? ''
-  const parts = family ? [`"${family}"`] : []
+  const parts = family ? [JSON.stringify(family)] : []
   const lowerFamily = family.toLowerCase()
-  // Why: a plugin family such as "Menlo (acme.fonts)" is never a fallback, so it must keep all of them.
   const isPluginFamily = isPluginFontFamilyName(family)
   for (const fallback of FALLBACKS) {
-    if (isPluginFamily || !lowerFamily.includes(fallback.lower)) {
+    const lowerFallback = fallback.lower
+    const exactMatch = lowerFamily === lowerFallback
+    // endsWith catches keyword containment: "ui-monospace" ends with "monospace".
+    // But only if the matched suffix is a full word boundary (preceded by '-' or start).
+    const suffixMatch =
+      lowerFamily.endsWith(lowerFallback) &&
+      (lowerFamily.length === lowerFallback.length ||
+        lowerFamily[lowerFamily.length - lowerFallback.length - 1] === '-')
+    if (isPluginFamily || (!exactMatch && !suffixMatch)) {
       parts.push(fallback.quoted)
     }
   }

@@ -40,7 +40,43 @@ function unquoteFontFamily(fontFamily: string): string {
 
 /** The family names a setting such as `"Cascadia Mono", D2Coding` lists, unquoted. */
 export function splitFontFamilyList(fontFamily: string): string[] {
-  return fontFamily.split(',').map(unquoteFontFamily).filter(Boolean)
+  const result: string[] = []
+  let current = ''
+  let inQuote = false
+  let quoteChar = ''
+
+  for (let i = 0; i < fontFamily.length; i++) {
+    const char = fontFamily[i]
+    if (!inQuote && (char === '"' || char === "'")) {
+      // Only track quote state if the quote is at the start of a token or after whitespace/comma
+      const prevChar = i > 0 ? fontFamily[i - 1] : ''
+      if (prevChar === '' || prevChar === ',' || prevChar === ' ' || prevChar === '\t') {
+        inQuote = true
+        quoteChar = char
+      }
+      current += char
+    } else if (inQuote && char === quoteChar) {
+      inQuote = false
+      quoteChar = ''
+      current += char
+    } else if (!inQuote && char === ',') {
+      const trimmed = unquoteFontFamily(current)
+      if (trimmed) {
+        result.push(trimmed)
+      }
+      current = ''
+    } else {
+      current += char
+    }
+  }
+
+  // Handle the last family
+  const trimmed = unquoteFontFamily(current)
+  if (trimmed) {
+    result.push(trimmed)
+  }
+
+  return result
 }
 
 type FontFallback = { lower: string; quoted: string }
