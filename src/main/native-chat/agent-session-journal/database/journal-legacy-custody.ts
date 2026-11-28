@@ -9,6 +9,7 @@ import { journalDatabasePath } from './journal-host-database'
 import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey,
+  journalLegacyFailureKey,
   openJournalLegacySourceChecked
 } from './journal-legacy-source'
 import { readMeta } from './journal-legacy-reconcile-marks'
@@ -112,7 +113,12 @@ function journalLegacyClaimsKept(
     : undefined
   const resolved = new Map<string, boolean>()
   const chatResolved = (sessionId: string): boolean => {
-    if (recordedHere.get(sessionId) !== undefined || journalForkAttachmentHeld(db, sessionId)) {
+    // A chat that failed to join keeps its original's revision too, so a failure never resolves.
+    if (
+      recordedHere.get(sessionId) !== undefined ||
+      journalForkAttachmentHeld(db, sessionId) ||
+      readMeta(db, journalLegacyFailureKey(sessionId)) !== undefined
+    ) {
       return false
     }
     if (recordedThere && recordedThere.get(sessionId) === undefined) {

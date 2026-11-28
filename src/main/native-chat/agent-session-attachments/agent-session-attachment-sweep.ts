@@ -44,10 +44,14 @@ export async function sweepAgentSessionAttachments(
   }
   // Undefined until read; null keeps every stored upload this pass.
   let retained: ReadonlySet<string> | null | undefined
-  const retainedUploads = async (): Promise<ReadonlySet<string> | null> =>
-    (retained ??= facts.retention
-      ? await facts.retention.uploads().catch(() => null)
-      : new Set<string>())
+  const retainedUploads = async (): Promise<ReadonlySet<string> | null> => {
+    if (retained === undefined) {
+      retained = facts.retention
+        ? await facts.retention.uploads().catch(() => null)
+        : new Set<string>()
+    }
+    return retained
+  }
   const remove = async (uploadDir: string): Promise<void> => {
     await removeQuietly(uploadDir)
     facts.onUploadRemoved?.(uploadDir)

@@ -194,12 +194,8 @@ it('keeps a claim it read across sweeps when the rest of that pass failed', asyn
   original(root, (db) => {
     chat(db, 'later')
     claim(db, OWNED, 'later')
-    // Walking the original's chats in saved order now fails after its claims were read.
-    db.exec(`ALTER TABLE agent_session_records RENAME TO saved_records;
-      CREATE TABLE agent_session_records(session_id TEXT PRIMARY KEY, record_json TEXT NOT NULL)
-        WITHOUT ROWID;
-      INSERT INTO agent_session_records SELECT session_id, record_json FROM saved_records;
-      DROP TABLE saved_records;`)
+    // Reading the original's tabs now fails, after its claims were read and before any chat.
+    db.exec('ALTER TABLE agent_session_tabs RENAME COLUMN tab_id TO saved_tab_id')
   })
 
   await launch(root, 2)
@@ -207,7 +203,7 @@ it('keeps a claim it read across sweeps when the rest of that pass failed', asyn
   expect(claims(root)).toEqual([OWNED])
 })
 
-it('keeps custody unknown when this file refuses one of the claims it must keep', async () => {
+it('keeps custody unknown across launches when this file refuses a claim it must keep', async () => {
   const root = profile()
   original(root, (db) => chat(db, 'kept'))
   await launch(root, 0)
@@ -217,11 +213,14 @@ it('keeps custody unknown when this file refuses one of the claims it must keep'
     db.exec(`CREATE TRIGGER refuse_claim BEFORE INSERT ON agent_session_attachment_claims
       WHEN NEW.upload_id='${REFUSED}' BEGIN SELECT RAISE(ABORT, 'refused'); END`)
   )
+  // A chat this file has never shown, so its refused claims also refuse joining it here.
   original(root, (db) => {
-    claim(db, OWNED, 'kept')
-    claim(db, REFUSED, 'kept')
+    chat(db, 'joining')
+    claim(db, OWNED, 'joining')
+    claim(db, REFUSED, 'joining')
   })
 
+  await launch(root)
   await launch(root)
   expect(claims(root)).toEqual([OWNED])
   expect(stored(root, REFUSED)).toBe(true)
@@ -279,16 +278,19 @@ it('takes neither a missing original with a companion nor a lost initializer rac
   expect((await initializeJournalDomainDatabaseCustody(raced)).custody).toEqual({ kind: 'unknown' })
 })
 
-it('holds a resumed removal while item mail retention cannot be read', async () => {
+it('holds every removal in a pass whose item mail retention could not be read', async () => {
   const root = profile()
   await launch(root, 0)
   upload(root, ORPHAN)
+  upload(root, OWNED)
   destination(root, (db) =>
     db.prepare('INSERT INTO agent_session_attachment_sweeps VALUES(?,?)').run(ORPHAN, 1)
   )
 
-  await launch(root, 1, async () => null)
-  expect(stored(root, ORPHAN)).toBe(true)
+  // A store that answers on a later read does not release this pass's hold.
+  const answers: (ReadonlySet<string> | null)[] = [null]
+  await launch(root, 1, async () => answers.shift() ?? new Set())
+  expect([ORPHAN, OWNED].map((id) => stored(root, id))).toEqual([true, true])
   expect(marks(root)).toEqual([ORPHAN])
 
   await launch(root, 1, async () => new Set())
