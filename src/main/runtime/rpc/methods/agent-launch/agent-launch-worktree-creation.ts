@@ -14,7 +14,8 @@ import {
 } from '../../../../automations/ownership/workspace-provenance'
 import type { AgentLaunchWorkspaceFactory } from '../../../../agent-launch/agent-launch-surface-factories'
 import { combineLaunchWarnings } from '../../../../agent-launch/agent-launch-warnings'
-import type { RpcContext } from '../../core'
+import type { HostLaunchContext } from './agent-launch-surfaces'
+import { assertAgentPromptRequestActive } from '../../../terminal/input/agent-prompt-signals'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   buildManagedWorktreeCreateArgs,
@@ -33,7 +34,7 @@ type WorktreeCreateParams = Extract<
 const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
 export function agentLaunchWorkspaceFactory(
-  context: RpcContext,
+  context: HostLaunchContext,
   agent: TuiAgent
 ): AgentLaunchWorkspaceFactory {
   return {
@@ -62,6 +63,9 @@ export function agentLaunchWorkspaceFactory(
       const params = create as WorktreeCreateParams
       const { runtime } = context
       const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
+      const beforeEffect = context.agentLaunchPolicy?.beforeEffect ?? context.beforeEffect
+      beforeEffect?.()
+      assertAgentPromptRequestActive(context.signal)
       const automationProvenance =
         resolveAutomationWorkspaceProvenance({
           authority: runtime,
@@ -118,7 +122,10 @@ export function agentLaunchWorkspaceFactory(
           ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
           // Chats have no startup command to sequence after setup; provision setup synchronously and return its completion token.
           awaitTerminalProvisioning: true,
-          observeSetupCompletion: true
+          observeSetupCompletion: true,
+          // The create starts the agent itself, after its own waits; approval is asked again right before.
+          ...(beforeEffect ? { beforeEffect } : {}),
+          ...(context.signal ? { signal: context.signal } : {})
         })
         if (!startupAgent) {
           await waitForStructuredSetup(runtime, result.setupReceipt)

@@ -33,6 +33,7 @@ export type RuntimeGroupFolderCreateInput = FolderWorkspaceCreateInput &
     | 'onStartupTerminalCreated'
     | 'onStartupPromptCarry'
     | 'onWorkspaceCreated'
+    | 'beforeEffect'
   > & {
     creatorProvenance?: FolderWorkspace['creatorProvenance']
     rendererOwnsSetup?: boolean

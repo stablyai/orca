@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { resolveAppearanceAccordionDeepLink } from '../appearance/appearance-usage-percentage-search'
+import { closePluginIntegrationSettingsForTarget } from '../integrations/plugin-integration-navigation'
 import { registerWindowCloseGuard } from '../../../app-shell/shutdown/window-close-request-coordinator'
 import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
@@ -241,6 +242,8 @@ export function useSettingsPageEffects(
         serverId ? { id: serverId, title: '', host: runtimeTargetEnvironmentId(host) } : null
       )
     }
+    // Only the plugin's own target keeps its page; a provider's, or the bare pane, ends it.
+    closePluginIntegrationSettingsForTarget(settingsNavigationTarget)
     cancelSettingsListReveal()
     consumeSettingsNavigation(settingsNavigationTarget)
     // A newer navigation supersedes any focus an earlier deep link is still waiting to give.

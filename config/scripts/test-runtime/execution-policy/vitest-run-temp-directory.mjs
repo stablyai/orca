@@ -61,9 +61,14 @@ export function resolveRunTempBase(base, name, platform = process.platform) {
 /** A per-run temp root, so files tests leave in os.tmpdir() go when the run ends; null keeps the inherited one. */
 export function createRunTempDirectory({ base: requested = tmpdir(), pid = process.pid } = {}) {
   const name = `ov${pid.toString(36)}`
-  const base = resolveRunTempBase(requested, name)
+  let base
+  try {
+    base = resolveRunTempBase(realpathSync(requested), name)
+  } catch {
+    return null
+  }
   sweepStaleRunDirectories(base, { ownPid: pid })
-  const path = join(base, name)
+  let path = join(base, name)
   if (existsSync(path)) {
     if (!existsSync(join(path, MARKER))) {
       return null
@@ -74,6 +79,8 @@ export function createRunTempDirectory({ base: requested = tmpdir(), pid = proce
   try {
     mkdirSync(path)
     writeFileSync(join(path, MARKER), '')
+    // Child cwd and module resolution canonicalize aliases such as macOS /tmp.
+    path = realpathSync(path)
   } catch {
     return null
   }

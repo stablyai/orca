@@ -2,11 +2,12 @@
  *  worker exits, is aborted (so its effect, if not started, never starts) and its answer dropped. */
 export class PluginWorkerHostCalls {
   private readonly calls = new Map<number, AbortController>()
+  private readonly lifetime = new AbortController()
 
   start(id: number): AbortSignal {
     const controller = new AbortController()
     this.calls.set(id, controller)
-    return controller.signal
+    return AbortSignal.any([controller.signal, this.lifetime.signal])
   }
 
   /** True while the call is still wanted, so its answer should reach the worker. */
@@ -20,6 +21,7 @@ export class PluginWorkerHostCalls {
   }
 
   cancelAll(): void {
+    this.lifetime.abort()
     for (const controller of this.calls.values()) {
       controller.abort()
     }

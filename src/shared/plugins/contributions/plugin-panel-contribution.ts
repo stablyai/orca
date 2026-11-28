@@ -7,6 +7,7 @@ import {
   pluginFieldDoc,
   PLUGIN_PANEL_PATH_ICON_SINCE,
   PLUGIN_PANEL_UI_SINCE,
+  PLUGIN_SETTINGS_PANEL_SINCE,
   PLUGIN_SCHEMA_SINCE_V1,
   PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
@@ -149,12 +150,26 @@ export const pluginPanelContributionSchema = z
           PLUGIN_PANEL_UI_SINCE,
           ['components']
         )
+      ),
+    location: z
+      .enum(['sidebar', 'settings'])
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          'Where Orca shows this panel. Defaults to `sidebar`. A `settings` panel appears under Settings > Integrations, must use `ui: "components"`, and is limited to one per plugin. It uses the plugin\'s existing worker, settings and storage.',
+          PLUGIN_SETTINGS_PANEL_SINCE,
+          ['settings']
+        )
       )
   })
   .strict()
   .refine((panel) => panel.ui !== 'components' || COMPONENTS_PANEL_ENTRY.test(panel.entry), {
     path: ['entry'],
     message: 'a components panel entry must be a .js, .mjs, .ts, .tsx, .mts or .jsx module'
+  })
+  .refine((panel) => panel.location !== 'settings' || panel.ui === 'components', {
+    path: ['ui'],
+    message: 'a settings panel must use ui: "components"'
   })
   .meta({
     id: 'PanelContribution',

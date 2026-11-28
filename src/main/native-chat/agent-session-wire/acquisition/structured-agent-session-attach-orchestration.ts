@@ -170,6 +170,7 @@ async function runAttachUnderAbort(
   }
   try {
     const attached = await performAttach({
+      ...(options.beforeEffect ? { beforeEffect: options.beforeEffect } : {}),
       models: priorRecord ? undefined : options.catalogModels,
       store: context.deps.store,
       adapter: context.deps.adapter,

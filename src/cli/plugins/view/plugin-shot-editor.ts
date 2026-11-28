@@ -89,7 +89,9 @@ export async function editorShotPluginKey(ctx: HandlerContext): Promise<string> 
   }
   const asPath = isAbsolute(target) ? target : resolve(ctx.cwd, target)
   if (!ctx.client.isRemote && existsSync(asPath)) {
-    return readPluginFolderKey(asPath)
+    return readPluginFolderKey(asPath, {
+      allowUnreleased: ctx.flags.get('allow-unreleased') === true
+    })
   }
   if (!isQualifiedPluginKey(target)) {
     throw new RuntimeClientError(

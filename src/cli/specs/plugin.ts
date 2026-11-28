@@ -68,12 +68,13 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
     path: ['plugin', 'check'],
     summary:
       'Validate a plugin, render each components panel once on this machine (unsandboxed: only for code you trust), and statically check each custom editor',
-    usage: 'orca plugin check [dir] [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'dir'],
+    usage: 'orca plugin check [dir] [--allow-unreleased] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'dir', 'allow-unreleased'],
     positionalArgs: ['dir'],
     notes: [
       "Not sandboxed: this runs the plugin's code on this machine with your user's full access, outside Orca's plugin sandbox. Check only code you trust.",
       'Validates like `orca plugin validate`, then mounts each `ui: "components"` panel in Node against a stand-in host with the capabilities the manifest declares, and reports runtime errors (with file:line), layouts Orca would refuse, and props it would drop.',
+      '--allow-unreleased checks source-only features against this SDK; it preserves released engine floors and does not establish compatibility with any published Orca release.',
       'Runs on the `node` on PATH when it is 20.6 or newer, else on the Node built into Orca. It does not reach the Orca app.',
       'Exit codes: 0 ok, 1 a panel failed to render or an editor failed its static check (plugin_check_failed), 2 the plugin is invalid (plugin_invalid).'
     ],
@@ -82,11 +83,12 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['plugin', 'validate'],
     summary: 'Check a plugin folder, manifest or catalog the way Orca will load it',
-    usage: 'orca plugin validate <dir|orca-plugin.json|orca-catalog.json> [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'path'],
+    usage: 'orca plugin validate <path> [--allow-unreleased] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'path', 'allow-unreleased'],
     positionalArgs: ['path'],
     notes: [
       'Runs the strict checks of `pnpm validate:plugin`: manifest, limits, execution profile, every theme, icon, syntax and translation file, and every file the manifest names.',
+      '--allow-unreleased permits source-only manifest fields for development against this SDK while retaining released engine floors. Do not use this result to publish: maintainers must assign the first supporting release before catalog or release export validation can pass.',
       'Offline; never runs plugin code. The result says whether loading needs --approve and what it would grant.',
       EXIT_CODES_NOTE
     ],

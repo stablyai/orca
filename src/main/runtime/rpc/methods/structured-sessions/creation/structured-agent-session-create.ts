@@ -177,6 +177,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   placedByWindow?: boolean
   /** Where the creating client opens the chat, in this host's ids. */
   tabPlacement?: ChatTabPlacement
+  beforeEffect?: () => void
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
   const tab = prepared.tab
@@ -185,13 +186,15 @@ export async function commitStructuredAgentSessionCreate(args: {
     ...(args.placedByWindow ? { placedByWindow: true } : {}),
     ...(args.tabPlacement ? { placement: args.tabPlacement } : {})
   }
+  const hostOptions = {
+    beforeEffect: args.beforeEffect,
+    hostLaunchDirectory: prepared.hostLaunchDirectory,
+    catalogModels: prepared.catalogModels
+  }
   if (prepared.atRest) {
     return prepared.host.create(args.caller, prepared.attachParams, {
+      ...hostOptions,
       ...prepared.atRest,
-      ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
-      ...(prepared.hostLaunchDirectory
-        ? { hostLaunchDirectory: prepared.hostLaunchDirectory }
-        : {}),
       ...(tab
         ? {
             // A chat closed while it was being made gets no tab to show before main closes it.
@@ -221,10 +224,7 @@ export async function commitStructuredAgentSessionCreate(args: {
         : {})
     })
   }
-  const result = await prepared.host.attach(args.caller, prepared.attachParams, {
-    ...(prepared.hostLaunchDirectory ? { hostLaunchDirectory: prepared.hostLaunchDirectory } : {}),
-    ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {})
-  })
+  const result = await prepared.host.attach(args.caller, prepared.attachParams, hostOptions)
   if (!result.ok || !prepared.tab) {
     return result
   }
@@ -286,6 +286,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   publishTab?: false
   firstMessage?: StructuredAgentSessionFirstMessage
   signal?: AbortSignal
+  beforeEffect?: () => void
   beforeFirstMessage?: () => void | Promise<void>
   beforeDelivery?: () => boolean
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
@@ -303,11 +304,14 @@ export async function createStructuredAgentSessionForWorktree(args: {
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
-  assertAgentPromptRequestActive(args.signal)
+  const beforeEffect = () => {
+    assertAgentPromptRequestActive(args.signal)
+    args.beforeEffect?.()
+  }
+  beforeEffect()
   return commitStructuredAgentSessionCreate({
-    runtime: args.runtime,
-    caller: args.caller,
+    ...args,
     prepared: args.publishTab === false ? { ...prepared, tab: null } : prepared,
-    activate: args.activate
+    beforeEffect
   })
 }

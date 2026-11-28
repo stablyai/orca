@@ -5,7 +5,10 @@ import {
   PLUGIN_FRAME_KEY_CHANNEL
 } from '../../../../../shared/plugins/frames/plugin-frame-guest'
 import { pluginEvent } from '../../../../../shared/plugins/frames/plugin-protocol'
-import { pluginPanelPushSchema } from '../../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
+import {
+  pluginPanelPushSchema,
+  type PluginSettingsChangeOrigin
+} from '../../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import {
   createPluginFrameEnvelopeHandler,
   createPluginFrameMessageHandler,
@@ -36,6 +39,7 @@ export function usePluginFrameHost(options: {
   onUnresponsive: () => void
   /** The guest's WebContents went away under an unchanged document (closed, crashed). */
   onGuestGone?: () => void
+  onSettingsChanged?: (key: string, origin?: PluginSettingsChangeOrigin) => void
 }): { onFrameLoad: () => void } {
   const {
     surface,
@@ -50,11 +54,13 @@ export function usePluginFrameHost(options: {
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null)
   const onUnresponsiveRef = useRef(options.onUnresponsive)
   const onGuestGoneRef = useRef(options.onGuestGone)
+  const onSettingsChangedRef = useRef(options.onSettingsChanged)
   // Why a ref: main rotates sessions without replacing the document or its in-flight calls.
   const sessionTokenRef = useRef(sessionToken)
   useLayoutEffect(() => {
     onUnresponsiveRef.current = options.onUnresponsive
     onGuestGoneRef.current = options.onGuestGone
+    onSettingsChangedRef.current = options.onSettingsChanged
     sessionTokenRef.current = sessionToken
   })
   const getFrameWindow = useMemo(() => () => pluginFrameWindowOf(frameRef.current), [frameRef])
@@ -153,6 +159,9 @@ export function usePluginFrameHost(options: {
       const push = pluginPanelPushSchema.safeParse(raw)
       if (push.success) {
         getFrameWindow()?.postMessage(pluginEvent(FRAME_EVENTS.push, push.data), '*')
+        if (push.data.kind === 'changed' && push.data.area === 'settings') {
+          onSettingsChangedRef.current?.(push.data.key, push.data.origin)
+        }
       }
     })
   }, [frameKey, getFrameWindow, sessionToken])

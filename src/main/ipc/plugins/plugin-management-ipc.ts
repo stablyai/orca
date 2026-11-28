@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { Store } from '../../persistence/loading-store/store'
 import { getUserPluginsDir } from '../../plugins/discovery/plugin-discovery'
+import { unloadPluginDevFolder } from '../../plugins/development/plugin-dev-folders'
 import {
   installPluginFromGit,
   installPluginFromLocalPath
@@ -133,6 +134,27 @@ export function registerPluginManagementHandlers(
     if (!removed) {
       throw new Error(`cannot remove protected or non-installed plugin ${parsed.pluginKey}`)
     }
+    return listPluginsForClients(pluginService)
+  })
+
+  ipc.handle('plugins:unloadDevFolder', async (_event, args: unknown) => {
+    await pluginService.whenReady()
+    const { pluginKey } = removeArgsSchema.parse(args)
+    if (
+      !pluginService
+        .getDiscovered()
+        .some((plugin) => plugin.pluginKey === pluginKey && plugin.isDev)
+    ) {
+      throw new Error(`${pluginKey} is not a loaded development plugin`)
+    }
+    await unloadPluginDevFolder({
+      service: pluginService,
+      writes: {
+        setDevPluginPaths: (devPluginPaths) =>
+          store.updateSettings({ devPluginPaths }, { notifyListeners: true })
+      },
+      target: { pluginKey }
+    })
     return listPluginsForClients(pluginService)
   })
 }

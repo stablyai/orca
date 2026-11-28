@@ -21,7 +21,8 @@ const PLUGIN_MANAGEMENT_IPC_CHANNELS = [
   'plugins:panelImage',
   'plugins:resolveGitSource',
   'plugins:install',
-  'plugins:remove'
+  'plugins:remove',
+  'plugins:unloadDevFolder'
 ] as const
 const PLUGIN_SETTINGS_IPC_CHANNELS = ['plugins:getSettings', 'plugins:setSetting'] as const
 const PLUGIN_EDITOR_SAVE_HOOK_IPC_CHANNELS = ['plugins:editorSaveHook'] as const

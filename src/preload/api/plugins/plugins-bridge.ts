@@ -86,6 +86,7 @@ export const pluginsApi = {
   getInstalledManifest: (args) => ipcRenderer.invoke('plugins:getInstalledManifest', args),
   remove: (args: { pluginKey: string }): Promise<PluginHostListEntry[]> =>
     ipcRenderer.invoke('plugins:remove', args),
+  unloadDevFolder: (args) => ipcRenderer.invoke('plugins:unloadDevFolder', args),
   getLogs: (args: { pluginKey: string }): Promise<PluginHostLogLine[]> =>
     ipcRenderer.invoke('plugins:getLogs', args),
   refresh: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:refresh'),

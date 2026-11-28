@@ -26,7 +26,7 @@ export function registerPluginSettingsHandlers(
     findValidPlugin: (pluginKey: string) => pluginService.findValidPlugin(pluginKey),
     userDataPath: pluginService.options.userDataPath,
     dataChanged: (pluginKey: string, key: string) =>
-      pluginService.panelBridge.dataChanged(pluginKey, 'settings', key)
+      pluginService.panelBridge.dataChanged(pluginKey, 'settings', key, 'settings-ui')
   })
   ipc.handle('plugins:getSettings', async (_event, args: unknown) => {
     await pluginService.whenReady()

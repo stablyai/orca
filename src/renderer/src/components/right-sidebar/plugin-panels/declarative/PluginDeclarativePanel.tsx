@@ -3,6 +3,7 @@ import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../../../shared/plugins/de
 import type { PluginFrameGuest } from '../../../../../../shared/plugins/frames/plugin-frame-bridge'
 import { pluginEvent } from '../../../../../../shared/plugins/frames/plugin-protocol'
 import { PLUGIN_FRAME_USER_METHODS } from '../../../../../../shared/plugins/workers/plugin-host-api'
+import type { PluginSettingsChangeOrigin } from '../../../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import { PluginDeclarativeView } from '@/components/plugins/declarative/PluginDeclarativeView'
 import type { PluginDeclarativeEmit } from '@/components/plugins/declarative/PluginDeclarativeControls'
 import { callPanelActionViaPreload } from '../../../plugins/frames/plugin-frame-host'
@@ -33,6 +34,9 @@ type PluginDeclarativePanelProps = {
   onUnresponsive: () => void
   /** Dev folder: saves swap the guest under this panel, keeping its last tree and memory atoms. */
   hotReload?: boolean
+  /** Settings panels are shown independently of the right sidebar. */
+  active?: boolean
+  onSettingsChanged?: (key: string, origin?: PluginSettingsChangeOrigin) => void
 }
 
 function subscribeDocumentVisibility(onChange: () => void): () => void {
@@ -54,7 +58,9 @@ export function PluginDeclarativePanel({
   frameKey,
   sessionToken,
   onUnresponsive,
-  hotReload = false
+  hotReload = false,
+  active,
+  onSettingsChanged
 }: PluginDeclarativePanelProps): React.JSX.Element {
   const frameRef = useRef<PluginFrameElement | null>(null)
   const sendToGuest = useCallback((event: string, payload: unknown) => {
@@ -68,7 +74,7 @@ export function PluginDeclarativePanel({
   const state = usePluginDeclarativeState({
     panelId,
     sessionToken,
-    visible: sidebarOpen && windowVisible,
+    visible: (active ?? sidebarOpen) && windowVisible,
     sendToGuest,
     hotReload
   })
@@ -135,7 +141,8 @@ export function PluginDeclarativePanel({
     declarative: channel,
     consumeHostActivation: consumePress,
     trackHostCall,
-    onUnresponsive
+    onUnresponsive,
+    onSettingsChanged
   })
   // A click on Orca's own Link (or a Markdown link): no frame-activation check, but its control
   // must have settled, and main keeps the URL allowlist and rate limit.

@@ -1,7 +1,6 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
-import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import { randomUUID } from 'node:crypto'
@@ -24,6 +23,11 @@ import type {
 } from '../startup/runtime-worktree-agent-startup'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
+import {
+  startStartupAgentTerminal,
+  startupAgentTerminalOptions,
+  startupEffectApproval
+} from '../startup/runtime-startup-agent-terminal'
 import {
   isPreparedFolderSetup,
   prepareFolderWorktreeSetup,
@@ -185,37 +189,29 @@ export async function createRuntimeFolderWorktree(args: {
   let startupTerminal: CreateWorktreeResult['startupTerminal']
   // Main owns failed agent startup too, so its pane can show the reason without a terminal service.
   if (args.startup && (deps.terminals.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
+    const approval = startupEffectApproval(request)
     try {
       const launchRuntime = args.startupLaunchRuntime
       if (launchRuntime instanceof Error && !ORCA_LAYOUT_OWNER_IS_MAIN) {
         throw launchRuntime
       }
-      const terminal = await deps.terminals.createTerminal(`id:${worktree.id}`, {
-        command: args.startup.command,
-        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
-        ...paneIdentity(request.startupPaneKey),
-        env: args.startup.env,
-        ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
-        ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
-        ...(launchRuntime instanceof Error
-          ? { startFailure: launchRuntime }
-          : launchRuntime
-            ? { launchRuntime }
-            : {}),
-        ...(args.startup.viewMode ? { viewMode: args.startup.viewMode } : {}),
-        startupCommandDelivery: args.startup.startupCommandDelivery,
-        telemetry: args.startup.telemetry,
-        // Keep failed main-owned starts visible in their panes.
-        ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
-        ...(shouldActivate ? {} : { surfaceOwner: false })
+      const terminal = await startStartupAgentTerminal({
+        worktreeId: worktree.id,
+        approval,
+        ports: deps.terminals,
+        options: {
+          ...startupAgentTerminalOptions({
+            request,
+            startup: args.startup,
+            launchRuntime,
+            ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {})
+          }),
+          ...(shouldActivate ? {} : { surfaceOwner: false })
+        },
+        onStartupTerminalCreated: request.onStartupTerminalCreated,
+        ...(args.draftPaste ? { draftPaste: args.draftPaste } : {}),
+        ...(args.startupFollowup ? { startupFollowup: args.startupFollowup } : {})
       })
-      request.onStartupTerminalCreated?.(terminal)
-      if (args.draftPaste) {
-        deps.terminals.pasteDraft(terminal.handle, args.draftPaste)
-      }
-      if (args.startupFollowup) {
-        deps.terminals.sendFollowup(terminal.handle, args.startupFollowup, terminal)
-      }
       didSpawnStartup = true
       startupTerminal = {
         spawned: true,
@@ -226,6 +222,8 @@ export async function createRuntimeFolderWorktree(args: {
         surface: 'background'
       }
     } catch (error) {
+      // A refusal is the caller's answer, not a startup failure to warn about.
+      approval.assertAllowed()
       const message = readableWslDistroHoldText(
         formatTerminalStartFailure(error) ??
           (error instanceof Error ? error.message : String(error))

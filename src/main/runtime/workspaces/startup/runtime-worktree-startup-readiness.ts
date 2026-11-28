@@ -37,9 +37,16 @@ export type WorktreeStartupReadinessHost = {
 
 export type StartupFollowupPromptOptions = {
   signal?: AbortSignal
+  beforeWrite?: () => void
   agentLaunch?: boolean
   terminalCreation?: TerminalReadinessCreation
 }
+
+/** A startup prompt's live approval: an abort ends its readiness wait, a throw sends nothing. */
+export type StartupPromptDeliveryGuard = Pick<
+  StartupFollowupPromptOptions,
+  'signal' | 'beforeWrite'
+>
 
 /** A post-start agent's first prompt: its process in front can still drop typed text (#10336). */
 export async function deliverStartupFollowupPrompt(
@@ -62,6 +69,7 @@ export async function deliverStartupFollowupPrompt(
       }
       // WSL and SSH-to-Windows cannot prove a lone shell either: keep their typed follow-up; agent.launch refused there.
       if (!options.agentLaunch && runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true) {
+        options.beforeWrite?.()
         host.write(ptyId, `${prompt}\r`, 'launch')
         return true
       }
@@ -73,6 +81,7 @@ export async function deliverStartupFollowupPrompt(
       freshLaunch: true,
       terminalCreation: options.terminalCreation,
       text: prompt,
+      beforeWrite: options.beforeWrite,
       unprovableHost: 'write-if-shell-provable',
       ...(signal ? { signal } : {})
     })

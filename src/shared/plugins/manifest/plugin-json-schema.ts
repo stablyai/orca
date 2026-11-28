@@ -66,7 +66,7 @@ export function pluginSchemaGeneratedFiles(): Record<string, string> {
       file: 'orca-plugin.json',
       schemaFile: PLUGIN_MANIFEST_SCHEMA_FILE,
       sinceNote:
-        '`Since` is the first Orca release that reads the field; raise `engines.orca` when you use a newer one.',
+        '`Since` is the first Orca release that reads the field; raise `engines.orca` when you use a newer one. `unreleased` means source development only until maintainers assign its first release.',
       appendix: PLUGIN_MANIFEST_POLICY_NOTES
     }),
     'docs/reference/plugin-catalog.md': renderPluginSchemaReference(catalog, {

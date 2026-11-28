@@ -16,6 +16,8 @@ export type PluginHostPanel = {
   /** Inline SVG path icon, defaults applied. Absent on older hosts; older clients ignore it and
    *  show `puzzle`, which is why it does not reuse `icon`. */
   iconPath?: ResolvedPluginPanelPathIcon
+  /** Absent on older hosts: sidebar. Settings panels are not sidebar tabs. */
+  location?: 'sidebar' | 'settings'
   tabKey: `plugin:${string}`
 }
 
@@ -120,6 +122,8 @@ export type PluginHostListEntry = {
   hasWorker: boolean
   /** The MCP servers its manifest adds, each with its URL or command line. Absent on older hosts. */
   mcpServers?: { name: string; detail: string }[]
+  /** Whether the plugin declares settings editable by the person. Absent on older hosts. */
+  hasSettings?: boolean
   vmRecipes?: {
     id: string
     name: string

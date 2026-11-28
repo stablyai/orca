@@ -201,6 +201,7 @@ export async function foundConversation(
         { uncommittedCreate: true }
       )
       await params.fork?.revalidate()
+      options.beforeEffect?.()
       const first = options.firstMessage
       if (first) {
         await options.beforeFirstMessage?.()

@@ -1,11 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, renameSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-// Per-checkout, user-owned: a predictable name in a shared /tmp could be planted by another user.
-const CACHE_DIR = resolve(import.meta.dirname, '../../../../node_modules/.cache')
+let cacheDirectory
 
 function signsByDefault(env) {
   try {
@@ -51,11 +50,14 @@ export function gitSigningOffEnv(env = process.env) {
     '\tforceSignAnnotated = false',
     ''
   ].join('\n')
+  if (!cacheDirectory || !existsSync(cacheDirectory)) {
+    // A private random directory cannot be planted by another user in shared temp storage.
+    cacheDirectory = mkdtempSync(join(tmpdir(), 'orca-vitest-git-signing-'))
+  }
   const hash = createHash('sha256').update(config).digest('hex').slice(0, 16)
-  const file = join(CACHE_DIR, `orca-vitest-unsigned-${hash}.gitconfig`)
+  const file = join(cacheDirectory, `orca-vitest-unsigned-${hash}.gitconfig`)
   if (!existsSync(file)) {
-    mkdirSync(CACHE_DIR, { recursive: true })
-    // Concurrent runs may share the cache; rename so no git ever reads a half-written file.
+    // Publish complete configuration before returning it to git.
     const partial = `${file}.${process.pid}`
     writeFileSync(partial, config)
     renameSync(partial, file)

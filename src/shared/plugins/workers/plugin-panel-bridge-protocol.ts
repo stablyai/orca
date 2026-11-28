@@ -63,12 +63,20 @@ export const pluginDataChangedSchema = lazyZodSchema(() =>
 )
 export type PluginDataChanged = z.infer<typeof pluginDataChangedSchema>
 
+const PLUGIN_SETTINGS_CHANGE_ORIGINS = ['plugin', 'settings-ui'] as const
+export type PluginSettingsChangeOrigin = (typeof PLUGIN_SETTINGS_CHANGE_ORIGINS)[number]
+
 /** main → renderer → frame: what an open panel is told, wrapped in the `plugin.push` frame event. */
 export const pluginPanelPushSchema = lazyZodSchema(() =>
   z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('message'), event: pluginBridgeNameSchema, payload: z.unknown() }),
     z.object({ kind: z.literal('event'), event: z.enum(PLUGIN_EVENT_NAMES), payload: z.unknown() }),
-    z.object({ kind: z.literal('changed'), area: z.enum(PLUGIN_DATA_AREAS), key: z.string() })
+    z.object({
+      kind: z.literal('changed'),
+      area: z.enum(PLUGIN_DATA_AREAS),
+      key: z.string(),
+      origin: z.enum(PLUGIN_SETTINGS_CHANGE_ORIGINS).optional()
+    })
   ])
 )
 export type PluginPanelPush = z.infer<typeof pluginPanelPushSchema>

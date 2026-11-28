@@ -7,8 +7,8 @@
 - `ORCA plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel|components|worker-panel|hook> [--publisher <name>] [--id <id>] [--name <display name>] [--json]`: Scaffold a new Orca plugin from a template
 - `ORCA plugin types <dir> [--json]`: Write the TypeScript typings for Orca plugins into a plugin folder
 - `ORCA plugin test [dir] [--json]`: Run a plugin's own tests on this machine, unsandboxed: only for code you trust
-- `ORCA plugin check [dir] [--json]`: Validate a plugin, render each components panel once on this machine (unsandboxed: only for code you trust), and statically check each custom editor
-- `ORCA plugin validate <dir|orca-plugin.json|orca-catalog.json> [--json]`: Check a plugin folder, manifest or catalog the way Orca will load it
+- `ORCA plugin check [dir] [--allow-unreleased] [--json]`: Validate a plugin, render each components panel once on this machine (unsandboxed: only for code you trust), and statically check each custom editor
+- `ORCA plugin validate <path> [--allow-unreleased] [--json]`: Check a plugin folder, manifest or catalog the way Orca will load it
 - `ORCA plugin inspect <dir> [--json]`: Show what a plugin folder contributes, the access it asks for, and its content hash
 - `ORCA plugin release-entry <dir> [--json]`: Print the catalog release entry for a plugin folder's committed HEAD
 - `ORCA plugin list [--json]`: List plugins on the Orca host with their status and access level
@@ -27,4 +27,4 @@
 - `ORCA plugin dev request <dir|plugin-key> <name> [--data <json>] [--panel <id>] [--timeout-ms <ms>] [--json]`: Call a development plugin's worker handler the way a panel's plugin.request does
 - `ORCA plugin dev unload <dir|plugin-key> [--json]`: Remove a development folder from Orca
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>] [--json]`: Show a plugin's panel in Orca's right sidebar, or open a file in its editor
-- `ORCA plugin shot <plugin-key|dir> [--panel <id> | --editor <file> | --status-bar | --window] [--theme <light|dark>] [--width <px>] [--height <px>] [--act '<json>' [--in-place] | --scenario <name>] [--out <file.png>] [--json]`: Save a PNG of a plugin panel exactly as Orca draws it, to look at what you built
+- `ORCA plugin shot <plugin-key|dir> [--panel <id> | --editor <file> | --status-bar | --window] [--theme <light|dark>] [--width <px>] [--height <px>] [--act '<json>' [--in-place] | --scenario <name>] [--out <file.png>] [--allow-unreleased] [--json]`: Save a PNG of a plugin panel exactly as Orca draws it, to look at what you built

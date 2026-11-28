@@ -24,6 +24,7 @@ import { usePluginReviewQueue } from '../state/use-plugin-review-queue'
 import { usePluginSettingsWrites } from '../state/use-plugin-settings-writes'
 import { isPluginEnabled } from '../presentation/plugin-status-presentation'
 import { applyPluginThemesNow } from '../state/plugin-theme-apply'
+import { createPluginListMutations } from '../state/plugin-list-mutations'
 import { PluginsSectionFrame } from './PluginsSectionFrame'
 import { openShortcutsSettingsFromPlugins } from '../../settings/navigation/open-plugins-settings'
 
@@ -55,7 +56,7 @@ export function PluginsSettingsSection({
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [developmentOpen, setDevelopmentOpen] = useState(false)
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
-  const [removePluginId, setRemovePluginId] = useState<string | null>(null)
+  const [removePlugin, setRemovePlugin] = useState<PluginHostListEntry | null>(null)
   const [busyPluginKeys, setBusyPluginKeys] = useState<Set<string>>(() => new Set())
   const mountedRef = useRef(false)
   const listRequestRef = useRef(0)
@@ -84,7 +85,12 @@ export function PluginsSettingsSection({
     setError(null)
     // Why: accepted discovery results own installed-plugin identity and invalidate stale UI state.
     review.prune(installedPluginKeys)
-    setRemovePluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
+    setRemovePlugin((current) => {
+      const next = nextPlugins.find((plugin) => plugin.pluginKey === current?.pluginKey)
+      return current && next?.isDev === current.isDev && next.bundled === current.bundled
+        ? next
+        : null
+    })
     setBusyPluginKeys(
       (current) => new Set([...current].filter((pluginKey) => installedPluginKeys.has(pluginKey)))
     )
@@ -163,7 +169,7 @@ export function PluginsSettingsSection({
       setError(null)
       setInstallKind(null)
       clearReviews()
-      setRemovePluginId(null)
+      setRemovePlugin(null)
       setBusyPluginKeys(new Set())
       resetSettingsWrites()
     }
@@ -204,8 +210,6 @@ export function PluginsSettingsSection({
   if (!mounted) {
     return <SettingsSection id="plugins" {...sectionPresentation} />
   }
-
-  const removePlugin = plugins.find((plugin) => plugin.pluginKey === removePluginId) ?? null
 
   const install = async (source: PluginHostInstallSource): Promise<void> => {
     if (!(await confirmTrust(sourceInstallTrustPrompt(source)))) {
@@ -302,37 +306,15 @@ export function PluginsSettingsSection({
     }
   }
 
-  // Why one wrapper: a list mutation marks its plugin busy and shows a failure on the list.
-  const mutateList = async (
-    pluginKey: string,
-    request: () => Promise<PluginHostListEntry[]>
-  ): Promise<boolean> => {
-    setBusyPluginKeys((current) => new Set(current).add(pluginKey))
-    try {
-      applyCompletedMutation(await request())
-      return true
-    } catch (cause) {
-      if (mountedRef.current) {
-        setPluginListError(cause)
-      }
-      return false
-    } finally {
-      clearBusy(pluginKey)
-    }
-  }
-
-  const remove = async (pluginKey: string): Promise<void> => {
-    if (
-      (await mutateList(pluginKey, () => window.api.plugins.remove({ pluginKey }))) &&
-      mountedRef.current
-    ) {
-      setRemovePluginId(null)
-    }
-  }
-
-  const refresh = async (): Promise<void> => {
-    await loadPluginList(window.api.plugins.refresh())
-  }
+  const { remove, refresh } = createPluginListMutations({
+    mountedRef,
+    applyCompletedMutation,
+    setPluginListError,
+    setBusyPluginKeys,
+    clearBusy,
+    loadPluginList,
+    setRemovePlugin
+  })
 
   const featureEnabled = settings.pluginSystemEnabled
   const headerAction = (
@@ -376,7 +358,8 @@ export function PluginsSettingsSection({
           },
           onRestart: (pluginKey) => void restart(pluginKey),
           onRollbackRequest: marketplaceLifecycle.requestRollback,
-          onRemoveRequest: setRemovePluginId
+          onRemoveRequest: (key) =>
+            setRemovePlugin(plugins.find((plugin) => plugin.pluginKey === key) ?? null)
         }}
         onRefresh={refresh}
         onMarketplaceInstalled={marketplaceLifecycle.reloadAfterMutation}
@@ -408,8 +391,12 @@ export function PluginsSettingsSection({
       <PluginRemoveDialog
         plugin={removePlugin}
         busy={Boolean(removePlugin && busyPluginKeys.has(removePlugin.pluginKey))}
-        onCancel={() => setRemovePluginId(null)}
-        onConfirm={(pluginKey) => void remove(pluginKey)}
+        onCancel={() => setRemovePlugin(null)}
+        onConfirm={() => {
+          if (removePlugin) {
+            void remove(removePlugin)
+          }
+        }}
       />
       <PluginRollbackDialog
         plugin={marketplaceLifecycle.rollbackPlugin}

@@ -20,16 +20,25 @@ type StartupAgentLaunch = {
 
 export async function createWorktreeWithStartupAgent(
   runtime: StartupAgentCreateRuntime,
-  args: RuntimeManagedWorktreeCreateArgs
+  args: RuntimeManagedWorktreeCreateArgs,
+  options: { beforeEffect?: () => void; signal?: AbortSignal } = {}
 ): Promise<CreateWorktreeResult> {
   const launch = await resolveStartupAgentLaunch(runtime, args)
+  // The create starts the agent once the worktree exists; its caller's approval travels to that spawn and prompt.
+  const approval = {
+    ...(options.beforeEffect ? { beforeEffect: options.beforeEffect } : {}),
+    ...(options.signal ? { signal: options.signal } : {})
+  }
   if ('passthrough' in launch) {
-    return runtime.createManagedWorktree(launch.passthrough)
+    options.beforeEffect?.()
+    options.signal?.throwIfAborted()
+    return runtime.createManagedWorktree({ ...launch.passthrough, ...approval })
   }
   let created: CreateWorktreeResult | undefined
   try {
     await executeAgentLaunch({
       runtime,
+      signal: options.signal,
       intent: {
         agent: launch.agent,
         target: { kind: 'create-worktree', create: args },
@@ -40,10 +49,13 @@ export async function createWorktreeWithStartupAgent(
       promptPolicy: 'legacy-host',
       workspaces: {
         createWorktree: async ({ legacyPrompt, launchSource }) => {
+          options.beforeEffect?.()
+          options.signal?.throwIfAborted()
           created = await runtime.createManagedWorktree({
             ...withoutStartupAgentFields(args),
             ...legacyStartupFields(launch.agent, legacyPrompt),
-            ...(launchSource ? { startupLaunchSource: launchSource } : {})
+            ...(launchSource ? { startupLaunchSource: launchSource } : {}),
+            ...approval
           })
           return {
             worktreeId: created.worktree.id,

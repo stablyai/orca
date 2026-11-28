@@ -3,28 +3,17 @@ import {
   isPluginHostMethodName,
   PLUGIN_HOST_API,
   PLUGIN_HOST_METHOD_NAMES,
-  type PluginHostMethodName,
-  type PluginJsonValue
+  type PluginHostMethodName
 } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   projectPluginWorkspaceAgents,
   pluginFrameWorkspaceContext,
-  projectPluginWorkspaceContext,
-  type PluginAgentStatusRow,
-  type PluginWorkspaceTerminal
+  projectPluginWorkspaceContext
 } from './plugin-workspace-projection'
-import type { PluginHostCallScope } from './plugin-host-call-scope'
 import type { PluginDataArea } from '../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
-import {
-  PLUGIN_PANEL_BRIDGE_HANDLERS,
-  type PluginPanelBridgeServices
-} from './plugin-host-panel-method-bindings'
+import { PLUGIN_PANEL_BRIDGE_HANDLERS } from './plugin-host-panel-method-bindings'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
-import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
-import {
-  PLUGIN_STATUS_BAR_HANDLERS,
-  type PluginStatusBarServices
-} from './plugin-host-status-bar-method-bindings'
+import { PLUGIN_STATUS_BAR_HANDLERS } from './plugin-host-status-bar-method-bindings'
 import { PLUGIN_WORKSPACE_ACTION_HANDLERS } from './plugin-host-workspace-method-bindings'
 import { PLUGIN_TERMINAL_ACTION_HANDLERS } from './plugin-host-terminal-method-bindings'
 import { PLUGIN_WORKSPACE_CREATE_HANDLERS } from './plugin-host-workspace-create-bindings'
@@ -33,105 +22,17 @@ import { PLUGIN_AGENT_HISTORY_HANDLERS } from './plugin-host-agent-history-bindi
 import { PLUGIN_PROJECT_VISIBILITY_HANDLERS } from './plugin-host-project-visibility-binding'
 import {
   pluginHostRpc as rpc,
-  pluginWorkspaceSelector as workspaceSelector,
-  type PluginRuntimeRpc
+  pluginWorkspaceSelector as workspaceSelector
 } from './plugin-host-runtime-call'
-import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
-import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 import { PluginHostCallError } from './plugin-host-call-scope'
-import type {
-  PluginActionConfirmation,
-  PluginConfirmationSubject
-} from '../../consent/plugin-confirmation-subject'
 
-export type PluginWorktreeContext = {
-  worktreeId: string
-  /** Host-qualified identity key, which `workspace.list` ids carry; absent without one. */
-  identityKey?: string
-  branch: string
-  displayName: string
-}
+import type { PluginDesktopFrameServices, PluginHostServices } from './plugin-host-services-types'
 
-/** Desktop-only sinks for frame methods and host confirmations; absent in headless serve. */
-export type PluginDesktopFrameServices = {
-  /** Asks the person in the calling frame's window, else Orca's focused or first window. */
-  confirm(
-    pluginId: string,
-    subject: PluginConfirmationSubject,
-    scope: PluginHostCallScope
-  ): Promise<PluginActionConfirmation>
-  openExternal(
-    pluginId: string,
-    url: string,
-    scope: PluginHostCallScope
-  ): Promise<{ opened: boolean; reason?: 'cancelled' | 'consent-unavailable' }>
-  /** False when the person cancelled the dialog. */
-  saveFile(
-    pluginId: string,
-    input: { suggestedName?: string; mimeType?: string; data: string | ArrayBuffer | Uint8Array },
-    scope: PluginHostCallScope
-  ): Promise<boolean>
-}
-
-export type PluginHostServices = {
-  appearance?: PluginAppearanceService | null
-  /** This Orca's own editor settings; absent where no profile is loaded (relay conformance). */
-  editorTypography?: PluginEditorTypographySource | null
-  resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
-  listWorktreeTerminals(worktreeId: string): Promise<PluginWorkspaceTerminal[]>
-  listAgentStatuses(): readonly PluginAgentStatusRow[]
-  /** The title of the orchestration task each pane runs, by pane key (`tabId:leafId`); absent
-   *  where no runtime dispatches tasks. */
-  listAgentTaskTitles?(): ReadonlyMap<string, string>
-  sendTerminalText(
-    terminalId: string,
-    action: { text: string; enter: boolean }
-  ): Promise<{ accepted: boolean }>
-  dispatchPluginNotification(input: {
-    pluginId: string
-    title: string
-    body?: string
-  }): Promise<{ delivered: boolean }>
-  storage: {
-    get(pluginId: string, key: string): PluginJsonValue | undefined
-    set(
-      pluginId: string,
-      key: string,
-      value: PluginJsonValue
-    ): { ok: true } | { ok: false; error: string }
-    delete(pluginId: string, key: string): void
-    keys(pluginId: string): string[]
-  }
-  secrets: {
-    get(
-      pluginId: string,
-      key: string
-    ): { ok: true; value: string | null } | { ok: false; error: string }
-    set(pluginId: string, key: string, value: string): { ok: true } | { ok: false; error: string }
-    delete(pluginId: string, key: string): void
-    protection(): 'os-keyring' | 'unavailable'
-  }
-  desktop?: PluginDesktopFrameServices | null
-  /** The plugin's open panels and its worker; absent where no panel host runs. */
-  panels?: PluginPanelBridgeServices | null
-  /** Absent where no Orca window draws a status bar. */
-  statusBar?: PluginStatusBarServices | null
-  /** The runtime methods the `orca` CLI calls, for workspace actions; absent without a runtime. */
-  runtimeRpc?: PluginRuntimeRpc | null
-  /** Orca's window, for actions only it can take; absent in headless serve. */
-  renderer?: PluginHostRendererActions | null
-  /** Asks the person before the plugin acts; absent where nobody can be asked (headless serve).
-   *  Re-checks the plugin's approval once the person answers. */
-  confirm?: PluginDesktopFrameServices['confirm'] | null
-  settings: {
-    getAll(pluginId: string): Record<string, PluginJsonValue>
-    set(
-      pluginId: string,
-      key: string,
-      value: PluginJsonValue
-    ): { ok: true } | { ok: false; error: string }
-  }
-}
+export type {
+  PluginDesktopFrameServices,
+  PluginHostServices,
+  PluginWorktreeContext
+} from './plugin-host-services-types'
 
 const api = PLUGIN_HOST_API
 
@@ -139,6 +40,17 @@ const worktreeShowAnswer = z.object({ worktree: z.object({ id: z.string() }) })
 const OK = { ok: true } as const
 
 const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
+  'settings.open': bind(api['settings.open'], async (_params, { pluginId, services, scope }) => {
+    if (!services.hasSettingsPage || !services.renderer?.openPluginSettings) {
+      throw new PluginHostCallError(
+        'unavailable',
+        'this plugin has no settings page available in an Orca window'
+      )
+    }
+    scope.assertActive()
+    await services.renderer.openPluginSettings(pluginId)
+    return { opened: true as const }
+  }),
   'appearance.read': bind(api['appearance.read'], async (_params, { services }) => {
     if (!services.appearance) {
       throw new PluginHostCallError('unavailable', 'desktop appearance service is unavailable')
@@ -296,7 +208,11 @@ function changed<T>(
   key: string,
   result: T
 ): T {
-  services.panels?.dataChanged(pluginId, area, key)
+  if (area === 'settings') {
+    services.panels?.dataChanged(pluginId, area, key, 'plugin')
+  } else {
+    services.panels?.dataChanged(pluginId, area, key)
+  }
   return result
 }
 

@@ -8,7 +8,8 @@ import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-
 import {
   parsePluginManifest,
   qualifiedPluginKey,
-  type PluginManifest
+  type PluginManifest,
+  type PluginManifestParseOptions
 } from '../../../shared/plugins/manifest/plugin-manifest'
 import {
   localPluginPublisher,
@@ -21,7 +22,7 @@ import type { PluginShotReply, PluginShotSaved } from './plugin-view'
 /** What `plugins.shotReplay` answers: a shot of the drawn scenario tree. */
 type PluginShotReplayReply = PluginShotReply & { replay?: true; scenario?: string }
 
-export type PluginShotScenarioRequest = {
+export type PluginShotScenarioRequest = PluginManifestParseOptions & {
   target: string
   scenario: string
   panelId?: string
@@ -50,7 +51,10 @@ function requireLocal(ctx: HandlerContext): void {
   }
 }
 
-async function readManifest(dir: string): Promise<PluginManifest> {
+async function readManifest(
+  dir: string,
+  options: PluginManifestParseOptions
+): Promise<PluginManifest> {
   let raw: unknown
   try {
     raw = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
@@ -60,7 +64,7 @@ async function readManifest(dir: string): Promise<PluginManifest> {
       `${dir} has no readable orca-plugin.json: ${error instanceof Error ? error.message : String(error)}`
     )
   }
-  const parsed = parsePluginManifest(raw)
+  const parsed = parsePluginManifest(raw, options)
   if (!parsed.ok) {
     throw refuse('plugin_invalid', `${dir}: ${parsed.error}`, [
       `\`orca plugin validate ${dir}\` lists every problem.`
@@ -74,8 +78,11 @@ const folderKey = (manifest: PluginManifest): string =>
   qualifiedPluginKey(withPluginPublisher(manifest, localPluginPublisher(manifest.publisher)))
 
 /** The key a development folder loads under. */
-export async function readPluginFolderKey(dir: string): Promise<string> {
-  return folderKey(await readManifest(dir))
+export async function readPluginFolderKey(
+  dir: string,
+  options: PluginManifestParseOptions = {}
+): Promise<string> {
+  return folderKey(await readManifest(dir, options))
 }
 
 /**
@@ -84,11 +91,12 @@ export async function readPluginFolderKey(dir: string): Promise<string> {
  */
 async function resolveFolder(
   ctx: HandlerContext,
-  target: string
+  target: string,
+  options: PluginManifestParseOptions
 ): Promise<{ dir: string; manifest: PluginManifest; pluginKey: string }> {
   const asPath = isAbsolute(target) ? target : resolve(ctx.cwd, target)
   if (existsSync(asPath) || !isQualifiedPluginKey(target)) {
-    const manifest = await readManifest(asPath)
+    const manifest = await readManifest(asPath, options)
     return { dir: asPath, manifest, pluginKey: folderKey(manifest) }
   }
   const plugins = await callPlugins<PluginHostListEntry[]>(ctx, 'plugins.list')
@@ -106,7 +114,7 @@ async function resolveFolder(
     )
   }
   const enclosing = enclosingPluginFolder(ctx.cwd)
-  const manifest = enclosing ? await readManifest(enclosing).catch(() => null) : null
+  const manifest = enclosing ? await readManifest(enclosing, options).catch(() => null) : null
   if (!enclosing || !manifest || folderKey(manifest) !== target) {
     throw refuse(
       'invalid_argument',
@@ -159,7 +167,8 @@ export async function takePluginScenarioShot(
   request: PluginShotScenarioRequest
 ): Promise<PluginShotSaved & { replay: true; scenario: string; notes: string[] }> {
   requireLocal(ctx)
-  const { dir, manifest, pluginKey } = await resolveFolder(ctx, request.target)
+  const options = { allowUnreleased: request.allowUnreleased === true }
+  const { dir, manifest, pluginKey } = await resolveFolder(ctx, request.target, options)
   const panel = scenarioPanel(manifest, pluginKey, request.panelId)
   // Lazy: the check pulls in the declarative tree validator and the Node selection.
   const check = await import('../authoring/plugin-panel-check.js')
@@ -175,6 +184,7 @@ export async function takePluginScenarioShot(
     )
   }
   const [rendered] = await check.checkPluginPanels(dir, {
+    ...options,
     panel: panel.id,
     scenario: request.scenario,
     drawnTree: true

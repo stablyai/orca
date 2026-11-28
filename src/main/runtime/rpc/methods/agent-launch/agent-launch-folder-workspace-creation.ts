@@ -2,7 +2,8 @@ import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runti
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchWorkspaceFactory } from '../../../../agent-launch/agent-launch-surface-factories'
-import type { RpcContext } from '../../core'
+import type { HostLaunchContext } from './agent-launch-surfaces'
+import { assertAgentPromptRequestActive } from '../../../terminal/input/agent-prompt-signals'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch/choices/agent-launch-preferences'
@@ -13,7 +14,7 @@ type FolderWorkspaceCreateParams = Extract<
 >['create']
 
 export function agentLaunchFolderWorkspaceCreator(
-  context: RpcContext,
+  context: HostLaunchContext,
   agent: TuiAgent
 ): AgentLaunchWorkspaceFactory['createFolderWorkspace'] {
   return async ({
@@ -31,6 +32,9 @@ export function agentLaunchFolderWorkspaceCreator(
   }) => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: AgentLaunch validated this payload before selecting its create factory.
     const params = create as FolderWorkspaceCreateParams
+    const beforeEffect = context.agentLaunchPolicy?.beforeEffect ?? context.beforeEffect
+    beforeEffect?.()
+    assertAgentPromptRequestActive(context.signal)
     let startupTerminalCreation: RuntimeTerminalCreate | undefined
     let promptRodeLaunchCommand = false
     const result = await context.runtime.createFolderWorkspace({
@@ -49,6 +53,8 @@ export function agentLaunchFolderWorkspaceCreator(
         ? toAgentLaunchPreferences(options, startupAgent)
         : undefined,
       startupAccountEnv: accountEnv ? { ...accountEnv } : undefined,
+      // The create starts the agent after its store write; approval is asked again right before.
+      beforeEffect,
       onWorkspaceCreated,
       onStartupTerminalCreated: (terminal) => {
         startupTerminalCreation = terminal

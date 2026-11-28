@@ -385,7 +385,7 @@ function renderManifest({ schema, fieldDocs }) {
   return document(
     'orca-plugin.json fields',
     [
-      `\`Since\` is the first Orca release that reads a field: raise \`engines.orca\` to the newest one you use. Orca refuses unknown keys at every level. File paths are ${pathRules.replace(/^Relative/u, 'relative')}`,
+      `\`Since\` is the first Orca release that reads a field: raise \`engines.orca\` to the newest one you use. \`unreleased\` fields require a matching source SDK and an explicit \`--allow-unreleased\` development check; maintainers assign their first supporting release before publication. Orca refuses unknown keys at every level. File paths are ${pathRules.replace(/^Relative/u, 'relative')}`,
       ''
     ],
     [

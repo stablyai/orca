@@ -2,6 +2,8 @@ import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agen
 import type { reserveRequestFor } from './structured-agent-session-attach'
 
 export type StructuredAgentSessionCreateOptions = {
+  /** Plugin handoff re-approval, checked after preparation and before durable ownership. */
+  beforeEffect?: () => void
   firstMessage?: StructuredAgentSessionFirstMessage
   /** In-process callers may reject background work after preparation without taking its slot;
    *  awaited right before the opening message, and a throw sends nothing. */

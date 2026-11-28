@@ -12,6 +12,7 @@ export type PluginRuntimeRpc = (
   params: unknown,
   options?: {
     signal?: AbortSignal
+    onAgentLaunchSurfacePublished?: (surface: unknown) => void
     beforeEffect?: () => void
     plugin?: { key: string; name: string }
   }
@@ -88,10 +89,12 @@ export function pluginHostRpc(services: PluginHostServices): PluginRuntimeRpc {
 export function pluginHostEffect(
   ctx: PluginHostMethodContext,
   method: string,
-  params: unknown
+  params: unknown,
+  options?: Pick<NonNullable<Parameters<PluginRuntimeRpc>[2]>, 'onAgentLaunchSurfacePublished'>
 ): Promise<unknown> {
   ctx.scope.assertActive()
   return pluginHostRpc(ctx.services)(method, params, {
+    ...options,
     ...(ctx.scope.signal ? { signal: ctx.scope.signal } : {}),
     beforeEffect: () => ctx.scope.assertActive(),
     plugin: { key: ctx.pluginId, name: ctx.scope.pluginName ?? ctx.pluginId }

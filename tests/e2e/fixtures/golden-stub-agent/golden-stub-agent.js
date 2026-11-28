@@ -17,7 +17,10 @@ const INCOMPLETE_ESCAPE_TAIL_RE = /^(?:\[[0-9;?]*|O)?$/
 const ESCAPE_TAIL_RE = /^(?:\[[0-9;?]*[ -/]*[@-~]|O[@-~])/
 
 let composer = ''
-let lastSubmission = ''
+let lastSubmission =
+  process.argv.includes('--echo-launch-prompt') && process.argv.at(-1) !== '--echo-launch-prompt'
+    ? process.argv.at(-1)
+    : ''
 let pendingInput = ''
 let exiting = false
 
