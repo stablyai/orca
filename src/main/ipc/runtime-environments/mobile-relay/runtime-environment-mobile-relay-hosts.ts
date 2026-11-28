@@ -134,6 +134,8 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         statusByEnvironmentId
       }
     },
+    configuredIds: async () =>
+      (await listEnvironments(userDataPath)).map((environment) => environment.id),
     resolve: async (environmentId, openingMethod, signal) => {
       if (
         !(await listRelayableEnvironments(userDataPath)).some(
