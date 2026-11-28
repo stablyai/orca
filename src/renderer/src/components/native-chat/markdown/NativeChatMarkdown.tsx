@@ -13,6 +13,7 @@ import CommentMarkdown, {
   type CommentMarkdownExtension
 } from '@/components/comment-markdown/CommentMarkdown'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
+import { CommentMarkdownDocumentCode } from '@/components/comment-markdown/comment-markdown-code-renderers'
 import { createDocumentCommentMarkdownComponents } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { cn } from '@/lib/class-names'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
@@ -113,18 +114,45 @@ function containsImage(children: ReactNode): boolean {
   )
 }
 
+// A paragraph consisting only of links still takes its direction from their labels.
+function containsOnlyLinks(children: ReactNode): boolean {
+  return Children.toArray(children).every((child) => {
+    if (typeof child === 'string') {
+      return child.trim() === ''
+    }
+    if (!isValidElement<MarkdownElementProps>(child)) {
+      return false
+    }
+    const tag =
+      child.props.node?.tagName ?? (typeof child.type === 'string' ? child.type : undefined)
+    return (
+      tag === 'a' ||
+      ((tag === 'strong' || tag === 'em' || tag === 'del' || tag === 'span') &&
+        containsOnlyLinks(child.props.children))
+    )
+  })
+}
+
 // The chat's own text blocks: list items take the paragraphs' line height (the shared comment
 // renderer gives them leading-relaxed), 10px between blocks and 3px between items at 13px.
 const NATIVE_CHAT_TEXT_BLOCK_COMPONENTS: CommentMarkdownExtension['components'] = {
-  p: ({ children }) => <p className="my-2.5 first:mt-0 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="my-2.5 ml-5 list-disc space-y-0.75">{children}</ul>,
+  code: (props) => <CommentMarkdownDocumentCode {...props} dir="ltr" />,
+  p: ({ children }) => (
+    <p
+      className="my-2.5 first:mt-0 last:mb-0"
+      data-native-chat-link-only={containsOnlyLinks(children) ? '' : undefined}
+    >
+      {children}
+    </p>
+  ),
+  ul: ({ children }) => <ul className="my-2.5 mx-5 list-disc space-y-0.75">{children}</ul>,
   ol: ({ children, start }) => (
-    <ol start={start} className="my-2.5 ml-5 list-decimal space-y-0.75">
+    <ol start={start} className="my-2.5 mx-5 list-decimal space-y-0.75">
       {children}
     </ol>
   ),
   li: ({ children, value }) => (
-    <li value={value} className="[&>input]:pointer-events-none">
+    <li dir="auto" value={value} className="[&>input]:pointer-events-none">
       {children}
     </li>
   )

@@ -23,12 +23,15 @@ import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatComposerPrimaryButton } from './NativeChatComposerPrimaryButton'
 import { NativeChatAttachButton } from './NativeChatAttachButton'
 import { NativeChatDictationButton } from './NativeChatDictationButton'
+import { NativeChatTextDirectionPicker } from './NativeChatTextDirectionPicker'
 import { NativeChatContextUsageRing } from '../../usage/NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from '../../../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from '../../session/options/controls/native-chat-option-picker-request'
 import type { NativeChatSteerChordPreview } from '../../../../../../shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 
 export type NativeChatComposerActionsProps = {
+  textDirection?: 'auto' | 'ltr' | 'rtl'
+  onTextDirectionChange?: (direction: 'auto' | 'ltr' | 'rtl') => void
   editSession?: { cancel: () => void }
   attachDisabled: boolean
   dictationDisabled: boolean
@@ -71,6 +74,8 @@ export type NativeChatComposerActionsProps = {
 
 // Memoized: typing re-renders the composer per keystroke, and these controls rarely change with it.
 export const NativeChatComposerActions = memo(function NativeChatComposerActions({
+  textDirection = 'auto',
+  onTextDirectionChange,
   editSession,
   attachDisabled,
   dictationDisabled,
@@ -186,10 +191,18 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       onHoldEnd={onDictationHoldEnd}
     />
   )
+  const direction = onTextDirectionChange ? (
+    <NativeChatTextDirectionPicker
+      value={textDirection}
+      onChange={onTextDirectionChange}
+      focusComposer={focusComposer}
+    />
+  ) : null
   if (launchPrompt) {
     return (
       <div className="flex w-full items-center justify-between text-muted-foreground">
         {attach}
+        {direction}
         {dictation}
       </div>
     )
@@ -197,6 +210,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
 
   const left: NativeChatComposerControl[] = [
     { id: 'attach', priority: 6, content: attach },
+    ...(direction ? [{ id: 'text-direction', priority: 2, content: direction }] : []),
     ...(roomReplies ? [{ id: 'room-replies', priority: 6, content: roomReplies }] : []),
     {
       id: 'permissions',

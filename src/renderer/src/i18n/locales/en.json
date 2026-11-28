@@ -23224,6 +23224,12 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "textDirection": {
+        "auto": "Automatic",
+        "rtl": "Right to left",
+        "ltr": "Left to right",
+        "label": "Text direction: {{direction}}"
       }
     },
     "tab": {

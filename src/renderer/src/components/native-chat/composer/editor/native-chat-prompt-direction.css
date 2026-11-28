@@ -1,0 +1,19 @@
+[data-native-chat-prompt-editor] p {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+[data-native-chat-text-direction='rtl'] p {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+[data-native-chat-text-direction='ltr'] p {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+[data-native-chat-prompt-editor] [contenteditable='false'] {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

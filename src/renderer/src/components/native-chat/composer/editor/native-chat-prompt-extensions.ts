@@ -11,6 +11,7 @@ import { NativeChatHardBreakParagraphs } from './native-chat-hard-break-paragrap
 export function nativeChatPromptExtensions(): Extensions {
   return [
     StarterKit.configure({
+      paragraph: { HTMLAttributes: { dir: 'auto' } },
       blockquote: false,
       bold: false,
       bulletList: false,

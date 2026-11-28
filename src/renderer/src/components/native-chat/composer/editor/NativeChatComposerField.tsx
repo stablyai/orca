@@ -1,7 +1,7 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from '../focus/native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { cn } from '@/lib/class-names'
 import { NativeChatComposerMenus } from '../pickers/NativeChatComposerMenus'
@@ -83,6 +83,7 @@ export function NativeChatComposerField({
   sideChat
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
+  const [textDirection, setTextDirection] = useState<'auto' | 'ltr' | 'rtl'>('auto')
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
   const glowing = useNativeChatComposerGlow(draftScopeKey)
   const optionCount =
@@ -251,6 +252,7 @@ export function NativeChatComposerField({
               </div>
             ) : null}
             <NativeChatPromptEditor
+              textDirection={textDirection}
               key={draftScopeKey}
               scopeKey={draftScopeKey}
               positionTarget={positionTarget}
@@ -294,7 +296,7 @@ export function NativeChatComposerField({
               className={cn(
                 'w-full bg-transparent px-2 py-1 text-sm outline-none',
                 launch
-                  ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:mr-[-100%]'
+                  ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:me-[-100%]'
                   : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14 [[data-native-chat-dock-fit~=composer]_[data-native-chat-dock]:has([data-native-chat-question-card])_&]:max-h-[calc(3lh+0.5rem)]',
                 'overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.
@@ -313,6 +315,8 @@ export function NativeChatComposerField({
               )}
             >
               <NativeChatComposerActions
+                textDirection={textDirection}
+                onTextDirectionChange={setTextDirection}
                 editSession={editSession}
                 attachDisabled={attachDisabled}
                 dictationDisabled={dictationDisabled}

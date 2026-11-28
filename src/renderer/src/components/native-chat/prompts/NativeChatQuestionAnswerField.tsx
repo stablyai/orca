@@ -56,6 +56,7 @@ export function NativeChatQuestionAnswerField({
       {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
       {multiline ? (
         <ImeTextarea
+          dir="auto"
           ref={inputRef}
           data-native-chat-answer-field
           data-native-chat-dock-content
@@ -65,10 +66,11 @@ export function NativeChatQuestionAnswerField({
           onChange={(e) => onChange(e.target.value)}
           onClick={onPointerChoose}
           placeholder={placeholder}
-          className="scrollbar-sleek max-h-[12lh] min-h-16 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent [field-sizing:content] text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50"
+          className="scrollbar-sleek max-h-[12lh] min-h-16 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent [field-sizing:content] text-start text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50 [unicode-bidi:plaintext]"
         />
       ) : (
         <ImeTextarea
+          dir="auto"
           ref={inputRef}
           rows={1}
           onFocus={revealGrownField}
@@ -101,7 +103,7 @@ export function NativeChatQuestionAnswerField({
           }}
           placeholder={placeholder}
           className={cn(
-            'scrollbar-sleek max-h-[6lh] min-h-[1lh] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground focus:min-h-[2lh] disabled:cursor-default disabled:opacity-50',
+            'scrollbar-sleek max-h-[6lh] min-h-[1lh] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-start text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground focus:min-h-[2lh] disabled:cursor-default disabled:opacity-50 [unicode-bidi:plaintext]',
             chosen || !value ? 'text-foreground' : 'text-muted-foreground'
           )}
         />

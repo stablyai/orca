@@ -321,7 +321,10 @@ function ConversationTurnCard({
       <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         {conversationRoleLabel(role, t)}
       </div>
-      <p className="line-clamp-4 select-text text-[12px] leading-[1.35] text-foreground/90 [overflow-wrap:anywhere]">
+      <p
+        dir="auto"
+        className="line-clamp-4 select-text whitespace-pre-wrap text-start text-[12px] leading-[1.35] text-foreground/90 [overflow-wrap:anywhere] [unicode-bidi:plaintext]"
+      >
         {text}
       </p>
     </div>

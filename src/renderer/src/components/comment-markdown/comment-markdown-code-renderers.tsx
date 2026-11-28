@@ -20,9 +20,11 @@ export const CommentMarkdownBlockLineContext = createContext(1)
 
 export function CommentMarkdownDocumentCode({
   className,
+  dir,
   children
 }: {
   className?: string
+  dir?: React.ComponentProps<'code'>['dir']
   children?: React.ReactNode
 }): React.JSX.Element {
   const renderMermaid = useContext(CommentMarkdownMermaidContext)
@@ -31,7 +33,10 @@ export function CommentMarkdownDocumentCode({
     return renderMermaidFence(children, diagramClassName)
   }
   return (
-    <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
+    <code
+      dir={dir}
+      className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]"
+    >
       {children}
     </code>
   )

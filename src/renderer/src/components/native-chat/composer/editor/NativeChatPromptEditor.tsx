@@ -53,6 +53,7 @@ import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-m
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 import { useNativeChatPromptEditorHandle } from '../../native-chat-prompt-editor-handle'
 import { useAppStore } from '@/store'
+import './native-chat-prompt-direction.css'
 
 const NO_IMAGES: readonly string[] = []
 const NOT_COMPOSING = (): boolean => false
@@ -65,6 +66,7 @@ export const NativeChatPromptEditor = memo(
 )
 
 function NativePromptEditor({
+  textDirection = 'auto',
   scopeKey,
   positionTarget,
   imageRow = NO_IMAGES,
@@ -110,6 +112,7 @@ function NativePromptEditor({
     editorProps: {
       attributes: {
         'data-native-chat-prompt-editor': 'true',
+        'data-native-chat-text-direction': textDirection,
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': placeholder,
@@ -117,7 +120,7 @@ function NativePromptEditor({
         spellcheck: spellcheck ? 'true' : 'false',
         // Chromium on macOS still applies system text replacements under spellcheck=false; autocorrect=off stops them.
         ...(spellcheck ? {} : { autocorrect: 'off', autocapitalize: 'off' }),
-        class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:only-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:only-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:only-child]:before:float-left [&_p.is-editor-empty:only-child]:before:h-0 [&_p.is-editor-empty:only-child]:before:pointer-events-none`,
+        class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:only-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:only-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:only-child]:before:float-start [&_p.is-editor-empty:only-child]:before:h-0 [&_p.is-editor-empty:only-child]:before:pointer-events-none`,
         ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))
       },
       // Clipboard input is read as plain text, as a draft is: a bot's token in it becomes its pill.

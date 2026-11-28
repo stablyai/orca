@@ -1,4 +1,23 @@
 /* Shared markdown also renders sidebar comments, so chat styling stays opt-in. */
+/* Let Unicode's first strong character choose each paragraph, including streamed text. */
+.native-chat-markdown :is(p, li, h1, h2, h3, h4, h5, h6, th, td, .comment-md-p, .comment-md-h) {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* Reference labels keep their own direction without choosing the surrounding prose direction. */
+.native-chat-markdown p:not([data-native-chat-link-only]) a:not([href^='#orca-native-chat-file']) {
+  unicode-bidi: plaintext;
+}
+
+/* Literal runs must not reorder punctuation or determine the surrounding paragraph's direction. */
+.native-chat-markdown
+  :is(pre, code, a[href^='#orca-native-chat-file='], a[href^='#orca-native-chat-file-path=']) {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
 /* Bold and headings stand out by weight alone, in the text color around them (body text in
    replies, the bubble's color in user messages); a theme may still color bold. :where keeps this
    below the link-label rule, so bold link text takes the link color. */

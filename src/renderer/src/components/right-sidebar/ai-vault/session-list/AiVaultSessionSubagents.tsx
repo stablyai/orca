@@ -214,7 +214,8 @@ function SubagentSessionLine({
           </span>
         ) : null}
         <span
-          className="min-w-0 flex-1 truncate text-[12px] leading-[1.35] text-foreground/90"
+          dir="auto"
+          className="min-w-0 flex-1 truncate text-start text-[12px] leading-[1.35] text-foreground/90"
           title={session.title}
         >
           {session.title}
