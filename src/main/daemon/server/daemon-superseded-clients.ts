@@ -1,7 +1,9 @@
 import type { DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
+import type { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
 
 export const RETIRE_WHEN_IDLE_REQUEST = 'retireWhenIdle'
+const STREAM_DRAIN_MAX_MS = 1_000
 
 /**
  * A newer app's connection stops keeping this older daemon alive; once only such connections
@@ -56,4 +58,37 @@ export function onlyClients(connections: DaemonClientConnections): boolean {
     clients.every((client) => client.superseded) &&
     connections.hasOnlyTransportsOf(clients)
   )
+}
+
+/** A superseding app still reads its sessions' last output and exits; let them reach it before the sockets close. */
+export async function drainStreams(
+  connections: DaemonClientConnections,
+  batcher: DaemonStreamDataBatcher
+): Promise<void> {
+  const drains = [...connections.values()].map((client) => {
+    const socket = client.streamSocket
+    if (!client.superseded || !socket || socket.destroyed) {
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve) => {
+      const done = (): void => {
+        clearTimeout(deadline)
+        socket.off('drain', check)
+        socket.off('close', done)
+        resolve()
+      }
+      const check = (): void => {
+        batcher.flush(client.clientId)
+        if (batcher.queuedCharsForClient(client.clientId) === 0 && socket.writableLength === 0) {
+          done()
+        }
+      }
+      const deadline = setTimeout(done, STREAM_DRAIN_MAX_MS)
+      deadline.unref()
+      socket.on('drain', check)
+      socket.once('close', done)
+      check()
+    })
+  })
+  await Promise.all(drains)
 }

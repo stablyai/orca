@@ -48,8 +48,12 @@ export class DaemonRouterSpawn {
       return await this.spawnOnce(opts, attempt)
     } catch (error) {
       // An older generation that retired under this spawn owned nothing; route again without it.
+      // A spawn the current generation took is never sent twice: its reply may only have been lost.
       const { target } = attempt
-      if (!(await this.legacyIdle.settleHeldRetirements(error, generations, target))) {
+      if (
+        target === this.state.current() ||
+        !(await this.legacyIdle.settleHeldRetirements(error, generations, target))
+      ) {
         throw error
       }
       return await this.spawnOnce(opts, {})

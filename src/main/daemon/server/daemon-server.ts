@@ -276,6 +276,7 @@ export class DaemonServer {
     this.transientFactRelay.dispose()
     this.preparations.cancelAll()
     await disposeTerminalsAndRelays({ host: this.host, relays: this.relays, log: this.log })
+    await superseded.drainStreams(this.connections, this.streamDataBatcher)
     this.streamDataBatcher.clear()
     this.historySeedTransfers.dispose()
     // Clearing earlier could make a crash during PTY teardown look like orderly shutdown.

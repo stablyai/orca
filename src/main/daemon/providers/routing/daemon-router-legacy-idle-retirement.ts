@@ -14,8 +14,8 @@ const RECHECK_MS = 60_000
 const RECHECK_MAX_MS = 30 * 60_000
 /** A hung decision must not hold reattaches; the generation's own fence still refuses them. */
 const DECISION_FENCE_MAX_MS = 2_000
-/** A held generation closes as it retires; its endpoint is proven gone within a few of these. */
-const RETIRED_CONFIRM_DELAYS_MS = [50, 100, 250, 500, 1_000]
+/** A retiring generation closes, then exits; both are proven within a few of these. */
+const RETIRED_CONFIRM_DELAYS_MS = [50, 100, 250, 500, 1_000, 2_000]
 
 type Timer = ReturnType<typeof setTimeout>
 
@@ -43,6 +43,7 @@ export class DaemonRouterLegacyIdleRetirement {
   private readonly recheckDelays = new WeakMap<DaemonPtyAdapter, number>()
   private readonly modes = new WeakMap<DaemonPtyAdapter, 'asking' | 'held' | 'pre-rpc'>()
   private readonly lostListeners = new Map<DaemonPtyAdapter, () => void>()
+  private readonly decisions = new Map<DaemonPtyAdapter, Promise<unknown>>()
   private reattachesInFlight = 0
   private reattachEpoch = 0
   private disposed = false
@@ -105,6 +106,12 @@ export class DaemonRouterLegacyIdleRetirement {
   ): Promise<boolean> {
     if (!mayComeFromRetirement(error)) {
       return false
+    }
+    // Refused while an older generation decided past the fence: route again once it has answered.
+    const decision = target ? this.decisions.get(target) : undefined
+    if (decision) {
+      await decision
+      return true
     }
     const held = this.options.legacy().filter((adapter) => this.modes.get(adapter) === 'held')
     // Only the generation the spawn reached can have refused it before its close arrives.
@@ -246,6 +253,14 @@ export class DaemonRouterLegacyIdleRetirement {
     try {
       await this.retireIfEmpty(adapter)
     } catch (error) {
+      // A decision whose answer was lost is settled once the generation is proven gone.
+      if (
+        adapter.isIdleRetirementAdmissionClosed() &&
+        (await adapter.confirmRetiredWhenIdle()) === 'retired'
+      ) {
+        this.forget(adapter)
+        return
+      }
       // An unanswered inventory proves nothing; ask again later.
       console.warn('[daemon] Older terminal host emptiness check failed:', error)
       this.checkAgainLater(adapter)
@@ -305,8 +320,10 @@ export class DaemonRouterLegacyIdleRetirement {
       releaseFence()
     }, this.options.timing?.fenceMaxMs ?? DECISION_FENCE_MAX_MS)
     fenceTimer.unref?.()
+    const decision = adapter.requestIdleRetirement()
+    this.decisions.set(adapter, decision)
     try {
-      const result = await adapter.requestIdleRetirement()
+      const result = await decision
       if (this.disposed && result.state !== 'retiring') {
         return
       }
@@ -327,6 +344,7 @@ export class DaemonRouterLegacyIdleRetirement {
         }
       }
     } finally {
+      this.decisions.delete(adapter)
       clearTimeout(fenceTimer)
       this.fences.delete(fence)
       releaseFence()
