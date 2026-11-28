@@ -1,5 +1,6 @@
 import { MobileNativeChatGoalCheckNotice } from './MobileNativeChatGoalCheckNotice'
 import * as Fallback from '../../../../../../src/shared/native-chat/transcript/notices/claude-model-fallback'
+import { AGENT_ACCOUNT_SWITCH_COPY } from '../../../../../../src/shared/native-chat/transcript/notices/agent-account-switch-notice'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
@@ -223,6 +224,15 @@ export function MobileNativeChatNoticeRow({
           style={[styles.faint, scaledType(TEXT_SIZE, fontScale)]}
         >
           {nativeChatHostStatusCopy(t)[look.presentation]}
+        </Text>
+      )
+    case 'account-switch':
+      return (
+        <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
+          {t('chat.notice.accountSwitch', AGENT_ACCOUNT_SWITCH_COPY, {
+            from: look.from,
+            to: look.to
+          })}
         </Text>
       )
     case 'model-fallback':

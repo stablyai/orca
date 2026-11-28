@@ -14,6 +14,8 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import { appendUsageLimitedTurn } from './structured-agent-session-usage-limited-turn.test-fixture'
 import { childRecord } from '../../recovery/testing/structured-agent-session-restart-resume.test-fixture'
 import { releaseIdleChatsOnOtherAccount } from '../structured-agent-session-account-switch'
+import { moveChatsToSelectedAccount } from '../structured-agent-session-saved-account-switch'
+import { readAgentAccountSwitchFrame } from '../../../../../shared/native-chat/transcript/notices/agent-account-switch-notice'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 
@@ -328,4 +330,84 @@ it('keeps the agent when a background task settles after its check, before it is
   expect(chat.child()).toBe(idle)
   expect(chat.child()?.close).toBeUndefined()
   expect(chat.rig.closeSession).not.toHaveBeenCalled()
+})
+
+/** An idle chat whose agent keeps one home, telling saved accounts apart only by the key each
+ *  start records (agy's accounts swap one login inside that home). */
+async function idleChatOnSavedAccount() {
+  await rig?.dispose()
+  let selected = 'account-a'
+  const current = await createQueuedMessageTestRig({
+    agent: 'claude',
+    restartable: true,
+    accountKey: () => selected
+  })
+  rig = current
+  await current.settleAccepted(await current.workingSend(), 'one')
+  await eventually(() =>
+    expect(current.host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(
+      false
+    )
+  )
+  return {
+    rig: current,
+    child: () => current.host.collaboratorsForTests().sessions.get(SESSION)?.child,
+    select: (key: string) => {
+      selected = key
+    },
+    moveChats: () => releaseIdleChatsOnOtherAccount(current.host, 'claude', () => true)
+  }
+}
+
+it('stops an idle agent that launched on another saved account in the same home, and keeps one on the selected account', async () => {
+  const chat = await idleChatOnSavedAccount()
+  const idle = chat.child()
+  expect(idle?.accountKey).toBe('account-a')
+  expect(idle?.accountHome).toBeUndefined()
+
+  await chat.moveChats()
+  expect(chat.child()).toBe(idle)
+
+  chat.select('account-b')
+  await chat.moveChats()
+  expect(chat.child()).toBeNull()
+})
+
+it("replaces an agent on another saved account at the next send's handover", async () => {
+  const chat = await idleChatOnSavedAccount()
+  const starts = chat.rig.starts.mock.calls.length
+  chat.select('account-b')
+  await chat.rig.settleAccepted(await chat.rig.workingSend(), 'two')
+  expect(chat.rig.starts.mock.calls.length).toBe(starts + 1)
+  expect(chat.child()?.accountKey).toBe('account-b')
+})
+
+it('lets a running turn finish on its saved account and tells the chat which account its next message uses', async () => {
+  const chat = await idleChatOnSavedAccount()
+  await chat.rig.workingSend()
+  chat.rig
+    .providerEvents()
+    .appendItem(
+      { provider: 'claude', sessionId: THREAD, uuid: 'working' },
+      { kind: 'turn', turnId: 'working', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  await chat.rig.host.flushStreamedEvents(SESSION)
+  const running = chat.child()
+  const journal = chat.rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const appended = vi.spyOn(journal, 'appendItem')
+  chat.select('account-b')
+  await moveChatsToSelectedAccount(
+    chat.rig.host,
+    'claude',
+    { current: () => 'account-b', email: (key) => `${key}@example.com` },
+    () => true
+  )
+  expect(chat.child()).toBe(running)
+  const notes = appended.mock.calls
+    .map(([, body]) => body)
+    .flatMap((body) =>
+      body.kind === 'status' ? [readAgentAccountSwitchFrame(body.providerFrame)] : []
+    )
+  expect(notes).toEqual([{ from: 'account-a@example.com', to: 'account-b@example.com' }])
 })

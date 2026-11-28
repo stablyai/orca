@@ -1,6 +1,7 @@
 // Shared host/command/plan notice presentation: desktop translates the copy; mobile renders it directly.
 
 import { readClaudeModelFallbackFrame } from './claude-model-fallback'
+import { readAgentAccountSwitchFrame } from './agent-account-switch-notice'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../agent-session/journal/agent-session-turn-notice'
 import {
   isAgentSessionHostStatusPresentation,
@@ -44,6 +45,8 @@ export type NativeChatNoticeLook =
   | { kind: 'host-status'; presentation: AgentSessionHostStatusPresentation }
   | { kind: 'plan' }
   | { kind: 'model-fallback'; from: string; to: string }
+  /** A turn finishing on the account it started on; the next message uses the selected one. */
+  | { kind: 'account-switch'; from: string; to: string }
   /** Faint, as a system row with no notice of its own is. */
   | { kind: 'aside' }
   | {
@@ -115,6 +118,13 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
       : null
   if (modelFallback) {
     return { kind: 'model-fallback', ...modelFallback }
+  }
+  const accountSwitch =
+    presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION && !block.failure
+      ? readAgentAccountSwitchFrame(block.providerFrame)
+      : null
+  if (accountSwitch) {
+    return { kind: 'account-switch', ...accountSwitch }
   }
   // Declared notification kinds select disclosure; prose and nested failures do not.
   if (presentation === undefined && !block.failure && !block.orcaStop) {

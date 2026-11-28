@@ -80,6 +80,11 @@ export class AntigravityAccountService {
     return antigravityAccountState(vault, login, Boolean(this.launchRestore))
   }
 
+  /** Reads only Orca's saved accounts, never agy's login, and waits on no other account work. */
+  async readSelection(): Promise<void> {
+    await this.store.read()
+  }
+
   /** Reads agy's login even where that may raise a keychain dialog; only for an explicit request. */
   readCurrentAccount(): Promise<AntigravityAccountState> {
     return this.serialize(async () => this.state(await this.reconcile()))

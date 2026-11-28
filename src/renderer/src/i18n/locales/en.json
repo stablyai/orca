@@ -21611,6 +21611,7 @@
         "autoReviewApproveFailed": "Couldn't record your approval. Try again.",
         "autoReviewApproveHint": "{{agent}} may retry this exact action once. Its review still checks the retry.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
+        "accountSwitch": "Finishing this turn on {{from}}. Your next message uses {{to}}.",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
         "forkedFrom": "Forked from",
         "forkedFromUnknown": "Forked from another chat"
@@ -25678,6 +25679,9 @@
         "accounts": "accounts"
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
+      "switched": "Switched to {{account}}",
+      "switchedDescription": "New chats use it now. Chats running a turn switch at their next message.",
+      "switchFailedToast": "Antigravity account update failed.",
       "authMethod": "Sign in with",
       "personal": "Google account",
       "enterprise": "Gemini Enterprise",

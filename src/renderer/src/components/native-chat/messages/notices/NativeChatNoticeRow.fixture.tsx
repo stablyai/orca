@@ -4,6 +4,11 @@ import { agentSessionFailureFact } from '../../../../../../shared/agent-session/
 import { agentSessionFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../../../shared/agent-session/journal/agent-session-turn-notice'
+import {
+  AGENT_ACCOUNT_SWITCH_FRAME_KIND,
+  agentAccountSwitchText
+} from '../../../../../../shared/native-chat/transcript/notices/agent-account-switch-notice'
 
 export const codexFailures = defineFixture({
   width: 440,
@@ -116,3 +121,27 @@ function ContextNotes(): React.JSX.Element {
 export const contextNotes = defineFixture({ width: 600, render: () => <ContextNotes /> })
 
 export const contextNotesNarrow = defineFixture({ width: 340, render: () => <ContextNotes /> })
+
+function AccountSwitchNote(): React.JSX.Element {
+  const notice = { from: 'personal@example.com', to: 'work@example.com' }
+  const head = JSON.stringify(notice)
+  // The row the host writes into a chat still running a turn when the account was switched.
+  const block: NativeChatTextBlock = {
+    type: 'text',
+    text: agentAccountSwitchText(notice),
+    tone: 'notice',
+    presentation: AGENT_SESSION_TURN_NOTICE_PRESENTATION,
+    providerFrame: {
+      provider: 'orca',
+      kind: AGENT_ACCOUNT_SWITCH_FRAME_KIND,
+      payload: { head, byteLength: head.length, digest: 'synthetic', truncated: false }
+    }
+  }
+  return (
+    <div className="bg-chat-pane p-4">
+      <NativeChatNoticeRow block={block} agentName="Antigravity" />
+    </div>
+  )
+}
+
+export const accountSwitch = defineFixture({ width: 600, render: () => <AccountSwitchNote /> })

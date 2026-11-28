@@ -5,6 +5,7 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/
 import { isAntigravityFileStorageHostAsync } from './native-file-credentials'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './native-account-host'
+import { AGY_HOST_SELECTION } from './agy-account-selection'
 
 export async function prepareAntigravityAccountForLaunch(args: {
   launchAgent?: string
@@ -57,9 +58,9 @@ export async function prepareAntigravityAccountForLaunch(args: {
   })
 }
 
-/** Chats never had the launch gate: put the selected account back when that's safe and raises no
- *  keychain dialog, else start on agy's current login as before. */
-export async function restoreAntigravityAccountForChat(
+/** A chat or listing puts the selected account back when that's safe and raises no keychain
+ *  dialog, else starts on agy's current login as before. */
+export async function restoreSelectedAntigravityAccount(
   env: Readonly<Record<string, string>>
 ): Promise<void> {
   try {
@@ -72,3 +73,6 @@ export async function restoreAntigravityAccountForChat(
     console.warn("[antigravity] chat starts on agy's current login:", error)
   }
 }
+
+// The last agy Orca started on a previous account may have written its login back as it ran.
+AGY_HOST_SELECTION.onOldLoginsGone(() => void restoreSelectedAntigravityAccount({}))
