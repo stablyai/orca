@@ -4,8 +4,6 @@ import { TERMINAL_HTML_DOCUMENT_SHELL } from '../terminal-webview-html/document-
 import type { TerminalFontStyle } from '../preferences/terminal-font-style'
 import { terminalBundledFontCss } from '../fonts/terminal-bundled-font-css'
 
-import '../terminal-webview-html/theme'
-
 // Generate native script from the same modules embedded pages import.
 export const XTERM_HTML = [
   TERMINAL_HTML_DOCUMENT_SHELL,

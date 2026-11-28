@@ -20,7 +20,6 @@ import { useSerializedStoredState } from '../../../storage/use-serialized-stored
 import { stylesSheet } from './terminal-shortcut-settings-styles'
 import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import '../../key-input/terminal-accessory-keys'
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from '../../key-input/terminal-key-definitions'
 import {
   getDefaultTerminalAccessoryLayout,

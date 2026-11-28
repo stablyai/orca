@@ -17,7 +17,6 @@ import {
   fetchResolveReviewThread,
   fetchUpdateIssueComment
 } from '../../github-operations/github-pr-mutations'
-import '../../github-operations/github-pr-mutation-outcome'
 import type { GitHubPrMutationOutcome } from '../../github-operations/github-pr-mutation-outcome'
 import { fetchAddPRReviewComment } from '../../github-operations/github-pr-review-line-mutations'
 import type { GitHubPrRepoSlug } from '../../github-operations/github-pr-repo-slug'

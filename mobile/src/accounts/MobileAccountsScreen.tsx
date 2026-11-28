@@ -19,7 +19,6 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { stylesSheet } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/icons/AgentIcons'
-import './usage/UsageBar'
 import {
   type ProviderKey,
   getActiveProviderRateLimits,
