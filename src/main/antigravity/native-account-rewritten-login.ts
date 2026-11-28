@@ -45,3 +45,26 @@ export class AntigravityRewrittenLoginIdentity {
     return identity ? { ...current, identity } : current
   }
 }
+
+/** Who a login being saved belongs to. `keepUnidentified` saves it without one when Google can't
+ *  say, and doesn't ask at all once its access token expired, since Google rejects that token. */
+export async function identifyLoginToSave(
+  current: AntigravityNativeCredential,
+  lookup: LookupIdentity,
+  now: number,
+  options?: { keepUnidentified?: boolean }
+): Promise<AntigravityCredentialIdentity | null> {
+  if (current.identity) {
+    return current.identity
+  }
+  const keep = options?.keepUnidentified === true
+  if (keep && current.accessTokenExpiresAt !== null && current.accessTokenExpiresAt <= now) {
+    return null
+  }
+  return lookup(current.accessToken).catch((error: unknown) => {
+    if (keep) {
+      return null
+    }
+    throw error
+  })
+}

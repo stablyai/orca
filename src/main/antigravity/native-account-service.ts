@@ -5,7 +5,10 @@ import {
   type AntigravityNativeCredential
 } from './native-credential-codec'
 import { fetchGoogleIdentity } from './google-userinfo-identity'
-import { AntigravityRewrittenLoginIdentity } from './native-account-rewritten-login'
+import {
+  AntigravityRewrittenLoginIdentity,
+  identifyLoginToSave
+} from './native-account-rewritten-login'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -112,19 +115,7 @@ export class AntigravityAccountService {
       if (vault.accounts.some((entry) => this.matches(entry, current))) {
         return this.state({ vault, current })
       }
-      // Google rejects an expired access token, so a kept login skips asking it.
-      const expired =
-        current.accessTokenExpiresAt !== null && current.accessTokenExpiresAt <= this.now()
-      const identity =
-        current.identity ??
-        (options?.keepUnidentified && expired
-          ? null
-          : await this.lookupIdentity(current.accessToken).catch((error: unknown) => {
-              if (options?.keepUnidentified) {
-                return null
-              }
-              throw error
-            }))
+      const identity = await identifyLoginToSave(current, this.lookupIdentity, this.now(), options)
       if (!current.identity && (await this.backend.read())?.contents !== current.contents) {
         throw new Error('The native Antigravity account changed. Save the current account again.')
       }
