@@ -4,7 +4,8 @@ const LAZY_MODAL_IDS = [
   'workspace-cleanup',
   'setup-guide',
   'feature-wall',
-  'feature-tips'
+  'feature-tips',
+  'workspace-status-picker'
 ] as const
 
 export type LazyModalId = (typeof LAZY_MODAL_IDS)[number]
