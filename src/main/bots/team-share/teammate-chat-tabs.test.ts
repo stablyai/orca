@@ -261,3 +261,44 @@ it('opens a teammate’s placed create (a fork’s tab path) in their own list, 
   expect(r.mineSaved()).toEqual([C, sessionId, B])
   expect(r.host.isSessionTabVisible(sessionId)).toBe(false)
 })
+
+it('titles a teammate’s fork by its source and retitles it when the source is renamed', async () => {
+  const F = 'chat-f-fork'
+  // An older build's fork of C, saved under "<source> fork"; it reads as its source's name.
+  const r = await rig({
+    chats: {
+      [C]: { conversationName: 'Release' },
+      [F]: {
+        conversationName: 'Release fork',
+        forkedFrom: { sessionId: C, itemId: 'item-1', childBoundary: { kind: 'start' } }
+      }
+    }
+  })
+  await r.reveal('owner-desk', O)
+  await r.reveal('mate-desk', C)
+  await r.reveal('mate-desk', F)
+  const rows = () =>
+    r.runtime['toMobileSessionTabsResult'](
+      r.runtime['mobileSessionTabsByWorktree'].get(r.listOf())!
+    ).tabs.map((tab) => ({ title: tab.title, forked: 'forked' in tab ? tab.forked : undefined }))
+  expect(rows()).toEqual([
+    { title: 'Release', forked: undefined },
+    { title: 'Release', forked: true }
+  ])
+
+  await ownerUntouchedBy(r, async () => {
+    await r.host.deps.store.setUserConversationName(C, 'Sprint Plan', 'rename')
+    r.runtime.refreshStructuredConversationTabTitle(r.workspace, C)
+  })
+
+  // The source moved off the name the fork was saved under, so the fork keeps its own: the rows
+  // the list holds and sends are retitled, not only those read afresh.
+  const stored = r.runtime['mobileSessionTabsByWorktree']
+    .get(r.listOf())!
+    .tabs.map((tab) => ({ title: tab.title, forked: 'forked' in tab ? tab.forked : undefined }))
+  expect(stored).toEqual(rows())
+  expect(rows()).toEqual([
+    { title: 'Sprint Plan', forked: undefined },
+    { title: 'Release fork', forked: true }
+  ])
+})

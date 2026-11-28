@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -112,7 +113,12 @@ export class AuthorityRuntime extends OrcaRuntimeService {
 
 export async function authorityProfile(
   ids: string[] = [B],
-  options: { visible?: string[]; records?: string[] } = {},
+  options: {
+    visible?: string[]
+    records?: string[]
+    /** Fields a seeded record has beyond the fixture's (a fork's `forkedFrom`, a saved name). */
+    recordFields?: Record<string, Partial<AgentSessionRecord>>
+  } = {},
   profile = createStore()
 ) {
   initOrcaProfilePaths()
@@ -138,7 +144,11 @@ export async function authorityProfile(
         claimStatus: 'released'
       })
     )
-    return { ...record, location: { ...record.location, workspaceId: workspace } }
+    return {
+      ...record,
+      ...options.recordFields?.[id],
+      location: { ...record.location, workspaceId: workspace }
+    }
   })
   await seedTestAgentSessionRecordStore(root, {
     records,

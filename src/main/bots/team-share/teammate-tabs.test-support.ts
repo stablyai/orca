@@ -108,12 +108,20 @@ function shareDevices(): BotShareDevices {
   }
 }
 
+type ChatRecordFields = NonNullable<Parameters<typeof authorityProfile>[1]>['recordFields']
+
 /** `home`: which folder is the agent's Home; the rig's own workspace by default, else a second one
- *  (so the rig's workspace is one of the agent's workers' workspaces). */
-export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = {}) {
+ *  (so the rig's workspace is one of the agent's workers' workspaces). `chats`: seeded chats beyond
+ *  B, C and O, each with its own record fields (a fork, a name). */
+export async function rig(
+  options: { home?: 'rig' | 'other'; opened?: AuthorityRig; chats?: ChatRecordFields } = {}
+) {
+  const chats = options.chats ?? {}
   const opened =
     options.opened ??
-    (await openAuthorityRuntime(await authorityProfile([], { records: [B, C, O] })))
+    (await openAuthorityRuntime(
+      await authorityProfile([], { records: [B, C, O, ...Object.keys(chats)], recordFields: chats })
+    ))
   const homeFolder =
     options.home === 'other'
       ? opened.profile.createFolderWorkspace({
@@ -130,7 +138,7 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
         ...SHARED
       })
     )
-    for (const sessionId of [B, C]) {
+    for (const sessionId of [B, C, ...Object.keys(chats)]) {
       opened.runtime
         .getOrchestrationDb()
         .recordBotConversationActsFor(sessionId, { actsFor: [botShareAsker(SHARED, SCOPE)] })
