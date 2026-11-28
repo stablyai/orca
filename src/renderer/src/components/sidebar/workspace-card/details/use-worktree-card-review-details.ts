@@ -25,21 +25,22 @@ export function useWorktreeCardReviewDetails({
   worktree,
   repo,
   settings,
-  projectGroups,
+  hasProjectGroups,
   cardProps,
   newCardStyle
 }: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
-  Pick<Foundation, 'settings' | 'projectGroups' | 'cardProps' | 'newCardStyle'>) {
+  Pick<Foundation, 'settings' | 'hasProjectGroups' | 'cardProps' | 'newCardStyle'>) {
   const t = useTranslate()
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  const workspaceScope = parseWorkspaceKey(worktree.id)
-  const folderWorkspaceId =
-    workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+  const folderWorkspaceId = worktree.id.startsWith('folder:')
+    ? parseWorkspaceKey(worktree.id)?.type === 'folder'
+      ? worktree.id.slice('folder:'.length)
+      : null
+    : null
   const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
   // Why: project groups gate folder workspaces, so folder paths stay hidden from identity surfaces until that capability exists.
-  const hasProjectGroups = projectGroups.length > 0
   const branchIdentityDisplay = !isFolder && branch.length > 0 ? branch : undefined
   const folderPathIdentityDisplay =
     isFolder && hasProjectGroups && worktree.path.trim().length > 0 ? worktree.path : undefined
@@ -68,7 +69,9 @@ export function useWorktreeCardReviewDetails({
         )
       : ''
   // Saved workspace bindings keep equal Linear identifiers separate.
-  const nextLinearSourceContext = getWorkspaceAttachmentSourceContext('linear', repo, worktree)
+  const nextLinearSourceContext = worktree.linkedLinearIssue
+    ? getWorkspaceAttachmentSourceContext('linear', repo, worktree)
+    : null
   // Preserve equal source-context identity so metadata writes do not retrigger Linear fetches.
   const [linearSourceContext, setLinearSourceContext] = useState(nextLinearSourceContext)
   if (!areTaskSourceContextsEqual(linearSourceContext, nextLinearSourceContext)) {

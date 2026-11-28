@@ -10,9 +10,9 @@ import {
   scopeRpcClientToExecutionHost
 } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 
-/** The client Linear account setup uses, bound to the desktop's tracker host as setup starts so a later
+/** The client tracker account setup (Linear, Jira) uses, bound to the desktop's tracker host as setup starts so a later
  *  change of that default cannot send the key elsewhere. Older desktops (no host) route it themselves. */
-export async function bindLinearAccountClient(
+export async function bindTrackerAccountClient(
   client: RpcClient,
   hostCapabilities: readonly string[]
 ): Promise<RpcClient> {
@@ -32,11 +32,11 @@ export async function bindLinearAccountClient(
   return rpcClientForExecutionHost(client, hostCapabilities, host) ?? client
 }
 
-export type LinearAccountBinding = { base: RpcClient; client: Promise<RpcClient> }
+export type TrackerAccountBinding = { base: RpcClient; client: Promise<RpcClient> }
 
 /** The bound client while it belongs to the current connection; otherwise the plain one. */
-export function linearAccountClient(
-  binding: LinearAccountBinding | null,
+export function trackerAccountClient(
+  binding: TrackerAccountBinding | null,
   client: RpcClient
 ): Promise<RpcClient> {
   return binding?.base === client ? binding.client : Promise.resolve(client)

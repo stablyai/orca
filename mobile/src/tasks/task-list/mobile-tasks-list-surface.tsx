@@ -19,6 +19,9 @@ export function renderMobileTasksListSurface(
     linearConnected,
     jiraConnection,
     refreshJiraConnection,
+    jiraConnectSupported,
+    bindJiraAccountHost,
+    setShowJiraConnect,
     setError,
     provider,
     setLinearApiKeyDraft,
@@ -41,6 +44,14 @@ export function renderMobileTasksListSurface(
       unavailableReason={jiraConnection.unavailableReason}
       disabled={!taskUiReady}
       bottomInset={bottomBarHeight}
+      onConnect={
+        jiraConnectSupported
+          ? () => {
+              bindJiraAccountHost()
+              setShowJiraConnect(true)
+            }
+          : null
+      }
       onCheckAgain={() => {
         void refreshJiraConnection().catch((err: unknown) => {
           setError(

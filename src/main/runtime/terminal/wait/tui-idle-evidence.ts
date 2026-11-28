@@ -224,10 +224,15 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
     if (Date.now() < blockedAt) {
       return { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
     }
-    // Why the screen: a slow saved-credential sign-in spins under the same blocked:auth (#44603).
-    return input.readProgramSignInWaitScreen()
-      ? { kind: 'blocked', reason: 'agent-sign-in-prompt' }
-      : { kind: 'pending', quietForeground: 'closed' }
+    const signInAgent =
+      input.agent ??
+      (input.record.lastOscTitle
+        ? resolveTerminalTitlePolicyAgentType(input.record.lastOscTitle)
+        : null)
+    // Why scoped to agy: only agy's slow saved-credential sign-in spins under blocked:auth (#44603).
+    return signInAgent === 'antigravity' && !input.readProgramSignInWaitScreen()
+      ? { kind: 'pending', quietForeground: 'closed' }
+      : { kind: 'blocked', reason: 'agent-sign-in-prompt' }
   }
   // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
   if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {

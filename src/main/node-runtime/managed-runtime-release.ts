@@ -50,8 +50,6 @@ export type ManagedAgentCli = {
   /** Whether this host has a build to download. */
   available: () => boolean
   executable: (folder: string) => string
-  /** The one stock command it stands in for, when the agent's launches name other programs too. */
-  standsInFor?: string
 }
 
 const serverUseListeners = new Set<(agent: string) => void>()

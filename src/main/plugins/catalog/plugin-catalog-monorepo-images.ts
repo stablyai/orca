@@ -21,11 +21,18 @@ export async function fillMonorepoReleaseImages(
   entry: PluginMarketplaceEntry,
   catalogUrl: string,
   readBlob: CatalogBlobReader,
-  memo?: CatalogBufferMemo
+  memo?: CatalogBufferMemo,
+  remainingBudget?: number
 ): Promise<{ entry: PluginMarketplaceEntry; readBlob: CatalogBlobReader }> {
   const [newest, ...older] = entry.releases ?? []
   const prefix = entry.source.path
-  if (!newest || newest.images || !prefix || !isSameGitRepository(entry.source.url, catalogUrl)) {
+  if (
+    (remainingBudget !== undefined && remainingBudget <= 0) ||
+    !newest ||
+    newest.images ||
+    !prefix ||
+    !isSameGitRepository(entry.source.url, catalogUrl)
+  ) {
     return { entry, readBlob }
   }
   const manifestBytes = await readBlob(`${prefix}/orca-plugin.json`, MANIFEST_MAX_BYTES).catch(
@@ -44,7 +51,8 @@ export async function fillMonorepoReleaseImages(
       return bytes
     },
     sha256: (bytes) => catalogImageDigest(bytes, memo),
-    readHeader: (bytes) => catalogImageHeader(bytes, memo)
+    readHeader: (bytes) => catalogImageHeader(bytes, memo),
+    ...(remainingBudget !== undefined ? { maxTotalBytes: remainingBudget } : {})
   })
   if (!images) {
     return { entry, readBlob }

@@ -16735,14 +16735,18 @@
           "resetDone": "已重設圖示和顏色",
           "undo": "復原",
           "styleLetters": "文字",
-          "stylePicture": "圖片",
-          "resetAppearance": "重設圖示和顏色",
+          "styleImage": "圖片",
           "faviconPlaceholder": "網站網址（用來取得網站圖示）",
           "lettersInput": "最多 2 個字元",
           "lettersPlaceholder": "1–2 個字元",
           "useLetters": "使用「{{value0}}」",
-          "usingGitHubAvatar": "正在使用 GitHub 頭像",
-          "openSettings": "開啟設定"
+          "openSettings": "開啟設定",
+          "noIconFound": "找不到圖示",
+          "githubAvatar": "GitHub 頭像",
+          "websiteIcon": "網站圖示",
+          "fetchIcon": "取得",
+          "uploadTooLarge": "超過 256 KB",
+          "options": "選項"
         }
       },
       "pet": {
@@ -19709,7 +19713,7 @@
           "runStatusDispatchFailed": "失敗"
         },
         "runContent": {
-          "noOutput": "沒有可用的輸出內容。"
+          "noOutput": "沒有輸出。"
         },
         "runViewState": {
           "viewRun": "檢視執行",
@@ -20744,7 +20748,7 @@
         "dismiss": "忽略",
         "retry": "重試",
         "stateResumed": "已恢復",
-        "stateNeedsYou": "需要你處理",
+        "stateNeedsYou": "需要你",
         "stateResuming": "正在恢復",
         "stateStopped": "已停止",
         "resumingOne": "正在恢復 {{name}}…",
@@ -20752,7 +20756,7 @@
         "failedSome_other": "無法恢復：{{total}} 個中的 {{count}} 個",
         "resumedOne": "已恢復 {{name}}",
         "resumedMany_other": "已恢復 {{count}} 個聊天",
-        "needYou_other": "{{count}} 個需要你處理",
+        "needYou_other": "{{count}} 個需要你",
         "resumedCount_other": "已恢復 {{count}} 個"
       },
       "RunTargetCombobox": {
@@ -21826,9 +21830,9 @@
         "prompt": "提示詞",
         "result": "結果",
         "close": "關閉",
-        "needsYou": "需要你處理",
-        "agentNeedsYou": "{{name}} 需要你處理",
-        "mainNeedsYou": "主代理程式需要你處理",
+        "needsYou": "需要你",
+        "agentNeedsYou": "{{name}} 需要你",
+        "mainNeedsYou": "主代理程式需要你",
         "show": "查看"
       },
       "rewind": {
@@ -22630,10 +22634,7 @@
         "refused": "Google 拒絕了此聊天的憑證。",
         "usageLimit": "此登入已達用量上限。",
         "signInGoogle": "使用 Google 登入",
-        "yourAgy": "你的 agy",
         "yourAgyVersion": "你的 agy · v{{version}}",
-        "orcasAgy": "Orca 的 agy",
-        "orcasAgyVersion": "Orca 的 agy · v{{version}}",
         "runsOn": "執行於：{{program}}",
         "keepsOwnLogin": "此聊天會沿用 agy 自己的 Google 登入。新的聊天會使用 {{method}}。",
         "apiKeyEnvironment": "來自你的環境",
@@ -22704,7 +22705,7 @@
         "task": "任務",
         "workerCount_other": "{{count}} 個工作者",
         "failedCount": "{{count}} 個失敗",
-        "needsYouCount": "{{count}} 個等待你處理",
+        "needsYouCount": "{{count}} 個需要你",
         "newQuestions_other": "{{count}} 個新的工作者問題等待你回覆",
         "waitingOnYouName": "{{name}} · 等待你處理",
         "moreQuestions": "還有 {{count}} 個等待你處理",
@@ -24061,7 +24062,7 @@
       "collapse": "收合編排面板",
       "show": "顯示編排：{{counts}}",
       "summary": "編排：{{counts}}",
-      "needsYou_other": "{{count}} 個需要你處理",
+      "needsYou_other": "{{count}} 個需要你",
       "waitingPrefix": "等待你回應 · ",
       "noTask": "沒有共用任務",
       "open": "開啟 {{name}}",
@@ -24287,7 +24288,7 @@
       "description": "儀表板未能完成繪製。請重試以重新掛載，或重新開啟。"
     },
     "bucket": {
-      "attention": "需要你處理",
+      "attention": "需要你",
       "working": "工作中",
       "idle": "閒置",
       "empty": "無",
@@ -24500,7 +24501,7 @@
       "groupComposer": "傳訊息給 {{group}}，@ 提及機器人",
       "items": "項目",
       "inProgress": "進行中",
-      "needsYou": "需要你處理",
+      "needsYou": "需要你",
       "itemMeta": "項目 {{number}} · {{bot}} · 現在",
       "activity": "活動",
       "activityAdded": "<b>{{bot}}</b> 新增了此項目",
@@ -24513,7 +24514,7 @@
       "itemDocs": "更新文件",
       "idle": "閒置",
       "inProgressCount": "{{count}} 個進行中",
-      "needsYouCount": "{{count}} 個需要你處理",
+      "needsYouCount": "{{count}} 個需要你",
       "itemsAsk": "修正 CSV 匯出功能和 Safari 登入錯誤，並更新文件。",
       "itemsReply": "開始處理了。每件事都會列為項目追蹤。",
       "askAnything": "有什麼想問的？",
@@ -25342,7 +25343,6 @@
       "noEmailNotSaved": "agy 未提供電子郵件地址 · 尚未儲存",
       "saveShort": "儲存",
       "active": "使用中",
-      "runtime": "執行環境",
       "chatTitle": "Antigravity 聊天",
       "terminalTitle": "終端機中的 agy",
       "terminalDescription": "使用 agy 本身已儲存的帳戶。切換後會套用至新的 agy 工作階段。",
@@ -27455,7 +27455,7 @@
       "branch": "分支",
       "startedIn": "在 {{name}} 中開始",
       "idle": "閒置",
-      "needsYou": "需要你處理",
+      "needsYou": "需要你",
       "askedCoordinator": "向 {{name}} 提了一個問題",
       "waitsOnBackground": "正在等待它的背景工作",
       "chat": "聊天"
@@ -28286,7 +28286,7 @@
         "replyingTo": "回覆：{{question}}。前往該問題",
         "linked": "連結了 {{links}}",
         "made": "新增了這個項目",
-        "madeNeedsYou": "新增了這個項目，狀態為需要你處理",
+        "madeNeedsYou": "新增了這個項目，並標記為「需要你」",
         "moved": "將這個項目移到",
         "noComments": "還沒有留言。",
         "notSent": "未傳送。",
@@ -28365,10 +28365,10 @@
         "replyTo": "回覆 {{name}}…"
       },
       "empty": {
-        "allClear": "沒有需要你處理的事項",
+        "allClear": "暫無需要你的項目",
         "body": "{{bot}} 替你接手的項目會顯示在這裡，讓你知道它正在做什麼，以及哪些事需要你處理。",
         "filtered": "沒有符合的項目。",
-        "needsYou": "沒有需要你處理的事項。",
+        "needsYou": "暫無需要你的項目。",
         "title": "還沒有項目",
         "short": "還沒有項目。{{bot}} 接手的項目會顯示在這裡。"
       },
@@ -28382,7 +28382,7 @@
       "filter": {
         "clearAll": "清除篩選",
         "label": "篩選項目",
-        "needsYou": "僅顯示需要你處理的",
+        "needsYou": "只看需要你",
         "remove": "移除篩選 {{name}}"
       },
       "group": {
@@ -28428,7 +28428,7 @@
       "status": {
         "canceled": "已取消",
         "done": "已完成",
-        "needsYou": "需要你處理",
+        "needsYou": "需要你",
         "planned": "已規劃",
         "working": "進行中",
         "waiting": "等待中"
@@ -28501,10 +28501,10 @@
       "access": "已要求存取權限",
       "review": "檢視",
       "openHome": "開啟 {{name}} 的 Home",
-      "needsYouHeading_other": "{{count}} 件事需要你處理",
+      "needsYouHeading_other": "{{count}} 件事需要你",
       "moreAsks_other": "另有 {{count}} 個請求",
       "itemsNeedYou_other": "為你標記的 {{count}} 個項目",
-      "needsYouHeading_one": "1 件事需要你處理",
+      "needsYouHeading_one": "1 件事需要你",
       "moreAsks_one": "另有 {{count}} 個請求",
       "itemsNeedYou_one": "為你標記的 {{count}} 個項目"
     },
@@ -28544,7 +28544,7 @@
       "handedOver": "已移交",
       "fromClosedChat": "來自已關閉的聊天",
       "automationTerminal": "自動化執行 · 終端機",
-      "needsYou": "需要你處理",
+      "needsYou": "需要你",
       "askingBot": "正在詢問 {{name}}",
       "asking": "正在詢問",
       "cantReachHost": "無法連線至 {{host}}",
@@ -28565,7 +28565,7 @@
       "delete": "刪除聊天",
       "open": "開啟",
       "actions": "聊天操作",
-      "needsYouCount": "{{count}} 個需要你處理",
+      "needsYouCount": "{{count}} 個需要你",
       "older": "顯示 {{count}} 個較早的",
       "moreMatches_other": "還有 {{count}} 個符合項目。請輸入更多名稱內容來縮小搜尋範圍。",
       "searchFailed": "無法搜尋此機器人的聊天。",
@@ -28593,8 +28593,8 @@
     "panel": {
       "idle": "閒置",
       "more": "更多",
-      "needYou_other": "{{count}} 個需要你",
-      "showNeedYou_other": "顯示面板 · {{count}} 項需要你處理",
+      "needYou_other": "{{count}} 項需要你",
+      "showNeedYou_other": "顯示面板 · {{count}} 項需要你",
       "working": "{{count}} 項工作進行中",
       "settings": {
         "title": "設定"
@@ -28604,7 +28604,7 @@
       "runningNamed": "正在執行 {{name}}",
       "nextAt": "下次 {{when}}",
       "working_other": "{{count}} 項工作進行中",
-      "needYou_one": "{{count}} 項需要你處理",
+      "needYou_one": "{{count}} 項需要你",
       "working_one": "{{count}} 項工作進行中",
       "runsOn": "在 {{host}} 上執行",
       "disconnected": "已中斷連線"
@@ -28629,7 +28629,7 @@
       "emptyTemplates": "範本",
       "expand": "展開 Bots",
       "collapse": "收合 Bots",
-      "summary": "{{action}}，共 {{total}} 個機器人，{{attention}} 個需要你處理，{{unread}} 個未讀，{{working}} 個工作中",
+      "summary": "{{action}}，共 {{total}} 個機器人，{{attention}} 個需要你，{{unread}} 個未讀，{{working}} 個工作中",
       "new": "新機器人或群組",
       "expandAll": "展開所有機器人",
       "collapseAll": "收合所有機器人"
@@ -29224,7 +29224,7 @@
       "until": "直到 {{time}}"
     },
     "groups": {
-      "needsYou": "· 需要你處理",
+      "needsYou": "· 需要你",
       "stopCouldNotBeConfirmed": "無法確認是否已停止。",
       "useEachBotSNativeSessionForCommands": "指令請使用各機器人的原生工作階段。",
       "attachmentsHostTooOld": "{{host}} 需要更新，才能在群組聊天中附加檔案。",
@@ -29301,7 +29301,7 @@
       "newThreadTab": "建立討論串",
       "items": {
         "orNames": "{{names}} 或 {{last}}",
-        "emptyBotsNeedsYou": "沒有來自 {{names}} 且需要你處理的事項",
+        "emptyBotsNeedsYou": "{{names}} 暫無需要你的事項",
         "emptyBots": "沒有來自 {{names}} 的事項",
         "emptyTitle": "此群組還沒有事項",
         "filterNamed": "篩選事項，目前篩選條件：{{filter}}",

@@ -24,6 +24,8 @@ import type {
   WorktreeGroupBy
 } from '../row-types'
 
+const EMPTY_NOTICE_REPOS: readonly (readonly [string, Repo])[] = []
+
 export function buildOrderedGroups(args: {
   groupBy: WorktreeGroupBy
   naturalWorktrees: readonly Worktree[]
@@ -58,6 +60,17 @@ export function buildOrderedGroups(args: {
   } = args
 
   if (groupBy === 'repo') {
+    let noticeRepos: readonly (readonly [string, Repo])[] = EMPTY_NOTICE_REPOS
+    if (importedWorktreesByRepo.size > 0 || newExternalWorktreesInboxByRepo.size > 0) {
+      const pairs: (readonly [string, Repo])[] = []
+      for (const [repoId, candidate] of importedWorktreesByRepo) {
+        pairs.push([repoId, candidate.repo])
+      }
+      for (const [repoId, candidate] of newExternalWorktreesInboxByRepo) {
+        pairs.push([repoId, candidate.repo])
+      }
+      noticeRepos = pairs
+    }
     // Shared with paired-phone Project sections.
     return buildProjectSections({
       items: naturalWorktrees,
@@ -67,14 +80,7 @@ export function buildOrderedGroups(args: {
       repoMap,
       projectIndex,
       placeholderRepoIds,
-      noticeRepos: [
-        ...[...importedWorktreesByRepo].map(
-          ([repoId, candidate]) => [repoId, candidate.repo] as const
-        ),
-        ...[...newExternalWorktreesInboxByRepo].map(
-          ([repoId, candidate]) => [repoId, candidate.repo] as const
-        )
-      ],
+      noticeRepos,
       pendingRepoIds: pendingByRepo.keys(),
       repoOrder,
       projectOrderBy

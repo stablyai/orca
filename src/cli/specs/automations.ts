@@ -158,7 +158,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       "--on replaces the bot automation's events; --on none removes them. --trigger none removes the schedule, leaving its events.",
       '--runs-in and --results-to change where a bot automation runs and where its results go, as on create; the automation keeps its id and run history.',
       "--agent, --model and --effort change a bot automation's own agent: --model or --effort alone keeps its agent and other choices; another --agent starts that agent on its defaults; --agent bot goes back to the bot's agent.",
-      'Use --setup run|skip only for new-per-run automations. Omit it to preserve the saved setup choice.'
+      'Use --setup run|skip only for new-per-run automations. Omit it to preserve the saved setup choice.',
+      'Omit --precheck to keep the saved precheck and its timeout; pass --precheck-timeout alone to retime the saved command, or --precheck "" to remove the precheck.'
     ],
     examples: [
       'orca automations edit 2f9e... --disabled',

@@ -95,5 +95,7 @@ describe('readyBotDefaultAgent', () => {
       { kind: 'cli', agent: 'codex', chat: true }
     ])
     expect(newBotAgent(botAgentChoices(ready), readyBotDefaultAgent(ready, 'codex'))).toBe('codex')
+    // Antigravity is listed before Grok, but a new bot without a ready default still gets Grok.
+    expect(newBotAgent(['antigravity', 'grok'], undefined)).toBe('grok')
   })
 })

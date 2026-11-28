@@ -189,27 +189,30 @@ export class HistoryManager {
     seq: number,
     records: PendingOutputRecord[]
   ): Promise<'ok' | 'needs-checkpoint'> {
-    return this.mutations.track(sessionId, this.appendIncrementsUntracked(sessionId, seq, records))
+    const writer =
+      !this.disabledSessions.has(sessionId) && records.length > 0
+        ? this.writers.get(sessionId)
+        : null
+    if (!writer) {
+      return Promise.resolve('ok')
+    }
+    return this.mutations.track(
+      sessionId,
+      writer.appendIncrements(seq, records).catch((err) => {
+        this.handleWriteError(sessionId, err)
+        return 'ok'
+      })
+    )
   }
 
-  private async appendIncrementsUntracked(
-    sessionId: string,
-    seq: number,
-    records: PendingOutputRecord[]
-  ): Promise<'ok' | 'needs-checkpoint'> {
-    if (this.disabledSessions.has(sessionId) || records.length === 0) {
-      return 'ok'
-    }
-    const writer = this.writers.get(sessionId)
-    if (!writer) {
-      return 'ok'
-    }
-    try {
-      return await writer.appendIncrements(seq, records)
-    } catch (err) {
-      this.handleWriteError(sessionId, err)
-      return 'ok'
-    }
+  recordProbedCwd(sessionId: string, cwd: string): Promise<void> {
+    const writer = !this.disabledSessions.has(sessionId) && cwd ? this.writers.get(sessionId) : null
+    return writer
+      ? this.mutations.track(
+          sessionId,
+          writer.recordProbedCwd(cwd).catch((err) => this.handleWriteError(sessionId, err))
+        )
+      : Promise.resolve()
   }
 
   checkpoint(
@@ -260,6 +263,7 @@ export class HistoryManager {
     this.writers.delete(sessionId)
     // Normal exit must also release IDs disabled by transient write failures.
     this.disabledSessions.delete(sessionId)
+    await this.mutations.wait(sessionId)
     try {
       updateTerminalHistoryMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
     } catch (err) {
@@ -298,19 +302,18 @@ export class HistoryManager {
   }
 
   async dispose(): Promise<void> {
+    const openWriters = [...this.writers.entries()]
+    this.writers.clear()
+    this.recoveryFreezes.releaseAll()
+    await Promise.all(openWriters.map(([sessionId]) => this.mutations.wait(sessionId)))
     // Mark orderly teardown clean so ended sessions cannot trigger cold restore.
-    for (const [sessionId, writer] of this.writers) {
+    for (const [sessionId, writer] of openWriters) {
       try {
-        updateTerminalHistoryMeta(writer.dir, {
-          endedAt: new Date().toISOString(),
-          exitCode: null
-        })
+        updateTerminalHistoryMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode: null })
       } catch {
         this.disabledSessions.add(sessionId)
       }
     }
-    this.writers.clear()
-    this.recoveryFreezes.releaseAll()
   }
 
   // Disable best-effort history on error instead of rejecting fire-and-forget callers.

@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/remote-row-orchestration'
 import {
   parseAgentStatusPaneIdentity,
@@ -27,6 +28,8 @@ import {
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 import type { ProjectionTopology } from './agent-status-projection-topology'
 
+const EMPTY_ROWS: DashboardAgentRow[] = []
+
 export function stageProjectionRows(
   data: AgentStatusProjectionState,
   state: AppState,
@@ -44,23 +47,40 @@ export function stageProjectionRows(
   } = topology
   // Remote hosts' contexts join by the same row identity the sidebar uses.
   const contexts = orchestrationForStatusRows(state)
+  const ownerLookup = { get: ownerOf }
+  const readTabFallbacks = (tabId: string) => {
+    const rowKeys = nextFallbackTabs.get(tabId) ?? data.fallbackByTab.get(tabId)
+    if (!rowKeys) {
+      return []
+    }
+    const result: (DashboardAgentRow | null | undefined)[] = []
+    for (const rowKey of rowKeys) {
+      result.push(
+        nextFallback.has(rowKey) ? nextFallback.get(rowKey) : data.fallbackRows.get(rowKey)
+      )
+    }
+    return result
+  }
   const nextSuppressions = new Map<string, readonly string[]>(),
     suppressionDeltas = new Map<string, number>()
   const delta = (key: string, sign: number) =>
     suppressionDeltas.set(key, (suppressionDeltas.get(key) ?? 0) + sign)
   for (const key of changedKeys) {
-    for (const suppressed of data.suppressionsBySource.get(key) ?? []) {
-      delta(suppressed, -1)
+    const prevSuppressed = data.suppressionsBySource.get(key)
+    if (prevSuppressed) {
+      for (let i = 0; i < prevSuppressed.length; i += 1) {
+        delta(prevSuppressed[i], -1)
+      }
     }
     const entry = sourceEntry(key),
       keys: string[] = []
     const identity = parseAgentStatusPaneIdentity(key, represented.get(key))
     if (entry && identity) {
       keys.push(key)
-      const titleRowKey = legacyStatusTitleRowKey(key, state.terminalLayoutsByTabId, (tabId) =>
-        Array.from(nextFallbackTabs.get(tabId) ?? data.fallbackByTab.get(tabId) ?? [], (rowKey) =>
-          nextFallback.has(rowKey) ? nextFallback.get(rowKey) : data.fallbackRows.get(rowKey)
-        )
+      const titleRowKey = legacyStatusTitleRowKey(
+        key,
+        state.terminalLayoutsByTabId,
+        readTabFallbacks
       )
       if (titleRowKey) {
         keys.push(titleRowKey)
@@ -68,14 +88,14 @@ export function stageProjectionRows(
       const orchestration = mergeAgentStatusOrchestration(entry, contexts[key])
       const parent = orchestration?.parentPaneKey
       const parsed = parent ? parsePaneKey(parent) : null
-      const owner = resolveAgentStatusWorktreeId(entry, { get: ownerOf }, orchestration)
+      const owner = resolveAgentStatusWorktreeId(entry, ownerLookup, orchestration)
       if (entry.state === 'done' && parsed && owner && ownerOf(parsed.tabId) === owner) {
         keys.push(parent!)
       }
     }
     nextSuppressions.set(key, keys)
-    for (const suppressed of keys) {
-      delta(suppressed, 1)
+    for (let i = 0; i < keys.length; i += 1) {
+      delta(keys[i], 1)
     }
   }
   for (const key of suppressionDeltas.keys()) {
@@ -89,7 +109,7 @@ export function stageProjectionRows(
     const identity = parseAgentStatusPaneIdentity(key, represented.get(key)),
       tabId = identity?.tabId
     const worktreeId = entry
-      ? liveEntryWorktreeId(key, entry, { get: ownerOf }, represented)
+      ? liveEntryWorktreeId(key, entry, ownerLookup, represented)
       : tabId
         ? ownerOf(tabId)
         : undefined
@@ -114,14 +134,11 @@ export function stageProjectionRows(
         ? buildExplicitWorktreeAgentRows(entry, displayTab, now, hasLivePty, contexts)
         : fallback && worktreeId && !suppressed
           ? [fallback]
-          : []
+          : EMPTY_ROWS
     let contribution: Contribution | undefined
+    const orchestration = entry ? mergeAgentStatusOrchestration(entry, contexts[key]) : undefined
     const summaryWorktreeId = entry
-      ? resolveAgentStatusWorktreeId(
-          entry,
-          { get: ownerOf },
-          mergeAgentStatusOrchestration(entry, contexts[key])
-        )
+      ? resolveAgentStatusWorktreeId(entry, ownerLookup, orchestration)
       : undefined
     if (entry && summaryWorktreeId && identity) {
       const flags = emptySummary(),
@@ -138,18 +155,21 @@ export function stageProjectionRows(
       } else if (!entry.restoredUnconfirmed && fresh) {
         applyAgentPaneActivityFlags(flags, entry)
         const parent =
-          entry.state === 'done'
-            ? parseAgentStatusPaneIdentity(
-                mergeAgentStatusOrchestration(entry, contexts[key])?.parentPaneKey
-              )
-            : null
+          entry.state === 'done' ? parseAgentStatusPaneIdentity(orchestration?.parentPaneKey) : null
         if (parent && ownerOf(parent.tabId) === summaryWorktreeId) {
           panes.push(`${parent.tabId}\0${parent.paneId}`)
         }
       }
+      const activeFlags: (typeof FLAGS)[number][] = []
+      for (let i = 0; i < FLAGS.length; i += 1) {
+        const flag = FLAGS[i]
+        if (flags[flag]) {
+          activeFlags.push(flag)
+        }
+      }
       contribution = {
         worktreeId: summaryWorktreeId,
-        flags: FLAGS.filter((flag) => flags[flag]),
+        flags: activeFlags,
         panes,
         stale,
         attention: resolveAttention([{ kind: 'hook', entry, hasLivePty }], now),

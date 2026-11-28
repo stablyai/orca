@@ -272,6 +272,11 @@ export function closePlainSshTerminalsOwnedBy(owner: number): void {
   }
 }
 
+/** Whether any plain SSH terminal is open or opening in this process (quit would end it). */
+export function hasPlainSshTerminalSessions(): boolean {
+  return slots.size > 0 || [...sessions.values()].some((session) => !session.hungUp)
+}
+
 /** Kill ephemeral sessions on quit and wait for their exits. */
 export async function closeAllPlainSshTerminals(): Promise<void> {
   quitting = true

@@ -10,6 +10,7 @@ import {
   wslMappedDriveMatches
 } from '../../wsl/filesystem/wsl-mapped-drive-share'
 import { wslMappedDriveLastKnownShare } from '../../wsl/filesystem/wsl-mapped-drive-last-known'
+import type { WslMoveInUseCheck } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-ports'
 
 export function wslMoveMappedDrivePorts(): Pick<
   WslMoveDriverDeps,
@@ -26,13 +27,28 @@ export function wslMoveMappedDrivePorts(): Pick<
     : {}
 }
 
+let systemDrive: string | null | undefined
+
+/** `%SystemDrive%`'s letter, read once; null when unset, so every letter stays unverifiable. */
+function windowsSystemDriveLetter(): string | null {
+  if (systemDrive === undefined) {
+    const match = /^([A-Za-z]):\\?$/.exec(process.env.SystemDrive?.trim() ?? '')
+    systemDrive = match ? match[1].toUpperCase() : null
+  }
+  return systemDrive
+}
+
 /**
- * For the orchestrator's prune check, which runs in the background: last-known answers only, so it
- * never reads a drive (a mapped share's read can boot its stopped distro). Unknown is in use.
+ * For the orchestrator's hold and prune checks, which run in the background: last-known answers
+ * only, so it never reads a drive (a mapped share's read can boot its stopped distro). Unknown is
+ * in use. The system drive is local (`net use` can't remap a local device), so it is never a share.
+ * A failed lookup's null proves nothing; one saved before lookups were recorded is trusted, except
+ * to drop a `stateLost` hold, which may guard a decline the set-aside file lost.
  */
 export function wslMoveDistroMappedDrivesLastKnown(
   store: Pick<Store, 'getRepos' | 'getFolderWorkspaces'>,
-  distro: string
+  distro: string,
+  check: WslMoveInUseCheck = {}
 ): readonly WslMappedDrive[] | 'unverifiable' {
   if (process.platform !== 'win32') {
     return []
@@ -43,12 +59,18 @@ export function wslMoveDistroMappedDrivesLastKnown(
   })
   const mapped: WslMappedDrive[] = []
   for (const letter of letters) {
-    const known = wslMappedDriveLastKnownShare(letter)
-    if (!known) {
-      return 'unverifiable'
+    if (letter === windowsSystemDriveLetter()) {
+      continue
     }
-    if (wslMappedDriveMatches(known.share, distro, undefined)) {
-      mapped.push({ letter, share: known.share })
+    const known = wslMappedDriveLastKnownShare(letter)
+    if (known?.share) {
+      if (wslMappedDriveMatches(known.share, distro, undefined)) {
+        mapped.push({ letter, share: known.share })
+      }
+      continue
+    }
+    if (!known || known.lookup === 'failed' || (!known.lookup && check.droppingLostHold)) {
+      return 'unverifiable'
     }
   }
   return mapped

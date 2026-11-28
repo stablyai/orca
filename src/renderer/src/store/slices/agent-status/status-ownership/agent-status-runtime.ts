@@ -128,29 +128,28 @@ export function createAgentStatusRuntime(
 
   let conversationDraft: RecordDraft<AgentPaneConversationIdentity> | null = null
   let conversationBuilt: AppState['agentConversationsByPaneKey'] | null = null
+  const writeConversationEntry = (
+    entries: AppState['agentConversationsByPaneKey'],
+    key: string,
+    value: AgentPaneConversationIdentity
+  ): AppState['agentConversationsByPaneKey'] => {
+    if (!batchedAgentStatusState) {
+      return replaceRecordEntries(entries, [[key, value]])
+    }
+    if (!conversationDraft || entries !== conversationBuilt) {
+      conversationDraft?.finish()
+      conversationDraft = recordDraft(entries)
+    }
+    conversationDraft.set(key, value)
+    conversationBuilt = conversationDraft.view()
+    return conversationBuilt
+  }
   const projectConversation: typeof projectAgentPaneConversation = (
     state,
     entry,
     _write,
-    ...sourceArgs
-  ) =>
-    projectAgentPaneConversation(
-      state,
-      entry,
-      (entries, key, value) => {
-        if (!batchedAgentStatusState) {
-          return replaceRecordEntries(entries, [[key, value]])
-        }
-        if (!conversationDraft || entries !== conversationBuilt) {
-          conversationDraft?.finish()
-          conversationDraft = recordDraft(entries)
-        }
-        conversationDraft.set(key, value)
-        conversationBuilt = conversationDraft.view()
-        return conversationBuilt
-      },
-      ...sourceArgs
-    )
+    ...args
+  ) => projectAgentPaneConversation(state, entry, writeConversationEntry, ...args)
 
   const set = (update: AgentStatusStateUpdate): void => {
     const staged = batchedAgentStatusState
@@ -167,8 +166,10 @@ export function createAgentStatusRuntime(
     batchedAgentStatusRevision += 1
     const touched = batchedAgentStatusTouchedKeys
     if (touched) {
-      for (const key of Object.keys(nextState)) {
-        touched.add(key as keyof AppState)
+      for (const key in nextState) {
+        if (Object.hasOwn(nextState, key)) {
+          touched.add(key as keyof AppState)
+        }
       }
     }
     Object.assign(staged, nextState)
@@ -232,14 +233,7 @@ export function createAgentStatusRuntime(
     batchedAgentStatusTouchedKeys = touchedKeys
     batchedAgentStatusEffects = []
     batchedGeneratedTabTitleUpdates = []
-    try {
-      const result = operation(batchTransaction)
-      const nextState = batchedAgentStatusState
-      const effects = batchedAgentStatusEffects
-      const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
-      const freshnessRequested = batchedAgentStatusFreshnessRequested
-      const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
-      conversationDraft?.finish()
+    const clearBatchState = (): void => {
       conversationDraft = null
       conversationBuilt = null
       batchedPaneKeys = null
@@ -248,6 +242,16 @@ export function createAgentStatusRuntime(
       batchedAgentStatusEffects = null
       batchedGeneratedTabTitleUpdates = null
       batchedAgentStatusFreshnessRequested = false
+    }
+    try {
+      const result = operation(batchTransaction)
+      const nextState = batchedAgentStatusState
+      const effects = batchedAgentStatusEffects
+      const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
+      const freshnessRequested = batchedAgentStatusFreshnessRequested
+      const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
+      conversationDraft?.finish()
+      clearBatchState()
       if (hasStagedWrites) {
         commit(
           buildAgentStatusBatchPatch(initialState, nextState, touchedKeys),
@@ -266,14 +270,7 @@ export function createAgentStatusRuntime(
       }
       return result
     } finally {
-      conversationDraft = null
-      conversationBuilt = null
-      batchedPaneKeys = null
-      batchedAgentStatusState = null
-      batchedAgentStatusTouchedKeys = null
-      batchedAgentStatusEffects = null
-      batchedGeneratedTabTitleUpdates = null
-      batchedAgentStatusFreshnessRequested = false
+      clearBatchState()
     }
   }
 

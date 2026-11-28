@@ -57,6 +57,9 @@ export type CallerOwnedSignInPolicy<
   /** How long the owner may go without asking before the flow ends (default OWNER_SILENCE_MS). A sign-in
    *  finished on this host outlives a caller that slept meanwhile, up to its own deadline. */
   ownerSilenceMs?: number
+  /** After this long without its owner asking, a new start from that same owner replaces the flow, so a
+   *  client that lost it (an app killed on the sign-in page) isn't refused until owner silence ends it. */
+  ownerTakesOverAfterMs?: number
   /** How long the login may run without publishing a prompt before the flow fails; unset waits for the login's own deadline. */
   promptDeadlineMs?: number
 }

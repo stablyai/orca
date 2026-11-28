@@ -24,12 +24,17 @@ function collectRepoIdsWithRegisteredWorktreeMeta(
   candidatePaths: Set<string>
 ): Set<string> {
   const worktreeMeta =
-    typeof store.getAllWorktreeMeta === 'function' ? store.getAllWorktreeMeta() : {}
+    typeof store.getAllWorktreeMeta === 'function' ? store.getAllWorktreeMeta() : undefined
   const repoIds = new Set<string>()
-  for (const worktreeId of Object.keys(worktreeMeta)) {
-    const parsed = splitWorktreeId(worktreeId)
-    if (parsed && candidatePaths.has(comparableLocalPath(parsed.worktreePath))) {
-      repoIds.add(parsed.repoId)
+  if (worktreeMeta) {
+    for (const worktreeId in worktreeMeta) {
+      if (!Object.hasOwn(worktreeMeta, worktreeId)) {
+        continue
+      }
+      const parsed = splitWorktreeId(worktreeId)
+      if (parsed && candidatePaths.has(comparableLocalPath(parsed.worktreePath))) {
+        repoIds.add(parsed.repoId)
+      }
     }
   }
   return repoIds

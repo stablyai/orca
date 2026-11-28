@@ -11,6 +11,7 @@ import {
   type SharedClientEvent
 } from '../../transport/connection/shared-client-events'
 import { relayHostsListRead } from './server-workspace-operations'
+import { readDirectPairingInstallations } from './direct-pairing-installations-read'
 
 // Count polling cadence from the last completed read.
 const RELAY_HOSTS_POLL_MS = 3000
@@ -20,15 +21,23 @@ const RELAY_HOSTS_BACKSTOP_POLL_MS = 60_000
 export type RelayHostsFeed = {
   /** `pushed`: the desktop publishes relayHostsChanged, so the feed may wait for it instead of polling. */
   subscribe: (listener: () => void, pushed: boolean) => () => void
+  /** Without servers this phone pairs with directly: lists show those under that pairing alone. */
   getSnapshot: () => readonly MobileRelayHost[] | null
+  /** Every relayed server, so a workspace already open under one keeps its route. */
+  getAllSnapshot: () => readonly MobileRelayHost[] | null
   /** Answers from the snapshot while the desktop's notices keep it current; reads otherwise. */
   read: () => Promise<readonly MobileRelayHost[] | null>
+  /** `read`, with servers this phone also pairs with directly, for rows an open route resolves. */
+  readAll: () => Promise<readonly MobileRelayHost[] | null>
 }
 
 const feeds = new WeakMap<RpcClient, RelayHostsFeed>()
 
 function createFeed(client: RpcClient): RelayHostsFeed {
   let snapshot: readonly MobileRelayHost[] | null = null
+  // Installations this phone pairs with directly; `listed` is `snapshot` without them.
+  let direct: ReadonlySet<string> = new Set()
+  let listed: readonly MobileRelayHost[] | null = null
   let inFlight: Promise<readonly MobileRelayHost[] | null> | null = null
   let lastReadAt = Number.NEGATIVE_INFINITY
   // Bumped on every drop, so a read from an earlier connection never lands.
@@ -52,12 +61,22 @@ function createFeed(client: RpcClient): RelayHostsFeed {
     !lastReadDoubtful &&
     Number.isFinite(lastReadAt)
 
-  const publish = (next: readonly MobileRelayHost[] | null): void => {
+  const publish = (
+    next: readonly MobileRelayHost[] | null,
+    nextDirect: ReadonlySet<string> = direct
+  ): void => {
     // Why: an unchanged poll keeps its identity, so readers do not re-render every tick.
-    if (JSON.stringify(next) === JSON.stringify(snapshot)) {
+    const sameDirect =
+      nextDirect.size === direct.size && [...nextDirect].every((id) => direct.has(id))
+    if (sameDirect && JSON.stringify(next) === JSON.stringify(snapshot)) {
       return
     }
     snapshot = next
+    direct = nextDirect
+    listed =
+      next?.filter(
+        (host) => host.installationId === undefined || !nextDirect.has(host.installationId)
+      ) ?? null
     for (const listener of listeners.keys()) {
       listener()
     }
@@ -92,12 +111,18 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   }
   const fetchHosts = async (readGeneration: number): Promise<readonly MobileRelayHost[] | null> => {
     try {
-      const listed = relayHostsListRead.interpret(await relayHostsListRead.request(client))
-      if (!listed.accepted || readGeneration !== generation) {
+      const [reply, paired] = await Promise.all([
+        relayHostsListRead.request(client),
+        readDirectPairingInstallations(client)
+      ])
+      const answer = relayHostsListRead.interpret(reply)
+      if (!answer.accepted || readGeneration !== generation) {
         return null
       }
-      publish(listed.value)
-      return listed.value
+      // A server this phone pairs with directly is listed under that pairing alone, so its
+      // workspaces, drafts and alerts keep one host whether or not the desktop is awake.
+      publish(answer.value, paired)
+      return listed
     } catch {
       return null
     }
@@ -106,7 +131,7 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   const fresh = (): boolean =>
     snapshot !== null && !lastReadDoubtful && Date.now() - lastReadAt < RELAY_HOSTS_POLL_MS
   const read = (): Promise<readonly MobileRelayHost[] | null> =>
-    inFlight === null && (current() || fresh()) ? Promise.resolve(snapshot) : refresh()
+    inFlight === null && (current() || fresh()) ? Promise.resolve(listed) : refresh()
   const refresh = (): Promise<readonly MobileRelayHost[] | null> => {
     if (inFlight) {
       return inFlight
@@ -189,8 +214,11 @@ function createFeed(client: RpcClient): RelayHostsFeed {
         }
       }
     },
-    getSnapshot: () => snapshot,
-    read
+    getSnapshot: () => listed,
+    getAllSnapshot: () => snapshot,
+    read,
+    // A failed read answers null, never the previous list.
+    readAll: () => read().then((hosts) => (hosts === null ? null : snapshot))
   }
 }
 
@@ -207,9 +235,11 @@ export function relayHostsFeed(client: RpcClient): RelayHostsFeed {
 
 const noSubscription = (): (() => void) => () => {}
 
+/** `all` keeps servers this phone also pairs with directly, for resolving a route already open. */
 export function useRelayHosts(
   client: RpcClient | null,
-  hostCapabilities: readonly string[]
+  hostCapabilities: readonly string[],
+  scope: 'listed' | 'all' = 'listed'
 ): readonly MobileRelayHost[] | null {
   const feed = client ? relayHostsFeed(client) : null
   const pushed = hostCapabilities.includes(MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY)
@@ -217,6 +247,6 @@ export function useRelayHosts(
     (listener: () => void) => (feed ? feed.subscribe(listener, pushed) : noSubscription()),
     [feed, pushed]
   )
-  const readHosts = () => feed?.getSnapshot() ?? null
+  const readHosts = () => (scope === 'all' ? feed?.getAllSnapshot() : feed?.getSnapshot()) ?? null
   return useSyncExternalStore(subscribe, readHosts, readHosts)
 }

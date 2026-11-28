@@ -1,10 +1,24 @@
 import { stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 
-const STRUCTURAL_METADATA_FILES = ['HEAD', 'gitdir', 'locked', 'config.worktree']
+const HEAD_FILE = 'HEAD'
+const GITDIR_FILE = 'gitdir'
+const LOCKED_FILE = 'locked'
+const CONFIG_WORKTREE_FILE = 'config.worktree'
 const INDEX_FILE = 'index'
 const HEAD_LOG_FILE = join('logs', 'HEAD')
-const GITDIR_FILE = 'gitdir'
+
+function joinLeaf(dir: string, leaf: string): string {
+  const len = dir.length
+  if (len === 0) {
+    return leaf
+  }
+  const last = dir.charCodeAt(len - 1)
+  if (last === 0x2f || (sep === '\\' && last === 0x5c)) {
+    return `${dir}${leaf}`
+  }
+  return `${dir}${sep}${leaf}`
+}
 
 function statSignature(value: { mtimeMs: number; ctimeMs: number; ino: number }): string {
   return `${value.mtimeMs}:${value.ctimeMs}:${value.ino}`
@@ -54,8 +68,8 @@ async function inPlaceLeavesChanged(
   previous: GitCommonEntrySnapshot
 ): Promise<boolean> {
   const [gitdirSignature, headLogSignature] = await Promise.all([
-    gitCommonFileSignature(join(entryPath, GITDIR_FILE)),
-    gitCommonFileSignature(join(entryPath, HEAD_LOG_FILE))
+    gitCommonFileSignature(joinLeaf(entryPath, GITDIR_FILE)),
+    gitCommonFileSignature(joinLeaf(entryPath, HEAD_LOG_FILE))
   ])
   return (
     gitdirSignature !== (previous.structuralSignatures.get(GITDIR_FILE) ?? null) ||
@@ -117,19 +131,34 @@ export async function snapshotGitCommonEntry(
   if (!shouldRescan) {
     return previous
   }
-  const structuralSignatures = new Map<string, string>()
-  const [headLogSignature, indexSignature] = await Promise.all([
-    gitCommonFileSignature(join(entryPath, HEAD_LOG_FILE)),
-    gitCommonFileSignature(join(entryPath, INDEX_FILE)),
-    Promise.all(
-      STRUCTURAL_METADATA_FILES.map(async (name) => {
-        const signature = await gitCommonFileSignature(join(entryPath, name))
-        if (signature !== null) {
-          structuralSignatures.set(name, signature)
-        }
-      })
-    )
+  const [
+    headLogSignature,
+    indexSignature,
+    headSignature,
+    gitdirSignature,
+    lockedSignature,
+    configWorktreeSignature
+  ] = await Promise.all([
+    gitCommonFileSignature(joinLeaf(entryPath, HEAD_LOG_FILE)),
+    gitCommonFileSignature(joinLeaf(entryPath, INDEX_FILE)),
+    gitCommonFileSignature(joinLeaf(entryPath, HEAD_FILE)),
+    gitCommonFileSignature(joinLeaf(entryPath, GITDIR_FILE)),
+    gitCommonFileSignature(joinLeaf(entryPath, LOCKED_FILE)),
+    gitCommonFileSignature(joinLeaf(entryPath, CONFIG_WORKTREE_FILE))
   ])
+  const structuralSignatures = new Map<string, string>()
+  if (headSignature !== null) {
+    structuralSignatures.set(HEAD_FILE, headSignature)
+  }
+  if (gitdirSignature !== null) {
+    structuralSignatures.set(GITDIR_FILE, gitdirSignature)
+  }
+  if (lockedSignature !== null) {
+    structuralSignatures.set(LOCKED_FILE, lockedSignature)
+  }
+  if (configWorktreeSignature !== null) {
+    structuralSignatures.set(CONFIG_WORKTREE_FILE, configWorktreeSignature)
+  }
   const next = {
     dirSignature: nextDirSignature,
     structuralSignatures,

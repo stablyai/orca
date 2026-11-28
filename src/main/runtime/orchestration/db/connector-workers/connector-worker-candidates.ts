@@ -31,6 +31,8 @@ export type ConnectorWorkerCandidate = {
   sessionId: string
   row: ConnectorWorkerRow
   attention: WorkerAttentionInput
+  /** Workers it started itself are still open, though no conversation read lists them. */
+  openChildren: boolean
 }
 
 // Each chat's newest Dispatches through its own index, as readSessionWorkers reads them; connector ones only.
@@ -43,6 +45,13 @@ const CONNECTOR_DISPATCHES_SQL = `
        ORDER BY rowid DESC LIMIT ?2
     )
    WHERE d.creator_turn_source = 'connector'`
+
+// Through idx_dispatch_creator_mailbox_work: which of these Dispatches started one still open.
+const OPEN_CHILDREN_SQL = `
+  SELECT DISTINCT creator_dispatch_id AS id
+    FROM dispatch_contexts
+   WHERE creator_dispatch_id IN (SELECT value FROM json_each(?1))
+     AND status IN ('pending', 'dispatched')`
 
 /**
  * These chats' connector-started workers that may still run. A worker settled by its stop or its
@@ -83,7 +92,7 @@ export function readConnectorWorkerCandidates(
     connection,
     rows.map((row) => row.dispatchId)
   )
-  const candidates = rows.flatMap((row) => {
+  const open = rows.flatMap((row) => {
     const input = attention.get(row.dispatchId)
     const sessionId = sessionByDispatch.get(row.dispatchId)
     if (!input || !sessionId || isSettled(row, input, now)) {
@@ -91,6 +100,14 @@ export function readConnectorWorkerCandidates(
     }
     return [{ sessionId, row, attention: input }]
   })
+  const parents = readOpenChildren(
+    connection,
+    open.map((candidate) => candidate.row.dispatchId)
+  )
+  const candidates = open.map((candidate) => ({
+    ...candidate,
+    openChildren: parents.has(candidate.row.dispatchId)
+  }))
   return {
     candidates,
     federated: listFederatedDispatchesByIds.call(
@@ -99,6 +116,22 @@ export function readConnectorWorkerCandidates(
     ),
     chatParties: readChatParties(connection, candidates)
   }
+}
+
+function readOpenChildren(
+  connection: OrchestrationDbConnection,
+  dispatchIds: readonly string[]
+): Set<string> {
+  if (dispatchIds.length === 0) {
+    return new Set()
+  }
+  const parents = new Set<string>()
+  for (const row of connection.db.prepare(OPEN_CHILDREN_SQL).all(JSON.stringify(dispatchIds))) {
+    if (typeof row.id === 'string') {
+      parents.add(row.id)
+    }
+  }
+  return parents
 }
 
 // What resolveOrcaSessionParty reads for a chat assignee; a chat is no worker, so both usually miss.

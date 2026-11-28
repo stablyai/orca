@@ -15,7 +15,6 @@ import {
   isMobileGitUnstageableEntry
 } from '../../changes/mobile-git-status'
 import type * as GitStatus from '../../../../../src/shared/git/status/git-status-types'
-import '../../git/git-status-reply-schema'
 import type { MobileGitStatusEntry } from '../../git/git-status-reply-schema'
 import {
   buildMobileDiffIdentity,

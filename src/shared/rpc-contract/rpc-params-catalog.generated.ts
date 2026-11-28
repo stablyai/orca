@@ -359,6 +359,7 @@ import {
   PRBotAuthorOverrideUpdate,
   SettingsUpdate
 } from './client-ui/client-settings-params'
+import { UiSetWorkspaceNotificationMuted } from './client-ui/client-ui-notification-mute-params'
 import { FeatureInteractionIdParam, UiUpdate } from './client-ui/client-ui-params'
 import { ClientWorkspaceViewParams } from './client-ui/client-workspace-view-params'
 import { SidebarSessionBeginParams } from './client-ui/sidebar-session-params'
@@ -2309,6 +2310,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ui.set': UiUpdate,
   'ui.setCollapsed': SetCollapsedParams,
   'ui.setJiraQuickFilters': JiraQuickFilterStateParam,
+  'ui.setWorkspaceNotificationMuted': UiSetWorkspaceNotificationMuted,
   'updater.check': UpdaterCheckParams,
   'updater.download': null,
   'updater.getStatus': null,

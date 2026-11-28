@@ -12,10 +12,8 @@ import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-works
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
-import '@/diagnostics/telemetry/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
-import './folder-workspace-source-repos'
 import {
   resolveFolderWorkspaceName,
   toFolderWorkspaceLinkedTask
@@ -26,7 +24,6 @@ import {
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import '@/lib/workspace/creation/new-workspace-project-options'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'

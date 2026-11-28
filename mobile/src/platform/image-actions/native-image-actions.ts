@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { File as FsFile, type Directory, type FileHandle } from 'expo-file-system'
 import { useFocusEffect, useNavigation } from 'expo-router'
-import { saveImageToPhotos, shareImage } from '../../../modules/orca-mobile-web-shell/src/index'
+import { saveImageToPhotos, shareFile } from '../../../modules/orca-mobile-web-shell/src/index'
 import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
@@ -120,7 +120,7 @@ function createNativeImageActions(isFocused: () => boolean) {
     } else if (operation === 'save') {
       await saveImageToPhotos(sharedUri(file), mime)
     } else {
-      await shareImage(sharedUri(file), mime)
+      await shareFile(sharedUri(file), mime)
     }
   }
 

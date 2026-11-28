@@ -10,7 +10,8 @@ import {
   getCodexResetCreditScope,
   requestCodexResetCredit
 } from './codex-reset-credit'
-import { useCodexResetCreditCapability } from './codex-reset-credit-capability'
+import { useRuntimeCapability } from '../../transport/connection/use-runtime-capability'
+import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/account-runtime-capabilities'
 import { getCodexAccountDisplayLabel } from '../../../../src/shared/agent-accounts/codex-account-display-label'
 
 type CodexResetDialog = { title: string; message: string }
@@ -101,7 +102,7 @@ export function useCodexResetCreditAction({
   cancelReset: () => void
 } {
   const t = useMobileTranslation()
-  const supported = useCodexResetCreditCapability(client, connected)
+  const supported = useRuntimeCapability(client, connected, CODEX_RESET_CREDIT_RUNTIME_CAPABILITY)
   const [resetting, setResetting] = useState(false)
   const [confirming, setConfirming] = useState<{
     scope: CodexResetCreditExpectedScope

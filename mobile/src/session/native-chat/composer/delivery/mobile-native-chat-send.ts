@@ -2,7 +2,6 @@ import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { PendingNativeChatImage } from '../attachments/mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from '../attachments/mobile-native-chat-file-attachment'
 import { isRpcDeliveryUnknown } from '../../../../transport/rpc/rpc-delivery-ambiguity'
-import '../../../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../../../transport/connection/logical-client-cutover-error'
 import {
   nativeChatTerminalWrite,

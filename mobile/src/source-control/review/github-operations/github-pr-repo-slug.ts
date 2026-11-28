@@ -1,6 +1,5 @@
 import type { RpcMethodName } from '../../../../../src/shared/rpc-contract/rpc-params-catalog.generated'
 import type { RpcSendParams } from '../../../../../src/shared/rpc-contract/rpc-send-params'
-import '../creation/mobile-pr-create'
 import { mobileRepoSelectorFromWorktreeId } from '../creation/mobile-hosted-review-service'
 
 // Preserve fork owner/repo and GHES host across RPC or actions may target a same-named github.com repository.

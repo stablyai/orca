@@ -1,6 +1,9 @@
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type {
+  AgentSessionAccountHome,
+  AgentSessionLaunchedAccount
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
   withAcquiredAgentSessionAccount,
   type ClaudeAccountRecipe
@@ -17,6 +20,32 @@ export function withMovedAccountHome<T extends AgentSessionRecord>(
   return moved && record.providerHandleChain.length === 0
     ? { ...proved, accountHome: moved }
     : proved
+}
+
+/** Where the runtime at `fence` launched, when its provider reports a home or a saved account.
+ *  A saved account alone (agy's) ran in the home the record keeps, or the one it moved to. */
+export function launchedAgentSessionAccount(
+  record: AgentSessionRecord,
+  args: {
+    fence: number
+    launchedAccountHome?: AgentSessionAccountHome
+    launchedAccountId?: string
+    movedAccountHome?: AgentSessionAccountHome
+  }
+): AgentSessionLaunchedAccount | undefined {
+  const accountHome =
+    args.launchedAccountHome ??
+    (args.launchedAccountId
+      ? withMovedAccountHome(record, record, args.movedAccountHome).accountHome
+      : undefined)
+  if (!accountHome) {
+    return undefined
+  }
+  return {
+    fence: args.fence,
+    accountHome,
+    ...(args.launchedAccountId ? { accountId: args.launchedAccountId } : {})
+  }
 }
 
 /** Construction observation and owner proof share the record's existing transaction. */
@@ -36,6 +65,8 @@ export function createAgentSessionOwnerProof(
     accountAcquisition?: { generation: string; recipe: ClaudeAccountRecipe }
     /** The account this runtime launched under, when the provider reports one. */
     launchedAccountHome?: AgentSessionAccountHome
+    /** The saved account it launched on, where one home holds several. */
+    launchedAccountId?: string
     /** The home a chat with no conversation yet moved to at this launch. */
     movedAccountHome?: AgentSessionAccountHome
   }): Promise<AgentSessionRecord> =>
@@ -51,12 +82,8 @@ export function createAgentSessionOwnerProof(
         args.accountAcquisition
       )
       // A runtime that reports no account leaves no stale claim about where this fence ran.
-      const launched = args.launchedAccountHome
-        ? {
-            ...proved,
-            launchedAccount: { fence: args.fence, accountHome: args.launchedAccountHome }
-          }
-        : proved
+      const launchedAccount = launchedAgentSessionAccount(record, args)
+      const launched = launchedAccount ? { ...proved, launchedAccount } : proved
       return withMovedAccountHome(launched, record, args.movedAccountHome)
     })
 }

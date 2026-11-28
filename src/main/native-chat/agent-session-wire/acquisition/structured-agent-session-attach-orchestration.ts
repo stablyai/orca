@@ -239,7 +239,7 @@ async function runAttachUnderAbort(
       },
       onAcquisitionReleased: (cause, verdict) =>
         endStructuredAgentSessionReleasedChild(context, sessionId, cause, verdict),
-      onAttached: async (attached, acquisitionGeneration, owner, accountHome) => {
+      onAttached: async (attached, acquisitionGeneration, owner, launched) => {
         const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
         const current = context.sessions.get(sessionId)?.child ?? null
         // Reattach preserves the live child’s existing sink.
@@ -277,7 +277,7 @@ async function runAttachUnderAbort(
         })
         const { journal } = attached
         const bound = { acquisitionGeneration, owner, fence, journal, current, eventSink }
-        attempt.bound = accountHome ? { ...bound, accountHome } : bound
+        attempt.bound = { ...bound, ...launched }
       },
       // Drain outside commits; proven children also resolve uncertain rewinds before publication.
       beforePublish: async (owner) => {

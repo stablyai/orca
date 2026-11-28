@@ -7,6 +7,7 @@ import { tabHasLivePty } from '../../workspace-layout/terminal-surfaces/tab-has-
 import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   buildWorkspaceRowComparator,
+  compareRecentActivityWithCreateGrace,
   recentActivityWithCreateGrace,
   type WorkspaceSortBy as SortBy
 } from '../../workspace-view/workspace-row-sort'
@@ -21,7 +22,7 @@ import {
 import { EMPTY_ATTENTION_MAP, buildSparseAttentionByWorktree } from './smart-attention-scan'
 import { smartSortPhase } from './smart-sort-phase'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../feed/sidebar-inputs-switch'
-import { compareSmartStamps, recentStamp } from './stamp-order'
+import { compareRecentStamps, compareSmartStamps, recentStamp } from './stamp-order'
 
 /** Recent-sort rank: `lastActivityAt`, floored at `createdAt + CREATE_GRACE_MS` while that window is open. */
 export function effectiveRecentActivity(worktree: Worktree, now: number): number {
@@ -30,15 +31,29 @@ export function effectiveRecentActivity(worktree: Worktree, now: number): number
 
 export type WorktreeSortLabelInput = Pick<Worktree, 'displayName' | 'path' | 'id' | 'hostId'>
 
+function trimIfNeeded(value: string): string {
+  const len = value.length
+  if (len === 0) {
+    return ''
+  }
+  const first = value.charCodeAt(0)
+  const last = value.charCodeAt(len - 1)
+  if (first > 32 && first < 127 && last > 32 && last < 127) {
+    return value
+  }
+  return value.trim()
+}
+
 export function getWorktreeSortLabel(worktree: WorktreeSortLabelInput): string {
-  const displayName = typeof worktree.displayName === 'string' ? worktree.displayName.trim() : ''
+  const displayName =
+    typeof worktree.displayName === 'string' ? trimIfNeeded(worktree.displayName) : ''
   if (displayName) {
     return displayName
   }
 
   // Persisted/remote rows may omit displayName briefly after a rename clear; keep sorting render-safe.
   const pathLabel =
-    typeof worktree.path === 'string' ? getRuntimePathBasename(worktree.path).trim() : ''
+    typeof worktree.path === 'string' ? trimIfNeeded(getRuntimePathBasename(worktree.path)) : ''
   return pathLabel || worktree.id
 }
 
@@ -100,6 +115,7 @@ function buildStampComparator(
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
     ...worktreeSortReads(repoMap, labels),
     recentActivity: recentStamp,
+    compareRecent: compareRecentStamps,
     compareSmart: compareSmartStamps
   })
 }
@@ -128,16 +144,35 @@ export function buildWorktreeComparator(
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
     ...worktreeSortReads(repoMap, labels),
     recentActivity: (worktree) => effectiveRecentActivity(worktree, now),
+    compareRecent: (a, b) =>
+      compareRecentActivityWithCreateGrace(
+        a.lastActivityAt,
+        a.createdAt,
+        b.lastActivityAt,
+        b.createdAt,
+        now
+      ),
     compareSmart: (a, b) => {
       const aw = attentionByWorktree.get(a.id) ?? IDLE
       const bw = attentionByWorktree.get(b.id) ?? IDLE
-      return (
+      if (aw.cls !== bw.cls) {
         // Lower class outranks higher.
-        aw.cls - bw.cls ||
-        // Latest attention wins within a class.
-        bw.attentionTimestamp - aw.attentionTimestamp ||
-        // Idle falls back to recency/create grace before labels.
-        effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now)
+        return aw.cls - bw.cls
+      }
+      if (aw.attentionTimestamp > bw.attentionTimestamp) {
+        // Latest attention wins within a class (Smi return avoids HeapNumber boxing).
+        return -1
+      }
+      if (aw.attentionTimestamp < bw.attentionTimestamp) {
+        return 1
+      }
+      // Idle falls back to recency/create grace before labels.
+      return compareRecentActivityWithCreateGrace(
+        a.lastActivityAt,
+        a.createdAt,
+        b.lastActivityAt,
+        b.createdAt,
+        now
       )
     }
   })

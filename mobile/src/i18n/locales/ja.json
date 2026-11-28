@@ -18,7 +18,10 @@
       "title": "アカウント",
       "useReset": "リセット枠を使用",
       "pairingInvalidMessage": "アカウントを表示するには、このスマートフォンをデスクトップと再ペアリングしてください。",
-      "weeklyWindow": "7日"
+      "weeklyWindow": "7日",
+      "signedOut": "サインアウト済み",
+      "addAccount": "アカウントを追加",
+      "signIn": "サインイン"
     },
     "claude": {
       "usageSignInLabel": "もう一度サインイン",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "残り {{value}}%"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "このサインインを開始したデバイスが応答しなくなりました。",
+        "superseded": "このホスト上でアカウントが変更されたため、サインインが中止されました。やり直してください。",
+        "noPrompt": "サーバーのログインコマンドが1分以内にサインインリンクを表示しませんでした。サーバーのOrcaを更新してから、もう一度お試しください。",
+        "failed": "サインインに失敗しました。もう一度お試しください。"
+      },
+      "starting": "{{host}} にサインインを開始しています…",
+      "copied": "コピーしました",
+      "copyLink": "リンクをコピー",
+      "continue": "続行",
+      "copyCode": "コードをコピーする",
+      "signingIn": "サインイン中…",
+      "tryAgain": "再試行",
+      "titleClaude": "Claude にサインイン",
+      "titleCodex": "Codex にサインイン",
+      "savedOn": "{{host}} に保存",
+      "newCode": "新しいコードを取得",
+      "openPage": "サインインページを開く",
+      "pasteStep": "コードを貼り付け",
+      "codePlaceholder": "ページに表示されたコード",
+      "enterCodeStep": "このコードを入力",
+      "waitingForPage": "ページでの操作が終わるのを待っています",
+      "signedInAs": "{{email}} としてサインインしました"
     }
   },
   "agentHistory": {
@@ -433,7 +461,10 @@
       "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。",
       "signIn": "サインイン",
       "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
-      "forkedFrom": "分岐元"
+      "forkedFrom": "分岐元",
+      "notSignedIn": "{{agent}} にサインインしていません。",
+      "signInAccountHint": "このチャットを実行しているコンピューターでこのアカウントに再度サインインします",
+      "signedInSendAgain": "サインインしました。もう一度送信してください。"
     },
     "ciResultLine": {
       "failingLead": "CI 失敗:",
@@ -1414,7 +1445,7 @@
       "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
       "unlockHint": "スマートフォンのロックを解除してから、タップして再試行してください。",
       "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ",
-      "tapToPairAgain": "タップしてデスクトップと再ペアリングしてください。"
+      "tapToPairAgain": "タップして再ペアリング"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "ホストの互換性を確認中"
@@ -1434,7 +1465,10 @@
       "connectHint": "デスクトップの Orca で「設定 → 連携」から Jira サイトを追加し、再確認してください。",
       "connectOnDesktop": "デスクトップで Jira に接続",
       "credentialUnreadable": "Jira の認証情報は保存されていますが、読み取れません：{{credentialError}}",
-      "updateDesktop": "このホストの Orca を更新"
+      "updateDesktop": "このホストの Orca を更新",
+      "connectTitle": "Jira アカウントを接続",
+      "connectMessage": "割り当てられた Jira 課題をタスクから直接閲覧して作業を始められます。",
+      "connect": "Jira を接続"
     },
     "markdownBlocks": {
       "copyCode": "コードをコピーする",
@@ -2043,7 +2077,9 @@
       "loading": "ファイルを読み込み中…",
       "loadFailed": "ファイルを読み込めませんでした。",
       "title": "ファイル",
-      "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示"
+      "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示",
+      "newEntry": "新規",
+      "add": "追加"
     },
     "fileExplorerRow": {
       "fileUnavailable": "「{{name}}」はモバイルでは利用できません",
@@ -2058,7 +2094,56 @@
     },
     "fileExplorerRowActions": {
       "copyName": "名前をコピー",
-      "copyRelativePath": "相対パスをコピー"
+      "copyRelativePath": "相対パスをコピー",
+      "newFile": "新しいファイル",
+      "newFolder": "新しいフォルダ",
+      "rename": "名前を変更",
+      "duplicate": "複製",
+      "create": "作成",
+      "fileName": "ファイル名",
+      "folderName": "フォルダ名",
+      "deleteTitle": "{{name}} を削除しますか？",
+      "deleteFileDetail": "ファイルを完全に削除します。元に戻せません。",
+      "deleteFolderDetail": "フォルダとその中身を完全に削除します。元に戻せません。",
+      "duplicateFailed": "{{name}} を複製できませんでした。{{reason}}",
+      "duplicateUnconfirmed": "コピーが完了していない可能性があります。確認してもう一度お試しください。",
+      "deleteFailed": "{{name}} を削除できませんでした。{{reason}}",
+      "deleteUnconfirmed": "まだ残っています。フォルダを確認して、もう一度お試しください。",
+      "renameFailed": "{{name}} の名前を変更できませんでした。{{reason}}",
+      "newFileFailed": "ファイルを作成できませんでした。{{reason}}",
+      "newFolderFailed": "フォルダを作成できませんでした。{{reason}}",
+      "share": "共有",
+      "shareFailed": "{{name}} を共有できませんでした",
+      "shareTooLarge": "256 MB を超えるファイルはスマートフォンから共有できません",
+      "shareHostOutdated": "ファイルを共有するには、このワークスペースを実行している Orca を更新してください",
+      "uploadHere": "ここにアップロード",
+      "uploadFiles": "ファイルをアップロード",
+      "noFreeCopyName": "{{name}} のコピーに使える名前がありません"
+    },
+    "fileExplorerUpload": {
+      "waiting": "待機中",
+      "waitingForConnection": "接続を待っています",
+      "failed": "{{reason}} · タップして再試行",
+      "failedReason": "アップロードに失敗しました",
+      "dismiss": "{{name}} をアップロードしない",
+      "tooLarge": "{{max}} MB を超えるファイルは、まだスマートフォンからアップロードできません。",
+      "busy": "一度にアップロードできるのは {{max}} 件までです。",
+      "pickFailed": "ファイルを開けませんでした。{{reason}}",
+      "clashMessage": "{{folder}} に既にあります",
+      "keepBoth": "両方残す",
+      "keepBothAs": "{{name}} として保存",
+      "keepBothCopies": "それぞれコピーとして保存",
+      "skip": "スキップ",
+      "skipAll": "すべてスキップ",
+      "uploaded_one": "{{count}} 件のファイルを {{folder}} にアップロードしました",
+      "uploaded_other": "{{count}} 件のファイルを {{folder}} にアップロードしました",
+      "clashTitleSeveral_one": "{{count}} 件のファイルが {{folder}} に既にあります",
+      "clashTitleSeveral_other": "{{count}} 件のファイルが {{folder}} に既にあります",
+      "lost_one": "{{count}} 件のファイルはアップロードされませんでした。スマートフォンが保持を終了しました。もう一度選んでください。",
+      "lost_other": "{{count}} 件のファイルはアップロードされませんでした。スマートフォンが保持を終了しました。もう一度選んでください。",
+      "nameTaken": "同じ名前があります · タップして選択",
+      "workspaceRoot": "ワークスペースのルート",
+      "unconfirmed": "アップロードを確認できませんでした。フォルダを確認してください。"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",
@@ -4933,6 +5018,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "ワークスペースの作成に失敗しました"
+    },
+    "jiraConnect": {
+      "title": "Jira を接続",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian のメールアドレス",
+      "apiToken": "API トークン",
+      "storageHint": "トークンはこのホストに保存され、OS が対応していれば暗号化されます。",
+      "createToken": "API トークンを作成",
+      "failed": "接続に失敗しました",
+      "serverNeedsUpdate": "このサーバーは先に Orca の更新が必要です。代わりに Orca デスクトップで Jira を接続してください。"
     }
   },
   "terminal": {
@@ -5092,7 +5187,7 @@
       "started": "開始済み",
       "trigger": "トリガー",
       "output": "出力",
-      "noOutput": "出力内容はありません。",
+      "noOutput": "表示できる出力はありません。",
       "loadingRuns": "実行を読み込み中…",
       "loading": "読み込み中…",
       "hourly": "毎時",
@@ -5774,7 +5869,7 @@
         "count": "{{count}} 件"
       },
       "empty": {
-        "allClear": "対応が必要なものはありません"
+        "allClear": "対応が必要な項目はありません"
       }
     },
     "needs": {

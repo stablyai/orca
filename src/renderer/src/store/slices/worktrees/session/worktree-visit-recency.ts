@@ -158,7 +158,12 @@ export function createPruneLastVisitedTimestamps(
       const activeId = s.activeWorktreeId
       if (activeId) {
         const activeRepoWorktreeIds = validIdsByRepo.get(getRepoIdFromWorktreeId(activeId))
-        if (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId)) {
+        // A worktree created during startup is listed but absent from the earlier scan; keep it selected.
+        if (
+          activeRepoWorktreeIds &&
+          !activeRepoWorktreeIds.has(activeId) &&
+          !listedIds.has(activeId)
+        ) {
           patch.activeWorktreeId = null
           // Clear only this stale worktree’s derived/legacy key; folder and other live keys must survive.
           if (

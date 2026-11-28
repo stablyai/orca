@@ -13,6 +13,7 @@ export type RemotePlacementRow = {
   dispatch_id: string | null
   created_at: string
   never_sent_at: string | null
+  send_attempt: number
   creator_orca_session_id: string | null
   creator_pane_key: string | null
 }
@@ -48,14 +49,15 @@ export function retireRemotePlacement(db: OrchestrationDb, taskId: string): void
 export function markRemotePlacementNeverSent(
   db: OrchestrationDb,
   taskId: string,
-  requestKey: string
+  requestKey: string,
+  sendAttempt: number
 ): void {
   db.db
     .prepare(
       `UPDATE remote_placements SET never_sent_at = datetime('now')
-       WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
+       WHERE task_id = ? AND request_key = ? AND state = 'reserved' AND send_attempt = ?`
     )
-    .run(taskId, requestKey)
+    .run(taskId, requestKey, sendAttempt)
 }
 
 /**

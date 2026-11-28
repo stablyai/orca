@@ -1,6 +1,6 @@
 // What New bot asks the chosen computer: its agent choices, and its Orca account.
 import * as z from 'zod'
-import { BOT_AGENTS, type BotAgent } from '../../../src/shared/bot-types'
+import { BOT_AGENTS, BOT_NEW_AGENT_PRIORITY, type BotAgent } from '../../../src/shared/bot-types'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
@@ -18,7 +18,11 @@ const botAgentChoicesRead = bindDeferredRpcOperation(
         .transform(({ agents, defaultAgent }) => {
           // A newer host's agent this build can't name or draw is left out.
           const known = BOT_AGENTS.filter((agent) => agents.includes(agent))
-          return { agents: known, defaultAgent: known.find((agent) => agent === defaultAgent) }
+          // An older host sends no default: pick as the host's New bot does, not by display order.
+          const picked =
+            known.find((agent) => agent === defaultAgent) ??
+            BOT_NEW_AGENT_PRIORITY.find((agent) => known.includes(agent))
+          return { agents: known, defaultAgent: picked }
         })
     )
   })
@@ -26,7 +30,7 @@ const botAgentChoicesRead = bindDeferredRpcOperation(
 
 export type NewBotAgentChoices = {
   agents: BotAgent[]
-  /** The agent the host's own New bot picks first; absent from an older host. */
+  /** The agent the host's own New bot picks first; an older host's is inferred the same way. */
   defaultAgent?: BotAgent
 }
 

@@ -22,7 +22,7 @@ import type {
   PluginLockEntry
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { validatePluginInstallTree } from '../artifacts/plugin-artifact-validation'
-import { renamePluginFileWithWindowsRetry } from './plugin-atomic-file-write'
+import { renameWithWindowsRetry } from '../../filesystem/windows-rename-retry'
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
 import { publishPluginInstall } from './plugin-install-publication'
 import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
@@ -237,7 +237,7 @@ export async function installStagedPluginTree(input: {
       if (!copiedArtifacts.ok) {
         return { ok: false, error: `copied artifact validation failed: ${copiedArtifacts.error}` }
       }
-      await renamePluginFileWithWindowsRetry(stagedVersionDir, versionDir)
+      await renameWithWindowsRetry(stagedVersionDir, versionDir)
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {
