@@ -1,5 +1,4 @@
 import { desktopChatCreationHistory } from '../../../runtime/client/navigation/desktop-chat-creation-history'
-import '../../../media/media-preview-protocol'
 import { revokeRemoteFilePreviewGrants } from '../../../media/preview-grant-registry'
 import { clearBrowserRoutePartitionStorageForEnvironment } from '../../../browser/routing/partitions/browser-route-partition-storage-runtime'
 import { retireBrowserRoutePartitionStorageForEnvironment } from '../../../browser/routing/partitions/browser-route-partition-storage-retirement'
