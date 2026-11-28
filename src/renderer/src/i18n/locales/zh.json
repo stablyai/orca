@@ -23078,7 +23078,6 @@
           "dialog": {
             "createToken": "创建令牌",
             "environmentManagedLine": "已由 ORCA_BITBUCKET_* 环境变量设置。取消设置后才能在此保存",
-            "savedLocallyOnly": "仅保存在这台电脑上",
             "accessTokenNeeds": "需要拉取请求的读取权限",
             "atlassianEmail": "Atlassian 邮箱",
             "requiredScopes": "所需范围",

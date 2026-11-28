@@ -23888,7 +23888,6 @@
           "dialog": {
             "createToken": "Oluştur",
             "environmentManagedLine": "ORCA_BITBUCKET_* ortam değişkenleriyle ayarlandı. Burada kaydetmek için bunları kaldırın.",
-            "savedLocallyOnly": "Yalnızca bu bilgisayara kaydedilir.",
             "accessTokenNeeds": "Pull request'lere okuma erişimi gerekir.",
             "atlassianEmail": "Atlassian e-postası",
             "requiredScopes": "Gerekli kapsamlar",

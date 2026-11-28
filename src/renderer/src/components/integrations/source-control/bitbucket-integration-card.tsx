@@ -10,45 +10,75 @@ import {
   IntegrationCardShell
 } from '../presentation/integration-card-shell'
 import { useIntegrationSubordinateRowClass } from '../presentation/integration-card-presentation'
-import type { BitbucketStatus } from './integrations-pane-status'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { tokenProviderStatusLabel } from './token-source-control-status'
 import { BitbucketCredentialsDialog } from './bitbucket-credentials-dialog'
+import { BitbucketCardNote } from './bitbucket-card-note'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import {
+  bitbucketCredentialStatus,
+  bitbucketDisconnect,
+  BitbucketCredentialsHostOutdatedError
+} from '@/runtime/source-control/bitbucket/runtime-bitbucket-credentials-client'
+import { useProviderAccountScope } from '../../provider-accounts/use-provider-host-scope'
+import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 
 const API_TOKEN_DOCS_URL = 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/'
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 
 export function BitbucketIntegrationCard(): React.JSX.Element {
+  const target = defaultScopeHost(useAppStore((s) => s.settings))
+  const hostKey = target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
+  // Why keyed: switching hosts drops the other host's status and any half-typed secret.
+  return <BitbucketHostIntegrationCard key={hostKey} target={target} />
+}
+
+function BitbucketHostIntegrationCard(props: { target: RuntimeClientTarget }): React.JSX.Element {
   const t = useTranslate()
+  // Why frozen: the key pins the host; a fresh target object each render must not refetch.
+  const [target] = useState(props.target)
+  const remoteHost = target.kind === 'environment'
+  const accountScope = useProviderAccountScope(target)
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('bitbucket')
   const status = unavailable ? 'unavailable' : statuses.bitbucketStatus
   const connected = status === 'connected'
   const mountedRef = useMountedRef()
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
+  const accountScopeRowClass = useIntegrationSubordinateRowClass('text-xs')
   const [connection, setConnection] = useState<BitbucketConnectionStatus | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
-  const [connectionLoadFailed, setConnectionLoadFailed] = useState(false)
+  const [connectionLoadError, setConnectionLoadError] = useState<string | null>(null)
+  const connectionLoadFailed = connectionLoadError !== null
   const connectionLoadGenerationRef = useRef(0)
 
   // Read metadata only; mounting must not decrypt secrets or trigger keychain prompts.
   const loadConnection = useCallback(async () => {
     const generation = ++connectionLoadGenerationRef.current
     try {
-      const next = await window.api.bitbucket.status()
+      const next = await bitbucketCredentialStatus(target)
       if (mountedRef.current && generation === connectionLoadGenerationRef.current) {
         setConnection(next)
-        setConnectionLoadFailed(false)
+        setConnectionLoadError(null)
       }
-    } catch {
+    } catch (error) {
       // Report unreadable state as unknown rather than indistinguishable from missing credentials.
       if (mountedRef.current && generation === connectionLoadGenerationRef.current) {
-        setConnectionLoadFailed(true)
+        setConnectionLoadError(
+          error instanceof BitbucketCredentialsHostOutdatedError
+            ? error.message
+            : t(
+                'auto.components.settings.bitbucket.integration.card.statusLoadFailed',
+                'Could not check for a saved Bitbucket credential.'
+              )
+        )
       }
     }
-  }, [mountedRef])
+  }, [mountedRef, target, t])
 
   useEffect(() => {
     void loadConnection()
@@ -80,7 +110,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     setDisconnecting(true)
     setDisconnectError(null)
     try {
-      await window.api.bitbucket.disconnect()
+      await bitbucketDisconnect(target)
     } catch (error) {
       // Surface deletion failures; otherwise disconnect silently repaints as still connected.
       if (mountedRef.current) {
@@ -152,6 +182,14 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
               'Your Bitbucket credential'
             )}
           />
+          <ProviderHostScopeControl
+            labelPrefix={t(
+              'auto.components.settings.bitbucket.integration.card.account_scope_prefix',
+              'Account scope'
+            )}
+            scope={accountScope}
+            className={accountScopeRowClass}
+          />
           {connected ? (
             <div className={subordinateRowClass}>
               <div className="min-w-0 flex-1">
@@ -188,10 +226,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
           {disconnectError ? <p className="text-xs text-destructive">{disconnectError}</p> : null}
           {connectionLoadFailed ? (
             <p role="alert" className="text-xs text-destructive">
-              {t(
-                'auto.components.settings.bitbucket.integration.card.statusLoadFailed',
-                'Could not check for a saved Bitbucket credential.'
-              )}
+              {connectionLoadError}
             </p>
           ) : null}
           {credentialStatusKnown ? (
@@ -199,6 +234,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
               envManaged={envManaged}
               status={status}
               storedCredential={storedCredential}
+              remoteHost={remoteHost}
             />
           ) : null}
           <div className="flex items-center gap-2">
@@ -232,69 +268,9 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
         initialEmail={currentConnection?.email}
         initialBaseUrl={currentConnection?.baseUrl}
         environmentManaged={envManaged}
+        target={target}
         onConnected={reloadCardState}
       />
     </IntegrationCardShell>
-  )
-}
-
-function BitbucketCardNote(props: {
-  envManaged: boolean
-  status: BitbucketStatus | 'unavailable'
-  storedCredential: boolean
-}): React.JSX.Element {
-  const t = useTranslate()
-  if (props.status === 'unavailable') {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {t(
-          'auto.components.settings.token.source.control.integration.cards.24ac1c69dc',
-          'Bitbucket status is not available in this runtime yet.'
-        )}
-      </p>
-    )
-  }
-  if (props.envManaged) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {t(
-          'auto.components.settings.bitbucket.integration.card.envManaged',
-          'Configured via environment variables. Unset the ORCA_BITBUCKET_* variables to manage this credential in Orca.'
-        )}
-      </p>
-    )
-  }
-  if (props.status === 'not-authenticated') {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {props.storedCredential
-          ? t(
-              'auto.components.settings.bitbucket.integration.card.storedAuthFailed',
-              'The saved Bitbucket credential could not authenticate. Edit it, or check that the token still has pull request access.'
-            )
-          : t(
-              'auto.components.settings.token.source.control.integration.cards.6154b02093',
-              'Bitbucket credentials are configured but could not authenticate. Check the token and repository permissions, then restart Orca if environment variables changed.'
-            )}
-      </p>
-    )
-  }
-  if (props.storedCredential) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {t(
-          'auto.components.settings.bitbucket.integration.card.storedCredential',
-          'Saved in Orca on this machine. ORCA_BITBUCKET_* environment variables take precedence when set.'
-        )}
-      </p>
-    )
-  }
-  return (
-    <p className="text-xs text-muted-foreground">
-      {t(
-        'auto.components.settings.bitbucket.integration.card.notConfigured',
-        'Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.'
-      )}
-    </p>
   )
 }

@@ -14136,7 +14136,9 @@
               "disconnectFailed": "Could not remove the saved Bitbucket credential.",
               "statusLoadFailed": "Could not check for a saved Bitbucket credential.",
               "replaceCredentials": "Manage credentials",
-              "credentialName": "Your Bitbucket credential"
+              "credentialName": "Your Bitbucket credential",
+              "storedCredentialRemote": "Saved in Orca on the selected server. ORCA_BITBUCKET_* environment variables there take precedence when set.",
+              "account_scope_prefix": "Account scope"
             }
           }
         },
@@ -21062,6 +21064,9 @@
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Resolving conflicts needs a newer Orca on this host. Update Orca on that host."
+      },
+      "bitbucket": {
+        "credentialsNeedNewerServer": "Update the remote Orca server to save Bitbucket credentials there."
       }
     },
     "ssh": {
@@ -24157,13 +24162,13 @@
           "dialog": {
             "createToken": "Create one",
             "environmentManagedLine": "Set by ORCA_BITBUCKET_* environment variables. Unset them to save one here.",
-            "savedLocallyOnly": "Saved on this computer only.",
             "accessTokenNeeds": "Needs read access to pull requests.",
             "atlassianEmail": "Atlassian email",
             "requiredScopes": "Required scopes",
             "apiBaseUrl": "API base URL",
             "close": "Close",
-            "verifyingEllipsis": "Verifying…"
+            "verifyingEllipsis": "Verifying…",
+            "savedOnSelectedServer": "Sent to the selected server and stored there, encrypted when it supports it."
           }
         }
       },

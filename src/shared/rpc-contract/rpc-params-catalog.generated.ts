@@ -865,6 +865,7 @@ import {
   SkillsDiscoverParams,
   SkillsGetInstallProgressParams
 } from './skills/skills-params'
+import { BitbucketConnectParams } from './source-control/bitbucket-params'
 import {
   GitBlame,
   GitBranchCompare,
@@ -1291,6 +1292,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'bitbucket.connect': BitbucketConnectParams,
+  'bitbucket.disconnect': null,
+  'bitbucket.status': null,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,
