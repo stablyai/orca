@@ -248,9 +248,7 @@ export function NativeChatQueuedMessageCard({
             // The line fades out under the revealed tools; shown while acting, so a pressed tool never vanishes.
             toolCount > 0 &&
               (expanded
-                ? busy
-                  ? '[padding-right:var(--queued-tools-width)]'
-                  : 'group-hover/queued:[padding-right:var(--queued-tools-width)] group-has-[:focus-visible]/queued:[padding-right:var(--queued-tools-width)] [@media(hover:none)]:group-focus-within/queued:[padding-right:var(--queued-tools-width)]'
+                ? '[padding-right:var(--queued-tools-width)]'
                 : busy
                   ? '[mask-image:var(--queued-tools-mask)]'
                   : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
