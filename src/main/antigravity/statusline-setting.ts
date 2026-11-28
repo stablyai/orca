@@ -32,12 +32,9 @@ export function readAntigravityStatusLineSettingStatus(): Promise<AntigravitySta
   return queue ?? getAntigravityStatusLineStatus()
 }
 
-/** Names a saved agy account from the status line's email; listing never reads agy's own login. */
-export async function antigravityAccountIdForEmail(email: string): Promise<string | null> {
-  const { getAntigravityAccountService } = await import('./native-account-host')
-  const { accounts } = await (
-    await getAntigravityAccountService({ runtime: 'host' })
-  ).listAccounts()
-  const wanted = email.trim().toLowerCase()
-  return accounts.find((account) => account.email?.trim().toLowerCase() === wanted)?.id ?? null
+/** On refreshes the managed script after an update; off retries a removal that failed earlier. */
+export async function reconcileAntigravityStatusLineAtStartup(enabled: boolean): Promise<void> {
+  if (enabled || (await getAntigravityStatusLineStatus()).state !== 'not_installed') {
+    await applyAntigravityStatusLineSetting(enabled)
+  }
 }

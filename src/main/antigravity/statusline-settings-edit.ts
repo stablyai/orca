@@ -1,8 +1,49 @@
-import { parseTree, type Node } from 'jsonc-parser'
+import { parseTree, type Node, type ParseError } from 'jsonc-parser'
 
 export type StatusLineEntry = { type: 'command'; command: string }
 
 // Text splices keep every byte outside the statusLine key, so remove restores the original file.
+
+export type StatusLineInspection =
+  | { kind: 'empty' }
+  | { kind: 'command'; command: string }
+  | { kind: 'unsupported'; detail: string }
+  | { kind: 'invalid' }
+
+const unsupported = (detail: string): StatusLineInspection => ({ kind: 'unsupported', detail })
+
+/** Reads the statusLine slot from the same tree the splices edit; ambiguous shapes are refused. */
+export function inspectStatusLine(text: string): StatusLineInspection {
+  const errors: ParseError[] = []
+  const root = parseTree(text, errors, { allowTrailingComma: true })
+  if (errors.length > 0 || root?.type !== 'object') {
+    return { kind: 'invalid' }
+  }
+  const found = (root.children ?? []).filter((member) => memberName(member) === 'statusLine')
+  if (found.length === 0) {
+    return { kind: 'empty' }
+  }
+  const value = found[0].children?.[1]
+  if (found.length > 1 || value?.type !== 'object') {
+    return unsupported("agy's statusLine setting is not a single command object")
+  }
+  const named = (name: string): Node[] =>
+    (value.children ?? []).filter((member) => memberName(member) === name)
+  if (named('enabled').some((member) => member.children?.[1]?.value === false)) {
+    return unsupported("agy's status line is turned off")
+  }
+  const commandNode = named('command')[0]?.children?.[1]
+  const typeValue = named('type')[0]?.children?.[1]?.value
+  if (
+    named('type').length > 1 ||
+    named('command').length !== 1 ||
+    commandNode?.type !== 'string' ||
+    (named('type').length === 1 && typeValue !== 'command')
+  ) {
+    return unsupported("agy's statusLine setting is not a single command object")
+  }
+  return { kind: 'command', command: String(commandNode.value) }
+}
 
 function rootMembers(text: string): { root: Node; members: Node[] } | null {
   const root = parseTree(text, [], { allowTrailingComma: true })
