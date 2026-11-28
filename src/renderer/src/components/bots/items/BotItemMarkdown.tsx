@@ -1,5 +1,6 @@
 // An item's description or comment, drawn by chat's own Markdown so it reads and links as chat does.
 import { memo } from 'react'
+import { cn } from '@/lib/class-names'
 import { NativeChatMarkdown } from '../../native-chat/markdown/NativeChatMarkdown'
 import { NativeChatDeferredCodeBlock } from '../../native-chat/markdown/code/NativeChatCodeBlock'
 
@@ -9,9 +10,11 @@ const ITEM_DENSITY =
 
 // Memoized: the comment box and live item updates re-render the pane, never an unchanged text.
 export const BotItemMarkdown = memo(function BotItemMarkdown({
-  text
+  text,
+  className
 }: {
   text: string
+  className?: string
 }): React.JSX.Element {
   return (
     <NativeChatMarkdown
@@ -19,7 +22,7 @@ export const BotItemMarkdown = memo(function BotItemMarkdown({
       variant="document"
       renderCodeBlock={NativeChatDeferredCodeBlock}
       linkifyFilePaths
-      className={ITEM_DENSITY}
+      className={cn(ITEM_DENSITY, className)}
     />
   )
 })

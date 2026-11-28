@@ -61,6 +61,7 @@ export type AgentSendPopoverTargetMode = {
   sendingPaneKey?: string
   error?: string
   onPromptDelivered?: () => void
+  canSendPrompt?: () => boolean
   /** Told the send's own result the moment the prompt is handed to an agent. */
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
@@ -73,6 +74,7 @@ export type OpenAgentSendPopoverTargetModeArgs = {
   label: string
   launchSource: LaunchSource
   onPromptDelivered?: () => void
+  canSendPrompt?: () => boolean
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
@@ -138,8 +140,17 @@ export type UiViewHistory =
   | 'automations'
   | 'space'
   | 'skills'
+  | 'plugins'
   | 'artifacts'
   | 'mobile'
+
+export type DiffNotesSendMenuOpenRequest = {
+  worktreeId: string
+  fileId: string
+  tabId: string
+  nonce: number
+  issuedAt: number
+}
 
 export type UISliceCore = {
   sidebarOpen: boolean
@@ -152,10 +163,10 @@ export type UISliceCore = {
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
   sendPromptToSidebarAgentTarget: (paneKey: string) => Promise<boolean>
   /** Shortcut request for the active notes menu; issuedAt expires requests the menu never consumed. */
-  diffNotesSendMenuOpenRequest: { worktreeId: string; nonce: number; issuedAt: number } | null
-  /** Reveal Source Control and request its notes send menu open; returns false (no-op) when the active worktree has no unsent notes. */
+  diffNotesSendMenuOpenRequest: DiffNotesSendMenuOpenRequest | null
+  /** Open Changes and its notes menu only when the selected copy has a sendable note. */
   openDiffNotesSendMenuForActiveWorktree: () => boolean
-  consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
+  consumeDiffNotesSendMenuOpenRequest: (request: DiffNotesSendMenuOpenRequest) => boolean
   /** Persisted read timestamps by pane; absent ack or newer stateStartedAt makes the row unvisited. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   /** `explicit` only from a user action on the row (Mark read, a jump, a dashboard ack). */
@@ -179,6 +190,7 @@ export type UISliceCore = {
   previousViewBeforeSpace: Exclude<UiViewHistory, 'space'>
   previousViewBeforeSkills: Exclude<UiViewHistory, 'skills'>
   previousViewBeforeMobile: Exclude<UiViewHistory, 'mobile'>
+  previousViewBeforePlugins: Exclude<UiViewHistory, 'plugins'>
   previousViewBeforeArtifacts: Exclude<UiViewHistory, 'artifacts'>
   setActiveView: (view: UISliceCore['activeView']) => void
   taskPageData: TaskPageData
@@ -237,6 +249,8 @@ export type UISliceCore = {
   closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
+  openPluginsPage: () => void
+  closePluginsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISliceCore['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null

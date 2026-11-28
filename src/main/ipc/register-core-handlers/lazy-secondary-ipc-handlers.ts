@@ -86,4 +86,9 @@ export function registerLazySecondaryIpcHandlers(
     const { registerMemoryHandlers } = await import('../memory')
     registerMemoryHandlers(store, ipc)
   })
+  // Why: the status bar polls this at startup; keep it from loading the memory sweep's modules.
+  registerLazyIpcHandleGroup(['memory:getAppMemoryTotal'], async (ipc) => {
+    const { readAppMemoryTotal } = await import('../../memory/app-memory-total')
+    ipc.handle('memory:getAppMemoryTotal', () => readAppMemoryTotal())
+  })
 }

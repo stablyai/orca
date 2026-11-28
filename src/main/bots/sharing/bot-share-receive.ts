@@ -6,7 +6,6 @@ import * as z from 'zod'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { planBotFromPackage, type BotPackagePlan } from '../../../shared/bots/bot-package'
 import { BOT_SHARE_MEMORY_INDEX } from '../../../shared/bots/bot-share-received'
-import { downloadSkillPackageGrant } from '../../skills/package-download/skill-package-download'
 import { readBotPackageArchive, type ReadBotPackage } from './bot-package-archive'
 import type { BotRecipientContent } from './bot-share-recipient'
 import type { BotShareClient, BotShareMoved, BotSharedVersion } from './bot-share-client'
@@ -51,6 +50,8 @@ export async function fetchSharedBot(
   }
   const { version } = granted
   const grant = GrantSchema.parse(granted.grant)
+  const { downloadSkillPackageGrant } =
+    await import('../../skills/package-download/skill-package-download')
   const downloaded = await downloadSkillPackageGrant({
     ...grant,
     expectedArchiveSha256: version.archiveSha256,

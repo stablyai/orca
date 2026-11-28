@@ -7,13 +7,13 @@ import type {
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { hookSilentPaneSendState } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   ptyHostGuardsSendApprovals,
   selectSendApprovalGuardEnvironmentIds
@@ -163,7 +163,7 @@ function deriveStructuredAgentSendTargets(
     if (!isStructuredTab(tab) || !tab.agentSessionAgent) {
       continue
     }
-    const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    const paneKey = chatPaneKey(tab.entityId)
     const entry = state.agentStatusByPaneKey.get(paneKey) ?? null
     if ((entry !== null) !== (status === 'with-status')) {
       continue

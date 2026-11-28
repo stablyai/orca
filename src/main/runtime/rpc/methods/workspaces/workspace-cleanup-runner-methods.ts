@@ -5,7 +5,7 @@ import {
   WorkspaceCleanupReportUnsavedEditorsParams,
   WorkspaceCleanupRunNowParams
 } from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-runner-params'
-import { requireWorkspaceCleanupRunner } from '../../../../workspaces/cleanup/workspace-cleanup-runner-registry'
+import { ensureWorkspaceCleanupRunner } from '../../../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { reportClientUnsavedEditors } from '../../../../workspaces/cleanup/workspace-cleanup-client-unsaved-editors'
 import {
   getCodexHistoryDiskUsage,
@@ -59,20 +59,21 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
     name: 'workspaceCleanup.preview',
     permission: 'workspace',
     params: WorkspaceCleanupPreviewParams,
-    handler: (params, { runtime }) => requireWorkspaceCleanupRunner(runtime).preview(params.rules)
+    handler: async (params, { runtime }) =>
+      (await ensureWorkspaceCleanupRunner(runtime)).preview(params.rules)
   }),
   defineMethod({
     name: 'workspaceCleanup.runNow',
     permission: 'workspace',
     params: WorkspaceCleanupRunNowParams,
-    handler: (params, { runtime }) =>
-      requireWorkspaceCleanupRunner(runtime).runNow(params.trigger ?? 'run-now')
+    handler: async (params, { runtime }) =>
+      (await ensureWorkspaceCleanupRunner(runtime)).runNow(params.trigger ?? 'run-now')
   }),
   defineMethod({
     name: 'workspaceCleanup.report',
     permission: 'workspace',
     params: null,
-    handler: (_params, { runtime }) => requireWorkspaceCleanupRunner(runtime).report()
+    handler: async (_params, { runtime }) => (await ensureWorkspaceCleanupRunner(runtime)).report()
   }),
   defineMethod({
     name: 'workspaceCleanup.codexHistoryDiskUsage',

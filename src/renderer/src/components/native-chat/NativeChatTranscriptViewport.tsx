@@ -24,6 +24,7 @@ export function NativeChatTranscriptViewport({
   overlays,
   topOverlay,
   label,
+  memoryKey,
   children
 }: {
   scrollRef: Ref<HTMLDivElement>
@@ -39,14 +40,17 @@ export function NativeChatTranscriptViewport({
   topOverlay?: ReactNode
   /** The scroller's accessible name; the conversation by default. */
   label?: string
+  /** This transcript within its chat tab, for disclosures that outlive a released view. */
+  memoryKey?: string
   children: ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
-  const disclosures = useNativeChatDisclosures()
+  const disclosures = useNativeChatDisclosures(memoryKey)
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatForwardedGestureContext.Provider value={forwardedGesture}>
-        <div className="relative min-h-0 flex-1">
+        {/* Never shorter than the worker chip that sits on its end (0 without one). */}
+        <div className="relative min-h-[var(--native-chat-worker-chip-room,0px)] flex-1">
           <div
             ref={scrollRef}
             {...scrollerProps}

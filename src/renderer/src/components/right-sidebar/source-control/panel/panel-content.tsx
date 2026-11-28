@@ -44,8 +44,6 @@ export function SourceControlPanelContent({
     filterExpanded,
     filterQuery,
     filteredBranchEntries,
-    handleAbortOperationForConflict,
-    handleCompleteMerge,
     handleContextMenu,
     handleOpenDiff,
     handleResolveConflictsWithAI,
@@ -59,9 +57,7 @@ export function SourceControlPanelContent({
     handleUnstagePaths,
     hasUncommittedEntries,
     isResolvingConflictsWithAI,
-    isAbortingOperation,
     isCheckingRecoveryAdmission,
-    isCommitting,
     isExecutingBulk,
     normalizedFilter,
     openAllDiffs,
@@ -131,10 +127,6 @@ export function SourceControlPanelContent({
         conflictOperation={conflictOperation}
         sourceControlAiActionsVisible={sourceControlAiActionsVisible}
         isRecoveryBusy={isCheckingRecoveryAdmission || isResolvingConflictsWithAI}
-        isAbortingOperation={isAbortingOperation}
-        onAbortOperation={handleAbortOperationForConflict}
-        isCompletingMerge={isCommitting}
-        onCompleteMerge={() => void handleCompleteMerge()}
         onResolveWithAi={() => void handleResolveConflictsWithAI()}
         onReviewConflicts={() => {
           openConflictReview(

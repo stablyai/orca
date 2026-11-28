@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { useNow } from '@/lib/window-activity/use-now'
 import { toast } from 'sonner'
 import { botTarget } from '@/lib/bot-hosts'
@@ -40,7 +41,8 @@ function WaitActions({
   const activity = useBotActivity(bot)
   const exists = activity.automations.some((row) => row.automation.id === automationId)
   const waiting = activity.waits?.some((row) => row.automation.id === automationId)
-  const [busy, setBusy] = useState(false)
+  // Kept with the chat tab: a row released mid-cancel returns still cancelling.
+  const [busy, setBusy] = useNativeChatViewGuard(`wait-cancel:${automationId}`, false)
   if (!exists && !waiting) {
     return null
   }

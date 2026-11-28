@@ -166,7 +166,12 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const previous = this.state.claude
     const now = Date.now()
     const configDir = snapshot.configDir
-    const sessionId = event.sessionId ?? null
+    // Pair paneKey with sessionId so a conversation resumed in two panes cannot interleave into a fake reset.
+    const reporterKey = event.sessionId
+      ? event.paneKey
+        ? JSON.stringify([event.paneKey, event.sessionId])
+        : event.sessionId
+      : null
     const sessionReports = this.claudeSessionReports
     // An idle session's older snapshot must not roll back newer account usage.
     const keepIfNewer = (
@@ -177,10 +182,10 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       if (!incoming) {
         return null
       }
-      const reset = sessionReports.recordReset(sessionId, configDir, kind, incoming)
+      const reset = sessionReports.recordReset(reporterKey, configDir, kind, incoming, now)
       if (
         current &&
-        !sessionReports.hasChanged(sessionId, configDir, kind, incoming) &&
+        sessionReports.isUnchanged(reporterKey, configDir, kind, incoming) &&
         !isSameClaudeUsageWindow(current, incoming) &&
         sessionReports.isResetWindow(configDir, kind, incoming, now)
       ) {
@@ -198,11 +203,16 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
     const freshSession = keepIfNewer('session', incomingSession, previous?.session)
     const freshWeekly = keepIfNewer('weekly', incomingWeekly, previous?.weekly)
-    if (sessionId !== null) {
-      sessionReports.remember(sessionId, configDir, {
-        session: incomingSession,
-        weekly: incomingWeekly
-      })
+    if (reporterKey !== null) {
+      sessionReports.remember(
+        reporterKey,
+        configDir,
+        {
+          session: incomingSession,
+          weekly: incomingWeekly
+        },
+        now
+      )
     }
     if (!freshSession && !freshWeekly) {
       return

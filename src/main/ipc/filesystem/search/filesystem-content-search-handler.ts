@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { SearchOptions, SearchResult } from '../../../../shared/file-search/code-search-types'
 import {
   throwIfSignalAborted,
@@ -13,14 +14,17 @@ import { runBundledRipgrepTextSearch } from '../../../ripgrep/bundled-ripgrep-te
 import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 
-export function registerFilesystemContentSearchHandler(context: FilesystemHandlerContext): void {
+export function registerFilesystemContentSearchHandler(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store, activeTextSearches } = context
   const searches = createSenderScopedRequestCancellations()
-  ipcMain.handle('fs:cancelSearch', (event, args: { requestToken: string }) => {
+  ipc.handle('fs:cancelSearch', (event, args: { requestToken: string }) => {
     searches.cancel(event, args.requestToken)
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:search',
     async (
       event,

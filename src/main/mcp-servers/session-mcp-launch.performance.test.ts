@@ -1,8 +1,10 @@
 // Guards STA-18220: one host-list write advances the epoch for every running chat, and each chat's
 // next input compared by rereading the list and opening the whole credential store twice. However many
-// warm chats compare after one write, the list and the store are read once.
+// warm chats compare after one write, the list and the store are read once. Also guards the `/mcp`
+// tray's status polls: after one write each running chat compares its launch once, not per poll.
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
+import type * as HostListLaunch from './mcp-host-list-launch'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,10 +13,29 @@ import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-s
 import { botToolCredentialsPath, useBotToolCredentialsRoot } from '../bots/bot-tool-credentials'
 import { botToolsPath } from '../bots/bot-tools-path'
 import { changeBotToolEntries } from '../bots/bot-tools-file'
-import { setMcpServerAgentEnabled } from './mcp-host-list'
-import { sessionLaunchToolsChanged, sessionMcpLaunchTools } from './session-mcp-launch'
+import { removeMcpServer, setMcpServerAgentEnabled } from './mcp-host-list'
+import {
+  sessionHostMcpChanges,
+  sessionLaunchToolsChanged,
+  sessionMcpLaunchTools
+} from './session-mcp-launch'
 
-const reads = vi.hoisted((): { paths: string[] } => ({ paths: [] }))
+const reads = vi.hoisted((): { paths: string[]; projections: number } => ({
+  paths: [],
+  projections: 0
+}))
+vi.mock('./mcp-host-list-launch', async (importOriginal) => {
+  const actual = await importOriginal<typeof HostListLaunch>()
+  return {
+    ...actual,
+    mcpServersWithDigestsForLaunch: (
+      ...args: Parameters<typeof actual.mcpServersWithDigestsForLaunch>
+    ) => {
+      reads.projections += 1
+      return actual.mcpServersWithDigestsForLaunch(...args)
+    }
+  }
+})
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof Fs>()
   return {
@@ -112,4 +133,30 @@ async function readsAfterOneWrite(chats: number): Promise<{ list: number; store:
 it('reads the host list and its credential store once per write, not once per warm chat', async () => {
   expect(await readsAfterOneWrite(10)).toEqual({ list: 1, store: 1 })
   expect(await readsAfterOneWrite(100)).toEqual({ list: 1, store: 1 })
+})
+
+it('compares a running chat with the host list once per write, however often its tray polls', async () => {
+  const folder = tempDir('mcp-host-list-')
+  await changeBotToolEntries(folder, () => [
+    {
+      server: { name: 'local', command: 'npx', args: ['local-mcp'] },
+      extras: { id: 'id-local-1' }
+    },
+    { server: { name: 'other', command: 'npx', args: ['other-mcp'] }, extras: { id: 'id-other-1' } }
+  ])
+  const chat = await sessionMcpLaunchTools(
+    null,
+    { provider: 'claude', location: { workspaceId: 'repo-1::/r' } },
+    '/r',
+    { relay, hostFolder: folder }
+  )
+  const delivered = new Set(chat.tools.hostNames)
+  await removeMcpServer('id-local-1', folder)
+  reads.projections = 0
+  for (let poll = 0; poll < 20; poll += 1) {
+    expect(await sessionHostMcpChanges(chat.launched!, delivered)).toEqual(
+      new Map([['local', 'removed']])
+    )
+  }
+  expect(reads.projections).toBe(1)
 })

@@ -179,11 +179,12 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
       </View>
     )
   }
-  return Object.assign(model, {
+  return {
+    ...model,
     renderCommentComposer,
     renderDetailComment,
     renderDetailCommentGroup
-  })
+  }
 }
 
 export type DetailCommentRenderersModel = ReturnType<typeof useMobileTasksDetailCommentRenderers>

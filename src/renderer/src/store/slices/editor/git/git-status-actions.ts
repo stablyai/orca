@@ -12,6 +12,7 @@ import {
 } from './branch-compare-state'
 import { closeDroppedEditorFileTabsThroughLayoutOwner } from '../tabs/editor-tab-close-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
+import { nextOperationMarkerMaps } from './git-status-operation-markers'
 
 export function createGitStatusActions(
   set: EditorSet,
@@ -21,6 +22,7 @@ export function createGitStatusActions(
   | 'gitStatusByWorktree'
   | 'gitStatusHeadByWorktree'
   | 'gitRebaseIndexObservationByWorktree'
+  | 'gitOperationRunIdentityByWorktree'
   | 'gitStatusHugeByWorktree'
   | 'gitStatusReadErrorByWorktree'
   | 'gitBranchLineTotalByWorktree'
@@ -35,6 +37,7 @@ export function createGitStatusActions(
     gitStatusByWorktree: {},
     gitStatusHeadByWorktree: {},
     gitRebaseIndexObservationByWorktree: {},
+    gitOperationRunIdentityByWorktree: {},
     gitStatusHugeByWorktree: {},
     gitStatusReadErrorByWorktree: {},
     gitBranchLineTotalByWorktree: {},
@@ -188,9 +191,7 @@ export function createGitStatusActions(
         const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
         const nextStatusHead = getKnownGitHead(status.head)
         const statusHeadUnchanged = prevStatusHead === nextStatusHead
-        const indexObservation = status.rebaseIndexObservation
-        const indexObservationUnchanged =
-          s.gitRebaseIndexObservationByWorktree?.[worktreeId] === indexObservation
+        const nextMarkerMaps = nextOperationMarkerMaps(s, worktreeId, status)
 
         const prevBranchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
         // Why: a compare request can finish after git status observed a new HEAD; reject the stale snapshot before it renders a false clean state.
@@ -210,7 +211,7 @@ export function createGitStatusActions(
           branchLineTotalUnchanged &&
           readErrorUnchanged &&
           statusHeadUnchanged &&
-          indexObservationUnchanged &&
+          nextMarkerMaps === null &&
           !shouldInvalidateBranchCompare
         ) {
           return s
@@ -269,9 +270,7 @@ export function createGitStatusActions(
           gitStatusReadErrorByWorktree: nextReadErrorMap,
           gitBranchLineTotalByWorktree: nextBranchLineTotalMap,
           gitStatusHeadByWorktree: nextStatusHeadMap,
-          gitRebaseIndexObservationByWorktree: indexObservationUnchanged
-            ? s.gitRebaseIndexObservationByWorktree
-            : { ...s.gitRebaseIndexObservationByWorktree, [worktreeId]: indexObservation },
+          ...nextMarkerMaps,
           gitStatusByWorktree: statusUnchanged
             ? s.gitStatusByWorktree
             : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },

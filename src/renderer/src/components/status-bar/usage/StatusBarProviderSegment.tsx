@@ -5,7 +5,6 @@ import { AlertTriangle } from 'lucide-react'
 import React from 'react'
 import { useSectionOnScreen } from '../../right-sidebar/source-control/panel/section-viewport-presence'
 import type {
-  OwnerNotSetUpPlaceholder,
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -20,11 +19,11 @@ import { formatCreditCount } from '../../../../../shared/agent-usage/display/cre
 import { ProviderIcon } from './provider-usage-panel'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 import { UsageBar } from './usage-meter'
-import { getOwnerNotSetUpLabelParts } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
+import { UsageErrorAlert, getUsageChipDescription } from './UsageErrorAlert'
 import {
-  getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
-  isClaudeUsageWaitingForClaude
+  isUsageStatusNotice,
+  isUsageWaitingForCli
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
 import { formatBareUsagePercentage } from './usage-percentage-label'
@@ -113,27 +112,6 @@ export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX
         className={`inline-block h-2 w-2 rounded-full ${hasData ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
       />
       {getProviderLetter(p.provider)}
-    </span>
-  )
-}
-
-// Why only the host name truncates: the phrase around it must stay readable in every locale.
-function OwnerNotSetUpLabel({
-  placeholder
-}: {
-  placeholder: OwnerNotSetUpPlaceholder
-}): React.JSX.Element {
-  const t = useTranslate()
-  const { before, host, after } = getOwnerNotSetUpLabelParts(placeholder, t)
-  return (
-    <span className="text-[11px] font-medium">
-      {before}
-      {host ? (
-        <span data-owner-host className="inline-block max-w-28 truncate align-bottom">
-          {host}
-        </span>
-      ) : null}
-      {after}
     </span>
   )
 }
@@ -270,8 +248,8 @@ export function ProviderSegment({
   const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
   const template = resolveStatusBarUsageTemplate(usageFormat, provider)
   const statusLabel = p ? getProviderUsageStatusLabel(p, t) : ''
-  // Why: not a problem; Claude updates its own login the next time it runs.
-  const calm = p ? isClaudeUsageWaitingForClaude(p) : false
+  // Why: not a problem; the CLI updates its own login the next time it runs.
+  const calm = p ? isUsageWaitingForCli(p) : false
   const calmClock = useNow(60_000, calm && p?.status === 'error')
   const tightest = p
     ? mode === 'compact'
@@ -307,32 +285,41 @@ export function ProviderSegment({
     )
   }
 
-  if (p.usageMetadata?.ownerNotSetUp) {
+  const description = getUsageChipDescription(p, t)
+  if (description) {
+    // Why "--", not the alert: not set up, unavailable and similar states are not failures to fix.
+    if (isUsageStatusNotice(p)) {
+      return (
+        <span className="inline-flex items-center gap-1 text-muted-foreground">
+          <ProviderIcon provider={provider} />
+          --
+        </span>
+      )
+    }
     return (
-      <span
-        className="inline-flex items-center gap-1 text-muted-foreground"
-        title={measuring ? undefined : getProviderUsageErrorMessage(p, t)}
-      >
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <UsageErrorAlert label={description} />
         <ProviderIcon provider={provider} />
-        {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
-        {compact ? '--' : <OwnerNotSetUpLabel placeholder={p.usageMetadata.ownerNotSetUp} />}
       </span>
     )
   }
 
+  // Why text: only a calm CLI wait reaches here, and it is not a problem to flag.
   if (p.status === 'error' && !tightest) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
         {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
       </span>
     )
   }
 
   // Why: calm is honest only while the kept bars are recent; old ones still deserve the warning.
+  // A notice (e.g. no subscription) is not a failure, so its kept bars never carry the alert.
   const isStale =
-    p.status === 'error' && (!calm || calmClock - p.updatedAt > CALM_STALE_USAGE_MAX_AGE_MS)
+    p.status === 'error' &&
+    !isUsageStatusNotice(p) &&
+    (!calm || calmClock - p.updatedAt > CALM_STALE_USAGE_MAX_AGE_MS)
   const showBalance = isExtraUsageActive(p)
 
   // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
