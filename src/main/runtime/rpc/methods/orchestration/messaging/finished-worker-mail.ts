@@ -8,6 +8,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { MessageRouting } from '../routing'
 import { parseRemoteWorkerPayload } from './message-payload'
+import { assertReportPathCaptured } from './send-params-checks'
 
 /** A terminal also proves its process, so a new process in the same pane is not taken for the old worker;
  *  a session caller is already bound to its own identity. */
@@ -107,6 +108,10 @@ function bindLocalWorkerReport(
   } catch {
     // Leave malformed payloads to the existing message validation.
     return payload
+  }
+  // Finished reports become status mail before the worker_done validation runs.
+  if (finished) {
+    assertReportPathCaptured(report)
   }
   if (typeof report.reportContentBase64 !== 'string') {
     return payload

@@ -77,6 +77,21 @@ it('reopens the bytes of each submitted report by message after the worker folde
       return { request, messageId: result.messageId, dispatchId: dispatch.id }
     }
     const a = await submit('first', Buffer.from([0, 255, 65]), true)
+    const rowCounts = db.db.prepare(`
+      SELECT (SELECT COUNT(*) FROM messages) AS messages,
+             (SELECT COUNT(*) FROM worker_report_files) AS files
+    `)
+    const before = rowCounts.get()
+    const uncaptured = await dispatcher.dispatch({
+      ...a.request,
+      orchestrationRequestId: 'request_late_uncaptured',
+      params: {
+        ...a.request.params,
+        payload: JSON.stringify({ outcome: 'succeeded', reportPath: 'uncaptured.bin' })
+      }
+    })
+    expect(uncaptured).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(rowCounts.get()).toEqual(before)
     const b = await submit('second', Buffer.from('B\r\n'))
     const body = await submit('plain')
     await rm(folder, { recursive: true })
