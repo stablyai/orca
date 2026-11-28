@@ -35,6 +35,18 @@ export function getRemotePlacement(
     | undefined
 }
 
+export function noteRemoteRunLinkPeerRun(
+  db: OrchestrationDb,
+  conversationId: string,
+  peerRunId: string
+): void {
+  db.db
+    .prepare(
+      `UPDATE remote_run_links SET peer_run_id = ? WHERE conversation_id = ? AND peer_run_id IS NULL`
+    )
+    .run(peerRunId, conversationId)
+}
+
 /** A same-key retry sends again. When nothing under the key left this Orca, it is the first ask the
  *  server will see, so the placement names who asks now. Otherwise the server may already hold, or
  *  have forgotten, the first send: its next answer proves the first asker only if they ask again. */

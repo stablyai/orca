@@ -26,6 +26,7 @@ import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
 import {
   getLiveRemotePlacement,
   getRemotePlacement,
+  noteRemoteRunLinkPeerRun,
   resendRemoteReservation,
   type RemotePlacementRow
 } from './remote-placement-hold'
@@ -262,18 +263,6 @@ export function adoptRemoteAttempt(
     })
   }
   return record
-}
-
-export function noteRemoteRunLinkPeerRun(
-  db: OrchestrationDb,
-  conversationId: string,
-  peerRunId: string
-): void {
-  db.db
-    .prepare(
-      `UPDATE remote_run_links SET peer_run_id = ? WHERE conversation_id = ? AND peer_run_id IS NULL`
-    )
-    .run(peerRunId, conversationId)
 }
 
 /**
