@@ -34,12 +34,15 @@ export function createJournalSqlMaintenance(
       writer,
       readers,
       // A conversion the proof waits on keeps periodic cleanup running, as idle conversion does.
-      { ensure: (id, foreground) => maintenance.serviceWhile(conversions.ensure(id, foreground)) },
-      () => maintenance.boundary(),
+      {
+        ensure: (id, foreground, authority) =>
+          maintenance.serviceWhile(conversions.ensure(id, foreground, authority))
+      },
+      (signal) => maintenance.boundary(signal),
       options.onMaintenanceError,
       undefined,
       undefined,
-      (started) => maintenance.rest(started)
+      (started, signal) => maintenance.rest(started, signal)
     )
     maintenance.stopped.signal.addEventListener('abort', () => retirement.stop(), { once: true })
     maintenance.legacy = retirement

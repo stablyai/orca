@@ -68,6 +68,8 @@ export type OrcadInstanceLockHooks = OrcadDataRootPrivacyHooks & {
   holderIdentity?: (record: OrcadLockRecord) => OrcadProcessIdentityVerdict
   /** Desktop callers must first hold Electron’s single-instance lock to reclaim desktop records. */
   role?: 'orcad' | 'desktop'
+  /** A service lock protects its own endpoint, not the profile's stores. */
+  scope?: 'service'
   /** Tighten and verify data-root permissions; defaults to on for the orcad role only. */
   enforcePrivateDataRoot?: boolean
   machineIdentity?: () => string | null
@@ -174,7 +176,8 @@ export function acquireOrcadInstanceLock(
             }
           }
         : undefined,
-      onExclusivityLost: hooks.onExclusivityLost ?? (() => {})
+      onExclusivityLost: hooks.onExclusivityLost ?? (() => {}),
+      profile: hooks.scope !== 'service'
     })
   if (publish()) {
     return lockFor()

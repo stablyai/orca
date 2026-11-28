@@ -1,4 +1,8 @@
 import { legacyDestinationFileIdentity } from './journal-legacy-retirement-files'
+import {
+  JournalRetirementCancelledError,
+  requireJournalRetirementPermit
+} from './journal-retirement-permit'
 import { JournalForkStages } from './journal-fork-stages'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
 import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
@@ -245,11 +249,18 @@ async function runWrites(
       throw fault
     }
     assertJournalWritable(readOnly, 'database')
+    // Maintenance requests keep their own transaction in takeJournalSqlReadyBatch.
+    const command = list[0]?.command
+    const permit = command?.type === 'maintenance' ? command.retirementPermit : undefined
+    if (command?.type === 'maintenance') {
+      requireJournalRetirementPermit(command.operation.kind, permit)
+    }
     const result = await writer.run(
       list,
       (request) => applyJournalSqlWriteRequest(context, request),
       journalSqlWriteDurability(list),
-      urgent
+      urgent,
+      permit
     )
     forks!.acknowledge()
     // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.
@@ -270,6 +281,12 @@ async function runWrites(
     forks?.rollback()
     const outcome = error instanceof JournalSqlBatchError ? error.outcome : 'not-dispatched'
     fault ??= writer.fault
+    const cause =
+      outcome !== 'indeterminate' &&
+      error instanceof JournalSqlBatchError &&
+      error.cause instanceof JournalRetirementCancelledError
+        ? error.cause
+        : error
     return {
       rolledBack: outcome === 'rolled-back',
       responses: list.map((request) => ({
@@ -277,7 +294,7 @@ async function runWrites(
         id: request.id,
         outcome,
         fatal: fault !== undefined,
-        error: journalSqlFailure(error)
+        error: journalSqlFailure(cause)
       }))
     }
   }

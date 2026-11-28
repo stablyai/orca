@@ -87,15 +87,18 @@ export async function completeJournalLegacyProof(
       // so a quit must resume in the copies, whose counts then read as partial, never as whole.
       if (frontier.cursor.table >= LEGACY_PROOF_COPIES_TABLE) {
         await progress(frontier.cursor)
+        signal.throwIfAborted()
       }
       const started = performance.now()
       frontier.page = await readers.legacyProof(frontier.cursor)
+      signal.throwIfAborted()
       for (const chat of frontier.page.sessions) {
         if (chat.convert && !chat.ready) {
           frontier.unconverted.add(chat.sessionId)
         }
       }
       await rest(started)
+      signal.throwIfAborted()
     }
     const page = frontier.page
     if (page.historical) {
@@ -112,11 +115,14 @@ export async function completeJournalLegacyProof(
     const writing = performance.now()
     if (originals.length > 0) {
       await writer.maintain({ kind: 'legacy-originals-keep', originals })
+      signal.throwIfAborted()
     }
     if (page.claims?.length) {
       await writer.maintain({ kind: 'legacy-claims-absorb', claims: page.claims })
+      signal.throwIfAborted()
     }
     await rest(writing)
+    signal.throwIfAborted()
     // A copy converts from its original chat like any unconverted chat.
     const chats = page.copies
       ? page.copies.map((sessionId) => ({
@@ -162,10 +168,12 @@ export async function completeJournalLegacyProof(
           throw error
         }
       }
+      signal.throwIfAborted()
       // Read back from the store, not a cached epoch: the chat may have been deleted since. Each
       // request is paced like a page read; time spent waiting on a conversion is not.
       const started = performance.now()
       let state = await readers.importState(source.sessionId)
+      signal.throwIfAborted()
       if (state.state !== 'ready' && source.empty) {
         const epoch = await writer.maintain({
           kind: 'import-finish',
@@ -185,6 +193,7 @@ export async function completeJournalLegacyProof(
             }
           }
         })
+        signal.throwIfAborted()
         if (typeof epoch !== 'string') {
           throw new Error('legacy proof received no committed empty-chat epoch')
         }
@@ -194,6 +203,7 @@ export async function completeJournalLegacyProof(
         throw new Error('legacy proof awaits committed conversion')
       }
       await rest(started)
+      signal.throwIfAborted()
       frontier.session++
       frontier.pending = false
       // Each copy as it converts: a copies page read again after a failure holds only the rest.

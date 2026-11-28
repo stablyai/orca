@@ -6,6 +6,11 @@ import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
 import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signals'
 import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
+import {
+  JournalRetirementCancelledError,
+  type JournalRetirementAuthority
+} from './journal-retirement-permit'
 
 const CONVERSION_EXPANSION = 1.5
 
@@ -34,7 +39,11 @@ export type JournalBackgroundConversions = Pick<
 
 type ChatSize = { sizedAt: string; measured: number; used: number }
 
-type Conversion = { promotion: AbortController; result: Promise<string | null> }
+type Conversion = {
+  promotion: AbortController
+  result: Promise<string | null>
+  retirement: boolean
+}
 
 function warnLegacy(step: string, sessionId: string, error: unknown): void {
   console.warn(
@@ -80,7 +89,12 @@ export class JournalSqlConversions {
     )
   }
 
-  async ensure(sessionId: string, foreground = true): Promise<string | null> {
+  async ensure(
+    sessionId: string,
+    foreground = true,
+    authority?: JournalRetirementAuthority
+  ): Promise<string | null> {
+    authority?.signal.throwIfAborted()
     if (this.closed) {
       throw new Error('journal conversions are closed')
     }
@@ -92,8 +106,21 @@ export class JournalSqlConversions {
     if (pending) {
       if (foreground) {
         pending.promotion.abort()
+        if (!authority && pending.retirement) {
+          try {
+            return await pending.result
+          } catch (error) {
+            if (!(error instanceof JournalRetirementCancelledError)) {
+              throw error
+            }
+            // The pending entry has settled, so the ordinary importer can discard any partial copy.
+            return this.ensure(sessionId)
+          }
+        }
       }
-      return pending.result
+      return authority && !pending.retirement
+        ? waitForPromiseWithSignal(pending.result, authority.signal)
+        : pending.result
     }
     if (!foreground && this.deferred()) {
       throw new JournalConversionStorageError()
@@ -102,7 +129,7 @@ export class JournalSqlConversions {
     if (foreground) {
       promotion.abort()
     }
-    const result = this.convert(sessionId, promotion.signal)
+    const result = this.convert(sessionId, promotion.signal, authority)
       .then((epoch) => {
         this.sizes.delete(sessionId)
         this.skippedSizes.delete(sessionId)
@@ -112,6 +139,9 @@ export class JournalSqlConversions {
         return epoch
       })
       .catch((error: unknown) => {
+        if (error instanceof JournalRetirementCancelledError) {
+          throw error
+        }
         const full = isJournalConversionStorageError(error)
           ? !error.skipped
           : storageCapacityErrorCode(error) !== null
@@ -130,13 +160,13 @@ export class JournalSqlConversions {
           }
           this.sizes.delete(sessionId)
         }
-        this.noteCopyFailure(sessionId, error)
+        this.noteCopyFailure(sessionId, error, authority)
         throw error
       })
       .finally(() => {
         this.pending.delete(sessionId)
       })
-    this.pending.set(sessionId, { promotion, result })
+    this.pending.set(sessionId, { promotion, result, retirement: authority !== undefined })
     return result
   }
 
@@ -166,17 +196,26 @@ export class JournalSqlConversions {
   }
 
   /** A copy whose original content can't convert or fit a reply is left to an open, never to a quit's rejection. */
-  private noteCopyFailure(sessionId: string, error: unknown): void {
+  private noteCopyFailure(
+    sessionId: string,
+    error: unknown,
+    authority?: JournalRetirementAuthority
+  ): void {
     if (
       this.closed ||
+      authority?.signal.aborted ||
       !(isJournalSqlSourceContentFailure(error) || isJournalReaderReplyLimitFailure(error))
     ) {
       return
     }
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 500)
     void this.writer
-      .maintain({ kind: 'legacy-copy-failed', sessionId, error: message })
-      .catch((failure: unknown) => warnLegacy('recording', sessionId, failure))
+      .maintain({ kind: 'legacy-copy-failed', sessionId, error: message }, authority?.permit)
+      .catch((failure: unknown) => {
+        if (!(failure instanceof JournalRetirementCancelledError)) {
+          warnLegacy('recording', sessionId, failure)
+        }
+      })
   }
 
   /** A ready physical epoch survives context changes for the lifetime of the database owner. */
@@ -193,31 +232,43 @@ export class JournalSqlConversions {
     this.ready.clear()
   }
 
-  private async boundary(promotion: AbortSignal): Promise<void> {
+  private async boundary(promotion: AbortSignal, cancellation?: AbortSignal): Promise<void> {
+    cancellation?.throwIfAborted()
     if (!promotion.aborted) {
       try {
-        await this.waitForIdle(promotion)
+        await this.waitForIdle(cancellation ? AbortSignal.any([promotion, cancellation]) : promotion)
       } catch (error) {
+        cancellation?.throwIfAborted()
         if (!promotion.aborted) {
           throw error
         }
       }
     }
+    cancellation?.throwIfAborted()
     if (this.closed) {
       throw new Error('journal conversions are closed')
     }
     await setImmediate()
+    cancellation?.throwIfAborted()
   }
 
-  private async convert(sessionId: string, promotion: AbortSignal): Promise<string | null> {
-    await this.boundary(promotion)
+  private async convert(
+    sessionId: string,
+    promotion: AbortSignal,
+    authority?: JournalRetirementAuthority
+  ): Promise<string | null> {
+    const cancellation = authority?.signal
+    const permit = authority?.permit
+    await this.boundary(promotion, cancellation)
     const state = await this.readers.importState(sessionId)
+    cancellation?.throwIfAborted()
     if (state.state === 'ready') {
       return state.epoch
     }
     for (;;) {
-      await this.boundary(promotion)
-      const discarded = await this.writer.maintain({ kind: 'import-discard', sessionId })
+      await this.boundary(promotion, cancellation)
+      const discarded = await this.writer.maintain({ kind: 'import-discard', sessionId }, permit)
+      cancellation?.throwIfAborted()
       if (
         !discarded ||
         typeof discarded !== 'object' ||
@@ -235,25 +286,30 @@ export class JournalSqlConversions {
     }
     // A chat deleted since it was listed (during a backoff, say) has no row left: never re-import it.
     const listed = await this.readers.database({ kind: 'chat-exists', sessionId })
+    cancellation?.throwIfAborted()
     if (listed.kind !== 'chat-exists' || !listed.exists) {
       return null
     }
     // Measured only for a chat that still converts, so ready chats never read their rows.
     // The estimate is a hint: a chat it doesn't fit is skipped, and only a full disk ends the pass.
     const started = await this.room(promotion, sessionId)
+    cancellation?.throwIfAborted()
     if (started.full || started.low) {
       throw new JournalConversionStorageError(!started.full, started.needed)
     }
-    await this.boundary(promotion)
+    await this.boundary(promotion, cancellation)
     const reader = await this.readers.prepareConversion(sessionId)
     if (!reader) {
+      cancellation?.throwIfAborted()
       return null
     }
     try {
+      cancellation?.throwIfAborted()
       const { header } = reader
       for (;;) {
-        await this.boundary(promotion)
+        await this.boundary(promotion, cancellation)
         const now = await this.room(promotion)
+        cancellation?.throwIfAborted()
         if (now.low) {
           // The next try needs what this one used, or twice the last requirement, whichever is
           // more: repeats grow until there is room for the whole chat, or stop.
@@ -267,16 +323,19 @@ export class JournalSqlConversions {
           throw new JournalConversionStorageError()
         }
         const page = await reader.next()
+        cancellation?.throwIfAborted()
         if (!page) {
           break
         }
         // A chat already ready keeps its rows; the frozen source never replaces them.
-        if (!(await this.writer.maintain({ kind: 'import-page', target: header, page }))) {
+        const imported = await this.writer.maintain({ kind: 'import-page', target: header, page }, permit)
+        cancellation?.throwIfAborted()
+        if (!imported) {
           break
         }
       }
-      await this.boundary(promotion)
-      const epoch = await this.writer.maintain({ kind: 'import-finish', header })
+      await this.boundary(promotion, cancellation)
+      const epoch = await this.writer.maintain({ kind: 'import-finish', header }, permit)
       if (typeof epoch !== 'string') {
         throw new Error('journal writer returned no imported epoch')
       }

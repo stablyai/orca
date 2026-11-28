@@ -108,16 +108,17 @@ export class JournalSqlBackgroundMaintenance {
     await this.running
   }
 
-  async boundary(): Promise<boolean> {
-    while (!this.stopped.signal.aborted) {
+  async boundary(cancellation?: AbortSignal): Promise<boolean> {
+    const stop = cancellation ? AbortSignal.any([this.stopped.signal, cancellation]) : this.stopped.signal
+    while (!stop.aborted) {
       await this.runOrdinaryWork()
       if (this.periodic) {
         continue
       }
-      await this.activity.waitForIdle(AbortSignal.any([this.stopped.signal, this.wake.signal]))
+      await this.activity.waitForIdle(AbortSignal.any([stop, this.wake.signal]))
       await setImmediate()
       if (!this.periodic) {
-        return !this.stopped.signal.aborted
+        return !stop.aborted
       }
     }
     return false
@@ -264,13 +265,14 @@ export class JournalSqlBackgroundMaintenance {
     }
   }
 
-  async rest(started: number): Promise<void> {
+  async rest(started: number, cancellation?: AbortSignal): Promise<void> {
     this.work += performance.now() - started
     if (this.work >= 25) {
+      const stop = cancellation ? AbortSignal.any([this.stopped.signal, cancellation]) : this.stopped.signal
       try {
-        await delay(this.work * 9, undefined, { signal: this.stopped.signal, ref: false })
+        await delay(this.work * 9, undefined, { signal: stop, ref: false })
       } catch (error) {
-        if (!this.stopped.signal.aborted) {
+        if (!stop.aborted) {
           throw error
         }
       }
