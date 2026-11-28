@@ -18,6 +18,7 @@ type TerminalQuickCommandAdvancedSectionProps = {
   selectedRepo: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'> | null
   selectedRepoId: string
   selectedRepoMissing: boolean
+  showFilePlaceholders: boolean
   lastRepoScopeIdRef: MutableRefObject<string | null>
   setAdvancedOpen: Dispatch<SetStateAction<boolean>>
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
@@ -56,6 +57,7 @@ export function TerminalQuickCommandAdvancedSection({
   selectedRepo,
   selectedRepoId,
   selectedRepoMissing,
+  showFilePlaceholders,
   lastRepoScopeIdRef,
   setAdvancedOpen,
   setDraft
@@ -117,6 +119,14 @@ export function TerminalQuickCommandAdvancedSection({
               }}
               setDraft={setDraft}
             />
+            {showFilePlaceholders ? (
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'components.terminal.quickCommands.filePlaceholderHelp',
+                  'Editor path tokens: ${file}, ${relativeFile}, ${fileBasename}, ${fileDirname}, ${workspaceFolder}. Quote paths that may contain spaces, for example python "${file}". If a file token is used and no editor file is open, the command is not sent.'
+                )}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
